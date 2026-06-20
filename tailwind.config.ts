@@ -59,9 +59,14 @@ const config: Config = {
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-10px)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.5s ease-out both",
+        float: "float 3.5s ease-in-out infinite",
       },
     },
   },

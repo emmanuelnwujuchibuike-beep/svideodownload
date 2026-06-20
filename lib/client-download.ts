@@ -15,10 +15,17 @@ function saveBlob(blob: Blob, filename: string): void {
   const a = document.createElement("a");
   a.href = objectUrl;
   a.download = filename;
+  a.rel = "noopener";
+  a.style.display = "none";
   document.body.appendChild(a);
   a.click();
-  a.remove();
-  URL.revokeObjectURL(objectUrl);
+  // IMPORTANT: revoke the object URL only AFTER the browser has had time to
+  // start the download. Revoking it synchronously (right after .click())
+  // cancels the download in many browsers before it begins.
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  }, 4000);
 }
 
 /**
@@ -45,6 +52,10 @@ export async function downloadToDisk(
   }
 
   const blob = await res.blob();
+  if (blob.size === 0) {
+    return { ok: false, error: "The server returned an empty file. Please retry." };
+  }
+
   const disposition = res.headers.get("Content-Disposition") || "";
   const match = disposition.match(/filename="?([^"]+)"?/);
   const filename =

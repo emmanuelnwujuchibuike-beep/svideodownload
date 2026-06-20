@@ -91,16 +91,41 @@ This starts:
 
 ---
 
-## ▲ Vercel deployment
+## ▲ Production: Vercel frontend + Docker worker (the split)
 
-The UI, SEO, auth, and metadata routes deploy cleanly to Vercel. **Caveat:** the
-streaming `/api/download` route shells out to the `yt-dlp` + `ffmpeg` binaries,
-which aren't present in Vercel's serverless runtime. For full download
-functionality in production, run the **Docker image** (Fly.io / Railway / a VPS /
-Cloud Run) or attach a separate worker. Metadata extraction has the same
-binary requirement.
+Vercel's serverless runtime has **no `yt-dlp`/`ffmpeg`**, so the heavy routes run
+on a **Docker worker** and Vercel proxies to it. The same codebase plays both
+roles, decided purely by env:
 
-Set all env vars from `.env.example` in the Vercel dashboard.
+| Role | Where | Env |
+| ---- | ----- | --- |
+| **Frontend** | Vercel | `DOWNLOAD_WORKER_URL=https://<worker>` + `WORKER_SECRET` |
+| **Worker** | Fly.io / Railway / VPS (Docker) | `DOWNLOAD_WORKER_URL` **blank** + same `WORKER_SECRET` |
+
+When `DOWNLOAD_WORKER_URL` is set, `/api/metadata` and `/api/download` forward to
+the worker (sending the secret); when blank, the app does the real
+extraction/download itself. The worker rejects requests without a matching
+`x-worker-secret`.
+
+**Deploy the worker (Fly.io example):**
+
+```bash
+fly launch --no-deploy                       # creates the app from fly.toml
+fly secrets set WORKER_SECRET=$(openssl rand -hex 24) \
+  UPSTASH_REDIS_REST_URL=... UPSTASH_REDIS_REST_TOKEN=...
+fly deploy                                   # builds Dockerfile (yt-dlp + ffmpeg)
+```
+
+**Then point Vercel at it** (Project → Settings → Environment Variables):
+`DOWNLOAD_WORKER_URL=https://<app>.fly.dev`, the **same** `WORKER_SECRET`, plus
+the rest of `.env.example`. Redeploy.
+
+> Note: Vercel Hobby caps function duration at 300s, so the proxied download
+> connection is capped there; full-length downloads still complete on the worker
+> if the client talks to it directly, or upgrade the plan.
+
+Single-host alternative: skip Vercel and deploy **only** the Docker image
+(`docker compose up`) — everything works in one place.
 
 ---
 

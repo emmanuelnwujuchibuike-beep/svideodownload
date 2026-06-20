@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { getMetadata } from "@/server/extractors";
 import { metadataLimiter, clientId } from "@/lib/rate-limit";
 import { metadataRequestSchema } from "@/lib/validation";
+import {
+  hasWorker,
+  proxyToWorker,
+  rejectIfUnauthorizedWorker,
+} from "@/lib/worker";
 import { YtDlpError } from "@/server/services/ytdlp-service";
 import type { ApiError } from "@/types";
 
@@ -14,6 +19,9 @@ function fail(error: string, code: ApiError["code"], status: number) {
 }
 
 export async function POST(request: Request) {
+  const unauthorized = rejectIfUnauthorizedWorker(request);
+  if (unauthorized) return unauthorized;
+
   const id = clientId(request.headers);
   const { success, reset } = await metadataLimiter.limit(id);
   if (!success) {
@@ -37,6 +45,15 @@ export async function POST(request: Request) {
       "INVALID_URL",
       400,
     );
+  }
+
+  // Frontend role: the worker has yt-dlp for fallback extraction.
+  if (hasWorker) {
+    try {
+      return await proxyToWorker("/api/metadata", parsed.data, id);
+    } catch {
+      return fail("Extraction service is unavailable.", "INTERNAL", 502);
+    }
   }
 
   try {

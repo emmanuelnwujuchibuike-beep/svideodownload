@@ -1,0 +1,41 @@
+# Fly.io config for the DOWNLOAD WORKER (Docker: Next.js standalone + yt-dlp + ffmpeg).
+# Deploy:  fly launch --no-deploy   (first time, to create the app)
+#          fly secrets set WORKER_SECRET=... UPSTASH_REDIS_REST_URL=... UPSTASH_REDIS_REST_TOKEN=...
+#          fly deploy
+# The Vercel frontend then points DOWNLOAD_WORKER_URL at https://<app>.fly.dev
+app = "svideodownload-worker"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  # IMPORTANT: the worker must NOT set DOWNLOAD_WORKER_URL (it does the real work).
+  # Binaries are installed in the image:
+  YTDLP_PATH = "/usr/local/bin/yt-dlp"
+  ARIA2C_PATH = "/usr/bin/aria2c"
+  DOWNLOAD_MAX_CONCURRENCY = "8"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 20
+    hard_limit = 40
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "20s"
+  method = "GET"
+  path = "/api/health"
+
+# ffmpeg transcoding is memory-hungry; give it headroom.
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"

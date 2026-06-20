@@ -4,23 +4,33 @@ import { BusyError } from "@/lib/concurrency";
 import { downloadLimiter, clientId } from "@/lib/rate-limit";
 import { slugifyFilename } from "@/lib/utils";
 import { downloadRequestSchema } from "@/lib/validation";
+import {
+  hasWorker,
+  proxyToWorker,
+  rejectIfUnauthorizedWorker,
+} from "@/lib/worker";
 import { resolveDownload } from "@/server/services/download-service";
 import { YtDlpError } from "@/server/services/ytdlp-service";
 import type { ApiError } from "@/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Long videos/audio can take many minutes. On self-hosted Node (Docker) there
-// is NO execution ceiling — this value is only honored by Vercel-style
-// serverless wrappers, where it is clamped to the plan maximum. For full-length
-// (hour+) downloads, deploy the Docker image rather than serverless functions.
-export const maxDuration = 3600;
+// Vercel caps serverless function duration at the plan maximum (300s on Hobby),
+// and rejects higher values at build time. On self-hosted Node (Docker / the
+// worker) there is NO ceiling and this hint is ignored. So: keep it within the
+// Hobby limit here, and run long/full-length downloads on the Docker worker,
+// which the Vercel frontend proxies to.
+export const maxDuration = 300;
 
 function fail(error: string, code: ApiError["code"], status: number) {
   return NextResponse.json<ApiError>({ error, code }, { status });
 }
 
 export async function POST(request: Request) {
+  // Worker role: reject requests without the shared secret (when configured).
+  const unauthorized = rejectIfUnauthorizedWorker(request);
+  if (unauthorized) return unauthorized;
+
   const id = clientId(request.headers);
   const { success, reset } = await downloadLimiter.limit(id);
   if (!success) {
@@ -40,6 +50,15 @@ export async function POST(request: Request) {
   const parsed = downloadRequestSchema.safeParse(body);
   if (!parsed.success) {
     return fail(parsed.error.issues[0]?.message ?? "Invalid request.", "INVALID_URL", 400);
+  }
+
+  // Frontend role: forward the heavy work to the worker (which has yt-dlp/ffmpeg).
+  if (hasWorker) {
+    try {
+      return await proxyToWorker("/api/download", parsed.data, id);
+    } catch {
+      return fail("Download service is unavailable.", "INTERNAL", 502);
+    }
   }
 
   const { url, formatId, kind, title: providedTitle } = parsed.data;

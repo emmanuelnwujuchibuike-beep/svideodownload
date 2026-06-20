@@ -93,9 +93,20 @@ export const twitterExtractor: Extractor = {
     const id = parseTweetId(url);
     if (!id) throw new ExtractionError("Unrecognised tweet URL");
 
+    // Match the params Twitter's own embed widget sends — some tweets now
+    // return an empty body without the `features`/`fieldToggles` toggles.
+    const features =
+      "tfw_timeline_list:;tfw_follower_count_sunset:true;" +
+      "tfw_tweet_edit_backend:on;tfw_refsrc_session:on;" +
+      "tfw_show_business_verified_badge:on;tfw_duplicate_scribes_to_settings:on;" +
+      "tfw_use_profile_image_shape_enabled:on;tfw_show_blue_verified_badge:on;" +
+      "tfw_legacy_timeline_sunset:on;tfw_show_gov_verified_badge:on;" +
+      "tfw_show_business_affiliate_badge:on;tfw_tweet_edit_frontend:on";
     const api =
       `https://cdn.syndication.twimg.com/tweet-result?id=${id}` +
-      `&token=${syndicationToken(id)}&lang=en`;
+      `&token=${syndicationToken(id)}&lang=en` +
+      `&features=${encodeURIComponent(features)}` +
+      `&fieldToggles=${encodeURIComponent("withArticleRichContentState:true")}`;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TWITTER_TIMEOUT_MS);
@@ -106,7 +117,13 @@ export const twitterExtractor: Extractor = {
         signal: controller.signal,
       });
       if (!res.ok) throw new ExtractionError(`Syndication responded ${res.status}`);
-      data = (await res.json()) as TwResult;
+      const body = await res.text();
+      if (!body.trim()) throw new ExtractionError("Empty syndication response");
+      try {
+        data = JSON.parse(body) as TwResult;
+      } catch {
+        throw new ExtractionError("Unparseable syndication response");
+      }
     } finally {
       clearTimeout(timer);
     }

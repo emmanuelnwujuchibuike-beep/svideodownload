@@ -203,22 +203,31 @@ function mapFormats(raw: RawFormat[] | undefined): MediaFormat[] {
   // with the highest bitrate so the displayed size is representative.
   const byHeight = new Map<number, { fps: number | null; tbr: number; filesize: number | null }>();
   let hasAnyAudio = false;
+  // Some platforms (Instagram, Facebook, X) return video formats WITHOUT a
+  // height. We must still offer a video option for those, or the UI would only
+  // show audio. Track the best such heightless video as a fallback "Best" tier.
+  let bestHeightless: { tbr: number; filesize: number | null } | null = null;
 
   for (const f of raw) {
     const hasVideo = !!f.vcodec && f.vcodec !== "none";
     const hasAudio = !!f.acodec && f.acodec !== "none";
     if (hasAudio) hasAnyAudio = true;
-    if (!hasVideo || !f.height) continue;
+    if (!hasVideo) continue;
 
     const size = f.filesize ?? f.filesize_approx ?? null;
     const tbr = f.tbr ?? 0;
-    const existing = byHeight.get(f.height);
-    if (!existing || tbr > existing.tbr) {
-      byHeight.set(f.height, { fps: f.fps ?? null, tbr, filesize: size });
+
+    if (f.height) {
+      const existing = byHeight.get(f.height);
+      if (!existing || tbr > existing.tbr) {
+        byHeight.set(f.height, { fps: f.fps ?? null, tbr, filesize: size });
+      }
+    } else if (!bestHeightless || tbr > bestHeightless.tbr) {
+      bestHeightless = { tbr, filesize: size };
     }
   }
 
-  const video: MediaFormat[] = [...byHeight.entries()]
+  let video: MediaFormat[] = [...byHeight.entries()]
     .sort((a, b) => b[0] - a[0])
     .map(([height, info]) => ({
       formatId: String(height),
@@ -232,6 +241,24 @@ function mapFormats(raw: RawFormat[] | undefined): MediaFormat[] {
       vcodec: null,
       acodec: null,
     }));
+
+  // No height-tagged video tiers but a video stream exists → offer "Best".
+  if (video.length === 0 && bestHeightless) {
+    video = [
+      {
+        formatId: "best",
+        kind: "video",
+        label: "Best quality",
+        ext: "mp4",
+        resolution: null,
+        fps: null,
+        filesize: bestHeightless.filesize,
+        tbr: bestHeightless.tbr || null,
+        vcodec: null,
+        acodec: null,
+      },
+    ];
+  }
 
   // A single, predictable MP3 audio option (server transcodes to MP3).
   const audio: MediaFormat[] = hasAnyAudio

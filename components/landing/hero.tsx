@@ -33,13 +33,13 @@ export function Hero() {
         </a>
 
         <h1 className="max-w-4xl text-balance text-[2.6rem] font-semibold leading-[1.04] tracking-[-0.03em] sm:text-6xl lg:text-7xl">
-          Download any video,
-          <br className="hidden sm:block" /> from{" "}
-          <span className="text-gradient">TikTok</span> to anywhere.
+          Download from{" "}
+          <span className="text-gradient">TikTok, Instagram, YouTube</span>
+          <br className="hidden sm:block" /> &amp; 1000+ more.
         </h1>
         <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground sm:text-xl">
           Paste a link, get a clean, watermark-free file in seconds. Fast,
-          secure, and free — no app, no login.
+          secure, and completely free — no login required.
         </p>
 
         <div className="mt-12 w-full max-w-2xl">

@@ -1,10 +1,12 @@
 "use client";
 
-import { Download, Menu, X } from "lucide-react";
+import { Download, LogOut, Menu, User as UserIcon, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useUser } from "@/features/auth/use-user";
+import { UserMenu } from "@/features/auth/user-menu";
 
 const NAV_LINKS = [
   { href: "/#platforms", label: "Platforms" },
@@ -14,6 +16,7 @@ const NAV_LINKS = [
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
+  const { user, enabled } = useUser();
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-border/40 bg-background/70 backdrop-blur-xl">
@@ -38,12 +41,7 @@ export function SiteHeader() {
 
         <div className="hidden items-center gap-3 md:flex">
           <ThemeToggle />
-          <Link
-            href="/#download"
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-          >
-            Get Started
-          </Link>
+          <UserMenu />
         </div>
 
         {/* Mobile trigger */}
@@ -78,13 +76,34 @@ export function SiteHeader() {
               <ThemeToggle />
             </div>
 
-            <Link
-              href="/#download"
-              onClick={() => setOpen(false)}
-              className="mt-2 rounded-xl bg-primary px-4 py-3 text-center text-base font-semibold text-primary-foreground"
-            >
-              Get Started
-            </Link>
+            {/* Auth */}
+            {enabled && user ? (
+              <>
+                <Link
+                  href="/account"
+                  onClick={() => setOpen(false)}
+                  className="mt-2 flex items-center gap-2 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
+                >
+                  <UserIcon className="h-5 w-5" /> Account
+                </Link>
+                <form action="/auth/signout" method="post">
+                  <button
+                    type="submit"
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-3 text-base font-medium text-muted-foreground transition hover:bg-secondary"
+                  >
+                    <LogOut className="h-5 w-5" /> Sign out
+                  </button>
+                </form>
+              </>
+            ) : (
+              <Link
+                href={enabled ? "/login" : "/#download"}
+                onClick={() => setOpen(false)}
+                className="mt-2 rounded-xl bg-primary px-4 py-3 text-center text-base font-semibold text-primary-foreground"
+              >
+                {enabled ? "Sign in" : "Get Started"}
+              </Link>
+            )}
           </nav>
         </div>
       )}

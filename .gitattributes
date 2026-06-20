@@ -1,0 +1,57 @@
+# Normalize line endings: LF in the repo, auto on checkout.
+* text=auto eol=lf
+
+# Explicit text files (force LF even on Windows checkouts).
+*.ts      text eol=lf
+*.tsx     text eol=lf
+*.js      text eol=lf
+*.mjs     text eol=lf
+*.cjs     text eol=lf
+*.json    text eol=lf
+*.css     text eol=lf
+*.scss    text eol=lf
+*.md      text eol=lf
+*.mdx     text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.sql     text eol=lf
+*.env     text eol=lf
+*.sh      text eol=lf
+.gitattributes text eol=lf
+.gitignore     text eol=lf
+Dockerfile     text eol=lf
+
+# Windows-specific scripts keep CRLF.
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+*.ps1     text eol=crlf
+
+# Binary assets — never normalize or diff.
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.webp    binary
+*.ico     binary
+*.avif    binary
+*.woff    binary
+*.woff2   binary
+*.ttf     binary
+*.eot     binary
+*.otf     binary
+*.mp4     binary
+*.mov     binary
+*.webm    binary
+*.mp3     binary
+*.m4a     binary
+*.wav     binary
+*.pdf     binary
+
+# Linguist: keep generated/vendored paths out of language stats.
+.next/**           linguist-generated
+public/**          linguist-vendored
+*.lock             linguist-generated
+package-lock.json  linguist-generated
+
+# Mark SQL migrations as documentation-relevant.
+supabase/migrations/*.sql linguist-detectable

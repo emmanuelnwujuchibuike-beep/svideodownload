@@ -105,7 +105,9 @@ function buildFormats(item: TikTokItem): MediaFormat[] {
   const formats: MediaFormat[] = [];
   const seen = new Set<string>();
 
-  // Prefer the per-bitrate URLs (gives multiple qualities up to the highest).
+  // WATERMARK-FREE GUARANTEE: we only ever read `bitrateInfo.PlayAddr` and
+  // `video.playAddr` — TikTok's clean playback sources. We deliberately never
+  // touch `video.downloadAddr`, which is the watermarked "Save video" asset.
   const bitrates = (video.bitrateInfo || [])
     .slice()
     .sort((a, b) => (b.Bitrate ?? 0) - (a.Bitrate ?? 0));

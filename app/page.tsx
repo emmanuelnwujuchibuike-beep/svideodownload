@@ -4,6 +4,7 @@ import { PlatformShowcase } from "@/components/landing/platform-showcase";
 import { TikTokFlagship } from "@/components/landing/tiktok-flagship";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { HistoryPanel } from "@/features/history/history-panel";
 
 export default function HomePage() {
   return (
@@ -11,6 +12,7 @@ export default function HomePage() {
       <SiteHeader />
       <main>
         <Hero />
+        <HistoryPanel />
         <TikTokFlagship />
         <PlatformShowcase />
         <Features />

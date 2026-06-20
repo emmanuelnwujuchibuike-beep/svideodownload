@@ -2,6 +2,8 @@
 
 import { useCallback, useRef, useState } from "react";
 
+import { addDownload } from "@/features/history/store";
+import { downloadToDisk } from "@/lib/client-download";
 import type { ApiError, MediaKind, VideoMetadata } from "@/types";
 
 type Status = "idle" | "fetching" | "ready" | "downloading" | "error";
@@ -58,37 +60,29 @@ export function useDownloader() {
       const meta = state.metadata;
       if (!meta) return;
       setState((s) => ({ ...s, status: "downloading", error: null }));
-      try {
-        const res = await fetch("/api/download", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: meta.sourceUrl, formatId, kind, title: meta.title }),
-        });
-        if (!res.ok) {
-          const json = (await res.json().catch(() => null)) as ApiError | null;
-          setState((s) => ({
-            ...s,
-            status: "ready",
-            error: json?.error ?? "Download failed.",
-          }));
-          return;
-        }
-        const blob = await res.blob();
-        const disposition = res.headers.get("Content-Disposition") || "";
-        const match = disposition.match(/filename="?([^"]+)"?/);
-        const filename = match?.[1] || `download.${kind === "audio" ? "m4a" : "mp4"}`;
 
-        const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = objectUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(objectUrl);
+      const outcome = await downloadToDisk({
+        url: meta.sourceUrl,
+        formatId,
+        kind,
+        title: meta.title,
+      });
+
+      if (outcome.ok) {
+        const fmt = meta.formats.find((f) => f.formatId === formatId);
+        addDownload({
+          url: meta.sourceUrl,
+          platform: meta.platform,
+          platformName: meta.platformName,
+          title: meta.title,
+          thumbnail: meta.thumbnail,
+          formatId,
+          kind,
+          qualityLabel: fmt?.label ?? (kind === "audio" ? "Audio" : "Video"),
+        });
         setState((s) => ({ ...s, status: "ready" }));
-      } catch {
-        setState((s) => ({ ...s, status: "ready", error: "Download failed." }));
+      } else {
+        setState((s) => ({ ...s, status: "ready", error: outcome.error }));
       }
     },
     [state.metadata],

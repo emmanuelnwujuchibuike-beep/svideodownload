@@ -90,6 +90,21 @@ export interface VideoMetadata {
   extractor: ExtractorName;
 }
 
+/** A locally-persisted record of a download the user performed. */
+export interface DownloadRecord {
+  id: string;
+  url: string;
+  platform: PlatformId;
+  platformName: string;
+  title: string;
+  thumbnail: string | null;
+  formatId: string;
+  kind: MediaKind;
+  qualityLabel: string;
+  createdAt: number;
+  favorite: boolean;
+}
+
 export interface ApiError {
   error: string;
   code:

@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 210 40% 98.5%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
@@ -51,8 +51,12 @@
 }
 
 @layer utilities {
+  /* Theme-aware frosted surface: subtle on light, luminous on dark. */
   .glass {
-    @apply border border-white/10 bg-white/5 backdrop-blur-xl;
+    @apply border border-border/70 bg-card/70 backdrop-blur-xl;
+  }
+  .dark .glass {
+    @apply border-white/10 bg-white/5;
   }
 
   .text-gradient {

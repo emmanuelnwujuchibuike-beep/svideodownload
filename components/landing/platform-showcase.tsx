@@ -1,7 +1,44 @@
 import { CheckCircle2 } from "lucide-react";
+import type { IconType } from "react-icons";
+import {
+  SiBilibili,
+  SiDailymotion,
+  SiFacebook,
+  SiInstagram,
+  SiPinterest,
+  SiReddit,
+  SiSnapchat,
+  SiSoundcloud,
+  SiThreads,
+  SiTiktok,
+  SiTwitch,
+  SiVimeo,
+  SiVk,
+  SiX,
+  SiYoutube,
+} from "react-icons/si";
 
 import { Reveal } from "@/components/ui/reveal";
 import { SHOWCASE_PLATFORMS } from "@/lib/platforms";
+import type { PlatformId } from "@/types";
+
+const BRAND_ICONS: Partial<Record<PlatformId, IconType>> = {
+  tiktok: SiTiktok,
+  instagram: SiInstagram,
+  facebook: SiFacebook,
+  twitter: SiX,
+  pinterest: SiPinterest,
+  reddit: SiReddit,
+  vimeo: SiVimeo,
+  dailymotion: SiDailymotion,
+  twitch: SiTwitch,
+  soundcloud: SiSoundcloud,
+  youtube: SiYoutube,
+  threads: SiThreads,
+  snapchat: SiSnapchat,
+  bilibili: SiBilibili,
+  vk: SiVk,
+};
 
 export function PlatformShowcase() {
   return (
@@ -25,7 +62,9 @@ export function PlatformShowcase() {
         </Reveal>
 
         <div className="mt-14 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {SHOWCASE_PLATFORMS.map((p, i) => (
+          {SHOWCASE_PLATFORMS.map((p, i) => {
+            const Brand = BRAND_ICONS[p.id];
+            return (
             <Reveal key={p.id} delay={(i % 4) * 0.06}>
               <article className="group relative h-full overflow-hidden rounded-2xl border border-border/70 bg-card p-5 transition-all duration-300 hover:-translate-y-1.5 hover:border-transparent hover:shadow-2xl">
                 {/* Soft brand glow on hover */}
@@ -47,7 +86,11 @@ export function PlatformShowcase() {
                 <div
                   className={`mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${p.accent} text-base font-bold text-white shadow-lg ring-1 ring-white/20 transition-transform duration-300 group-hover:scale-110`}
                 >
-                  {p.name.replace(/[^A-Za-z]/g, "").slice(0, 2)}
+                  {Brand ? (
+                    <Brand className="h-6 w-6" />
+                  ) : (
+                    p.name.replace(/[^A-Za-z]/g, "").slice(0, 2)
+                  )}
                 </div>
 
                 <h3 className="font-semibold">{p.name}</h3>
@@ -66,7 +109,8 @@ export function PlatformShowcase() {
                 )}
               </article>
             </Reveal>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

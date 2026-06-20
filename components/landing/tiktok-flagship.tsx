@@ -71,17 +71,29 @@ export function TikTokFlagship() {
 
           {/* Phone */}
           <div className="glass aspect-[9/19] rounded-[2.5rem] p-2 shadow-2xl">
-            <div className="relative flex h-full flex-col overflow-hidden rounded-[2rem] bg-gradient-to-b from-pink-500/40 via-fuchsia-600/25 to-cyan-500/25">
+            <div className="relative flex h-full flex-col overflow-hidden rounded-[2rem] bg-zinc-900">
+              {/* Video cover */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://picsum.photos/seed/svd-tiktok/360/760"
+                alt=""
+                aria-hidden
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+              {/* Cinematic overlay for legibility */}
+              <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-black/70" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-pink-600/25 via-transparent to-cyan-500/20" />
+
               {/* Status / header */}
-              <div className="flex items-center justify-between p-4 text-xs font-medium text-white/90">
+              <div className="relative z-10 flex items-center justify-between p-4 text-xs font-medium text-white">
                 <span>TikTok</span>
-                <span className="rounded-full bg-green-500/25 px-2 py-0.5 text-green-200">
+                <span className="rounded-full bg-green-500/30 px-2 py-0.5 text-green-200 backdrop-blur">
                   No watermark
                 </span>
               </div>
 
               {/* Center play button with pulsing rings */}
-              <div className="relative flex flex-1 items-center justify-center">
+              <div className="relative z-10 flex flex-1 items-center justify-center">
                 <span className="absolute h-24 w-24 animate-ping rounded-full bg-white/15" />
                 <span className="absolute h-32 w-32 animate-pulse rounded-full border border-white/20" />
                 <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-white/95 shadow-2xl">
@@ -100,7 +112,7 @@ export function TikTokFlagship() {
               </div>
 
               {/* Creator + caption + animated download */}
-              <div className="p-4">
+              <div className="relative z-10 p-4">
                 <div className="flex items-center gap-2">
                   <div className="h-9 w-9 rounded-full bg-gradient-to-br from-pink-400 to-cyan-300 ring-2 ring-white/60" />
                   <div className="min-w-0">

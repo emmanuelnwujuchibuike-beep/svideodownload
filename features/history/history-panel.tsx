@@ -103,15 +103,15 @@ function HistoryRow({
     }
   };
 
-  const reDownload = async () => {
+  const reDownload = () => {
     setRedownloading(true);
-    await downloadToDisk({
+    downloadToDisk({
       url: item.url,
       formatId: item.formatId,
       kind: item.kind,
       title: item.title,
     });
-    setRedownloading(false);
+    setTimeout(() => setRedownloading(false), 1200);
   };
 
   return (

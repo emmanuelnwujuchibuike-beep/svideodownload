@@ -1,4 +1,4 @@
-import type { ApiError, MediaKind } from "@/types";
+import type { MediaKind } from "@/types";
 
 export interface DownloadPayload {
   url: string;
@@ -7,59 +7,34 @@ export interface DownloadPayload {
   title?: string;
 }
 
-export type DownloadOutcome = { ok: true } | { ok: false; error: string };
+/** Builds the browser-navigable download URL for a payload. */
+export function downloadUrl(payload: DownloadPayload): string {
+  const params = new URLSearchParams({
+    url: payload.url,
+    formatId: payload.formatId,
+    kind: payload.kind,
+  });
+  if (payload.title) params.set("title", payload.title);
+  return `/api/download?${params.toString()}`;
+}
 
-/** Saves a blob to the user's disk via a transient object URL. */
-function saveBlob(blob: Blob, filename: string): void {
-  const objectUrl = URL.createObjectURL(blob);
+/**
+ * Triggers a download via the browser's NATIVE download manager by navigating a
+ * link to the GET download endpoint (which responds with
+ * `Content-Disposition: attachment`).
+ *
+ * This replaces the old fetch()+Blob approach, which iOS Safari silently
+ * ignores (the request finishes but no file is ever saved). A real navigation
+ * works across iOS, Android and desktop.
+ */
+export function downloadToDisk(payload: DownloadPayload): void {
   const a = document.createElement("a");
-  a.href = objectUrl;
-  a.download = filename;
+  a.href = downloadUrl(payload);
+  a.download = "";
   a.rel = "noopener";
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();
-  // IMPORTANT: revoke the object URL only AFTER the browser has had time to
-  // start the download. Revoking it synchronously (right after .click())
-  // cancels the download in many browsers before it begins.
-  setTimeout(() => {
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
-  }, 4000);
-}
-
-/**
- * Requests a download from the API and saves the resulting file. Shared by the
- * main downloader and the history panel's "re-download" action.
- */
-export async function downloadToDisk(
-  payload: DownloadPayload,
-): Promise<DownloadOutcome> {
-  let res: Response;
-  try {
-    res = await fetch("/api/download", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    return { ok: false, error: "Network error. Please try again." };
-  }
-
-  if (!res.ok) {
-    const json = (await res.json().catch(() => null)) as ApiError | null;
-    return { ok: false, error: json?.error ?? "Download failed." };
-  }
-
-  const blob = await res.blob();
-  if (blob.size === 0) {
-    return { ok: false, error: "The server returned an empty file. Please retry." };
-  }
-
-  const disposition = res.headers.get("Content-Disposition") || "";
-  const match = disposition.match(/filename="?([^"]+)"?/);
-  const filename =
-    match?.[1] || `download.${payload.kind === "audio" ? "mp3" : "mp4"}`;
-  saveBlob(blob, filename);
-  return { ok: true };
+  // Remove on the next tick so the click/navigation is registered first.
+  setTimeout(() => a.remove(), 0);
 }

@@ -56,34 +56,30 @@ export function useDownloader() {
   }, []);
 
   const download = useCallback(
-    async (formatId: string, kind: MediaKind) => {
+    (formatId: string, kind: MediaKind) => {
       const meta = state.metadata;
       if (!meta) return;
       setState((s) => ({ ...s, status: "downloading", error: null }));
 
-      const outcome = await downloadToDisk({
+      // Hand off to the browser's native download manager (the only reliable
+      // path on iOS), then record the download locally and reset the button.
+      downloadToDisk({ url: meta.sourceUrl, formatId, kind, title: meta.title });
+
+      const fmt = meta.formats.find((f) => f.formatId === formatId);
+      addDownload({
         url: meta.sourceUrl,
+        platform: meta.platform,
+        platformName: meta.platformName,
+        title: meta.title,
+        thumbnail: meta.thumbnail,
         formatId,
         kind,
-        title: meta.title,
+        qualityLabel: fmt?.label ?? (kind === "audio" ? "Audio" : "Video"),
       });
 
-      if (outcome.ok) {
-        const fmt = meta.formats.find((f) => f.formatId === formatId);
-        addDownload({
-          url: meta.sourceUrl,
-          platform: meta.platform,
-          platformName: meta.platformName,
-          title: meta.title,
-          thumbnail: meta.thumbnail,
-          formatId,
-          kind,
-          qualityLabel: fmt?.label ?? (kind === "audio" ? "Audio" : "Video"),
-        });
-        setState((s) => ({ ...s, status: "ready" }));
-      } else {
-        setState((s) => ({ ...s, status: "ready", error: outcome.error }));
-      }
+      // Briefly show progress, then return to ready (the browser shows real
+      // download progress in its own UI).
+      setTimeout(() => setState((s) => ({ ...s, status: "ready" })), 1200);
     },
     [state.metadata],
   );

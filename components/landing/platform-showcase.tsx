@@ -9,7 +9,7 @@ export function PlatformShowcase() {
     <section id="platforms" className="relative overflow-hidden border-t border-border/60 py-28 sm:py-36">
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-72 w-[60rem] -translate-x-1/2 bg-gradient-to-r from-pink-500/[0.07] via-fuchsia-500/[0.07] to-cyan-400/[0.07] blur-3xl"
+        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-72 w-[60rem] -translate-x-1/2 bg-gradient-to-r from-blue-500/[0.07] via-sky-500/[0.07] to-cyan-400/[0.07] blur-3xl"
       />
       <div className="container">
         <Reveal className="mx-auto max-w-2xl text-center">

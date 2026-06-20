@@ -9,7 +9,7 @@
     --foreground: 240 10% 9%;
     --card: 0 0% 100%;
     --card-foreground: 240 10% 9%;
-    --primary: 330 81% 56%;
+    --primary: 221 83% 53%;
     --primary-foreground: 0 0% 100%;
     --secondary: 240 6% 96%;
     --secondary-foreground: 240 10% 9%;
@@ -19,7 +19,7 @@
     --accent-foreground: 0 0% 100%;
     --border: 240 6% 90%;
     --input: 240 6% 90%;
-    --ring: 330 81% 56%;
+    --ring: 221 83% 53%;
     --radius: 0.75rem;
   }
 
@@ -29,7 +29,7 @@
     --foreground: 0 0% 98%;
     --card: 240 8% 6%;
     --card-foreground: 0 0% 98%;
-    --primary: 330 85% 62%;
+    --primary: 217 91% 62%;
     --primary-foreground: 0 0% 100%;
     --secondary: 240 5% 13%;
     --secondary-foreground: 0 0% 98%;
@@ -39,7 +39,7 @@
     --accent-foreground: 0 0% 100%;
     --border: 240 5% 14%;
     --input: 240 5% 16%;
-    --ring: 330 85% 62%;
+    --ring: 217 91% 62%;
   }
 
   * {
@@ -96,7 +96,7 @@
 
   /* Reserved as a rare accent — not a default heading treatment. */
   .text-gradient {
-    @apply bg-gradient-to-r from-pink-500 via-fuchsia-500 to-cyan-400 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-blue-500 via-sky-400 to-cyan-400 bg-clip-text text-transparent;
   }
 
   /* Subtle hairline ring used on premium cards. */

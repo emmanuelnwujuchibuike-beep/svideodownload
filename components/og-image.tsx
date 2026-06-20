@@ -69,14 +69,14 @@ export function OgImage(): ReactElement {
             width: 92,
             height: 92,
             borderRadius: 24,
-            background: "linear-gradient(135deg, #ec4899, #22d3ee)",
+            background: "linear-gradient(135deg, #2563eb, #22d3ee)",
           }}
         >
           <LogoMark size={52} />
         </div>
         <div style={{ display: "flex", fontSize: 54, fontWeight: 800, color: "white" }}>
           <span style={{ color: "white" }}>S</span>
-          <span style={{ color: "#f472b6" }}>Video</span>
+          <span style={{ color: "#60a5fa" }}>Video</span>
           <span style={{ color: "white" }}>Download</span>
         </div>
       </div>

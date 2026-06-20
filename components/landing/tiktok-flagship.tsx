@@ -27,7 +27,7 @@ export function TikTokFlagship() {
     <section className="relative overflow-hidden border-t border-border/60 py-28 sm:py-36">
       <div
         aria-hidden
-        className="pointer-events-none absolute right-0 top-1/2 -z-10 h-96 w-96 -translate-y-1/2 rounded-full bg-pink-500/15 blur-3xl"
+        className="pointer-events-none absolute right-0 top-1/2 -z-10 h-96 w-96 -translate-y-1/2 rounded-full bg-blue-500/15 blur-3xl"
       />
       <div className="container grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
         <Reveal>
@@ -46,7 +46,7 @@ export function TikTokFlagship() {
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {features.map(({ icon: Icon, title, body }) => (
               <div key={title} className="flex gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-cyan-400 text-white">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-cyan-400 text-white">
                   <Icon className="h-5 w-5" />
                 </div>
                 <div>
@@ -82,7 +82,7 @@ export function TikTokFlagship() {
               />
               {/* Cinematic overlay for legibility */}
               <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-black/70" />
-              <div className="absolute inset-0 bg-gradient-to-tr from-pink-600/25 via-transparent to-cyan-500/20" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-blue-600/25 via-transparent to-cyan-500/20" />
 
               {/* Status / header */}
               <div className="relative z-10 flex items-center justify-between p-4 text-xs font-medium text-white">
@@ -97,12 +97,12 @@ export function TikTokFlagship() {
                 <span className="absolute h-24 w-24 animate-ping rounded-full bg-white/15" />
                 <span className="absolute h-32 w-32 animate-pulse rounded-full border border-white/20" />
                 <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-white/95 shadow-2xl">
-                  <Play className="h-6 w-6 translate-x-0.5 fill-pink-600 text-pink-600" />
+                  <Play className="h-6 w-6 translate-x-0.5 fill-blue-600 text-blue-600" />
                 </div>
 
                 {/* Right action rail */}
                 <div className="absolute right-3 flex flex-col items-center gap-4">
-                  <RailIcon icon={Heart} label="2.4M" tint="text-pink-300" />
+                  <RailIcon icon={Heart} label="2.4M" tint="text-sky-300" />
                   <RailIcon icon={MessageCircle} label="18K" />
                   <RailIcon icon={Share2} label="Share" />
                   <div className="flex h-9 w-9 animate-[spin_5s_linear_infinite] items-center justify-center rounded-full bg-gradient-to-br from-zinc-700 to-black ring-2 ring-white/40">
@@ -114,7 +114,7 @@ export function TikTokFlagship() {
               {/* Creator + caption + animated download */}
               <div className="relative z-10 p-4">
                 <div className="flex items-center gap-2">
-                  <div className="h-9 w-9 rounded-full bg-gradient-to-br from-pink-400 to-cyan-300 ring-2 ring-white/60" />
+                  <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-400 to-cyan-300 ring-2 ring-white/60" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-white">@creator</p>
                     <p className="truncate text-[11px] text-white/70">♪ original sound</p>
@@ -125,7 +125,7 @@ export function TikTokFlagship() {
                   <div className="shimmer h-full w-2/3 rounded-full bg-white" />
                 </div>
 
-                <div className="mt-3 flex h-11 items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-pink-600 shadow-lg">
+                <div className="mt-3 flex h-11 items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-blue-600 shadow-lg">
                   <Droplet className="h-4 w-4" /> Download HD
                 </div>
               </div>

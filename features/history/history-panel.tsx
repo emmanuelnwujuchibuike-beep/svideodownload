@@ -183,7 +183,7 @@ function IconButton({
       disabled={disabled}
       className={cn(
         "rounded-lg p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-50",
-        active && "text-pink-500 hover:text-pink-500",
+        active && "text-primary hover:text-primary",
       )}
     >
       {children}

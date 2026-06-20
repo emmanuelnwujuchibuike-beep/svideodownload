@@ -14,7 +14,7 @@ export function Hero() {
       {/* Premium gradient glow — vibrant in both light and dark */}
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[-12%] -z-10 h-[560px] w-[920px] -translate-x-1/2 rounded-full bg-gradient-to-tr from-pink-500/35 via-fuchsia-500/25 to-cyan-400/30 blur-[110px]"
+        className="pointer-events-none absolute left-1/2 top-[-12%] -z-10 h-[560px] w-[920px] -translate-x-1/2 rounded-full bg-gradient-to-tr from-blue-500/35 via-sky-500/25 to-cyan-400/30 blur-[110px]"
       />
 
       <div className="container flex flex-col items-center text-center">

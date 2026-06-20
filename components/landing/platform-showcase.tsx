@@ -42,31 +42,32 @@ const BRAND_ICONS: Partial<Record<PlatformId, IconType>> = {
 
 export function PlatformShowcase() {
   return (
-    <section id="platforms" className="relative overflow-hidden border-t border-border/60 py-24">
+    <section id="platforms" className="relative overflow-hidden border-t border-border/60 py-28 sm:py-36">
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-72 w-[60rem] -translate-x-1/2 bg-gradient-to-r from-pink-500/10 via-fuchsia-500/10 to-cyan-400/10 blur-3xl"
+        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-72 w-[60rem] -translate-x-1/2 bg-gradient-to-r from-pink-500/[0.07] via-fuchsia-500/[0.07] to-cyan-400/[0.07] blur-3xl"
       />
       <div className="container">
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="inline-flex items-center rounded-full border border-border bg-secondary/50 px-3 py-1 text-xs font-medium text-muted-foreground">
-            1000+ platforms supported
+            Universal support
           </span>
-          <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
-            Every platform you use, <span className="text-gradient">one downloader</span>
+          <h2 className="mt-5 text-3xl font-semibold tracking-[-0.02em] sm:text-[2.75rem] sm:leading-[1.1]">
+            Every platform you use,
+            <br className="hidden sm:block" /> one downloader
           </h2>
-          <p className="mt-3 text-muted-foreground">
+          <p className="mx-auto mt-4 max-w-md text-pretty text-base text-muted-foreground sm:text-lg">
             From short-form video to long-form audio — all through a single,
             unified extraction engine.
           </p>
         </Reveal>
 
-        <div className="mt-14 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="mt-16 grid grid-cols-2 gap-3.5 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
           {SHOWCASE_PLATFORMS.map((p, i) => {
             const Brand = BRAND_ICONS[p.id];
             return (
             <Reveal key={p.id} delay={(i % 4) * 0.06}>
-              <article className="group relative h-full overflow-hidden rounded-2xl border border-border/70 bg-card p-5 transition-all duration-300 hover:-translate-y-1.5 hover:border-transparent hover:shadow-2xl">
+              <article className="group relative h-full overflow-hidden rounded-2xl border border-border/70 bg-card p-5 shadow-soft transition-all duration-300 hover:-translate-y-1.5 hover:border-transparent hover:shadow-elevated">
                 {/* Soft brand glow on hover */}
                 <div
                   className={`pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br ${p.accent} opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-40`}

@@ -24,21 +24,21 @@ const features = [
 
 export function TikTokFlagship() {
   return (
-    <section className="relative overflow-hidden border-t border-border/60 py-20">
+    <section className="relative overflow-hidden border-t border-border/60 py-28 sm:py-36">
       <div
         aria-hidden
-        className="pointer-events-none absolute right-0 top-1/2 -z-10 h-96 w-96 -translate-y-1/2 rounded-full bg-pink-500/20 blur-3xl"
+        className="pointer-events-none absolute right-0 top-1/2 -z-10 h-96 w-96 -translate-y-1/2 rounded-full bg-pink-500/15 blur-3xl"
       />
-      <div className="container grid items-center gap-12 lg:grid-cols-2">
+      <div className="container grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
         <Reveal>
-          <span className="inline-flex items-center rounded-full bg-primary/15 px-3 py-1 text-sm font-medium text-primary">
+          <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20">
             Flagship · TikTok
           </span>
-          <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
+          <h2 className="mt-5 text-3xl font-semibold tracking-[-0.02em] sm:text-[2.75rem] sm:leading-[1.1]">
             The fastest way to save{" "}
             <span className="text-gradient">TikTok</span> videos
           </h2>
-          <p className="mt-4 text-muted-foreground">
+          <p className="mt-5 max-w-md text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
             SVideoDownload is built TikTok-first. Drop any video, photo carousel,
             or sound link and get a pristine, watermark-free file in moments.
           </p>

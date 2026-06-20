@@ -48,7 +48,10 @@ export function Downloader() {
 
   return (
     <div className="w-full">
-      <form onSubmit={handleSubmit} className="glass rounded-2xl p-2 shadow-2xl">
+      <form
+        onSubmit={handleSubmit}
+        className="glass rounded-[1.4rem] p-2 shadow-elevated ring-1 ring-black/[0.03] focus-within:ring-primary/30"
+      >
         <div className="flex flex-col gap-2 sm:flex-row">
           <div className="relative flex-1">
             <input
@@ -57,17 +60,17 @@ export function Downloader() {
               autoComplete="off"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste a TikTok, Instagram, YouTube… link"
+              placeholder="Paste a video link…"
               aria-label="Video URL"
-              className="h-14 w-full rounded-xl bg-background/60 px-4 pr-24 text-base outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+              className="h-16 w-full rounded-2xl bg-background/50 px-5 pr-28 text-base outline-none ring-1 ring-inset ring-border transition focus:bg-background/80 focus:ring-2 focus:ring-primary sm:text-lg"
             />
-            <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+            <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
               {url ? (
                 <button
                   type="button"
                   onClick={handleClear}
                   aria-label="Clear"
-                  className="rounded-lg p-2 text-muted-foreground hover:bg-secondary"
+                  className="rounded-xl p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -75,7 +78,7 @@ export function Downloader() {
               <button
                 type="button"
                 onClick={handlePaste}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-2 text-sm font-medium hover:bg-secondary/80"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-secondary px-3 py-2 text-sm font-medium text-foreground transition hover:bg-secondary/70 active:scale-[0.97]"
               >
                 <ClipboardPaste className="h-4 w-4" /> Paste
               </button>
@@ -84,7 +87,7 @@ export function Downloader() {
           <button
             type="submit"
             disabled={isBusy}
-            className="inline-flex h-14 items-center justify-center gap-2 rounded-xl bg-primary px-7 text-base font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+            className="group inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-primary px-8 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-primary/40 active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
           >
             {isBusy ? (
               <>
@@ -92,15 +95,17 @@ export function Downloader() {
               </>
             ) : (
               <>
-                <Search className="h-5 w-5" /> Download
+                <Search className="h-5 w-5 transition-transform group-hover:scale-110" />{" "}
+                Download
               </>
             )}
           </button>
         </div>
 
         {detected && detected.id !== "generic" ? (
-          <p className="px-3 pb-1 pt-2 text-xs text-muted-foreground">
-            Detected platform: <span className="font-medium text-foreground">{detected.name}</span>
+          <p className="px-4 pb-1.5 pt-2.5 text-xs text-muted-foreground">
+            Detected ·{" "}
+            <span className="font-medium text-foreground">{detected.name}</span>
           </p>
         ) : null}
       </form>

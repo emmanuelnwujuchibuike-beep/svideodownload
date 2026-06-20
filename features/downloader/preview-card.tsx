@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Download, Music, Video, Loader2 } from "lucide-react";
+import { Download, Music, Play, Video, Loader2 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
 import { cn, formatBytes, formatCompactNumber, formatDuration } from "@/lib/utils";
@@ -35,42 +35,55 @@ export function PreviewCard({ metadata, downloading, onDownload }: PreviewCardPr
     setActiveId(list[0]?.formatId ?? "best");
   };
 
+  const activeFormat = formats.find((f) => f.formatId === activeId);
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="glass mx-auto mt-8 w-full max-w-3xl overflow-hidden rounded-2xl"
+      initial={{ opacity: 0, y: 20, scale: 0.99 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      className="mx-auto mt-10 w-full max-w-2xl overflow-hidden rounded-3xl border border-border bg-card shadow-elevated"
     >
-      <div className="grid gap-0 sm:grid-cols-[200px_1fr]">
-        <div className="relative aspect-video bg-black/40 sm:aspect-auto">
-          {metadata.thumbnail ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={metadata.thumbnail}
-              alt={metadata.title}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-              <Video className="h-10 w-10" />
-            </div>
-          )}
-          {metadata.durationSeconds ? (
-            <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-xs font-medium text-white">
-              {formatDuration(metadata.durationSeconds)}
-            </span>
-          ) : null}
+      {/* Media preview */}
+      <div className="relative aspect-video bg-black">
+        {metadata.thumbnail ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={metadata.thumbnail}
+            alt={metadata.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-white/40">
+            <Video className="h-12 w-12" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/30" />
+
+        {/* Center play */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/95 shadow-xl backdrop-blur">
+            <Play className="h-5 w-5 translate-x-0.5 fill-black text-black" />
+          </div>
         </div>
 
-        <div className="p-5">
-          <span className="inline-flex items-center rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary">
-            {metadata.platformName}
+        {/* Platform + duration chips */}
+        <span className="absolute left-4 top-4 inline-flex items-center rounded-full bg-black/55 px-3 py-1 text-xs font-medium text-white backdrop-blur">
+          {metadata.platformName}
+        </span>
+        {metadata.durationSeconds ? (
+          <span className="absolute bottom-4 right-4 rounded-md bg-black/70 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
+            {formatDuration(metadata.durationSeconds)}
           </span>
-          <h3 className="mt-2 line-clamp-2 text-lg font-semibold leading-snug">
+        ) : null}
+
+        {/* Title overlay */}
+        <div className="absolute inset-x-0 bottom-0 p-4 pr-24">
+          <h3 className="line-clamp-2 text-base font-semibold leading-snug text-white">
             {metadata.title}
           </h3>
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
-            {metadata.creator ? <span>{metadata.creator}</span> : null}
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-white/70">
+            {metadata.creator ? <span className="truncate">{metadata.creator}</span> : null}
             {metadata.viewCount != null ? (
               <span>{formatCompactNumber(metadata.viewCount)} views</span>
             ) : null}
@@ -78,44 +91,66 @@ export function PreviewCard({ metadata, downloading, onDownload }: PreviewCardPr
               <span>{formatCompactNumber(metadata.likeCount)} likes</span>
             ) : null}
           </div>
+        </div>
+      </div>
 
-          <div className="mt-4 inline-flex rounded-lg bg-secondary p-1">
-            <TabButton active={tab === "video"} disabled={videoFormats.length === 0} onClick={() => onTabChange("video")}>
+      {/* Controls */}
+      <div className="p-5 sm:p-6">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-muted-foreground">
+            Choose format
+          </span>
+          <div className="inline-flex rounded-xl bg-secondary p-1">
+            <TabButton
+              active={tab === "video"}
+              disabled={videoFormats.length === 0}
+              onClick={() => onTabChange("video")}
+            >
               <Video className="h-4 w-4" /> Video
             </TabButton>
-            <TabButton active={tab === "audio"} disabled={audioFormats.length === 0} onClick={() => onTabChange("audio")}>
+            <TabButton
+              active={tab === "audio"}
+              disabled={audioFormats.length === 0}
+              onClick={() => onTabChange("audio")}
+            >
               <Music className="h-4 w-4" /> Audio
             </TabButton>
           </div>
-
-          <div className="mt-3 max-h-40 space-y-1.5 overflow-y-auto pr-1">
-            {formats.map((f) => (
-              <FormatRow
-                key={f.formatId}
-                format={f}
-                active={f.formatId === activeId}
-                onSelect={() => setActiveId(f.formatId)}
-              />
-            ))}
-          </div>
-
-          <button
-            type="button"
-            disabled={downloading}
-            onClick={() => onDownload(activeId, tab)}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
-          >
-            {downloading ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" /> Preparing your file…
-              </>
-            ) : (
-              <>
-                <Download className="h-5 w-5" /> Download {tab === "audio" ? "Audio" : "Video"}
-              </>
-            )}
-          </button>
         </div>
+
+        <div className="mt-4 grid max-h-44 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
+          {formats.map((f) => (
+            <FormatRow
+              key={f.formatId}
+              format={f}
+              active={f.formatId === activeId}
+              onSelect={() => setActiveId(f.formatId)}
+            />
+          ))}
+        </div>
+
+        <button
+          type="button"
+          disabled={downloading}
+          onClick={() => onDownload(activeId, tab)}
+          className="group mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-primary/40 active:scale-[0.99] disabled:opacity-60 disabled:active:scale-100"
+        >
+          {downloading ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" /> Preparing your file…
+            </>
+          ) : (
+            <>
+              <Download className="h-5 w-5 transition-transform group-hover:translate-y-0.5" />
+              Download {activeFormat?.label ?? (tab === "audio" ? "Audio" : "Video")}
+              {activeFormat?.filesize ? (
+                <span className="text-primary-foreground/70">
+                  · {formatBytes(activeFormat.filesize)}
+                </span>
+              ) : null}
+            </>
+          )}
+        </button>
       </div>
     </motion.div>
   );
@@ -162,20 +197,24 @@ function FormatRow({
       type="button"
       onClick={onSelect}
       className={cn(
-        "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition",
-        active ? "border-primary bg-primary/10" : "border-border hover:bg-secondary",
+        "flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.98]",
+        active
+          ? "border-primary bg-primary/10 ring-1 ring-primary/30"
+          : "border-border bg-card hover:border-foreground/20 hover:bg-secondary/60",
       )}
     >
-      <span className="flex items-center gap-2 font-medium">
-        <span className="uppercase">{format.label}</span>
-        <span className="rounded bg-secondary px-1.5 py-0.5 text-xs uppercase text-muted-foreground">
-          {format.ext}
-        </span>
-        {format.fps ? (
-          <span className="text-xs text-muted-foreground">{format.fps}fps</span>
+      <span className="flex items-center gap-1.5 text-sm font-semibold uppercase leading-none">
+        {format.label}
+        {format.fps && format.fps >= 50 ? (
+          <span className="rounded bg-primary/15 px-1 py-0.5 text-[9px] font-bold text-primary">
+            {format.fps}
+          </span>
         ) : null}
       </span>
-      <span className="text-xs text-muted-foreground">{formatBytes(format.filesize)}</span>
+      <span className="text-[11px] uppercase text-muted-foreground">
+        {format.ext}
+        {format.filesize ? ` · ${formatBytes(format.filesize)}` : ""}
+      </span>
     </button>
   );
 }

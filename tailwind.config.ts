@@ -47,6 +47,17 @@ const config: Config = {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        "2xl": "1.25rem",
+        "3xl": "1.75rem",
+      },
+      boxShadow: {
+        soft: "0 1px 2px hsl(240 10% 4% / 0.06), 0 8px 24px -12px hsl(240 10% 4% / 0.12)",
+        card: "0 1px 3px hsl(240 10% 4% / 0.05), 0 18px 40px -18px hsl(240 10% 4% / 0.18)",
+        elevated:
+          "0 4px 8px hsl(240 10% 4% / 0.08), 0 36px 64px -24px hsl(240 10% 4% / 0.28)",
+      },
+      fontFamily: {
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
       },
       backgroundImage: {
         "grid-pattern":

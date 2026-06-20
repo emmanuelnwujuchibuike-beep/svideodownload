@@ -7,9 +7,9 @@ import { useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV_LINKS = [
-  { href: "#platforms", label: "Platforms" },
-  { href: "#features", label: "Features" },
-  { href: "#history", label: "Downloads" },
+  { href: "/#platforms", label: "Platforms" },
+  { href: "/#features", label: "Features" },
+  { href: "/#faq", label: "FAQ" },
 ];
 
 export function SiteHeader() {
@@ -39,7 +39,7 @@ export function SiteHeader() {
         <div className="hidden items-center gap-3 md:flex">
           <ThemeToggle />
           <Link
-            href="#"
+            href="/#download"
             className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
           >
             Get Started
@@ -79,7 +79,7 @@ export function SiteHeader() {
             </div>
 
             <Link
-              href="#"
+              href="/#download"
               onClick={() => setOpen(false)}
               className="mt-2 rounded-xl bg-primary px-4 py-3 text-center text-base font-semibold text-primary-foreground"
             >

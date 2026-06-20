@@ -1,0 +1,50 @@
+import type { Metadata } from "next";
+
+import { PageShell } from "@/components/layout/page-shell";
+
+export const metadata: Metadata = {
+  title: "Contact",
+  description:
+    "Get in touch with the SVideoDownload team — support, copyright, and business enquiries.",
+  alternates: { canonical: "/contact" },
+};
+
+export default function ContactPage() {
+  return (
+    <PageShell
+      title="Contact us"
+      subtitle="We're a small team and we read every message."
+    >
+      <p>
+        Whether you&apos;ve hit a snag, want a platform added, or have a business
+        idea — reach out using the right address below and we&apos;ll get back to
+        you, usually within a couple of business days.
+      </p>
+
+      <h2>Support</h2>
+      <p>
+        Something not working, or a platform you&apos;d like supported?{" "}
+        <a href="mailto:support@svideodownload.com">support@svideodownload.com</a>
+      </p>
+
+      <h2>Copyright &amp; DMCA</h2>
+      <p>
+        Copyright notices and takedown concerns:{" "}
+        <a href="mailto:dmca@svideodownload.com">dmca@svideodownload.com</a> (see
+        our <a href="/dmca">DMCA policy</a>).
+      </p>
+
+      <h2>Privacy</h2>
+      <p>
+        Data and privacy requests:{" "}
+        <a href="mailto:privacy@svideodownload.com">privacy@svideodownload.com</a>
+      </p>
+
+      <h2>Business &amp; partnerships</h2>
+      <p>
+        Advertising, partnerships, or press:{" "}
+        <a href="mailto:hello@svideodownload.com">hello@svideodownload.com</a>
+      </p>
+    </PageShell>
+  );
+}

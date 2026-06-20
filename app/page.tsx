@@ -1,3 +1,4 @@
+import { Faq } from "@/components/landing/faq";
 import { Features } from "@/components/landing/features";
 import { FlagshipPlatforms } from "@/components/landing/flagship-platforms";
 import { Hero } from "@/components/landing/hero";
@@ -18,6 +19,7 @@ export default function HomePage() {
         <TikTokFlagship />
         <PlatformShowcase />
         <Features />
+        <Faq />
       </main>
       <SiteFooter />
     </>

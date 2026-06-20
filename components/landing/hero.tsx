@@ -42,7 +42,7 @@ export function Hero() {
           secure, and completely free — no login required.
         </p>
 
-        <div className="mt-12 w-full max-w-2xl">
+        <div id="download" className="mt-12 w-full max-w-2xl scroll-mt-24">
           <Downloader />
         </div>
 

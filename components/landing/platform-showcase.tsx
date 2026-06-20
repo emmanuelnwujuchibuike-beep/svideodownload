@@ -1,44 +1,8 @@
 import { CheckCircle2 } from "lucide-react";
-import type { IconType } from "react-icons";
-import {
-  SiBilibili,
-  SiDailymotion,
-  SiFacebook,
-  SiInstagram,
-  SiPinterest,
-  SiReddit,
-  SiSnapchat,
-  SiSoundcloud,
-  SiThreads,
-  SiTiktok,
-  SiTwitch,
-  SiVimeo,
-  SiVk,
-  SiX,
-  SiYoutube,
-} from "react-icons/si";
 
 import { Reveal } from "@/components/ui/reveal";
+import { BRAND_ICONS } from "@/lib/platform-icons";
 import { SHOWCASE_PLATFORMS } from "@/lib/platforms";
-import type { PlatformId } from "@/types";
-
-const BRAND_ICONS: Partial<Record<PlatformId, IconType>> = {
-  tiktok: SiTiktok,
-  instagram: SiInstagram,
-  facebook: SiFacebook,
-  twitter: SiX,
-  pinterest: SiPinterest,
-  reddit: SiReddit,
-  vimeo: SiVimeo,
-  dailymotion: SiDailymotion,
-  twitch: SiTwitch,
-  soundcloud: SiSoundcloud,
-  youtube: SiYoutube,
-  threads: SiThreads,
-  snapchat: SiSnapchat,
-  bilibili: SiBilibili,
-  vk: SiVk,
-};
 
 export function PlatformShowcase() {
   return (

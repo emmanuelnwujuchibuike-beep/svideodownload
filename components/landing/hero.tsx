@@ -1,30 +1,25 @@
-import { ShieldCheck, Sparkles, Zap } from "lucide-react";
-
 import { StatsCounter } from "@/components/landing/stats-counter";
 import { Downloader } from "@/features/downloader/downloader";
-
-const trust = [
-  { icon: ShieldCheck, label: "No login required" },
-  { icon: Zap, label: "Ultra-fast processing" },
-  { icon: Sparkles, label: "Watermark-free HD" },
-];
+import { BRAND_ICONS, FLAGSHIP_IDS } from "@/lib/platform-icons";
+import { PLATFORMS } from "@/lib/platforms";
 
 export function Hero() {
   return (
     <section className="relative overflow-hidden pb-20 pt-28 sm:pb-28 sm:pt-40">
-      {/* Ambient grid + single restrained glow */}
+      {/* Ambient grid */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 bg-grid-pattern bg-[size:44px_44px] opacity-[0.35] [mask-image:radial-gradient(ellipse_at_top,black,transparent_65%)]"
       />
+      {/* Premium gradient glow — vibrant in both light and dark */}
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[-10%] -z-10 h-[520px] w-[880px] -translate-x-1/2 rounded-full bg-gradient-to-tr from-pink-500/20 via-fuchsia-500/10 to-cyan-400/15 blur-[120px]"
+        className="pointer-events-none absolute left-1/2 top-[-12%] -z-10 h-[560px] w-[920px] -translate-x-1/2 rounded-full bg-gradient-to-tr from-pink-500/35 via-fuchsia-500/25 to-cyan-400/30 blur-[110px]"
       />
 
       <div className="container flex flex-col items-center text-center">
         <a
-          href="#platforms"
+          href="#flagship"
           className="group mb-8 inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-4 py-1.5 text-sm text-muted-foreground shadow-soft backdrop-blur transition-colors hover:text-foreground"
         >
           <span className="relative flex h-2 w-2">
@@ -51,13 +46,31 @@ export function Hero() {
           <Downloader />
         </div>
 
-        <ul className="mt-7 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 text-sm text-muted-foreground">
-          {trust.map(({ icon: Icon, label }) => (
-            <li key={label} className="inline-flex items-center gap-2">
-              <Icon className="h-4 w-4 text-primary" /> {label}
-            </li>
-          ))}
-        </ul>
+        {/* Featured platforms */}
+        <div className="mt-10 flex flex-col items-center gap-3.5">
+          <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground/70">
+            Built for the platforms you love
+          </span>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {FLAGSHIP_IDS.map((id) => {
+              const platform = PLATFORMS[id];
+              const Icon = BRAND_ICONS[id];
+              return (
+                <span
+                  key={id}
+                  className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1.5 text-sm font-medium shadow-soft backdrop-blur transition-colors hover:border-foreground/20"
+                >
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br ${platform.accent} text-white`}
+                  >
+                    {Icon ? <Icon className="h-3 w-3" /> : null}
+                  </span>
+                  {platform.name}
+                </span>
+              );
+            })}
+          </div>
+        </div>
 
         <div className="mt-16 w-full sm:mt-20">
           <StatsCounter />

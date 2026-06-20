@@ -1,4 +1,5 @@
 import { Features } from "@/components/landing/features";
+import { FlagshipPlatforms } from "@/components/landing/flagship-platforms";
 import { Hero } from "@/components/landing/hero";
 import { PlatformShowcase } from "@/components/landing/platform-showcase";
 import { TikTokFlagship } from "@/components/landing/tiktok-flagship";
@@ -13,6 +14,7 @@ export default function HomePage() {
       <main>
         <Hero />
         <HistoryPanel />
+        <FlagshipPlatforms />
         <TikTokFlagship />
         <PlatformShowcase />
         <Features />

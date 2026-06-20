@@ -1,7 +1,7 @@
 "use client";
 
 import { ClipboardPaste, Loader2, Search, X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 import { detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
@@ -9,13 +9,35 @@ import { sourceUrlSchema } from "@/lib/validation";
 import { PreviewCard } from "./preview-card";
 import { useDownloader } from "./use-downloader";
 
+// Cycled through in the input placeholder for a lively, on-brand prompt.
+const PLACEHOLDER_PLATFORMS = [
+  "TikTok",
+  "Instagram",
+  "X (Twitter)",
+  "Snapchat",
+  "YouTube",
+  "Facebook",
+  "Pinterest",
+];
+
 export function Downloader() {
   const [url, setUrl] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [phIndex, setPhIndex] = useState(0);
   const { status, metadata, error, fetchMetadata, download, reset } = useDownloader();
 
   const isBusy = status === "fetching";
   const detected = url ? detectPlatform(url) : null;
+
+  // Rotate the placeholder platform every couple of seconds (visible only while
+  // the field is empty).
+  useEffect(() => {
+    const id = setInterval(
+      () => setPhIndex((i) => (i + 1) % PLACEHOLDER_PLATFORMS.length),
+      2200,
+    );
+    return () => clearInterval(id);
+  }, []);
 
   const handlePaste = async () => {
     try {
@@ -60,7 +82,7 @@ export function Downloader() {
               autoComplete="off"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste a video link…"
+              placeholder={`Paste your ${PLACEHOLDER_PLATFORMS[phIndex]} link…`}
               aria-label="Video URL"
               className="h-16 w-full rounded-2xl bg-background/50 px-5 pr-28 text-base outline-none ring-1 ring-inset ring-border transition focus:bg-background/80 focus:ring-2 focus:ring-primary sm:text-lg"
             />

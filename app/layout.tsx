@@ -28,7 +28,6 @@ export const metadata: Metadata = {
     "mp3 download",
   ],
   alternates: { canonical: "/" },
-  icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
   openGraph: {
     type: "website",
     url: siteUrl,

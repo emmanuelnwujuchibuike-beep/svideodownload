@@ -1,0 +1,22 @@
+# Keep the worker image small and secret-free.
+node_modules
+.next
+.git
+.github
+.vercel
+.vscode
+*.log
+npm-debug.log*
+
+# NEVER bake local secrets into the image.
+.env
+.env*.local
+.env.production
+
+# Docs / infra not needed at runtime.
+README.md
+docs
+docker-compose.yml
+fly.toml
+nginx.conf
+.vercelignore

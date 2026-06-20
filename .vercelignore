@@ -1,0 +1,14 @@
+# Keep Vercel building the Next.js app — NOT the Docker worker.
+# These files are for the Docker/Fly worker only; if Vercel sees the Dockerfile
+# it tries a container build (installing yt-dlp/ffmpeg) and fails.
+Dockerfile
+.dockerignore
+docker-compose.yml
+nginx.conf
+fly.toml
+
+# Never upload local env or build artifacts.
+.env
+.env*.local
+.next
+node_modules

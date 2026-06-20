@@ -1,0 +1,54 @@
+import {
+  Headphones,
+  Infinity as InfinityIcon,
+  Layers,
+  Lock,
+  LogIn,
+  ShieldCheck,
+  Smartphone,
+  Sparkles,
+  Zap,
+} from "lucide-react";
+
+const features = [
+  { icon: LogIn, title: "No Login Required", body: "Start downloading instantly — no account, no email." },
+  { icon: InfinityIcon, title: "Unlimited Downloads", body: "No daily caps. Download as much as you need." },
+  { icon: Layers, title: "Multi-Platform Support", body: "1000+ sites supported through one engine." },
+  { icon: Headphones, title: "Audio Extraction", body: "Pull MP3, M4A, AAC or WAV from any video." },
+  { icon: Sparkles, title: "HD Quality", body: "Up to 4K where the source provides it." },
+  { icon: Zap, title: "Fast Processing", body: "Edge caching keeps extraction lightning quick." },
+  { icon: ShieldCheck, title: "Secure Downloads", body: "Encrypted transfers, no third-party redirects." },
+  { icon: Smartphone, title: "Mobile Friendly", body: "A responsive, mobile-first experience." },
+  { icon: Lock, title: "Privacy Focused", body: "We don't store your files or watch your links." },
+];
+
+export function Features() {
+  return (
+    <section id="features" className="border-t border-border/60 py-20">
+      <div className="container">
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            Everything you need, nothing you don&apos;t
+          </h2>
+          <p className="mt-3 text-muted-foreground">
+            A premium downloading experience engineered for speed, privacy and
+            quality.
+          </p>
+        </div>
+
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map(({ icon: Icon, title, body }) => (
+            <div
+              key={title}
+              className="rounded-2xl border border-border bg-card p-6 transition hover:border-primary/40"
+            >
+              <Icon className="h-6 w-6 text-primary" />
+              <h3 className="mt-4 font-semibold">{title}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}

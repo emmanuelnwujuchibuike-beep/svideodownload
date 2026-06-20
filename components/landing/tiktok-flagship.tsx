@@ -12,6 +12,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { Reveal } from "@/components/ui/reveal";
+
 const features = [
   { icon: Droplet, title: "No Watermark", body: "Clean exports with the TikTok watermark removed automatically." },
   { icon: Sparkles, title: "HD Downloads", body: "Original resolution up to 1080p and beyond when available." },
@@ -28,7 +30,7 @@ export function TikTokFlagship() {
         className="pointer-events-none absolute right-0 top-1/2 -z-10 h-96 w-96 -translate-y-1/2 rounded-full bg-pink-500/20 blur-3xl"
       />
       <div className="container grid items-center gap-12 lg:grid-cols-2">
-        <div>
+        <Reveal>
           <span className="inline-flex items-center rounded-full bg-primary/15 px-3 py-1 text-sm font-medium text-primary">
             Flagship · TikTok
           </span>
@@ -54,7 +56,7 @@ export function TikTokFlagship() {
               </div>
             ))}
           </div>
-        </div>
+        </Reveal>
 
         <div className="relative mx-auto w-full max-w-[300px]">
           {/* Floating quality badges */}

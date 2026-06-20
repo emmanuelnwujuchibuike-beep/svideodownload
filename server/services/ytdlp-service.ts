@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { writeFileSync } from "node:fs";
 import { copyFile, mkdtemp, readdir, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +10,23 @@ import { detectPlatform } from "@/lib/platforms";
 import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
 import { getOrProduce, type DownloadResult } from "./download-cache";
+
+// Optional Netscape-format cookies (set YTDLP_COOKIES to the cookies.txt
+// contents) — lets yt-dlp authenticate sign-in-walled sites like Instagram,
+// Facebook and private/age-gated videos. Written once to a temp file.
+let cookiesFile: string | null = null;
+if (process.env.YTDLP_COOKIES) {
+  try {
+    const path = join(tmpdir(), "svd-cookies.txt");
+    writeFileSync(path, process.env.YTDLP_COOKIES, "utf8");
+    cookiesFile = path;
+  } catch {
+    cookiesFile = null;
+  }
+}
+function cookieArgs(): string[] {
+  return cookiesFile ? ["--cookies", cookiesFile] : [];
+}
 
 /**
  * Thin, typed wrapper around the yt-dlp binary.
@@ -269,6 +287,7 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
       "--no-call-home",
       "--socket-timeout",
       "15",
+      ...cookieArgs(),
       url,
     ],
     METADATA_TIMEOUT_MS,
@@ -298,6 +317,7 @@ function buildDownloadArgs(
       contentType: "audio/mpeg",
       args: withFfmpeg([
         ...accelArgs(),
+        ...cookieArgs(),
         "-f",
         "bestaudio/best",
         "-x",
@@ -338,6 +358,7 @@ function buildDownloadArgs(
     contentType: "video/mp4",
     args: withFfmpeg([
       ...accelArgs(),
+      ...cookieArgs(),
       "-f",
       selector,
       "--merge-output-format",

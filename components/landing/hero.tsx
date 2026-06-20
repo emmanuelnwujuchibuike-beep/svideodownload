@@ -1,5 +1,6 @@
 import { ShieldCheck, Sparkles, Zap } from "lucide-react";
 
+import { StatsCounter } from "@/components/landing/stats-counter";
 import { Downloader } from "@/features/downloader/downloader";
 
 const trust = [
@@ -50,6 +51,10 @@ export function Hero() {
             </li>
           ))}
         </ul>
+
+        <div className="mt-12 w-full">
+          <StatsCounter />
+        </div>
       </div>
     </section>
   );

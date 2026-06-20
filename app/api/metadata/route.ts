@@ -71,7 +71,7 @@ export async function POST(request: Request) {
         return fail("Downloader is temporarily unavailable.", "INTERNAL", 503);
       }
       return fail(
-        "We couldn't extract this link. It may be private, removed, or unsupported.",
+        "Couldn't fetch this video — it may be private, region-locked, removed, or require sign-in. Some platforms (Instagram, Facebook) need cookies or a proxy configured on the server.",
         "EXTRACTION_FAILED",
         422,
       );

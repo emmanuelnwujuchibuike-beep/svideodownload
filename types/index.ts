@@ -69,6 +69,7 @@ export type ExtractorName =
   | "instagram"
   | "facebook"
   | "pinterest"
+  | "snapchat"
   | "ytdlp";
 
 export interface VideoMetadata {

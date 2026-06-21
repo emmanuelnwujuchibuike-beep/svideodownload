@@ -11,6 +11,7 @@ import type { VideoMetadata } from "@/types";
 import { facebookExtractor } from "./facebook";
 import { instagramExtractor } from "./instagram";
 import { pinterestExtractor } from "./pinterest";
+import { snapchatExtractor } from "./snapchat";
 import { tiktokExtractor } from "./tiktok";
 import { twitterExtractor } from "./twitter";
 import type { Extractor } from "./types";
@@ -28,6 +29,7 @@ const CUSTOM_EXTRACTORS: Extractor[] = [
   instagramExtractor,
   facebookExtractor,
   pinterestExtractor,
+  snapchatExtractor,
 ];
 
 const METADATA_TTL_SECONDS = Number(

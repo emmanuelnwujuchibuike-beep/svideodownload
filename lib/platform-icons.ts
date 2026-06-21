@@ -1,4 +1,5 @@
 import type { IconType } from "react-icons";
+import { FaLinkedin } from "react-icons/fa";
 import {
   SiBilibili,
   SiDailymotion,
@@ -34,6 +35,7 @@ export const BRAND_ICONS: Partial<Record<PlatformId, IconType>> = {
   youtube: SiYoutube,
   threads: SiThreads,
   snapchat: SiSnapchat,
+  linkedin: FaLinkedin,
   bilibili: SiBilibili,
   vk: SiVk,
 };

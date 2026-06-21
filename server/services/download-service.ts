@@ -1,8 +1,13 @@
+import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+
 import { getCachedMetadata, getMetadata } from "@/server/extractors";
 import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
-import type { DownloadResult } from "./download-cache";
+import { getOrProduce, type DownloadResult } from "./download-cache";
 import { prepareDownload, YtDlpError } from "./ytdlp-service";
+
+const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
 
 /**
  * Orchestrates a download: prefers the fast direct-CDN proxy path produced by a
@@ -66,6 +71,72 @@ async function proxyDownload(format: MediaFormat): Promise<DownloadResult> {
   };
 }
 
+/**
+ * Transcodes a direct CDN URL to H.264/AAC MP4 with ffmpeg. Used for the
+ * Facebook fallback, whose direct streams are often VP9 (audio-only on iOS).
+ * Result is cached so a trending clip is only transcoded once.
+ */
+async function transcodeToH264(format: MediaFormat): Promise<DownloadResult> {
+  const key = createHash("sha256")
+    .update(`fbh264|${format.directUrl}`)
+    .digest("hex")
+    .slice(0, 40);
+
+  const headerArg = format.httpHeaders
+    ? Object.entries(format.httpHeaders)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("\r\n")
+    : "";
+
+  return getOrProduce(key, "mp4", "video/mp4", (finalPath) =>
+    new Promise<void>((resolve, reject) => {
+      const args = [
+        ...(headerArg ? ["-headers", headerArg] : []),
+        "-i",
+        format.directUrl!,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-movflags",
+        "+faststart",
+        "-y",
+        finalPath,
+      ];
+      let child;
+      try {
+        child = spawn(FFMPEG, args, { windowsHide: true });
+      } catch {
+        reject(new YtDlpError("ffmpeg not found", "DOWNLOAD_FAILED"));
+        return;
+      }
+      let err = "";
+      child.stderr.on("data", (c: Buffer) => {
+        if (err.length < 2000) err += c.toString();
+      });
+      child.on("error", (e: Error) =>
+        reject(new YtDlpError(e.message, "DOWNLOAD_FAILED")),
+      );
+      child.on("close", (code) =>
+        code === 0
+          ? resolve()
+          : reject(
+              new YtDlpError(
+                `transcode failed: ${err.slice(-300)}`,
+                "DOWNLOAD_FAILED",
+              ),
+            ),
+      );
+    }),
+  );
+}
+
 function findFormat(
   meta: VideoMetadata,
   formatId: string,
@@ -118,6 +189,15 @@ export async function resolveDownload(
   } catch (err) {
     // yt-dlp couldn't handle it — use the direct URL as a last resort.
     if (hasDirect) {
+      // Facebook direct URLs are often VP9 (audio-only on iOS) → transcode to
+      // H.264 so the file plays everywhere. Other platforms stream as-is.
+      if (preferYtdlp) {
+        try {
+          return { ...(await transcodeToH264(format!)), title };
+        } catch {
+          /* transcode unavailable/failed — stream the original as a last resort */
+        }
+      }
       return { ...(await proxyDownload(format!)), title };
     }
     throw err;

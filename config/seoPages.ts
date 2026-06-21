@@ -832,6 +832,178 @@ export const CLUSTERS: SeoCluster[] = [
       },
     ],
   },
+  {
+    id: "reddit",
+    platformId: "reddit",
+    brand: "Reddit",
+    thing: "videos",
+    stem: "reddit",
+    intros: [
+      "Save Reddit videos with sound — paste a post link and download in seconds.",
+      "Reddit splits video and audio into separate streams; we merge them so your download actually has sound.",
+      "The easy way to keep Reddit clips offline, audio included.",
+    ],
+    facts: [
+      "Reddit serves video and audio as separate DASH streams, which is why most screen-grabs and lazy downloaders end up silent. We fetch both and merge them into one MP4 with sound.",
+      "It works for v.redd.it links, full post URLs and crossposts, saving the original quality the uploader provided.",
+      "Everything runs in your browser on iPhone, Android, Windows and Mac — no app and no Reddit login.",
+    ],
+    baseBenefits: [
+      { title: "With sound", text: "Merges Reddit's separate video + audio streams so the file isn't silent." },
+      { title: "Original quality", text: "Saves the best resolution the post provides." },
+      { title: "No login", text: "Public posts download without a Reddit account." },
+    ],
+    baseFaqs: [
+      { q: "Is the Reddit video downloader free?", a: "Yes — free and unlimited, no account needed." },
+      { q: "Why are my Reddit downloads usually silent?", a: "Reddit stores video and audio separately. We merge them, so your download keeps the sound." },
+      { q: "Does it work with v.redd.it links?", a: "Yes — paste a v.redd.it link or the full post URL." },
+      { q: "Does it work on iPhone and Android?", a: "Yes — directly in your mobile browser, saved to your device." },
+      { q: "Is it safe?", a: "Yes — encrypted downloads, no stored files and no login." },
+    ],
+    modifiers: [
+      {
+        slug: "video-downloader",
+        title: "Reddit Video Downloader (With Sound)",
+        keyword: "Reddit video downloader",
+        h1: "Reddit Video Downloader — With Sound",
+        tagline: "Download Reddit videos with audio — free, no login.",
+        angle:
+          "Our Reddit video downloader saves any public Reddit video as an MP4 with sound — merging Reddit's separate video and audio streams that usually leave downloads silent. Paste a post or v.redd.it link and download in original quality, no app and no account.",
+        benefit: { title: "Audio merged", text: "Combines Reddit's split streams into one MP4 with sound." },
+        faqs: [{ q: "Can I download Reddit videos with sound on iPhone?", a: "Yes — paste the link in Safari and the merged MP4 (with audio) saves to your device." }],
+        secondary: ["download reddit video", "reddit video with sound", "v.redd.it downloader"],
+      },
+    ],
+  },
+  {
+    id: "vimeo",
+    platformId: "vimeo",
+    brand: "Vimeo",
+    thing: "videos",
+    stem: "vimeo",
+    intros: [
+      "Download Vimeo videos in HD — paste a link and choose your quality.",
+      "Keep Vimeo videos offline in crisp quality, no app and no account.",
+      "The simple way to save public Vimeo videos on any device.",
+    ],
+    facts: [
+      "Vimeo is built for high-quality video, and we preserve it — downloading the best resolution the uploader allows, up to Full HD and 4K where available.",
+      "It's ideal for saving showreels, tutorials and films to watch offline, or archiving your own uploads in original quality.",
+      "Everything runs in your browser on iPhone, Android, Windows and Mac, with fast server-side processing.",
+    ],
+    baseBenefits: [
+      { title: "Up to 4K", text: "Download the best resolution the video offers." },
+      { title: "MP3 audio", text: "Extract the soundtrack from any Vimeo video as MP3." },
+      { title: "No app", text: "Runs in the browser on every device — nothing to install." },
+    ],
+    baseFaqs: [
+      { q: "Is the Vimeo downloader free?", a: "Yes — free and unlimited with no account." },
+      { q: "What quality can I download?", a: "Up to the highest the source offers, including HD and 4K. You pick the resolution first." },
+      { q: "Does it work on iPhone and Android?", a: "Yes — directly in your mobile browser, saved to your device." },
+      { q: "Can I download password-protected videos?", a: "No — only public Vimeo videos can be downloaded." },
+      { q: "Is it safe?", a: "Yes — encrypted downloads, no stored files and no login." },
+    ],
+    modifiers: [
+      {
+        slug: "video-downloader",
+        title: "Vimeo Video Downloader (HD & 4K)",
+        keyword: "Vimeo video downloader",
+        h1: "Vimeo Video Downloader — HD & 4K",
+        tagline: "Download Vimeo videos in HD or 4K — free and fast.",
+        angle:
+          "Our Vimeo video downloader saves public Vimeo videos as HD MP4 files at the resolution you choose, up to 4K, or extracts the audio as MP3. Paste the video link and download — no app, no account and no watermark.",
+        benefit: { title: "Pristine quality", text: "Preserves Vimeo's high quality up to 4K." },
+        faqs: [{ q: "Can I download Vimeo videos in 4K?", a: "Yes, when the source offers it — we always fetch the highest available resolution." }],
+        secondary: ["download vimeo video", "vimeo to mp4", "save vimeo video"],
+      },
+    ],
+  },
+  {
+    id: "linkedin",
+    platformId: "linkedin",
+    brand: "LinkedIn",
+    thing: "videos",
+    stem: "linkedin",
+    intros: [
+      "Download LinkedIn videos in HD — paste a post link and save in seconds.",
+      "Keep LinkedIn video posts offline for reference, no app and no login.",
+      "The professional way to save LinkedIn videos on any device.",
+    ],
+    facts: [
+      "Save native LinkedIn video posts as HD MP4 files — useful for keeping talks, demos, case studies and thought-leadership clips to reference or repurpose.",
+      "We fetch the original source file rather than a re-encode, so your saved video stays sharp for presentations or reposts.",
+      "Everything runs in your browser on iPhone, Android, Windows and Mac, with no LinkedIn login required for public posts.",
+    ],
+    baseBenefits: [
+      { title: "HD video", text: "Download LinkedIn video posts at the original quality." },
+      { title: "MP3 audio", text: "Extract the audio from any LinkedIn video as MP3." },
+      { title: "No login", text: "Public posts download without your LinkedIn account." },
+    ],
+    baseFaqs: [
+      { q: "Is the LinkedIn video downloader free?", a: "Yes — free and unlimited with no account." },
+      { q: "Can I download any LinkedIn video?", a: "You can download public, native LinkedIn video posts. Private or members-only content can't be accessed." },
+      { q: "Does it work on iPhone and Android?", a: "Yes — directly in your mobile browser, saved to your device." },
+      { q: "Do I need to log in?", a: "No. Public video posts download without signing in." },
+      { q: "Is it safe?", a: "Yes — encrypted downloads, no stored files and no login." },
+    ],
+    modifiers: [
+      {
+        slug: "video-downloader",
+        title: "LinkedIn Video Downloader (HD MP4)",
+        keyword: "LinkedIn video downloader",
+        h1: "LinkedIn Video Downloader — HD MP4",
+        tagline: "Download LinkedIn videos in HD — free, no login.",
+        angle:
+          "Our LinkedIn video downloader saves public LinkedIn video posts as HD MP4 files, or extracts the audio as MP3. Paste the post link and download instantly — no app, no account and no watermark. Great for saving talks and demos to reference later.",
+        benefit: { title: "Reference offline", text: "Keep professional videos for offline viewing or reposting." },
+        faqs: [{ q: "How do I download a LinkedIn video?", a: "Open the post, copy its link, paste it here and tap Download." }],
+        secondary: ["download linkedin video", "linkedin to mp4", "save linkedin video"],
+      },
+    ],
+  },
+  {
+    id: "threads",
+    platformId: "threads",
+    brand: "Threads",
+    thing: "videos",
+    stem: "threads",
+    intros: [
+      "Download Threads videos in HD — paste a post link and save in seconds.",
+      "Keep videos from Threads offline in original quality, no app and no login.",
+      "The simple way to save Threads video posts on any device.",
+    ],
+    facts: [
+      "Save native video posts from Threads as HD MP4 files, or extract the audio as MP3 — handy for archiving clips or reposting them elsewhere.",
+      "We fetch the original source file Threads serves, so your saved video keeps its full quality and sound.",
+      "Everything runs in your browser on iPhone, Android, Windows and Mac, with no Threads login required for public posts.",
+    ],
+    baseBenefits: [
+      { title: "HD video", text: "Download Threads videos at the original quality." },
+      { title: "MP3 audio", text: "Extract the sound from any Threads video as MP3." },
+      { title: "No login", text: "Public posts download without your Threads account." },
+    ],
+    baseFaqs: [
+      { q: "Is the Threads video downloader free?", a: "Yes — free and unlimited with no account." },
+      { q: "Can I download any Threads video?", a: "You can download public Threads video posts. Private accounts can't be accessed." },
+      { q: "Does it work on iPhone and Android?", a: "Yes — directly in your mobile browser, saved to your device." },
+      { q: "Do I need to log in?", a: "No. Public video posts download without signing in." },
+      { q: "Is it safe?", a: "Yes — encrypted downloads, no stored files and no login." },
+    ],
+    modifiers: [
+      {
+        slug: "video-downloader",
+        title: "Threads Video Downloader (HD MP4)",
+        keyword: "Threads video downloader",
+        h1: "Threads Video Downloader — HD MP4",
+        tagline: "Download Threads videos in HD — free, no login.",
+        angle:
+          "Our Threads video downloader saves public Threads video posts as HD MP4 files, or extracts the audio as MP3. Paste the post link and download instantly — no app, no account and no watermark.",
+        benefit: { title: "Original quality", text: "Saves Threads videos at full source quality with sound." },
+        faqs: [{ q: "How do I download a Threads video?", a: "Open the post, copy its link, paste it here and tap Download." }],
+        secondary: ["download threads video", "threads to mp4", "save threads video"],
+      },
+    ],
+  },
 ];
 
 /** Attach the shared generic modifiers to each cluster (after its specific ones). */
@@ -847,6 +1019,10 @@ const GENERIC_BY_CLUSTER: Record<string, SeoModifier[]> = {
   facebook: GENERIC,
   pinterest: GENERIC,
   snapchat: [mMp4, mIphone, mAndroid, mOnline, mFree, mSave, mWithoutApp],
+  reddit: GENERIC,
+  vimeo: GENERIC,
+  linkedin: GENERIC,
+  threads: GENERIC,
 };
 
 for (const cluster of CLUSTERS) {

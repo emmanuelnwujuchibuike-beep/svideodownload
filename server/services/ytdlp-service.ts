@@ -543,11 +543,18 @@ function buildDownloadArgs(
   // Where a single-file progressive already exists at the exact height, yt-dlp
   // uses it (no merge). "best" is capped at 1080p to avoid multi-GB 4K files.
   const height = formatId === "best" ? 1080 : parseInt(formatId, 10) || 1080;
+  // Order matters. Every fallback that selects a SINGLE format requires a video
+  // codec ([vcodec!=none]) so we never accidentally save an audio-only file in
+  // an mp4. The heightless `bestvideo+bestaudio` rung handles sources whose
+  // video streams carry no height (Instagram posts/stories, Facebook posts) —
+  // without it those fell through to bare `best` and produced audio.
   const selector =
     `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/` +
-    `best[height<=${height}][ext=mp4]/` +
     `bestvideo[height<=${height}]+bestaudio/` +
-    `best[height<=${height}]/best`;
+    `best[height<=${height}][ext=mp4][vcodec!=none]/` +
+    `best[height<=${height}][vcodec!=none]/` +
+    `bestvideo+bestaudio/` +
+    `best[vcodec!=none]/best`;
 
   return {
     ext: "mp4",

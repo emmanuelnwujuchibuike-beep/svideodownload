@@ -10,6 +10,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { SiteHeader } from "@/components/layout/site-header";
+import { isAdmin } from "@/lib/admin";
 import { fetchDownloadStats, fetchProxyUsage } from "@/lib/admin-stats";
 import { PLATFORMS } from "@/lib/platforms";
 import { createClient } from "@/lib/supabase/server";
@@ -41,7 +42,7 @@ export default async function AdminPage() {
     .select("role")
     .eq("id", user.id)
     .single();
-  if (profile?.role !== "admin") redirect("/");
+  if (!isAdmin(profile?.role, user.email)) redirect("/");
 
   const [proxy, downloads] = await Promise.all([
     fetchProxyUsage(),

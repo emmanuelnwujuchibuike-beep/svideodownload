@@ -1,6 +1,8 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { isAdmin } from "@/lib/admin";
+
 /**
  * Refreshes the Supabase auth session on each request (so access tokens stay
  * fresh and server components see the right user) and guards protected routes.
@@ -53,7 +55,7 @@ export async function middleware(request: NextRequest) {
       .select("role")
       .eq("id", user.id)
       .single();
-    if (profile?.role !== "admin") {
+    if (!isAdmin(profile?.role, user.email)) {
       return NextResponse.redirect(new URL("/", request.url));
     }
   }

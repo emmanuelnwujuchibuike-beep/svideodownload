@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { isAdmin } from "@/lib/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +39,7 @@ export default async function AccountPage() {
     (user.user_metadata?.avatar_url as string | undefined) ||
     profile?.avatar_url ||
     null;
-  const role = profile?.role ?? "user";
+  const admin = isAdmin(profile?.role, user.email);
   const created = profile?.created_at ?? user.created_at;
   const initial = email.charAt(0).toUpperCase();
 
@@ -71,7 +72,7 @@ export default async function AccountPage() {
             )}
             <div className="min-w-0">
               <p className="truncate text-lg font-semibold">{email}</p>
-              {role === "admin" ? (
+              {admin ? (
                 <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                   <ShieldCheck className="h-3 w-3" /> Admin
                 </span>
@@ -99,7 +100,7 @@ export default async function AccountPage() {
             >
               Download a video
             </Link>
-            {role === "admin" ? (
+            {admin ? (
               <Link
                 href="/admin"
                 className="inline-flex items-center justify-center rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition hover:bg-secondary"

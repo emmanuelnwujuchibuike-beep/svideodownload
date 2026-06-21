@@ -168,10 +168,12 @@ export async function resolveDownload(
   const format = findFormat(meta, formatId, kind);
   const hasDirect = !!format?.directUrl && format.kind === kind;
 
-  // Facebook's direct URLs are frequently VP9 (which plays as audio-only on
-  // iOS), so for video we try yt-dlp's H.264 selector FIRST and only use the
-  // direct URL if yt-dlp can't extract it.
-  const preferYtdlp = meta.platform === "facebook" && kind === "video";
+  // Meta platforms' direct URLs can be VP9/DASH (audio-only or blank on iOS), so
+  // for video we try yt-dlp's H.264 selector FIRST and only fall back to the
+  // direct URL (transcoded to H.264) if yt-dlp can't extract it.
+  const preferYtdlp =
+    ["facebook", "instagram", "threads"].includes(meta.platform) &&
+    kind === "video";
 
   // Fast path: a custom extractor gave us a direct CDN URL for the exact kind
   // requested — unless we're preferring yt-dlp for codec-compatibility reasons.

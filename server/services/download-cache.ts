@@ -137,16 +137,31 @@ export async function getOrProduce(
   await mkdir(CACHE_DIR, { recursive: true });
 
   // Synchronous get/set (no await between) keeps coalescing race-free.
+  // Files smaller than this are treated as corrupt/partial (never cached/served).
+  const MIN_BYTES = 1024;
+
   let work = inflight.get(key);
   if (!work) {
     const finalPath = cachePathFor(key, ext);
     work = (async () => {
       if (await isFresh(finalPath)) {
         const { size } = await stat(finalPath);
-        return { filePath: finalPath, size };
+        if (size >= MIN_BYTES) return { filePath: finalPath, size };
+        await rm(finalPath, { force: true }); // drop a stale/corrupt cached file
       }
-      await producer(finalPath);
-      const { size } = await stat(finalPath);
+      try {
+        await producer(finalPath);
+      } catch (err) {
+        // A failed/interrupted producer can leave a partial file — remove it so
+        // we never serve or cache a blank/corrupt download.
+        await rm(finalPath, { force: true });
+        throw err;
+      }
+      const { size } = await stat(finalPath).catch(() => ({ size: 0 }));
+      if (size < MIN_BYTES) {
+        await rm(finalPath, { force: true });
+        throw new Error("produced file is empty or too small");
+      }
       return { filePath: finalPath, size };
     })();
     inflight.set(key, work);

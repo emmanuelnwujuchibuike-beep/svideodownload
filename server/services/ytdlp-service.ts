@@ -379,12 +379,40 @@ function parseMetadata(stdout: string, url: string): VideoMetadata {
 }
 
 /**
+ * Snapchat `/t/<code>` share links 404 for yt-dlp's dedicated Spotlight
+ * extractor (which only matches `/spotlight/`), so they fall to the generic
+ * extractor and fail. Follow the redirect to the canonical URL first.
+ */
+async function canonicalizeUrl(url: string): Promise<string> {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "snapchat.com" && u.pathname.startsWith("/t/")) {
+      const res = await fetch(url, {
+        method: "GET",
+        redirect: "follow",
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) " +
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile Safari/604.1",
+        },
+      });
+      if (res.url && res.url !== url) return res.url;
+    }
+  } catch {
+    /* fall through to original url */
+  }
+  return url;
+}
+
+/**
  * Extracts metadata for a URL. Uses the residential proxy only when this call is
  * a *forced proxy retry* (the registry re-runs extraction under the proxy after
  * a direct failure for a proxy-eligible platform). The eventual video download
  * stays direct, so proxy bandwidth is minimal.
  */
 export async function extractMetadata(url: string): Promise<VideoMetadata> {
+  url = await canonicalizeUrl(url);
   const baseArgs = [
     "-J",
     "--no-playlist",
@@ -413,6 +441,7 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
  * why a platform yields zero formats.
  */
 export async function probeExtraction(url: string): Promise<unknown> {
+  url = await canonicalizeUrl(url);
   const platform = detectPlatform(url).id;
   const baseArgs = [
     "-J",

@@ -141,6 +141,150 @@ export const BLOG_POSTS: BlogPost[] = [
       },
     ],
   },
+  {
+    slug: "how-to-download-youtube-shorts",
+    title: "How to Download YouTube Shorts (HD & MP3) in 2026",
+    description:
+      "Save YouTube Shorts as HD MP4 or convert them to MP3 — free, on iPhone, Android and PC, with no app to install.",
+    date: "2026-06-16",
+    readingMinutes: 4,
+    toolSlug: "youtube-shorts-downloader",
+    body: [
+      {
+        paragraphs: [
+          "YouTube Shorts are quick to watch but there's no built-in download button. Whether you want to watch offline, save your own Short, or grab the audio, here's the simplest way to download YouTube Shorts in 2026.",
+        ],
+      },
+      {
+        heading: "Download a Short in 3 steps",
+        bullets: [
+          "Open the Short and tap Share → Copy link.",
+          "Paste it into our YouTube Shorts downloader.",
+          "Choose HD video or MP3 audio — the file saves to your device.",
+        ],
+      },
+      {
+        heading: "Video or MP3?",
+        paragraphs: [
+          "Pick MP4 video to keep the full clip, or MP3 if you only want the sound — handy for music, voiceovers or sound effects. You can choose the resolution up to the highest the Short was uploaded in.",
+        ],
+      },
+      {
+        heading: "Does it work on iPhone?",
+        paragraphs: [
+          "Yes. It runs in Safari or Chrome with no app, and the file saves to Files or Photos. The same link works on Android and desktop too.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "how-to-download-twitter-x-videos",
+    title: "How to Download Twitter / X Videos (Including Reposts)",
+    description:
+      "Save videos and GIFs from X (Twitter) in HD — even from reposts and quote tweets — free and without an account.",
+    date: "2026-06-17",
+    readingMinutes: 4,
+    toolSlug: "twitter-video-downloader",
+    body: [
+      {
+        paragraphs: [
+          "X (formerly Twitter) doesn't let you save videos directly. This guide shows how to download any public tweet's video in HD — including videos inside reposts and quote tweets — for free.",
+        ],
+      },
+      {
+        heading: "The quick method",
+        bullets: [
+          "Tap the share icon on the tweet and choose Copy link.",
+          "Paste the link into our Twitter video downloader.",
+          "Pick a quality and download the MP4.",
+        ],
+      },
+      {
+        heading: "Reposts and quote tweets",
+        paragraphs: [
+          "When a video lives inside a reposted or quoted tweet, our extractor reads the original media so it still downloads. For private or age-restricted accounts, the video can't be accessed without being logged in.",
+        ],
+      },
+      {
+        heading: "Saving Twitter GIFs",
+        paragraphs: [
+          "Twitter GIFs are really short videos, so they save as MP4. You can keep them as-is or convert to a real GIF with any converter.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "how-to-download-facebook-videos",
+    title: "How to Download Facebook Videos & Reels in HD",
+    description:
+      "Save public Facebook videos, Reels and Watch clips in HD or SD — free, on any device, with no login.",
+    date: "2026-06-18",
+    readingMinutes: 4,
+    toolSlug: "facebook-video-downloader",
+    body: [
+      {
+        paragraphs: [
+          "Facebook hides its download options, but saving a public video, Reel or Watch clip is straightforward. Here's how to download Facebook videos in HD on any device.",
+        ],
+      },
+      {
+        heading: "Step by step",
+        bullets: [
+          "Open the video, tap the three dots or Share, and Copy link.",
+          "Paste it into our Facebook video downloader.",
+          "Choose HD or SD and download the MP4.",
+        ],
+      },
+      {
+        heading: "A note on quality and playback",
+        paragraphs: [
+          "We always aim for an H.264 MP4, which plays on every device including iPhone — some Facebook HD streams use VP9, which iOS can't play, so we prefer the universally compatible version automatically.",
+        ],
+      },
+      {
+        heading: "What about private videos?",
+        paragraphs: [
+          "Only public Facebook videos can be downloaded. Private group or friends-only videos require being logged in and aren't accessible.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "how-to-download-snapchat-stories-and-spotlight",
+    title: "How to Download Snapchat Stories & Spotlight Videos",
+    description:
+      "Save public Snapchat Stories and Spotlight clips as MP4 — free, no app, no login — before they disappear.",
+    date: "2026-06-19",
+    readingMinutes: 4,
+    toolSlug: "snapchat-story-downloader",
+    body: [
+      {
+        paragraphs: [
+          "Snapchat is built around content that disappears, which makes saving it tricky. Here's how to download public Snapchat Stories and Spotlight videos before they're gone.",
+        ],
+      },
+      {
+        heading: "Download a public Story",
+        bullets: [
+          "Open a public profile or Story link (e.g. snapchat.com/@username).",
+          "Paste it into our Snapchat downloader.",
+          "Download the current video snap as MP4.",
+        ],
+      },
+      {
+        heading: "Spotlight and share links",
+        paragraphs: [
+          "Spotlight clips are public and easy to save — even snapchat.com/t/ share links work, because we resolve them to the real video automatically.",
+        ],
+      },
+      {
+        heading: "Remember the 24-hour window",
+        paragraphs: [
+          "Stories are live for only 24 hours. If a profile has no current video Story (or only photos), there's nothing to download — so grab Stories while they're still up.",
+        ],
+      },
+    ],
+  },
 ];
 
 export const BLOG_SLUGS = BLOG_POSTS.map((p) => p.slug);

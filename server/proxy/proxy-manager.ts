@@ -56,19 +56,22 @@ const FALLBACK_ONLY = bool(process.env.PROXY_FALLBACK_ONLY, true);
 const LIMIT_GB = num(process.env.PROXY_BANDWIDTH_LIMIT_GB, 2);
 const COST_PER_GB = num(process.env.PROXY_COST_PER_GB, 0); // optional, for $ estimate
 
-// Platforms that MAY use the proxy as a fallback.
+// Platforms that MAY use the proxy as a fallback. YouTube blocks datacenter IPs
+// ("Sign in to confirm you're not a bot"), so a residential IP is needed for
+// extraction. Threads is login-walled like Instagram.
 const PROXY_PLATFORMS = list(process.env.PROXY_PLATFORMS, [
   "instagram",
   "facebook",
   "twitter",
   "snapchat",
   "linkedin",
+  "youtube",
+  "threads",
 ]);
 // Platforms that ALWAYS stay direct (never proxy), even on a block.
 const DIRECT_PLATFORMS = list(process.env.PROXY_DIRECT_PLATFORMS, [
   "tiktok",
   "pinterest",
-  "youtube",
 ]);
 
 // Backward-compat: a single EXTRACTOR_PROXY URL still works if the structured

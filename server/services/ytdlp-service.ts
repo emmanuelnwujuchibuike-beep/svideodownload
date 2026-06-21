@@ -379,15 +379,17 @@ function parseMetadata(stdout: string, url: string): VideoMetadata {
 }
 
 /**
- * Snapchat `/t/<code>` share links 404 for yt-dlp's dedicated Spotlight
- * extractor (which only matches `/spotlight/`), so they fall to the generic
- * extractor and fail. Follow the redirect to the canonical URL first.
+ * Resolves share/short links to their canonical URL so the right extractor runs:
+ *  - Snapchat `/t/<code>` (only `/spotlight/` matches the dedicated extractor)
+ *  - Pinterest `pin.it/<code>` (redirects to pinterest.com/pin/<id>)
  */
 async function canonicalizeUrl(url: string): Promise<string> {
   try {
     const u = new URL(url);
     const host = u.hostname.replace(/^www\./, "");
-    if (host === "snapchat.com" && u.pathname.startsWith("/t/")) {
+    const isSnapShare = host === "snapchat.com" && u.pathname.startsWith("/t/");
+    const isPinShare = host === "pin.it";
+    if (isSnapShare || isPinShare) {
       const res = await fetch(url, {
         method: "GET",
         redirect: "follow",
@@ -705,6 +707,7 @@ export async function prepareDownload(
   formatId: string,
   kind: MediaKind,
 ): Promise<DownloadResult> {
+  url = await canonicalizeUrl(url);
   // The real output template is set per-production inside produceTo; this
   // placeholder is only here so buildDownloadArgs can return args/ext/type.
   const { args, ext, contentType } = buildDownloadArgs(

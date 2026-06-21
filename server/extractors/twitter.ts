@@ -32,6 +32,19 @@ interface TwResult {
   text?: string;
   user?: { name?: string; screen_name?: string };
   mediaDetails?: TwMedia[];
+  // Reposts / quote tweets nest the original tweet (with its video) here.
+  quoted_tweet?: TwResult;
+  retweeted_status_result?: { result?: TwResult };
+}
+
+/** Collects media from a tweet AND any tweet it reposts/quotes. */
+function collectMedia(t: TwResult | undefined, depth = 0): TwMedia[] {
+  if (!t || depth > 3) return [];
+  return [
+    ...(t.mediaDetails ?? []),
+    ...collectMedia(t.quoted_tweet, depth + 1),
+    ...collectMedia(t.retweeted_status_result?.result, depth + 1),
+  ];
 }
 
 /** Extracts the numeric tweet id from any x.com / twitter.com status URL. */
@@ -132,14 +145,18 @@ export const twitterExtractor: Extractor = {
       clearTimeout(timer);
     }
 
-    if (data.__typename === "TweetTombstone" || !data.mediaDetails) {
-      throw new ExtractionError("Tweet unavailable or has no video");
+    if (data.__typename === "TweetTombstone") {
+      throw new ExtractionError("Tweet unavailable");
     }
 
-    const formats = buildFormats(data.mediaDetails);
+    // Include media from the tweet AND any tweet it reposts/quotes.
+    const media = collectMedia(data);
+    if (media.length === 0) throw new ExtractionError("Tweet has no video");
+
+    const formats = buildFormats(media);
     if (formats.length === 0) throw new ExtractionError("No video in tweet");
 
-    const durationMs = data.mediaDetails.find((m) => m.video_info)?.video_info
+    const durationMs = media.find((m) => m.video_info)?.video_info
       ?.duration_millis;
 
     return {
@@ -149,8 +166,7 @@ export const twitterExtractor: Extractor = {
       sourceUrl: url,
       title: data.text?.trim() || "X video",
       description: data.text?.trim() || null,
-      thumbnail:
-        data.mediaDetails.find((m) => m.media_url_https)?.media_url_https ?? null,
+      thumbnail: media.find((m) => m.media_url_https)?.media_url_https ?? null,
       durationSeconds: durationMs ? Math.round(durationMs / 1000) : null,
       creator: data.user?.name || data.user?.screen_name || null,
       uploadDate: null,

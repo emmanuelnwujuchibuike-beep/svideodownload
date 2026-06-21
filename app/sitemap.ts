@@ -1,14 +1,13 @@
 import type { MetadataRoute } from "next";
 
 import { BLOG_SLUGS } from "@/lib/seo/blog";
-import { DOWNLOADER_SLUGS } from "@/lib/seo/downloaders";
-
+import { SEO_SLUGS } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
 
-  const downloaders: MetadataRoute.Sitemap = DOWNLOADER_SLUGS.map((slug) => ({
+  const downloaders: MetadataRoute.Sitemap = SEO_SLUGS.map((slug) => ({
     url: `${siteUrl}/${slug}`,
     lastModified: now,
     changeFrequency: "weekly",

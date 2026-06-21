@@ -6,8 +6,7 @@ import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { BLOG_SLUGS, getPost } from "@/lib/seo/blog";
-import { getDownloader } from "@/lib/seo/downloaders";
-
+import { getSeoPage } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
 export function generateStaticParams() {
@@ -47,7 +46,7 @@ export default async function BlogPostPage({
   const post = getPost(slug);
   if (!post) notFound();
 
-  const tool = post.toolSlug ? getDownloader(post.toolSlug) : undefined;
+  const tool = post.toolSlug ? getSeoPage(post.toolSlug) : undefined;
 
   const articleLd = {
     "@context": "https://schema.org",
@@ -130,7 +129,8 @@ export default async function BlogPostPage({
             <div className="mt-12 rounded-3xl border border-border bg-card p-6 shadow-card sm:p-8">
               <h2 className="text-xl font-semibold">Try it now</h2>
               <p className="mt-2 text-muted-foreground">
-                Use our free {tool.keyword} — no app, no login, no watermark.
+                Use our free {tool.primaryKeyword} — no app, no login, no
+                watermark.
               </p>
               <Link
                 href={`/${tool.slug}`}

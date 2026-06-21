@@ -3,11 +3,11 @@ import Link from "next/link";
 
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
-import { DOWNLOADERS } from "@/lib/seo/downloaders";
+import { getPrimaryPages } from "@/lib/seo/seo-pages";
 
 /**
- * Internal-linking grid shown on every landing page (and the home page). Links
- * all downloader tools together to build topical authority for Google.
+ * Internal-linking grid of the cluster primary pages — shown on the home page,
+ * blog and footer to spread authority into each downloader cluster.
  */
 export function DownloaderLinks({
   currentSlug,
@@ -16,7 +16,7 @@ export function DownloaderLinks({
   currentSlug?: string;
   heading?: string;
 }) {
-  const items = DOWNLOADERS.filter((d) => d.slug !== currentSlug);
+  const items = getPrimaryPages().filter((d) => d.slug !== currentSlug);
 
   return (
     <section className="border-t border-border/60 py-16 sm:py-20">
@@ -41,10 +41,10 @@ export function DownloaderLinks({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">
-                    {d.brand} {d.noun}
+                    {d.brand} {d.thing}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {d.keyword}
+                    {d.primaryKeyword}
                   </span>
                 </span>
                 <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />

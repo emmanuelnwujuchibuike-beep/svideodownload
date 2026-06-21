@@ -1,10 +1,10 @@
 import Link from "next/link";
 
 import { SecretAdminGesture } from "@/features/account/secret-admin";
-import { DOWNLOADERS } from "@/lib/seo/downloaders";
+import { getPrimaryPages } from "@/lib/seo/seo-pages";
 
-const DOWNLOADER_LINKS: [string, string][] = DOWNLOADERS.map((d) => [
-  `${d.brand} ${d.noun}`,
+const DOWNLOADER_LINKS: [string, string][] = getPrimaryPages().map((d) => [
+  `${d.brand} ${d.thing}`,
   `/${d.slug}`,
 ]);
 

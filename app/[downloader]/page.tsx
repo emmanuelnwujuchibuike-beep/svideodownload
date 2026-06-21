@@ -10,22 +10,17 @@ import {
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { RelatedLinks } from "@/components/seo/related-links";
 import { Downloader } from "@/features/downloader/downloader";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
-import {
-  DOWNLOADER_SLUGS,
-  getDownloader,
-  howToSteps,
-} from "@/lib/seo/downloaders";
-
+import { getSeoPage, howToSteps, SEO_SLUGS } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
 export function generateStaticParams() {
-  return DOWNLOADER_SLUGS.map((downloader) => ({ downloader }));
+  return SEO_SLUGS.map((downloader) => ({ downloader }));
 }
 
 export const dynamicParams = false;
@@ -36,14 +31,14 @@ export async function generateMetadata({
   params: Promise<{ downloader: string }>;
 }): Promise<Metadata> {
   const { downloader } = await params;
-  const page = getDownloader(downloader);
+  const page = getSeoPage(downloader);
   if (!page) return {};
 
   const url = `${siteUrl}/${page.slug}`;
   return {
     title: page.title,
     description: page.description,
-    keywords: page.keywords,
+    keywords: [page.primaryKeyword, ...page.secondaryKeywords],
     alternates: { canonical: `/${page.slug}` },
     openGraph: {
       type: "website",
@@ -67,12 +62,12 @@ export default async function DownloaderPage({
   params: Promise<{ downloader: string }>;
 }) {
   const { downloader } = await params;
-  const page = getDownloader(downloader);
+  const page = getSeoPage(downloader);
   if (!page) notFound();
 
   const platform = PLATFORMS[page.platformId];
   const Icon = BRAND_ICONS[page.platformId];
-  const steps = howToSteps(page.brand, page.noun);
+  const steps = howToSteps(page.brand, page.thing);
   const url = `${siteUrl}/${page.slug}`;
 
   const softwareLd = {
@@ -93,10 +88,10 @@ export default async function DownloaderPage({
   const faqLd = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    mainEntity: page.faqs.map((f) => ({
+    mainEntity: page.faqs.map((ff) => ({
       "@type": "Question",
-      name: f.q,
-      acceptedAnswer: { "@type": "Answer", text: f.a },
+      name: ff.q,
+      acceptedAnswer: { "@type": "Answer", text: ff.a },
     })),
   };
   const breadcrumbLd = {
@@ -110,7 +105,7 @@ export default async function DownloaderPage({
   const howToLd = {
     "@context": "https://schema.org",
     "@type": "HowTo",
-    name: `How to download ${page.brand} ${page.noun}`,
+    name: `How to download ${page.brand} ${page.thing}`,
     step: steps.map((s, i) => ({
       "@type": "HowToStep",
       position: i + 1,
@@ -163,7 +158,7 @@ export default async function DownloaderPage({
         <section className="border-t border-border/60 py-16 sm:py-20">
           <div className="container max-w-5xl">
             <h2 className="mb-10 text-center text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
-              How to download {page.brand} {page.noun}
+              How to download {page.brand} {page.thing}
             </h2>
             <ol className="grid gap-5 sm:grid-cols-3">
               {steps.map((s, i) => (
@@ -189,10 +184,10 @@ export default async function DownloaderPage({
           <div className="container grid max-w-5xl gap-12 lg:grid-cols-[1.3fr_1fr]">
             <div className="space-y-4">
               <h2 className="text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
-                The free {page.keyword} that just works
+                The free {page.primaryKeyword} that just works
               </h2>
               {page.about.map((p) => (
-                <p key={p.slice(0, 24)} className="leading-relaxed text-muted-foreground">
+                <p key={p.slice(0, 28)} className="leading-relaxed text-muted-foreground">
                   {p}
                 </p>
               ))}
@@ -245,17 +240,17 @@ export default async function DownloaderPage({
               </h2>
             </div>
             <div className="space-y-3">
-              {page.faqs.map((f) => (
+              {page.faqs.map((ff) => (
                 <details
-                  key={f.q}
+                  key={ff.q}
                   className="group rounded-2xl border border-border bg-card p-5 shadow-soft open:shadow-card sm:p-6"
                 >
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-medium [&::-webkit-details-marker]:hidden">
-                    {f.q}
+                    {ff.q}
                     <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-300 group-open:rotate-180" />
                   </summary>
                   <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
-                    {f.a}
+                    {ff.a}
                   </p>
                 </details>
               ))}
@@ -263,7 +258,7 @@ export default async function DownloaderPage({
           </div>
         </section>
 
-        <DownloaderLinks currentSlug={page.slug} />
+        <RelatedLinks slug={page.slug} brand={page.brand} />
       </main>
       <SiteFooter />
     </>

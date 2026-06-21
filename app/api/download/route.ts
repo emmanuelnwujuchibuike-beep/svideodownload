@@ -9,6 +9,7 @@ import {
   proxyToWorker,
   rejectIfUnauthorizedWorker,
 } from "@/lib/worker";
+import { recordDownloadEvent } from "@/server/services/analytics";
 import { resolveDownload } from "@/server/services/download-service";
 import { YtDlpError } from "@/server/services/ytdlp-service";
 import type { ApiError } from "@/types";
@@ -35,6 +36,9 @@ async function processDownload(
       { status: 429, headers: { "Retry-After": String(Math.ceil((reset - Date.now()) / 1000)) } },
     );
   }
+
+  // Record the download for admin stats (best-effort, fire-and-forget).
+  recordDownloadEvent(data.url, data.kind, data.title);
 
   // Frontend role: forward the heavy work to the worker (which has yt-dlp/ffmpeg).
   if (hasWorker) {

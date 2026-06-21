@@ -407,6 +407,68 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
   return parseMetadata(stdout, url);
 }
 
+/**
+ * Diagnostic probe (admin/secret only): runs yt-dlp twice — direct, then via the
+ * proxy — and returns a redacted summary (NO media URLs/tokens) so we can see
+ * why a platform yields zero formats.
+ */
+export async function probeExtraction(url: string): Promise<unknown> {
+  const platform = detectPlatform(url).id;
+  const baseArgs = [
+    "-J",
+    "--no-playlist",
+    "--no-warnings",
+    "--no-call-home",
+    "--socket-timeout",
+    "15",
+    ...cookieArgs(),
+    url,
+  ];
+
+  async function attempt(useProxy: boolean) {
+    try {
+      const { stdout } = await runYtDlp(
+        useProxy ? [...ytdlpProxyArgs(), ...baseArgs] : baseArgs,
+        METADATA_TIMEOUT_MS,
+      );
+      const info = JSON.parse(stdout) as RawInfo & { _type?: string; entries?: unknown[] };
+      const fmts = info.formats ?? [];
+      return {
+        ok: true,
+        extractor: info.extractor_key,
+        type: info._type ?? "video",
+        hasTopLevelUrl: !!info.url,
+        topLevel: info.url
+          ? { ext: info.ext, vcodec: info.vcodec, acodec: info.acodec, height: info.height }
+          : null,
+        isPlaylist: Array.isArray(info.entries),
+        entryCount: Array.isArray(info.entries) ? info.entries.length : 0,
+        formatCount: fmts.length,
+        sampleFormats: fmts.slice(0, 6).map((f) => ({
+          ext: f.ext,
+          vcodec: f.vcodec,
+          acodec: f.acodec,
+          height: f.height,
+          note: f.format_note,
+        })),
+        title: info.title?.slice(0, 80),
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        code: err instanceof YtDlpError ? err.code : "ERR",
+        stderr: (err instanceof YtDlpError ? err.stderr : String(err))?.slice(-600),
+      };
+    }
+  }
+
+  return {
+    platform,
+    cookiesConfigured: !!cookiesFile,
+    direct: await attempt(false),
+    proxy: await attempt(true),
+  };
+}
 
 /** Builds the yt-dlp argv + container metadata for a requested download. */
 function buildDownloadArgs(

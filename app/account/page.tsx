@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { SecretAdminGesture } from "@/features/account/secret-admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -117,6 +118,8 @@ export default async function AccountPage() {
             </form>
           </div>
         </div>
+
+        <SecretAdminGesture />
       </main>
       <SiteFooter />
     </>

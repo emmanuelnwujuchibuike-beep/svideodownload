@@ -8,7 +8,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { BLOG_SLUGS, getPost } from "@/lib/seo/blog";
 import { getDownloader } from "@/lib/seo/downloaders";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://svideodownload.com";
+import { SITE_URL as siteUrl } from "@/lib/site";
 
 export function generateStaticParams() {
   return BLOG_SLUGS.map((slug) => ({ slug }));

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { SecretAdminGesture } from "@/features/account/secret-admin";
 import { DOWNLOADERS } from "@/lib/seo/downloaders";
 
 const DOWNLOADER_LINKS: [string, string][] = DOWNLOADERS.map((d) => [
@@ -12,9 +13,9 @@ export function SiteFooter() {
     <footer className="border-t border-border/60 py-12">
       <div className="container grid gap-8 sm:grid-cols-2 lg:grid-cols-5">
         <div>
-          <span className="text-lg font-bold">
+          <SecretAdminGesture className="text-lg font-bold">
             S<span className="text-gradient">Video</span>Download
-          </span>
+          </SecretAdminGesture>
           <p className="mt-2 max-w-xs text-sm text-muted-foreground">
             Premium multi-platform video downloader. Fast, secure and
             watermark-free.

@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 import { BLOG_SLUGS } from "@/lib/seo/blog";
 import { DOWNLOADER_SLUGS } from "@/lib/seo/downloaders";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://svideodownload.com";
+import { SITE_URL as siteUrl } from "@/lib/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();

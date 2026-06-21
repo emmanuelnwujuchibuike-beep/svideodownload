@@ -22,7 +22,7 @@ import {
   howToSteps,
 } from "@/lib/seo/downloaders";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://svideodownload.com";
+import { SITE_URL as siteUrl } from "@/lib/site";
 
 export function generateStaticParams() {
   return DOWNLOADER_SLUGS.map((downloader) => ({ downloader }));

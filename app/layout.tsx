@@ -3,12 +3,11 @@ import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { SITE_URL as siteUrl } from "@/lib/site";
 
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://svideodownload.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

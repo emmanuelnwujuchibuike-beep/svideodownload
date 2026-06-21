@@ -2,6 +2,7 @@ import { ProxyAgent } from "undici";
 
 import {
   isBlockedStatus,
+  looksLikeChallenge,
   proxyConfigured,
   proxyDispatcher,
   recordProxyBytes,
@@ -11,31 +12,23 @@ import {
 import type { PlatformId } from "@/types";
 
 /**
- * Smart extractor fetch: tries a DIRECT request first (cheap VPS bandwidth) and
- * only retries through the residential proxy when the platform blocks us
- * (403/429/etc) AND the platform is proxy-eligible AND we're under budget.
- *
- * Only small extraction payloads (pages / API JSON) ever go through the proxy —
- * never video bytes — so proxy bandwidth stays minimal.
+ * Smart extractor fetch: DIRECT first (cheap), residential proxy only as a
+ * fallback when the platform blocks us — by HTTP status (403/429) OR by serving
+ * a 200 login/WAF/challenge page (Instagram, Facebook, TikTok all do this).
+ * Only small extraction payloads ever touch the proxy; video bytes never do.
  */
 
 export const usingExtractorProxy = proxyConfigured;
 
 type FetchInit = RequestInit & { dispatcher?: ProxyAgent };
 
-async function viaProxy(
+function reFetchViaProxy(
   input: string,
   init: RequestInit | undefined,
-  platform: PlatformId,
-): Promise<Response> {
+): Promise<Response> | null {
   const dispatcher = proxyDispatcher();
-  if (!dispatcher) return fetch(input, init);
-  const res = await fetch(input, { ...init, dispatcher } as FetchInit);
-  await recordRequest(true);
-  // Attribute extraction bandwidth (best-effort, from Content-Length).
-  const len = Number(res.headers.get("content-length")) || 0;
-  if (len > 0) await recordProxyBytes(platform, len);
-  return res;
+  if (!dispatcher) return null;
+  return fetch(input, { ...init, dispatcher } as FetchInit);
 }
 
 export async function extractorFetch(
@@ -43,32 +36,75 @@ export async function extractorFetch(
   init: RequestInit | undefined,
   platform: PlatformId,
 ): Promise<Response> {
-  // Attempt 0 — direct.
-  let direct: Response;
+  const method = (init?.method || "GET").toUpperCase();
+
+  // HEAD (e.g. short-link resolution): no body to inspect, and callers rely on
+  // res.url — so use status-only detection and never rebuild the Response.
+  if (method === "HEAD") {
+    let res: Response;
+    try {
+      res = await fetch(input, init);
+    } catch (err) {
+      if (await shouldUseProxy(platform, 1)) {
+        const p = reFetchViaProxy(input, init);
+        if (p) {
+          await recordRequest(true);
+          return p;
+        }
+      }
+      throw err;
+    }
+    if (isBlockedStatus(res.status) && (await shouldUseProxy(platform, 1))) {
+      const p = reFetchViaProxy(input, init);
+      if (p) {
+        await recordRequest(true);
+        return p;
+      }
+    }
+    await recordRequest(false);
+    return res;
+  }
+
+  // GET: read the body so we can detect 200-status login/challenge walls.
+  let body: string;
+  let status: number;
+  let headers: Headers;
   try {
-    direct = await fetch(input, init);
+    const res = await fetch(input, init);
+    status = res.status;
+    headers = res.headers;
+    body = await res.text();
   } catch (err) {
-    // Direct connection failed entirely — retry via proxy if allowed.
     if (await shouldUseProxy(platform, 1)) {
-      return viaProxy(input, init, platform);
+      const p = reFetchViaProxy(input, init);
+      if (p) {
+        const r = await p;
+        const b = await r.text();
+        await recordRequest(true);
+        await recordProxyBytes(platform, b.length);
+        return new Response(b, { status: r.status, headers: r.headers });
+      }
     }
     throw err;
   }
 
-  if (!isBlockedStatus(direct.status)) {
-    await recordRequest(false);
-    return direct;
-  }
+  const blocked = isBlockedStatus(status) || looksLikeChallenge(body);
 
-  // Direct was blocked — fall back to the residential proxy when permitted.
-  if (await shouldUseProxy(platform, 1)) {
-    try {
-      return await viaProxy(input, init, platform);
-    } catch {
-      // Proxy attempt failed — surface the original blocked response.
+  if (blocked && (await shouldUseProxy(platform, 1))) {
+    const p = reFetchViaProxy(input, init);
+    if (p) {
+      try {
+        const r = await p;
+        const b = await r.text();
+        await recordRequest(true);
+        await recordProxyBytes(platform, b.length);
+        return new Response(b, { status: r.status, headers: r.headers });
+      } catch {
+        // Proxy attempt failed — fall through to the original direct response.
+      }
     }
   }
 
   await recordRequest(false);
-  return direct;
+  return new Response(body, { status, headers });
 }

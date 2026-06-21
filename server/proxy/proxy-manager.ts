@@ -16,8 +16,12 @@ import type { PlatformId } from "@/types";
  */
 
 function bool(v: string | undefined, def: boolean): boolean {
-  if (v == null) return def;
+  if (v == null || v === "") return def;
   return !["false", "0", "off", "no"].includes(v.toLowerCase());
+}
+function num(v: string | undefined, def: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
 }
 function list(v: string | undefined, def: PlatformId[]): PlatformId[] {
   if (!v) return def;
@@ -34,8 +38,8 @@ const USER = process.env.PROXY_USERNAME || "";
 const PASS = process.env.PROXY_PASSWORD || "";
 const PROTOCOL = process.env.PROXY_PROTOCOL || "http";
 const FALLBACK_ONLY = bool(process.env.PROXY_FALLBACK_ONLY, true);
-const LIMIT_GB = Number(process.env.PROXY_BANDWIDTH_LIMIT_GB || 2);
-const COST_PER_GB = Number(process.env.PROXY_COST_PER_GB || 0); // optional, for $ estimate
+const LIMIT_GB = num(process.env.PROXY_BANDWIDTH_LIMIT_GB, 2);
+const COST_PER_GB = num(process.env.PROXY_COST_PER_GB, 0); // optional, for $ estimate
 
 // Platforms that MAY use the proxy as a fallback.
 const PROXY_PLATFORMS = list(process.env.PROXY_PLATFORMS, [
@@ -141,7 +145,8 @@ async function monthlyBytes(): Promise<number> {
 
 /** True while the proxy is configured and under the monthly bandwidth budget. */
 export async function withinBudget(): Promise<boolean> {
-  if (LIMIT_BYTES <= 0) return true; // unlimited
+  // Treat 0 / invalid limit as unlimited (never accidentally disable the proxy).
+  if (!Number.isFinite(LIMIT_BYTES) || LIMIT_BYTES <= 0) return true;
   return (await monthlyBytes()) < LIMIT_BYTES;
 }
 

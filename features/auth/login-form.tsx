@@ -19,16 +19,27 @@ export function LoginForm({ next = "/account" }: { next?: string }) {
     e.preventDefault();
     setStatus("sending");
     setError(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: callbackUrl() },
-    });
-    if (error) {
-      setError(error.message);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: { emailRedirectTo: callbackUrl() },
+      });
+      if (error) {
+        setError(
+          typeof error.message === "string" && error.message
+            ? error.message
+            : "Couldn't send the sign-in link. Please try again.",
+        );
+        setStatus("error");
+      } else {
+        setStatus("sent");
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Sign-in is unavailable right now.",
+      );
       setStatus("error");
-    } else {
-      setStatus("sent");
     }
   };
 

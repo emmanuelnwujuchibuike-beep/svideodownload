@@ -117,10 +117,14 @@ export const vimeoExtractor: Extractor = {
     const timer = setTimeout(() => controller.abort(), VIMEO_TIMEOUT_MS);
     let config: VimeoConfig;
     try {
-      const res = await extractorFetch(configUrl, {
-        headers: { "User-Agent": DESKTOP_UA, Referer: "https://vimeo.com/" },
-        signal: controller.signal,
-      });
+      const res = await extractorFetch(
+        configUrl,
+        {
+          headers: { "User-Agent": DESKTOP_UA, Referer: "https://vimeo.com/" },
+          signal: controller.signal,
+        },
+        "vimeo",
+      );
       if (!res.ok) throw new ExtractionError(`Vimeo responded ${res.status}`);
       config = (await res.json()) as VimeoConfig;
     } finally {

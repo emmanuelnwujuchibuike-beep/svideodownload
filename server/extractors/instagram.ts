@@ -52,11 +52,11 @@ export const instagramExtractor: Extractor = {
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let html: string;
     try {
-      const res = await extractorFetch(`https://www.instagram.com/p/${shortcode}/`, {
-        headers: HEADERS,
-        redirect: "follow",
-        signal: controller.signal,
-      });
+      const res = await extractorFetch(
+        `https://www.instagram.com/p/${shortcode}/`,
+        { headers: HEADERS, redirect: "follow", signal: controller.signal },
+        "instagram",
+      );
       if (!res.ok) throw new ExtractionError(`Instagram responded ${res.status}`);
       html = await res.text();
     } finally {

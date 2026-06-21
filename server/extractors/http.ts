@@ -1,34 +1,74 @@
 import { ProxyAgent } from "undici";
 
+import {
+  isBlockedStatus,
+  proxyConfigured,
+  proxyDispatcher,
+  recordProxyBytes,
+  recordRequest,
+  shouldUseProxy,
+} from "@/server/proxy/proxy-manager";
+import type { PlatformId } from "@/types";
+
 /**
- * Proxy-aware fetch for custom extractors.
+ * Smart extractor fetch: tries a DIRECT request first (cheap VPS bandwidth) and
+ * only retries through the residential proxy when the platform blocks us
+ * (403/429/etc) AND the platform is proxy-eligible AND we're under budget.
  *
- * TikTok (and some other sites) serve a WAF / bot-challenge page to datacenter
- * IPs, so a plain server-side fetch returns no usable data. Setting
- * `EXTRACTOR_PROXY` (a residential/rotating HTTP proxy — the same mechanism
- * snaptik-style services rely on) routes extractor requests through it so the
- * fast custom path works in production. When unset, behaviour is identical to a
- * normal fetch.
+ * Only small extraction payloads (pages / API JSON) ever go through the proxy —
+ * never video bytes — so proxy bandwidth stays minimal.
  */
 
-const PROXY_URL =
-  process.env.EXTRACTOR_PROXY ||
-  process.env.TIKTOK_PROXY ||
-  process.env.HTTPS_PROXY ||
-  "";
+export const usingExtractorProxy = proxyConfigured;
 
-// One agent for the process; undici pools connections internally.
-const proxyAgent = PROXY_URL ? new ProxyAgent(PROXY_URL) : null;
+type FetchInit = RequestInit & { dispatcher?: ProxyAgent };
 
-export const usingExtractorProxy = !!proxyAgent;
-
-export function extractorFetch(
+async function viaProxy(
   input: string,
-  init?: RequestInit,
+  init: RequestInit | undefined,
+  platform: PlatformId,
 ): Promise<Response> {
-  if (!proxyAgent) return fetch(input, init);
-  // `dispatcher` is an undici extension not present in the DOM RequestInit type.
-  return fetch(input, { ...init, dispatcher: proxyAgent } as RequestInit & {
-    dispatcher: ProxyAgent;
-  });
+  const dispatcher = proxyDispatcher();
+  if (!dispatcher) return fetch(input, init);
+  const res = await fetch(input, { ...init, dispatcher } as FetchInit);
+  await recordRequest(true);
+  // Attribute extraction bandwidth (best-effort, from Content-Length).
+  const len = Number(res.headers.get("content-length")) || 0;
+  if (len > 0) await recordProxyBytes(platform, len);
+  return res;
+}
+
+export async function extractorFetch(
+  input: string,
+  init: RequestInit | undefined,
+  platform: PlatformId,
+): Promise<Response> {
+  // Attempt 0 — direct.
+  let direct: Response;
+  try {
+    direct = await fetch(input, init);
+  } catch (err) {
+    // Direct connection failed entirely — retry via proxy if allowed.
+    if (await shouldUseProxy(platform, 1)) {
+      return viaProxy(input, init, platform);
+    }
+    throw err;
+  }
+
+  if (!isBlockedStatus(direct.status)) {
+    await recordRequest(false);
+    return direct;
+  }
+
+  // Direct was blocked — fall back to the residential proxy when permitted.
+  if (await shouldUseProxy(platform, 1)) {
+    try {
+      return await viaProxy(input, init, platform);
+    } catch {
+      // Proxy attempt failed — surface the original blocked response.
+    }
+  }
+
+  await recordRequest(false);
+  return direct;
 }

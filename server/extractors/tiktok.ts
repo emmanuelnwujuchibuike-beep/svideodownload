@@ -58,11 +58,15 @@ interface TikTokItem {
 async function resolveUrl(url: string): Promise<string> {
   // Short links (vm./vt.tiktok.com) redirect to the canonical watch URL.
   if (/\b(vm|vt)\.tiktok\.com\b/i.test(url)) {
-    const res = await extractorFetch(url, {
-      method: "HEAD",
-      redirect: "follow",
-      headers: { "User-Agent": DESKTOP_UA },
-    });
+    const res = await extractorFetch(
+      url,
+      {
+        method: "HEAD",
+        redirect: "follow",
+        headers: { "User-Agent": DESKTOP_UA },
+      },
+      "tiktok",
+    );
     return res.url || url;
   }
   return url;
@@ -191,11 +195,15 @@ export const tiktokExtractor: Extractor = {
     const timer = setTimeout(() => controller.abort(), TIKTOK_TIMEOUT_MS);
     let html: string;
     try {
-      const res = await extractorFetch(resolved, {
-        headers: FETCH_HEADERS,
-        redirect: "follow",
-        signal: controller.signal,
-      });
+      const res = await extractorFetch(
+        resolved,
+        {
+          headers: FETCH_HEADERS,
+          redirect: "follow",
+          signal: controller.signal,
+        },
+        "tiktok",
+      );
       if (!res.ok) throw new ExtractionError(`TikTok responded ${res.status}`);
       html = await res.text();
     } finally {

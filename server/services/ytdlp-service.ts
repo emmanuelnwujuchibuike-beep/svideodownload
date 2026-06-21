@@ -7,6 +7,13 @@ import { join } from "node:path";
 
 import { withDownloadSlot } from "@/lib/concurrency";
 import { detectPlatform } from "@/lib/platforms";
+import {
+  recordProxyBytes,
+  recordRequest,
+  shouldUseProxy,
+  ytdlpProxyArgs,
+  ytdlpStderrIsBlock,
+} from "@/server/proxy/proxy-manager";
 import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
 import { getOrProduce, type DownloadResult } from "./download-cache";
@@ -304,22 +311,7 @@ function mapInfo(info: RawInfo, sourceUrl: string): VideoMetadata {
   };
 }
 
-/** Extracts metadata + available formats for a single media URL. */
-export async function extractMetadata(url: string): Promise<VideoMetadata> {
-  const { stdout } = await runYtDlp(
-    [
-      "-J",
-      "--no-playlist",
-      "--no-warnings",
-      "--no-call-home",
-      "--socket-timeout",
-      "15",
-      ...cookieArgs(),
-      url,
-    ],
-    METADATA_TIMEOUT_MS,
-  );
-
+function parseMetadata(stdout: string, url: string): VideoMetadata {
   let info: RawInfo;
   try {
     info = JSON.parse(stdout) as RawInfo;
@@ -327,6 +319,49 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
     throw new YtDlpError("Could not parse extractor output", "EXTRACTION_FAILED");
   }
   return mapInfo(info, url);
+}
+
+/**
+ * Extracts metadata for a URL. Tries DIRECT first; if the platform blocks us
+ * (403/429/login/geo) and it's proxy-eligible + under budget, retries the
+ * *metadata* request (small) through the residential proxy. The eventual video
+ * download stays direct, so proxy bandwidth is minimal.
+ */
+export async function extractMetadata(url: string): Promise<VideoMetadata> {
+  const baseArgs = [
+    "-J",
+    "--no-playlist",
+    "--no-warnings",
+    "--no-call-home",
+    "--socket-timeout",
+    "15",
+    ...cookieArgs(),
+    url,
+  ];
+  const platform = detectPlatform(url).id;
+
+  try {
+    const { stdout } = await runYtDlp(baseArgs, METADATA_TIMEOUT_MS);
+    await recordRequest(false);
+    return parseMetadata(stdout, url);
+  } catch (err) {
+    const blocked =
+      err instanceof YtDlpError &&
+      !!err.stderr &&
+      ytdlpStderrIsBlock(err.stderr);
+
+    if (blocked && (await shouldUseProxy(platform, 1))) {
+      const { stdout } = await runYtDlp(
+        [...ytdlpProxyArgs(), ...baseArgs],
+        METADATA_TIMEOUT_MS,
+      );
+      await recordRequest(true);
+      // Metadata payloads are small; attribute a conservative estimate.
+      await recordProxyBytes(platform, 300_000);
+      return parseMetadata(stdout, url);
+    }
+    throw err;
+  }
 }
 
 

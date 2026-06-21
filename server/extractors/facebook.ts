@@ -84,11 +84,11 @@ export const facebookExtractor: Extractor = {
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let html: string;
     try {
-      const res = await extractorFetch(url, {
-        headers: HEADERS,
-        redirect: "follow",
-        signal: controller.signal,
-      });
+      const res = await extractorFetch(
+        url,
+        { headers: HEADERS, redirect: "follow", signal: controller.signal },
+        "facebook",
+      );
       if (!res.ok) throw new ExtractionError(`Facebook responded ${res.status}`);
       html = await res.text();
     } finally {

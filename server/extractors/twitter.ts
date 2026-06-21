@@ -112,10 +112,14 @@ export const twitterExtractor: Extractor = {
     const timer = setTimeout(() => controller.abort(), TWITTER_TIMEOUT_MS);
     let data: TwResult;
     try {
-      const res = await extractorFetch(api, {
-        headers: { "User-Agent": DESKTOP_UA, Referer: "https://platform.twitter.com/" },
-        signal: controller.signal,
-      });
+      const res = await extractorFetch(
+        api,
+        {
+          headers: { "User-Agent": DESKTOP_UA, Referer: "https://platform.twitter.com/" },
+          signal: controller.signal,
+        },
+        "twitter",
+      );
       if (!res.ok) throw new ExtractionError(`Syndication responded ${res.status}`);
       const body = await res.text();
       if (!body.trim()) throw new ExtractionError("Empty syndication response");

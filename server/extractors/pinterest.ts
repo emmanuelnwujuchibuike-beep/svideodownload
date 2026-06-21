@@ -88,11 +88,11 @@ export const pinterestExtractor: Extractor = {
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let html: string;
     try {
-      const res = await extractorFetch(url, {
-        headers: HEADERS,
-        redirect: "follow",
-        signal: controller.signal,
-      });
+      const res = await extractorFetch(
+        url,
+        { headers: HEADERS, redirect: "follow", signal: controller.signal },
+        "pinterest",
+      );
       if (!res.ok) throw new ExtractionError(`Pinterest responded ${res.status}`);
       html = await res.text();
     } finally {

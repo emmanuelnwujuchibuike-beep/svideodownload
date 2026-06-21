@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardPaste, Loader2, Search, X } from "lucide-react";
+import { ClipboardPaste, Loader2, Plus, Search, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 
 import { detectPlatform } from "@/lib/platforms";
@@ -139,11 +139,25 @@ export function Downloader() {
       ) : null}
 
       {metadata ? (
-        <PreviewCard
-          metadata={metadata}
-          downloading={status === "downloading"}
-          onDownload={download}
-        />
+        <>
+          <PreviewCard
+            metadata={metadata}
+            downloading={status === "downloading"}
+            onDownload={download}
+          />
+          <div className="mt-5 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                handleClear();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-semibold text-foreground shadow-soft transition hover:bg-secondary active:scale-[0.98]"
+            >
+              <Plus className="h-4 w-4" /> Download another video
+            </button>
+          </div>
+        </>
       ) : null}
     </div>
   );

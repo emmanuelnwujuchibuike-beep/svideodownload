@@ -133,6 +133,19 @@ interface RawInfo {
   webpage_url?: string;
   extractor_key?: string;
   formats?: RawFormat[];
+  // Single-file extractors (Snapchat, Reddit, many simple sites) put the media
+  // URL at the top level with NO `formats[]` array.
+  url?: string;
+  ext?: string;
+  vcodec?: string;
+  acodec?: string;
+  format_id?: string;
+  height?: number;
+  width?: number;
+  fps?: number;
+  tbr?: number;
+  filesize?: number;
+  filesize_approx?: number;
 }
 
 function runYtDlp(
@@ -202,8 +215,68 @@ function runYtDlp(
  * below) that height itself, so we never accidentally append a second audio
  * track to an already-progressive format.
  */
-function mapFormats(raw: RawFormat[] | undefined): MediaFormat[] {
-  if (!raw?.length) return [];
+const MP3_AUDIO: MediaFormat = {
+  formatId: "audio",
+  kind: "audio",
+  label: "MP3 audio",
+  ext: "mp3",
+  resolution: null,
+  fps: null,
+  filesize: null,
+  tbr: null,
+  vcodec: null,
+  acodec: null,
+};
+
+/**
+ * Single-file extractors (Snapchat, Reddit, many simple sites) return one media
+ * URL at the top level with no `formats[]`. Synthesize a video (+ audio) tier so
+ * we still offer a download instead of "No downloadable media found".
+ */
+function mapSingleFile(info: RawInfo): MediaFormat[] {
+  const size = info.filesize ?? info.filesize_approx ?? null;
+
+  // Explicitly audio-only.
+  if (info.vcodec === "none" && info.acodec && info.acodec !== "none") {
+    return [MP3_AUDIO];
+  }
+
+  const video: MediaFormat = info.height
+    ? {
+        formatId: String(info.height),
+        kind: "video",
+        label: `${info.height}p`,
+        ext: "mp4",
+        resolution: `${info.height}p`,
+        fps: info.fps ?? null,
+        filesize: size,
+        tbr: info.tbr ?? null,
+        vcodec: null,
+        acodec: null,
+      }
+    : {
+        formatId: "best",
+        kind: "video",
+        label: "Best quality",
+        ext: "mp4",
+        resolution: null,
+        fps: info.fps ?? null,
+        filesize: size,
+        tbr: info.tbr ?? null,
+        vcodec: null,
+        acodec: null,
+      };
+
+  // Assume the file carries audio unless yt-dlp says otherwise.
+  const audio = info.acodec === "none" ? [] : [MP3_AUDIO];
+  return [video, ...audio];
+}
+
+function mapFormats(info: RawInfo): MediaFormat[] {
+  const raw = info.formats;
+  if (!raw?.length) {
+    return info.url ? mapSingleFile(info) : [];
+  }
 
   // Collapse video formats into one entry per height, preferring the variant
   // with the highest bitrate so the displayed size is representative.
@@ -267,22 +340,7 @@ function mapFormats(raw: RawFormat[] | undefined): MediaFormat[] {
   }
 
   // A single, predictable MP3 audio option (server transcodes to MP3).
-  const audio: MediaFormat[] = hasAnyAudio
-    ? [
-        {
-          formatId: "audio",
-          kind: "audio",
-          label: "MP3 audio",
-          ext: "mp3",
-          resolution: null,
-          fps: null,
-          filesize: null,
-          tbr: null,
-          vcodec: null,
-          acodec: null,
-        },
-      ]
-    : [];
+  const audio: MediaFormat[] = hasAnyAudio ? [MP3_AUDIO] : [];
 
   return [...video, ...audio];
 }
@@ -305,7 +363,7 @@ function mapInfo(info: RawInfo, sourceUrl: string): VideoMetadata {
     viewCount: info.view_count ?? null,
     likeCount: info.like_count ?? null,
     webpageUrl: info.webpage_url || sourceUrl,
-    formats: mapFormats(info.formats),
+    formats: mapFormats(info),
     extractor: "ytdlp",
   };
 }

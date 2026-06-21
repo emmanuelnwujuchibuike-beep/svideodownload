@@ -17,12 +17,19 @@ const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
   !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+const ERROR_MESSAGES: Record<string, string> = {
+  callback: "Sign-in link couldn't be verified. Please request a new one.",
+  confirm: "That link has expired or was already used. Request a fresh link.",
+  auth: "Something went wrong signing you in. Please try again.",
+};
+
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; error?: string }>;
 }) {
-  const { next } = await searchParams;
+  const { next, error } = await searchParams;
+  const errorMessage = error ? (ERROR_MESSAGES[error] ?? ERROR_MESSAGES.auth) : null;
 
   // If already signed in, skip the login screen.
   if (hasSupabase) {
@@ -49,6 +56,15 @@ export default async function LoginPage({
         <p className="mb-6 mt-1 text-center text-sm text-muted-foreground">
           Sign in to sync your downloads and favorites across devices.
         </p>
+
+        {errorMessage ? (
+          <p
+            role="alert"
+            className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm text-red-400"
+          >
+            {errorMessage}
+          </p>
+        ) : null}
 
         <LoginForm next={next} />
 

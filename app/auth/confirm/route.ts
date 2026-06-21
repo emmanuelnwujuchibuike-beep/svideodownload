@@ -1,0 +1,36 @@
+import type { EmailOtpType } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
+
+import { createClient } from "@/lib/supabase/server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/**
+ * Magic-link / email confirmation via `token_hash` + `verifyOtp`. Unlike the
+ * PKCE `?code=` callback, this does NOT depend on a verifier cookie, so it works
+ * even when the email is opened in a different browser (e.g. an email app's
+ * in-app browser) — the most reliable flow for SSR magic links.
+ *
+ * Point the Supabase "Magic Link" email template at:
+ *   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/account
+ */
+export async function GET(request: Request) {
+  const { searchParams, origin } = new URL(request.url);
+  const tokenHash = searchParams.get("token_hash");
+  const type = searchParams.get("type") as EmailOtpType | null;
+  const next = searchParams.get("next") || "/account";
+
+  if (tokenHash && type) {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.verifyOtp({
+      type,
+      token_hash: tokenHash,
+    });
+    if (!error) {
+      return NextResponse.redirect(`${origin}${next}`);
+    }
+  }
+
+  return NextResponse.redirect(`${origin}/login?error=confirm`);
+}

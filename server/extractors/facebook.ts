@@ -2,7 +2,7 @@ import { detectPlatform } from "@/lib/platforms";
 import type { MediaFormat, PlatformId, VideoMetadata } from "@/types";
 
 import { extractorFetch } from "./http";
-import { DESKTOP_UA, firstMatch, metaContent } from "./parse";
+import { DESKTOP_UA, firstMatch, metaContent, unescapeJsonUrl } from "./parse";
 import { ExtractionError, type Extractor } from "./types";
 
 /**
@@ -23,31 +23,34 @@ const HEADERS = {
   "Accept-Language": "en-US,en;q=0.9",
 };
 
-function buildFormats(html: string): MediaFormat[] {
-  // A video exists if Facebook embedded any playable/native stream URL. We do
-  // NOT expose the direct URL: Facebook serves VP9 (even via playable_url_*),
-  // which iOS/Safari can't decode and plays as audio-only. Instead we offer a
-  // single option with NO directUrl, so the download resolves through yt-dlp's
-  // H.264-preferring selector — universally playable.
-  const hasVideo =
-    /"playable_url(?:_quality_hd)?":"https/.test(html) ||
-    /"browser_native_(?:hd|sd)_url":"https/.test(html);
-  if (!hasVideo) return [];
+function fmt(id: string, label: string, directUrl: string): MediaFormat {
+  return {
+    formatId: id,
+    kind: "video",
+    label,
+    ext: "mp4",
+    resolution: null,
+    fps: null,
+    filesize: null,
+    tbr: null,
+    vcodec: "h264",
+    acodec: "aac",
+    directUrl: unescapeJsonUrl(directUrl),
+    httpHeaders: { "User-Agent": DESKTOP_UA, Referer: "https://www.facebook.com/" },
+  };
+}
 
-  return [
-    {
-      formatId: "best",
-      kind: "video",
-      label: "HD",
-      ext: "mp4",
-      resolution: null,
-      fps: null,
-      filesize: null,
-      tbr: null,
-      vcodec: "h264",
-      acodec: "aac",
-    },
-  ];
+function buildFormats(html: string): MediaFormat[] {
+  // Prefer the progressive `playable_url*` streams (H.264) over `browser_native_*`
+  // (VP9/DASH, which plays as audio-only on iOS).
+  const hd = firstMatch(html, /"playable_url_quality_hd":"([^"]+)"/);
+  const sd = firstMatch(html, /"playable_url":"([^"]+)"/);
+  const formats: MediaFormat[] = [];
+  if (hd) formats.push(fmt("fb-hd", "HD", hd));
+  if (sd && unescapeJsonUrl(sd) !== formats[0]?.directUrl) {
+    formats.push(fmt("fb-sd", "SD", sd));
+  }
+  return formats;
 }
 
 export const facebookExtractor: Extractor = {

@@ -31,7 +31,13 @@ function LogoMark({ size }: { size: number }) {
   );
 }
 
-export function OgImage(): ReactElement {
+export function OgImage({
+  headline = "Download TikTok & 1000+ Platforms",
+  sub = "Fast · Watermark-free · HD · No login",
+}: {
+  headline?: string;
+  sub?: string;
+} = {}): ReactElement {
   return (
     <div
       style={{
@@ -94,12 +100,12 @@ export function OgImage(): ReactElement {
           lineHeight: 1.1,
         }}
       >
-        Download TikTok &amp; 1000+ Platforms
+        {headline}
       </div>
 
       {/* Sub */}
       <div style={{ display: "flex", marginTop: 26, fontSize: 30, color: "#94a3b8" }}>
-        Fast · Watermark-free · HD · No login
+        {sub}
       </div>
     </div>
   );

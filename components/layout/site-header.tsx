@@ -9,9 +9,10 @@ import { useUser } from "@/features/auth/use-user";
 import { UserMenu } from "@/features/auth/user-menu";
 
 const NAV_LINKS = [
-  { href: "/#platforms", label: "Platforms" },
+  { href: "/tiktok-video-downloader", label: "TikTok" },
+  { href: "/instagram-reels-downloader", label: "Instagram" },
   { href: "/#features", label: "Features" },
-  { href: "/#faq", label: "FAQ" },
+  { href: "/blog", label: "Blog" },
 ];
 
 export function SiteHeader() {

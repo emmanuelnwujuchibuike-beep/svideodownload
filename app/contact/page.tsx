@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { PageShell } from "@/components/layout/page-shell";
 
@@ -31,7 +32,7 @@ export default function ContactPage() {
       <p>
         Copyright notices and takedown concerns:{" "}
         <a href="mailto:dmca@svideodownload.com">dmca@svideodownload.com</a> (see
-        our <a href="/dmca">DMCA policy</a>).
+        our <Link href="/dmca">DMCA policy</Link>).
       </p>
 
       <h2>Privacy</h2>

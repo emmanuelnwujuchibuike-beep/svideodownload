@@ -6,6 +6,7 @@ import { PlatformShowcase } from "@/components/landing/platform-showcase";
 import { TikTokFlagship } from "@/components/landing/tiktok-flagship";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { HistoryPanel } from "@/features/history/history-panel";
 
 export default function HomePage() {
@@ -19,6 +20,7 @@ export default function HomePage() {
         <TikTokFlagship />
         <PlatformShowcase />
         <Features />
+        <DownloaderLinks heading="Popular video downloaders" />
         <Faq />
       </main>
       <SiteFooter />

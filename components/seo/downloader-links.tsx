@@ -1,0 +1,69 @@
+import { ArrowUpRight } from "lucide-react";
+import Link from "next/link";
+
+import { BRAND_ICONS } from "@/lib/platform-icons";
+import { PLATFORMS } from "@/lib/platforms";
+import { DOWNLOADERS } from "@/lib/seo/downloaders";
+
+/**
+ * Internal-linking grid shown on every landing page (and the home page). Links
+ * all downloader tools together to build topical authority for Google.
+ */
+export function DownloaderLinks({
+  currentSlug,
+  heading = "More free downloaders",
+}: {
+  currentSlug?: string;
+  heading?: string;
+}) {
+  const items = DOWNLOADERS.filter((d) => d.slug !== currentSlug);
+
+  return (
+    <section className="border-t border-border/60 py-16 sm:py-20">
+      <div className="container max-w-5xl">
+        <h2 className="mb-8 text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
+          {heading}
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((d) => {
+            const platform = PLATFORMS[d.platformId];
+            const Icon = BRAND_ICONS[d.platformId];
+            return (
+              <Link
+                key={d.slug}
+                href={`/${d.slug}`}
+                className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft transition hover:border-foreground/20 hover:shadow-card"
+              >
+                <span
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${platform.accent} text-white`}
+                >
+                  {Icon ? <Icon className="h-4 w-4" /> : null}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">
+                    {d.brand} {d.noun}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {d.keyword}
+                  </span>
+                </span>
+                <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />
+              </Link>
+            );
+          })}
+        </div>
+        <p className="mt-6 text-sm text-muted-foreground">
+          Looking for something else?{" "}
+          <Link href="/" className="font-medium text-primary hover:underline">
+            Download from 1000+ platforms on the home page
+          </Link>{" "}
+          or read our{" "}
+          <Link href="/blog" className="font-medium text-primary hover:underline">
+            downloading guides
+          </Link>
+          .
+        </p>
+      </div>
+    </section>
+  );
+}

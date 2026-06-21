@@ -38,6 +38,22 @@ export async function extractorFetch(
 ): Promise<Response> {
   const method = (init?.method || "GET").toUpperCase();
 
+  // Forced retry (a prior direct extraction failed) → use the proxy directly.
+  // shouldUseProxy(platform, 0) is true only when forced (or not fallback-only).
+  if (await shouldUseProxy(platform, 0)) {
+    const p = reFetchViaProxy(input, init);
+    if (p) {
+      const r = await p;
+      await recordRequest(true);
+      if (method !== "HEAD") {
+        const b = await r.text();
+        await recordProxyBytes(platform, b.length);
+        return new Response(b, { status: r.status, headers: r.headers });
+      }
+      return r;
+    }
+  }
+
   // HEAD (e.g. short-link resolution): no body to inspect, and callers rely on
   // res.url — so use status-only detection and never rebuild the Response.
   if (method === "HEAD") {

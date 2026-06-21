@@ -12,7 +12,6 @@ import {
   recordRequest,
   shouldUseProxy,
   ytdlpProxyArgs,
-  ytdlpStderrIsBlock,
 } from "@/server/proxy/proxy-manager";
 import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
@@ -322,10 +321,10 @@ function parseMetadata(stdout: string, url: string): VideoMetadata {
 }
 
 /**
- * Extracts metadata for a URL. Tries DIRECT first; if the platform blocks us
- * (403/429/login/geo) and it's proxy-eligible + under budget, retries the
- * *metadata* request (small) through the residential proxy. The eventual video
- * download stays direct, so proxy bandwidth is minimal.
+ * Extracts metadata for a URL. Uses the residential proxy only when this call is
+ * a *forced proxy retry* (the registry re-runs extraction under the proxy after
+ * a direct failure for a proxy-eligible platform). The eventual video download
+ * stays direct, so proxy bandwidth is minimal.
  */
 export async function extractMetadata(url: string): Promise<VideoMetadata> {
   const baseArgs = [
@@ -339,29 +338,15 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
     url,
   ];
   const platform = detectPlatform(url).id;
+  const useProxy = await shouldUseProxy(platform, 0); // true only when forced
 
-  try {
-    const { stdout } = await runYtDlp(baseArgs, METADATA_TIMEOUT_MS);
-    await recordRequest(false);
-    return parseMetadata(stdout, url);
-  } catch (err) {
-    const blocked =
-      err instanceof YtDlpError &&
-      !!err.stderr &&
-      ytdlpStderrIsBlock(err.stderr);
-
-    if (blocked && (await shouldUseProxy(platform, 1))) {
-      const { stdout } = await runYtDlp(
-        [...ytdlpProxyArgs(), ...baseArgs],
-        METADATA_TIMEOUT_MS,
-      );
-      await recordRequest(true);
-      // Metadata payloads are small; attribute a conservative estimate.
-      await recordProxyBytes(platform, 300_000);
-      return parseMetadata(stdout, url);
-    }
-    throw err;
-  }
+  const { stdout } = await runYtDlp(
+    useProxy ? [...ytdlpProxyArgs(), ...baseArgs] : baseArgs,
+    METADATA_TIMEOUT_MS,
+  );
+  await recordRequest(useProxy);
+  if (useProxy) await recordProxyBytes(platform, 300_000);
+  return parseMetadata(stdout, url);
 }
 
 

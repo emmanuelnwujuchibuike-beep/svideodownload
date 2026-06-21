@@ -1,5 +1,10 @@
 import { cacheGet, cacheSet } from "@/lib/cache";
 import { detectPlatform } from "@/lib/platforms";
+import {
+  isProxyForced,
+  runWithForcedProxy,
+  shouldUseProxy,
+} from "@/server/proxy/proxy-manager";
 import { extractMetadata as ytdlpExtract } from "@/server/services/ytdlp-service";
 import type { VideoMetadata } from "@/types";
 
@@ -34,7 +39,7 @@ function metadataKey(url: string): string {
 }
 
 /** Runs the custom-first, yt-dlp-fallback extraction chain (no caching). */
-async function extractFresh(url: string): Promise<VideoMetadata> {
+async function runChain(url: string): Promise<VideoMetadata> {
   const platform = detectPlatform(url);
   for (const extractor of CUSTOM_EXTRACTORS) {
     if (!extractor.canHandle(url, platform.id)) continue;
@@ -42,14 +47,36 @@ async function extractFresh(url: string): Promise<VideoMetadata> {
       const meta = await extractor.extract(url);
       if (meta.formats.length > 0) return meta;
     } catch (err) {
-      // Custom extractor failed (site changed, blocked, private) — fall back.
+      const via = isProxyForced() ? " (via proxy)" : "";
       console.warn(
-        `[extractor:${extractor.name}] falling back to yt-dlp:`,
+        `[extractor:${extractor.name}]${via} falling back:`,
         err instanceof Error ? err.message : err,
       );
     }
   }
   return ytdlpExtract(url);
+}
+
+/**
+ * Extraction with smart proxy fallback: try DIRECT first; if it fails for a
+ * proxy-eligible platform (Instagram, Facebook, X, …) and we're under budget,
+ * re-run the WHOLE chain with the residential proxy forced. Direct-success
+ * platforms (TikTok, YouTube, Pinterest, Vimeo) never trigger the proxy.
+ */
+async function extractFresh(url: string): Promise<VideoMetadata> {
+  try {
+    return await runChain(url);
+  } catch (err) {
+    const platform = detectPlatform(url).id;
+    if (await shouldUseProxy(platform, 1)) {
+      try {
+        return await runWithForcedProxy(() => runChain(url));
+      } catch {
+        /* proxy retry also failed — surface the original error below */
+      }
+    }
+    throw err;
+  }
 }
 
 /**

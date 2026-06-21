@@ -1,7 +1,22 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { Redis } from "@upstash/redis";
 import { ProxyAgent } from "undici";
 
 import type { PlatformId } from "@/types";
+
+/**
+ * Async-context flag: when set, the current extraction is a *forced proxy
+ * retry* (the direct attempt already failed), so fetches and yt-dlp use the
+ * residential proxy regardless of FALLBACK_ONLY.
+ */
+const forcedProxy = new AsyncLocalStorage<boolean>();
+export function runWithForcedProxy<T>(fn: () => Promise<T>): Promise<T> {
+  return forcedProxy.run(true, fn);
+}
+export function isProxyForced(): boolean {
+  return forcedProxy.getStore() === true;
+}
 
 /**
  * Smart residential-proxy manager.
@@ -169,6 +184,8 @@ export async function shouldUseProxy(
   attempt: number,
 ): Promise<boolean> {
   if (!isProxyEligible(platform)) return false;
+  // A forced retry uses the proxy immediately (subject to budget).
+  if (isProxyForced()) return withinBudget();
   if (FALLBACK_ONLY && attempt === 0) return false;
   return withinBudget();
 }

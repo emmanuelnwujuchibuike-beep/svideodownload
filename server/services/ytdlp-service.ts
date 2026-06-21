@@ -383,23 +383,32 @@ function parseMetadata(stdout: string, url: string): VideoMetadata {
  *  - Snapchat `/t/<code>` (only `/spotlight/` matches the dedicated extractor)
  *  - Pinterest `pin.it/<code>` (redirects to pinterest.com/pin/<id>)
  */
+const MOBILE_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) " +
+  "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile Safari/604.1";
+
 async function canonicalizeUrl(url: string): Promise<string> {
   try {
     const u = new URL(url);
     const host = u.hostname.replace(/^www\./, "");
-    const isSnapShare = host === "snapchat.com" && u.pathname.startsWith("/t/");
-    const isPinShare = host === "pin.it";
-    if (isSnapShare || isPinShare) {
-      const res = await fetch(url, {
-        method: "GET",
-        redirect: "follow",
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) " +
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile Safari/604.1",
-        },
-      });
+
+    // Snapchat /t/ share links → resolve to the real /spotlight/ URL.
+    if (host === "snapchat.com" && u.pathname.startsWith("/t/")) {
+      const res = await fetch(url, { redirect: "follow", headers: { "User-Agent": MOBILE_UA } });
       if (res.url && res.url !== url) return res.url;
+    }
+
+    // Pinterest pin.it → resolve, then strip to a clean /pin/<id>/ URL (yt-dlp
+    // chokes on the /sent/?invite_code=... suffix the share link expands to).
+    if (host === "pin.it") {
+      const res = await fetch(url, { redirect: "follow", headers: { "User-Agent": MOBILE_UA } });
+      const m = (res.url || "").match(/\/pin\/(\d+)/);
+      if (m) return `https://www.pinterest.com/pin/${m[1]}/`;
+      if (res.url && res.url !== url) return res.url;
+    }
+    if (host === "pinterest.com") {
+      const m = u.pathname.match(/\/pin\/(\d+)/);
+      if (m) return `https://www.pinterest.com/pin/${m[1]}/`;
     }
   } catch {
     /* fall through to original url */

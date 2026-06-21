@@ -12,6 +12,7 @@ import { facebookExtractor } from "./facebook";
 import { instagramExtractor } from "./instagram";
 import { pinterestExtractor } from "./pinterest";
 import { snapchatExtractor } from "./snapchat";
+import { threadsExtractor } from "./threads";
 import { tiktokExtractor } from "./tiktok";
 import { twitterExtractor } from "./twitter";
 import type { Extractor } from "./types";
@@ -30,6 +31,7 @@ const CUSTOM_EXTRACTORS: Extractor[] = [
   facebookExtractor,
   pinterestExtractor,
   snapchatExtractor,
+  threadsExtractor,
 ];
 
 const METADATA_TTL_SECONDS = Number(

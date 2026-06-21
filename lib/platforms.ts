@@ -87,7 +87,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
   threads: {
     id: "threads",
     name: "Threads",
-    hosts: ["threads.net"],
+    hosts: ["threads.net", "threads.com"],
     accent: "from-zinc-700 to-black",
     watermarkFree: true,
   },

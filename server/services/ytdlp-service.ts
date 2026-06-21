@@ -543,15 +543,19 @@ function buildDownloadArgs(
   // Where a single-file progressive already exists at the exact height, yt-dlp
   // uses it (no merge). "best" is capped at 1080p to avoid multi-GB 4K files.
   const height = formatId === "best" ? 1080 : parseInt(formatId, 10) || 1080;
-  // Order matters. Every fallback that selects a SINGLE format requires a video
-  // codec ([vcodec!=none]) so we never accidentally save an audio-only file in
-  // an mp4. The heightless `bestvideo+bestaudio` rung handles sources whose
-  // video streams carry no height (Instagram posts/stories, Facebook posts) —
-  // without it those fell through to bare `best` and produced audio.
+  // Order matters, and we PREFER H.264 (avc1): VP9/AV1 in an mp4 is undecodable
+  // on iOS/Safari, where it plays as audio-only ("audio as video"). Every rung
+  // that picks a single format requires a video codec ([vcodec!=none]) so a
+  // video request never resolves to audio. The heightless `bestvideo+bestaudio`
+  // rung handles sources whose video carries no height (Instagram posts/stories,
+  // Facebook posts) — without it they fell through to bare `best`.
   const selector =
+    `bestvideo[height<=${height}][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/` +
+    `bestvideo[height<=${height}][vcodec^=avc1]+bestaudio/` +
+    `best[height<=${height}][ext=mp4][vcodec^=avc1]/` +
     `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/` +
     `bestvideo[height<=${height}]+bestaudio/` +
-    `best[height<=${height}][ext=mp4][vcodec!=none]/` +
+    `bestvideo[vcodec^=avc1]+bestaudio/` +
     `best[height<=${height}][vcodec!=none]/` +
     `bestvideo+bestaudio/` +
     `best[vcodec!=none]/best`;

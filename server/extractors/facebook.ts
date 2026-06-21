@@ -2,7 +2,7 @@ import { detectPlatform } from "@/lib/platforms";
 import type { MediaFormat, PlatformId, VideoMetadata } from "@/types";
 
 import { extractorFetch } from "./http";
-import { DESKTOP_UA, firstMatch, metaContent, unescapeJsonUrl } from "./parse";
+import { DESKTOP_UA, firstMatch, metaContent } from "./parse";
 import { ExtractionError, type Extractor } from "./types";
 
 /**
@@ -24,22 +24,19 @@ const HEADERS = {
 };
 
 function buildFormats(html: string): MediaFormat[] {
-  const headers = { "User-Agent": DESKTOP_UA, Referer: "https://www.facebook.com/" };
-  const hd = firstMatch(
-    html,
-    /"playable_url_quality_hd":"([^"]+)"/,
-    /"browser_native_hd_url":"([^"]+)"/,
-  );
-  const sd = firstMatch(
-    html,
-    /"playable_url":"([^"]+)"/,
-    /"browser_native_sd_url":"([^"]+)"/,
-  );
+  // A video exists if Facebook embedded any playable/native stream URL. We do
+  // NOT expose the direct URL: Facebook serves VP9 (even via playable_url_*),
+  // which iOS/Safari can't decode and plays as audio-only. Instead we offer a
+  // single option with NO directUrl, so the download resolves through yt-dlp's
+  // H.264-preferring selector — universally playable.
+  const hasVideo =
+    /"playable_url(?:_quality_hd)?":"https/.test(html) ||
+    /"browser_native_(?:hd|sd)_url":"https/.test(html);
+  if (!hasVideo) return [];
 
-  const formats: MediaFormat[] = [];
-  if (hd) {
-    formats.push({
-      formatId: "fb-hd",
+  return [
+    {
+      formatId: "best",
       kind: "video",
       label: "HD",
       ext: "mp4",
@@ -49,27 +46,8 @@ function buildFormats(html: string): MediaFormat[] {
       tbr: null,
       vcodec: "h264",
       acodec: "aac",
-      directUrl: unescapeJsonUrl(hd),
-      httpHeaders: headers,
-    });
-  }
-  if (sd && unescapeJsonUrl(sd) !== formats[0]?.directUrl) {
-    formats.push({
-      formatId: "fb-sd",
-      kind: "video",
-      label: "SD",
-      ext: "mp4",
-      resolution: null,
-      fps: null,
-      filesize: null,
-      tbr: null,
-      vcodec: "h264",
-      acodec: "aac",
-      directUrl: unescapeJsonUrl(sd),
-      httpHeaders: headers,
-    });
-  }
-  return formats;
+    },
+  ];
 }
 
 export const facebookExtractor: Extractor = {

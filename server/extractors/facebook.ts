@@ -41,10 +41,19 @@ function fmt(id: string, label: string, directUrl: string): MediaFormat {
 }
 
 function buildFormats(html: string): MediaFormat[] {
-  // Prefer the progressive `playable_url*` streams (H.264) over `browser_native_*`
-  // (VP9/DASH, which plays as audio-only on iOS).
-  const hd = firstMatch(html, /"playable_url_quality_hd":"([^"]+)"/);
-  const sd = firstMatch(html, /"playable_url":"([^"]+)"/);
+  // These direct URLs are kept as a reliable fallback, but Facebook often serves
+  // VP9 here (audio-only on iOS), so the download path tries yt-dlp's H.264
+  // selector FIRST for Facebook and only uses these if yt-dlp can't extract.
+  const hd = firstMatch(
+    html,
+    /"playable_url_quality_hd":"([^"]+)"/,
+    /"browser_native_hd_url":"([^"]+)"/,
+  );
+  const sd = firstMatch(
+    html,
+    /"playable_url":"([^"]+)"/,
+    /"browser_native_sd_url":"([^"]+)"/,
+  );
   const formats: MediaFormat[] = [];
   if (hd) formats.push(fmt("fb-hd", "HD", hd));
   if (sd && unescapeJsonUrl(sd) !== formats[0]?.directUrl) {

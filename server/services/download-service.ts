@@ -95,19 +95,31 @@ export async function resolveDownload(
   const meta = (await getCachedMetadata(url)) ?? (await getMetadata(url));
   const title = meta.title || fallbackTitle;
   const format = findFormat(meta, formatId, kind);
+  const hasDirect = !!format?.directUrl && format.kind === kind;
+
+  // Facebook's direct URLs are frequently VP9 (which plays as audio-only on
+  // iOS), so for video we try yt-dlp's H.264 selector FIRST and only use the
+  // direct URL if yt-dlp can't extract it.
+  const preferYtdlp = meta.platform === "facebook" && kind === "video";
 
   // Fast path: a custom extractor gave us a direct CDN URL for the exact kind
-  // requested (video→video, audio→audio).
-  if (format?.directUrl && format.kind === kind) {
+  // requested — unless we're preferring yt-dlp for codec-compatibility reasons.
+  if (hasDirect && !preferYtdlp) {
     try {
-      const result = await proxyDownload(format);
-      return { ...result, title };
+      return { ...(await proxyDownload(format!)), title };
     } catch {
       // Direct URL expired/blocked — fall through to yt-dlp.
     }
   }
 
-  // Fallback: yt-dlp pipeline (handles everything else + every other platform).
-  const result = await prepareDownload(url, formatId, kind);
-  return { ...result, title };
+  // Main path: yt-dlp pipeline (H.264-preferring; handles every other platform).
+  try {
+    return { ...(await prepareDownload(url, formatId, kind)), title };
+  } catch (err) {
+    // yt-dlp couldn't handle it — use the direct URL as a last resort.
+    if (hasDirect) {
+      return { ...(await proxyDownload(format!)), title };
+    }
+    throw err;
+  }
 }

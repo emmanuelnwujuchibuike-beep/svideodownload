@@ -8,6 +8,7 @@ import {
 import { extractMetadata as ytdlpExtract } from "@/server/services/ytdlp-service";
 import type { VideoMetadata } from "@/types";
 
+import { apifyEnabled, apifyExtract, isApifyPlatform } from "./apify-instagram";
 import { facebookExtractor } from "./facebook";
 import { pinterestExtractor } from "./pinterest";
 import { snapchatExtractor } from "./snapchat";
@@ -68,10 +69,17 @@ async function runChain(url: string): Promise<VideoMetadata> {
  * platforms (TikTok, YouTube, Pinterest, Vimeo) never trigger the proxy.
  */
 async function extractFresh(url: string): Promise<VideoMetadata> {
+  const platform = detectPlatform(url).id;
   try {
     return await runChain(url);
   } catch (err) {
-    const platform = detectPlatform(url).id;
+    // Instagram/Threads: go straight to the Apify scraper (image posts,
+    // carousels, dead sessions) — more reliable than the proxy retry for these.
+    // Dormant unless APIFY_TOKEN is configured.
+    if (apifyEnabled() && isApifyPlatform(platform)) {
+      const viaApify = await apifyExtract(url);
+      if (viaApify) return viaApify;
+    }
     if (await shouldUseProxy(platform, 1)) {
       try {
         return await runWithForcedProxy(() => runChain(url));

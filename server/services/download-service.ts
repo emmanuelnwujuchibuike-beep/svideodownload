@@ -80,33 +80,62 @@ async function proxyDownload(format: MediaFormat): Promise<DownloadResult> {
 
 /**
  * Transcodes a direct CDN URL to H.264/AAC MP4 with ffmpeg. Used for the
- * Facebook fallback, whose direct streams are often VP9 (audio-only on iOS).
- * Result is cached so a trending clip is only transcoded once.
+ * Facebook/Instagram fallback, whose direct streams are often VP9 (audio-only
+ * on iOS). Already-H.264 streams are remuxed (fast, no quality loss); only
+ * VP9/AV1 is re-encoded. Result is cached so a clip is only processed once.
  */
+function headerArgFor(format: MediaFormat): string[] {
+  if (!format.httpHeaders) return [];
+  const h = Object.entries(format.httpHeaders)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\r\n");
+  return h ? ["-headers", h] : [];
+}
+
+/** Probes a remote URL's video codec via ffmpeg (always available). */
+function probeUrlCodec(format: MediaFormat): Promise<string | null> {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(
+        FFMPEG,
+        [...headerArgFor(format), "-hide_banner", "-i", format.directUrl!],
+        { windowsHide: true },
+      );
+    } catch {
+      resolve(null);
+      return;
+    }
+    let err = "";
+    child.stderr?.on("data", (c: Buffer) => (err += c.toString()));
+    child.on("error", () => resolve(null));
+    child.on("close", () => {
+      const m = err.match(/Video:\s*([a-z0-9]+)/i);
+      resolve(m ? m[1]!.toLowerCase() : null);
+    });
+  });
+}
+
 async function transcodeToH264(format: MediaFormat): Promise<DownloadResult> {
   const key = createHash("sha256")
-    .update(`fbh264|${format.directUrl}`)
+    .update(`vh264|${format.directUrl}`)
     .digest("hex")
     .slice(0, 40);
 
-  const headerArg = format.httpHeaders
-    ? Object.entries(format.httpHeaders)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join("\r\n")
-    : "";
+  const codec = (await probeUrlCodec(format))?.toLowerCase();
+  // H.264/HEVC → just remux into mp4 (fast). VP9/AV1/unknown → re-encode.
+  const copy = codec === "h264" || codec === "hevc";
+  const videoArgs = copy
+    ? ["-c:v", "copy"]
+    : ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"];
 
   return getOrProduce(key, "mp4", "video/mp4", (finalPath) =>
     new Promise<void>((resolve, reject) => {
       const args = [
-        ...(headerArg ? ["-headers", headerArg] : []),
+        ...headerArgFor(format),
         "-i",
         format.directUrl!,
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "23",
+        ...videoArgs,
         "-c:a",
         "aac",
         "-b:a",
@@ -134,10 +163,7 @@ async function transcodeToH264(format: MediaFormat): Promise<DownloadResult> {
         code === 0
           ? resolve()
           : reject(
-              new YtDlpError(
-                `transcode failed: ${err.slice(-300)}`,
-                "DOWNLOAD_FAILED",
-              ),
+              new YtDlpError(`transcode failed: ${err.slice(-300)}`, "DOWNLOAD_FAILED"),
             ),
       );
     }),
@@ -175,39 +201,33 @@ export async function resolveDownload(
   const format = findFormat(meta, formatId, kind);
   const hasDirect = !!format?.directUrl && format.kind === kind;
 
-  // Meta platforms' direct URLs can be VP9/DASH (audio-only or blank on iOS), so
-  // for video we try yt-dlp's H.264 selector FIRST and only fall back to the
-  // direct URL (transcoded to H.264) if yt-dlp can't extract it.
-  const preferYtdlp =
-    ["facebook", "instagram", "threads"].includes(meta.platform) &&
-    kind === "video";
+  // Meta platforms (Facebook/Instagram/Threads) serve VP9, which is audio-only
+  // on iOS — their VIDEO direct URLs go through ffmpeg (remux if already H.264,
+  // transcode if VP9). Other platforms (TikTok/X/Pinterest/Vimeo) are H.264, so
+  // they stream straight through — fastest path, no ffmpeg.
+  const metaPlatform = ["facebook", "instagram", "threads"].includes(meta.platform);
 
-  // Fast path: a custom extractor gave us a direct CDN URL for the exact kind
-  // requested — unless we're preferring yt-dlp for codec-compatibility reasons.
-  if (hasDirect && !preferYtdlp) {
+  if (hasDirect) {
     try {
+      if (kind === "video" && metaPlatform) {
+        return { ...(await transcodeToH264(format!)), title };
+      }
       return { ...(await proxyDownload(format!)), title };
     } catch {
       // Direct URL expired/blocked — fall through to yt-dlp.
     }
   }
 
-  // Main path: yt-dlp pipeline (H.264-preferring; handles every other platform).
+  // yt-dlp pipeline (no direct URL, or it failed). produceTo guarantees H.264.
   try {
     return { ...(await prepareDownload(url, formatId, kind)), title };
   } catch (err) {
-    // yt-dlp couldn't handle it — use the direct URL as a last resort.
     if (hasDirect) {
-      // Facebook direct URLs are often VP9 (audio-only on iOS) → transcode to
-      // H.264 so the file plays everywhere. Other platforms stream as-is.
-      if (preferYtdlp) {
-        try {
-          return { ...(await transcodeToH264(format!)), title };
-        } catch {
-          /* transcode unavailable/failed — stream the original as a last resort */
-        }
+      try {
+        return { ...(await transcodeToH264(format!)), title };
+      } catch {
+        return { ...(await proxyDownload(format!)), title };
       }
-      return { ...(await proxyDownload(format!)), title };
     }
     throw err;
   }

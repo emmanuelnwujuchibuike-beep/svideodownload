@@ -400,10 +400,18 @@ async function canonicalizeUrl(url: string): Promise<string> {
     const u = new URL(url);
     const host = u.hostname.replace(/^www\./, "");
 
-    // Snapchat /t/ share links → resolve to the real /spotlight/ URL.
-    if (host === "snapchat.com" && u.pathname.startsWith("/t/")) {
-      const res = await fetch(url, { redirect: "follow", headers: { "User-Agent": MOBILE_UA } });
-      if (res.url && res.url !== url) return res.url;
+    // Snapchat: resolve /t/ share links, then normalize any spotlight URL
+    // (e.g. /@user/spotlight/<id>?query) to the clean /spotlight/<id> form that
+    // yt-dlp's Spotlight extractor matches.
+    if (host === "snapchat.com") {
+      let resolved = url;
+      if (u.pathname.startsWith("/t/")) {
+        const res = await fetch(url, { redirect: "follow", headers: { "User-Agent": MOBILE_UA } });
+        resolved = res.url || url;
+      }
+      const spot = resolved.match(/\/spotlight\/([A-Za-z0-9_-]+)/);
+      if (spot) return `https://www.snapchat.com/spotlight/${spot[1]}`;
+      if (resolved !== url) return resolved;
     }
 
     // Pinterest pin.it → resolve, then strip to a clean /pin/<id>/ URL (yt-dlp
@@ -691,6 +699,62 @@ async function moveFile(from: string, to: string): Promise<void> {
   }
 }
 
+const FFPROBE_BIN = process.env.FFPROBE_PATH || "ffprobe";
+
+/** Returns the file's first video stream codec (e.g. "h264", "vp9"), or null. */
+function videoCodec(filePath: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(
+        FFPROBE_BIN,
+        ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "default=nw=1:nk=1", filePath],
+        { windowsHide: true },
+      );
+    } catch {
+      resolve(null);
+      return;
+    }
+    let out = "";
+    child.stdout?.on("data", (c: Buffer) => (out += c.toString()));
+    child.on("error", () => resolve(null));
+    child.on("close", () => resolve(out.trim().split(/\s+/)[0] || null));
+  });
+}
+
+/** Transcodes a file's video to H.264 (copying AAC audio) into `out`. */
+function transcodeFileToH264(src: string, out: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const args = [
+      "-i", src,
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+      "-c:a", "aac", "-b:a", "128k",
+      "-movflags", "+faststart", "-y", out,
+    ];
+    const child = spawn(FFMPEG_PATH || "ffmpeg", args, { windowsHide: true });
+    let err = "";
+    child.stderr?.on("data", (c: Buffer) => { if (err.length < 1500) err += c.toString(); });
+    child.on("error", (e: Error) => reject(new YtDlpError(e.message, "DOWNLOAD_FAILED")));
+    child.on("close", (code) =>
+      code === 0 ? resolve() : reject(new YtDlpError(`recode failed: ${err.slice(-200)}`, "DOWNLOAD_FAILED")),
+    );
+  });
+}
+
+/**
+ * Guarantees an iOS-playable H.264 mp4: VP9/AV1 video (common on Instagram &
+ * Facebook) plays as audio-only on iOS/Safari, so anything that isn't already
+ * H.264/HEVC is transcoded. H.264 files pass through untouched (no re-encode).
+ */
+async function ensureH264(filePath: string, dir: string): Promise<string> {
+  if (!filePath.endsWith(".mp4")) return filePath; // audio/other — leave as-is
+  const codec = (await videoCodec(filePath))?.toLowerCase();
+  if (!codec || codec === "h264" || codec === "hevc") return filePath;
+  const out = join(dir, "h264.mp4");
+  await withDownloadSlot(() => transcodeFileToH264(filePath, out));
+  return out;
+}
+
 /**
  * Runs yt-dlp into its OWN temp dir (so the merged output can be located by the
  * `media.*` name), then moves the finished file to `finalPath`. The temp dir is
@@ -709,7 +773,8 @@ async function produceTo(baseArgs: string[], finalPath: string): Promise<void> {
     if (!fileName) {
       throw new YtDlpError("no output produced", "DOWNLOAD_FAILED");
     }
-    await moveFile(join(dir, fileName), finalPath);
+    const ready = await ensureH264(join(dir, fileName), dir);
+    await moveFile(ready, finalPath);
   } finally {
     void rm(dir, { recursive: true, force: true });
   }

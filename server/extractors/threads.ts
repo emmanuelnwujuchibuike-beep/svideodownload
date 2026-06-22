@@ -54,13 +54,12 @@ export const threadsExtractor: Extractor = {
       clearTimeout(timer);
     }
 
+    const headers = { "User-Agent": DESKTOP_UA, Referer: "https://www.threads.com/" };
     const videoUrl = findVideoUrl(html);
-    if (!videoUrl || !videoUrl.startsWith("http")) {
-      throw new ExtractionError("No Threads video URL (private or image post)");
-    }
+    const formats: MediaFormat[] = [];
 
-    const formats: MediaFormat[] = [
-      {
+    if (videoUrl && videoUrl.startsWith("http")) {
+      formats.push({
         formatId: "best",
         kind: "video",
         label: "HD",
@@ -72,9 +71,46 @@ export const threadsExtractor: Extractor = {
         vcodec: "h264",
         acodec: "aac",
         directUrl: videoUrl,
-        httpHeaders: { "User-Agent": DESKTOP_UA, Referer: "https://www.threads.com/" },
-      },
-    ];
+        httpHeaders: headers,
+      });
+    } else {
+      // Photo / carousel post → offer each image (Meta image_versions2/display_url).
+      const imgs: string[] = [];
+      for (const m of html.matchAll(
+        /"image_versions2":\{"candidates":\[\{"[^}]*?"url":"([^"]+)"/g,
+      )) {
+        const u = unescapeJsonUrl(m[1]!);
+        if (u.startsWith("http") && !imgs.includes(u)) imgs.push(u);
+      }
+      for (const m of html.matchAll(/"display_url":"([^"]+)"/g)) {
+        const u = unescapeJsonUrl(m[1]!);
+        if (u.startsWith("http") && !imgs.includes(u)) imgs.push(u);
+      }
+      if (imgs.length === 0) {
+        const og = metaContent(html, "og:image");
+        if (og) imgs.push(og);
+      }
+      imgs.forEach((img, i) => {
+        formats.push({
+          formatId: `img-${i}`,
+          kind: "image",
+          label: imgs.length > 1 ? `Photo ${i + 1}` : "Photo",
+          ext: /\.png/i.test(img) ? "png" : /\.webp/i.test(img) ? "webp" : "jpg",
+          resolution: null,
+          fps: null,
+          filesize: null,
+          tbr: null,
+          vcodec: null,
+          acodec: null,
+          directUrl: img,
+          httpHeaders: headers,
+        });
+      });
+    }
+
+    if (formats.length === 0) {
+      throw new ExtractionError("No Threads media (private or login-walled)");
+    }
 
     return {
       id: crypto.randomUUID(),

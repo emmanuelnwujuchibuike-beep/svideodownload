@@ -11,16 +11,33 @@ import {
 } from "@/server/proxy/proxy-manager";
 import type { PlatformId } from "@/types";
 
+import { cookieHeaderFor } from "./cookies";
+
 /**
  * Smart extractor fetch: DIRECT first (cheap), residential proxy only as a
  * fallback when the platform blocks us — by HTTP status (403/429) OR by serving
  * a 200 login/WAF/challenge page (Instagram, Facebook, TikTok all do this).
  * Only small extraction payloads ever touch the proxy; video bytes never do.
+ *
+ * Sign-in cookies (YTDLP_COOKIES) are attached for the request host so the
+ * custom extractors can read authenticated pages (e.g. Instagram image posts).
  */
 
 export const usingExtractorProxy = proxyConfigured;
 
 type FetchInit = RequestInit & { dispatcher?: ProxyAgent };
+
+/** Merge sign-in cookies for the target host into the request headers. */
+function withCookies(
+  input: string,
+  init: RequestInit | undefined,
+): RequestInit | undefined {
+  const cookie = cookieHeaderFor(input);
+  if (!cookie) return init;
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Cookie")) headers.set("Cookie", cookie);
+  return { ...init, headers };
+}
 
 function reFetchViaProxy(
   input: string,
@@ -37,6 +54,7 @@ export async function extractorFetch(
   platform: PlatformId,
 ): Promise<Response> {
   const method = (init?.method || "GET").toUpperCase();
+  init = withCookies(input, init);
 
   // Forced retry (a prior direct extraction failed) → use the proxy directly.
   // shouldUseProxy(platform, 0) is true only when forced (or not fallback-only).

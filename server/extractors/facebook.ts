@@ -87,7 +87,26 @@ export const facebookExtractor: Extractor = {
 
     const formats = buildFormats(html);
     if (formats.length === 0) {
-      throw new ExtractionError("No Facebook video URL (likely login-walled)");
+      // Photo post → offer the image instead of failing.
+      const img = metaContent(html, "og:image");
+      if (img && img.startsWith("http")) {
+        formats.push({
+          formatId: "fb-img",
+          kind: "image",
+          label: "Photo",
+          ext: /\.png/i.test(img) ? "png" : "jpg",
+          resolution: null,
+          fps: null,
+          filesize: null,
+          tbr: null,
+          vcodec: null,
+          acodec: null,
+          directUrl: img,
+          httpHeaders: { "User-Agent": DESKTOP_UA, Referer: "https://www.facebook.com/" },
+        });
+      } else {
+        throw new ExtractionError("No Facebook media (likely login-walled)");
+      }
     }
 
     return {

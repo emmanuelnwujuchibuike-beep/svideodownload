@@ -151,10 +151,35 @@ export const twitterExtractor: Extractor = {
 
     // Include media from the tweet AND any tweet it reposts/quotes.
     const media = collectMedia(data);
-    if (media.length === 0) throw new ExtractionError("Tweet has no video");
+    if (media.length === 0) throw new ExtractionError("Tweet has no media");
 
     const formats = buildFormats(media);
-    if (formats.length === 0) throw new ExtractionError("No video in tweet");
+
+    // Photo tweets → offer each image.
+    if (formats.length === 0) {
+      const photos = media.filter(
+        (m) => !m.video_info && m.media_url_https,
+      );
+      photos.forEach((p, i) => {
+        const u = `${p.media_url_https}?name=orig`;
+        formats.push({
+          formatId: `img-${i}`,
+          kind: "image",
+          label: photos.length > 1 ? `Photo ${i + 1}` : "Photo",
+          ext: /\.png/i.test(p.media_url_https!) ? "png" : "jpg",
+          resolution: null,
+          fps: null,
+          filesize: null,
+          tbr: null,
+          vcodec: null,
+          acodec: null,
+          directUrl: u,
+          httpHeaders: { "User-Agent": DESKTOP_UA, Referer: "https://twitter.com/" },
+        });
+      });
+    }
+
+    if (formats.length === 0) throw new ExtractionError("No media in tweet");
 
     const durationMs = media.find((m) => m.video_info)?.video_info
       ?.duration_millis;

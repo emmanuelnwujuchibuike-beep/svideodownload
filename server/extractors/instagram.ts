@@ -38,6 +38,27 @@ function findVideoUrl(html: string): string | null {
   return raw ? unescapeJsonUrl(raw) : null;
 }
 
+/** Collects image URLs for photo / carousel posts (highest resolution first). */
+function findImageUrls(html: string): string[] {
+  const urls: string[] = [];
+  const push = (u?: string | null) => {
+    if (!u) return;
+    const clean = unescapeJsonUrl(u);
+    if (clean.startsWith("http") && !urls.includes(clean)) urls.push(clean);
+  };
+
+  // Highest-res candidate from each image_versions2 block (covers carousels).
+  for (const m of html.matchAll(
+    /"image_versions2":\{"candidates":\[\{"[^}]*?"url":"([^"]+)"/g,
+  )) {
+    push(m[1]);
+  }
+  // display_url appears once per carousel child and on single image posts.
+  for (const m of html.matchAll(/"display_url":"([^"]+)"/g)) push(m[1]);
+  if (urls.length === 0) push(metaContent(html, "og:image"));
+  return urls;
+}
+
 export const instagramExtractor: Extractor = {
   name: "instagram",
   canHandle(_url: string, platform: PlatformId) {
@@ -63,14 +84,12 @@ export const instagramExtractor: Extractor = {
       clearTimeout(timer);
     }
 
-    const videoUrl = findVideoUrl(html);
-    if (!videoUrl || !videoUrl.startsWith("http")) {
-      throw new ExtractionError("No Instagram video URL (likely login-walled)");
-    }
-
     const headers = { "User-Agent": DESKTOP_UA, Referer: "https://www.instagram.com/" };
-    const formats: MediaFormat[] = [
-      {
+    const videoUrl = findVideoUrl(html);
+    const formats: MediaFormat[] = [];
+
+    if (videoUrl && videoUrl.startsWith("http")) {
+      formats.push({
         formatId: "ig-hd",
         kind: "video",
         label: "HD",
@@ -83,10 +102,32 @@ export const instagramExtractor: Extractor = {
         acodec: "aac",
         directUrl: videoUrl,
         httpHeaders: headers,
-      },
-    ];
+      });
+    } else {
+      // Photo / carousel post → offer each image.
+      findImageUrls(html).forEach((img, i) => {
+        formats.push({
+          formatId: `img-${i}`,
+          kind: "image",
+          label: `Photo ${i + 1}`,
+          ext: /\.png/i.test(img) ? "png" : /\.webp/i.test(img) ? "webp" : "jpg",
+          resolution: null,
+          fps: null,
+          filesize: null,
+          tbr: null,
+          vcodec: null,
+          acodec: null,
+          directUrl: img,
+          httpHeaders: headers,
+        });
+      });
+    }
 
-    const title = metaContent(html, "og:title") || "Instagram video";
+    if (formats.length === 0) {
+      throw new ExtractionError("No Instagram media (likely login-walled or private)");
+    }
+
+    const title = metaContent(html, "og:title") || "Instagram post";
 
     return {
       id: shortcode,

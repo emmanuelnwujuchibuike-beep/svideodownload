@@ -288,7 +288,15 @@ function mapFormats(info: RawInfo): MediaFormat[] {
   let bestHeightless: { tbr: number; filesize: number | null } | null = null;
 
   for (const f of raw) {
-    const hasVideo = !!f.vcodec && f.vcodec !== "none";
+    const isStoryboard = f.ext === "mhtml" || /storyboard/i.test(f.format_note || "");
+    // A format is video if it has a real video codec OR (commonly on Instagram/
+    // Facebook) it carries a height/width but yt-dlp left vcodec unknown. Only an
+    // explicit vcodec:"none" (or a storyboard) is treated as non-video — without
+    // this, posts whose only video streams have an unknown codec showed audio-only.
+    const hasVideo =
+      !isStoryboard &&
+      f.vcodec !== "none" &&
+      (!!f.vcodec || !!f.height || !!f.width);
     const hasAudio = !!f.acodec && f.acodec !== "none";
     if (hasAudio) hasAnyAudio = true;
     if (!hasVideo) continue;
@@ -569,7 +577,8 @@ function buildDownloadArgs(
     `bestvideo[vcodec^=avc1]+bestaudio/` +
     `best[height<=${height}][vcodec!=none]/` +
     `bestvideo+bestaudio/` +
-    `best[vcodec!=none]/best`;
+    `best[vcodec!=none]/` +
+    `best[height<=${height}]/best`;
 
   return {
     ext: "mp4",

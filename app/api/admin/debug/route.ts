@@ -67,9 +67,11 @@ export async function GET(request: Request) {
 
   const apifyUrl = sp.get("apify");
   if (apifyUrl) {
-    const token = process.env.APIFY_TOKEN;
-    const actor = (process.env.APIFY_IG_ACTOR || "apify/instagram-scraper").replace("/", "~");
+    const token = process.env.APIFY_TOKEN?.trim().replace(/^["']|["']$/g, "");
+    const actor = (process.env.APIFY_IG_ACTOR || "apify/instagram-scraper").trim().replace("/", "~");
     if (!token) return NextResponse.json({ enabled: false, note: "APIFY_TOKEN not set on this service" });
+    // Surface token shape (NOT the token) to spot wrong/empty/typo'd values.
+    const shape = { len: token.length, prefix: token.slice(0, 9), looksApify: token.startsWith("apify_api_") };
     try {
       const r = await fetch(
         `https://api.apify.com/v2/acts/${actor}/run-sync-get-dataset-items?token=${token}`,
@@ -87,6 +89,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         enabled: true,
         actor,
+        tokenShape: shape,
         status: r.status,
         items: arr?.length ?? null,
         firstKeys: arr?.[0] ? Object.keys(arr[0]).slice(0, 20) : null,

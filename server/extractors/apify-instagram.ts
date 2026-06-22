@@ -15,7 +15,8 @@ import { detectPlatform } from "@/lib/platforms";
  * Dormant (returns null) when APIFY_TOKEN isn't set.
  */
 
-const APIFY_TOKEN = process.env.APIFY_TOKEN;
+// Strip accidental surrounding quotes/whitespace (a common env-var paste issue).
+const APIFY_TOKEN = process.env.APIFY_TOKEN?.trim().replace(/^["']|["']$/g, "");
 const APIFY_IG_ACTOR = process.env.APIFY_IG_ACTOR || "apify/instagram-scraper";
 const APIFY_THREADS_ACTOR = process.env.APIFY_THREADS_ACTOR || APIFY_IG_ACTOR;
 const TIMEOUT_MS = Number(process.env.APIFY_TIMEOUT_MS || 90_000);

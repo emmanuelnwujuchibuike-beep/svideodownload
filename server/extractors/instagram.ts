@@ -2,61 +2,103 @@ import { detectPlatform } from "@/lib/platforms";
 import type { MediaFormat, PlatformId, VideoMetadata } from "@/types";
 
 import { extractorFetch } from "./http";
-import { DESKTOP_UA, firstMatch, metaContent, unescapeJsonUrl } from "./parse";
+import { DESKTOP_UA } from "./parse";
 import { ExtractionError, type Extractor } from "./types";
 
 /**
- * Instagram custom extractor (reels / posts / IGTV).
- *
- * Public posts embed the direct MP4 in the page's inline JSON (`video_url`) or
- * an `og:video` meta tag. We read those for a fast, no-yt-dlp download. NOTE:
- * Instagram heavily auth-/WAF-walls datacenter IPs, so without EXTRACTOR_PROXY
- * this will usually hit a login wall and transparently fall back to yt-dlp.
+ * Instagram extractor via the private web media API
+ * (`/api/v1/media/<pk>/info/`). With the YTDLP_COOKIES `sessionid` attached by
+ * extractorFetch, this returns full media info for reels, photos AND carousels
+ * — the only reliable way to get image posts, which yt-dlp refuses. On any
+ * failure we throw and the registry falls back to yt-dlp.
  */
 
-const TIMEOUT_MS = Number(process.env.INSTAGRAM_EXTRACTOR_TIMEOUT_MS || 8000);
+const TIMEOUT_MS = Number(process.env.INSTAGRAM_EXTRACTOR_TIMEOUT_MS || 9000);
+const IG_APP_ID = "936619743392459";
 
-const HEADERS = {
-  "User-Agent": DESKTOP_UA,
-  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "Accept-Language": "en-US,en;q=0.9",
-};
+const ALPHABET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 function shortcodeOf(url: string): string | null {
-  const m = url.match(/instagram\.com\/(?:[^/]+\/)?(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i);
+  const m = url.match(
+    /instagram\.com\/(?:[^/]+\/)?(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i,
+  );
   return m ? m[1]! : null;
 }
 
-function findVideoUrl(html: string): string | null {
-  const raw = firstMatch(
-    html,
-    /"video_url":"([^"]+)"/,
-    /"video_versions":\[\{"[^}]*?"url":"([^"]+)"/,
-    /property=["']og:video["'][^>]+content=["']([^"']+)["']/i,
-    /property=["']og:video:secure_url["'][^>]+content=["']([^"']+)["']/i,
-  );
-  return raw ? unescapeJsonUrl(raw) : null;
+/** Instagram shortcode → numeric media pk (base64 with IG's alphabet). */
+function shortcodeToPk(shortcode: string): string | null {
+  let pk = 0n;
+  for (const ch of shortcode) {
+    const idx = ALPHABET.indexOf(ch);
+    if (idx < 0) return null;
+    pk = pk * 64n + BigInt(idx);
+  }
+  return pk.toString();
 }
 
-/** Collects image URLs for photo / carousel posts (highest resolution first). */
-function findImageUrls(html: string): string[] {
-  const urls: string[] = [];
-  const push = (u?: string | null) => {
-    if (!u) return;
-    const clean = unescapeJsonUrl(u);
-    if (clean.startsWith("http") && !urls.includes(clean)) urls.push(clean);
-  };
+interface IgImageCandidate { url?: string; width?: number; height?: number }
+interface IgMedia {
+  media_type?: number; // 1 image, 2 video, 8 carousel
+  video_versions?: { url?: string; width?: number; height?: number }[];
+  image_versions2?: { candidates?: IgImageCandidate[] };
+  carousel_media?: IgMedia[];
+}
+interface IgItem extends IgMedia {
+  code?: string;
+  caption?: { text?: string } | null;
+  user?: { username?: string };
+}
 
-  // Highest-res candidate from each image_versions2 block (covers carousels).
-  for (const m of html.matchAll(
-    /"image_versions2":\{"candidates":\[\{"[^}]*?"url":"([^"]+)"/g,
-  )) {
-    push(m[1]);
-  }
-  // display_url appears once per carousel child and on single image posts.
-  for (const m of html.matchAll(/"display_url":"([^"]+)"/g)) push(m[1]);
-  if (urls.length === 0) push(metaContent(html, "og:image"));
-  return urls;
+function bestImage(m: IgMedia): IgImageCandidate | null {
+  const c = m.image_versions2?.candidates ?? [];
+  return c.slice().sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0] ?? null;
+}
+
+function buildFormats(item: IgItem): MediaFormat[] {
+  const headers = { "User-Agent": DESKTOP_UA, Referer: "https://www.instagram.com/" };
+  const children = item.carousel_media?.length ? item.carousel_media : [item];
+  const formats: MediaFormat[] = [];
+
+  children.forEach((child, i) => {
+    const video = child.video_versions?.find((v) => v.url?.startsWith("http"));
+    if (video?.url) {
+      formats.push({
+        formatId: children.length > 1 ? `vid-${i}` : "ig-hd",
+        kind: "video",
+        label: children.length > 1 ? `Video ${i + 1}` : "HD",
+        ext: "mp4",
+        resolution: video.height ? `${video.height}p` : null,
+        fps: null,
+        filesize: null,
+        tbr: null,
+        vcodec: "h264",
+        acodec: "aac",
+        directUrl: video.url,
+        httpHeaders: headers,
+      });
+      return;
+    }
+    const img = bestImage(child);
+    if (img?.url) {
+      formats.push({
+        formatId: `img-${i}`,
+        kind: "image",
+        label: children.length > 1 ? `Photo ${i + 1}` : "Photo",
+        ext: /\.png/i.test(img.url) ? "png" : /\.webp/i.test(img.url) ? "webp" : "jpg",
+        resolution: null,
+        fps: null,
+        filesize: null,
+        tbr: null,
+        vcodec: null,
+        acodec: null,
+        directUrl: img.url,
+        httpHeaders: headers,
+      });
+    }
+  });
+
+  return formats;
 }
 
 export const instagramExtractor: Extractor = {
@@ -68,79 +110,52 @@ export const instagramExtractor: Extractor = {
     const platform = detectPlatform(url);
     const shortcode = shortcodeOf(url);
     if (!shortcode) throw new ExtractionError("Unrecognised Instagram URL");
+    const pk = shortcodeToPk(shortcode);
+    if (!pk) throw new ExtractionError("Bad Instagram shortcode");
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    let html: string;
+    let item: IgItem;
     try {
       const res = await extractorFetch(
-        `https://www.instagram.com/p/${shortcode}/`,
-        { headers: HEADERS, redirect: "follow", signal: controller.signal },
+        `https://www.instagram.com/api/v1/media/${pk}/info/`,
+        {
+          headers: {
+            "User-Agent": DESKTOP_UA,
+            "X-IG-App-ID": IG_APP_ID,
+            Accept: "*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+            Referer: "https://www.instagram.com/",
+          },
+          signal: controller.signal,
+        },
         "instagram",
       );
-      if (!res.ok) throw new ExtractionError(`Instagram responded ${res.status}`);
-      html = await res.text();
+      if (!res.ok) throw new ExtractionError(`Instagram API ${res.status}`);
+      const data = (await res.json()) as { items?: IgItem[] };
+      const first = data.items?.[0];
+      if (!first) throw new ExtractionError("Instagram API returned no item");
+      item = first;
     } finally {
       clearTimeout(timer);
     }
 
-    const headers = { "User-Agent": DESKTOP_UA, Referer: "https://www.instagram.com/" };
-    const videoUrl = findVideoUrl(html);
-    const formats: MediaFormat[] = [];
-
-    if (videoUrl && videoUrl.startsWith("http")) {
-      formats.push({
-        formatId: "ig-hd",
-        kind: "video",
-        label: "HD",
-        ext: "mp4",
-        resolution: null,
-        fps: null,
-        filesize: null,
-        tbr: null,
-        vcodec: "h264",
-        acodec: "aac",
-        directUrl: videoUrl,
-        httpHeaders: headers,
-      });
-    } else {
-      // Photo / carousel post → offer each image.
-      findImageUrls(html).forEach((img, i) => {
-        formats.push({
-          formatId: `img-${i}`,
-          kind: "image",
-          label: `Photo ${i + 1}`,
-          ext: /\.png/i.test(img) ? "png" : /\.webp/i.test(img) ? "webp" : "jpg",
-          resolution: null,
-          fps: null,
-          filesize: null,
-          tbr: null,
-          vcodec: null,
-          acodec: null,
-          directUrl: img,
-          httpHeaders: headers,
-        });
-      });
-    }
-
+    const formats = buildFormats(item);
     if (formats.length === 0) {
-      throw new ExtractionError("No Instagram media (likely login-walled or private)");
+      throw new ExtractionError("No Instagram media found");
     }
 
-    const title = metaContent(html, "og:title") || "Instagram post";
-
+    const thumb = bestImage(item.carousel_media?.[0] ?? item)?.url ?? null;
     return {
       id: shortcode,
       platform: platform.id,
       platformName: platform.name,
       sourceUrl: url,
-      title: title.slice(0, 200),
-      description: metaContent(html, "og:description"),
-      thumbnail: metaContent(html, "og:image"),
+      title: item.caption?.text?.trim().slice(0, 200) || "Instagram post",
+      description: item.caption?.text?.trim() || null,
+      thumbnail: thumb,
       durationSeconds: null,
-      creator:
-        firstMatch(html, /"owner":\{"[^}]*?"username":"([^"]+)"/) ||
-        firstMatch(html, /"username":"([^"]+)"/),
+      creator: item.user?.username ?? null,
       uploadDate: null,
       viewCount: null,
       likeCount: null,

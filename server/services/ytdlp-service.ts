@@ -699,26 +699,30 @@ async function moveFile(from: string, to: string): Promise<void> {
   }
 }
 
-const FFPROBE_BIN = process.env.FFPROBE_PATH || "ffprobe";
-
-/** Returns the file's first video stream codec (e.g. "h264", "vp9"), or null. */
+/**
+ * Returns the file's first video stream codec ("h264", "vp9", "av1"…) using
+ * ffmpeg itself (which is always present, unlike ffprobe in static builds).
+ * `ffmpeg -i <file>` prints stream info to stderr and exits non-zero — we just
+ * parse the "Video: <codec>" line.
+ */
 function videoCodec(filePath: string): Promise<string | null> {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(
-        FFPROBE_BIN,
-        ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "default=nw=1:nk=1", filePath],
-        { windowsHide: true },
-      );
+      child = spawn(FFMPEG_PATH || "ffmpeg", ["-hide_banner", "-i", filePath], {
+        windowsHide: true,
+      });
     } catch {
       resolve(null);
       return;
     }
-    let out = "";
-    child.stdout?.on("data", (c: Buffer) => (out += c.toString()));
+    let err = "";
+    child.stderr?.on("data", (c: Buffer) => (err += c.toString()));
     child.on("error", () => resolve(null));
-    child.on("close", () => resolve(out.trim().split(/\s+/)[0] || null));
+    child.on("close", () => {
+      const m = err.match(/Video:\s*([a-z0-9]+)/i);
+      resolve(m ? m[1]!.toLowerCase() : null);
+    });
   });
 }
 

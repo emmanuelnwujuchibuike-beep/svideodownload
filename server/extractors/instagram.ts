@@ -13,8 +13,13 @@ import { ExtractionError, type Extractor } from "./types";
  * failure we throw and the registry falls back to yt-dlp.
  */
 
-const TIMEOUT_MS = Number(process.env.INSTAGRAM_EXTRACTOR_TIMEOUT_MS || 9000);
+const TIMEOUT_MS = Number(process.env.INSTAGRAM_EXTRACTOR_TIMEOUT_MS || 12000);
 const IG_APP_ID = "936619743392459";
+// The mobile API (i.instagram.com) returns 403 when IP-blocked — which triggers
+// our residential-proxy retry — whereas the www API 302-redirects to login.
+const IG_APP_UA =
+  "Instagram 269.0.0.18.75 Android (30/11; 420dpi; 1080x2400; samsung; " +
+  "SM-G991B; o1s; exynos2100; en_US; 314665256)";
 
 const ALPHABET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -118,14 +123,13 @@ export const instagramExtractor: Extractor = {
     let item: IgItem;
     try {
       const res = await extractorFetch(
-        `https://www.instagram.com/api/v1/media/${pk}/info/`,
+        `https://i.instagram.com/api/v1/media/${pk}/info/`,
         {
           headers: {
-            "User-Agent": DESKTOP_UA,
+            "User-Agent": IG_APP_UA,
             "X-IG-App-ID": IG_APP_ID,
             Accept: "*/*",
             "Accept-Language": "en-US,en;q=0.9",
-            Referer: "https://www.instagram.com/",
           },
           signal: controller.signal,
         },

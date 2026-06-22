@@ -576,17 +576,23 @@ function buildDownloadArgs(
   // that picks a single format requires a video codec ([vcodec!=none]) so a
   // video request never resolves to audio.
   const no01 = "[vcodec!*=av01]";
+  const h = height;
   const selector =
-    `bestvideo[height<=${height}][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/` +
-    `bestvideo[height<=${height}][vcodec^=avc1]+bestaudio/` +
-    `best[height<=${height}][ext=mp4][vcodec^=avc1]/` +
-    `bestvideo[height<=${height}][ext=mp4]${no01}+bestaudio[ext=m4a]/` +
-    `bestvideo[height<=${height}]${no01}+bestaudio/` +
-    `bestvideo[vcodec^=avc1]+bestaudio/` +
-    `best[height<=${height}][vcodec!=none]${no01}/` +
-    `bestvideo${no01}+bestaudio/` +
-    `best[vcodec!=none]${no01}/` +
-    `best[height<=${height}]${no01}/best${no01}/best`;
+    // 1) H.264 from separate streams (best quality, plays everywhere, no transcode)
+    `bestvideo[height<=${h}][vcodec^=avc1]+bestaudio[ext=m4a]/` +
+    `bestvideo[height<=${h}][vcodec^=avc1]+bestaudio/` +
+    `best[height<=${h}][vcodec^=avc1]/` +
+    // 2) H.264 PROGRESSIVE (combined mp4 with audio) — Instagram/Facebook only
+    //    expose H.264 here; preferring it avoids a VP9 transcode that the worker
+    //    ffmpeg may not support. Slightly lower res, but it actually plays on iOS.
+    `best[height<=${h}][ext=mp4][acodec!=none][vcodec!=none]/` +
+    `best[ext=mp4][acodec!=none][vcodec!=none]/` +
+    // 3) VP9 / other (needs transcode; never AV1, which we can't decode)
+    `bestvideo[height<=${h}][ext=mp4]${no01}+bestaudio[ext=m4a]/` +
+    `bestvideo[height<=${h}]${no01}+bestaudio/` +
+    `best[height<=${h}][vcodec!=none]${no01}/` +
+    // 4) last resort
+    `bestvideo${no01}+bestaudio/best[vcodec!=none]${no01}/best`;
 
   return {
     ext: "mp4",

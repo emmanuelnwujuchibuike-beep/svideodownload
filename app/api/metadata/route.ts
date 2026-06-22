@@ -70,6 +70,20 @@ export async function POST(request: Request) {
       if (err.code === "NOT_INSTALLED") {
         return fail("Downloader is temporarily unavailable.", "INTERNAL", 503);
       }
+      // Image-only post (e.g. a Pinterest image pin or Instagram photo) — make
+      // the reason clear instead of implying it's private.
+      if (
+        err.stderr &&
+        /no video (formats|could be found)|there'?s no video|image post/i.test(
+          err.stderr,
+        )
+      ) {
+        return fail(
+          "This link looks like a photo, not a video — there's no video to download here.",
+          "EXTRACTION_FAILED",
+          422,
+        );
+      }
       return fail(
         "Couldn't fetch this video — it may be private, region-locked, removed, or require sign-in. Some platforms (Instagram, Facebook) need cookies or a proxy configured on the server.",
         "EXTRACTION_FAILED",

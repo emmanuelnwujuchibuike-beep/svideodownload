@@ -766,8 +766,15 @@ async function ensureH264(filePath: string, dir: string): Promise<string> {
   const codec = (await videoCodec(filePath))?.toLowerCase();
   if (!codec || codec === "h264" || codec === "hevc") return filePath;
   const out = join(dir, "h264.mp4");
-  await withDownloadSlot(() => transcodeFileToH264(filePath, out));
-  return out;
+  try {
+    await withDownloadSlot(() => transcodeFileToH264(filePath, out));
+    return out;
+  } catch {
+    // Transcode failed (e.g. ffmpeg can't decode this codec) — serve the
+    // original file rather than failing the whole download with a tiny error.
+    // It still plays on Android/desktop; only iOS struggles with VP9/AV1.
+    return filePath;
+  }
 }
 
 /**

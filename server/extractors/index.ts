@@ -9,7 +9,6 @@ import { extractMetadata as ytdlpExtract } from "@/server/services/ytdlp-service
 import type { VideoMetadata } from "@/types";
 
 import { facebookExtractor } from "./facebook";
-import { instagramExtractor } from "./instagram";
 import { pinterestExtractor } from "./pinterest";
 import { snapchatExtractor } from "./snapchat";
 import { threadsExtractor } from "./threads";
@@ -27,7 +26,8 @@ const CUSTOM_EXTRACTORS: Extractor[] = [
   tiktokExtractor,
   vimeoExtractor,
   twitterExtractor,
-  instagramExtractor,
+  // instagramExtractor removed: IG rejects exported sessionids server-side, so
+  // the custom path only added latency. IG videos/reels go straight to yt-dlp.
   facebookExtractor,
   pinterestExtractor,
   snapchatExtractor,

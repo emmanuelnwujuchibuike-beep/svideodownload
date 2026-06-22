@@ -59,8 +59,10 @@ function videoFormat(mediaUrl: string): MediaFormat {
 
 export const snapchatExtractor: Extractor = {
   name: "snapchat",
-  canHandle(_url: string, platform: PlatformId) {
-    return platform === "snapchat";
+  canHandle(url: string, platform: PlatformId) {
+    // Only handle profile / Story pages here. Spotlight and /t/ share links go
+    // to yt-dlp's dedicated Spotlight extractor (more reliable for those).
+    return platform === "snapchat" && /snapchat\.com\/@/.test(url);
   },
   async extract(url: string): Promise<VideoMetadata> {
     const platform = detectPlatform(url);

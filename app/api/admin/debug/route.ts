@@ -126,7 +126,8 @@ export async function GET(request: Request) {
       return NextResponse.json({
         ok: false,
         code: e instanceof YtDlpError ? e.code : "ERR",
-        stderr: (e instanceof YtDlpError ? e.stderr : String(e))?.slice(-600),
+        message: (e instanceof Error ? e.message : String(e))?.slice(-400),
+        stderr: (e instanceof YtDlpError ? e.stderr : undefined)?.slice(-400),
       });
     }
   }

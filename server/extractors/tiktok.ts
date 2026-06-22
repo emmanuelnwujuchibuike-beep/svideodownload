@@ -238,35 +238,138 @@ function buildFormats(item: TikTokItem): MediaFormat[] {
   return formats;
 }
 
-export const tiktokExtractor: Extractor = {
-  name: "tiktok",
-  canHandle(_url: string, platform: PlatformId) {
-    return platform === "tiktok";
-  },
-  async extract(url: string): Promise<VideoMetadata> {
-    const platform = detectPlatform(url);
-    const resolved = await resolveUrl(url);
+/**
+ * Fallback via the free TikWM API. TikTok serves datacenter IPs a blank page,
+ * so when the native page parse fails (and for region-locked videos) this
+ * returns the no-watermark video, the sound, OR each image of a photo post.
+ */
+interface TikWmData {
+  id?: string;
+  title?: string;
+  cover?: string;
+  duration?: number;
+  play?: string;
+  hdplay?: string;
+  music?: string;
+  images?: string[];
+  author?: { nickname?: string; unique_id?: string };
+}
+function abs(u: string): string {
+  return u.startsWith("http") ? u : `https://www.tikwm.com${u}`;
+}
+async function tikwmExtract(
+  url: string,
+  platform: ReturnType<typeof detectPlatform>,
+): Promise<VideoMetadata | null> {
+  try {
+    const res = await extractorFetch(
+      `https://www.tikwm.com/api/?hd=1&url=${encodeURIComponent(url)}`,
+      { headers: { "User-Agent": DESKTOP_UA, Accept: "application/json" } },
+      "tiktok",
+    );
+    if (!res.ok) return null;
+    const j = (await res.json()) as { code?: number; data?: TikWmData };
+    if (j.code !== 0 || !j.data) return null;
+    const d = j.data;
+    const headers = { "User-Agent": DESKTOP_UA, Referer: "https://www.tiktok.com/" };
+    const formats: MediaFormat[] = [];
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIKTOK_TIMEOUT_MS);
-    let html: string;
-    try {
-      const res = await extractorFetch(
-        resolved,
-        {
-          headers: FETCH_HEADERS,
-          redirect: "follow",
-          signal: controller.signal,
-        },
-        "tiktok",
+    if (Array.isArray(d.images) && d.images.length) {
+      d.images.forEach((img, i) =>
+        formats.push({
+          formatId: `img-${i}`,
+          kind: "image",
+          label: `Photo ${i + 1}`,
+          ext: /\.png/i.test(img) ? "png" : "jpg",
+          resolution: null,
+          fps: null,
+          filesize: null,
+          tbr: null,
+          vcodec: null,
+          acodec: null,
+          directUrl: abs(img),
+          httpHeaders: headers,
+        }),
       );
-      if (!res.ok) throw new ExtractionError(`TikTok responded ${res.status}`);
-      html = await res.text();
-    } finally {
-      clearTimeout(timer);
+    } else {
+      const v = d.hdplay || d.play;
+      if (v)
+        formats.push({
+          formatId: "tt-0",
+          kind: "video",
+          label: "HD · No watermark",
+          ext: "mp4",
+          resolution: null,
+          fps: null,
+          filesize: null,
+          tbr: null,
+          vcodec: "h264",
+          acodec: "aac",
+          directUrl: abs(v),
+          httpHeaders: headers,
+        });
     }
+    if (d.music)
+      formats.push({
+        formatId: "audio",
+        kind: "audio",
+        label: "Audio (MP3)",
+        ext: "mp3",
+        resolution: null,
+        fps: null,
+        filesize: null,
+        tbr: null,
+        vcodec: null,
+        acodec: "aac",
+        directUrl: abs(d.music),
+        httpHeaders: headers,
+      });
+    if (formats.length === 0) return null;
 
-    const item = findItemStruct(extractStateJson(html));
+    return {
+      id: d.id || crypto.randomUUID(),
+      platform: platform.id,
+      platformName: platform.name,
+      sourceUrl: url,
+      title: d.title?.trim().slice(0, 200) || "TikTok",
+      description: d.title?.trim() || null,
+      thumbnail: d.cover ? abs(d.cover) : null,
+      durationSeconds: d.duration ?? null,
+      creator: d.author?.nickname || d.author?.unique_id || null,
+      uploadDate: null,
+      viewCount: null,
+      likeCount: null,
+      webpageUrl: url,
+      formats,
+      extractor: "tiktok",
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function nativeExtract(
+  url: string,
+  platform: ReturnType<typeof detectPlatform>,
+): Promise<VideoMetadata> {
+  const resolved = await resolveUrl(url);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIKTOK_TIMEOUT_MS);
+  let html: string;
+  try {
+    const res = await extractorFetch(
+      resolved,
+      { headers: FETCH_HEADERS, redirect: "follow", signal: controller.signal },
+      "tiktok",
+    );
+    if (!res.ok) throw new ExtractionError(`TikTok responded ${res.status}`);
+    html = await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const item = findItemStruct(extractStateJson(html));
     const isPhoto = !item.video && !!item.imagePost?.images?.length;
     const video = item.video;
     const createTime = item.createTime ? Number(item.createTime) : null;
@@ -295,5 +398,23 @@ export const tiktokExtractor: Extractor = {
       formats: isPhoto ? buildImageFormats(item) : buildFormats(item),
       extractor: "tiktok",
     };
+}
+
+export const tiktokExtractor: Extractor = {
+  name: "tiktok",
+  canHandle(_url: string, platform: PlatformId) {
+    return platform === "tiktok";
+  },
+  async extract(url: string): Promise<VideoMetadata> {
+    const platform = detectPlatform(url);
+    try {
+      return await nativeExtract(url, platform);
+    } catch (err) {
+      // TikTok blocks datacenter IPs (blank page) and region-locks some videos —
+      // fall back to the TikWM API before giving up to yt-dlp.
+      const viaApi = await tikwmExtract(url, platform);
+      if (viaApi) return viaApi;
+      throw err;
+    }
   },
 };

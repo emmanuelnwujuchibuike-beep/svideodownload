@@ -570,23 +570,23 @@ function buildDownloadArgs(
   // Where a single-file progressive already exists at the exact height, yt-dlp
   // uses it (no merge). "best" is capped at 1080p to avoid multi-GB 4K files.
   const height = formatId === "best" ? 1080 : parseInt(formatId, 10) || 1080;
-  // Order matters, and we PREFER H.264 (avc1): VP9/AV1 in an mp4 is undecodable
-  // on iOS/Safari, where it plays as audio-only ("audio as video"). Every rung
+  // Order matters. We PREFER H.264 (avc1) — plays everywhere, no transcode — and
+  // explicitly AVOID AV1 (av01): our ffmpeg can't decode it, so re-encoding to
+  // H.264 fails. VP9 is fine (ffmpeg decodes it, then we transcode). Every rung
   // that picks a single format requires a video codec ([vcodec!=none]) so a
-  // video request never resolves to audio. The heightless `bestvideo+bestaudio`
-  // rung handles sources whose video carries no height (Instagram posts/stories,
-  // Facebook posts) — without it they fell through to bare `best`.
+  // video request never resolves to audio.
+  const no01 = "[vcodec!*=av01]";
   const selector =
     `bestvideo[height<=${height}][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/` +
     `bestvideo[height<=${height}][vcodec^=avc1]+bestaudio/` +
     `best[height<=${height}][ext=mp4][vcodec^=avc1]/` +
-    `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/` +
-    `bestvideo[height<=${height}]+bestaudio/` +
+    `bestvideo[height<=${height}][ext=mp4]${no01}+bestaudio[ext=m4a]/` +
+    `bestvideo[height<=${height}]${no01}+bestaudio/` +
     `bestvideo[vcodec^=avc1]+bestaudio/` +
-    `best[height<=${height}][vcodec!=none]/` +
-    `bestvideo+bestaudio/` +
-    `best[vcodec!=none]/` +
-    `best[height<=${height}]/best`;
+    `best[height<=${height}][vcodec!=none]${no01}/` +
+    `bestvideo${no01}+bestaudio/` +
+    `best[vcodec!=none]${no01}/` +
+    `best[height<=${height}]${no01}/best${no01}/best`;
 
   return {
     ext: "mp4",
@@ -737,10 +737,13 @@ function transcodeFileToH264(src: string, out: string): Promise<void> {
     ];
     const child = spawn(FFMPEG_PATH || "ffmpeg", args, { windowsHide: true });
     let err = "";
-    child.stderr?.on("data", (c: Buffer) => { if (err.length < 1500) err += c.toString(); });
+    child.stderr?.on("data", (c: Buffer) => {
+      err += c.toString();
+      if (err.length > 4000) err = err.slice(-4000); // keep the TAIL (real error)
+    });
     child.on("error", (e: Error) => reject(new YtDlpError(e.message, "DOWNLOAD_FAILED")));
     child.on("close", (code) =>
-      code === 0 ? resolve() : reject(new YtDlpError(`recode failed: ${err.slice(-200)}`, "DOWNLOAD_FAILED")),
+      code === 0 ? resolve() : reject(new YtDlpError(`recode failed: ${err.slice(-300)}`, "DOWNLOAD_FAILED")),
     );
   });
 }

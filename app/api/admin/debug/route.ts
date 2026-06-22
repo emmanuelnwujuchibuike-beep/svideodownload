@@ -65,6 +65,41 @@ export async function GET(request: Request) {
     }
   }
 
+  const apifyUrl = sp.get("apify");
+  if (apifyUrl) {
+    const token = process.env.APIFY_TOKEN;
+    const actor = (process.env.APIFY_IG_ACTOR || "apify/instagram-scraper").replace("/", "~");
+    if (!token) return NextResponse.json({ enabled: false, note: "APIFY_TOKEN not set on this service" });
+    try {
+      const r = await fetch(
+        `https://api.apify.com/v2/acts/${actor}/run-sync-get-dataset-items?token=${token}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ directUrls: [apifyUrl], resultsType: "posts", resultsLimit: 1, addParentData: false }),
+          signal: AbortSignal.timeout(120000),
+        },
+      );
+      const body = await r.text();
+      let json: unknown = null;
+      try { json = JSON.parse(body); } catch { /* */ }
+      const arr = Array.isArray(json) ? (json as Record<string, unknown>[]) : null;
+      return NextResponse.json({
+        enabled: true,
+        actor,
+        status: r.status,
+        items: arr?.length ?? null,
+        firstKeys: arr?.[0] ? Object.keys(arr[0]).slice(0, 20) : null,
+        hasVideoUrl: arr?.[0]?.videoUrl ? true : false,
+        hasDisplayUrl: arr?.[0]?.displayUrl ? true : false,
+        childPosts: Array.isArray(arr?.[0]?.childPosts) ? (arr![0]!.childPosts as unknown[]).length : null,
+        snippet: arr ? null : body.slice(0, 300),
+      });
+    } catch (e) {
+      return NextResponse.json({ enabled: true, error: e instanceof Error ? e.message : "apify failed" });
+    }
+  }
+
   const url = sp.get("url");
   if (!url) return NextResponse.json({ error: "Missing ?url= or ?fetch=" }, { status: 400 });
   try {

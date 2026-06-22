@@ -35,11 +35,6 @@ jobs:
         env:
           NEXT_PUBLIC_SITE_URL: https://svideodownload.com
 
-  docker:
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t svideodownload:ci .
+  # NOTE: the production Docker image is built & deployed by Railway directly
+  # from this repo. A duplicate `docker build` job here only added noise and
+  # failed on CI-runner resource limits, so it was removed.

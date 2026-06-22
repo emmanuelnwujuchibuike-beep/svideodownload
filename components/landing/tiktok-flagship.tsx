@@ -1,10 +1,13 @@
 "use client";
 
 import {
+  Check,
+  ClipboardPaste,
   Download,
   Droplet,
   Gauge,
   Heart,
+  Loader2,
   MessageCircle,
   MousePointerClick,
   Music,
@@ -14,7 +17,7 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Reveal } from "@/components/ui/reveal";
 
@@ -29,17 +32,44 @@ const features = [
 // Drop a short vertical promo clip at public/flagship-demo.mp4 to feature it.
 const DEMO_SRC = "/flagship-demo.mp4";
 
+// Steps for the built-in animated demo (used when no promo video is present).
+const STEPS = [
+  { icon: ClipboardPaste, label: "Paste your TikTok link" },
+  { icon: Loader2, label: "Fetching · removing watermark" },
+  { icon: Download, label: "Downloading in HD" },
+  { icon: Check, label: "Saved to camera roll" },
+];
+
 export function TikTokFlagship() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [hasRealVideo, setHasRealVideo] = useState(false);
+  const [step, setStep] = useState(0);
+
+  // Cycle the built-in demo while "playing" and there's no real clip.
+  useEffect(() => {
+    if (!playing || hasRealVideo) return;
+    const id = setInterval(() => setStep((s) => (s + 1) % STEPS.length), 1400);
+    return () => clearInterval(id);
+  }, [playing, hasRealVideo]);
 
   const play = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.play()
-      .then(() => setPlaying(true))
-      .catch(() => setPlaying(false)); // no/blocked source → keep the cover
+    setPlaying(true);
+    setStep(0);
+    videoRef.current
+      ?.play()
+      .then(() => setHasRealVideo(true))
+      .catch(() => setHasRealVideo(false)); // no clip → built-in demo runs
   };
+
+  const stop = () => {
+    videoRef.current?.pause();
+    setPlaying(false);
+    setHasRealVideo(false);
+  };
+
+  const Stage = STEPS[step]!;
+  const progress = ((step + 1) / STEPS.length) * 100;
 
   return (
     <section className="relative overflow-hidden border-t border-border/60 py-28 sm:py-36">
@@ -89,19 +119,23 @@ export function TikTokFlagship() {
 
           {/* Phone */}
           <div className="glass aspect-[9/19] rounded-[2.5rem] p-2 shadow-2xl">
-            <div className="relative flex h-full flex-col overflow-hidden rounded-[2rem] bg-zinc-900">
-              {/* Branded, on-brand cover (replaces the old random stock photo) */}
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-700 via-sky-600 to-cyan-500" />
+            <div className="relative flex h-full flex-col overflow-hidden rounded-[2rem] bg-zinc-950">
+              {/* Rich, on-brand animated cover */}
+              <div className="absolute inset-0 bg-[conic-gradient(from_210deg_at_30%_20%,#1d4ed8,#0ea5e9,#22d3ee,#2563eb,#1d4ed8)]" />
               <div
                 aria-hidden
-                className="absolute inset-0 opacity-60 [background:radial-gradient(120%_80%_at_20%_10%,rgba(255,255,255,0.25),transparent_55%),radial-gradient(120%_90%_at_90%_90%,rgba(8,47,73,0.6),transparent_60%)]"
+                className="absolute inset-0 opacity-70 [background:radial-gradient(90%_60%_at_15%_0%,rgba(255,255,255,0.35),transparent_55%),radial-gradient(90%_70%_at_100%_100%,rgba(2,6,23,0.7),transparent_60%)]"
               />
               <div
                 aria-hidden
-                className="absolute inset-0 bg-grid-pattern bg-[size:26px_26px] opacity-[0.15]"
+                className="absolute inset-0 animate-float bg-grid-pattern bg-[size:26px_26px] opacity-[0.18]"
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -inset-x-10 top-1/3 h-40 -rotate-12 bg-white/10 blur-2xl"
               />
 
-              {/* The promo video (hidden until it can play) */}
+              {/* Optional real promo clip */}
               <video
                 ref={videoRef}
                 src={DEMO_SRC}
@@ -110,50 +144,61 @@ export function TikTokFlagship() {
                 playsInline
                 preload="none"
                 className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
-                  playing ? "opacity-100" : "opacity-0"
+                  playing && hasRealVideo ? "opacity-100" : "opacity-0"
                 }`}
               />
 
-              {/* Cinematic overlay for legibility (fades out while playing) */}
-              <div
-                className={`absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-black/70 transition-opacity duration-500 ${
-                  playing ? "opacity-0" : "opacity-100"
-                }`}
-              />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/70" />
 
-              {/* Cover UI — hidden once the video is playing */}
-              <div
-                className={`relative z-10 flex h-full flex-col transition-opacity duration-500 ${
-                  playing ? "pointer-events-none opacity-0" : "opacity-100"
-                }`}
-              >
-                {/* Status / header */}
-                <div className="flex items-center justify-between p-4 text-xs font-medium text-white">
-                  <span className="flex items-center gap-1.5 font-bold">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20">
-                      <Download className="h-3 w-3" />
+              {/* Header */}
+              <div className="relative z-10 flex items-center justify-between p-4 text-xs font-medium text-white">
+                <span className="flex items-center gap-1.5 font-bold">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20">
+                    <Download className="h-3 w-3" />
+                  </span>
+                  SVideoDownload
+                </span>
+                <span className="rounded-full bg-green-500/30 px-2 py-0.5 text-green-100 backdrop-blur">
+                  No watermark
+                </span>
+              </div>
+
+              {/* Center: play button OR live demo */}
+              <div className="relative z-10 flex flex-1 items-center justify-center px-6">
+                {!playing ? (
+                  <button
+                    type="button"
+                    onClick={play}
+                    aria-label="Play preview"
+                    className="relative flex items-center justify-center"
+                  >
+                    <span className="absolute h-24 w-24 animate-ping rounded-full bg-white/15" />
+                    <span className="absolute h-32 w-32 animate-pulse rounded-full border border-white/20" />
+                    <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-white/95 shadow-2xl transition-transform active:scale-95">
+                      <Play className="h-6 w-6 translate-x-0.5 fill-blue-600 text-blue-600" />
                     </span>
-                    SVideoDownload
-                  </span>
-                  <span className="rounded-full bg-green-500/30 px-2 py-0.5 text-green-100 backdrop-blur">
-                    No watermark
-                  </span>
-                </div>
+                  </button>
+                ) : hasRealVideo ? null : (
+                  <div className="w-full rounded-2xl border border-white/15 bg-black/35 p-4 backdrop-blur-md">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600">
+                        <Stage.icon
+                          className={`h-5 w-5 ${step === 1 ? "animate-spin" : ""}`}
+                        />
+                      </span>
+                      <p className="text-sm font-semibold text-white">{Stage.label}</p>
+                    </div>
+                    <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/20">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-white to-cyan-200 transition-all duration-700"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
 
-                {/* Center play button */}
-                <button
-                  type="button"
-                  onClick={play}
-                  aria-label="Play preview"
-                  className="relative flex flex-1 items-center justify-center"
-                >
-                  <span className="absolute h-24 w-24 animate-ping rounded-full bg-white/15" />
-                  <span className="absolute h-32 w-32 animate-pulse rounded-full border border-white/20" />
-                  <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-white/95 shadow-2xl transition-transform active:scale-95">
-                    <Play className="h-6 w-6 translate-x-0.5 fill-blue-600 text-blue-600" />
-                  </span>
-
-                  {/* Right action rail */}
+                {/* Right action rail */}
+                {!playing ? (
                   <span className="absolute right-3 flex flex-col items-center gap-4">
                     <RailIcon icon={Heart} label="2.4M" tint="text-sky-200" />
                     <RailIcon icon={MessageCircle} label="18K" />
@@ -162,44 +207,37 @@ export function TikTokFlagship() {
                       <Music className="h-4 w-4 text-white" />
                     </span>
                   </span>
-                </button>
-
-                {/* Creator + caption + animated download */}
-                <div className="p-4">
-                  <div className="flex items-center gap-2">
-                    <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-300 to-cyan-200 ring-2 ring-white/60" />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-white">
-                        Paste · Preview · Download
-                      </p>
-                      <p className="truncate text-[11px] text-white/80">
-                        ♪ watermark-free HD
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/20">
-                    <div className="shimmer h-full w-2/3 rounded-full bg-white" />
-                  </div>
-
-                  <div className="mt-3 flex h-11 items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-blue-600 shadow-lg">
-                    <Droplet className="h-4 w-4" /> Download HD
-                  </div>
-                </div>
+                ) : null}
               </div>
 
-              {/* Tap-to-pause when playing */}
-              {playing ? (
+              {/* Footer */}
+              <div className="relative z-10 p-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-300 to-cyan-200 ring-2 ring-white/60" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">
+                      Paste · Preview · Download
+                    </p>
+                    <p className="truncate text-[11px] text-white/80">
+                      ♪ watermark-free HD
+                    </p>
+                  </div>
+                </div>
+
                 <button
                   type="button"
-                  aria-label="Pause preview"
-                  onClick={() => {
-                    videoRef.current?.pause();
-                    setPlaying(false);
-                  }}
-                  className="absolute inset-0 z-10"
-                />
-              ) : null}
+                  onClick={playing ? stop : play}
+                  className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-blue-600 shadow-lg transition active:scale-[0.98]"
+                >
+                  {playing ? (
+                    <>Tap to replay</>
+                  ) : (
+                    <>
+                      <Droplet className="h-4 w-4" /> Download HD
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

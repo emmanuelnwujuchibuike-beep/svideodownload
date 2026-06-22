@@ -35,7 +35,7 @@ export interface Platform {
   audioOnly?: boolean;
 }
 
-export type MediaKind = "video" | "audio";
+export type MediaKind = "video" | "audio" | "image";
 
 export interface MediaFormat {
   /** Download selector: a height tier ("1080"), "audio", or an extractor key. */

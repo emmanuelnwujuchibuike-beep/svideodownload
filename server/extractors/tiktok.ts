@@ -53,6 +53,10 @@ interface TikTokItem {
     height?: number;
     bitrateInfo?: TikTokBitrate[];
   };
+  // Photo / slideshow posts.
+  imagePost?: {
+    images?: { imageURL?: { urlList?: string[] } }[];
+  };
 }
 
 async function resolveUrl(url: string): Promise<string> {
@@ -95,8 +99,60 @@ function findItemStruct(state: unknown): TikTokItem {
     | { itemInfo?: { itemStruct?: TikTokItem } }
     | undefined;
   const item = detail?.itemInfo?.itemStruct;
-  if (!item?.video) throw new ExtractionError("TikTok item missing");
+  // Accept video posts AND photo/slideshow (imagePost) posts.
+  if (!item?.video && !item?.imagePost?.images?.length) {
+    throw new ExtractionError("TikTok item missing");
+  }
   return item;
+}
+
+/** Image (photo / slideshow) post → one downloadable image per slide. */
+function buildImageFormats(item: TikTokItem): MediaFormat[] {
+  const headers: Record<string, string> = {
+    "User-Agent": DESKTOP_UA,
+    Referer: "https://www.tiktok.com/",
+  };
+  const images = item.imagePost?.images ?? [];
+  const formats: MediaFormat[] = [];
+  images.forEach((img, i) => {
+    const url = img.imageURL?.urlList?.find((u) => u.startsWith("http"));
+    if (!url) return;
+    formats.push({
+      formatId: `img-${i}`,
+      kind: "image",
+      label: `Photo ${i + 1}`,
+      ext: "jpg",
+      resolution: null,
+      fps: null,
+      filesize: null,
+      tbr: null,
+      vcodec: null,
+      acodec: null,
+      directUrl: url,
+      httpHeaders: headers,
+    });
+  });
+  // Slideshows usually carry a sound too.
+  if (item.music?.playUrl) {
+    formats.push({
+      formatId: "audio",
+      kind: "audio",
+      label: "Audio (M4A)",
+      ext: "m4a",
+      resolution: null,
+      fps: null,
+      filesize: null,
+      tbr: null,
+      vcodec: null,
+      acodec: "aac",
+      directUrl: item.music.playUrl,
+      httpHeaders: headers,
+    });
+  }
+  if (formats.length === 0) {
+    throw new ExtractionError("No TikTok images found");
+  }
+  return formats;
 }
 
 function buildFormats(item: TikTokItem): MediaFormat[] {
@@ -211,18 +267,23 @@ export const tiktokExtractor: Extractor = {
     }
 
     const item = findItemStruct(extractStateJson(html));
-    const video = item.video!;
+    const isPhoto = !item.video && !!item.imagePost?.images?.length;
+    const video = item.video;
     const createTime = item.createTime ? Number(item.createTime) : null;
+    const firstImage =
+      item.imagePost?.images?.[0]?.imageURL?.urlList?.find((u) =>
+        u.startsWith("http"),
+      ) ?? null;
 
     return {
       id: item.id || crypto.randomUUID(),
       platform: platform.id,
       platformName: platform.name,
       sourceUrl: url,
-      title: item.desc?.trim() || "TikTok video",
+      title: item.desc?.trim() || (isPhoto ? "TikTok photos" : "TikTok video"),
       description: item.desc?.trim() || null,
-      thumbnail: video.cover || video.originCover || null,
-      durationSeconds: video.duration ?? null,
+      thumbnail: video?.cover || video?.originCover || firstImage,
+      durationSeconds: video?.duration ?? null,
       creator: item.author?.nickname || item.author?.uniqueId || null,
       uploadDate:
         createTime && Number.isFinite(createTime)
@@ -231,7 +292,7 @@ export const tiktokExtractor: Extractor = {
       viewCount: item.stats?.playCount ?? null,
       likeCount: item.stats?.diggCount ?? null,
       webpageUrl: resolved,
-      formats: buildFormats(item),
+      formats: isPhoto ? buildImageFormats(item) : buildFormats(item),
       extractor: "tiktok",
     };
   },

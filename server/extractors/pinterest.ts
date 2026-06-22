@@ -71,6 +71,29 @@ function buildFormats(html: string): MediaFormat[] {
     }
   }
 
+  // No video → offer the pin's image so image pins are still downloadable.
+  if (formats.length === 0) {
+    const img =
+      metaContent(html, "og:image") ||
+      firstMatch(html, /"orig":\{"url":"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/);
+    if (img && img.startsWith("http")) {
+      formats.push({
+        formatId: "pin-img",
+        kind: "image",
+        label: "Photo",
+        ext: /\.png/i.test(img) ? "png" : /\.webp/i.test(img) ? "webp" : "jpg",
+        resolution: null,
+        fps: null,
+        filesize: null,
+        tbr: null,
+        vcodec: null,
+        acodec: null,
+        directUrl: unescapeJsonUrl(img),
+        httpHeaders: headers,
+      });
+    }
+  }
+
   return formats.sort(
     (a, b) => (parseInt(b.resolution ?? "0") || 0) - (parseInt(a.resolution ?? "0") || 0),
   );

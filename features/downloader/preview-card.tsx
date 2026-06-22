@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Download, Music, Play, Video, Loader2 } from "lucide-react";
+import { Download, ImageIcon, Music, Play, Video, Loader2 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
 import { cn, formatBytes, formatCompactNumber, formatDuration } from "@/lib/utils";
@@ -22,17 +22,23 @@ export function PreviewCard({ metadata, downloading, onDownload }: PreviewCardPr
     () => metadata.formats.filter((f) => f.kind === "audio"),
     [metadata.formats],
   );
+  const imageFormats = useMemo(
+    () => metadata.formats.filter((f) => f.kind === "image"),
+    [metadata.formats],
+  );
+
+  const listFor = (k: MediaKind) =>
+    k === "video" ? videoFormats : k === "image" ? imageFormats : audioFormats;
 
   const [tab, setTab] = useState<MediaKind>(
-    videoFormats.length > 0 ? "video" : "audio",
+    videoFormats.length > 0 ? "video" : imageFormats.length > 0 ? "image" : "audio",
   );
-  const formats = tab === "video" ? videoFormats : audioFormats;
+  const formats = listFor(tab);
   const [activeId, setActiveId] = useState<string>(formats[0]?.formatId ?? "best");
 
   const onTabChange = (next: MediaKind) => {
     setTab(next);
-    const list = next === "video" ? videoFormats : audioFormats;
-    setActiveId(list[0]?.formatId ?? "best");
+    setActiveId(listFor(next)[0]?.formatId ?? "best");
   };
 
   const activeFormat = formats.find((f) => f.formatId === activeId);
@@ -108,6 +114,11 @@ export function PreviewCard({ metadata, downloading, onDownload }: PreviewCardPr
             >
               <Video className="h-4 w-4" /> Video
             </TabButton>
+            {imageFormats.length > 0 ? (
+              <TabButton active={tab === "image"} onClick={() => onTabChange("image")}>
+                <ImageIcon className="h-4 w-4" /> Photos
+              </TabButton>
+            ) : null}
             <TabButton
               active={tab === "audio"}
               disabled={audioFormats.length === 0}

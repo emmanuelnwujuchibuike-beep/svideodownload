@@ -71,7 +71,7 @@ export const downloadRequestSchema = z.object({
     .min(1)
     .max(64)
     .regex(/^[a-zA-Z0-9_+\-./]+$/, "Invalid format selector."),
-  kind: z.enum(["video", "audio"]).default("video"),
+  kind: z.enum(["video", "audio", "image"]).default("video"),
   /** Optional title from the preview, used only for the download filename. */
   title: z.string().trim().max(300).optional(),
 });

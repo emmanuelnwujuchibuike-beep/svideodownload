@@ -1,10 +1,19 @@
 import type { DownloadRecord } from "@/types";
 
+import {
+  fetchRemote,
+  pushAdd,
+  pushClear,
+  pushFavorite,
+  pushRemove,
+  remoteId,
+} from "./sync";
+
 /**
- * Tiny localStorage-backed store for download history, exposed through
- * `useSyncExternalStore` so the downloader and the history panel stay in sync
- * without a context provider. State lives client-side only (no account needed);
- * a Supabase-backed version can sync this later in Phase 2.
+ * localStorage-backed download-history store, exposed through
+ * `useSyncExternalStore`. When the visitor is signed in, history is also mirrored
+ * to Supabase (see ./sync) so it follows them across devices; logged-out users
+ * keep a purely local history.
  */
 
 const STORAGE_KEY = "svd:history:v1";
@@ -18,6 +27,8 @@ function emit() {
   for (const l of listeners) l();
 }
 
+let remoteSynced = false;
+
 function load(): void {
   if (loaded || typeof window === "undefined") return;
   loaded = true;
@@ -27,6 +38,30 @@ function load(): void {
   } catch {
     items = [];
   }
+  void syncFromRemote();
+}
+
+/** Pulls the signed-in user's history and merges it with the local cache. */
+async function syncFromRemote(): Promise<void> {
+  if (remoteSynced) return;
+  remoteSynced = true;
+  const remote = await fetchRemote();
+  if (remote.length === 0) return;
+
+  const key = (r: DownloadRecord) => `${r.url}|${r.formatId}|${r.kind}`;
+  const seen = new Set(items.map(key));
+  const merged = [...items];
+  for (const r of remote) {
+    if (!seen.has(key(r))) {
+      merged.push(r);
+      seen.add(key(r));
+    }
+  }
+  items = merged
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, MAX_ITEMS);
+  persist();
+  emit();
 }
 
 function persist(): void {
@@ -79,24 +114,39 @@ export function addDownload(
   ].slice(0, MAX_ITEMS);
   persist();
   emit();
+
+  // Mirror to Supabase (best-effort); on success adopt the remote id so later
+  // favourite/remove operations sync too.
+  void pushAdd(next).then((rid) => {
+    if (!rid) return;
+    items = items.map((r) => (r.id === next.id ? { ...r, id: rid } : r));
+    persist();
+    emit();
+  });
 }
 
 export function toggleFavorite(id: string): void {
+  let favorite = false;
   items = items.map((r) =>
-    r.id === id ? { ...r, favorite: !r.favorite } : r,
+    r.id === id ? ((favorite = !r.favorite), { ...r, favorite }) : r,
   );
   persist();
   emit();
+  const dbId = remoteId(id);
+  if (dbId) void pushFavorite(dbId, favorite);
 }
 
 export function removeDownload(id: string): void {
   items = items.filter((r) => r.id !== id);
   persist();
   emit();
+  const dbId = remoteId(id);
+  if (dbId) void pushRemove(dbId);
 }
 
 export function clearHistory(): void {
   items = [];
   persist();
   emit();
+  void pushClear();
 }

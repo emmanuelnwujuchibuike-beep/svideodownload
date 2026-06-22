@@ -1,9 +1,21 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Download, ImageIcon, Music, Play, Video, Loader2 } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  BadgeCheck,
+  Download,
+  Eye,
+  Heart,
+  ImageIcon,
+  Loader2,
+  Music,
+  Play,
+  Video,
+} from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
+import { BRAND_ICONS } from "@/lib/platform-icons";
+import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes, formatCompactNumber, formatDuration } from "@/lib/utils";
 import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
@@ -43,97 +55,202 @@ export function PreviewCard({ metadata, downloading, onDownload }: PreviewCardPr
 
   const activeFormat = formats.find((f) => f.formatId === activeId);
 
+  const platform = PLATFORMS[metadata.platform];
+  const BrandIcon = BRAND_ICONS[metadata.platform];
+
+  // Live cover: when browsing photos, mirror the selected photo; otherwise show
+  // the video poster, falling back to any available image so every fetch — image
+  // OR video — always shows a cover.
+  const firstImage = imageFormats.find((f) => f.directUrl)?.directUrl ?? null;
+  const cover =
+    (tab === "image" ? activeFormat?.directUrl : null) ??
+    metadata.thumbnail ??
+    firstImage ??
+    null;
+
+  const isImageTab = tab === "image";
+  const photoIndex = isImageTab ? imageFormats.findIndex((f) => f.formatId === activeId) : -1;
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.99 }}
+      initial={{ opacity: 0, y: 24, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="mx-auto mt-10 w-full max-w-2xl overflow-hidden rounded-3xl border border-border bg-card shadow-elevated"
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      className="group/card relative mx-auto mt-10 w-full max-w-2xl overflow-hidden rounded-[1.75rem] border border-border/70 bg-card shadow-elevated"
     >
-      {/* Media preview */}
-      <div className="relative aspect-video bg-black">
-        {metadata.thumbnail ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={metadata.thumbnail}
-            alt={metadata.title}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-white/40">
-            <Video className="h-12 w-12" />
-          </div>
+      {/* subtle gradient sheen on top edge */}
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r opacity-70",
+          platform.accent,
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/30" />
+      />
 
-        {/* Center play */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/95 shadow-xl backdrop-blur">
-            <Play className="h-5 w-5 translate-x-0.5 fill-black text-black" />
+      {/* ---------------- Media cover ---------------- */}
+      <div className="relative aspect-video overflow-hidden bg-neutral-950">
+        {/* blurred fill so portrait/square media frames elegantly */}
+        <AnimatePresence mode="popLayout">
+          {cover ? (
+            <motion.div
+              key={cover}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.35 }}
+              className="absolute inset-0"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={cover}
+                alt=""
+                aria-hidden
+                className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={cover}
+                alt={metadata.title}
+                className="absolute inset-0 h-full w-full object-contain"
+              />
+            </motion.div>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-white/25">
+              {BrandIcon ? <BrandIcon className="h-16 w-16" /> : <Video className="h-14 w-14" />}
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* legibility gradients */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/40" />
+
+        {/* center play (video only) */}
+        {tab === "video" ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="absolute h-16 w-16 rounded-full bg-white/20 blur-md" />
+            <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-white/95 shadow-2xl ring-1 ring-black/5 transition-transform duration-300 group-hover/card:scale-105">
+              <Play className="h-6 w-6 translate-x-0.5 fill-black text-black" />
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        {/* Platform + duration chips */}
-        <span className="absolute left-4 top-4 inline-flex items-center rounded-full bg-black/55 px-3 py-1 text-xs font-medium text-white backdrop-blur">
-          {metadata.platformName}
-        </span>
-        {metadata.durationSeconds ? (
-          <span className="absolute bottom-4 right-4 rounded-md bg-black/70 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
-            {formatDuration(metadata.durationSeconds)}
+        {/* photo counter (image only) */}
+        {isImageTab && imageFormats.length > 1 ? (
+          <span className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 text-xs font-medium text-white backdrop-blur-md">
+            {photoIndex + 1} / {imageFormats.length}
           </span>
         ) : null}
 
-        {/* Title overlay */}
-        <div className="absolute inset-x-0 bottom-0 p-4 pr-24">
-          <h3 className="line-clamp-2 text-base font-semibold leading-snug text-white">
+        {/* brand badge */}
+        <span
+          className={cn(
+            "absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br px-3 py-1.5 text-xs font-semibold text-white shadow-lg",
+            platform.accent,
+          )}
+        >
+          {BrandIcon ? <BrandIcon className="h-3.5 w-3.5" /> : null}
+          {metadata.platformName}
+        </span>
+
+        {/* duration / hd chip */}
+        <div className="absolute right-4 top-4 flex items-center gap-2">
+          {tab === "video" ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white backdrop-blur-md ring-1 ring-white/20">
+              <BadgeCheck className="h-3 w-3" /> No watermark
+            </span>
+          ) : null}
+          {tab === "video" && metadata.durationSeconds ? (
+            <span className="rounded-md bg-black/65 px-2 py-0.5 text-xs font-semibold tabular-nums text-white backdrop-blur-md">
+              {formatDuration(metadata.durationSeconds)}
+            </span>
+          ) : null}
+        </div>
+
+        {/* title + meta overlay */}
+        <div className="absolute inset-x-0 bottom-0 p-5">
+          <h3 className="line-clamp-2 text-base font-semibold leading-snug text-white drop-shadow sm:text-lg">
             {metadata.title}
           </h3>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-white/70">
-            {metadata.creator ? <span className="truncate">{metadata.creator}</span> : null}
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/75">
+            {metadata.creator ? (
+              <span className="inline-flex max-w-[12rem] items-center gap-1 truncate font-medium text-white/90">
+                @{metadata.creator.replace(/^@/, "")}
+              </span>
+            ) : null}
             {metadata.viewCount != null ? (
-              <span>{formatCompactNumber(metadata.viewCount)} views</span>
+              <span className="inline-flex items-center gap-1">
+                <Eye className="h-3.5 w-3.5" /> {formatCompactNumber(metadata.viewCount)}
+              </span>
             ) : null}
             {metadata.likeCount != null ? (
-              <span>{formatCompactNumber(metadata.likeCount)} likes</span>
+              <span className="inline-flex items-center gap-1">
+                <Heart className="h-3.5 w-3.5" /> {formatCompactNumber(metadata.likeCount)}
+              </span>
             ) : null}
           </div>
         </div>
       </div>
 
-      {/* Controls */}
+      {/* thumbnail strip for multi-photo posts */}
+      {isImageTab && imageFormats.length > 1 ? (
+        <div className="flex gap-2 overflow-x-auto border-b border-border/60 bg-secondary/30 px-4 py-3">
+          {imageFormats.map((f, i) => (
+            <button
+              key={f.formatId}
+              type="button"
+              onClick={() => setActiveId(f.formatId)}
+              className={cn(
+                "relative h-12 w-12 shrink-0 overflow-hidden rounded-lg ring-2 transition",
+                f.formatId === activeId
+                  ? "ring-primary"
+                  : "ring-transparent opacity-60 hover:opacity-100",
+              )}
+              aria-label={`Photo ${i + 1}`}
+            >
+              {f.directUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={f.directUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
+                  <ImageIcon className="h-4 w-4" />
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {/* ---------------- Controls ---------------- */}
       <div className="p-5 sm:p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm font-medium text-muted-foreground">
-            Choose format
+            Choose {isImageTab ? "photo" : "quality"}
           </span>
           <div className="inline-flex rounded-xl bg-secondary p-1">
-            <TabButton
-              active={tab === "video"}
-              disabled={videoFormats.length === 0}
-              onClick={() => onTabChange("video")}
-            >
-              <Video className="h-4 w-4" /> Video
-            </TabButton>
+            {videoFormats.length > 0 ? (
+              <TabButton active={tab === "video"} onClick={() => onTabChange("video")}>
+                <Video className="h-4 w-4" /> Video
+              </TabButton>
+            ) : null}
             {imageFormats.length > 0 ? (
               <TabButton active={tab === "image"} onClick={() => onTabChange("image")}>
                 <ImageIcon className="h-4 w-4" /> Photos
               </TabButton>
             ) : null}
-            <TabButton
-              active={tab === "audio"}
-              disabled={audioFormats.length === 0}
-              onClick={() => onTabChange("audio")}
-            >
-              <Music className="h-4 w-4" /> Audio
-            </TabButton>
+            {audioFormats.length > 0 ? (
+              <TabButton active={tab === "audio"} onClick={() => onTabChange("audio")}>
+                <Music className="h-4 w-4" /> Audio
+              </TabButton>
+            ) : null}
           </div>
         </div>
 
         <div className="mt-4 grid max-h-44 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
-          {formats.map((f) => (
+          {formats.map((f, i) => (
             <FormatRow
               key={f.formatId}
               format={f}
+              index={i}
+              kind={tab}
               active={f.formatId === activeId}
               onSelect={() => setActiveId(f.formatId)}
             />
@@ -144,8 +261,10 @@ export function PreviewCard({ metadata, downloading, onDownload }: PreviewCardPr
           type="button"
           disabled={downloading}
           onClick={() => onDownload(activeId, tab)}
-          className="group mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-primary/40 active:scale-[0.99] disabled:opacity-60 disabled:active:scale-100"
+          className="group relative mt-5 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-primary px-4 py-4 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/40 active:scale-[0.99] disabled:opacity-70 disabled:active:scale-100"
         >
+          {/* shimmer sweep */}
+          <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
           {downloading ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" /> Preparing your file…
@@ -153,15 +272,21 @@ export function PreviewCard({ metadata, downloading, onDownload }: PreviewCardPr
           ) : (
             <>
               <Download className="h-5 w-5 transition-transform group-hover:translate-y-0.5" />
-              Download {activeFormat?.label ?? (tab === "audio" ? "Audio" : "Video")}
+              {isImageTab
+                ? `Download Photo${imageFormats.length > 1 ? ` ${photoIndex + 1}` : ""}`
+                : `Download ${activeFormat?.label ?? (tab === "audio" ? "Audio" : "Video")}`}
               {activeFormat?.filesize ? (
-                <span className="text-primary-foreground/70">
+                <span className="font-normal text-primary-foreground/70">
                   · {formatBytes(activeFormat.filesize)}
                 </span>
               ) : null}
             </>
           )}
         </button>
+
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          Fast, private & free — no app, no sign-up.
+        </p>
       </div>
     </motion.div>
   );
@@ -196,13 +321,19 @@ function TabButton({
 
 function FormatRow({
   format,
+  index,
+  kind,
   active,
   onSelect,
 }: {
   format: MediaFormat;
+  index: number;
+  kind: MediaKind;
   active: boolean;
   onSelect: () => void;
 }) {
+  const label =
+    kind === "image" ? `Photo ${index + 1}` : format.label || (kind === "audio" ? "Audio" : "Video");
   return (
     <button
       type="button"
@@ -215,7 +346,7 @@ function FormatRow({
       )}
     >
       <span className="flex items-center gap-1.5 text-sm font-semibold uppercase leading-none">
-        {format.label}
+        {label}
         {format.fps && format.fps >= 50 ? (
           <span className="rounded bg-primary/15 px-1 py-0.5 text-[9px] font-bold text-primary">
             {format.fps}

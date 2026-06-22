@@ -739,11 +739,19 @@ function transcodeFileToH264(src: string, out: string): Promise<void> {
     let err = "";
     child.stderr?.on("data", (c: Buffer) => {
       err += c.toString();
-      if (err.length > 4000) err = err.slice(-4000); // keep the TAIL (real error)
+      if (err.length > 8000) err = err.slice(-8000);
     });
-    child.on("error", (e: Error) => reject(new YtDlpError(e.message, "DOWNLOAD_FAILED")));
+    child.on("error", (e: Error) => reject(new YtDlpError(`spawn: ${e.message}`, "DOWNLOAD_FAILED")));
     child.on("close", (code) =>
-      code === 0 ? resolve() : reject(new YtDlpError(`recode failed: ${err.slice(-300)}`, "DOWNLOAD_FAILED")),
+      code === 0
+        ? resolve()
+        : reject(
+            // Keep the lines that mention the real failure (codec/decoder/error).
+            new YtDlpError(
+              `recode rc=${code}: ${err.split("\n").filter((l) => /error|fail|not found|invalid|codec|decoder|encoder|permission|no such/i.test(l)).slice(-6).join(" | ").slice(-500) || err.slice(-300)}`,
+              "DOWNLOAD_FAILED",
+            ),
+          ),
     );
   });
 }

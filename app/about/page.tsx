@@ -5,7 +5,7 @@ import { PageShell } from "@/components/layout/page-shell";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "SVideoDownload is a fast, private, watermark-free downloader for TikTok and 1000+ platforms.",
+    "SVideoDownload is a fast, private, watermark-free downloader for TikTok, Instagram, YouTube, X, Facebook and more.",
   alternates: { canonical: "/about" },
 };
 
@@ -41,7 +41,7 @@ export default function AboutPage() {
       <h2>Built for every platform</h2>
       <p>
         From TikTok, Instagram, and YouTube to X, Facebook, Pinterest, Vimeo,
-        Reddit and 1000+ more — SVideoDownload supports the platforms you
+        Reddit, LinkedIn and Threads — SVideoDownload supports the platforms you
         actually use, with audio extraction and quality selection built in.
       </p>
 

@@ -12,11 +12,11 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "SVideoDownload — Download TikTok & 1000+ Platform Videos",
+    default: "SVideoDownload — Download TikTok, Instagram, YouTube & More",
     template: "%s · SVideoDownload",
   },
   description:
-    "Fast, secure, watermark-free video downloads from TikTok, Instagram, YouTube, X and 1000+ platforms. No login. Unlimited downloads in HD.",
+    "Fast, secure, watermark-free video downloads from TikTok, Instagram, YouTube, X, Facebook, Pinterest, Snapchat and more. No login. Unlimited HD downloads.",
   keywords: [
     "tiktok downloader",
     "no watermark",
@@ -31,14 +31,14 @@ export const metadata: Metadata = {
     type: "website",
     url: siteUrl,
     siteName: "SVideoDownload",
-    title: "Download TikTok & 1000+ Platform Videos — Watermark Free",
+    title: "Download TikTok, Instagram, YouTube & More — Watermark Free",
     description:
       "Fast, secure, watermark-free downloads powered by advanced media extraction technology.",
   },
   twitter: {
     card: "summary_large_image",
     title: "SVideoDownload — Watermark-Free Video Downloader",
-    description: "Download from TikTok, Instagram, YouTube and 1000+ platforms.",
+    description: "Download from TikTok, Instagram, YouTube, X, Facebook and more.",
   },
   robots: { index: true, follow: true },
 };
@@ -58,7 +58,7 @@ const jsonLd = {
   operatingSystem: "Web",
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
   description:
-    "Watermark-free video downloader for TikTok and 1000+ platforms powered by yt-dlp.",
+    "Watermark-free video downloader for TikTok, Instagram, YouTube and more.",
 };
 
 export default function RootLayout({

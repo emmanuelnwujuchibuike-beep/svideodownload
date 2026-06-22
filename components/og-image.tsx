@@ -9,7 +9,7 @@ import type { ReactElement } from "react";
 
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_ALT =
-  "SVideoDownload — Download TikTok & 1000+ platform videos, watermark-free";
+  "SVideoDownload — Download TikTok, Instagram, YouTube & more, watermark-free";
 
 /** The download-arrow logo glyph (used in the badge). */
 function LogoMark({ size }: { size: number }) {
@@ -32,7 +32,7 @@ function LogoMark({ size }: { size: number }) {
 }
 
 export function OgImage({
-  headline = "Download TikTok & 1000+ Platforms",
+  headline = "Download from Every Major Platform",
   sub = "Fast · Watermark-free · HD · No login",
 }: {
   headline?: string;

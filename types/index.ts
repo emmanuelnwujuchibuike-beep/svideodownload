@@ -12,15 +12,10 @@ export type PlatformId =
   | "pinterest"
   | "reddit"
   | "vimeo"
-  | "dailymotion"
-  | "twitch"
-  | "soundcloud"
   | "youtube"
   | "threads"
   | "snapchat"
   | "linkedin"
-  | "bilibili"
-  | "vk"
   | "generic";
 
 export interface Platform {

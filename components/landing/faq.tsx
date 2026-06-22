@@ -13,7 +13,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Which platforms are supported?",
-    a: "TikTok, Instagram, YouTube, X (Twitter), Facebook, Pinterest, Snapchat, Vimeo, Reddit, and 1000+ more — any site supported by our extraction engine.",
+    a: "TikTok, Instagram, YouTube, X (Twitter), Facebook, Pinterest, Snapchat, Vimeo, Reddit, LinkedIn and Threads.",
   },
   {
     q: "Can I download just the audio (MP3)?",

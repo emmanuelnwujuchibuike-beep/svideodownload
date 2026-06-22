@@ -55,7 +55,7 @@ export function DownloaderLinks({
         <p className="mt-6 text-sm text-muted-foreground">
           Looking for something else?{" "}
           <Link href="/" className="font-medium text-primary hover:underline">
-            Download from 1000+ platforms on the home page
+            Download from every supported platform on the home page
           </Link>{" "}
           or read our{" "}
           <Link href="/blog" className="font-medium text-primary hover:underline">

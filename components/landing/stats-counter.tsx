@@ -15,7 +15,7 @@ const compact = new Intl.NumberFormat("en", {
 
 const STATS: Stat[] = [
   { label: "Downloads served", target: 4_200_000, format: (n) => compact.format(n) },
-  { label: "Platforms", target: 1000, format: (n) => `${Math.round(n)}+` },
+  { label: "Platforms", target: 11, format: (n) => `${Math.round(n)}+` },
   { label: "Avg. processing", target: 2.8, format: (n) => `${n.toFixed(1)}s` },
   { label: "Uptime", target: 99.9, format: (n) => `${n.toFixed(1)}%` },
 ];

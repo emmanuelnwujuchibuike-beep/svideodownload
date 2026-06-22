@@ -26,7 +26,7 @@ export function Hero() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
           </span>
-          1000+ platforms supported
+          All major platforms
           <span className="text-muted-foreground/50 transition-transform group-hover:translate-x-0.5">
             →
           </span>
@@ -35,7 +35,7 @@ export function Hero() {
         <h1 className="max-w-4xl text-balance text-[2.6rem] font-semibold leading-[1.04] tracking-[-0.03em] sm:text-6xl lg:text-7xl">
           Download from{" "}
           <span className="text-gradient">TikTok, Instagram, YouTube</span>
-          <br className="hidden sm:block" /> &amp; 1000+ more.
+          <br className="hidden sm:block" /> &amp; more.
         </h1>
         <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground sm:text-xl">
           Paste a link, get a clean, watermark-free file in seconds. Fast,

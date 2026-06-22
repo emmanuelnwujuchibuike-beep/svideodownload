@@ -15,7 +15,7 @@ import { Reveal } from "@/components/ui/reveal";
 const features = [
   { icon: LogIn, title: "No Login Required", body: "Start downloading instantly — no account, no email." },
   { icon: InfinityIcon, title: "Unlimited Downloads", body: "No daily caps. Download as much as you need." },
-  { icon: Layers, title: "Multi-Platform Support", body: "1000+ sites supported through one engine." },
+  { icon: Layers, title: "Multi-Platform Support", body: "Every major platform supported through one engine." },
   { icon: Headphones, title: "Audio Extraction", body: "Pull MP3, M4A, AAC or WAV from any video." },
   { icon: Sparkles, title: "HD Quality", body: "Up to 4K where the source provides it." },
   { icon: Zap, title: "Fast Processing", body: "Edge caching keeps extraction lightning quick." },

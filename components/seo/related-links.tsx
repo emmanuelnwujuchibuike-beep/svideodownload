@@ -65,7 +65,7 @@ export function RelatedLinks({ slug, brand }: { slug: string; brand: string }) {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">
-                    All 1000+ platforms
+                    All platforms
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
                     Home

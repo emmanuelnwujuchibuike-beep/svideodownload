@@ -1,19 +1,14 @@
 import type { IconType } from "react-icons";
 import { FaLinkedin } from "react-icons/fa";
 import {
-  SiBilibili,
-  SiDailymotion,
   SiFacebook,
   SiInstagram,
   SiPinterest,
   SiReddit,
   SiSnapchat,
-  SiSoundcloud,
   SiThreads,
   SiTiktok,
-  SiTwitch,
   SiVimeo,
-  SiVk,
   SiX,
   SiYoutube,
 } from "react-icons/si";
@@ -29,15 +24,10 @@ export const BRAND_ICONS: Partial<Record<PlatformId, IconType>> = {
   pinterest: SiPinterest,
   reddit: SiReddit,
   vimeo: SiVimeo,
-  dailymotion: SiDailymotion,
-  twitch: SiTwitch,
-  soundcloud: SiSoundcloud,
   youtube: SiYoutube,
   threads: SiThreads,
   snapchat: SiSnapchat,
   linkedin: FaLinkedin,
-  bilibili: SiBilibili,
-  vk: SiVk,
 };
 
 /** The hero/flagship featured platforms, in display order. */

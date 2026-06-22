@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 
 import { cookieHeaderFor } from "@/server/extractors/cookies";
 import { proxyDispatcher } from "@/server/proxy/proxy-manager";
-import { probeExtraction } from "@/server/services/ytdlp-service";
+import { resolveDownload } from "@/server/services/download-service";
+import { probeExtraction, YtDlpError } from "@/server/services/ytdlp-service";
+import type { MediaKind } from "@/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,6 +102,32 @@ export async function GET(request: Request) {
       });
     } catch (e) {
       return NextResponse.json({ enabled: true, error: e instanceof Error ? e.message : "apify failed" });
+    }
+  }
+
+  const dl = sp.get("dl");
+  if (dl) {
+    const fmt = sp.get("fmt") || "best";
+    const kind = (sp.get("kind") || "video") as MediaKind;
+    try {
+      const r = await resolveDownload(dl, fmt, kind, "test");
+      // Drain the stream so the producer (yt-dlp/ffmpeg) actually runs.
+      let bytes = 0;
+      const reader = r.stream.getReader();
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        bytes += value?.length ?? 0;
+        if (bytes > 256_000) break; // enough to confirm real media
+      }
+      reader.cancel().catch(() => {});
+      return NextResponse.json({ ok: true, ext: r.ext, contentType: r.contentType, bytes });
+    } catch (e) {
+      return NextResponse.json({
+        ok: false,
+        code: e instanceof YtDlpError ? e.code : "ERR",
+        stderr: (e instanceof YtDlpError ? e.stderr : String(e))?.slice(-600),
+      });
     }
   }
 

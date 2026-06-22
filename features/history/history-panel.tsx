@@ -145,14 +145,7 @@ export function HistoryPanel() {
           </p>
         ) : (
           <>
-            <div
-              className={cn(
-                "grid grid-cols-1 gap-3 sm:grid-cols-2",
-                !collapsed &&
-                  filtered.length > 8 &&
-                  "max-h-[34rem] overflow-y-auto pr-1",
-              )}
-            >
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {shown.map((item) => (
                 <HistoryCard
                   key={item.id}

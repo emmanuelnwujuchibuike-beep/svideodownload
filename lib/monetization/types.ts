@@ -4,6 +4,8 @@ export type AdZone =
   | "global"
   | "homepage_top"
   | "download_result_page"
+  | "result_top"
+  | "reward_video"
   | "sidebar"
   | "exit_intent_popup"
   | "mobile_bottom_banner";
@@ -25,7 +27,7 @@ export interface AdSlotData {
   id: string;
   zone: string;
   network: string;
-  format: "display" | "pop" | "native";
+  format: "display" | "pop" | "native" | "video";
   scriptCode: string | null;
   imageUrl: string | null;
   targetUrl: string | null;

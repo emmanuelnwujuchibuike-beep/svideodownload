@@ -9,8 +9,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ZONES = [
+  "global",
   "homepage_top",
   "download_result_page",
+  "result_top",
+  "reward_video",
   "sidebar",
   "exit_intent_popup",
   "mobile_bottom_banner",

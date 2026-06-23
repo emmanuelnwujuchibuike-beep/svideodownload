@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { FetchedAd } from "@/features/monetization/fetched-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
 import { detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
@@ -168,6 +169,7 @@ export function Downloader() {
 
       {metadata ? (
         <div ref={previewRef} className="scroll-mt-24">
+          <FetchedAd key={`ad-${metadata.id}`} />
           <PreviewCard
             metadata={metadata}
             phase={

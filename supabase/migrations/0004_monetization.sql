@@ -48,6 +48,9 @@ create table if not exists public.ads (
   active      boolean not null default true,
   created_at  timestamptz not null default now()
 );
+-- idempotent: add columns if the table already existed from an earlier run
+alter table public.ads add column if not exists width  int;
+alter table public.ads add column if not exists height int;
 create index if not exists ads_zone_active_idx on public.ads (zone, active, priority);
 
 create table if not exists public.ad_impressions (
@@ -115,8 +118,15 @@ create table if not exists public.subscriptions (
   cancel_at_period_end   boolean not null default false,
   updated_at             timestamptz not null default now()
 );
-create index if not exists subscriptions_customer_idx on public.subscriptions (customer_ref);
-create index if not exists subscriptions_sub_ref_idx on public.subscriptions (subscription_ref);
+-- idempotent: a subscriptions table from an earlier (Stripe) run is migrated here
+alter table public.subscriptions add column if not exists provider             text not null default 'paystack';
+alter table public.subscriptions add column if not exists customer_ref         text;
+alter table public.subscriptions add column if not exists subscription_ref     text;
+alter table public.subscriptions add column if not exists email_token          text;
+alter table public.subscriptions add column if not exists current_period_end   timestamptz;
+alter table public.subscriptions add column if not exists cancel_at_period_end boolean not null default false;
+create index if not exists subscriptions_customer_ref_idx on public.subscriptions (customer_ref);
+create index if not exists subscriptions_subscription_ref_idx on public.subscriptions (subscription_ref);
 
 -- ---------------------------------------------------------------------
 -- api_keys — hashed; the raw key is shown once at creation and never stored.

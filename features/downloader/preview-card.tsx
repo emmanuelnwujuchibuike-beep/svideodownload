@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
+import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
+import { useShowAds } from "@/features/monetization/use-show-ads";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes, formatCompactNumber, formatDuration } from "@/lib/utils";
@@ -58,6 +60,18 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
 
   const activeFormat = formats.find((f) => f.formatId === activeId);
 
+  // Rewarded-ad gate for high-quality downloads (highest-res video + any image).
+  // Free users watch a short ad; premium users (showAds=false) skip it.
+  const { showAds } = useShowAds();
+  const [gate, setGate] = useState<{ formatId: string; kind: MediaKind } | null>(null);
+  const topVideoId = videoFormats[0]?.formatId;
+  const needsReward = (formatId: string, kind: MediaKind) =>
+    showAds && (kind === "image" || (kind === "video" && formatId === topVideoId));
+  const startDownload = (formatId: string, kind: MediaKind) => {
+    if (needsReward(formatId, kind)) setGate({ formatId, kind });
+    else onDownload(formatId, kind);
+  };
+
   const platform = PLATFORMS[metadata.platform];
   const BrandIcon = BRAND_ICONS[metadata.platform];
 
@@ -75,6 +89,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const photoIndex = isImageTab ? imageFormats.findIndex((f) => f.formatId === activeId) : -1;
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0, y: 24, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -263,7 +278,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         <button
           type="button"
           disabled={phase !== "idle"}
-          onClick={() => onDownload(activeId, tab)}
+          onClick={() => startDownload(activeId, tab)}
           className={cn(
             "group relative mt-5 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-4 text-base font-semibold shadow-lg transition-all active:scale-[0.99] disabled:active:scale-100",
             phase === "done"
@@ -303,6 +318,16 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         </p>
       </div>
     </motion.div>
+
+    <RewardedAdGate
+      open={!!gate}
+      onReward={() => {
+        if (gate) onDownload(gate.formatId, gate.kind);
+        setGate(null);
+      }}
+      onCancel={() => setGate(null)}
+    />
+    </>
   );
 }
 

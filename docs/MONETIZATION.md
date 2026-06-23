@@ -137,6 +137,27 @@ Notes:
   plenty); networks frequency-cap, and too many hurts UX and approval.
 - After inserting, ads appear within ~60s (zone cache). Set `active=false` to pause.
 
+### Non-intrusive ad experience
+
+The UI is built to be polite and dormant-until-configured:
+
+- **Banners are closable** — every `display`/`native` `<AdSlot>` has an **✕** so users can dismiss it (the only exception is the rewarded gate below).
+- **`result_top` — the 5-second banner**: a bold, centered ad shown above a freshly-fetched result for ~5s, then it auto-dismisses (and is closable). Seed it like any banner with `zone='result_top'`.
+- **`reward_video` — 30-second rewarded gate** for **high-quality video + image** downloads. Free users watch a short ad; the **✕ and the Download button only appear once it's watched**. For a *video* ad the timer accrues **only while it's playing** — pausing freezes it (no reward until ~20–30s are actually watched). Premium users skip it. **Dormant**: with no `reward_video` ad configured, HD downloads work normally.
+
+Configure a reward **video** ad (pause-aware) like this — the mp4 URL goes in `script_code`:
+
+```sql
+insert into public.ads (zone, network, format, script_code, image_url, target_url, headline, active)
+values ('reward_video', 'house', 'video',
+        'https://cdn.example.com/ad-30s.mp4',   -- the video file (script_code)
+        'https://cdn.example.com/ad-poster.jpg', -- poster (image_url)
+        'https://advertiser.example/landing',    -- click-through (target_url)
+        'Advertiser Name', true);
+```
+
+Or use a network display/script ad in the same zone (`format='display'`/`'pop'`) — it then uses a plain 30-second wall-clock timer (no pause detection).
+
 ## 5. Seeding affiliate offers
 
 ```sql

@@ -12,6 +12,8 @@ const ZONES: ReadonlySet<string> = new Set<AdZone>([
   "global",
   "homepage_top",
   "download_result_page",
+  "result_top",
+  "reward_video",
   "sidebar",
   "exit_intent_popup",
   "mobile_bottom_banner",

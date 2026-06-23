@@ -774,13 +774,27 @@ async function ensureH264(filePath: string, dir: string): Promise<string> {
   const out = join(dir, "h264.mp4");
   try {
     await withDownloadSlot(() => transcodeFileToH264(filePath, out));
+    _lastTranscode = { ok: true, codec, error: null, at: Date.now() };
     return out;
-  } catch {
+  } catch (e) {
     // Transcode failed (e.g. ffmpeg can't decode this codec) — serve the
     // original file rather than failing the whole download with a tiny error.
     // It still plays on Android/desktop; only iOS struggles with VP9/AV1.
+    _lastTranscode = {
+      ok: false,
+      codec,
+      error: (e instanceof Error ? e.message : String(e)).slice(-500),
+      at: Date.now(),
+    };
     return filePath;
   }
+}
+
+/** Last transcode attempt — surfaced via the admin debug route for diagnosis. */
+let _lastTranscode: { ok: boolean; codec: string | null; error: string | null; at: number } | null =
+  null;
+export function lastTranscode() {
+  return _lastTranscode;
 }
 
 /**

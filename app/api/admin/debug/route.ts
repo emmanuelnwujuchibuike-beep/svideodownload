@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { cookieHeaderFor } from "@/server/extractors/cookies";
 import { proxyDispatcher } from "@/server/proxy/proxy-manager";
 import { resolveDownload } from "@/server/services/download-service";
-import { probeExtraction, YtDlpError } from "@/server/services/ytdlp-service";
+import { lastTranscode, probeExtraction, YtDlpError } from "@/server/services/ytdlp-service";
 import type { MediaKind } from "@/types";
 
 export const runtime = "nodejs";
@@ -28,6 +28,10 @@ export async function GET(request: Request) {
 
   // ffmpeg capability probe: does this worker's ffmpeg decode VP9/AV1? If the
   // decoder is missing, Instagram/Facebook VP9 can't be transcoded to H.264.
+  if (sp.get("lasterr")) {
+    return NextResponse.json({ lastTranscode: lastTranscode() });
+  }
+
   if (sp.get("ffmpeg")) {
     const run = (args: string[]) =>
       new Promise<{ rc: number | null; out: string }>((resolve) => {

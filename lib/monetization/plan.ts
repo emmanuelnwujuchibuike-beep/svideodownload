@@ -35,7 +35,7 @@ export const PLAN_LIMITS: Record<
   BillingPlan,
   { ads: boolean; dailyDownloads: number; batch: boolean; apiAccess: boolean; apiDailyLimit: number }
 > = {
-  free: { ads: true, dailyDownloads: 30, batch: false, apiAccess: false, apiDailyLimit: 50 },
-  pro: { ads: false, dailyDownloads: 1000, batch: true, apiAccess: false, apiDailyLimit: 50 },
+  free: { ads: true, dailyDownloads: 30, batch: false, apiAccess: true, apiDailyLimit: 50 },
+  pro: { ads: false, dailyDownloads: 1000, batch: true, apiAccess: true, apiDailyLimit: 500 },
   business: { ads: false, dailyDownloads: 10000, batch: true, apiAccess: true, apiDailyLimit: 10000 },
 };

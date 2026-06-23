@@ -119,9 +119,21 @@ wins; `weight` controls the split within the top tier. Clicks go through
 - Affiliate redirects only ever go to a DB-stored http(s) URL — no open redirect.
 - Beacons (`/api/track`, `/api/go`) are IP rate-limited to resist click floods.
 
-## Pending (next phases)
+## 8. API monetization (4c)
 
-- **4c — API monetization**: hashed API keys, `/v1/analyze|download|usage`,
-  per-key daily quota + usage metering (tables `api_keys`, `api_usage` already exist).
-- **4d — Admin revenue dashboard** (impressions/clicks/affiliate/MRR), **browser
-  extension hooks** (`/api/me` plan + offers sync), and production hardening.
+Public REST API with hashed keys + per-plan daily quotas.
+
+- **Keys** — `lib/api/keys.ts`: `svd_live_…`, SHA-256 hashed, shown once. Managed
+  from the account page (`/api/keys`, `/api/keys/[id]`).
+- **Auth + quota** — `lib/api/auth.ts` (`authenticateApi`): bearer token →
+  per-key burst limit → plan daily limit (free 50 / pro 500 / business 10,000).
+- **Endpoints** — `POST /api/v1/analyze`, `POST /api/v1/download`,
+  `GET /api/v1/usage`. Metered into `api_usage` (request count + endpoint).
+- **Docs** — `/developers`.
+
+No new env vars; runs on the existing Supabase setup.
+
+## Pending (next phase)
+
+- **4d — Admin revenue dashboard** (impressions/clicks/affiliate/MRR/API usage),
+  **browser-extension hooks** (`/api/me` plan + offers sync), production hardening.

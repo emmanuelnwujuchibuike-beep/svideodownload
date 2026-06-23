@@ -5,8 +5,11 @@ import { redirect } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { ApiKeys } from "@/features/api/api-keys";
 import { ManageBillingButton } from "@/features/monetization/manage-billing-button";
 import { isAdmin } from "@/lib/admin";
+import { PLAN_LIMITS } from "@/lib/monetization/plan";
+import type { BillingPlan } from "@/lib/monetization/types";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -130,6 +133,9 @@ export default async function AccountPage() {
               <ManageBillingButton className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-secondary disabled:opacity-60" />
             ) : null}
           </div>
+
+          {/* Developer API keys */}
+          <ApiKeys dailyLimit={PLAN_LIMITS[plan as BillingPlan].apiDailyLimit} />
 
           <dl className="mt-7 grid gap-4 border-t border-border/60 pt-6 sm:grid-cols-2">
             <Detail icon={Mail} label="Email" value={email} />

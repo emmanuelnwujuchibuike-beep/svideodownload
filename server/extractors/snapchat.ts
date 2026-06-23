@@ -6,12 +6,13 @@ import { metaContent, unescapeJsonUrl } from "./parse";
 import { ExtractionError, type Extractor } from "./types";
 
 /**
- * Snapchat custom extractor — handles public **Story** pages (snapchat.com/@user,
- * /p/, /add/) which yt-dlp doesn't cover. The page embeds each story snap in a
- * `__NEXT_DATA__` blob (`props.pageProps.story.snapList`), where every snap has a
- * `snapMediaType` (1 = video, 0 = image) and a direct `snapUrls.mediaUrl` CDN
- * link. We surface the targeted snap (or the latest video snap) as a download.
- * Spotlight links fall through to yt-dlp's dedicated extractor.
+ * Snapchat custom extractor — handles **Spotlight** clips AND public **Story**
+ * pages (snapchat.com/@user, /p/, /spotlight/, /t/ share links). Both embed the
+ * raw, watermark-free CDN media in the page's `__NEXT_DATA__` blob:
+ *   - Spotlight → `props.pageProps.videoMetadata.contentUrl` (clean H.264 mp4)
+ *   - Story     → `props.pageProps.story.snapList[].snapUrls.mediaUrl`
+ * Using these direct CDN URLs gives a no-watermark download with no transcode,
+ * which yt-dlp's Spotlight extractor cannot do (it returns a watermarked render).
  */
 
 const MOBILE_UA =
@@ -28,6 +29,16 @@ interface Snap {
   snapUrls?: { mediaUrl?: string; mediaPreviewUrl?: string };
 }
 
+interface VideoMeta {
+  name?: string;
+  description?: string;
+  thumbnailUrl?: string;
+  contentUrl?: string;
+  durationMs?: number;
+  viewCount?: number | string;
+  creator?: unknown;
+}
+
 /** Pick the snap the URL targets, else the most recent video snap. */
 function pickSnap(snapList: Snap[], url: string): Snap | null {
   const idMatch = url.match(/\/(?:@[^/]+|p|spotlight|t)\/[^/]*?([A-Za-z0-9_-]{16,})/);
@@ -35,9 +46,24 @@ function pickSnap(snapList: Snap[], url: string): Snap | null {
     const exact = snapList.find((s) => s.snapId === idMatch[1]);
     if (exact?.snapUrls?.mediaUrl) return exact;
   }
-  return (
-    snapList.find((s) => s.snapMediaType === 1 && s.snapUrls?.mediaUrl) ?? null
-  );
+  return snapList.find((s) => s.snapMediaType === 1 && s.snapUrls?.mediaUrl) ?? null;
+}
+
+function cleanUrl(u: string): string {
+  return unescapeJsonUrl(u.replace(/&amp;/g, "&"));
+}
+
+function creatorName(c: unknown): string | null {
+  if (typeof c === "string") return c;
+  if (c && typeof c === "object") {
+    const o = c as Record<string, unknown>;
+    return (
+      (typeof o.name === "string" && o.name) ||
+      (typeof o.username === "string" && o.username) ||
+      null
+    );
+  }
+  return null;
 }
 
 function videoFormat(mediaUrl: string): MediaFormat {
@@ -59,10 +85,8 @@ function videoFormat(mediaUrl: string): MediaFormat {
 
 export const snapchatExtractor: Extractor = {
   name: "snapchat",
-  canHandle(url: string, platform: PlatformId) {
-    // Only handle profile / Story pages here. Spotlight and /t/ share links go
-    // to yt-dlp's dedicated Spotlight extractor (more reliable for those).
-    return platform === "snapchat" && /snapchat\.com\/@/.test(url);
+  canHandle(_url: string, platform: PlatformId) {
+    return platform === "snapchat";
   },
   async extract(url: string): Promise<VideoMetadata> {
     const platform = detectPlatform(url);
@@ -89,8 +113,10 @@ export const snapchatExtractor: Extractor = {
     const blob = html.match(
       /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/,
     );
+
     let mediaUrl: string | undefined;
-    let snapTitle: string | undefined;
+    let title: string | undefined;
+    let vm: VideoMeta | undefined;
 
     if (blob) {
       try {
@@ -98,16 +124,28 @@ export const snapchatExtractor: Extractor = {
           props?: { pageProps?: Record<string, unknown> };
         };
         const pp = (data.props?.pageProps ?? {}) as {
+          videoMetadata?: VideoMeta;
           story?: { snapList?: Snap[] };
           curatedHighlights?: { snapList?: Snap[] }[];
         };
-        const snapList =
-          pp.story?.snapList ?? pp.curatedHighlights?.[0]?.snapList ?? [];
-        if (Array.isArray(snapList) && snapList.length) {
-          const snap = pickSnap(snapList, url);
-          if (snap?.snapUrls?.mediaUrl) {
-            mediaUrl = snap.snapUrls.mediaUrl;
-            snapTitle = snap.snapTitle;
+
+        // Spotlight (single video page) — the clean, no-watermark H.264 URL.
+        if (pp.videoMetadata?.contentUrl) {
+          vm = pp.videoMetadata;
+          mediaUrl = pp.videoMetadata.contentUrl;
+          title = pp.videoMetadata.name;
+        }
+
+        // Story page — pick the targeted/most-recent video snap.
+        if (!mediaUrl) {
+          const snapList =
+            pp.story?.snapList ?? pp.curatedHighlights?.[0]?.snapList ?? [];
+          if (Array.isArray(snapList) && snapList.length) {
+            const snap = pickSnap(snapList, url);
+            if (snap?.snapUrls?.mediaUrl) {
+              mediaUrl = snap.snapUrls.mediaUrl;
+              title = snap.snapTitle;
+            }
           }
         }
       } catch {
@@ -115,38 +153,35 @@ export const snapchatExtractor: Extractor = {
       }
     }
 
-    // Generic fallback: any Snapchat CDN MP4 in the page.
+    // Generic fallback: any Snapchat CDN media URL in the page (covers layout
+    // changes). Spotlight uses extension-less /d/ or /y/ paths; stories use .mp4.
     if (!mediaUrl) {
-      const m = html.match(
-        /https:\/\/[a-z0-9.-]*sc-cdn\.net\/[^"'\\ ]+?\.(?:mp4|mov)[^"'\\ ]*/i,
-      );
-      if (m) mediaUrl = m[0];
+      const m =
+        html.match(/"contentUrl":"(https:\\?\/\\?\/[a-z0-9.-]*sc-cdn\.net\\?\/[^"]+?)"/i) ??
+        html.match(/https:\/\/[a-z0-9.-]*sc-cdn\.net\/[^"'\\ ]+?\.(?:mp4|mov)[^"'\\ ]*/i);
+      if (m) mediaUrl = m[1] ?? m[0];
     }
 
     if (!mediaUrl) {
-      // No story video — let yt-dlp try (e.g. Spotlight) or report cleanly.
       throw new ExtractionError(
         "No Snapchat video found (story may be expired or image-only)",
       );
     }
 
-    mediaUrl = unescapeJsonUrl(mediaUrl);
+    mediaUrl = cleanUrl(mediaUrl);
 
     return {
       id: crypto.randomUUID(),
       platform: platform.id,
       platformName: platform.name,
       sourceUrl: url,
-      title: (snapTitle || metaContent(html, "og:title") || "Snapchat video").slice(
-        0,
-        200,
-      ),
-      description: metaContent(html, "og:description"),
-      thumbnail: metaContent(html, "og:image"),
-      durationSeconds: null,
-      creator: null,
+      title: (title || metaContent(html, "og:title") || "Snapchat video").slice(0, 200),
+      description: vm?.description ?? metaContent(html, "og:description"),
+      thumbnail: vm?.thumbnailUrl ? cleanUrl(vm.thumbnailUrl) : metaContent(html, "og:image"),
+      durationSeconds: vm?.durationMs ? Math.round(vm.durationMs / 1000) : null,
+      creator: creatorName(vm?.creator),
       uploadDate: null,
-      viewCount: null,
+      viewCount: vm?.viewCount != null ? Number(vm.viewCount) || null : null,
       likeCount: null,
       webpageUrl: url,
       formats: [videoFormat(mediaUrl)],

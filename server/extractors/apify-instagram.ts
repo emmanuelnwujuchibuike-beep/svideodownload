@@ -145,7 +145,7 @@ export async function apifyExtract(url: string): Promise<VideoMetadata | null> {
     const items = (await runActor(APIFY_THREADS_ACTOR, {
       mode: "user",
       usernames: [username],
-      max_posts: 25,
+      max_posts: 10, // actor minimum — fewer posts = faster fetch
     })) as ThreadsItem[] | null;
     if (!items) return null;
     const post =

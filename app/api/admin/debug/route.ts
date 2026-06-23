@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+
 import { NextResponse } from "next/server";
 
 import { cookieHeaderFor } from "@/server/extractors/cookies";
@@ -23,6 +25,38 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const sp = new URL(request.url).searchParams;
+
+  // ffmpeg capability probe: does this worker's ffmpeg decode VP9/AV1? If the
+  // decoder is missing, Instagram/Facebook VP9 can't be transcoded to H.264.
+  if (sp.get("ffmpeg")) {
+    const run = (args: string[]) =>
+      new Promise<{ rc: number | null; out: string }>((resolve) => {
+        let out = "";
+        try {
+          const c = spawn(process.env.FFMPEG_PATH || "ffmpeg", args, { windowsHide: true });
+          c.stdout?.on("data", (d: Buffer) => (out += d.toString()));
+          c.stderr?.on("data", (d: Buffer) => (out += d.toString()));
+          c.on("error", (e) => resolve({ rc: -1, out: String(e) }));
+          c.on("close", (rc) => resolve({ rc, out }));
+        } catch (e) {
+          resolve({ rc: -1, out: String(e) });
+        }
+      });
+    const ver = await run(["-hide_banner", "-version"]);
+    const dec = await run(["-hide_banner", "-loglevel", "error", "-decoders"]);
+    const want = ["vp9", "vp8", "av1", "h264"];
+    const found = dec.out
+      .split("\n")
+      .filter((l) => want.some((w) => new RegExp(`\\b${w}\\b`, "i").test(l)))
+      .map((l) => l.trim());
+    return NextResponse.json({
+      version: ver.out.split("\n")[0] ?? null,
+      decodersRc: dec.rc,
+      vp9Decode: /(\bvp9\b)/i.test(dec.out),
+      av1Decode: /(\bav1\b)/i.test(dec.out),
+      decoders: found.slice(0, 12),
+    });
+  }
 
   const fetchUrl = sp.get("fetch");
   if (fetchUrl) {

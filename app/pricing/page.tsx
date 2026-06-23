@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { SiteHeader } from "@/components/layout/site-header";
+import { UpgradeButton } from "@/features/monetization/upgrade-button";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -138,17 +139,31 @@ export default function PricingPage() {
                 ))}
               </ul>
 
-              <Link
-                href={t.href}
-                className={cn(
-                  "mt-auto inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition active:scale-[0.99]",
-                  t.highlight
-                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-primary/40"
-                    : "border border-border bg-background hover:bg-secondary",
-                )}
-              >
-                {t.cta}
-              </Link>
+              {t.id === "pro" || t.id === "business" ? (
+                <div className="mt-auto">
+                  <UpgradeButton
+                    plan={t.id}
+                    className={cn(
+                      "inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition active:scale-[0.99] disabled:opacity-70",
+                      t.highlight
+                        ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-primary/40"
+                        : "border border-border bg-background hover:bg-secondary",
+                    )}
+                  >
+                    {t.cta}
+                  </UpgradeButton>
+                </div>
+              ) : (
+                <Link
+                  href={t.href}
+                  className={cn(
+                    "mt-auto inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition active:scale-[0.99]",
+                    "border border-border bg-background hover:bg-secondary",
+                  )}
+                >
+                  {t.cta}
+                </Link>
+              )}
             </div>
           ))}
         </div>

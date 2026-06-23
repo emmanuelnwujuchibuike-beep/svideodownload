@@ -1,12 +1,14 @@
-import { CalendarDays, LogOut, Mail, ShieldCheck } from "lucide-react";
+import { CalendarDays, Crown, LogOut, Mail, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { ManageBillingButton } from "@/features/monetization/manage-billing-button";
 import { isAdmin } from "@/lib/admin";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +35,17 @@ export default async function AccountPage() {
     .select("role, avatar_url, created_at")
     .eq("id", user.id)
     .single();
+
+  const { data: sub } = await supabase
+    .from("subscriptions")
+    .select("plan, status, current_period_end, cancel_at_period_end, stripe_customer_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const planActive = sub?.status === "active" || sub?.status === "trialing";
+  const plan = (planActive ? sub?.plan : "free") ?? "free";
+  const planLabel = plan === "business" ? "Business" : plan === "pro" ? "Pro" : "Free";
+  const hasCustomer = !!sub?.stripe_customer_id;
 
   const email = user.email ?? "—";
   const avatar =
@@ -78,10 +91,44 @@ export default async function AccountPage() {
                 </span>
               ) : (
                 <span className="text-sm text-muted-foreground">
-                  Free account
+                  {planLabel} account
                 </span>
               )}
             </div>
+          </div>
+
+          {/* Plan / billing */}
+          <div className="mt-7 flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-secondary/30 p-4">
+            <span
+              className={cn(
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                plan === "free" ? "bg-secondary text-muted-foreground" : "bg-primary/15 text-primary",
+              )}
+            >
+              <Crown className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">{planLabel} plan</p>
+              <p className="text-xs text-muted-foreground">
+                {plan === "free"
+                  ? "Upgrade for an ad-free, faster experience."
+                  : sub?.cancel_at_period_end
+                    ? `Cancels on ${sub?.current_period_end ? new Date(sub.current_period_end).toLocaleDateString() : "period end"}`
+                    : sub?.current_period_end
+                      ? `Renews ${new Date(sub.current_period_end).toLocaleDateString()}`
+                      : "Active"}
+              </p>
+            </div>
+            {plan === "free" ? (
+              <Link
+                href="/pricing"
+                className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+              >
+                Upgrade
+              </Link>
+            ) : hasCustomer ? (
+              <ManageBillingButton className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-secondary disabled:opacity-60" />
+            ) : null}
           </div>
 
           <dl className="mt-7 grid gap-4 border-t border-border/60 pt-6 sm:grid-cols-2">

@@ -4,7 +4,10 @@ import Link from "next/link";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { UpgradeButton } from "@/features/monetization/upgrade-button";
+import { getPricing } from "@/lib/monetization/pricing";
 import { cn } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Pricing — Go ad-free with Pro",
@@ -26,61 +29,67 @@ interface Tier {
   highlight?: boolean;
 }
 
-const TIERS: Tier[] = [
-  {
-    id: "free",
-    name: "Free",
-    price: "$0",
-    tagline: "Everything you need to get started.",
-    icon: Sparkles,
-    features: [
-      "Downloads from every supported platform",
-      "HD video, MP3 audio & photos",
-      "No watermark",
-      "Up to 30 downloads/day",
-      "Supported by ads",
-    ],
-    cta: "Get started",
-    href: "/",
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: process.env.PRICE_DISPLAY_PRO || "$4.99",
-    period: "/mo",
-    tagline: "For people who download a lot.",
-    icon: Crown,
-    features: [
-      "Everything in Free",
-      "100% ad-free experience",
-      "Faster, priority downloads",
-      "Batch downloads",
-      "Up to 1,000 downloads/day",
-    ],
-    cta: "Upgrade to Pro",
-    href: "/login?next=/pricing",
-    highlight: true,
-  },
-  {
-    id: "business",
-    name: "Business",
-    price: process.env.PRICE_DISPLAY_BUSINESS || "$9.99",
-    period: "/mo",
-    tagline: "For developers & power users.",
-    icon: Code2,
-    features: [
-      "Everything in Pro",
-      "Full REST API access",
-      "10,000 downloads/day",
-      "Higher rate limits",
-      "Priority support",
-    ],
-    cta: "Get Business",
-    href: "/login?next=/pricing",
-  },
-];
+function buildTiers(pricing: {
+  pro: { name: string; price: string; period: string };
+  business: { name: string; price: string; period: string };
+}): Tier[] {
+  return [
+    {
+      id: "free",
+      name: "Free",
+      price: "$0",
+      tagline: "Everything you need to get started.",
+      icon: Sparkles,
+      features: [
+        "Downloads from every supported platform",
+        "HD video, MP3 audio & photos",
+        "No watermark",
+        "Up to 30 downloads/day",
+        "Supported by ads",
+      ],
+      cta: "Get started",
+      href: "/",
+    },
+    {
+      id: "pro",
+      name: pricing.pro.name,
+      price: pricing.pro.price,
+      period: pricing.pro.period,
+      tagline: "For people who download a lot.",
+      icon: Crown,
+      features: [
+        "Everything in Free",
+        "100% ad-free experience",
+        "Faster, priority downloads",
+        "Batch downloads",
+        "Up to 1,000 downloads/day",
+      ],
+      cta: `Upgrade to ${pricing.pro.name}`,
+      href: "/login?next=/pricing",
+      highlight: true,
+    },
+    {
+      id: "business",
+      name: pricing.business.name,
+      price: pricing.business.price,
+      period: pricing.business.period,
+      tagline: "For developers & power users.",
+      icon: Code2,
+      features: [
+        "Everything in Pro",
+        "Full REST API access",
+        "10,000 downloads/day",
+        "Higher rate limits",
+        "Priority support",
+      ],
+      cta: `Get ${pricing.business.name}`,
+      href: "/login?next=/pricing",
+    },
+  ];
+}
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const TIERS = buildTiers(await getPricing());
   return (
     <>
       <SiteHeader />

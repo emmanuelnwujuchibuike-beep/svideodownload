@@ -27,7 +27,10 @@ import {
   fetchRecentAlerts,
   maybeAlertProxyBudget,
 } from "@/lib/admin-stats";
-import { fetchRevenueStats } from "@/lib/monetization/stats";
+import { PlanManager } from "@/features/admin/plan-manager";
+import { PricingEditor } from "@/features/admin/pricing-editor";
+import { getPricing } from "@/lib/monetization/pricing";
+import { fetchRevenueStats, fetchSubscribers } from "@/lib/monetization/stats";
 import { alertsEnabled } from "@/lib/notify";
 import { PLATFORMS } from "@/lib/platforms";
 import { createClient } from "@/lib/supabase/server";
@@ -63,11 +66,13 @@ export default async function AdminPage() {
     .single();
   if (!isAdmin(profile?.role, user.email)) redirect("/");
 
-  const [proxy, downloads, alerts, revenue] = await Promise.all([
+  const [proxy, downloads, alerts, revenue, subscribers, pricing] = await Promise.all([
     fetchProxyUsage(),
     fetchDownloadStats(),
     fetchRecentAlerts(),
     fetchRevenueStats(),
+    fetchSubscribers(),
+    getPricing(),
   ]);
   // Fire the proxy-budget alert if we've crossed 90% (deduped to once/day).
   await maybeAlertProxyBudget(proxy);
@@ -188,6 +193,10 @@ export default async function AdminPage() {
             </div>
           </section>
         ) : null}
+
+        {/* Manual plan management + editable pricing */}
+        <PlanManager subscribers={subscribers} />
+        <PricingEditor pricing={pricing} />
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
           {/* Proxy widget */}

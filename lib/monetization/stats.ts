@@ -15,6 +15,39 @@ const startOfTodayIso = () => {
   return d.toISOString();
 };
 
+export interface Subscriber {
+  email: string;
+  plan: string;
+  status: string;
+  provider: string;
+}
+
+/** Active/trialing subscribers with their email — for the admin members list. */
+export async function fetchSubscribers(): Promise<Subscriber[]> {
+  if (!hasSupabase) return [];
+  try {
+    const db = createAdminClient();
+    const { data: subs } = await db
+      .from("subscriptions")
+      .select("user_id, plan, status, provider, updated_at")
+      .in("status", ["active", "trialing"])
+      .order("updated_at", { ascending: false })
+      .limit(100);
+    if (!subs?.length) return [];
+    const ids = subs.map((s) => s.user_id);
+    const { data: profs } = await db.from("profiles").select("id, email").in("id", ids);
+    const emailById = new Map((profs ?? []).map((p) => [p.id as string, p.email as string]));
+    return subs.map((s) => ({
+      email: emailById.get(s.user_id as string) ?? (s.user_id as string),
+      plan: s.plan as string,
+      status: s.status as string,
+      provider: (s.provider as string) ?? "—",
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export interface RevenueStats {
   currency: string;
   mrr: number;

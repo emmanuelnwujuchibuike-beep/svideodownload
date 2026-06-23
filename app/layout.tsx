@@ -46,6 +46,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Zoom-lock: prevents the mobile auto-zoom when focusing inputs (and pinch-zoom)
+  // across the whole app, including the admin pages.
+  maximumScale: 1,
+  userScalable: false,
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#0a0a14" },
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },

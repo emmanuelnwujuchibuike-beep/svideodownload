@@ -120,17 +120,16 @@ export function RewardedAdGate({
           animate={{ scale: 1, y: 0 }}
           className="relative w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-elevated"
         >
-          {/* X — only after the ad is watched */}
-          {done ? (
-            <button
-              type="button"
-              onClick={onCancel}
-              aria-label="Close"
-              className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white transition hover:bg-black/60"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          ) : null}
+          {/* X — always available so users are never trapped (closing simply
+              skips the HD reward). */}
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label="Close"
+            className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white transition hover:bg-black/60"
+          >
+            <X className="h-4 w-4" />
+          </button>
 
           <div className="p-5">
             <h3 className="flex items-center gap-2 text-base font-semibold">
@@ -196,7 +195,7 @@ export function RewardedAdGate({
                       <Pause className="h-3.5 w-3.5" /> Paused — play to keep unlocking
                     </span>
                   ) : (
-                    <>Keep watching — {remaining}s left to unlock your HD download</>
+                    <>Watch {remaining}s more to unlock HD — or tap ✕ to skip</>
                   )}
                 </p>
               </div>

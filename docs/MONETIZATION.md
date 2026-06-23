@@ -73,6 +73,30 @@ the plan. "Manage billing" opens Paystack's subscription manage link
 You don't touch code: paste each network's ad tag into a row in the `ads` table
 and it renders. Two things decide how it's rendered: **format** and **zone**.
 
+### Start to finish (do these in order)
+
+1. **Run the migrations** — Supabase → SQL Editor → run `0003_admin_alerts.sql`,
+   then `0004_monetization.sql`. (0004 is idempotent — safe to re-run if an
+   earlier run half-failed.)
+2. **Make yourself admin** — on Vercel set `ADMIN_EMAILS=nwujuchriss@gmail.com`
+   (and redeploy), or in SQL: `update public.profiles set role='admin' where email='nwujuchriss@gmail.com';`
+   You must have signed in once for a profile row to exist.
+3. **Create the ad-network accounts**
+   - **Adsterra** → adsterra.com → sign up → **Websites → Add website**
+     (`svideodownload.com`) → wait for approval.
+   - **PropellerAds** → propellerads.com → sign up → **Sites → Add site** → verify.
+4. **Create ad units & copy the code**
+   - Adsterra → **Add new ad unit** (Social Bar, Pop-under, Banner, Native).
+   - PropellerAds → create OnClick/Pop-under, Multitag, In-Page Push, Banner.
+5. **Insert the codes** in Supabase → SQL Editor (one row per ad — see the
+   network examples below). Match `format`/`zone` to the unit type.
+6. **Verify** — open the site signed-out (or in a private window); ads appear
+   within ~60s. The **admin dashboard → Revenue & monetization** shows
+   impressions/clicks/CTR as traffic comes in.
+7. **Pause/replace any time** by setting `active=false` (no redeploy).
+
+> Premium (Pro/Business) users never see ads. Logged-out + Free users do.
+
 **Formats**
 | format | use for | how it renders |
 |---|---|---|

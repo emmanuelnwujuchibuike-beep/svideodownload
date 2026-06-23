@@ -37,13 +37,22 @@ export async function POST(request: Request) {
   const { email, plan } = parsed.data;
   const db = createAdminClient();
 
-  const { data: profile } = await db
+  const { data: profile, error: lookupError } = await db
     .from("profiles")
     .select("id")
     .ilike("email", email)
     .maybeSingle();
+  if (lookupError) {
+    return NextResponse.json(
+      { error: `Lookup failed: ${lookupError.message}` },
+      { status: 500 },
+    );
+  }
   if (!profile) {
-    return NextResponse.json({ error: "No user found with that email." }, { status: 404 });
+    return NextResponse.json(
+      { error: "No user found with that email — they must have signed in at least once." },
+      { status: 404 },
+    );
   }
   const userId = profile.id as string;
 
@@ -59,7 +68,12 @@ export async function POST(request: Request) {
     { onConflict: "user_id" },
   );
   if (error) {
-    return NextResponse.json({ error: "Couldn't update the plan." }, { status: 500 });
+    // Surface the real reason (admin-only). Usually "column ... does not exist"
+    // when migration 0004 hasn't been (re-)run yet.
+    return NextResponse.json(
+      { error: `Couldn't update the plan: ${error.message}` },
+      { status: 500 },
+    );
   }
 
   await db.from("profiles").update({ role: active ? "pro" : "user" }).eq("id", userId);

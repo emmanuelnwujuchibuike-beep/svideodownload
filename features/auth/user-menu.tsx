@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, User as UserIcon } from "lucide-react";
+import { KeyRound, LogOut, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -39,10 +39,11 @@ export function UserMenu() {
   if (!user) {
     return (
       <Link
-        href="/login"
-        className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+        href="/login?next=/account"
+        title="Log in to use the REST API and sync your downloads"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
       >
-        Sign in
+        <KeyRound className="h-4 w-4" /> Log in for API
       </Link>
     );
   }

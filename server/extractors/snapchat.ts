@@ -39,14 +39,42 @@ interface VideoMeta {
   creator?: unknown;
 }
 
-/** Pick the snap the URL targets, else the most recent video snap. */
-function pickSnap(snapList: Snap[], url: string): Snap | null {
-  const idMatch = url.match(/\/(?:@[^/]+|p|spotlight|t)\/[^/]*?([A-Za-z0-9_-]{16,})/);
-  if (idMatch) {
-    const exact = snapList.find((s) => s.snapId === idMatch[1]);
-    if (exact?.snapUrls?.mediaUrl) return exact;
+/** Find the snap the URL targets by matching its snapId anywhere in the link. */
+function matchSnap(snaps: Snap[], url: string): Snap | null {
+  let dec = url;
+  try {
+    dec = decodeURIComponent(url);
+  } catch {
+    /* keep raw */
   }
-  return snapList.find((s) => s.snapMediaType === 1 && s.snapUrls?.mediaUrl) ?? null;
+  // 1) the snap's id appears verbatim in the URL (most reliable)
+  const exact = snaps.find((s) => s.snapId && (url.includes(s.snapId) || dec.includes(s.snapId)));
+  if (exact) return exact;
+  // 2) a long token in the URL overlaps a snapId (handles wrapped/short ids)
+  for (const t of dec.match(/[A-Za-z0-9_-]{16,}/g) ?? []) {
+    const m = snaps.find((s) => s.snapId && (s.snapId.includes(t) || t.includes(s.snapId)));
+    if (m) return m;
+  }
+  return null;
+}
+
+function snapFormat(snap: Snap, i: number, count: number): MediaFormat {
+  const isVideo = snap.snapMediaType !== 0; // 1 = video, 0 = image
+  const headers = { "User-Agent": MOBILE_UA, Referer: "https://www.snapchat.com/" };
+  return {
+    formatId: `snap-${i}`,
+    kind: isVideo ? "video" : "image",
+    label: count > 1 ? `Story ${i + 1}` : isVideo ? "Best quality" : "Photo",
+    ext: isVideo ? "mp4" : "jpg",
+    resolution: null,
+    fps: null,
+    filesize: null,
+    tbr: null,
+    vcodec: isVideo ? "h264" : null,
+    acodec: isVideo ? "aac" : null,
+    directUrl: cleanUrl(snap.snapUrls!.mediaUrl!),
+    httpHeaders: headers,
+  };
 }
 
 function cleanUrl(u: string): string {
@@ -117,6 +145,7 @@ export const snapchatExtractor: Extractor = {
     let mediaUrl: string | undefined;
     let title: string | undefined;
     let vm: VideoMeta | undefined;
+    let formats: MediaFormat[] | undefined;
 
     if (blob) {
       try {
@@ -136,16 +165,20 @@ export const snapchatExtractor: Extractor = {
           title = pp.videoMetadata.name;
         }
 
-        // Story page — pick the targeted/most-recent video snap.
+        // Story page — return the EXACT snap the link points to. If we can't
+        // identify it from the URL, return every snap so the user picks the
+        // right one (instead of guessing and serving a random snap).
         if (!mediaUrl) {
           const snapList =
             pp.story?.snapList ?? pp.curatedHighlights?.[0]?.snapList ?? [];
-          if (Array.isArray(snapList) && snapList.length) {
-            const snap = pickSnap(snapList, url);
-            if (snap?.snapUrls?.mediaUrl) {
-              mediaUrl = snap.snapUrls.mediaUrl;
-              title = snap.snapTitle;
-            }
+          const snaps = (Array.isArray(snapList) ? snapList : []).filter(
+            (s) => s.snapUrls?.mediaUrl,
+          );
+          if (snaps.length) {
+            const matched = matchSnap(snaps, url);
+            const chosen = matched ? [matched] : snaps;
+            formats = chosen.map((s, i) => snapFormat(s, i, chosen.length));
+            title = matched?.snapTitle ?? snaps[0]?.snapTitle;
           }
         }
       } catch {
@@ -155,27 +188,28 @@ export const snapchatExtractor: Extractor = {
 
     // Generic fallback: any Snapchat CDN media URL in the page (covers layout
     // changes). Spotlight uses extension-less /d/ or /y/ paths; stories use .mp4.
-    if (!mediaUrl) {
+    if (!mediaUrl && !formats?.length) {
       const m =
         html.match(/"contentUrl":"(https:\\?\/\\?\/[a-z0-9.-]*sc-cdn\.net\\?\/[^"]+?)"/i) ??
         html.match(/https:\/\/[a-z0-9.-]*sc-cdn\.net\/[^"'\\ ]+?\.(?:mp4|mov)[^"'\\ ]*/i);
       if (m) mediaUrl = m[1] ?? m[0];
     }
 
-    if (!mediaUrl) {
+    if (!mediaUrl && !formats?.length) {
       throw new ExtractionError(
         "No Snapchat video found (story may be expired or image-only)",
       );
     }
 
-    mediaUrl = cleanUrl(mediaUrl);
+    const finalFormats =
+      formats && formats.length ? formats : [videoFormat(cleanUrl(mediaUrl!))];
 
     return {
       id: crypto.randomUUID(),
       platform: platform.id,
       platformName: platform.name,
       sourceUrl: url,
-      title: (title || metaContent(html, "og:title") || "Snapchat video").slice(0, 200),
+      title: (title || metaContent(html, "og:title") || "Snapchat story").slice(0, 200),
       description: vm?.description ?? metaContent(html, "og:description"),
       thumbnail: vm?.thumbnailUrl ? cleanUrl(vm.thumbnailUrl) : metaContent(html, "og:image"),
       durationSeconds: vm?.durationMs ? Math.round(vm.durationMs / 1000) : null,
@@ -184,7 +218,7 @@ export const snapchatExtractor: Extractor = {
       viewCount: vm?.viewCount != null ? Number(vm.viewCount) || null : null,
       likeCount: null,
       webpageUrl: url,
-      formats: [videoFormat(mediaUrl)],
+      formats: finalFormats,
       extractor: "snapchat",
     };
   },

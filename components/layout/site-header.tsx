@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, Download, LogOut, Menu, User as UserIcon, X } from "lucide-react";
+import { Crown, Download, KeyRound, LogOut, Menu, User as UserIcon, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -15,6 +15,7 @@ const NAV_LINKS = [
   { href: "/tiktok-video-downloader", label: "TikTok" },
   { href: "/instagram-reels-downloader", label: "Instagram" },
   { href: "/#features", label: "Features" },
+  { href: "/developers", label: "API" },
   { href: "/blog", label: "Blog" },
 ];
 
@@ -146,11 +147,17 @@ export function SiteHeader() {
               </>
             ) : (
               <Link
-                href={enabled ? "/login" : "/#download"}
+                href={enabled ? "/login?next=/account" : "/#download"}
                 onClick={() => setOpen(false)}
-                className="mt-2 rounded-xl bg-primary px-4 py-3 text-center text-base font-semibold text-primary-foreground"
+                className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-center text-base font-semibold text-primary-foreground"
               >
-                {enabled ? "Sign in" : "Get Started"}
+                {enabled ? (
+                  <>
+                    <KeyRound className="h-5 w-5" /> Log in for API &amp; more
+                  </>
+                ) : (
+                  "Get Started"
+                )}
               </Link>
             )}
           </nav>

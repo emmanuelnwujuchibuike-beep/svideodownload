@@ -17,7 +17,11 @@ import { detectPlatform } from "@/lib/platforms";
 const APIFY_TOKEN = process.env.APIFY_TOKEN?.trim().replace(/^["']|["']$/g, "");
 const APIFY_IG_ACTOR = (process.env.APIFY_IG_ACTOR || "apify/instagram-scraper").trim();
 const APIFY_THREADS_ACTOR = process.env.APIFY_THREADS_ACTOR?.trim();
-const TIMEOUT_MS = Number(process.env.APIFY_TIMEOUT_MS || 90_000);
+const TIMEOUT_MS = Number(process.env.APIFY_TIMEOUT_MS || 120_000);
+// The Threads actor only fetches a user's RECENT posts (no per-URL lookup), so
+// we must pull enough to include the target. Higher = finds older posts but
+// slower. Tune via APIFY_THREADS_MAX_POSTS (actor minimum is 10).
+const THREADS_MAX_POSTS = Math.max(10, Number(process.env.APIFY_THREADS_MAX_POSTS) || 30);
 
 const IMG_HEADERS = { "User-Agent": "Mozilla/5.0", Referer: "https://www.instagram.com/" };
 
@@ -102,6 +106,10 @@ function igFormats(item: IgItem): { formats: MediaFormat[]; thumb: string | null
 
 interface ThreadsItem {
   post_url?: string;
+  url?: string;
+  code?: string;
+  shortcode?: string;
+  pk?: string;
   media_url?: string;
   media_urls?: string[];
   media_type?: string;
@@ -109,6 +117,45 @@ interface ThreadsItem {
   has_audio?: boolean;
   text_content?: string;
   username?: string;
+}
+
+/** Find the post matching a Threads share code across the actor's result fields. */
+function matchThreadsPost(items: ThreadsItem[], code: string): ThreadsItem | null {
+  return (
+    items.find((p) => (p.post_url || p.url || "").includes(`/post/${code}`)) ??
+    items.find((p) => p.code === code || p.shortcode === code) ??
+    items.find((p) => (p.post_url || p.url || "").includes(code)) ??
+    null
+  );
+}
+
+/** Diagnostic: run the Threads actor and report what it returned (admin debug). */
+export async function apifyThreadsDiag(url: string): Promise<Record<string, unknown>> {
+  const m = url.match(/threads\.(?:net|com)\/@([^/?]+)\/post\/([A-Za-z0-9_-]+)/i);
+  const username = m?.[1];
+  const code = m?.[2];
+  if (!APIFY_TOKEN) return { error: "APIFY_TOKEN not set" };
+  if (!APIFY_THREADS_ACTOR) return { error: "APIFY_THREADS_ACTOR not set" };
+  if (!username || !code) return { error: "could not parse username/code", url };
+  const items = (await runActor(APIFY_THREADS_ACTOR, {
+    mode: "user",
+    usernames: [username],
+    max_posts: THREADS_MAX_POSTS,
+  })) as ThreadsItem[] | null;
+  if (!items) return { actor: APIFY_THREADS_ACTOR, username, code, count: null, note: "actor returned null/non-array" };
+  const matched = matchThreadsPost(items, code);
+  return {
+    actor: APIFY_THREADS_ACTOR,
+    username,
+    code,
+    maxPosts: THREADS_MAX_POSTS,
+    count: items.length,
+    matched: !!matched,
+    matchedHasMedia: matched?.has_media ?? null,
+    matchedMediaType: matched?.media_type ?? null,
+    firstKeys: items[0] ? Object.keys(items[0]).slice(0, 20) : null,
+    samplePostUrls: items.slice(0, 12).map((p) => (p.post_url || p.url || "").slice(-40)),
+  };
 }
 
 function threadsFormats(post: ThreadsItem): MediaFormat[] {
@@ -145,12 +192,10 @@ export async function apifyExtract(url: string): Promise<VideoMetadata | null> {
     const items = (await runActor(APIFY_THREADS_ACTOR, {
       mode: "user",
       usernames: [username],
-      max_posts: 10, // actor minimum — fewer posts = faster fetch
+      max_posts: THREADS_MAX_POSTS,
     })) as ThreadsItem[] | null;
     if (!items) return null;
-    const post =
-      items.find((p) => (p.post_url || "").includes(`/post/${code}`)) ??
-      items.find((p) => (p.post_url || "").includes(code));
+    const post = matchThreadsPost(items, code);
     if (!post || post.has_media === false) return null;
     const formats = threadsFormats(post);
     if (formats.length === 0) return null;

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 
 import { NextResponse } from "next/server";
 
+import { apifyThreadsDiag } from "@/server/extractors/apify-instagram";
 import { cookieHeaderFor } from "@/server/extractors/cookies";
 import { proxyDispatcher } from "@/server/proxy/proxy-manager";
 import { resolveDownload } from "@/server/services/download-service";
@@ -30,6 +31,11 @@ export async function GET(request: Request) {
   // decoder is missing, Instagram/Facebook VP9 can't be transcoded to H.264.
   if (sp.get("lasterr")) {
     return NextResponse.json({ lastTranscode: lastTranscode() });
+  }
+
+  const threadsUrl = sp.get("threads");
+  if (threadsUrl) {
+    return NextResponse.json(await apifyThreadsDiag(threadsUrl));
   }
 
   if (sp.get("ffmpeg")) {

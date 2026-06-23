@@ -135,3 +135,15 @@
     animation: shimmer 1.6s infinite;
   }
 }
+
+/* Belt-and-suspenders zoom lock: iOS auto-zooms when a focused control's
+   font-size is < 16px. Force 16px on mobile form controls so even older iOS
+   (which ignores the viewport user-scalable=no) won't zoom on input focus.
+   Pairs with the maximum-scale=1 viewport set in layout.tsx. */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

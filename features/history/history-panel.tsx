@@ -6,13 +6,16 @@ import {
   Download,
   Heart,
   History,
+  Image as ImageIcon,
   Loader2,
   Music,
   Search,
   Trash2,
   Video,
 } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ComponentType, type ReactNode, useMemo, useState } from "react";
+
+import type { MediaKind } from "@/types";
 
 import { downloadToDisk } from "@/lib/client-download";
 import { BRAND_ICONS } from "@/lib/platform-icons";
@@ -23,6 +26,12 @@ import type { DownloadRecord } from "@/types";
 import { useHistory } from "./use-history";
 
 const INITIAL_VISIBLE = 6;
+
+const KIND_ICON: Record<MediaKind, ComponentType<{ className?: string }>> = {
+  video: Video,
+  audio: Music,
+  image: ImageIcon,
+};
 
 function timeAgo(ts: number): string {
   const s = (Date.now() - ts) / 1000;
@@ -199,6 +208,7 @@ function HistoryCard({
   const [redownloading, setRedownloading] = useState(false);
   const platform = PLATFORMS[item.platform] ?? PLATFORMS.generic;
   const Icon = BRAND_ICONS[item.platform];
+  const KindIcon = KIND_ICON[item.kind] ?? Video;
 
   const copyLink = async () => {
     try {
@@ -229,7 +239,7 @@ function HistoryCard({
           <img src={item.thumbnail} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-            <Video className="h-5 w-5" />
+            <KindIcon className="h-5 w-5" />
           </div>
         )}
         <span
@@ -246,11 +256,7 @@ function HistoryCard({
         <p className="truncate text-sm font-semibold">{item.title}</p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <span className="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
-            {item.kind === "audio" ? (
-              <Music className="h-2.5 w-2.5" />
-            ) : (
-              <Video className="h-2.5 w-2.5" />
-            )}
+            <KindIcon className="h-2.5 w-2.5" />
             {item.qualityLabel}
           </span>
           <span className="text-xs text-muted-foreground">

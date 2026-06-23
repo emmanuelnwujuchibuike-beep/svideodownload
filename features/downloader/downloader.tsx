@@ -1,6 +1,14 @@
 "use client";
 
-import { ClipboardPaste, Loader2, Plus, Search, X } from "lucide-react";
+import {
+  AlertCircle,
+  ClipboardPaste,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  X,
+} from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 
 import { detectPlatform } from "@/lib/platforms";
@@ -51,8 +59,7 @@ export function Downloader() {
     }
   };
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
+  const startFetch = () => {
     const parsed = sourceUrlSchema.safeParse(url);
     if (!parsed.success) {
       setValidationError(parsed.error.issues[0]?.message ?? "Invalid URL.");
@@ -60,6 +67,11 @@ export function Downloader() {
     }
     setValidationError(null);
     void fetchMetadata(parsed.data);
+  };
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    startFetch();
   };
 
   const handleClear = () => {
@@ -133,9 +145,12 @@ export function Downloader() {
       </form>
 
       {(validationError || error) && status !== "fetching" ? (
-        <p role="alert" className="mt-3 text-center text-sm text-red-400">
-          {validationError ?? error}
-        </p>
+        <ErrorCard
+          message={validationError ?? error ?? "Something went wrong."}
+          isValidation={!!validationError}
+          onRetry={validationError ? undefined : startFetch}
+          onDismiss={handleClear}
+        />
       ) : null}
 
       {metadata ? (
@@ -159,6 +174,65 @@ export function Downloader() {
           </div>
         </>
       ) : null}
+    </div>
+  );
+}
+
+function ErrorCard({
+  message,
+  isValidation,
+  onRetry,
+  onDismiss,
+}: {
+  message: string;
+  isValidation: boolean;
+  onRetry?: () => void;
+  onDismiss: () => void;
+}) {
+  const privateLike = /private|sign-?in|login|region|removed|unavailable/i.test(message);
+  return (
+    <div
+      role="alert"
+      className="mx-auto mt-5 max-w-xl rounded-2xl border border-red-500/25 bg-red-500/[0.04] p-4 text-left"
+    >
+      <div className="flex gap-3">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-500/12 text-red-400">
+          <AlertCircle className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-foreground">
+            {isValidation
+              ? "That doesn't look like a valid link"
+              : privateLike
+                ? "We couldn't reach that post"
+                : "Couldn't fetch that link"}
+          </p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{message}</p>
+          {!isValidation && privateLike ? (
+            <p className="mt-1.5 text-xs text-muted-foreground/80">
+              Tip: make sure the post is public and the link is complete.
+            </p>
+          ) : null}
+          <div className="mt-3 flex items-center gap-2">
+            {onRetry ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90 active:scale-[0.98]"
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Try again
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

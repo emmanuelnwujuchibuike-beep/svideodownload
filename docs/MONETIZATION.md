@@ -22,7 +22,7 @@ URL input → metadata → result card
 - **Ads** — `lib/monetization/ads.ts` + `<AdSlot>` + `/api/ads`, `/api/track`
 - **Affiliates** — `lib/monetization/affiliates.ts` + `/api/go/[id]` (tracked redirect)
 - **Plans** — `lib/monetization/plan.ts` (`PLAN_LIMITS`, `getUserPlan`)
-- **Billing** — `lib/stripe/*`, `/api/checkout`, `/api/stripe/webhook`, `/api/billing/portal`
+- **Billing (Paystack)** — `lib/paystack/*`, `/api/checkout`, `/api/paystack/webhook`, `/api/billing/portal`
 - **Analytics** — `lib/analytics/events.ts` (`trackEvent`) → `events` + counters
 
 ## 1. Database
@@ -41,27 +41,32 @@ All RLS-enabled; tracking/billing inserts go through the service role.
 
 | Variable | Purpose |
 |---|---|
-| `STRIPE_SECRET_KEY` | Stripe API key (`sk_live_…`) |
-| `STRIPE_WEBHOOK_SECRET` | Webhook signing secret (`whsec_…`) |
-| `STRIPE_PRICE_PRO` | Price id for Pro ($4.99/mo) |
-| `STRIPE_PRICE_BUSINESS` | Price id for Business ($9.99/mo) |
+| `PAYSTACK_SECRET_KEY` | Paystack API key (`sk_live_…` / `sk_test_…`) |
+| `PAYSTACK_PLAN_PRO` | Plan code for Pro (`PLN_…`) |
+| `PAYSTACK_PLAN_BUSINESS` | Plan code for Business (`PLN_…`) |
+| `PRICE_DISPLAY_PRO` | *(optional)* price shown on /pricing, e.g. `₦2,500` |
+| `PRICE_DISPLAY_BUSINESS` | *(optional)* price shown on /pricing, e.g. `₦5,000` |
 | `MONETIZATION_AFFILIATE_RATE` | 0–1, how often to prefer an affiliate offer (default 0.4) |
 | `MONETIZATION_VALUE_THRESHOLD` | 0–1, min traffic value to fill premium ads (default 0.55) |
 | `RATE_LIMIT_TRACK_PER_MIN` | impression/click beacon cap per IP (default 120) |
 
 Already required by the app: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 
-## 3. Stripe setup
+## 3. Paystack setup
 
-1. Create two **recurring products** in Stripe → Products: Pro ($4.99/mo),
-   Business ($9.99/mo). Copy each **Price ID** into the env vars above.
-2. Add a webhook endpoint: `https://<your-domain>/api/stripe/webhook`, subscribing to:
-   `checkout.session.completed`, `customer.subscription.created`,
-   `customer.subscription.updated`, `customer.subscription.deleted`.
-   Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
-3. (Optional) Enable the **Billing Portal** in Stripe settings so "Manage billing" works.
+1. In the Paystack dashboard → **Plans**, create two recurring plans (set the
+   amount/currency, e.g. ₦ or USD, monthly): "Pro" and "Business". Copy each
+   **Plan code** (`PLN_…`) into `PAYSTACK_PLAN_PRO` / `PAYSTACK_PLAN_BUSINESS`.
+2. **Settings → API Keys & Webhooks**: copy the **Secret key** into
+   `PAYSTACK_SECRET_KEY`, and set the **Webhook URL** to
+   `https://<your-domain>/api/paystack/webhook`. (Paystack signs every webhook
+   with HMAC-SHA512 of the body using your secret key — we verify it.)
+3. (Optional) Set `PRICE_DISPLAY_PRO` / `PRICE_DISPLAY_BUSINESS` to show the real
+   ₦ amounts on the pricing page.
 
-Test with Stripe test keys + `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
+Checkout redirects to Paystack's hosted page; on success the webhook activates
+the plan. "Manage billing" opens Paystack's subscription manage link
+(update card / cancel). Test with `sk_test_…` keys first.
 
 ## 4. Seeding ads
 
@@ -110,7 +115,7 @@ wins; `weight` controls the split within the top tier. Clicks go through
 ## 7. Security
 
 - All tables RLS-enabled; only the service role writes tracking/billing rows.
-- Stripe webhook verified via HMAC over the **raw** body (300s tolerance).
+- Paystack webhook verified via HMAC-SHA512 over the **raw** body.
 - Affiliate redirects only ever go to a DB-stored http(s) URL — no open redirect.
 - Beacons (`/api/track`, `/api/go`) are IP rate-limited to resist click floods.
 

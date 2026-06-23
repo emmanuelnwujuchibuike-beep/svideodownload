@@ -38,14 +38,14 @@ export default async function AccountPage() {
 
   const { data: sub } = await supabase
     .from("subscriptions")
-    .select("plan, status, current_period_end, cancel_at_period_end, stripe_customer_id")
+    .select("plan, status, current_period_end, cancel_at_period_end, subscription_ref")
     .eq("user_id", user.id)
     .maybeSingle();
 
   const planActive = sub?.status === "active" || sub?.status === "trialing";
   const plan = (planActive ? sub?.plan : "free") ?? "free";
   const planLabel = plan === "business" ? "Business" : plan === "pro" ? "Pro" : "Free";
-  const hasCustomer = !!sub?.stripe_customer_id;
+  const canManage = !!sub?.subscription_ref;
 
   const email = user.email ?? "—";
   const avatar =
@@ -126,7 +126,7 @@ export default async function AccountPage() {
               >
                 Upgrade
               </Link>
-            ) : hasCustomer ? (
+            ) : canManage ? (
               <ManageBillingButton className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-secondary disabled:opacity-60" />
             ) : null}
           </div>

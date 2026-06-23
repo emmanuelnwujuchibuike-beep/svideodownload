@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 
-import { createPortalSession, stripeEnabled } from "@/lib/stripe/stripe";
+import { paystackEnabled, subscriptionManageLink } from "@/lib/paystack/paystack";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { SITE_URL } from "@/lib/site";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Opens the Stripe billing portal so a member can manage/cancel their plan. */
-export async function POST(request: Request) {
-  if (!stripeEnabled()) {
+/** Returns a Paystack manage link so a member can update card / cancel. */
+export async function POST() {
+  if (!paystackEnabled()) {
     return NextResponse.json({ error: "Billing isn't available yet." }, { status: 503 });
   }
 
@@ -23,18 +22,17 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const { data } = await admin
     .from("subscriptions")
-    .select("stripe_customer_id")
+    .select("subscription_ref")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const customer = data?.stripe_customer_id as string | undefined;
-  if (!customer) {
-    return NextResponse.json({ error: "No billing account found." }, { status: 404 });
+  const code = data?.subscription_ref as string | undefined;
+  if (!code) {
+    return NextResponse.json({ error: "No active subscription found." }, { status: 404 });
   }
 
   try {
-    const base = SITE_URL || new URL(request.url).origin;
-    const url = await createPortalSession(customer, `${base}/account`);
+    const url = await subscriptionManageLink(code);
     return NextResponse.json({ url });
   } catch {
     return NextResponse.json({ error: "Couldn't open billing. Try again." }, { status: 502 });

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { createCheckoutSession, ensureCustomer, priceForPlan, stripeEnabled } from "@/lib/stripe/stripe";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { initializeTransaction, paystackEnabled, planCodeForPlan } from "@/lib/paystack/paystack";
 import { createClient } from "@/lib/supabase/server";
 import { SITE_URL } from "@/lib/site";
 
@@ -11,9 +10,9 @@ export const dynamic = "force-dynamic";
 
 const schema = z.object({ plan: z.enum(["pro", "business"]) });
 
-/** Creates a Stripe Checkout session for the signed-in user and returns its URL. */
+/** Starts a Paystack subscription checkout for the signed-in user. */
 export async function POST(request: Request) {
-  if (!stripeEnabled()) {
+  if (!paystackEnabled()) {
     return NextResponse.json({ error: "Billing isn't available yet." }, { status: 503 });
   }
 
@@ -23,6 +22,9 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Please sign in first.", login: true }, { status: 401 });
+  }
+  if (!user.email) {
+    return NextResponse.json({ error: "Your account needs an email to subscribe." }, { status: 400 });
   }
 
   let body: unknown;
@@ -36,40 +38,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Choose a valid plan." }, { status: 400 });
   }
 
-  const priceId = priceForPlan(parsed.data.plan);
-  if (!priceId) {
+  const planCode = planCodeForPlan(parsed.data.plan);
+  if (!planCode) {
     return NextResponse.json({ error: "That plan isn't available yet." }, { status: 503 });
   }
 
   try {
-    const admin = createAdminClient();
-    const { data: existing } = await admin
-      .from("subscriptions")
-      .select("stripe_customer_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    const customer = await ensureCustomer(
-      (existing?.stripe_customer_id as string) ?? null,
-      user.email ?? undefined,
-      user.id,
-    );
-
-    // Persist the customer id up-front so the webhook can resolve the user.
-    await admin
-      .from("subscriptions")
-      .upsert(
-        { user_id: user.id, stripe_customer_id: customer, updated_at: new Date().toISOString() },
-        { onConflict: "user_id" },
-      );
-
     const base = SITE_URL || new URL(request.url).origin;
-    const url = await createCheckoutSession({
-      customer,
-      priceId,
+    const url = await initializeTransaction({
+      email: user.email,
+      planCode,
       userId: user.id,
-      successUrl: `${base}/account?upgraded=1`,
-      cancelUrl: `${base}/pricing`,
+      callbackUrl: `${base}/account?upgraded=1`,
     });
     return NextResponse.json({ url });
   } catch {

@@ -97,19 +97,24 @@ create table if not exists public.affiliate_clicks (
 create index if not exists affiliate_clicks_offer_created_idx on public.affiliate_clicks (offer_id, created_at desc);
 
 -- ---------------------------------------------------------------------
--- subscriptions — Stripe-synced; source of truth for a user's plan.
+-- subscriptions — Paystack-synced; source of truth for a user's plan.
+-- Provider-agnostic refs so the billing provider can change without a schema
+-- change (customer_ref = Paystack customer_code, subscription_ref = sub code).
 -- ---------------------------------------------------------------------
 create table if not exists public.subscriptions (
   user_id                uuid primary key references auth.users (id) on delete cascade,
   plan                   public.billing_plan not null default 'free',
   status                 public.subscription_status,
-  stripe_customer_id     text,
-  stripe_subscription_id text,
+  provider               text not null default 'paystack',
+  customer_ref           text,   -- Paystack customer_code
+  subscription_ref       text,   -- Paystack subscription_code
+  email_token            text,   -- Paystack token required to disable a sub
   current_period_end     timestamptz,
   cancel_at_period_end   boolean not null default false,
   updated_at             timestamptz not null default now()
 );
-create index if not exists subscriptions_customer_idx on public.subscriptions (stripe_customer_id);
+create index if not exists subscriptions_customer_idx on public.subscriptions (customer_ref);
+create index if not exists subscriptions_sub_ref_idx on public.subscriptions (subscription_ref);
 
 -- ---------------------------------------------------------------------
 -- api_keys — hashed; the raw key is shown once at creation and never stored.

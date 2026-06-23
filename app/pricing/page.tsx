@@ -46,7 +46,7 @@ const TIERS: Tier[] = [
   {
     id: "pro",
     name: "Pro",
-    price: "$4.99",
+    price: process.env.PRICE_DISPLAY_PRO || "$4.99",
     period: "/mo",
     tagline: "For people who download a lot.",
     icon: Crown,
@@ -64,7 +64,7 @@ const TIERS: Tier[] = [
   {
     id: "business",
     name: "Business",
-    price: "$9.99",
+    price: process.env.PRICE_DISPLAY_BUSINESS || "$9.99",
     period: "/mo",
     tagline: "For developers & power users.",
     icon: Code2,

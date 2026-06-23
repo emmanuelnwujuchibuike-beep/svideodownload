@@ -83,6 +83,10 @@ function buildLimiter(tokens: number): Limiter {
 export const metadataLimiter: Limiter = buildLimiter(METADATA_TOKENS);
 export const downloadLimiter: Limiter = buildLimiter(DOWNLOAD_TOKENS);
 export const assistantLimiter: Limiter = buildLimiter(ASSISTANT_TOKENS);
+// Tracking pixels fire often but must resist fake-click floods.
+export const trackLimiter: Limiter = buildLimiter(
+  Number(process.env.RATE_LIMIT_TRACK_PER_MIN || 120),
+);
 
 /** Derives a best-effort client identifier from request headers. */
 export function clientId(headers: Headers): string {

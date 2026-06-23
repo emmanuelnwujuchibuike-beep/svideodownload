@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { ResultOffer } from "@/features/monetization/result-offer";
 import { detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
 
@@ -174,6 +175,9 @@ export function Downloader() {
             }
             onDownload={download}
           />
+
+          {/* Decision-engine offer: ad / affiliate / upgrade — keyed per video. */}
+          <ResultOffer key={metadata.id} />
           <div className="mt-5 text-center">
             <button
               type="button"

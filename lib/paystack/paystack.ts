@@ -57,6 +57,17 @@ async function paystack<T = Record<string, unknown>>(
   return json;
 }
 
+/** The plan's amount (in kobo). Paystack's initialize requires an amount even
+ * when a plan is passed, so we read it from the plan to stay correct. */
+async function planAmount(planCode: string): Promise<number | undefined> {
+  try {
+    const p = await paystack<{ data: { amount: number } }>(`/plan/${planCode}`);
+    return p.data?.amount;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Starts a subscription checkout: initialize a transaction tied to a plan and
  * return Paystack's hosted authorization URL to redirect the user to.
@@ -67,13 +78,16 @@ export async function initializeTransaction(opts: {
   userId: string;
   callbackUrl: string;
 }): Promise<string> {
+  const amount = await planAmount(opts.planCode);
   const data = await paystack<{ data: { authorization_url: string } }>(
     "/transaction/initialize",
     {
       method: "POST",
       body: {
         email: opts.email,
-        plan: opts.planCode, // amount is derived from the plan
+        plan: opts.planCode,
+        // Required by the API; the plan amount governs the actual charge.
+        ...(amount != null ? { amount } : {}),
         callback_url: opts.callbackUrl,
         metadata: { user_id: opts.userId },
       },

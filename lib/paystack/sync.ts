@@ -62,6 +62,19 @@ export async function syncPaystackEvent(
       status = "active";
   }
 
+  // Don't downgrade on an active event whose payload didn't carry a plan code
+  // (e.g. some charge.success events): keep the user's current plan instead.
+  if (status !== "canceled" && effectivePlan === "free") {
+    const { data: existing } = await supabase
+      .from("subscriptions")
+      .select("plan")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (existing?.plan && existing.plan !== "free") {
+      effectivePlan = existing.plan as typeof effectivePlan;
+    }
+  }
+
   const patch: Record<string, unknown> = {
     user_id: userId,
     plan: effectivePlan,

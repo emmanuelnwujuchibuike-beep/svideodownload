@@ -108,8 +108,9 @@ export default async function PricingPage() {
           {TIERS.map((t) => (
             <div
               key={t.id}
+              id={t.id}
               className={cn(
-                "relative flex flex-col rounded-3xl border bg-card p-6 shadow-soft",
+                "relative flex flex-col scroll-mt-24 rounded-3xl border bg-card p-6 shadow-soft",
                 t.highlight
                   ? "border-primary/40 ring-1 ring-primary/20 lg:scale-[1.03]"
                   : "border-border",

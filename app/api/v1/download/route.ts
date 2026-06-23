@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     // Validate + pick a format via metadata.
     const r = await fetch(`${base}/api/metadata`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-forwarded-for": `apikey:${auth.ctx.keyId}` },
       body: JSON.stringify({ url: parsed.data.url }),
     });
     const j = await r.json();

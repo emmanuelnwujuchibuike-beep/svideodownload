@@ -43,7 +43,9 @@ export async function POST(request: Request) {
   try {
     const r = await fetch(`${base}/api/metadata`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // Forward a per-key identity so the metadata rate-limit buckets per API
+      // key instead of lumping every API call into one shared bucket.
+      headers: { "Content-Type": "application/json", "x-forwarded-for": `apikey:${auth.ctx.keyId}` },
       body: JSON.stringify({ url: parsed.data.url }),
     });
     const j = await r.json();

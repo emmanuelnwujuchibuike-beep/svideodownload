@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { AssistantWidget } from "@/features/assistant/assistant-widget";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
 import "./globals.css";
@@ -78,6 +79,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <AssistantWidget />
         </ThemeProvider>
       </body>
     </html>

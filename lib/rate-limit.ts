@@ -22,6 +22,7 @@ const rateLimitEnabled = !["false", "0", "off"].includes(
 
 const METADATA_TOKENS = Number(process.env.RATE_LIMIT_METADATA_PER_MIN || 60);
 const DOWNLOAD_TOKENS = Number(process.env.RATE_LIMIT_DOWNLOAD_PER_MIN || 30);
+const ASSISTANT_TOKENS = Number(process.env.RATE_LIMIT_ASSISTANT_PER_MIN || 15);
 
 type LimitResult = { success: boolean; remaining: number; reset: number };
 
@@ -81,6 +82,7 @@ function buildLimiter(tokens: number): Limiter {
 
 export const metadataLimiter: Limiter = buildLimiter(METADATA_TOKENS);
 export const downloadLimiter: Limiter = buildLimiter(DOWNLOAD_TOKENS);
+export const assistantLimiter: Limiter = buildLimiter(ASSISTANT_TOKENS);
 
 /** Derives a best-effort client identifier from request headers. */
 export function clientId(headers: Headers): string {

@@ -70,6 +70,17 @@ async function runChain(url: string): Promise<VideoMetadata> {
  */
 async function extractFresh(url: string): Promise<VideoMetadata> {
   const platform = detectPlatform(url).id;
+
+  // Threads fast path: the post page is now a client-rendered shell with no
+  // media, and yt-dlp can't read Threads without auth — only the Apify scraper
+  // works. Go straight to it and skip the ~10s of dead page-fetch + yt-dlp
+  // attempts. Falls through to the normal chain only if Apify is off or returns
+  // nothing.
+  if (platform === "threads" && apifyEnabled()) {
+    const viaApify = await apifyExtract(url);
+    if (viaApify) return viaApify;
+  }
+
   try {
     return await runChain(url);
   } catch (err) {

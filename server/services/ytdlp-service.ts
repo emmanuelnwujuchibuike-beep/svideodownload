@@ -735,10 +735,19 @@ function videoCodec(filePath: string): Promise<string | null> {
 /** Transcodes a file's video to H.264 (copying AAC audio) into `out`. */
 function transcodeFileToH264(src: string, out: string): Promise<void> {
   return new Promise((resolve, reject) => {
+    // Cap threads: x264 otherwise spawns one thread per host core (60+ on the
+    // build host), and each thread's lookahead buffers blow past the worker
+    // container's memory limit → the process is OOM-killed mid-encode. A small
+    // fixed pool keeps memory bounded and still transcodes a reel in seconds.
+    const threads = process.env.FFMPEG_THREADS || "2";
     const args = [
+      "-threads", threads,
       "-i", src,
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+      "-threads", threads,
+      "-x264-params", `threads=${threads}:lookahead-threads=1`,
       "-c:a", "aac", "-b:a", "128k",
+      "-max_muxing_queue_size", "1024",
       "-movflags", "+faststart", "-y", out,
     ];
     const child = spawn(FFMPEG_PATH || "ffmpeg", args, { windowsHide: true });

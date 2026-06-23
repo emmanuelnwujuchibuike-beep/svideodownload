@@ -125,14 +125,22 @@ async function transcodeToH264(format: MediaFormat): Promise<DownloadResult> {
   const codec = (await probeUrlCodec(format))?.toLowerCase();
   // H.264/HEVC → just remux into mp4 (fast). VP9/AV1/unknown → re-encode.
   const copy = codec === "h264" || codec === "hevc";
+  // Cap x264 threads — it otherwise spawns one per host core and OOM-kills the
+  // memory-limited worker container mid-encode (see ytdlp-service transcode).
+  const threads = process.env.FFMPEG_THREADS || "2";
   const videoArgs = copy
     ? ["-c:v", "copy"]
-    : ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"];
+    : [
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        "-threads", threads,
+        "-x264-params", `threads=${threads}:lookahead-threads=1`,
+      ];
 
   return getOrProduce(key, "mp4", "video/mp4", (finalPath) =>
     new Promise<void>((resolve, reject) => {
       const args = [
         ...headerArgFor(format),
+        "-threads", threads,
         "-i",
         format.directUrl!,
         ...videoArgs,

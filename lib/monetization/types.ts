@@ -1,6 +1,7 @@
 export type BillingPlan = "free" | "pro" | "business";
 
 export type AdZone =
+  | "global"
   | "homepage_top"
   | "download_result_page"
   | "sidebar"
@@ -29,6 +30,8 @@ export interface AdSlotData {
   imageUrl: string | null;
   targetUrl: string | null;
   headline: string | null;
+  width: number | null;
+  height: number | null;
 }
 
 export interface AffiliateOffer {

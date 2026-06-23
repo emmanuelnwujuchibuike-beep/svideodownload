@@ -22,6 +22,8 @@ interface AdRow {
   image_url: string | null;
   target_url: string | null;
   headline: string | null;
+  width: number | null;
+  height: number | null;
   weight: number;
 }
 
@@ -35,6 +37,8 @@ function toSlot(r: AdRow): AdSlotData {
     imageUrl: r.image_url,
     targetUrl: r.target_url,
     headline: r.headline,
+    width: r.width,
+    height: r.height,
   };
 }
 
@@ -47,7 +51,9 @@ async function loadZone(zone: string): Promise<AdSlotData[]> {
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("ads")
-      .select("id, zone, network, format, script_code, image_url, target_url, headline, weight")
+      .select(
+        "id, zone, network, format, script_code, image_url, target_url, headline, width, height, weight",
+      )
       .eq("zone", zone)
       .eq("active", true)
       .order("priority", { ascending: true });
@@ -73,6 +79,11 @@ export async function getAdForZone(zone: string): Promise<AdSlotData | null> {
     if (r <= 0) return a;
   }
   return rows[0]!;
+}
+
+/** All active ads in a zone (used for page-level `global` scripts). */
+export async function getAdsForZone(zone: string): Promise<AdSlotData[]> {
+  return loadZone(zone);
 }
 
 export function clearAdCache(): void {

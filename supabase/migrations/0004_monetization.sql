@@ -34,13 +34,15 @@ create index if not exists events_user_idx on public.events (user_id, created_at
 -- ---------------------------------------------------------------------
 create table if not exists public.ads (
   id          uuid primary key default uuid_generate_v4(),
-  zone        text not null,        -- homepage_top | download_result_page | sidebar | exit_intent_popup | mobile_bottom_banner
+  zone        text not null,        -- global | homepage_top | download_result_page | sidebar | exit_intent_popup | mobile_bottom_banner
   network     text not null,        -- adsterra | propellerads | native | house | ...
-  format      text not null default 'display', -- display | pop | native
-  script_code text,                 -- raw embed script/markup
+  format      text not null default 'display', -- display (banner/iframe) | pop (popunder/social-bar/multitag) | native
+  script_code text,                 -- raw embed script/markup from the network
   image_url   text,                 -- for native/house ads
   target_url  text,                 -- for native/house ads (click-through)
   headline    text,                 -- native/house copy
+  width       int,                  -- banner width  (e.g. 300, 728, 320)
+  height      int,                  -- banner height (e.g. 250, 90, 50)
   priority    int  not null default 100,
   weight      int  not null default 1,
   active      boolean not null default true,

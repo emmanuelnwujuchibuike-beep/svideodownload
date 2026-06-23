@@ -68,22 +68,74 @@ Checkout redirects to Paystack's hosted page; on success the webhook activates
 the plan. "Manage billing" opens Paystack's subscription manage link
 (update card / cancel). Test with `sk_test_…` keys first.
 
-## 4. Seeding ads
+## 4. Ads — Adsterra & PropellerAds
+
+You don't touch code: paste each network's ad tag into a row in the `ads` table
+and it renders. Two things decide how it's rendered: **format** and **zone**.
+
+**Formats**
+| format | use for | how it renders |
+|---|---|---|
+| `display` | banners (300×250, 728×90, 320×50, 160×600) | isolated `<iframe>` — works even with `document.write` codes. Set `width`/`height`. |
+| `pop` | Pop-under, Social Bar, OnClick, Multitag, In-Page Push, Interstitial | script injected into the page (needs top-window). Put these in zone `global`. |
+| `native` | your own house promo (image + link) | declarative card; clicks tracked. |
+
+**Zones**
+`global` (page-level pop/social-bar — loads on every page), `homepage_top`,
+`download_result_page`, `sidebar`, `mobile_bottom_banner`, `exit_intent_popup`.
+The result page already renders an ad via the decision engine; drop
+`<AdSlot zone="…" />` anywhere to add more.
+
+### Adsterra (adsterra.com)
+1. Sign up → **Websites → Add website** (`svideodownload.com`) → wait for approval.
+2. **Add new ad unit**, copy the code, and insert:
 
 ```sql
--- A network script ad (Adsterra / PropellerAds) on the result page:
-insert into public.ads (zone, network, format, script_code, priority, active)
-values ('download_result_page', 'adsterra', 'display',
-        '<script ...your embed...></script>', 10, true);
+-- Social Bar (high RPM, page-level) → zone 'global', format 'pop'
+insert into public.ads (zone, network, format, script_code, priority)
+values ('global', 'adsterra', 'pop',
+        '<script src="//pl########.profitabledisplaynetwork.com/##/##/##/######.js"></script>', 10);
 
--- A house/native ad (declarative card):
-insert into public.ads (zone, network, format, image_url, target_url, headline, active)
-values ('sidebar', 'house', 'native',
-        'https://.../banner.jpg', 'https://partner.example/offer', 'Try Partner Pro', true);
+-- Pop-under (page-level) → zone 'global', format 'pop'
+insert into public.ads (zone, network, format, script_code, priority)
+values ('global', 'adsterra', 'pop',
+        '<script type="text/javascript" src="//pl########.profitabledisplaynetwork.com/##.js"></script>', 20);
+
+-- 300x250 Banner on the result page → format 'display' with width/height
+insert into public.ads (zone, network, format, script_code, width, height, priority)
+values ('download_result_page', 'adsterra', 'display',
+        $$<script type="text/javascript">atOptions={'key':'YOURKEY','format':'iframe','height':250,'width':300,'params':{}};</script>
+          <script src="//www.highperformanceformat.com/YOURKEY/invoke.js"></script>$$,
+        300, 250, 30);
 ```
 
-Zones: `homepage_top`, `download_result_page`, `sidebar`, `exit_intent_popup`,
-`mobile_bottom_banner`. Drop `<AdSlot zone="..." />` anywhere to render one.
+### PropellerAds (propellerads.com)
+1. Sign up → **Sites → Add site** → verify.
+2. Create ad units, copy the tag, insert:
+
+```sql
+-- OnClick / Pop-under (page-level) → zone 'global', format 'pop'
+insert into public.ads (zone, network, format, script_code, priority)
+values ('global', 'propellerads', 'pop',
+        '<script src="https://upgulpinon.com/1?z=######"></script>', 15);
+
+-- Multitag (auto-optimised, page-level) → zone 'global', format 'pop'
+insert into public.ads (zone, network, format, script_code, priority)
+values ('global', 'propellerads', 'pop',
+        '<script src="//thubanoa.com/1?z=######"></script>', 25);
+
+-- In-Page Push (page-level) → zone 'global', format 'pop'
+insert into public.ads (zone, network, format, script_code, priority)
+values ('global', 'propellerads', 'pop',
+        '<script src="//xyz.propellerads.tag.js"></script>', 35);
+```
+
+Notes:
+- Use `$$ … $$` quoting in SQL for codes that contain single quotes.
+- Premium (Pro/Business) users never see ads — `/api/ads` returns nothing for them.
+- Don't stack too many `pop` units in `global` (one pop-under + one social bar is
+  plenty); networks frequency-cap, and too many hurts UX and approval.
+- After inserting, ads appear within ~60s (zone cache). Set `active=false` to pause.
 
 ## 5. Seeding affiliate offers
 

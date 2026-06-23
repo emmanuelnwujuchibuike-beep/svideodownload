@@ -2,12 +2,26 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { cn } from "@/lib/utils";
 import type { AdSlotData, AdZone } from "@/lib/monetization/types";
 
+import { injectAdMarkup } from "./inject";
+
+function beacon(kind: "impression" | "click", zone: string, adId: string) {
+  navigator.sendBeacon?.(
+    "/api/track",
+    new Blob([JSON.stringify({ kind, zone, adId })], { type: "application/json" }),
+  );
+}
+
 /**
- * Async, non-blocking ad slot. Fetches its config for the zone after mount
- * (premium users get `null` → renders nothing), injects the network script or
- * native markup, then beacons an impression. Never blocks first paint.
+ * Async, non-blocking ad slot. Premium users get nothing. Rendering depends on
+ * the ad's format:
+ *  - "native"  → declarative house card (we track the click)
+ *  - "display" → network banner rendered inside an isolated <iframe srcdoc> so
+ *                even `document.write` codes (classic Adsterra/PropellerAds
+ *                banners) work without wiping the page
+ *  - "pop"     → self-injecting script executed directly in the page
  */
 export function AdSlot({ zone, className }: { zone: AdZone; className?: string }) {
   const [ad, setAd] = useState<AdSlotData | null>(null);
@@ -18,58 +32,43 @@ export function AdSlot({ zone, className }: { zone: AdZone; className?: string }
     let alive = true;
     fetch(`/api/ads?zone=${zone}`)
       .then((r) => (r.ok ? r.json() : { ad: null }))
-      .then((d) => {
-        if (alive) setAd(d.ad ?? null);
-      })
+      .then((d) => alive && setAd(d.ad ?? null))
       .catch(() => {});
     return () => {
       alive = false;
     };
   }, [zone]);
 
-  // Inject network <script> embeds (native/house ads render declaratively below).
+  // Self-injecting (pop) scripts run directly in the page.
   useEffect(() => {
-    if (!ad || !ad.scriptCode || !hostRef.current) return;
+    if (!ad || ad.format !== "pop" || !ad.scriptCode || !hostRef.current) return;
     const host = hostRef.current;
-    const range = document.createRange();
-    range.selectNode(host);
-    host.appendChild(range.createContextualFragment(ad.scriptCode));
+    injectAdMarkup(host, ad.scriptCode);
     return () => {
       host.innerHTML = "";
     };
   }, [ad]);
 
-  // Beacon a single impression once we have a fill.
   useEffect(() => {
     if (!ad || tracked.current) return;
     tracked.current = true;
-    navigator.sendBeacon?.(
-      "/api/track",
-      new Blob([JSON.stringify({ kind: "impression", zone, adId: ad.id })], {
-        type: "application/json",
-      }),
-    );
+    beacon("impression", zone, ad.id);
   }, [ad, zone]);
 
   if (!ad) return null;
 
-  const beaconClick = () =>
-    navigator.sendBeacon?.(
-      "/api/track",
-      new Blob([JSON.stringify({ kind: "click", zone, adId: ad.id })], {
-        type: "application/json",
-      }),
-    );
-
-  // Native / house ad — declarative card.
+  // Native / house ad.
   if (ad.format === "native" && ad.targetUrl) {
     return (
       <a
         href={ad.targetUrl}
         target="_blank"
         rel="nofollow sponsored noopener"
-        onClick={beaconClick}
-        className={`block overflow-hidden rounded-2xl border border-border bg-card transition hover:border-foreground/20 ${className ?? ""}`}
+        onClick={() => beacon("click", zone, ad.id)}
+        className={cn(
+          "block overflow-hidden rounded-2xl border border-border bg-card transition hover:border-foreground/20",
+          className,
+        )}
       >
         {ad.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -85,6 +84,28 @@ export function AdSlot({ zone, className }: { zone: AdZone; className?: string }
     );
   }
 
-  // Script-embed ad (Adsterra / PropellerAds / …).
-  return <div ref={hostRef} className={className} aria-hidden />;
+  // Display banner inside an isolated iframe (handles document.write embeds).
+  if (ad.format === "display" && ad.scriptCode) {
+    const w = ad.width ?? 300;
+    const h = ad.height ?? 250;
+    const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden}</style></head><body>${ad.scriptCode}</body></html>`;
+    return (
+      <div className={cn("flex justify-center", className)}>
+        <iframe
+          title="Advertisement"
+          srcDoc={srcDoc}
+          width={w}
+          height={h}
+          loading="lazy"
+          // allow-same-origin is required so the network's protocol-relative
+          // (//…) script URLs resolve; allow-popups lets the ad open on click.
+          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+          style={{ border: 0, display: "block", maxWidth: "100%" }}
+        />
+      </div>
+    );
+  }
+
+  // pop: invisible host the script injected itself into.
+  return <div ref={hostRef} className={className} aria-hidden style={{ display: "contents" }} />;
 }

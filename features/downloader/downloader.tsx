@@ -9,7 +9,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
@@ -33,9 +33,21 @@ export function Downloader() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [phIndex, setPhIndex] = useState(0);
   const { status, metadata, error, fetchMetadata, download, reset } = useDownloader();
+  const previewRef = useRef<HTMLDivElement | null>(null);
 
   const isBusy = status === "fetching";
   const detected = url ? detectPlatform(url) : null;
+
+  // On phones, bring the result card into view once a fetch resolves.
+  useEffect(() => {
+    if (metadata && typeof window !== "undefined" && window.innerWidth < 768) {
+      const t = setTimeout(
+        () => previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        90,
+      );
+      return () => clearTimeout(t);
+    }
+  }, [metadata]);
 
   // Rotate the placeholder platform every couple of seconds (visible only while
   // the field is empty).
@@ -154,10 +166,12 @@ export function Downloader() {
       ) : null}
 
       {metadata ? (
-        <>
+        <div ref={previewRef} className="scroll-mt-24">
           <PreviewCard
             metadata={metadata}
-            downloading={status === "downloading"}
+            phase={
+              status === "downloading" ? "working" : status === "started" ? "done" : "idle"
+            }
             onDownload={download}
           />
           <div className="mt-5 text-center">
@@ -172,7 +186,7 @@ export function Downloader() {
               <Plus className="h-4 w-4" /> Download another video
             </button>
           </div>
-        </>
+        </div>
       ) : null}
     </div>
   );

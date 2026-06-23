@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BadgeCheck,
+  CheckCircle2,
   Download,
   Eye,
   Heart,
@@ -19,13 +20,15 @@ import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes, formatCompactNumber, formatDuration } from "@/lib/utils";
 import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
+type DownloadPhase = "idle" | "working" | "done";
+
 interface PreviewCardProps {
   metadata: VideoMetadata;
-  downloading: boolean;
+  phase: DownloadPhase;
   onDownload: (formatId: string, kind: MediaKind) => void;
 }
 
-export function PreviewCard({ metadata, downloading, onDownload }: PreviewCardProps) {
+export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const videoFormats = useMemo(
     () => metadata.formats.filter((f) => f.kind === "video"),
     [metadata.formats],
@@ -259,15 +262,24 @@ export function PreviewCard({ metadata, downloading, onDownload }: PreviewCardPr
 
         <button
           type="button"
-          disabled={downloading}
+          disabled={phase !== "idle"}
           onClick={() => onDownload(activeId, tab)}
-          className="group relative mt-5 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-primary px-4 py-4 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/40 active:scale-[0.99] disabled:opacity-70 disabled:active:scale-100"
+          className={cn(
+            "group relative mt-5 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-4 text-base font-semibold shadow-lg transition-all active:scale-[0.99] disabled:active:scale-100",
+            phase === "done"
+              ? "bg-green-600 text-white shadow-green-600/25"
+              : "bg-primary text-primary-foreground shadow-primary/25 hover:shadow-xl hover:shadow-primary/40 disabled:opacity-70",
+          )}
         >
           {/* shimmer sweep */}
           <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-          {downloading ? (
+          {phase === "working" ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" /> Preparing your file…
+            </>
+          ) : phase === "done" ? (
+            <>
+              <CheckCircle2 className="h-5 w-5" /> Download started — check your files
             </>
           ) : (
             <>
@@ -285,7 +297,9 @@ export function PreviewCard({ metadata, downloading, onDownload }: PreviewCardPr
         </button>
 
         <p className="mt-3 text-center text-xs text-muted-foreground">
-          Fast, private & free — no app, no sign-up.
+          {phase === "done"
+            ? "Saving to your device — check your browser downloads or Files app."
+            : "Fast, private & free — no app, no sign-up."}
         </p>
       </div>
     </motion.div>

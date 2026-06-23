@@ -6,7 +6,7 @@ import { addDownload } from "@/features/history/store";
 import { downloadToDisk } from "@/lib/client-download";
 import type { ApiError, MediaKind, VideoMetadata } from "@/types";
 
-type Status = "idle" | "fetching" | "ready" | "downloading" | "error";
+type Status = "idle" | "fetching" | "ready" | "downloading" | "started" | "error";
 
 interface State {
   status: Status;
@@ -77,9 +77,10 @@ export function useDownloader() {
         qualityLabel: fmt?.label ?? (kind === "audio" ? "Audio" : "Video"),
       });
 
-      // Briefly show progress, then return to ready (the browser shows real
-      // download progress in its own UI).
-      setTimeout(() => setState((s) => ({ ...s, status: "ready" })), 1200);
+      // Briefly show "preparing", then a "download started" confirmation (the
+      // browser's own UI shows the real byte progress), then settle to ready.
+      setTimeout(() => setState((s) => ({ ...s, status: "started" })), 700);
+      setTimeout(() => setState((s) => ({ ...s, status: "ready" })), 3200);
     },
     [state.metadata],
   );

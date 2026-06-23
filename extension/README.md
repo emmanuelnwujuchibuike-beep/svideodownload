@@ -28,9 +28,8 @@ popup opens → reads active tab URL → GET /api/me (plan + offer)
 3. Click **Load unpacked** and select this `extension/` folder.
 4. Pin the icon, open a TikTok/Instagram/YouTube page, click it → **Fetch this media**.
 
-> Add icons (optional): drop `icon16.png`, `icon48.png`, `icon128.png` into
-> `extension/icons/` and add an `"icons"` block + `"action.default_icon"` to
-> `manifest.json`. Chrome uses a default icon if omitted.
+Icons (16/48/128) are included in `icons/`. To regenerate them after a brand
+tweak: `node extension/icons/generate-icons.mjs`.
 
 ## Configuration
 

@@ -189,11 +189,15 @@ export async function apifyExtract(url: string): Promise<VideoMetadata | null> {
     const username = m?.[1];
     const code = m?.[2];
     if (!username || !code) return null;
-    const items = (await runActor(APIFY_THREADS_ACTOR, {
-      mode: "user",
-      usernames: [username],
-      max_posts: THREADS_MAX_POSTS,
-    })) as ThreadsItem[] | null;
+    const runThreads = () =>
+      runActor(APIFY_THREADS_ACTOR!, {
+        mode: "user",
+        usernames: [username],
+        max_posts: THREADS_MAX_POSTS,
+      }) as Promise<ThreadsItem[] | null>;
+    // One retry: the actor occasionally returns null on a transient hiccup,
+    // which otherwise surfaces as a misleading "private link" error.
+    const items = (await runThreads()) ?? (await runThreads());
     if (!items) return null;
     const post = matchThreadsPost(items, code);
     if (!post || post.has_media === false) return null;

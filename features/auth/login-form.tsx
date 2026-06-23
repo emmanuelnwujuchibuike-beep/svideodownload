@@ -8,9 +8,15 @@ import { createClient } from "@/lib/supabase/client";
 type Status = "idle" | "sending" | "sent" | "error";
 type Mode = "magic" | "password";
 
-export function LoginForm({ next = "/account" }: { next?: string }) {
-  const [mode, setMode] = useState<Mode>("magic");
-  const [isSignUp, setIsSignUp] = useState(false);
+export function LoginForm({
+  next = "/account",
+  initialSignUp = false,
+}: {
+  next?: string;
+  initialSignUp?: boolean;
+}) {
+  const [mode, setMode] = useState<Mode>(initialSignUp ? "password" : "magic");
+  const [isSignUp, setIsSignUp] = useState(initialSignUp);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

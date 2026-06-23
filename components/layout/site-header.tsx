@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, LogOut, Menu, User as UserIcon, X } from "lucide-react";
+import { Crown, Download, LogOut, Menu, User as UserIcon, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -46,6 +46,12 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
+          <Link
+            href="/pricing"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-[0.98]"
+          >
+            <Crown className="h-4 w-4" /> Go Pro
+          </Link>
           <ThemeToggle />
           <UserMenu />
         </div>
@@ -66,6 +72,13 @@ export function SiteHeader() {
       {open && (
         <div className="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-border/40 bg-background/95 backdrop-blur-xl md:hidden">
           <nav className="container flex flex-col gap-1 py-4">
+            <Link
+              href="/pricing"
+              onClick={() => setOpen(false)}
+              className="mb-1 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-base font-semibold text-white shadow"
+            >
+              <Crown className="h-5 w-5" /> Go Pro — remove ads
+            </Link>
             <Link
               href="/blog"
               onClick={() => setOpen(false)}

@@ -3,7 +3,14 @@
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
-/** Starts Stripe Checkout for a plan; routes to login if needed. */
+import { useUser } from "@/features/auth/use-user";
+
+/**
+ * Starts a subscription upgrade. Anyone can click it (signed in or not):
+ * - not signed in → straight to sign-up (with a return to /pricing), no waiting
+ *   on a billing call first;
+ * - signed in → Paystack checkout.
+ */
 export function UpgradeButton({
   plan,
   className,
@@ -13,10 +20,17 @@ export function UpgradeButton({
   className?: string;
   children: React.ReactNode;
 }) {
+  const { user, enabled } = useUser();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const go = async () => {
+    // Anonymous → sign up immediately, then come back to pricing.
+    if (enabled && !user) {
+      window.location.href = `/login?signup=1&next=${encodeURIComponent("/pricing")}`;
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -27,7 +41,7 @@ export function UpgradeButton({
       });
       const json = await res.json();
       if (res.status === 401 && json.login) {
-        window.location.href = "/login?next=/pricing";
+        window.location.href = `/login?signup=1&next=${encodeURIComponent("/pricing")}`;
         return;
       }
       if (json.url) {

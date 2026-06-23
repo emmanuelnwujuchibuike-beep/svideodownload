@@ -26,10 +26,11 @@ const ERROR_MESSAGES: Record<string, string> = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; error?: string }>;
+  searchParams: Promise<{ next?: string; error?: string; signup?: string }>;
 }) {
-  const { next, error } = await searchParams;
+  const { next, error, signup } = await searchParams;
   const errorMessage = error ? (ERROR_MESSAGES[error] ?? ERROR_MESSAGES.auth) : null;
+  const isSignUp = signup === "1";
 
   // If already signed in, skip the login screen.
   if (hasSupabase) {
@@ -51,10 +52,12 @@ export default async function LoginPage({
 
       <div className="w-full max-w-sm">
         <h1 className="text-center text-2xl font-semibold tracking-tight">
-          Welcome
+          {isSignUp ? "Create your account" : "Welcome"}
         </h1>
         <p className="mb-6 mt-1 text-center text-sm text-muted-foreground">
-          Sign in to sync your downloads and favorites across devices.
+          {isSignUp
+            ? "Sign up in seconds — then pick your plan."
+            : "Sign in to sync your downloads and favorites across devices."}
         </p>
 
         {errorMessage ? (
@@ -66,7 +69,7 @@ export default async function LoginPage({
           </p>
         ) : null}
 
-        <LoginForm next={next} />
+        <LoginForm next={next} initialSignUp={isSignUp} />
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
           By continuing you agree to our{" "}

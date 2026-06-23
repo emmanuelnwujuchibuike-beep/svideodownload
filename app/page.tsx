@@ -8,6 +8,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { HistoryPanel } from "@/features/history/history-panel";
+import { AdSlot } from "@/features/monetization/ad-slot";
 
 export default function HomePage() {
   return (
@@ -15,6 +16,9 @@ export default function HomePage() {
       <SiteHeader />
       <main>
         <Hero />
+        <div className="container max-w-5xl py-4">
+          <AdSlot zone="homepage_top" />
+        </div>
         <HistoryPanel />
         <FlagshipPlatforms />
         <TikTokFlagship />

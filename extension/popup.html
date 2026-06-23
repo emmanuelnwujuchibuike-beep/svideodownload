@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>SVideoDownload</title>
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="logo">S</span>
+        <strong>SVideoDownload</strong>
+      </div>
+      <span id="plan" class="badge">…</span>
+    </header>
+
+    <main>
+      <p id="status" class="status">Checking this page…</p>
+
+      <button id="fetchBtn" class="btn primary hidden">Fetch this media</button>
+
+      <div id="preview" class="preview hidden">
+        <img id="thumb" alt="" />
+        <p id="title" class="title"></p>
+        <div id="formats" class="formats"></div>
+      </div>
+
+      <p id="error" class="error hidden"></p>
+
+      <a id="offer" class="offer hidden" target="_blank" rel="noopener nofollow sponsored"></a>
+    </main>
+
+    <footer class="foot">
+      <a href="https://svideodownload.com" target="_blank" rel="noopener">Open site</a>
+      <a id="settings" href="#">Settings</a>
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

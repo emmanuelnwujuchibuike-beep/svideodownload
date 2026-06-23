@@ -1,0 +1,83 @@
+* { box-sizing: border-box; }
+body {
+  width: 340px;
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  background: #0b0b12;
+  color: #f3f4f6;
+}
+.hidden { display: none !important; }
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #20202b;
+}
+.brand { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; height: 24px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #2563eb, #22d3ee);
+  font-weight: 800;
+}
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #1b2436;
+  color: #93c5fd;
+}
+.badge.pro { background: #3b2f12; color: #fbbf24; }
+
+main { padding: 14px; }
+.status { margin: 0 0 12px; font-size: 13px; color: #9ca3af; }
+
+.btn {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn.primary { background: #2563eb; color: #fff; }
+.btn.primary:disabled { opacity: .6; cursor: default; }
+.btn.ghost { background: #161622; color: #e5e7eb; border: 1px solid #262633; }
+
+.preview { margin-top: 12px; }
+.preview img { width: 100%; border-radius: 12px; display: block; background: #000; }
+.title { margin: 10px 0; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.formats { display: flex; flex-direction: column; gap: 8px; }
+
+.error { margin-top: 10px; font-size: 13px; color: #f87171; }
+
+.offer {
+  display: block;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #262633;
+  border-radius: 12px;
+  background: #12121c;
+  color: #e5e7eb;
+  text-decoration: none;
+  font-size: 13px;
+}
+.offer b { color: #fff; }
+
+.foot {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-top: 1px solid #20202b;
+  font-size: 12px;
+}
+.foot a { color: #93c5fd; text-decoration: none; }
+.spin { animation: s 1s linear infinite; }
+@keyframes s { to { transform: rotate(360deg); } }

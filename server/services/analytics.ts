@@ -1,3 +1,4 @@
+import { alertEmailHtml, sendAdminAlertOnce } from "@/lib/notify";
 import { detectPlatform } from "@/lib/platforms";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { MediaKind } from "@/types";
@@ -12,6 +13,9 @@ import type { MediaKind } from "@/types";
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
   !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Email the admin every N downloads (configurable). Default: every 100.
+const MILESTONE_EVERY = Math.max(1, Number(process.env.ALERT_DOWNLOAD_EVERY) || 100);
 
 export function recordDownloadEvent(
   url: string,
@@ -31,8 +35,39 @@ export function recordDownloadEvent(
         format: kind,
         status: "completed",
       });
+      await checkDownloadMilestone(supabase);
     } catch {
       /* analytics must never affect the download */
     }
   })();
+}
+
+/** Emails the admin when total downloads cross a new milestone (every N). */
+async function checkDownloadMilestone(
+  supabase: ReturnType<typeof createAdminClient>,
+): Promise<void> {
+  const { count } = await supabase
+    .from("downloads")
+    .select("*", { count: "exact", head: true });
+  if (!count) return;
+
+  // Highest milestone reached so far — robust even if concurrent inserts skip
+  // the exact multiple. Dedupe by milestone value means one email per milestone.
+  const milestone = Math.floor(count / MILESTONE_EVERY) * MILESTONE_EVERY;
+  if (milestone < MILESTONE_EVERY) return;
+
+  await sendAdminAlertOnce(
+    `downloads-${milestone}`,
+    "download_milestone",
+    `🎉 ${milestone.toLocaleString()} downloads on SVideoDownload`,
+    alertEmailHtml({
+      heading: `${milestone.toLocaleString()} downloads & counting`,
+      intro: "Your downloader just crossed a new milestone. Nice work! 🚀",
+      rows: [
+        { label: "Total downloads", value: count.toLocaleString() },
+        { label: "Milestone", value: milestone.toLocaleString() },
+      ],
+      footnote: `You'll get the next nudge at ${(milestone + MILESTONE_EVERY).toLocaleString()} downloads.`,
+    }),
+  );
 }

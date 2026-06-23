@@ -13,6 +13,7 @@ export function LoginForm({ next = "/account" }: { next?: string }) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -57,6 +58,11 @@ export function LoginForm({ next = "/account" }: { next?: string }) {
       const supabase = createClient();
 
       if (isSignUp) {
+        if (password !== confirmPassword) {
+          setError("Passwords don't match. Please re-enter them.");
+          setStatus("error");
+          return;
+        }
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
@@ -93,14 +99,6 @@ export function LoginForm({ next = "/account" }: { next?: string }) {
     }
   };
 
-  const signInWithGoogle = async () => {
-    const supabase = createClient();
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: callbackUrl() },
-    });
-  };
-
   if (status === "sent") {
     return (
       <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-card">
@@ -126,19 +124,6 @@ export function LoginForm({ next = "/account" }: { next?: string }) {
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6 shadow-card sm:p-7">
-      <button
-        type="button"
-        onClick={signInWithGoogle}
-        className="inline-flex w-full items-center justify-center gap-2.5 rounded-xl border border-border bg-background px-4 py-3 text-sm font-semibold transition hover:bg-secondary active:scale-[0.99]"
-      >
-        <GoogleIcon /> Continue with Google
-      </button>
-
-      <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="h-px flex-1 bg-border" /> or{" "}
-        <span className="h-px flex-1 bg-border" />
-      </div>
-
       {/* Method toggle */}
       <div className="mb-4 grid grid-cols-2 gap-1 rounded-xl bg-secondary p-1 text-sm font-medium">
         <button
@@ -195,6 +180,27 @@ export function LoginForm({ next = "/account" }: { next?: string }) {
               className="h-12 w-full rounded-xl bg-background px-4 pl-10 text-sm outline-none ring-1 ring-inset ring-border transition focus:ring-2 focus:ring-primary"
             />
           </div>
+          {isSignUp ? (
+            <div className="relative">
+              <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm password"
+                autoComplete="new-password"
+                aria-label="Confirm password"
+                aria-invalid={confirmPassword.length > 0 && confirmPassword !== password}
+                className={`h-12 w-full rounded-xl bg-background px-4 pl-10 text-sm outline-none ring-1 ring-inset transition focus:ring-2 ${
+                  confirmPassword.length > 0 && confirmPassword !== password
+                    ? "ring-red-400/60 focus:ring-red-400"
+                    : "ring-border focus:ring-primary"
+                }`}
+              />
+            </div>
+          ) : null}
           <SubmitButton
             busy={busy}
             label={isSignUp ? "Create account" : "Sign in"}
@@ -203,6 +209,7 @@ export function LoginForm({ next = "/account" }: { next?: string }) {
             type="button"
             onClick={() => {
               setIsSignUp((v) => !v);
+              setConfirmPassword("");
               setError(null);
               setNotice(null);
             }}
@@ -272,28 +279,5 @@ function SubmitButton({ busy, label }: { busy: boolean; label: string }) {
         label
       )}
     </button>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden>
-      <path
-        fill="#4285F4"
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1Z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84Z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.3 9.14 5.38 12 5.38Z"
-      />
-    </svg>
   );
 }

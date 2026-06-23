@@ -1,17 +1,29 @@
 import {
   Activity,
   AlertTriangle,
+  Bell,
+  BellOff,
+  CalendarDays,
   Download,
   Gauge,
-  Globe,
+  Image as ImageIcon,
+  Music,
   Server,
+  Sparkles,
+  Video,
 } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { isAdmin } from "@/lib/admin";
-import { fetchDownloadStats, fetchProxyUsage } from "@/lib/admin-stats";
+import {
+  fetchDownloadStats,
+  fetchProxyUsage,
+  fetchRecentAlerts,
+  maybeAlertProxyBudget,
+} from "@/lib/admin-stats";
+import { alertsEnabled } from "@/lib/notify";
 import { PLATFORMS } from "@/lib/platforms";
 import { createClient } from "@/lib/supabase/server";
 import { cn, formatCompactNumber } from "@/lib/utils";
@@ -23,6 +35,8 @@ export const metadata: Metadata = {
   title: "Admin",
   robots: { index: false, follow: false },
 };
+
+const MILESTONE_EVERY = Math.max(1, Number(process.env.ALERT_DOWNLOAD_EVERY) || 100);
 
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -44,26 +58,47 @@ export default async function AdminPage() {
     .single();
   if (!isAdmin(profile?.role, user.email)) redirect("/");
 
-  const [proxy, downloads] = await Promise.all([
+  const [proxy, downloads, alerts] = await Promise.all([
     fetchProxyUsage(),
     fetchDownloadStats(),
+    fetchRecentAlerts(),
   ]);
+  // Fire the proxy-budget alert if we've crossed 90% (deduped to once/day).
+  await maybeAlertProxyBudget(proxy);
 
-  const platformName = (id: string) =>
-    PLATFORMS[id as PlatformId]?.name ?? id;
+  const emailOn = alertsEnabled();
+  const total = downloads?.total ?? 0;
+  const nextMilestone = (Math.floor(total / MILESTONE_EVERY) + 1) * MILESTONE_EVERY;
+
+  const platformName = (id: string) => PLATFORMS[id as PlatformId]?.name ?? id;
   const maxPlatform = downloads?.platforms[0]?.total_downloads ?? 1;
+  const kinds = downloads?.byKind ?? { video: 0, audio: 0, image: 0 };
+  const kindTotal = Math.max(1, kinds.video + kinds.audio + kinds.image);
 
   return (
     <>
       <SiteHeader />
       <main className="container max-w-5xl pb-24 pt-28 sm:pt-36">
-        <header className="mb-8">
-          <h1 className="text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">
-            Admin dashboard
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            Usage, proxy spend, and platform health at a glance.
-          </p>
+        <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">
+              Admin dashboard
+            </h1>
+            <p className="mt-2 text-muted-foreground">
+              Usage, proxy spend, and platform health at a glance.
+            </p>
+          </div>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium",
+              emailOn
+                ? "bg-green-500/12 text-green-500"
+                : "bg-amber-500/12 text-amber-500",
+            )}
+          >
+            {emailOn ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
+            {emailOn ? "Email alerts on" : "Email alerts off"}
+          </span>
         </header>
 
         {/* Stat cards */}
@@ -72,27 +107,23 @@ export default async function AdminPage() {
             icon={Download}
             label="Total downloads"
             value={downloads ? formatCompactNumber(downloads.total) : "—"}
+            accent
           />
           <StatCard
-            icon={Gauge}
-            label="Proxy used (mo)"
-            value={proxy ? `${proxy.gbThisMonth} GB` : "—"}
-            sub={proxy ? `of ${proxy.limitGb} GB` : undefined}
+            icon={Sparkles}
+            label="Today"
+            value={downloads ? formatCompactNumber(downloads.today) : "—"}
           />
           <StatCard
-            icon={Globe}
-            label="Proxy / direct"
-            value={
-              proxy
-                ? `${formatCompactNumber(proxy.requests.proxy)} / ${formatCompactNumber(proxy.requests.direct)}`
-                : "—"
-            }
+            icon={CalendarDays}
+            label="Last 7 days"
+            value={downloads ? formatCompactNumber(downloads.last7) : "—"}
           />
           <StatCard
-            icon={Server}
-            label="Proxy status"
-            value={proxy?.configured ? "Active" : "Off"}
-            sub={proxy?.fallbackOnly ? "fallback-only" : undefined}
+            icon={Bell}
+            label="Next email alert"
+            value={downloads ? formatCompactNumber(nextMilestone) : "—"}
+            sub={`every ${MILESTONE_EVERY}`}
           />
         </div>
 
@@ -104,7 +135,14 @@ export default async function AdminPage() {
                 <Gauge className="h-5 w-5 text-primary" /> Residential proxy
               </h2>
               {proxy && proxy.alertLevel >= 75 ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-medium text-amber-500">
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                    proxy.alertLevel >= 90
+                      ? "bg-red-500/15 text-red-500"
+                      : "bg-amber-500/15 text-amber-500",
+                  )}
+                >
                   <AlertTriangle className="h-3 w-3" /> {proxy.alertLevel}% of budget
                 </span>
               ) : null}
@@ -141,7 +179,9 @@ export default async function AdminPage() {
                   />
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {proxy.remainingGb} GB remaining · {proxy.percentOfLimit}% used
+                  {proxy.remainingGb} GB remaining · {proxy.percentOfLimit}% used ·{" "}
+                  {formatCompactNumber(proxy.requests.proxy)} proxied /{" "}
+                  {formatCompactNumber(proxy.requests.direct)} direct
                 </p>
 
                 {Object.keys(proxy.perPlatform).length > 0 ? (
@@ -211,6 +251,58 @@ export default async function AdminPage() {
           </section>
         </div>
 
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          {/* Media type breakdown */}
+          <section className="rounded-3xl border border-border bg-card p-6 shadow-card">
+            <h2 className="mb-5 flex items-center gap-2 font-semibold">
+              <Server className="h-5 w-5 text-primary" /> By media type
+            </h2>
+            <div className="space-y-4">
+              <KindBar icon={Video} label="Video" value={kinds.video} total={kindTotal} className="from-violet-600 to-fuchsia-500" />
+              <KindBar icon={Music} label="Audio" value={kinds.audio} total={kindTotal} className="from-emerald-600 to-teal-400" />
+              <KindBar icon={ImageIcon} label="Photos" value={kinds.image} total={kindTotal} className="from-amber-500 to-orange-400" />
+            </div>
+          </section>
+
+          {/* Alerts log */}
+          <section className="rounded-3xl border border-border bg-card p-6 shadow-card">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 font-semibold">
+                <Bell className="h-5 w-5 text-primary" /> Alerts
+              </h2>
+              <span className="text-xs text-muted-foreground">
+                {emailOn ? "to your admin email" : "not configured"}
+              </span>
+            </div>
+            {!emailOn ? (
+              <p className="rounded-xl bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-400">
+                Set <code className="font-mono">RESEND_API_KEY</code> and{" "}
+                <code className="font-mono">ALERT_EMAIL_TO</code> to receive emails
+                every {MILESTONE_EVERY} downloads and when proxy spend runs high.
+              </p>
+            ) : alerts.length > 0 ? (
+              <ul className="divide-y divide-border/60">
+                {alerts.map((a, i) => (
+                  <li key={i} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <AlertDot kind={a.kind} />
+                      <span className="truncate">{a.subject ?? a.kind}</span>
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {new Date(a.created_at).toLocaleDateString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No alerts sent yet. Your first email arrives at{" "}
+                {formatCompactNumber(nextMilestone)} downloads.
+              </p>
+            )}
+          </section>
+        </div>
+
         {/* Recent downloads */}
         <section className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card">
           <h2 className="mb-4 font-semibold">Recent downloads</h2>
@@ -240,15 +332,22 @@ function StatCard({
   label,
   value,
   sub,
+  accent,
 }: {
   icon: typeof Download;
   label: string;
   value: string;
   sub?: string;
+  accent?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-      <Icon className="h-5 w-5 text-muted-foreground" />
+    <div
+      className={cn(
+        "rounded-2xl border bg-card p-5 shadow-soft",
+        accent ? "border-primary/30 ring-1 ring-primary/10" : "border-border",
+      )}
+    >
+      <Icon className={cn("h-5 w-5", accent ? "text-primary" : "text-muted-foreground")} />
       <p className="mt-3 text-2xl font-semibold tracking-tight">{value}</p>
       <p className="text-xs text-muted-foreground">
         {label}
@@ -256,4 +355,48 @@ function StatCard({
       </p>
     </div>
   );
+}
+
+function KindBar({
+  icon: Icon,
+  label,
+  value,
+  total,
+  className,
+}: {
+  icon: typeof Video;
+  label: string;
+  value: number;
+  total: number;
+  className: string;
+}) {
+  const pct = Math.round((value / total) * 100);
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-sm">
+        <span className="flex items-center gap-2 font-medium">
+          <Icon className="h-4 w-4 text-muted-foreground" /> {label}
+        </span>
+        <span className="text-muted-foreground">
+          {formatCompactNumber(value)} · {pct}%
+        </span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+        <div
+          className={cn("h-full rounded-full bg-gradient-to-r", className)}
+          style={{ width: `${Math.max(2, pct)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function AlertDot({ kind }: { kind: string }) {
+  const color =
+    kind === "proxy_budget"
+      ? "bg-amber-500"
+      : kind === "download_milestone"
+        ? "bg-green-500"
+        : "bg-primary";
+  return <span className={cn("h-2 w-2 shrink-0 rounded-full", color)} />;
 }

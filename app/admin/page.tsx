@@ -4,12 +4,16 @@ import {
   Bell,
   BellOff,
   CalendarDays,
+  Code2,
+  DollarSign,
   Download,
   Gauge,
   Image as ImageIcon,
+  MousePointerClick,
   Music,
   Server,
   Sparkles,
+  Users,
   Video,
 } from "lucide-react";
 import type { Metadata } from "next";
@@ -23,6 +27,7 @@ import {
   fetchRecentAlerts,
   maybeAlertProxyBudget,
 } from "@/lib/admin-stats";
+import { fetchRevenueStats } from "@/lib/monetization/stats";
 import { alertsEnabled } from "@/lib/notify";
 import { PLATFORMS } from "@/lib/platforms";
 import { createClient } from "@/lib/supabase/server";
@@ -58,10 +63,11 @@ export default async function AdminPage() {
     .single();
   if (!isAdmin(profile?.role, user.email)) redirect("/");
 
-  const [proxy, downloads, alerts] = await Promise.all([
+  const [proxy, downloads, alerts, revenue] = await Promise.all([
     fetchProxyUsage(),
     fetchDownloadStats(),
     fetchRecentAlerts(),
+    fetchRevenueStats(),
   ]);
   // Fire the proxy-budget alert if we've crossed 90% (deduped to once/day).
   await maybeAlertProxyBudget(proxy);
@@ -126,6 +132,62 @@ export default async function AdminPage() {
             sub={`every ${MILESTONE_EVERY}`}
           />
         </div>
+
+        {/* Revenue & monetization */}
+        {revenue ? (
+          <section className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card">
+            <h2 className="mb-5 flex items-center gap-2 font-semibold">
+              <DollarSign className="h-5 w-5 text-primary" /> Revenue &amp; monetization
+            </h2>
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <MiniStat
+                icon={DollarSign}
+                label="Est. MRR"
+                value={`${revenue.currency}${formatCompactNumber(revenue.mrr)}`}
+                sub={`${revenue.subscribers.total} subscribers`}
+                accent
+              />
+              <MiniStat
+                icon={Users}
+                label="Pro / Business"
+                value={`${formatCompactNumber(revenue.subscribers.pro)} / ${formatCompactNumber(revenue.subscribers.business)}`}
+              />
+              <MiniStat
+                icon={Activity}
+                label="Ad CTR (7d)"
+                value={`${revenue.ads.ctr}%`}
+                sub={`${formatCompactNumber(revenue.ads.clicks7d)} clicks`}
+              />
+              <MiniStat
+                icon={MousePointerClick}
+                label="Affiliate (today)"
+                value={formatCompactNumber(revenue.affiliate.clicksToday)}
+                sub={`${formatCompactNumber(revenue.affiliate.clicks7d)} this week`}
+              />
+              <MiniStat
+                icon={Sparkles}
+                label="Ad impressions today"
+                value={formatCompactNumber(revenue.ads.impressionsToday)}
+              />
+              <MiniStat
+                icon={MousePointerClick}
+                label="Ad clicks today"
+                value={formatCompactNumber(revenue.ads.clicksToday)}
+              />
+              <MiniStat
+                icon={Code2}
+                label="API calls today"
+                value={formatCompactNumber(revenue.api.callsToday)}
+                sub={`${formatCompactNumber(revenue.api.calls7d)} this week`}
+              />
+              <MiniStat
+                icon={Code2}
+                label="Active API keys"
+                value={formatCompactNumber(revenue.api.activeKeys)}
+              />
+            </div>
+          </section>
+        ) : null}
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
           {/* Proxy widget */}
@@ -350,6 +412,36 @@ function StatCard({
       <Icon className={cn("h-5 w-5", accent ? "text-primary" : "text-muted-foreground")} />
       <p className="mt-3 text-2xl font-semibold tracking-tight">{value}</p>
       <p className="text-xs text-muted-foreground">
+        {label}
+        {sub ? ` · ${sub}` : ""}
+      </p>
+    </div>
+  );
+}
+
+function MiniStat({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  icon: typeof Download;
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border p-4",
+        accent ? "border-primary/30 bg-primary/[0.04]" : "border-border/70 bg-secondary/20",
+      )}
+    >
+      <Icon className={cn("h-4 w-4", accent ? "text-primary" : "text-muted-foreground")} />
+      <p className="mt-2 text-xl font-semibold tracking-tight">{value}</p>
+      <p className="text-[11px] text-muted-foreground">
         {label}
         {sub ? ` · ${sub}` : ""}
       </p>

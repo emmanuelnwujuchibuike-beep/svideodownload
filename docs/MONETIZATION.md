@@ -133,7 +133,36 @@ Public REST API with hashed keys + per-plan daily quotas.
 
 No new env vars; runs on the existing Supabase setup.
 
-## Pending (next phase)
+## 9. Admin revenue dashboard (4d)
 
-- **4d — Admin revenue dashboard** (impressions/clicks/affiliate/MRR/API usage),
-  **browser-extension hooks** (`/api/me` plan + offers sync), production hardening.
+The admin dashboard (`/admin`) now has a **Revenue & monetization** panel: estimated
+MRR, active Pro/Business subscribers, ad CTR + impressions/clicks, affiliate clicks,
+and API calls / active keys. Source: `lib/monetization/stats.ts`.
+
+Tune the MRR estimate with `MONETIZATION_CURRENCY` (default `$`),
+`MONETIZATION_MRR_PRO`, `MONETIZATION_MRR_BUSINESS` (numeric, for the calc only).
+
+## 10. Browser-extension hooks (4d)
+
+`GET /api/me` is the single sync endpoint the extension calls. It's CORS-enabled
+(via middleware) and accepts **either** an API key (`Authorization: Bearer svd_live_…`)
+**or** the session cookie; anonymous callers get the free-tier view.
+
+```js
+// extension background/popup
+const me = await fetch("https://svideodownload.com/api/me", {
+  headers: { Authorization: `Bearer ${userApiKey}` }, // optional
+}).then((r) => r.json());
+
+// → { authenticated, plan, isPremium, showAds, limits, offer }
+if (me.showAds && me.offer) renderOffer(me.offer);     // offer.url is a tracked redirect
+if (me.isPremium) hideAds();
+```
+
+For the extension to download, call `POST /api/v1/download` with the user's API key
+and open the returned `download_url`. Use `host_permissions` for the domain so
+background requests aren't CORS-blocked.
+
+**Phase 4 complete** (4a ads/affiliates, 4b Paystack billing, 4c API, 4d dashboard
++ extension). Remaining work is configuration (keys/migrations) + provisioning a
+Paystack live account.

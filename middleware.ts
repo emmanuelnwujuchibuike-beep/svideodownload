@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { isAdmin } from "@/lib/admin";
+import { CORS_HEADERS } from "@/lib/api/cors";
 
 /**
  * Refreshes the Supabase auth session on each request (so access tokens stay
@@ -9,6 +10,18 @@ import { isAdmin } from "@/lib/admin";
  * If Supabase env vars are absent (e.g. the worker), it is a no-op pass-through.
  */
 export async function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+
+  // Public API + extension endpoints: enable CORS and skip session work.
+  if (path.startsWith("/api/v1") || path === "/api/me") {
+    if (request.method === "OPTIONS") {
+      return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+    }
+    const res = NextResponse.next();
+    for (const [k, v] of Object.entries(CORS_HEADERS)) res.headers.set(k, v);
+    return res;
+  }
+
   let response = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -61,32 +61,13 @@
   }
 
   body {
-    @apply text-foreground antialiased;
-    background-color: hsl(var(--background));
-    /* Gradient orbs baked into the body background — never clipped by overflow-hidden */
-    background-image:
-      radial-gradient(ellipse 70% 50% at 50% -5%, hsl(221 83% 53% / 0.28) 0%, transparent 70%),
-      radial-gradient(ellipse 50% 42% at 100% 0%,  hsl(43  96% 52% / 0.24) 0%, transparent 70%),
-      radial-gradient(ellipse 44% 36% at 0%   80%, hsl(199 89% 48% / 0.20) 0%, transparent 70%),
-      radial-gradient(ellipse 36% 28% at 8%   44%, hsl(270 80% 62% / 0.14) 0%, transparent 70%);
-    background-repeat: no-repeat;
-    background-attachment: fixed;
-    background-size: 100% 100%;
+    @apply bg-background text-foreground antialiased;
     overflow-x: hidden;
     font-feature-settings: "cv11", "ss01";
     font-variation-settings: "opsz" 32;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-  }
-
-  /* Richer orbs in dark mode — vivid against near-black background */
-  .dark body {
-    background-image:
-      radial-gradient(ellipse 70% 50% at 50% -5%, hsl(217 100% 65% / 0.36) 0%, transparent 70%),
-      radial-gradient(ellipse 50% 42% at 100% 0%,  hsl(43  96% 56% / 0.32) 0%, transparent 70%),
-      radial-gradient(ellipse 44% 36% at 0%   80%, hsl(199 89% 55% / 0.26) 0%, transparent 70%),
-      radial-gradient(ellipse 36% 28% at 8%   44%, hsl(270 100% 65% / 0.20) 0%, transparent 70%);
   }
 
   h1,

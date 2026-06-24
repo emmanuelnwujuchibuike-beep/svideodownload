@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useUser } from "@/features/auth/use-user";
 import { UserMenu } from "@/features/auth/user-menu";
+import { useShowAds } from "@/features/monetization/use-show-ads";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
@@ -24,6 +25,8 @@ const DOWNLOADERS = getPrimaryPages();
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const { user, enabled } = useUser();
+  const { showAds, ready } = useShowAds();
+  const isPremium = ready && !showAds;
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-border/40 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
@@ -53,13 +56,15 @@ export function SiteHeader() {
 
         {/* Desktop right */}
         <div className="hidden items-center gap-3 md:flex">
-          <Link
-            href="/pricing"
-            className="group relative inline-flex items-center gap-1.5 overflow-hidden rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/25 transition-all hover:shadow-amber-500/40 hover:shadow-lg active:scale-[0.98]"
-          >
-            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-            <Crown className="h-4 w-4" /> Go Pro
-          </Link>
+          {!isPremium && (
+            <Link
+              href="/pricing"
+              className="group relative inline-flex items-center gap-1.5 overflow-hidden rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/25 transition-all hover:shadow-amber-500/40 hover:shadow-lg active:scale-[0.98]"
+            >
+              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+              <Crown className="h-4 w-4" /> Go Pro
+            </Link>
+          )}
           <ThemeToggle />
           <UserMenu />
         </div>
@@ -80,15 +85,17 @@ export function SiteHeader() {
       {open && (
         <div className="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-border/40 bg-background/97 md:hidden">
           <nav className="container flex flex-col gap-1 py-4">
-            {/* Go Pro — top CTA */}
-            <Link
-              href="/pricing"
-              onClick={() => setOpen(false)}
-              className="group relative mb-2 flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 px-4 py-3.5 text-base font-semibold text-white shadow-lg shadow-amber-500/25"
-            >
-              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-              <Crown className="h-5 w-5" /> Go Pro — remove ads
-            </Link>
+            {/* Go Pro — top CTA, hidden for paying users */}
+            {!isPremium && (
+              <Link
+                href="/pricing"
+                onClick={() => setOpen(false)}
+                className="group relative mb-2 flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 px-4 py-3.5 text-base font-semibold text-white shadow-lg shadow-amber-500/25"
+              >
+                <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+                <Crown className="h-5 w-5" /> Go Pro — remove ads
+              </Link>
+            )}
 
             <Link
               href="/blog"

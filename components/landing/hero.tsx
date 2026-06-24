@@ -12,28 +12,28 @@ export function Hero() {
         className="pointer-events-none absolute inset-0 -z-10 bg-grid-pattern bg-[size:40px_40px] opacity-[0.28] [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,black,transparent)]"
       />
 
-      {/* Primary blue glow — top center */}
+      {/* Primary blue glow — dominant, clearly visible */}
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[-10%] -z-10 h-[420px] w-[760px] -translate-x-1/2 rounded-full bg-gradient-to-b from-blue-600/28 via-sky-500/18 to-transparent blur-[90px]"
+        className="pointer-events-none absolute left-1/2 top-[-15%] -z-10 h-[500px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-b from-blue-600/40 via-sky-500/25 to-transparent blur-[80px]"
       />
 
-      {/* Gold accent orb — top right */}
+      {/* Gold accent — top right, clearly visible */}
       <div
         aria-hidden
-        className="pointer-events-none absolute right-[2%] top-[3%] -z-10 h-[260px] w-[360px] rounded-full bg-gradient-to-bl from-amber-500/18 via-orange-500/10 to-transparent blur-[75px]"
+        className="pointer-events-none absolute right-0 top-0 -z-10 h-[350px] w-[450px] rounded-full bg-gradient-to-bl from-amber-500/35 via-orange-500/20 to-transparent blur-[70px]"
       />
 
-      {/* Cyan accent orb — bottom left */}
+      {/* Cyan accent — bottom left */}
       <div
         aria-hidden
-        className="pointer-events-none absolute bottom-8 left-[3%] -z-10 h-[180px] w-[300px] rounded-full bg-gradient-to-tr from-cyan-500/14 via-sky-400/8 to-transparent blur-[65px]"
+        className="pointer-events-none absolute bottom-0 left-0 -z-10 h-[280px] w-[400px] rounded-full bg-gradient-to-tr from-cyan-500/30 via-sky-400/15 to-transparent blur-[65px]"
       />
 
-      {/* Violet accent orb — mid left */}
+      {/* Violet hint — mid left */}
       <div
         aria-hidden
-        className="pointer-events-none absolute left-[8%] top-1/2 -z-10 h-[160px] w-[240px] -translate-y-1/2 rounded-full bg-gradient-to-r from-violet-600/10 to-transparent blur-[60px]"
+        className="pointer-events-none absolute left-[5%] top-[40%] -z-10 h-[240px] w-[320px] rounded-full bg-gradient-to-r from-violet-600/20 via-purple-500/10 to-transparent blur-[60px]"
       />
 
       <div className="container flex flex-col items-center text-center">

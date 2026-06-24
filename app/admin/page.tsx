@@ -89,7 +89,10 @@ export default async function AdminPage() {
   return (
     <>
       <SiteHeader />
-      <main className="container max-w-5xl pb-28 pt-32 sm:pt-40">
+      <main className="relative overflow-hidden container max-w-5xl pb-28 pt-32 sm:pt-40">
+        {/* Ambient gradients */}
+        <div aria-hidden className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[320px] w-[600px] -translate-x-1/2 rounded-full bg-gradient-to-b from-primary/10 via-sky-500/6 to-transparent blur-[80px]" />
+        <div aria-hidden className="pointer-events-none absolute right-[4%] top-[12%] -z-10 h-[200px] w-[280px] rounded-full bg-gradient-to-bl from-amber-500/10 to-transparent blur-[65px]" />
         <header className="mb-10 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-[-0.03em] sm:text-4xl">

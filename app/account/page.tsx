@@ -64,10 +64,15 @@ export default async function AccountPage() {
     <>
       <SiteHeader />
       <main className="relative overflow-hidden pb-28 pt-32 sm:pt-44">
-        {/* Ambient glow */}
+        {/* Primary blue glow — top center */}
         <div
           aria-hidden
-          className="pointer-events-none absolute left-1/2 top-0 -z-10 hidden h-[260px] w-[500px] -translate-x-1/2 rounded-full bg-gradient-to-b from-primary/10 to-transparent blur-[70px] md:block"
+          className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[300px] w-[560px] -translate-x-1/2 rounded-full bg-gradient-to-b from-primary/12 via-sky-500/6 to-transparent blur-[80px]"
+        />
+        {/* Gold accent — top right */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute right-[5%] top-[10%] -z-10 h-[200px] w-[280px] rounded-full bg-gradient-to-bl from-amber-500/10 to-transparent blur-[65px]"
         />
 
         <div className="container max-w-2xl">

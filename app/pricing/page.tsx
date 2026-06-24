@@ -94,10 +94,20 @@ export default async function PricingPage() {
     <>
       <SiteHeader />
       <main className="relative overflow-hidden pb-28 pt-32 sm:pt-40">
-        {/* Background glow */}
+        {/* Gold glow — top center */}
         <div
           aria-hidden
-          className="pointer-events-none absolute left-1/2 top-0 -z-10 hidden h-[320px] w-[560px] -translate-x-1/2 rounded-full bg-gradient-to-b from-amber-500/12 via-primary/8 to-transparent blur-[80px] md:block"
+          className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[360px] w-[640px] -translate-x-1/2 rounded-full bg-gradient-to-b from-amber-500/16 via-orange-500/8 to-transparent blur-[90px]"
+        />
+        {/* Blue glow — top right (business tier side) */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute right-[5%] top-[8%] -z-10 h-[240px] w-[320px] rounded-full bg-gradient-to-bl from-blue-600/12 via-sky-500/8 to-transparent blur-[70px]"
+        />
+        {/* Cyan glow — bottom left */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 left-[8%] -z-10 h-[180px] w-[280px] rounded-full bg-gradient-to-tr from-cyan-500/10 to-transparent blur-[65px]"
         />
 
         <div className="container max-w-5xl">

@@ -6,22 +6,34 @@ import { PLATFORMS } from "@/lib/platforms";
 export function Hero() {
   return (
     <section className="relative overflow-hidden pb-24 pt-32 sm:pb-32 sm:pt-44">
-      {/* Dot grid — lightweight CSS background */}
+      {/* Dot grid */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 bg-grid-pattern bg-[size:40px_40px] opacity-[0.28] [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,black,transparent)]"
       />
 
-      {/* Primary glow — single orb on mobile, smaller blur */}
+      {/* Primary blue glow — top center */}
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[-8%] -z-10 h-[380px] w-[700px] -translate-x-1/2 rounded-full bg-gradient-to-b from-blue-600/25 via-sky-500/15 to-transparent blur-[80px]"
+        className="pointer-events-none absolute left-1/2 top-[-10%] -z-10 h-[420px] w-[760px] -translate-x-1/2 rounded-full bg-gradient-to-b from-blue-600/28 via-sky-500/18 to-transparent blur-[90px]"
       />
 
-      {/* Gold accent orb — desktop only */}
+      {/* Gold accent orb — top right */}
       <div
         aria-hidden
-        className="pointer-events-none absolute right-[5%] top-[5%] -z-10 hidden h-[220px] w-[320px] rounded-full bg-gradient-to-bl from-amber-500/14 to-transparent blur-[70px] md:block"
+        className="pointer-events-none absolute right-[2%] top-[3%] -z-10 h-[260px] w-[360px] rounded-full bg-gradient-to-bl from-amber-500/18 via-orange-500/10 to-transparent blur-[75px]"
+      />
+
+      {/* Cyan accent orb — bottom left */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-8 left-[3%] -z-10 h-[180px] w-[300px] rounded-full bg-gradient-to-tr from-cyan-500/14 via-sky-400/8 to-transparent blur-[65px]"
+      />
+
+      {/* Violet accent orb — mid left */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-[8%] top-1/2 -z-10 h-[160px] w-[240px] -translate-y-1/2 rounded-full bg-gradient-to-r from-violet-600/10 to-transparent blur-[60px]"
       />
 
       <div className="container flex flex-col items-center text-center">
@@ -40,7 +52,7 @@ export function Hero() {
           </span>
         </a>
 
-        {/* Main heading — capped at 4.5rem on lg so it never overflows */}
+        {/* Main heading */}
         <h1 className="max-w-4xl text-[2.6rem] font-bold leading-[1.04] tracking-[-0.04em] sm:text-[3.75rem] lg:text-[4.5rem]">
           Download from{" "}
           <span className="text-gradient">

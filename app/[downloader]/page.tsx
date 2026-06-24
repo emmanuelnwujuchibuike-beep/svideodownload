@@ -126,9 +126,20 @@ export default async function DownloaderPage({
       <main>
         {/* Hero + tool */}
         <section className="relative overflow-hidden pb-16 pt-28 sm:pt-36">
+          {/* Primary blue glow */}
           <div
             aria-hidden
-            className="pointer-events-none absolute left-1/2 top-[-12%] -z-10 hidden h-[380px] w-[680px] -translate-x-1/2 rounded-full bg-gradient-to-tr from-blue-500/25 via-sky-500/16 to-cyan-400/20 blur-[80px] md:block"
+            className="pointer-events-none absolute left-1/2 top-[-12%] -z-10 h-[400px] w-[720px] -translate-x-1/2 rounded-full bg-gradient-to-tr from-blue-500/25 via-sky-500/16 to-cyan-400/18 blur-[85px]"
+          />
+          {/* Gold accent — top right */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute right-[4%] top-[5%] -z-10 h-[220px] w-[320px] rounded-full bg-gradient-to-bl from-amber-500/14 to-transparent blur-[70px]"
+          />
+          {/* Cyan accent — bottom left */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute bottom-0 left-[5%] -z-10 h-[160px] w-[260px] rounded-full bg-gradient-to-tr from-cyan-500/12 to-transparent blur-[60px]"
           />
           <div className="container flex flex-col items-center text-center">
             <span

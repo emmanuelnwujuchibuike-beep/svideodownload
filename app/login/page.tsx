@@ -42,10 +42,20 @@ export default async function LoginPage({
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-16">
-      {/* Ambient glow */}
+      {/* Primary blue glow */}
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-0 -z-10 hidden h-[320px] w-[500px] -translate-x-1/2 rounded-full bg-gradient-to-b from-primary/15 via-sky-500/8 to-transparent blur-[70px] md:block"
+        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[360px] w-[560px] -translate-x-1/2 rounded-full bg-gradient-to-b from-primary/16 via-sky-500/8 to-transparent blur-[80px]"
+      />
+      {/* Gold accent — bottom right */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-[10%] right-[8%] -z-10 h-[200px] w-[300px] rounded-full bg-gradient-to-tl from-amber-500/12 to-transparent blur-[65px]"
+      />
+      {/* Cyan accent — bottom left */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-[15%] left-[5%] -z-10 h-[160px] w-[240px] rounded-full bg-gradient-to-tr from-cyan-500/10 to-transparent blur-[55px]"
       />
 
       {/* Brand */}

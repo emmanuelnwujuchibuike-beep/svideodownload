@@ -27,8 +27,23 @@ const features = [
 export function Features() {
   return (
     <section id="features" className="relative py-28 sm:py-36">
-      {/* Subtle section divider */}
+      {/* Section divider */}
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+      {/* Blue glow — left */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-[3%] top-[15%] -z-10 h-[280px] w-[380px] rounded-full bg-gradient-to-r from-blue-600/10 to-transparent blur-[80px]"
+      />
+      {/* Gold glow — right */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute right-[3%] top-[40%] -z-10 h-[240px] w-[340px] rounded-full bg-gradient-to-l from-amber-500/10 to-transparent blur-[75px]"
+      />
+      {/* Cyan glow — bottom center */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-[10%] left-1/2 -z-10 h-[200px] w-[500px] -translate-x-1/2 rounded-full bg-gradient-to-t from-cyan-500/8 to-transparent blur-[70px]"
+      />
 
       <div className="container">
         <Reveal className="mx-auto max-w-2xl text-center">

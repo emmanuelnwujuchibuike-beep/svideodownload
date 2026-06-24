@@ -1,4 +1,4 @@
-import { CalendarDays, Crown, LogOut, Mail, ShieldCheck } from "lucide-react";
+import { CalendarDays, Crown, LogOut, Mail, ShieldCheck, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -49,6 +49,7 @@ export default async function AccountPage() {
   const plan = (planActive ? sub?.plan : "free") ?? "free";
   const planLabel = plan === "business" ? "Business" : plan === "pro" ? "Pro" : "Free";
   const canManage = !!sub?.subscription_ref;
+  const isPremium = plan !== "free";
 
   const email = user.email ?? "—";
   const avatar =
@@ -62,113 +63,146 @@ export default async function AccountPage() {
   return (
     <>
       <SiteHeader />
-      <main className="container max-w-2xl pb-24 pt-32 sm:pt-40">
-        <header className="mb-8">
-          <h1 className="text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">
-            Your account
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            Manage your profile and session.
-          </p>
-        </header>
+      <main className="relative overflow-hidden pb-28 pt-32 sm:pt-44">
+        {/* Ambient glow */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-0 -z-10 hidden h-[260px] w-[500px] -translate-x-1/2 rounded-full bg-gradient-to-b from-primary/10 to-transparent blur-[70px] md:block"
+        />
 
-        <div className="rounded-3xl border border-border bg-card p-6 shadow-card sm:p-8">
-          <div className="flex items-center gap-4">
-            {avatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatar}
-                alt=""
-                className="h-16 w-16 rounded-full object-cover ring-2 ring-border"
-              />
-            ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-cyan-400 text-2xl font-bold text-white">
-                {initial}
-              </div>
-            )}
-            <div className="min-w-0">
-              <p className="truncate text-lg font-semibold">{email}</p>
-              {admin ? (
-                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                  <ShieldCheck className="h-3 w-3" /> Admin
-                </span>
+        <div className="container max-w-2xl">
+          <header className="mb-10">
+            <h1 className="text-3xl font-bold tracking-[-0.03em] sm:text-4xl">
+              Your account
+            </h1>
+            <p className="mt-2 text-muted-foreground">
+              Manage your profile, plan, and API access.
+            </p>
+          </header>
+
+          <div className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card">
+            {/* Profile header */}
+            <div className="flex items-center gap-5 border-b border-border/60 p-6 sm:p-8">
+              {avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatar}
+                  alt=""
+                  className="h-16 w-16 rounded-full object-cover ring-2 ring-border"
+                />
               ) : (
-                <span className="text-sm text-muted-foreground">
-                  {planLabel} account
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-2xl font-bold text-white shadow-md shadow-blue-500/25">
+                  {initial}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="truncate text-lg font-semibold">{email}</p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                  {admin ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                      <ShieldCheck className="h-3 w-3" /> Admin
+                    </span>
+                  ) : null}
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
+                      isPremium
+                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                        : "bg-secondary text-muted-foreground",
+                    )}
+                  >
+                    {isPremium ? <Crown className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
+                    {planLabel}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Plan / billing */}
+            <div className="border-b border-border/60 p-6 sm:p-8">
+              <div
+                className={cn(
+                  "flex flex-wrap items-center gap-4 rounded-2xl border p-4",
+                  isPremium
+                    ? "border-amber-500/20 bg-amber-500/[0.04]"
+                    : "border-border/60 bg-secondary/30",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-sm",
+                    isPremium
+                      ? "bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-amber-500/25"
+                      : "bg-secondary text-muted-foreground",
+                  )}
+                >
+                  <Crown className="h-5 w-5" />
                 </span>
-              )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{planLabel} plan</p>
+                  <p className="text-xs text-muted-foreground">
+                    {plan === "free"
+                      ? "Upgrade for an ad-free, faster experience."
+                      : sub?.cancel_at_period_end
+                        ? `Cancels on ${sub?.current_period_end ? new Date(sub.current_period_end).toLocaleDateString() : "period end"}`
+                        : sub?.current_period_end
+                          ? `Renews ${new Date(sub.current_period_end).toLocaleDateString()}`
+                          : "Active"}
+                  </p>
+                </div>
+                {plan === "free" ? (
+                  <Link
+                    href="/pricing"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/25 transition hover:shadow-amber-500/40"
+                  >
+                    <Crown className="h-4 w-4" /> Upgrade
+                  </Link>
+                ) : canManage ? (
+                  <ManageBillingButton className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-secondary disabled:opacity-60" />
+                ) : null}
+              </div>
             </div>
-          </div>
 
-          {/* Plan / billing */}
-          <div className="mt-7 flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-secondary/30 p-4">
-            <span
-              className={cn(
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-                plan === "free" ? "bg-secondary text-muted-foreground" : "bg-primary/15 text-primary",
-              )}
-            >
-              <Crown className="h-5 w-5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">{planLabel} plan</p>
-              <p className="text-xs text-muted-foreground">
-                {plan === "free"
-                  ? "Upgrade for an ad-free, faster experience."
-                  : sub?.cancel_at_period_end
-                    ? `Cancels on ${sub?.current_period_end ? new Date(sub.current_period_end).toLocaleDateString() : "period end"}`
-                    : sub?.current_period_end
-                      ? `Renews ${new Date(sub.current_period_end).toLocaleDateString()}`
-                      : "Active"}
-              </p>
+            {/* API keys */}
+            <div className="border-b border-border/60 p-6 sm:p-8">
+              <ApiKeys dailyLimit={PLAN_LIMITS[plan as BillingPlan].apiDailyLimit} />
             </div>
-            {plan === "free" ? (
+
+            {/* Detail fields */}
+            <dl className="grid gap-5 p-6 sm:grid-cols-2 sm:p-8">
+              <Detail icon={Mail} label="Email" value={email} />
+              <Detail
+                icon={CalendarDays}
+                label="Member since"
+                value={created ? new Date(created).toLocaleDateString() : "—"}
+              />
+            </dl>
+
+            {/* Actions */}
+            <div className="flex flex-wrap items-center gap-3 border-t border-border/60 p-6 sm:p-8">
               <Link
-                href="/pricing"
-                className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+                href="/#download"
+                className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 transition hover:shadow-primary/35 hover:opacity-95"
               >
-                Upgrade
+                Download a video
               </Link>
-            ) : canManage ? (
-              <ManageBillingButton className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-secondary disabled:opacity-60" />
-            ) : null}
-          </div>
-
-          {/* Developer API keys */}
-          <ApiKeys dailyLimit={PLAN_LIMITS[plan as BillingPlan].apiDailyLimit} />
-
-          <dl className="mt-7 grid gap-4 border-t border-border/60 pt-6 sm:grid-cols-2">
-            <Detail icon={Mail} label="Email" value={email} />
-            <Detail
-              icon={CalendarDays}
-              label="Member since"
-              value={created ? new Date(created).toLocaleDateString() : "—"}
-            />
-          </dl>
-
-          <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-border/60 pt-6">
-            <Link
-              href="/#download"
-              className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-            >
-              Download a video
-            </Link>
-            {admin ? (
-              <Link
-                href="/admin"
-                className="inline-flex items-center justify-center rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition hover:bg-secondary"
-              >
-                Admin dashboard
-              </Link>
-            ) : null}
-            <form action="/auth/signout" method="post" className="ml-auto">
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-muted-foreground transition hover:border-red-500/40 hover:text-red-400"
-              >
-                <LogOut className="h-4 w-4" /> Sign out
-              </button>
-            </form>
+              {admin ? (
+                <Link
+                  href="/admin"
+                  className="inline-flex items-center justify-center rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition hover:bg-secondary"
+                >
+                  Admin dashboard
+                </Link>
+              ) : null}
+              <form action="/auth/signout" method="post" className="ml-auto">
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 rounded-xl border border-border/70 px-4 py-2.5 text-sm font-medium text-muted-foreground transition hover:border-red-500/40 hover:text-red-400"
+                >
+                  <LogOut className="h-4 w-4" /> Sign out
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       </main>
@@ -188,10 +222,12 @@ function Detail({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+        <Icon className="h-4 w-4" />
+      </span>
       <div className="min-w-0">
         <dt className="text-xs text-muted-foreground">{label}</dt>
-        <dd className="truncate text-sm font-medium">{value}</dd>
+        <dd className="truncate text-sm font-semibold">{value}</dd>
       </div>
     </div>
   );

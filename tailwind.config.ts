@@ -43,6 +43,10 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        gold: {
+          DEFAULT: "hsl(var(--gold))",
+          foreground: "hsl(var(--gold-foreground))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -52,10 +56,16 @@ const config: Config = {
         "3xl": "1.75rem",
       },
       boxShadow: {
-        soft: "0 1px 2px hsl(240 10% 4% / 0.06), 0 8px 24px -12px hsl(240 10% 4% / 0.12)",
-        card: "0 1px 3px hsl(240 10% 4% / 0.05), 0 18px 40px -18px hsl(240 10% 4% / 0.18)",
+        soft: "0 1px 2px hsl(240 10% 4% / 0.08), 0 8px 28px -12px hsl(240 10% 4% / 0.18)",
+        card: "0 1px 3px hsl(240 10% 4% / 0.08), 0 20px 48px -18px hsl(240 10% 4% / 0.26)",
         elevated:
-          "0 4px 8px hsl(240 10% 4% / 0.08), 0 36px 64px -24px hsl(240 10% 4% / 0.28)",
+          "0 4px 12px hsl(240 10% 4% / 0.12), 0 40px 80px -24px hsl(240 10% 4% / 0.38)",
+        luxury:
+          "inset 0 1px 0 hsl(0 0% 100% / 0.07), 0 4px 20px hsl(0 0% 0% / 0.45), 0 24px 64px hsl(0 0% 0% / 0.28)",
+        "glow-blue":
+          "0 0 28px hsl(217 100% 65% / 0.28), 0 0 64px hsl(217 100% 65% / 0.1)",
+        "glow-gold":
+          "0 0 28px hsl(43 96% 56% / 0.32), 0 0 64px hsl(43 96% 56% / 0.12)",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
@@ -76,10 +86,15 @@ const config: Config = {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-10px)" },
         },
+        "pulse-glow": {
+          "0%, 100%": { opacity: "0.55" },
+          "50%": { opacity: "1" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.5s ease-out both",
         float: "float 3.5s ease-in-out infinite",
+        "pulse-glow": "pulse-glow 3s ease-in-out infinite",
       },
     },
   },

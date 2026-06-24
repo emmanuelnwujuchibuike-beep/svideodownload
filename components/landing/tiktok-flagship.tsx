@@ -108,11 +108,11 @@ export function TikTokFlagship() {
 
         <div className="relative mx-auto w-full max-w-[300px]">
           {/* Floating quality badges */}
-          <div className="absolute -left-5 top-16 z-20 animate-float rounded-2xl border border-white/10 bg-background/80 px-3 py-2 text-center shadow-xl backdrop-blur">
+          <div className="absolute -left-5 top-16 z-20 motion-safe:animate-float rounded-2xl border border-white/10 bg-background/90 px-3 py-2 text-center shadow-xl">
             <p className="text-lg font-bold text-gradient">4K</p>
             <p className="text-[10px] text-muted-foreground">Ultra HD</p>
           </div>
-          <div className="absolute -right-4 bottom-28 z-20 animate-float rounded-2xl border border-white/10 bg-background/80 px-3 py-2 text-center shadow-xl backdrop-blur [animation-delay:1.2s]">
+          <div className="absolute -right-4 bottom-28 z-20 motion-safe:animate-float rounded-2xl border border-white/10 bg-background/90 px-3 py-2 text-center shadow-xl [animation-delay:1.2s]">
             <p className="text-lg font-bold text-gradient">MP3</p>
             <p className="text-[10px] text-muted-foreground">Audio</p>
           </div>
@@ -128,7 +128,7 @@ export function TikTokFlagship() {
               />
               <div
                 aria-hidden
-                className="absolute inset-0 animate-float bg-grid-pattern bg-[size:26px_26px] opacity-[0.18]"
+                className="absolute inset-0 motion-safe:animate-float bg-grid-pattern bg-[size:26px_26px] opacity-[0.18]"
               />
               <div
                 aria-hidden
@@ -172,8 +172,8 @@ export function TikTokFlagship() {
                     aria-label="Play preview"
                     className="relative flex items-center justify-center"
                   >
-                    <span className="absolute h-24 w-24 animate-ping rounded-full bg-white/15" />
-                    <span className="absolute h-32 w-32 animate-pulse rounded-full border border-white/20" />
+                    <span className="absolute h-24 w-24 motion-safe:animate-ping rounded-full bg-white/15" />
+                    <span className="absolute h-32 w-32 motion-safe:animate-pulse rounded-full border border-white/20" />
                     <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-white/95 shadow-2xl transition-transform active:scale-95">
                       <Play className="h-6 w-6 translate-x-0.5 fill-blue-600 text-blue-600" />
                     </span>

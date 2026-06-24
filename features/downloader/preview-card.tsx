@@ -94,7 +94,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       initial={{ opacity: 0, y: 24, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="group/card relative mx-auto mt-10 w-full max-w-2xl overflow-hidden rounded-[1.75rem] border border-border/70 bg-card shadow-elevated"
+      className="group/card relative mx-auto mt-10 w-full max-w-2xl overflow-hidden rounded-[2rem] border border-border/60 bg-card shadow-luxury"
     >
       {/* subtle gradient sheen on top edge */}
       <div
@@ -282,8 +282,10 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
           className={cn(
             "group relative mt-5 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-4 text-base font-semibold shadow-lg transition-all active:scale-[0.99] disabled:active:scale-100",
             phase === "done"
-              ? "bg-green-600 text-white shadow-green-600/25"
-              : "bg-primary text-primary-foreground shadow-primary/25 hover:shadow-xl hover:shadow-primary/40 disabled:opacity-70",
+              ? "bg-emerald-600 text-white shadow-emerald-600/25"
+              : needsReward(activeId, tab)
+                ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-amber-500/30 hover:shadow-amber-500/50 hover:shadow-xl disabled:opacity-70"
+                : "bg-primary text-primary-foreground shadow-primary/25 hover:shadow-glow-blue disabled:opacity-70",
           )}
         >
           {/* shimmer sweep */}
@@ -380,8 +382,8 @@ function FormatRow({
       className={cn(
         "flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.98]",
         active
-          ? "border-primary bg-primary/10 ring-1 ring-primary/30"
-          : "border-border bg-card hover:border-foreground/20 hover:bg-secondary/60",
+          ? "border-primary/60 bg-primary/10 shadow-sm shadow-primary/10 ring-1 ring-primary/25"
+          : "border-border/70 bg-card/80 hover:border-foreground/20 hover:bg-secondary/70",
       )}
     >
       <span className="flex items-center gap-1.5 text-sm font-semibold uppercase leading-none">

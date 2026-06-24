@@ -98,7 +98,7 @@ export function Downloader() {
     <div className="w-full">
       <form
         onSubmit={handleSubmit}
-        className="glass rounded-[1.4rem] p-2 shadow-elevated ring-1 ring-black/[0.03] focus-within:ring-primary/30"
+        className="glass rounded-[1.5rem] p-2 shadow-luxury ring-1 ring-inset ring-white/[0.06] transition-shadow focus-within:shadow-glow-blue focus-within:ring-primary/25"
       >
         <div className="flex flex-col gap-2 sm:flex-row">
           <div className="relative flex-1">
@@ -110,7 +110,7 @@ export function Downloader() {
               onChange={(e) => setUrl(e.target.value)}
               placeholder={`Paste your ${PLACEHOLDER_PLATFORMS[phIndex]} link…`}
               aria-label="Video URL"
-              className="h-16 w-full rounded-2xl bg-background/50 px-5 pr-28 text-base outline-none ring-1 ring-inset ring-border transition focus:bg-background/80 focus:ring-2 focus:ring-primary sm:text-lg"
+              className="h-16 w-full rounded-2xl bg-background/60 px-5 pr-28 text-base outline-none ring-1 ring-inset ring-border/80 transition-all focus:bg-background/90 focus:ring-2 focus:ring-primary sm:text-lg"
             />
             <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
               {url ? (
@@ -135,8 +135,9 @@ export function Downloader() {
           <button
             type="submit"
             disabled={isBusy}
-            className="group inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-primary px-8 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-primary/40 active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
+            className="group relative inline-flex h-16 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-primary px-8 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-glow-blue active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
           >
+            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
             {isBusy ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" /> Fetching…

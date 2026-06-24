@@ -1,4 +1,4 @@
-import { Check, Code2, Crown, Sparkles } from "lucide-react";
+import { Check, Code2, Crown, Sparkles, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -47,7 +47,7 @@ function buildTiers(pricing: {
         "Up to 30 downloads/day",
         "Supported by ads",
       ],
-      cta: "Get started",
+      cta: "Get started free",
       href: "/",
     },
     {
@@ -93,95 +93,130 @@ export default async function PricingPage() {
   return (
     <>
       <SiteHeader />
-      <main className="container max-w-5xl pb-24 pt-28 sm:pt-36">
-        <header className="mx-auto mb-12 max-w-2xl text-center">
-          <h1 className="text-3xl font-bold tracking-[-0.02em] sm:text-4xl">
-            Simple, honest pricing
-          </h1>
-          <p className="mt-3 text-muted-foreground">
-            Start free. Upgrade any time to remove ads, download faster, or build
-            on our API. Cancel whenever you like.
-          </p>
-        </header>
+      <main className="relative overflow-hidden pb-28 pt-32 sm:pt-40">
+        {/* Background glow */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-0 -z-10 hidden h-[320px] w-[560px] -translate-x-1/2 rounded-full bg-gradient-to-b from-amber-500/12 via-primary/8 to-transparent blur-[80px] md:block"
+        />
 
-        <div className="grid gap-5 lg:grid-cols-3">
-          {TIERS.map((t) => (
-            <div
-              key={t.id}
-              id={t.id}
-              className={cn(
-                "relative flex flex-col scroll-mt-24 rounded-3xl border bg-card p-6 shadow-soft",
-                t.highlight
-                  ? "border-primary/40 ring-1 ring-primary/20 lg:scale-[1.03]"
-                  : "border-border",
-              )}
-            >
-              {t.highlight ? (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow">
-                  Most popular
-                </span>
-              ) : null}
-              <div className="mb-4 flex items-center gap-2">
-                <span
-                  className={cn(
-                    "flex h-9 w-9 items-center justify-center rounded-xl",
-                    t.highlight ? "bg-primary/15 text-primary" : "bg-secondary text-foreground",
-                  )}
-                >
-                  <t.icon className="h-5 w-5" />
-                </span>
-                <h2 className="text-lg font-semibold">{t.name}</h2>
-              </div>
-              <div className="mb-1 flex items-end gap-1">
-                <span className="text-4xl font-bold tracking-tight">{t.price}</span>
-                {t.period ? (
-                  <span className="mb-1 text-sm text-muted-foreground">{t.period}</span>
+        <div className="container max-w-5xl">
+          <header className="mx-auto mb-14 max-w-2xl text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Zap className="h-3.5 w-3.5" /> Simple pricing
+            </span>
+            <h1 className="mt-5 text-3xl font-bold tracking-[-0.03em] sm:text-4xl lg:text-5xl">
+              Simple, honest pricing
+            </h1>
+            <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
+              Start free. Upgrade any time to remove ads, download faster, or
+              build on our API. Cancel whenever you like.
+            </p>
+          </header>
+
+          <div className="grid gap-5 lg:grid-cols-3 lg:items-start">
+            {TIERS.map((t) => (
+              <div
+                key={t.id}
+                id={t.id}
+                className={cn(
+                  "relative flex flex-col scroll-mt-24 rounded-3xl p-7",
+                  t.highlight
+                    ? "border border-amber-500/30 bg-card bg-gradient-to-b from-amber-500/[0.08] to-transparent shadow-card ring-1 ring-amber-500/15 lg:scale-[1.04]"
+                    : "border border-border/80 bg-card shadow-card",
+                )}
+              >
+                {t.highlight ? (
+                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-white shadow-md shadow-amber-500/30">
+                    Most popular
+                  </span>
                 ) : null}
-              </div>
-              <p className="mb-5 text-sm text-muted-foreground">{t.tagline}</p>
 
-              <ul className="mb-6 space-y-2.5">
-                {t.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-
-              {t.id === "pro" || t.id === "business" ? (
-                <div className="mt-auto">
-                  <UpgradeButton
-                    plan={t.id}
+                {/* Icon + name */}
+                <div className="mb-5 flex items-center gap-3">
+                  <span
                     className={cn(
-                      "inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition active:scale-[0.99] disabled:opacity-70",
+                      "flex h-10 w-10 items-center justify-center rounded-xl shadow-sm",
                       t.highlight
-                        ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-primary/40"
-                        : "border border-border bg-background hover:bg-secondary",
+                        ? "bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-amber-500/30"
+                        : t.id === "business"
+                          ? "bg-gradient-to-br from-blue-600 to-cyan-400 text-white shadow-blue-500/25"
+                          : "bg-secondary text-muted-foreground",
                     )}
                   >
-                    {t.cta}
-                  </UpgradeButton>
+                    <t.icon className="h-5 w-5" />
+                  </span>
+                  <h2 className="text-lg font-bold">{t.name}</h2>
                 </div>
-              ) : (
-                <Link
-                  href={t.href}
-                  className={cn(
-                    "mt-auto inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition active:scale-[0.99]",
-                    "border border-border bg-background hover:bg-secondary",
-                  )}
-                >
-                  {t.cta}
-                </Link>
-              )}
-            </div>
-          ))}
-        </div>
 
-        <p className="mx-auto mt-10 max-w-xl text-center text-xs text-muted-foreground">
-          Prices in USD. Taxes may apply. Subscriptions renew automatically and can
-          be canceled any time from your account.
-        </p>
+                {/* Price */}
+                <div className="mb-2 flex items-end gap-1.5">
+                  <span
+                    className={cn(
+                      "text-5xl font-bold tracking-tight",
+                      t.highlight && "text-gradient-gold",
+                    )}
+                  >
+                    {t.price}
+                  </span>
+                  {t.period ? (
+                    <span className="mb-1.5 text-sm text-muted-foreground">{t.period}</span>
+                  ) : null}
+                </div>
+                <p className="mb-6 text-sm text-muted-foreground">{t.tagline}</p>
+
+                {/* Features */}
+                <ul className="mb-8 space-y-3">
+                  {t.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5 text-sm">
+                      <span
+                        className={cn(
+                          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
+                          t.highlight
+                            ? "bg-amber-500/15 text-amber-500"
+                            : "bg-primary/10 text-primary",
+                        )}
+                      >
+                        <Check className="h-3 w-3" />
+                      </span>
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* CTA */}
+                {t.id === "pro" || t.id === "business" ? (
+                  <div className="mt-auto">
+                    <UpgradeButton
+                      plan={t.id}
+                      className={cn(
+                        "group relative inline-flex w-full items-center justify-center overflow-hidden rounded-2xl px-4 py-3.5 text-sm font-semibold transition-all active:scale-[0.99] disabled:opacity-70",
+                        t.highlight
+                          ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50 hover:shadow-xl"
+                          : "bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:shadow-primary/35",
+                      )}
+                    >
+                      <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+                      {t.cta}
+                    </UpgradeButton>
+                  </div>
+                ) : (
+                  <Link
+                    href={t.href}
+                    className="mt-auto inline-flex items-center justify-center rounded-2xl border border-border/80 bg-background/60 px-4 py-3.5 text-sm font-semibold transition hover:bg-secondary active:scale-[0.99]"
+                  >
+                    {t.cta}
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <p className="mx-auto mt-12 max-w-xl text-center text-xs text-muted-foreground/70">
+            Prices in USD. Taxes may apply. Subscriptions renew automatically and can
+            be canceled any time from your account.
+          </p>
+        </div>
       </main>
     </>
   );

@@ -4,42 +4,46 @@
 
 @layer base {
   :root {
-    /* Light — clean, cool near-white with neutral grays */
-    --background: 240 20% 99%;
-    --foreground: 240 10% 9%;
+    /* Light — crisp near-white, warm neutral grays */
+    --background: 0 0% 99%;
+    --foreground: 240 10% 8%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 9%;
+    --card-foreground: 240 10% 8%;
     --primary: 221 83% 53%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 6% 96%;
-    --secondary-foreground: 240 10% 9%;
-    --muted: 240 6% 96%;
-    --muted-foreground: 240 4% 44%;
+    --secondary: 240 5% 95%;
+    --secondary-foreground: 240 10% 8%;
+    --muted: 240 5% 95%;
+    --muted-foreground: 240 4% 42%;
     --accent: 199 89% 48%;
     --accent-foreground: 0 0% 100%;
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
+    --gold: 43 96% 48%;
+    --gold-foreground: 30 20% 8%;
+    --border: 240 5% 88%;
+    --input: 240 5% 88%;
     --ring: 221 83% 53%;
-    --radius: 0.75rem;
+    --radius: 0.875rem;
   }
 
   .dark {
-    /* Dark — neutral near-black (Vercel/Arc), not blue-tinted */
-    --background: 240 10% 3.5%;
-    --foreground: 0 0% 98%;
-    --card: 240 8% 6%;
-    --card-foreground: 0 0% 98%;
-    --primary: 217 91% 62%;
+    /* Dark — deep obsidian, premium luxury surface */
+    --background: 240 10% 2.5%;
+    --foreground: 0 0% 97%;
+    --card: 240 9% 4.5%;
+    --card-foreground: 0 0% 97%;
+    --primary: 217 100% 65%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 5% 13%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 5% 11%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 199 89% 52%;
+    --secondary: 240 6% 10%;
+    --secondary-foreground: 0 0% 97%;
+    --muted: 240 6% 9%;
+    --muted-foreground: 240 5% 58%;
+    --accent: 199 89% 55%;
     --accent-foreground: 0 0% 100%;
-    --border: 240 5% 14%;
-    --input: 240 5% 16%;
-    --ring: 217 91% 62%;
+    --gold: 43 96% 56%;
+    --gold-foreground: 30 20% 5%;
+    --border: 240 5% 11%;
+    --input: 240 5% 13%;
+    --ring: 217 100% 65%;
   }
 
   * {
@@ -51,7 +55,6 @@
     scroll-behavior: smooth;
   }
 
-  /* Keep anchored sections clear of the fixed header. */
   :target {
     scroll-margin-top: 5rem;
   }
@@ -65,58 +68,81 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Premium display typography: large headings are tight + balanced. */
   h1,
   h2,
   h3 {
-    @apply tracking-tight;
+    letter-spacing: -0.03em;
     text-wrap: balance;
   }
 
   ::selection {
-    @apply bg-primary/25;
+    @apply bg-primary/20;
   }
 
-  /* Refined, unobtrusive scrollbar */
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
     @apply rounded-full bg-border;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/40;
+    @apply bg-muted-foreground/35;
   }
 }
 
 @layer utilities {
-  /* Theme-aware frosted surface: subtle on light, luminous on dark. */
+  /* Frosted glass — refined on light, luminous on dark.
+     backdrop-blur-lg (16px) keeps GPU load low on mobile. */
   .glass {
-    @apply border border-border/70 bg-card/70 backdrop-blur-xl;
+    @apply border border-border/60 bg-card/80 backdrop-blur-lg;
   }
   .dark .glass {
-    @apply border-white/[0.08] bg-white/[0.03];
+    @apply border-white/[0.07] bg-white/[0.04];
   }
 
-  /* Reserved as a rare accent — not a default heading treatment. */
+  /* Blue gradient text — hero headings, brand moments */
   .text-gradient {
     @apply bg-gradient-to-r from-blue-500 via-sky-400 to-cyan-400 bg-clip-text text-transparent;
   }
 
-  /* Subtle hairline ring used on premium cards. */
+  /* Gold gradient text — premium/Pro moments */
+  .text-gradient-gold {
+    @apply bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 bg-clip-text text-transparent;
+  }
+
+  /* Premium hairline ring — default card treatment */
   .ring-hairline {
     box-shadow:
-      inset 0 0 0 1px hsl(var(--border)),
-      0 1px 2px hsl(240 10% 3.5% / 0.04),
-      0 12px 32px -16px hsl(240 10% 3.5% / 0.12);
+      inset 0 0 0 1px hsl(var(--border) / 0.8),
+      0 1px 3px hsl(240 10% 3.5% / 0.06),
+      0 16px 40px -18px hsl(240 10% 3.5% / 0.16);
   }
   .dark .ring-hairline {
     box-shadow:
-      inset 0 0 0 1px hsl(0 0% 100% / 0.06),
-      0 1px 0 0 hsl(0 0% 100% / 0.03);
+      inset 0 1px 0 hsl(0 0% 100% / 0.07),
+      inset 0 0 0 1px hsl(0 0% 100% / 0.05),
+      0 1px 0 0 hsl(0 0% 0% / 0.4);
   }
 
+  /* Gold hairline — Pro card / premium CTA */
+  .ring-hairline-gold {
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--gold) / 0.35),
+      0 1px 3px hsl(240 10% 3.5% / 0.06),
+      0 16px 40px -18px hsl(43 96% 56% / 0.2);
+  }
+  .dark .ring-hairline-gold {
+    box-shadow:
+      inset 0 1px 0 hsl(43 96% 56% / 0.18),
+      inset 0 0 0 1px hsl(43 96% 56% / 0.22),
+      0 4px 24px hsl(43 96% 56% / 0.12);
+  }
+
+  /* Shimmer sweep — loading states, hover sweeps */
   .shimmer {
     position: relative;
     overflow: hidden;
@@ -129,17 +155,20 @@
     background: linear-gradient(
       90deg,
       transparent,
-      hsl(var(--foreground) / 0.06),
+      hsl(var(--foreground) / 0.05),
       transparent
     );
-    animation: shimmer 1.6s infinite;
+    animation: shimmer 1.8s infinite;
   }
+  @media (prefers-reduced-motion: reduce) {
+    .shimmer::after { animation: none; }
+  }
+
 }
 
 /* Belt-and-suspenders zoom lock: iOS auto-zooms when a focused control's
-   font-size is < 16px. Force 16px on mobile form controls so even older iOS
-   (which ignores the viewport user-scalable=no) won't zoom on input focus.
-   Pairs with the maximum-scale=1 viewport set in layout.tsx. */
+   font-size is < 16px. Force 16px on mobile so even older iOS won't zoom.
+   Pairs with maximum-scale=1 viewport in layout.tsx. */
 @media (max-width: 640px) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   select,

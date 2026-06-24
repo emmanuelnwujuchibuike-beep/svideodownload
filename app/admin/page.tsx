@@ -89,10 +89,10 @@ export default async function AdminPage() {
   return (
     <>
       <SiteHeader />
-      <main className="container max-w-5xl pb-24 pt-28 sm:pt-36">
-        <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <main className="container max-w-5xl pb-28 pt-32 sm:pt-40">
+        <header className="mb-10 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">
+            <h1 className="text-3xl font-bold tracking-[-0.03em] sm:text-4xl">
               Admin dashboard
             </h1>
             <p className="mt-2 text-muted-foreground">
@@ -200,7 +200,7 @@ export default async function AdminPage() {
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
           {/* Proxy widget */}
-          <section className="rounded-3xl border border-border bg-card p-6 shadow-card">
+          <section className="overflow-hidden rounded-3xl border border-border/70 bg-card p-6 shadow-card">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="flex items-center gap-2 font-semibold">
                 <Gauge className="h-5 w-5 text-primary" /> Residential proxy
@@ -286,7 +286,7 @@ export default async function AdminPage() {
           </section>
 
           {/* Top platforms */}
-          <section className="rounded-3xl border border-border bg-card p-6 shadow-card">
+          <section className="overflow-hidden rounded-3xl border border-border/70 bg-card p-6 shadow-card">
             <h2 className="mb-5 flex items-center gap-2 font-semibold">
               <Activity className="h-5 w-5 text-primary" /> Top platforms
             </h2>
@@ -324,7 +324,7 @@ export default async function AdminPage() {
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           {/* Media type breakdown */}
-          <section className="rounded-3xl border border-border bg-card p-6 shadow-card">
+          <section className="overflow-hidden rounded-3xl border border-border/70 bg-card p-6 shadow-card">
             <h2 className="mb-5 flex items-center gap-2 font-semibold">
               <Server className="h-5 w-5 text-primary" /> By media type
             </h2>
@@ -336,7 +336,7 @@ export default async function AdminPage() {
           </section>
 
           {/* Alerts log */}
-          <section className="rounded-3xl border border-border bg-card p-6 shadow-card">
+          <section className="overflow-hidden rounded-3xl border border-border/70 bg-card p-6 shadow-card">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="flex items-center gap-2 font-semibold">
                 <Bell className="h-5 w-5 text-primary" /> Alerts
@@ -414,13 +414,22 @@ function StatCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border bg-card p-5 shadow-soft",
-        accent ? "border-primary/30 ring-1 ring-primary/10" : "border-border",
+        "rounded-2xl border bg-card p-5 shadow-soft transition-shadow hover:shadow-card",
+        accent
+          ? "border-primary/30 bg-primary/[0.03] ring-1 ring-primary/15"
+          : "border-border/70",
       )}
     >
-      <Icon className={cn("h-5 w-5", accent ? "text-primary" : "text-muted-foreground")} />
-      <p className="mt-3 text-2xl font-semibold tracking-tight">{value}</p>
-      <p className="text-xs text-muted-foreground">
+      <span
+        className={cn(
+          "flex h-9 w-9 items-center justify-center rounded-xl",
+          accent ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground",
+        )}
+      >
+        <Icon className="h-4.5 w-4.5 h-[18px] w-[18px]" />
+      </span>
+      <p className="mt-4 text-2xl font-bold tracking-tight">{value}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
         {label}
         {sub ? ` · ${sub}` : ""}
       </p>
@@ -445,11 +454,13 @@ function MiniStat({
     <div
       className={cn(
         "rounded-2xl border p-4",
-        accent ? "border-primary/30 bg-primary/[0.04]" : "border-border/70 bg-secondary/20",
+        accent
+          ? "border-primary/30 bg-primary/[0.04]"
+          : "border-border/60 bg-secondary/25",
       )}
     >
       <Icon className={cn("h-4 w-4", accent ? "text-primary" : "text-muted-foreground")} />
-      <p className="mt-2 text-xl font-semibold tracking-tight">{value}</p>
+      <p className="mt-2 text-xl font-bold tracking-tight">{value}</p>
       <p className="text-[11px] text-muted-foreground">
         {label}
         {sub ? ` · ${sub}` : ""}

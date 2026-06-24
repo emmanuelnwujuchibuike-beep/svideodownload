@@ -128,7 +128,7 @@ export default async function DownloaderPage({
         <section className="relative overflow-hidden pb-16 pt-28 sm:pt-36">
           <div
             aria-hidden
-            className="pointer-events-none absolute left-1/2 top-[-12%] -z-10 h-[480px] w-[820px] -translate-x-1/2 rounded-full bg-gradient-to-tr from-blue-500/30 via-sky-500/20 to-cyan-400/25 blur-[110px]"
+            className="pointer-events-none absolute left-1/2 top-[-12%] -z-10 hidden h-[380px] w-[680px] -translate-x-1/2 rounded-full bg-gradient-to-tr from-blue-500/25 via-sky-500/16 to-cyan-400/20 blur-[80px] md:block"
           />
           <div className="container flex flex-col items-center text-center">
             <span

@@ -48,7 +48,7 @@ function StatItem({ label, target, format }: Stat) {
   }, [target]);
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-card/40 px-4 py-3 text-center backdrop-blur transition-colors hover:border-primary/40">
+    <div className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-center transition-colors hover:border-primary/40">
       <dd className="text-2xl font-bold text-gradient tabular-nums">{format(value)}</dd>
       <dt className="mt-0.5 text-xs text-muted-foreground">{label}</dt>
     </div>

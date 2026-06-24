@@ -74,7 +74,7 @@ export function UserMenu() {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-card p-1.5 shadow-elevated"
+          className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border border-border/70 bg-card p-1.5 shadow-elevated backdrop-blur-md"
         >
           <div className="truncate px-3 py-2 text-xs text-muted-foreground">
             {email}

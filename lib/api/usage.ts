@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-/** Today's request count for a key (used for daily quota enforcement). */
+/** Today's request count for a single key. */
 export async function dailyUsage(keyId: string): Promise<number> {
   try {
     const supabase = createAdminClient();
@@ -11,6 +11,25 @@ export async function dailyUsage(keyId: string): Promise<number> {
       .from("api_usage")
       .select("*", { count: "exact", head: true })
       .eq("api_key_id", keyId)
+      .eq("day", today());
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Today's request count for a USER across ALL their keys — this is what the
+ * daily quota is enforced against, so a user can't multiply their cap by
+ * creating extra keys.
+ */
+export async function dailyUsageByUser(userId: string): Promise<number> {
+  try {
+    const supabase = createAdminClient();
+    const { count } = await supabase
+      .from("api_usage")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
       .eq("day", today());
     return count ?? 0;
   } catch {

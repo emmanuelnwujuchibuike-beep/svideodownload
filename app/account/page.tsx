@@ -8,7 +8,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { ApiKeys } from "@/features/api/api-keys";
 import { ManageBillingButton } from "@/features/monetization/manage-billing-button";
 import { isAdmin } from "@/lib/admin";
-import { PLAN_LIMITS } from "@/lib/monetization/plan";
+import { getPlanLimits } from "@/lib/monetization/plan";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -59,6 +59,16 @@ export default async function AccountPage() {
   const admin = isAdmin(profile?.role, user.email);
   const created = profile?.created_at ?? user.created_at;
   const initial = email.charAt(0).toUpperCase();
+
+  // Effective API cap for this plan + today's usage (RLS lets a user read their
+  // own api_usage rows) so they can monitor their daily API consumption.
+  const apiDailyLimit = (await getPlanLimits())[plan as BillingPlan].apiDailyLimit;
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  const { count: apiUsedToday } = await supabase
+    .from("api_usage")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("day", todayUtc);
 
   return (
     <>
@@ -160,7 +170,7 @@ export default async function AccountPage() {
 
             {/* API keys */}
             <div className="border-b border-border/60 p-6 sm:p-8">
-              <ApiKeys dailyLimit={PLAN_LIMITS[plan as BillingPlan].apiDailyLimit} />
+              <ApiKeys dailyLimit={apiDailyLimit} usedToday={apiUsedToday ?? 0} />
             </div>
 
             {/* Detail fields */}

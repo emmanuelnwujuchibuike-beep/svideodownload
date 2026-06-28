@@ -12,7 +12,13 @@ interface ApiKey {
   created_at: string;
 }
 
-export function ApiKeys({ dailyLimit }: { dailyLimit: number }) {
+export function ApiKeys({
+  dailyLimit,
+  usedToday = 0,
+}: {
+  dailyLimit: number;
+  usedToday?: number;
+}) {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -66,6 +72,34 @@ export function ApiKeys({ dailyLimit }: { dailyLimit: number }) {
           <KeyRound className="h-4 w-4 text-primary" /> Developer API
         </h3>
         <span className="text-xs text-muted-foreground">{dailyLimit.toLocaleString()} req/day</span>
+      </div>
+
+      {/* Today's usage — lets the user monitor their daily API consumption */}
+      <div className="mb-4 rounded-xl border border-border/60 bg-background/50 p-3">
+        <div className="mb-1.5 flex items-center justify-between text-xs">
+          <span className="font-medium text-muted-foreground">API usage today</span>
+          <span className="font-semibold">
+            {usedToday.toLocaleString()} / {dailyLimit.toLocaleString()}
+          </span>
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+          <div
+            className={
+              "h-full rounded-full transition-all " +
+              (usedToday >= dailyLimit
+                ? "bg-red-500"
+                : usedToday / dailyLimit >= 0.8
+                  ? "bg-amber-500"
+                  : "bg-gradient-to-r from-blue-600 to-cyan-400")
+            }
+            style={{ width: `${Math.min(100, dailyLimit > 0 ? (usedToday / dailyLimit) * 100 : 0)}%` }}
+          />
+        </div>
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          {usedToday >= dailyLimit
+            ? "Daily limit reached — calls return 429 until midnight UTC."
+            : `${Math.max(0, dailyLimit - usedToday).toLocaleString()} requests left today · resets midnight UTC`}
+        </p>
       </div>
 
       {fresh ? (

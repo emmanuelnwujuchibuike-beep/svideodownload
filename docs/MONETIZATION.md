@@ -200,12 +200,18 @@ wins; `weight` controls the split within the top tier. Clicks go through
 
 ## 6. Plans & entitlements
 
-`lib/monetization/plan.ts` → `PLAN_LIMITS` is the single source of truth:
+`lib/monetization/plan.ts` is the source of truth. `DEFAULT_PLAN_LIMITS` holds
+the defaults; `getPlanLimits()` returns the effective values with any admin
+overrides (stored in `settings.plan_limits`, editable from the admin dashboard
+via `LimitsEditor` → `POST /api/admin/plan-limits`). The daily download cap is
+enforced in `/api/download` (keyed by user, else IP) and the API daily cap in
+`lib/api/auth.ts` (counted **per user** across all their keys).
 
 | | Free | Pro | Business |
 |---|---|---|---|
 | Ads | yes | no | no |
 | Downloads/day | 30 | 1,000 | 10,000 |
+| API requests/day | 50 | 500 | 50,000 |
 | Batch | – | ✓ | ✓ |
 | API access | – | – | ✓ |
 

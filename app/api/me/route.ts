@@ -4,7 +4,7 @@ import { corsPreflight, withCors } from "@/lib/api/cors";
 import { bearerToken, verifyApiKey } from "@/lib/api/keys";
 import { selectAffiliateOffer } from "@/lib/monetization/affiliates";
 import { buildRequestContext } from "@/lib/monetization/context";
-import { getUserPlan, PLAN_LIMITS } from "@/lib/monetization/plan";
+import { getPlanLimits, getUserPlan } from "@/lib/monetization/plan";
 import { createClient } from "@/lib/supabase/server";
 import { SITE_URL } from "@/lib/site";
 
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   }
 
   const plan = await getUserPlan(userId);
-  const limits = PLAN_LIMITS[plan];
+  const limits = (await getPlanLimits())[plan];
   const ctx = buildRequestContext(request, plan);
 
   let offer = null as null | {

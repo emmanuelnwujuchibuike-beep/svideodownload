@@ -88,6 +88,43 @@ export const trackLimiter: Limiter = buildLimiter(
   Number(process.env.RATE_LIMIT_TRACK_PER_MIN || 120),
 );
 
+/**
+ * Per-day counter for enforcing daily caps (downloads per plan). Uses a single
+ * Redis INCR keyed by UTC day so the cap is shared across serverless instances.
+ *
+ * Fail-open: if rate limiting is disabled or Upstash isn't configured (local
+ * dev), it always allows — same philosophy as the windowed limiters, so a
+ * missing Redis never hard-blocks real users. Production must configure Upstash
+ * for the daily cap to actually bite.
+ */
+const dailyRedis = rateLimitEnabled && hasUpstash ? Redis.fromEnv() : null;
+
+export interface DailyResult {
+  allowed: boolean;
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+export async function consumeDaily(key: string, limit: number): Promise<DailyResult> {
+  if (!dailyRedis || limit <= 0) {
+    return { allowed: true, used: 0, limit, remaining: limit };
+  }
+  try {
+    const day = new Date().toISOString().slice(0, 10); // UTC date
+    const rk = `svd:daily:${day}:${key}`;
+    const used = await dailyRedis.incr(rk);
+    if (used === 1) {
+      // Expire ~26h after first hit so the bucket self-cleans the next UTC day.
+      await dailyRedis.expire(rk, 60 * 60 * 26);
+    }
+    return { allowed: used <= limit, used, limit, remaining: Math.max(0, limit - used) };
+  } catch {
+    // Never block a download because the counter backend hiccupped.
+    return { allowed: true, used: 0, limit, remaining: limit };
+  }
+}
+
 /** Derives a best-effort client identifier from request headers. */
 export function clientId(headers: Headers): string {
   const fwd = headers.get("x-forwarded-for");

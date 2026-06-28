@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { getUserPlan, PLAN_LIMITS } from "@/lib/monetization/plan";
+import { getPlanLimits, getUserPlan } from "@/lib/monetization/plan";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { metadataLimiter } from "@/lib/rate-limit";
 
 import { bearerToken, verifyApiKey, type ApiKeyAuth } from "./keys";
-import { dailyUsage } from "./usage";
+import { dailyUsageByUser } from "./usage";
 
 export interface ApiContext extends ApiKeyAuth {
   plan: BillingPlan;
@@ -40,8 +40,10 @@ export async function authenticateApi(request: Request): Promise<AuthResult> {
   }
 
   const plan = await getUserPlan(auth.userId);
-  const limit = PLAN_LIMITS[plan].apiDailyLimit;
-  const used = await dailyUsage(auth.keyId);
+  const limits = await getPlanLimits();
+  const limit = limits[plan].apiDailyLimit;
+  // Aggregate across ALL the user's keys so extra keys can't multiply the cap.
+  const used = await dailyUsageByUser(auth.userId);
   if (used >= limit) {
     return {
       ok: false,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { checkDownloadQuota, isInternalWorkerCall } from "@/lib/api/download-quota";
 import { BusyError } from "@/lib/concurrency";
 import { downloadLimiter, clientId } from "@/lib/rate-limit";
 import { slugifyFilename } from "@/lib/utils";
@@ -22,6 +23,30 @@ export const maxDuration = 300;
 
 function fail(error: string, code: ApiError["code"], status: number) {
   return NextResponse.json<ApiError>({ error, code }, { status });
+}
+
+/**
+ * Enforces the per-plan DAILY download cap for genuine end-user requests.
+ * Returns a 429 response when the cap is hit, or null to proceed. Internal
+ * worker-proxied calls are skipped (the frontend already counted them).
+ */
+async function enforceDailyCap(
+  request: Request,
+  clientIp: string,
+): Promise<Response | null> {
+  if (isInternalWorkerCall(request)) return null;
+  const quota = await checkDownloadQuota(request, clientIp);
+  if (quota.allowed) return null;
+  return NextResponse.json<ApiError>(
+    {
+      error:
+        quota.plan === "free"
+          ? `Daily download limit reached (${quota.limit}/day). Sign up or upgrade for more.`
+          : `Daily download limit reached (${quota.limit}/day on the ${quota.plan} plan).`,
+      code: "RATE_LIMITED",
+    },
+    { status: 429, headers: { "Retry-After": "3600" } },
+  );
 }
 
 /** Shared core: rate-limit, proxy-or-resolve, stream the file as an attachment. */
@@ -104,7 +129,11 @@ export async function POST(request: Request) {
     return fail(parsed.error.issues[0]?.message ?? "Invalid request.", "INVALID_URL", 400);
   }
 
-  return processDownload(parsed.data, clientId(request.headers));
+  const clientIp = clientId(request.headers);
+  const capped = await enforceDailyCap(request, clientIp);
+  if (capped) return capped;
+
+  return processDownload(parsed.data, clientIp);
 }
 
 /**
@@ -127,5 +156,9 @@ export async function GET(request: Request) {
     return fail(parsed.error.issues[0]?.message ?? "Invalid request.", "INVALID_URL", 400);
   }
 
-  return processDownload(parsed.data, clientId(request.headers));
+  const clientIp = clientId(request.headers);
+  const capped = await enforceDailyCap(request, clientIp);
+  if (capped) return capped;
+
+  return processDownload(parsed.data, clientIp);
 }

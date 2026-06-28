@@ -27,8 +27,10 @@ import {
   fetchRecentAlerts,
   maybeAlertProxyBudget,
 } from "@/lib/admin-stats";
+import { LimitsEditor } from "@/features/admin/limits-editor";
 import { PlanManager } from "@/features/admin/plan-manager";
 import { PricingEditor } from "@/features/admin/pricing-editor";
+import { getPlanLimits } from "@/lib/monetization/plan";
 import { getPricing } from "@/lib/monetization/pricing";
 import { fetchRevenueStats, fetchSubscribers } from "@/lib/monetization/stats";
 import { alertsEnabled } from "@/lib/notify";
@@ -66,14 +68,16 @@ export default async function AdminPage() {
     .single();
   if (!isAdmin(profile?.role, user.email)) redirect("/");
 
-  const [proxy, downloads, alerts, revenue, subscribers, pricing] = await Promise.all([
-    fetchProxyUsage(),
-    fetchDownloadStats(),
-    fetchRecentAlerts(),
-    fetchRevenueStats(),
-    fetchSubscribers(),
-    getPricing(),
-  ]);
+  const [proxy, downloads, alerts, revenue, subscribers, pricing, planLimits] =
+    await Promise.all([
+      fetchProxyUsage(),
+      fetchDownloadStats(),
+      fetchRecentAlerts(),
+      fetchRevenueStats(),
+      fetchSubscribers(),
+      getPricing(),
+      getPlanLimits(),
+    ]);
   // Fire the proxy-budget alert if we've crossed 90% (deduped to once/day).
   await maybeAlertProxyBudget(proxy);
 
@@ -194,9 +198,25 @@ export default async function AdminPage() {
           </section>
         ) : null}
 
-        {/* Manual plan management + editable pricing */}
+        {/* Manual plan management + editable pricing + editable limits */}
         <PlanManager subscribers={subscribers} />
         <PricingEditor pricing={pricing} />
+        <LimitsEditor
+          limits={{
+            free: {
+              dailyDownloads: planLimits.free.dailyDownloads,
+              apiDailyLimit: planLimits.free.apiDailyLimit,
+            },
+            pro: {
+              dailyDownloads: planLimits.pro.dailyDownloads,
+              apiDailyLimit: planLimits.pro.apiDailyLimit,
+            },
+            business: {
+              dailyDownloads: planLimits.business.dailyDownloads,
+              apiDailyLimit: planLimits.business.apiDailyLimit,
+            },
+          }}
+        />
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
           {/* Proxy widget */}

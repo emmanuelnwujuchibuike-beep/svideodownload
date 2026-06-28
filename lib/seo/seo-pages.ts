@@ -153,6 +153,16 @@ export function getPrimaryPages(): SeoPage[] {
   return ALL_PAGES.filter((p) => p.isPrimary);
 }
 
+/** The canonical download page for a platform — used by platform cards. */
+export function getPrimaryPageForPlatform(
+  platformId: PlatformId,
+): SeoPage | undefined {
+  return (
+    ALL_PAGES.find((p) => p.platformId === platformId && p.isPrimary) ??
+    ALL_PAGES.find((p) => p.platformId === platformId)
+  );
+}
+
 export function getClusterPages(clusterId: string): SeoPage[] {
   return ALL_PAGES.filter((p) => p.clusterId === clusterId);
 }

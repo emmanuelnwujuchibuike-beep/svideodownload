@@ -27,6 +27,7 @@ interface Tier {
   cta: string;
   href: string;
   highlight?: boolean;
+  prestige?: boolean;
 }
 
 function buildTiers(pricing: {
@@ -84,6 +85,7 @@ function buildTiers(pricing: {
       ],
       cta: `Get ${pricing.business.name}`,
       href: "/login?next=/pricing",
+      prestige: true,
     },
   ];
 }
@@ -115,13 +117,26 @@ export default async function PricingPage() {
                 key={t.id}
                 id={t.id}
                 className={cn(
-                  "relative flex flex-col scroll-mt-24 rounded-3xl p-7",
-                  t.highlight
-                    ? "border border-amber-500/30 bg-card bg-gradient-to-b from-amber-500/[0.08] to-transparent shadow-card ring-1 ring-amber-500/15 lg:scale-[1.04]"
-                    : "border border-border/80 bg-card shadow-card",
+                  "relative flex flex-col scroll-mt-24 rounded-3xl p-7 transition-all",
+                  t.prestige
+                    ? "border border-amber-300/40 bg-gradient-to-b from-slate-900 via-slate-950 to-black text-white shadow-luxury ring-1 ring-amber-300/30 lg:z-10 lg:scale-[1.06] lg:-translate-y-1"
+                    : t.highlight
+                      ? "border border-amber-500/30 bg-card bg-gradient-to-b from-amber-500/[0.08] to-transparent shadow-card ring-1 ring-amber-500/15 lg:scale-[1.02]"
+                      : "border border-border/80 bg-card shadow-card",
                 )}
               >
-                {t.highlight ? (
+                {t.prestige ? (
+                  <>
+                    {/* Soft platinum sheen across the top of the prestige card */}
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-x-0 top-0 h-32 rounded-t-3xl bg-gradient-to-b from-amber-200/10 to-transparent"
+                    />
+                    <span className="absolute -top-3.5 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-200 via-amber-400 to-amber-200 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-900 shadow-lg shadow-amber-400/40 ring-1 ring-amber-100/50">
+                      <Crown className="h-3.5 w-3.5" /> Ultimate
+                    </span>
+                  </>
+                ) : t.highlight ? (
                   <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-white shadow-md shadow-amber-500/30">
                     Most popular
                   </span>
@@ -132,10 +147,10 @@ export default async function PricingPage() {
                   <span
                     className={cn(
                       "flex h-10 w-10 items-center justify-center rounded-xl shadow-sm",
-                      t.highlight
-                        ? "bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-amber-500/30"
-                        : t.id === "business"
-                          ? "bg-gradient-to-br from-blue-600 to-cyan-400 text-white shadow-blue-500/25"
+                      t.prestige
+                        ? "bg-gradient-to-br from-amber-200 via-amber-400 to-amber-500 text-slate-900 shadow-amber-400/40 ring-1 ring-amber-200/40"
+                        : t.highlight
+                          ? "bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-amber-500/30"
                           : "bg-secondary text-muted-foreground",
                     )}
                   >
@@ -149,27 +164,49 @@ export default async function PricingPage() {
                   <span
                     className={cn(
                       "text-5xl font-bold tracking-tight",
-                      t.highlight && "text-gradient-gold",
+                      (t.highlight || t.prestige) && "text-gradient-gold",
                     )}
                   >
                     {t.price}
                   </span>
                   {t.period ? (
-                    <span className="mb-1.5 text-sm text-muted-foreground">{t.period}</span>
+                    <span
+                      className={cn(
+                        "mb-1.5 text-sm",
+                        t.prestige ? "text-slate-400" : "text-muted-foreground",
+                      )}
+                    >
+                      {t.period}
+                    </span>
                   ) : null}
                 </div>
-                <p className="mb-6 text-sm text-muted-foreground">{t.tagline}</p>
+                <p
+                  className={cn(
+                    "mb-6 text-sm",
+                    t.prestige ? "text-slate-400" : "text-muted-foreground",
+                  )}
+                >
+                  {t.tagline}
+                </p>
 
                 {/* Features */}
                 <ul className="mb-8 space-y-3">
                   {t.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm">
+                    <li
+                      key={f}
+                      className={cn(
+                        "flex items-start gap-2.5 text-sm",
+                        t.prestige && "text-slate-200",
+                      )}
+                    >
                       <span
                         className={cn(
                           "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
-                          t.highlight
-                            ? "bg-amber-500/15 text-amber-500"
-                            : "bg-primary/10 text-primary",
+                          t.prestige
+                            ? "bg-amber-400/20 text-amber-300"
+                            : t.highlight
+                              ? "bg-amber-500/15 text-amber-500"
+                              : "bg-primary/10 text-primary",
                         )}
                       >
                         <Check className="h-3 w-3" />
@@ -186,9 +223,11 @@ export default async function PricingPage() {
                       plan={t.id}
                       className={cn(
                         "group relative inline-flex w-full items-center justify-center overflow-hidden rounded-2xl px-4 py-3.5 text-sm font-semibold transition-all active:scale-[0.99] disabled:opacity-70",
-                        t.highlight
-                          ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50 hover:shadow-xl"
-                          : "bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:shadow-primary/35",
+                        t.prestige
+                          ? "bg-gradient-to-r from-amber-200 via-amber-400 to-amber-300 text-slate-900 shadow-lg shadow-amber-400/30 hover:shadow-amber-400/50 hover:shadow-xl"
+                          : t.highlight
+                            ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50 hover:shadow-xl"
+                            : "bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:shadow-primary/35",
                       )}
                     >
                       <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />

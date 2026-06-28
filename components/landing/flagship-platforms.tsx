@@ -1,4 +1,5 @@
 import { ArrowRight, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
 
 import { Reveal } from "@/components/ui/reveal";
 import {
@@ -7,6 +8,7 @@ import {
   FLAGSHIP_TAGLINES,
 } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
+import { getPrimaryPageForPlatform } from "@/lib/seo/seo-pages";
 
 export function FlagshipPlatforms() {
   return (
@@ -30,9 +32,13 @@ export function FlagshipPlatforms() {
           {FLAGSHIP_IDS.map((id, i) => {
             const platform = PLATFORMS[id];
             const Icon = BRAND_ICONS[id];
+            const href = `/${getPrimaryPageForPlatform(id)?.slug ?? ""}`;
             return (
               <Reveal key={id} delay={(i % 3) * 0.07}>
-                <article className="group relative h-full overflow-hidden rounded-3xl border border-border bg-card p-7 shadow-card transition-all duration-300 hover:-translate-y-1.5 hover:shadow-elevated">
+                <Link
+                  href={href}
+                  className="group relative block h-full overflow-hidden rounded-3xl border border-border bg-card p-7 shadow-card transition-all duration-300 hover:-translate-y-1.5 hover:border-foreground/20 hover:shadow-elevated"
+                >
                   {/* Brand glow */}
                   <div
                     className={`pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-gradient-to-br ${platform.accent} opacity-20 blur-2xl transition-opacity duration-300 group-hover:opacity-40`}
@@ -52,11 +58,9 @@ export function FlagshipPlatforms() {
                   </p>
 
                   <div className="mt-6 flex flex-wrap items-center gap-2">
-                    {platform.watermarkFree ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-500 ring-1 ring-inset ring-green-500/20">
-                        <CheckCircle2 className="h-3 w-3" /> No watermark
-                      </span>
-                    ) : null}
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-500 ring-1 ring-inset ring-green-500/20">
+                      <CheckCircle2 className="h-3 w-3" /> No watermark
+                    </span>
                     <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
                       MP4 · HD · MP3
                     </span>
@@ -66,7 +70,7 @@ export function FlagshipPlatforms() {
                     Download {platform.name.split(" ")[0]}
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                   </div>
-                </article>
+                </Link>
               </Reveal>
             );
           })}

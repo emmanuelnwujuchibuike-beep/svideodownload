@@ -81,10 +81,18 @@ export function SiteHeader() {
         </button>
       </div>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — right-side panel; left half of the page stays visible */}
       {open && (
-        <div className="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-border/40 bg-background/97 md:hidden">
-          <nav className="container flex flex-col gap-1 py-4">
+        <>
+          {/* Backdrop over the exposed page area */}
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={() => setOpen(false)}
+            className="fixed inset-x-0 bottom-0 top-16 z-40 bg-background/50 backdrop-blur-sm md:hidden"
+          />
+          <div className="fixed bottom-0 right-0 top-16 z-50 w-1/2 min-w-[16rem] max-w-sm overflow-y-auto overscroll-contain border-l border-border/40 bg-background/97 shadow-2xl md:hidden">
+            <nav className="flex flex-col gap-1 p-4">
             {/* Go Pro — top CTA, hidden for paying users */}
             {!isPremium && (
               <Link
@@ -105,11 +113,11 @@ export function SiteHeader() {
               Blog
             </Link>
 
-            {/* Platform grid */}
+            {/* Platform list — vertical, scrollable */}
             <p className="mt-3 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
               Download from
             </p>
-            <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="mt-2 flex flex-col gap-2">
               {DOWNLOADERS.map((d) => {
                 const platform = PLATFORMS[d.platformId];
                 const Icon = BRAND_ICONS[d.platformId];
@@ -177,8 +185,9 @@ export function SiteHeader() {
                 )}
               </Link>
             )}
-          </nav>
-        </div>
+            </nav>
+          </div>
+        </>
       )}
     </header>
   );

@@ -59,15 +59,9 @@ export function PlatformShowcase() {
                   {p.audioOnly ? "MP3 · M4A · WAV" : "MP4 · HD · MP3"}
                 </p>
 
-                {p.watermarkFree ? (
-                  <span className="mt-3 inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-400 ring-1 ring-inset ring-green-500/20">
-                    <CheckCircle2 className="h-3 w-3" /> No watermark
-                  </span>
-                ) : (
-                  <span className="mt-3 inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                    Up to 4K
-                  </span>
-                )}
+                <span className="mt-3 inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-400 ring-1 ring-inset ring-green-500/20">
+                  <CheckCircle2 className="h-3 w-3" /> No watermark
+                </span>
               </article>
             </Reveal>
             );

@@ -5,6 +5,7 @@ import { bearerToken, verifyApiKey } from "@/lib/api/keys";
 import { selectAffiliateOffer } from "@/lib/monetization/affiliates";
 import { buildRequestContext } from "@/lib/monetization/context";
 import { getPlanLimits, getUserPlan } from "@/lib/monetization/plan";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { SITE_URL } from "@/lib/site";
 
@@ -45,6 +46,21 @@ export async function GET(request: Request) {
   const limits = (await getPlanLimits())[plan];
   const ctx = buildRequestContext(request, plan);
 
+  // The viewer's profile handle (for "My profile" links). Null until they set one.
+  let handle: string | null = null;
+  if (userId) {
+    try {
+      const { data } = await createAdminClient()
+        .from("profiles")
+        .select("handle")
+        .eq("id", userId)
+        .maybeSingle();
+      handle = (data?.handle as string | null) ?? null;
+    } catch {
+      /* ignore */
+    }
+  }
+
   let offer = null as null | {
     id: string;
     name: string;
@@ -72,6 +88,7 @@ export async function GET(request: Request) {
     NextResponse.json({
       authenticated: !!userId,
       plan,
+      handle,
       isPremium: plan !== "free",
       showAds: limits.ads,
       limits: {

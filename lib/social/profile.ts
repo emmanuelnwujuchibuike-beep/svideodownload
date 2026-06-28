@@ -109,10 +109,12 @@ export async function getPublicProfile(
   if (!HANDLE_RE.test(norm)) return null;
   try {
     const db = createAdminClient();
+    // Handles are stored lowercased, so match exactly — NOT with ilike, whose
+    // `_`/`%` would be treated as wildcards (handles allow underscores).
     const { data } = await db
       .from("profiles")
       .select(SELECT)
-      .ilike("handle", norm)
+      .eq("handle", norm)
       .maybeSingle();
     const row = data as ProfileRow | null;
     if (!row || row.is_suspended) return null;

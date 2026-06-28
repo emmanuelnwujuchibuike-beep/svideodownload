@@ -1,16 +1,18 @@
 "use client";
 
-import { KeyRound, LogOut, User as UserIcon } from "lucide-react";
+import { KeyRound, LogOut, User as UserIcon, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { MyDiamondCrownBadge } from "@/components/badges/my-diamond-crown-badge";
 
+import { useEntitlements } from "./use-entitlements";
 import { useUser } from "./use-user";
 
 /** Desktop header auth control: "Sign in" when logged out, avatar menu in. */
 export function UserMenu() {
   const { user, loading, enabled } = useUser();
+  const { handle } = useEntitlements();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -86,6 +88,14 @@ export function UserMenu() {
             <span className="truncate text-xs text-muted-foreground">{email}</span>
             <MyDiamondCrownBadge size="sm" showLabel />
           </div>
+          <Link
+            href={handle ? `/u/${handle}` : "/account#profile"}
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
+          >
+            <UserCircle className="h-4 w-4" /> {handle ? "My profile" : "Set up profile"}
+          </Link>
           <Link
             href="/account"
             role="menuitem"

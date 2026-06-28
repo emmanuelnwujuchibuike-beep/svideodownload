@@ -1,10 +1,11 @@
 "use client";
 
-import { Crown, Download, KeyRound, LogOut, Menu, User as UserIcon, X } from "lucide-react";
+import { Crown, Download, KeyRound, LogOut, Menu, User as UserIcon, UserCircle, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useUser } from "@/features/auth/use-user";
 import { UserMenu } from "@/features/auth/user-menu";
 import { useShowAds } from "@/features/monetization/use-show-ads";
@@ -25,6 +26,7 @@ const DOWNLOADERS = getPrimaryPages();
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const { user, enabled } = useUser();
+  const { handle } = useEntitlements();
   const { showAds, ready } = useShowAds();
   const isPremium = ready && !showAds;
 
@@ -157,9 +159,16 @@ export function SiteHeader() {
             {enabled && user ? (
               <>
                 <Link
-                  href="/account"
+                  href={handle ? `/u/${handle}` : "/account#profile"}
                   onClick={() => setOpen(false)}
                   className="mt-2 flex items-center gap-2 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
+                >
+                  <UserCircle className="h-5 w-5" /> {handle ? "My profile" : "Set up profile"}
+                </Link>
+                <Link
+                  href="/account"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
                 >
                   <UserIcon className="h-5 w-5" /> Account
                 </Link>

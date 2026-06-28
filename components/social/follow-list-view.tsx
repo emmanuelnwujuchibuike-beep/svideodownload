@@ -33,8 +33,12 @@ export async function FollowListView({
   const profile = await getPublicProfile(handle, viewerId);
   if (!profile) notFound();
 
-  const users =
-    kind === "followers"
+  // Privacy compounds: if the viewer can't see the profile itself (private /
+  // followers-only and not allowed), they can't see its follow lists either —
+  // regardless of the separate followers_visibility setting.
+  const users = profile.restricted
+    ? null
+    : kind === "followers"
       ? await listFollowers(profile.id, viewerId)
       : await listFollowing(profile.id, viewerId);
 

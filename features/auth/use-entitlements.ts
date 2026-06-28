@@ -14,6 +14,7 @@ export interface Entitlements {
   isPremium: boolean;
   isBusiness: boolean;
   showAds: boolean;
+  handle: string | null;
   ready: boolean;
 }
 
@@ -22,6 +23,7 @@ const FREE: Omit<Entitlements, "ready"> = {
   isPremium: false,
   isBusiness: false,
   showAds: true,
+  handle: null,
 };
 
 let cache: Omit<Entitlements, "ready"> | null = null;
@@ -47,6 +49,7 @@ export function useEntitlements(): Entitlements {
           isPremium: plan !== "free",
           isBusiness: plan === "business",
           showAds: d?.showAds ?? true,
+          handle: (d?.handle as string | null) ?? null,
         };
       })
       .catch(() => {

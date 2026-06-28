@@ -6,34 +6,10 @@ import { PLATFORMS } from "@/lib/platforms";
 export function Hero() {
   return (
     <section className="relative overflow-hidden pb-24 pt-32 sm:pb-32 sm:pt-44">
-      {/* Dot grid */}
+      {/* Dot grid — no z-index so it stays inside this section's paint order */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-grid-pattern bg-[size:40px_40px] opacity-[0.28] [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,black,transparent)]"
-      />
-
-      {/* Primary blue glow — dominant, clearly visible */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[-15%] -z-10 h-[500px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-b from-blue-600/40 via-sky-500/25 to-transparent blur-[80px]"
-      />
-
-      {/* Gold accent — top right, clearly visible */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute right-0 top-0 -z-10 h-[350px] w-[450px] rounded-full bg-gradient-to-bl from-amber-500/35 via-orange-500/20 to-transparent blur-[70px]"
-      />
-
-      {/* Cyan accent — bottom left */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute bottom-0 left-0 -z-10 h-[280px] w-[400px] rounded-full bg-gradient-to-tr from-cyan-500/30 via-sky-400/15 to-transparent blur-[65px]"
-      />
-
-      {/* Violet hint — mid left */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-[5%] top-[40%] -z-10 h-[240px] w-[320px] rounded-full bg-gradient-to-r from-violet-600/20 via-purple-500/10 to-transparent blur-[60px]"
+        className="pointer-events-none absolute inset-0 bg-grid-pattern bg-[size:40px_40px] opacity-[0.22] [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,black,transparent)]"
       />
 
       <div className="container flex flex-col items-center text-center">

@@ -42,21 +42,6 @@ export default async function LoginPage({
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-16">
-      {/* Blue glow — top center */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[420px] w-[640px] -translate-x-1/2 rounded-full bg-gradient-to-b from-primary/38 via-sky-500/20 to-transparent blur-[80px]"
-      />
-      {/* Gold accent — top right */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute right-0 top-0 -z-10 h-[280px] w-[380px] rounded-full bg-gradient-to-bl from-amber-500/30 via-orange-500/15 to-transparent blur-[65px]"
-      />
-      {/* Cyan accent — bottom left */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute bottom-0 left-0 -z-10 h-[220px] w-[340px] rounded-full bg-gradient-to-tr from-cyan-500/25 to-transparent blur-[60px]"
-      />
 
       {/* Brand */}
       <Link

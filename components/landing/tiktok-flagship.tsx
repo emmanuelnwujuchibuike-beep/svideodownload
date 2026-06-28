@@ -73,10 +73,6 @@ export function TikTokFlagship() {
 
   return (
     <section className="relative overflow-hidden border-t border-border/60 py-28 sm:py-36">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute right-0 top-1/2 -z-10 h-96 w-96 -translate-y-1/2 rounded-full bg-blue-500/15 blur-3xl"
-      />
       <div className="container grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
         <Reveal>
           <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20">

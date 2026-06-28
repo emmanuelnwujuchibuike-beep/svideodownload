@@ -126,21 +126,6 @@ export default async function DownloaderPage({
       <main>
         {/* Hero + tool */}
         <section className="relative overflow-hidden pb-16 pt-28 sm:pt-36">
-          {/* Primary blue glow */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute left-1/2 top-[-12%] -z-10 h-[480px] w-[820px] -translate-x-1/2 rounded-full bg-gradient-to-tr from-blue-500/38 via-sky-500/22 to-cyan-400/20 blur-[85px]"
-          />
-          {/* Gold accent — top right */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute right-0 top-0 -z-10 h-[300px] w-[420px] rounded-full bg-gradient-to-bl from-amber-500/30 via-orange-400/16 to-transparent blur-[70px]"
-          />
-          {/* Cyan accent — bottom left */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute bottom-0 left-0 -z-10 h-[220px] w-[360px] rounded-full bg-gradient-to-tr from-cyan-500/26 to-transparent blur-[60px]"
-          />
           <div className="container flex flex-col items-center text-center">
             <span
               className={`mb-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-br ${platform.accent} px-4 py-1.5 text-sm font-semibold text-white shadow-soft`}

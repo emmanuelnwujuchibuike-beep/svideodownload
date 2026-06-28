@@ -56,8 +56,13 @@ const PLACEMENT_LABELS: Record<Placement, string> = {
   sidebar: "Sidebar",
 };
 
-const toLocal = (iso: string | null): string =>
-  iso ? new Date(iso).toISOString().slice(0, 16) : "";
+// datetime-local shows/edits LOCAL wall-clock time, so shift by the tz offset
+// when converting to/from the stored UTC ISO string.
+const toLocal = (iso: string | null): string => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
 const fromLocal = (local: string): string | null =>
   local ? new Date(local).toISOString() : null;
 
@@ -164,10 +169,9 @@ export function AffiliateManager({ affiliates }: { affiliates: AffiliateRecord[]
     const a = affiliates[index];
     const b = affiliates[index + dir];
     if (!a || !b) return;
-    await Promise.all([
-      patch(a.id, { sort_order: b.sort_order }),
-      patch(b.id, { sort_order: a.sort_order }),
-    ]);
+    // Put `a` just past `b` in the move direction. Robust even when rows share
+    // the same sort_order (a plain swap would be a no-op there).
+    await patch(a.id, { sort_order: b.sort_order + dir });
     router.refresh();
   };
 

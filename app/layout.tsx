@@ -12,6 +12,11 @@ import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
+// ISR: static pages (incl. the global footer's admin-managed Recommended Tools)
+// regenerate at most once a minute, so monetization changes go live without a
+// redeploy. Dynamic pages (/admin, /account, /login) set their own config.
+export const revalidate = 60;
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {

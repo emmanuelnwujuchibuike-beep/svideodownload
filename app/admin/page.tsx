@@ -27,16 +27,23 @@ import {
   fetchRecentAlerts,
   maybeAlertProxyBudget,
 } from "@/lib/admin-stats";
+import { AdManager } from "@/features/admin/ad-manager";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
+import { AnalyticsPanel } from "@/features/admin/analytics-panel";
 import { LimitsEditor } from "@/features/admin/limits-editor";
 import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
 import { PricingEditor } from "@/features/admin/pricing-editor";
+import { listAds } from "@/lib/monetization/ads";
 import { getPlanLimits } from "@/lib/monetization/plan";
 import { getPricing } from "@/lib/monetization/pricing";
 import { getMonetizationSettings } from "@/lib/monetization/settings";
 import { listAffiliates } from "@/lib/monetization/tools";
-import { fetchRevenueStats, fetchSubscribers } from "@/lib/monetization/stats";
+import {
+  fetchMonetizationAnalytics,
+  fetchRevenueStats,
+  fetchSubscribers,
+} from "@/lib/monetization/stats";
 import { alertsEnabled } from "@/lib/notify";
 import { PLATFORMS } from "@/lib/platforms";
 import { createClient } from "@/lib/supabase/server";
@@ -82,6 +89,8 @@ export default async function AdminPage() {
     planLimits,
     monetization,
     affiliates,
+    adRecords,
+    analytics,
   ] = await Promise.all([
     fetchProxyUsage(),
     fetchDownloadStats(),
@@ -92,6 +101,8 @@ export default async function AdminPage() {
     getPlanLimits(),
     getMonetizationSettings(),
     listAffiliates(),
+    listAds(),
+    fetchMonetizationAnalytics(),
   ]);
   // Fire the proxy-budget alert if we've crossed 90% (deduped to once/day).
   await maybeAlertProxyBudget(proxy);
@@ -233,9 +244,11 @@ export default async function AdminPage() {
           }}
         />
 
-        {/* Monetization controls + affiliate / recommended-tools manager */}
+        {/* Monetization controls + managers + analytics */}
         <MonetizationSettings settings={monetization} />
+        <AnalyticsPanel data={analytics} />
         <AffiliateManager affiliates={affiliates} />
+        <AdManager ads={adRecords} />
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
           {/* Proxy widget */}

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { RecommendedToolsClient } from "@/components/monetization/recommended-tools-client";
 import { FetchedAd } from "@/features/monetization/fetched-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
 import { detectPlatform } from "@/lib/platforms";
@@ -181,6 +182,8 @@ export function Downloader() {
 
           {/* Decision-engine offer: ad / affiliate / upgrade — keyed per video. */}
           <ResultOffer key={metadata.id} />
+          {/* Admin-managed recommended tools (renders nothing when empty). */}
+          <RecommendedToolsClient placement="download_result" />
           <div className="mt-5 text-center">
             <button
               type="button"

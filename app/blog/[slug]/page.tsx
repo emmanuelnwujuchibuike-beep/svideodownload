@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { AdSlot } from "@/features/monetization/ad-slot";
 import { BLOG_SLUGS, getPost } from "@/lib/seo/blog";
 import { getSeoPage } from "@/lib/seo/seo-pages";
@@ -127,6 +128,8 @@ export default async function BlogPostPage({
           </div>
 
           <AdSlot zone="sidebar" className="my-10" />
+
+          <RecommendedTools placement="blog" title="Recommended tools" className="my-10" />
 
           {tool ? (
             <div className="mt-12 rounded-3xl border border-border bg-card p-6 shadow-card sm:p-8">

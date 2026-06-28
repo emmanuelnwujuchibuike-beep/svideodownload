@@ -57,6 +57,87 @@ export interface RevenueStats {
   api: { callsToday: number; calls7d: number; activeKeys: number };
 }
 
+const AD_ZONES = [
+  "global",
+  "homepage_top",
+  "download_result_page",
+  "result_top",
+  "reward_video",
+  "sidebar",
+  "exit_intent_popup",
+  "mobile_bottom_banner",
+] as const;
+
+export interface MonetizationAnalytics {
+  totals: { affiliateClicks7d: number; adClicks7d: number; adImpressions7d: number; ctr: number };
+  adZones: { zone: string; impressions: number; clicks: number; ctr: number }[];
+  topAffiliates: { id: string; name: string; clicks: number }[];
+}
+
+/**
+ * Click/impression analytics for the admin dashboard: per-zone ad CTR (7d) and
+ * top-performing affiliates (30d). Admin-only; runs on the dynamic /admin page.
+ */
+export async function fetchMonetizationAnalytics(): Promise<MonetizationAnalytics | null> {
+  if (!hasSupabase) return null;
+  try {
+    const s = createAdminClient();
+    const week = sinceIso(7 * 864e5);
+    const month = sinceIso(30 * 864e5);
+    const headCount = (table: string) => s.from(table).select("*", { count: "exact", head: true });
+
+    // Per-zone ad impressions + clicks (7d).
+    const adZonesRaw = await Promise.all(
+      AD_ZONES.map(async (zone) => {
+        const [impr, clk] = await Promise.all([
+          headCount("ad_impressions").eq("zone", zone).gte("created_at", week),
+          headCount("ad_clicks").eq("zone", zone).gte("created_at", week),
+        ]);
+        const impressions = impr.count ?? 0;
+        const clicks = clk.count ?? 0;
+        return {
+          zone,
+          impressions,
+          clicks,
+          ctr: impressions > 0 ? Math.round((clicks / impressions) * 1000) / 10 : 0,
+        };
+      }),
+    );
+
+    // Top affiliates by clicks (30d) — bounded to the first 30 offers.
+    const { data: offers } = await s.from("affiliate_offers").select("id, name").limit(30);
+    const topRaw = await Promise.all(
+      (offers ?? []).map(async (o) => {
+        const { count } = await headCount("affiliate_clicks")
+          .eq("offer_id", o.id as string)
+          .gte("created_at", month);
+        return { id: o.id as string, name: o.name as string, clicks: count ?? 0 };
+      }),
+    );
+
+    const [affTot, adClkTot, adImprTot] = await Promise.all([
+      headCount("affiliate_clicks").gte("created_at", week),
+      headCount("ad_clicks").gte("created_at", week),
+      headCount("ad_impressions").gte("created_at", week),
+    ]);
+    const adImpr = adImprTot.count ?? 0;
+    const adClk = adClkTot.count ?? 0;
+
+    return {
+      totals: {
+        affiliateClicks7d: affTot.count ?? 0,
+        adClicks7d: adClk,
+        adImpressions7d: adImpr,
+        ctr: adImpr > 0 ? Math.round((adClk / adImpr) * 1000) / 10 : 0,
+      },
+      adZones: adZonesRaw.filter((z) => z.impressions > 0 || z.clicks > 0),
+      topAffiliates: topRaw.filter((t) => t.clicks > 0).sort((a, b) => b.clicks - a.clicks).slice(0, 8),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Aggregates monetization metrics for the admin dashboard. */
 export async function fetchRevenueStats(): Promise<RevenueStats | null> {
   if (!hasSupabase) return null;

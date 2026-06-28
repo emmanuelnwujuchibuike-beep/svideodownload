@@ -53,11 +53,12 @@ export function Reveal({
       ref={ref}
       className={cn(
         "motion-reduce:!translate-y-0 motion-reduce:!opacity-100 motion-reduce:!transition-none",
-        "transform-gpu transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        "transform-gpu transition-[opacity,transform] duration-700",
         shown ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0",
         className,
       )}
       style={{
+        transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
         transitionDelay: shown ? `${delay}s` : "0s",
         willChange: shown ? "auto" : "transform, opacity",
       }}

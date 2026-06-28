@@ -89,3 +89,39 @@ export async function getAdsForZone(zone: string): Promise<AdSlotData[]> {
 export function clearAdCache(): void {
   cache.clear();
 }
+
+/** Full admin row (all fields, incl. disabled) for the ad manager. */
+export interface AdRecord {
+  id: string;
+  zone: string;
+  network: string;
+  format: string;
+  script_code: string | null;
+  image_url: string | null;
+  target_url: string | null;
+  headline: string | null;
+  width: number | null;
+  height: number | null;
+  priority: number;
+  weight: number;
+  active: boolean;
+  created_at: string;
+}
+
+/** Admin: every ad row across all zones (newest first). */
+export async function listAds(): Promise<AdRecord[]> {
+  if (!hasSupabase) return [];
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("ads")
+      .select(
+        "id, zone, network, format, script_code, image_url, target_url, headline, width, height, priority, weight, active, created_at",
+      )
+      .order("zone", { ascending: true })
+      .order("priority", { ascending: true });
+    return (data as AdRecord[]) ?? [];
+  } catch {
+    return [];
+  }
+}

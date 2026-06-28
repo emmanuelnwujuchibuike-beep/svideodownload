@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AssistantWidget } from "@/features/assistant/assistant-widget";
 import { AdScripts } from "@/features/monetization/ad-scripts";
+import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
 import "./globals.css";
@@ -100,6 +101,7 @@ export default function RootLayout({
           </div>
           {children}
           <AssistantWidget />
+          <StickyBottomAd />
           <AdScripts />
         </ThemeProvider>
       </body>

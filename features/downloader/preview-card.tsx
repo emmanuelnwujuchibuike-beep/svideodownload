@@ -13,13 +13,13 @@ import {
   Play,
   Video,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
 import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
-import { cn, formatBytes, formatCompactNumber, formatDuration } from "@/lib/utils";
+import { cn, formatCompactNumber, formatDuration } from "@/lib/utils";
 import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
 type DownloadPhase = "idle" | "working" | "done";
@@ -304,11 +304,6 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
               {isImageTab
                 ? `Download Photo${imageFormats.length > 1 ? ` ${photoIndex + 1}` : ""}`
                 : `Download ${activeFormat?.label ?? (tab === "audio" ? "Audio" : "Video")}`}
-              {activeFormat?.filesize ? (
-                <span className="font-normal text-primary-foreground/70">
-                  · {formatBytes(activeFormat.filesize)}
-                </span>
-              ) : null}
             </>
           )}
         </button>
@@ -396,7 +391,6 @@ function FormatRow({
       </span>
       <span className="text-[11px] uppercase text-muted-foreground">
         {format.ext}
-        {format.filesize ? ` · ${formatBytes(format.filesize)}` : ""}
       </span>
     </button>
   );

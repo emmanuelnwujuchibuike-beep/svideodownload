@@ -16,22 +16,16 @@ export default function Icon() {
           justifyContent: "center",
           borderRadius: 14,
           background: "linear-gradient(135deg, #2563eb, #22d3ee)",
+          color: "white",
+          fontSize: 44,
+          fontWeight: 800,
+          fontFamily: "sans-serif",
+          letterSpacing: -1,
+          // optical centering for the cap-height letter
+          paddingBottom: 2,
         }}
       >
-        <svg
-          width="40"
-          height="40"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          strokeWidth={2.6}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M12 4v9" />
-          <path d="M8 11l4 4 4-4" />
-          <path d="M5 20h14" />
-        </svg>
+        F
       </div>
     ),
     { ...size },

@@ -11,26 +11,6 @@ export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_ALT =
   "FrenzSave — Download and meet new friends with the latest news and reels";
 
-/** The download-arrow logo glyph (used in the badge). */
-function LogoMark({ size }: { size: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="white"
-      strokeWidth={2.3}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 4v9" />
-      <path d="M8 11l4 4 4-4" />
-      <path d="M5 20h14" />
-    </svg>
-  );
-}
-
 export function OgImage({
   headline = "Download & meet new friends with the latest news and reels",
   sub = "Fast · Watermark-free · HD · No login",
@@ -76,9 +56,14 @@ export function OgImage({
             height: 92,
             borderRadius: 24,
             background: "linear-gradient(135deg, #2563eb, #22d3ee)",
+            color: "white",
+            fontSize: 60,
+            fontWeight: 800,
+            letterSpacing: -2,
+            paddingBottom: 4,
           }}
         >
-          <LogoMark size={52} />
+          F
         </div>
         <div style={{ display: "flex", fontSize: 54, fontWeight: 800, color: "white" }}>
           <span style={{ color: "white" }}>Frenz</span>

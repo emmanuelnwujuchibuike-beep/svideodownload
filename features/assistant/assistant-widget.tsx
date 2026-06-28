@@ -54,7 +54,7 @@ export function AssistantWidget() {
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 0.6, type: "spring", stiffness: 260, damping: 20 }}
-        className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-xl shadow-primary/30 transition-transform hover:scale-105 active:scale-95 sm:bottom-6 sm:right-6"
+        className="fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-xl shadow-primary/30 transition-transform hover:scale-105 active:scale-95 sm:bottom-6 sm:right-6"
       >
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
@@ -83,7 +83,7 @@ export function AssistantWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.97 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed inset-x-3 bottom-24 z-50 mx-auto flex max-h-[70vh] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-elevated sm:inset-x-auto sm:right-6 sm:bottom-24 sm:w-[24rem]"
+            className="fixed inset-x-3 bottom-24 z-30 mx-auto flex max-h-[70vh] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-elevated sm:inset-x-auto sm:right-6 sm:bottom-24 sm:w-[24rem]"
           >
             {/* Header */}
             <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-gradient-to-r from-blue-600/10 to-cyan-500/10 px-4 py-3">

@@ -15,22 +15,15 @@ export default function AppleIcon() {
           alignItems: "center",
           justifyContent: "center",
           background: "linear-gradient(135deg, #2563eb, #22d3ee)",
+          color: "white",
+          fontSize: 120,
+          fontWeight: 800,
+          fontFamily: "sans-serif",
+          letterSpacing: -2,
+          paddingBottom: 6,
         }}
       >
-        <svg
-          width="108"
-          height="108"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          strokeWidth={2.3}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M12 4v9" />
-          <path d="M8 11l4 4 4-4" />
-          <path d="M5 20h14" />
-        </svg>
+        F
       </div>
     ),
     { ...size },

@@ -93,7 +93,7 @@ export function SiteHeader() {
             onClick={() => setOpen(false)}
             className="fixed inset-x-0 bottom-0 top-16 z-40 bg-background/50 backdrop-blur-sm md:hidden"
           />
-          <div className="fixed bottom-0 right-0 top-16 z-50 w-1/2 min-w-[16rem] max-w-sm overflow-y-auto overscroll-contain border-l border-border/40 bg-background/97 shadow-2xl md:hidden">
+          <div className="fixed bottom-0 right-0 top-16 z-50 w-[62%] min-w-[18rem] max-w-sm overflow-y-auto overscroll-contain border-l border-border/40 bg-background/97 shadow-2xl md:hidden">
             <nav className="flex flex-col gap-1 p-4">
             {/* Go Pro — top CTA, hidden for paying users */}
             {!isPremium && (

@@ -28,9 +28,17 @@ export function alertsEnabled(): boolean {
 
 /** Low-level send. Returns true on a 2xx from Resend. Never throws. */
 export async function sendAdminEmail(subject: string, html: string): Promise<boolean> {
-  if (!RESEND_API_KEY) return false;
+  if (!RESEND_API_KEY) {
+    console.warn("[notify] RESEND_API_KEY not set — admin email skipped.");
+    return false;
+  }
   const to = recipients();
-  if (to.length === 0) return false;
+  if (to.length === 0) {
+    console.warn(
+      "[notify] No recipients — set ALERT_EMAIL_TO (or ADMIN_EMAILS). Admin email skipped.",
+    );
+    return false;
+  }
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -41,8 +49,19 @@ export async function sendAdminEmail(subject: string, html: string): Promise<boo
       body: JSON.stringify({ from: FROM, to, subject, html }),
       signal: AbortSignal.timeout(10_000),
     });
-    return res.ok;
-  } catch {
+    if (!res.ok) {
+      // Surface the reason instead of failing silently. The most common cause is
+      // using the default `onboarding@resend.dev` sender, which Resend only lets
+      // deliver to the account owner's own email — set a verified ALERT_EMAIL_FROM.
+      const body = await res.text().catch(() => "");
+      console.error(
+        `[notify] Resend rejected email (${res.status}) from="${FROM}" to=${to.join(",")}: ${body}`,
+      );
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[notify] Resend request failed:", err);
     return false;
   }
 }

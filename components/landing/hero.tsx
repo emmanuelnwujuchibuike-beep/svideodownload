@@ -30,11 +30,9 @@ export function Hero() {
 
         {/* Main heading */}
         <h1 className="max-w-4xl text-[2.6rem] font-bold leading-[1.04] tracking-[-0.04em] sm:text-[3.75rem] lg:text-[4.5rem]">
-          Download &amp; meet new friends with{" "}
-          <span className="text-gradient">
-            the latest news
-            <br className="hidden sm:block" /> and reels
-          </span>
+          Download Videos,{" "}
+          <span className="text-gradient">Meet New Friends</span>
+          <br className="hidden sm:block" /> &amp; Discover the Latest News
         </h1>
 
         <p className="mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-xl">

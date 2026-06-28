@@ -15,11 +15,11 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "FrenzSave — Download and meet new friends with the latest news and reels",
+    default: "Download Videos Online Free | Frenzsave",
     template: "%s · FrenzSave",
   },
   description:
-    "FrenzSave — download and meet new friends with the latest news and reels. Fast, secure, watermark-free downloads from TikTok, Instagram, YouTube, X, Facebook, Pinterest, Snapchat and more. No login. Unlimited HD.",
+    "Download videos online for free, connect with new friends, watch trending reels, and stay updated with the latest news—all in one place.",
   keywords: [
     "tiktok downloader",
     "no watermark",
@@ -34,14 +34,15 @@ export const metadata: Metadata = {
     type: "website",
     url: siteUrl,
     siteName: "FrenzSave",
-    title: "FrenzSave — Download and meet new friends with the latest news and reels",
+    title: "Download Videos Online Free | Frenzsave",
     description:
-      "Download and meet new friends with the latest news and reels — fast, secure, watermark-free.",
+      "Download videos online for free, connect with new friends, watch trending reels, and stay updated with the latest news—all in one place.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "FrenzSave — Download and meet new friends with the latest news and reels",
-    description: "Download and meet new friends with the latest news and reels.",
+    title: "Download Videos Online Free | Frenzsave",
+    description:
+      "Download videos online for free, connect with new friends, watch trending reels, and stay updated with the latest news—all in one place.",
   },
   robots: { index: true, follow: true },
 };

@@ -8,9 +8,12 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ApiKeys } from "@/features/api/api-keys";
 import { ManageBillingButton } from "@/features/monetization/manage-billing-button";
+import { ProfileEditor } from "@/features/social/profile-editor";
+import { PrivacyEditor } from "@/features/social/privacy-editor";
 import { isAdmin } from "@/lib/admin";
 import { getPlanLimits } from "@/lib/monetization/plan";
 import type { BillingPlan } from "@/lib/monetization/types";
+import { getOwnProfile, getPrivacySettings } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -84,6 +87,12 @@ export default async function AccountPage() {
     apiUsed7d = count ?? 0;
   }
 
+  // Social profile + privacy (for the editors).
+  const [ownProfile, privacy] = await Promise.all([
+    getOwnProfile(user.id),
+    getPrivacySettings(user.id),
+  ]);
+
   return (
     <>
       <SiteHeader />
@@ -147,6 +156,10 @@ export default async function AccountPage() {
                 </div>
               </div>
             </div>
+
+            {/* Public profile + privacy */}
+            {ownProfile ? <ProfileEditor profile={ownProfile} /> : null}
+            <PrivacyEditor settings={privacy} />
 
             {/* Plan / billing */}
             <div className="border-b border-border/60 p-6 sm:p-8">

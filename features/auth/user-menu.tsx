@@ -4,6 +4,8 @@ import { KeyRound, LogOut, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { MyDiamondCrownBadge } from "@/components/badges/my-diamond-crown-badge";
+
 import { useUser } from "./use-user";
 
 /** Desktop header auth control: "Sign in" when logged out, avatar menu in. */
@@ -59,16 +61,20 @@ export function UserMenu() {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full ring-1 ring-border transition hover:ring-foreground/30"
+        className="relative flex h-9 w-9 items-center justify-center overflow-visible rounded-full ring-1 ring-border transition hover:ring-foreground/30"
       >
-        {avatar ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatar} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600 to-cyan-400 text-sm font-bold text-white">
-            {initial}
-          </span>
-        )}
+        <span className="h-full w-full overflow-hidden rounded-full">
+          {avatar ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatar} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600 to-cyan-400 text-sm font-bold text-white">
+              {initial}
+            </span>
+          )}
+        </span>
+        {/* Diamond Crown overlaps the avatar for premium/business viewers */}
+        <MyDiamondCrownBadge size="xs" className="absolute -bottom-1 -right-1 ring-2 ring-background" />
       </button>
 
       {open ? (
@@ -76,8 +82,9 @@ export function UserMenu() {
           role="menu"
           className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border border-border/70 bg-card p-1.5 shadow-elevated backdrop-blur-md"
         >
-          <div className="truncate px-3 py-2 text-xs text-muted-foreground">
-            {email}
+          <div className="flex items-center justify-between gap-2 px-3 py-2">
+            <span className="truncate text-xs text-muted-foreground">{email}</span>
+            <MyDiamondCrownBadge size="sm" showLabel />
           </div>
           <Link
             href="/account"

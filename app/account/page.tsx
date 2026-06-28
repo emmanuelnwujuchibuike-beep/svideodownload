@@ -1,8 +1,9 @@
-import { CalendarDays, Crown, LogOut, Mail, ShieldCheck, Sparkles } from "lucide-react";
+import { CalendarDays, Code2, Crown, Gem, LogOut, Mail, ShieldCheck, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ApiKeys } from "@/features/api/api-keys";
@@ -70,6 +71,19 @@ export default async function AccountPage() {
     .eq("user_id", user.id)
     .eq("day", todayUtc);
 
+  // Business-only: 7-day API usage for the enhanced analytics card.
+  const isBusiness = plan === "business";
+  let apiUsed7d = 0;
+  if (isBusiness) {
+    const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
+    const { count } = await supabase
+      .from("api_usage")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .gte("created_at", weekAgo);
+    apiUsed7d = count ?? 0;
+  }
+
   return (
     <>
       <SiteHeader />
@@ -88,20 +102,31 @@ export default async function AccountPage() {
           <div className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card">
             {/* Profile header */}
             <div className="flex items-center gap-5 border-b border-border/60 p-6 sm:p-8">
-              {avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={avatar}
-                  alt=""
-                  className="h-16 w-16 rounded-full object-cover ring-2 ring-border"
+              <div className="relative shrink-0">
+                {avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={avatar}
+                    alt=""
+                    className="h-16 w-16 rounded-full object-cover ring-2 ring-border"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-2xl font-bold text-white shadow-md shadow-blue-500/25">
+                    {initial}
+                  </div>
+                )}
+                {/* Diamond Crown overlay for premium/business */}
+                <DiamondCrownBadge
+                  plan={plan as BillingPlan}
+                  size="md"
+                  className="absolute -bottom-1 -right-1 ring-2 ring-card"
                 />
-              ) : (
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-2xl font-bold text-white shadow-md shadow-blue-500/25">
-                  {initial}
-                </div>
-              )}
+              </div>
               <div className="min-w-0">
-                <p className="truncate text-lg font-semibold">{email}</p>
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-lg font-semibold">{email}</p>
+                  <DiamondCrownBadge plan={plan as BillingPlan} size="sm" />
+                </div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   {admin ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
@@ -168,6 +193,37 @@ export default async function AccountPage() {
               </div>
             </div>
 
+            {/* Business tools & analytics — enhanced tier */}
+            {isBusiness ? (
+              <div className="border-b border-border/60 bg-gradient-to-br from-amber-500/[0.05] to-transparent p-6 sm:p-8">
+                <div className="mb-4 flex items-center gap-2">
+                  <Gem className="h-5 w-5 text-amber-500" />
+                  <h2 className="text-sm font-semibold">Business tools &amp; analytics</h2>
+                  <DiamondCrownBadge plan="business" size="sm" showLabel className="ml-auto" />
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <BizStat label="API calls today" value={(apiUsedToday ?? 0).toLocaleString()} />
+                  <BizStat label="API calls (7d)" value={apiUsed7d.toLocaleString()} />
+                  <BizStat label="Daily limit" value={apiDailyLimit.toLocaleString()} />
+                  <BizStat label="Plan" value="Business" accent />
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link
+                    href="/developers"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+                  >
+                    <Code2 className="h-4 w-4" /> API documentation
+                  </Link>
+                  <Link
+                    href="/pricing#business"
+                    className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary"
+                  >
+                    Manage plan
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+
             {/* API keys */}
             <div className="border-b border-border/60 p-6 sm:p-8">
               <ApiKeys dailyLimit={apiDailyLimit} usedToday={apiUsedToday ?? 0} />
@@ -213,6 +269,20 @@ export default async function AccountPage() {
       </main>
       <SiteFooter />
     </>
+  );
+}
+
+function BizStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border p-3.5",
+        accent ? "border-amber-500/30 bg-amber-500/[0.06]" : "border-border/60 bg-card",
+      )}
+    >
+      <p className="text-lg font-bold tracking-tight">{value}</p>
+      <p className="mt-0.5 text-[11px] text-muted-foreground">{label}</p>
+    </div>
   );
 }
 

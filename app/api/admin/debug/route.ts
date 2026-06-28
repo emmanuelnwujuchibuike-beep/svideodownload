@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 
 import { NextResponse } from "next/server";
 
+import { diagnoseEmail } from "@/lib/notify";
 import { apifyThreadsDiag } from "@/server/extractors/apify-instagram";
 import { cookieHeaderFor } from "@/server/extractors/cookies";
 import { proxyDispatcher } from "@/server/proxy/proxy-manager";
@@ -26,6 +27,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const sp = new URL(request.url).searchParams;
+
+  // Email diagnostic: live-send a test alert and return Resend's exact response.
+  if (sp.get("email")) {
+    return NextResponse.json(await diagnoseEmail());
+  }
 
   // ffmpeg capability probe: does this worker's ffmpeg decode VP9/AV1? If the
   // decoder is missing, Instagram/Facebook VP9 can't be transcoded to H.264.

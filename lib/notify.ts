@@ -67,6 +67,52 @@ export async function sendAdminEmail(subject: string, html: string): Promise<boo
 }
 
 /**
+ * Live email diagnostic — reports the resolved config and performs a real send
+ * to the configured recipients, returning Resend's exact status/body. Use it to
+ * find out *why* milestone alerts aren't arriving without waiting on a milestone
+ * or the dedupe lock. Never throws.
+ */
+export async function diagnoseEmail(): Promise<{
+  keySet: boolean;
+  recipients: string[];
+  from: string;
+  attempted: boolean;
+  status?: number;
+  ok?: boolean;
+  body?: string;
+  error?: string;
+}> {
+  const to = recipients();
+  const base = { keySet: !!RESEND_API_KEY, recipients: to, from: FROM };
+  if (!RESEND_API_KEY || to.length === 0) {
+    return { ...base, attempted: false };
+  }
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: FROM,
+        to,
+        subject: "✅ SVideoDownload alert test",
+        html: alertEmailHtml({
+          heading: "Alerts are working",
+          intro: "This is a test of your admin alert pipeline. If you got this, milestone emails will arrive too.",
+        }),
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const body = await res.text().catch(() => "");
+    return { ...base, attempted: true, status: res.status, ok: res.ok, body: body.slice(0, 400) };
+  } catch (err) {
+    return { ...base, attempted: true, error: err instanceof Error ? err.message : "send failed" };
+  }
+}
+
+/**
  * Sends an alert at most once per `dedupeKey`, using a unique row in
  * `admin_alerts` as the lock. If the email fails to send the lock row is
  * removed so the alert can be retried later. Safe under concurrency — only the

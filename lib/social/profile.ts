@@ -1,3 +1,4 @@
+import type { BillingPlan } from "@/lib/monetization/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -30,6 +31,8 @@ export interface PublicProfile {
   /** The viewer's relationship to this profile. */
   isOwner: boolean;
   isFollowing: boolean;
+  /** True when the VIEWER has blocked this profile. */
+  viewerHasBlocked: boolean;
 }
 
 /* ------------------------------- handles -------------------------------- */
@@ -79,17 +82,20 @@ async function relationship(
   db: ReturnType<typeof createAdminClient>,
   viewerId: string | null,
   targetId: string,
-): Promise<{ isFollowing: boolean; blockedByTarget: boolean }> {
-  if (!viewerId) return { isFollowing: false, blockedByTarget: false };
-  const [follow, block] = await Promise.all([
+): Promise<{ isFollowing: boolean; blockedByTarget: boolean; viewerHasBlocked: boolean }> {
+  if (!viewerId) return { isFollowing: false, blockedByTarget: false, viewerHasBlocked: false };
+  const [follow, blockedBy, blocked] = await Promise.all([
     db.from("follows").select("follower_id", { head: true, count: "exact" })
       .eq("follower_id", viewerId).eq("following_id", targetId),
     db.from("blocks").select("blocker_id", { head: true, count: "exact" })
       .eq("blocker_id", targetId).eq("blocked_id", viewerId),
+    db.from("blocks").select("blocker_id", { head: true, count: "exact" })
+      .eq("blocker_id", viewerId).eq("blocked_id", targetId),
   ]);
   return {
     isFollowing: (follow.count ?? 0) > 0,
-    blockedByTarget: (block.count ?? 0) > 0,
+    blockedByTarget: (blockedBy.count ?? 0) > 0,
+    viewerHasBlocked: (blocked.count ?? 0) > 0,
   };
 }
 
@@ -112,11 +118,11 @@ export async function getPublicProfile(
     if (!row || row.is_suspended) return null;
 
     const isOwner = viewerId === row.id;
-    const { isFollowing, blockedByTarget } = isOwner
-      ? { isFollowing: false, blockedByTarget: false }
+    const { isFollowing, blockedByTarget, viewerHasBlocked } = isOwner
+      ? { isFollowing: false, blockedByTarget: false, viewerHasBlocked: false }
       : await relationship(db, viewerId, row.id);
 
-    // A block hides the profile entirely (treat as not found for the viewer).
+    // A block by the target hides the profile entirely (treat as not found).
     if (blockedByTarget) return null;
 
     const restricted =
@@ -140,6 +146,7 @@ export async function getPublicProfile(
       restricted,
       isOwner,
       isFollowing,
+      viewerHasBlocked,
     };
   } catch {
     return null;
@@ -197,6 +204,158 @@ export const DEFAULT_PRIVACY: PrivacySettings = {
   allow_indexing: true,
   show_in_recommendations: true,
 };
+
+/* ----------------------------- follow lists ----------------------------- */
+
+export interface ListUser {
+  id: string;
+  handle: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  isVerified: boolean;
+  plan: BillingPlan;
+  viewerFollows: boolean;
+}
+
+/** Batched plan lookup (one query) → id → effective plan. */
+async function plansFor(
+  db: ReturnType<typeof createAdminClient>,
+  ids: string[],
+): Promise<Map<string, BillingPlan>> {
+  const map = new Map<string, BillingPlan>();
+  if (ids.length === 0) return map;
+  const { data } = await db
+    .from("subscriptions")
+    .select("user_id, plan, status")
+    .in("user_id", ids)
+    .in("status", ["active", "trialing"]);
+  for (const r of (data ?? []) as { user_id: string; plan: BillingPlan }[]) {
+    map.set(r.user_id, r.plan);
+  }
+  return map;
+}
+
+/** Can `viewerId` see `targetId`'s follower/following lists? */
+async function canViewFollows(
+  db: ReturnType<typeof createAdminClient>,
+  targetId: string,
+  viewerId: string | null,
+): Promise<boolean> {
+  if (viewerId === targetId) return true;
+  const { followers_visibility } = await getPrivacySettings(targetId);
+  if (followers_visibility === "public") return true;
+  if (!viewerId) return false;
+  if (followers_visibility === "private") return false;
+  // followers-only → viewer must follow the target.
+  const { count } = await db
+    .from("follows")
+    .select("follower_id", { head: true, count: "exact" })
+    .eq("follower_id", viewerId)
+    .eq("following_id", targetId);
+  return (count ?? 0) > 0;
+}
+
+async function buildList(
+  db: ReturnType<typeof createAdminClient>,
+  profileIds: string[],
+  viewerId: string | null,
+): Promise<ListUser[]> {
+  if (profileIds.length === 0) return [];
+  const { data: profs } = await db
+    .from("profiles")
+    .select("id, handle, display_name, avatar_url, bio, is_verified, is_suspended")
+    .in("id", profileIds);
+  const rows = ((profs ?? []) as ProfileRow[]).filter((p) => !p.is_suspended && p.handle);
+
+  const ids = rows.map((r) => r.id);
+  const [plans, follows] = await Promise.all([
+    plansFor(db, ids),
+    viewerId
+      ? db.from("follows").select("following_id").eq("follower_id", viewerId).in("following_id", ids)
+      : Promise.resolve({ data: [] as { following_id: string }[] }),
+  ]);
+  const viewerFollowing = new Set(
+    ((follows.data ?? []) as { following_id: string }[]).map((f) => f.following_id),
+  );
+
+  // Preserve the incoming order (recency from the follows query).
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return profileIds
+    .map((id) => byId.get(id))
+    .filter((r): r is ProfileRow => !!r)
+    .map((r) => ({
+      id: r.id,
+      handle: r.handle ?? "",
+      displayName: fallbackName(r),
+      avatarUrl: r.avatar_url,
+      bio: r.bio,
+      isVerified: r.is_verified,
+      plan: plans.get(r.id) ?? "free",
+      viewerFollows: viewerFollowing.has(r.id),
+    }));
+}
+
+/** Followers of `targetId`, privacy-gated. Null = not permitted to view. */
+export async function listFollowers(
+  targetId: string,
+  viewerId: string | null,
+  limit = 50,
+): Promise<ListUser[] | null> {
+  if (!hasSupabase) return [];
+  try {
+    const db = createAdminClient();
+    if (!(await canViewFollows(db, targetId, viewerId))) return null;
+    const { data } = await db
+      .from("follows")
+      .select("follower_id")
+      .eq("following_id", targetId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    return buildList(db, ((data ?? []) as { follower_id: string }[]).map((r) => r.follower_id), viewerId);
+  } catch {
+    return [];
+  }
+}
+
+/** Accounts `targetId` follows, privacy-gated. Null = not permitted to view. */
+export async function listFollowing(
+  targetId: string,
+  viewerId: string | null,
+  limit = 50,
+): Promise<ListUser[] | null> {
+  if (!hasSupabase) return [];
+  try {
+    const db = createAdminClient();
+    if (!(await canViewFollows(db, targetId, viewerId))) return null;
+    const { data } = await db
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", targetId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    return buildList(db, ((data ?? []) as { following_id: string }[]).map((r) => r.following_id), viewerId);
+  } catch {
+    return [];
+  }
+}
+
+/** The viewer's own blocked users (for the block-management UI). */
+export async function listBlocked(viewerId: string): Promise<ListUser[]> {
+  if (!hasSupabase) return [];
+  try {
+    const db = createAdminClient();
+    const { data } = await db
+      .from("blocks")
+      .select("blocked_id")
+      .eq("blocker_id", viewerId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    return buildList(db, ((data ?? []) as { blocked_id: string }[]).map((r) => r.blocked_id), viewerId);
+  } catch {
+    return [];
+  }
+}
 
 /** A user's privacy settings (defaults if none saved yet). */
 export async function getPrivacySettings(userId: string): Promise<PrivacySettings> {

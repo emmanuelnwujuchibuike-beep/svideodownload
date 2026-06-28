@@ -8,12 +8,13 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ApiKeys } from "@/features/api/api-keys";
 import { ManageBillingButton } from "@/features/monetization/manage-billing-button";
+import { UserList } from "@/components/social/user-list";
 import { ProfileEditor } from "@/features/social/profile-editor";
 import { PrivacyEditor } from "@/features/social/privacy-editor";
 import { isAdmin } from "@/lib/admin";
 import { getPlanLimits } from "@/lib/monetization/plan";
 import type { BillingPlan } from "@/lib/monetization/types";
-import { getOwnProfile, getPrivacySettings } from "@/lib/social/profile";
+import { getOwnProfile, getPrivacySettings, listBlocked } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -87,10 +88,11 @@ export default async function AccountPage() {
     apiUsed7d = count ?? 0;
   }
 
-  // Social profile + privacy (for the editors).
-  const [ownProfile, privacy] = await Promise.all([
+  // Social profile + privacy + blocked accounts.
+  const [ownProfile, privacy, blocked] = await Promise.all([
     getOwnProfile(user.id),
     getPrivacySettings(user.id),
+    listBlocked(user.id),
   ]);
 
   return (
@@ -160,6 +162,14 @@ export default async function AccountPage() {
             {/* Public profile + privacy */}
             {ownProfile ? <ProfileEditor profile={ownProfile} /> : null}
             <PrivacyEditor settings={privacy} />
+
+            {/* Blocked accounts (only shown when there are any) */}
+            {blocked.length > 0 ? (
+              <div className="border-b border-border/60 p-6 sm:p-8">
+                <h2 className="mb-3 text-sm font-semibold">Blocked accounts</h2>
+                <UserList users={blocked} viewerId={user.id} mode="blocked" />
+              </div>
+            ) : null}
 
             {/* Plan / billing */}
             <div className="border-b border-border/60 p-6 sm:p-8">

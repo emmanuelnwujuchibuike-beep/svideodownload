@@ -7,6 +7,7 @@ import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { FollowButton } from "@/features/social/follow-button";
+import { ProfileActions } from "@/features/social/profile-actions";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { getPublicProfile } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -105,7 +106,7 @@ export default async function ProfilePage({
               <DiamondCrownBadge plan={plan} size="md" className="absolute bottom-1 right-1 ring-2 ring-background" />
             </div>
 
-            <div className="mb-2">
+            <div className="mb-2 flex items-center gap-2">
               {profile.isOwner ? (
                 <Link
                   href="/account#profile"
@@ -114,11 +115,20 @@ export default async function ProfilePage({
                   Edit profile
                 </Link>
               ) : (
-                <FollowButton
-                  targetId={profile.id}
-                  initialFollowing={profile.isFollowing}
-                  canFollow={!!me}
-                />
+                <>
+                  <FollowButton
+                    targetId={profile.id}
+                    initialFollowing={profile.isFollowing}
+                    canFollow={!!me}
+                  />
+                  {me ? (
+                    <ProfileActions
+                      targetId={profile.id}
+                      handle={profile.handle}
+                      initialBlocked={profile.viewerHasBlocked}
+                    />
+                  ) : null}
+                </>
               )}
             </div>
           </div>
@@ -164,14 +174,14 @@ export default async function ProfilePage({
               </div>
 
               <div className="mt-4 flex gap-6 text-sm">
-                <span>
+                <Link href={`/u/${profile.handle}/following`} className="transition hover:underline">
                   <strong className="font-semibold">{formatCompactNumber(profile.followingCount)}</strong>{" "}
                   <span className="text-muted-foreground">Following</span>
-                </span>
-                <span>
+                </Link>
+                <Link href={`/u/${profile.handle}/followers`} className="transition hover:underline">
                   <strong className="font-semibold">{formatCompactNumber(profile.followersCount)}</strong>{" "}
                   <span className="text-muted-foreground">Followers</span>
-                </span>
+                </Link>
               </div>
 
               {/* Content (published downloads/reels) lands here in the next phase. */}

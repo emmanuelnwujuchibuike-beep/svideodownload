@@ -7,10 +7,12 @@ import { ExtractionError, type Extractor } from "./types";
 
 /**
  * Snapchat custom extractor — handles **Spotlight** clips AND public **Story**
- * pages (snapchat.com/@user, /p/, /spotlight/, /t/ share links). Both embed the
- * raw, watermark-free CDN media in the page's `__NEXT_DATA__` blob:
- *   - Spotlight → `props.pageProps.videoMetadata.contentUrl` (clean H.264 mp4)
+ * pages (snapchat.com/@user, /p/, /spotlight/, /t/ share links). Media comes
+ * from the page's `__NEXT_DATA__` blob:
+ *   - Spotlight → `props.pageProps.videoMetadata.contentUrl`
  *   - Story     → `props.pageProps.story.snapList[].snapUrls.mediaUrl`
+ * Spotlight's `contentUrl` is the watermarked share render, so we rewrite it to
+ * the clean rendition (see `stripSnapWatermark`). Stories are already clean.
  * Using these direct CDN URLs gives a no-watermark download with no transcode,
  * which yt-dlp's Spotlight extractor cannot do (it returns a watermarked render).
  */
@@ -72,13 +74,45 @@ function snapFormat(snap: Snap, i: number, count: number): MediaFormat {
     tbr: null,
     vcodec: isVideo ? "h264" : null,
     acodec: isVideo ? "aac" : null,
-    directUrl: cleanUrl(snap.snapUrls!.mediaUrl!),
+    directUrl: stripSnapWatermark(cleanUrl(snap.snapUrls!.mediaUrl!)),
     httpHeaders: headers,
   };
 }
 
 function cleanUrl(u: string): string {
   return unescapeJsonUrl(u.replace(/&amp;/g, "&"));
+}
+
+/**
+ * Removes the Snapchat Spotlight watermark.
+ *
+ * Spotlight share pages serve a watermarked render: the media path uses the
+ * `.27.` rendition and the `mo` (media-options) query embeds `SpotlightSharing`,
+ * which tells the CDN to burn the "Snapchat / @username" overlay into the file.
+ * The SAME media id + format token is also served clean at the `.1034.` (story
+ * original) rendition. Swapping the rendition and dropping the watermark
+ * media-option yields the identical clip with no overlay. Verified against live
+ * Spotlight clips: `<id>.27.<tok>` (watermarked) vs `<id>.1034.<tok>` (clean).
+ *
+ * No-op for Story/image URLs (already clean), so it is safe to apply to every
+ * Snapchat media URL. If the clean rendition is ever unavailable the proxy
+ * download fails and the pipeline falls back to yt-dlp — never a broken file.
+ */
+function stripSnapWatermark(u: string): string {
+  try {
+    const url = new URL(u);
+    const mo = url.searchParams.get("mo") ?? "";
+    const watermarked =
+      /\.27\.[^./?#]+$/.test(url.pathname) || // watermarked video rendition
+      /U3BvdGxpZ2h0U2hhcmluZ/.test(mo); // base64 of "SpotlightSharing"
+    if (!watermarked) return u;
+    url.pathname = url.pathname.replace(/(\/d\/[^./]+)\.\d+\./, "$1.1034.");
+    url.searchParams.delete("mo");
+    url.searchParams.delete("uc");
+    return url.toString();
+  } catch {
+    return u;
+  }
 }
 
 function creatorName(c: unknown): string | null {
@@ -202,7 +236,9 @@ export const snapchatExtractor: Extractor = {
     }
 
     const finalFormats =
-      formats && formats.length ? formats : [videoFormat(cleanUrl(mediaUrl!))];
+      formats && formats.length
+        ? formats
+        : [videoFormat(stripSnapWatermark(cleanUrl(mediaUrl!)))];
 
     return {
       id: crypto.randomUUID(),

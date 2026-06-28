@@ -136,7 +136,7 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         heading: "Our approach",
         paragraphs: [
-          "SVideoDownload runs entirely in your browser, never asks for your social passwords, encrypts transfers, and doesn't store your files. You choose the quality, and the clean file saves directly to your device.",
+          "FrenzSave runs entirely in your browser, never asks for your social passwords, encrypts transfers, and doesn't store your files. You choose the quality, and the clean file saves directly to your device.",
         ],
       },
     ],

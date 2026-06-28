@@ -33,7 +33,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          NEXT_PUBLIC_SITE_URL: https://svideodownload.com
+          NEXT_PUBLIC_SITE_URL: https://frenzsave.com
 
   # NOTE: the production Docker image is built & deployed by Railway directly
   # from this repo. A duplicate `docker build` job here only added noise and

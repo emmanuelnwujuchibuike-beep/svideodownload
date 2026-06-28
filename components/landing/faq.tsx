@@ -4,7 +4,7 @@ import { Reveal } from "@/components/ui/reveal";
 
 const FAQS: { q: string; a: string }[] = [
   {
-    q: "Is SVideoDownload free?",
+    q: "Is FrenzSave free?",
     a: "Yes — completely free and unlimited, with no account or login required. Just paste a link and download.",
   },
   {

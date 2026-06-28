@@ -14,11 +14,11 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "SVideoDownload — Download TikTok, Instagram, YouTube & More",
-    template: "%s · SVideoDownload",
+    default: "FrenzSave — Download and meet new friends with the latest news and reels",
+    template: "%s · FrenzSave",
   },
   description:
-    "Fast, secure, watermark-free video downloads from TikTok, Instagram, YouTube, X, Facebook, Pinterest, Snapchat and more. No login. Unlimited HD downloads.",
+    "FrenzSave — download and meet new friends with the latest news and reels. Fast, secure, watermark-free downloads from TikTok, Instagram, YouTube, X, Facebook, Pinterest, Snapchat and more. No login. Unlimited HD.",
   keywords: [
     "tiktok downloader",
     "no watermark",
@@ -32,15 +32,15 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: siteUrl,
-    siteName: "SVideoDownload",
-    title: "Download TikTok, Instagram, YouTube & More — Watermark Free",
+    siteName: "FrenzSave",
+    title: "FrenzSave — Download and meet new friends with the latest news and reels",
     description:
-      "Fast, secure, watermark-free downloads powered by advanced media extraction technology.",
+      "Download and meet new friends with the latest news and reels — fast, secure, watermark-free.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "SVideoDownload — Watermark-Free Video Downloader",
-    description: "Download from TikTok, Instagram, YouTube, X, Facebook and more.",
+    title: "FrenzSave — Download and meet new friends with the latest news and reels",
+    description: "Download and meet new friends with the latest news and reels.",
   },
   robots: { index: true, follow: true },
 };
@@ -61,7 +61,7 @@ export const viewport: Viewport = {
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "WebApplication",
-  name: "SVideoDownload",
+  name: "FrenzSave",
   applicationCategory: "MultimediaApplication",
   operatingSystem: "Web",
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },

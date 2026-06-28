@@ -5,7 +5,7 @@ import { PageShell } from "@/components/layout/page-shell";
 export const metadata: Metadata = {
   title: "DMCA & Copyright Policy",
   description:
-    "SVideoDownload respects copyright. We are a tool and do not host content. How to report concerns.",
+    "FrenzSave respects copyright. We are a tool and do not host content. How to report concerns.",
   alternates: { canonical: "/dmca" },
 };
 
@@ -13,13 +13,13 @@ export default function DmcaPage() {
   return (
     <PageShell title="DMCA & Copyright Policy" updated="June 20, 2026">
       <p>
-        SVideoDownload respects the intellectual property rights of others and
+        FrenzSave respects the intellectual property rights of others and
         expects users to do the same.
       </p>
 
       <h2>We do not host content</h2>
       <p>
-        SVideoDownload is a tool that retrieves publicly available media at a
+        FrenzSave is a tool that retrieves publicly available media at a
         user&apos;s request. We do not store, host, cache long-term, or
         distribute any third-party media files. Content remains hosted on its
         original source platform.
@@ -70,7 +70,7 @@ export default function DmcaPage() {
       <h2>Contact our designated agent</h2>
       <p>
         Send notices to{" "}
-        <a href="mailto:dmca@svideodownload.com">dmca@svideodownload.com</a>.
+        <a href="mailto:dmca@frenzsave.com">dmca@frenzsave.com</a>.
       </p>
 
       <p>

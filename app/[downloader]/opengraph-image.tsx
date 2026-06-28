@@ -3,7 +3,7 @@ import { ImageResponse } from "next/og";
 import { OG_SIZE, OgImage } from "@/components/og-image";
 import { getSeoPage, SEO_SLUGS } from "@/lib/seo/seo-pages";
 
-export const alt = "SVideoDownload";
+export const alt = "FrenzSave";
 export const size = OG_SIZE;
 export const contentType = "image/png";
 

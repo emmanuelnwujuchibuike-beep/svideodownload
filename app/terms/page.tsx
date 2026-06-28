@@ -5,7 +5,7 @@ import { PageShell } from "@/components/layout/page-shell";
 export const metadata: Metadata = {
   title: "Terms of Service",
   description:
-    "The terms governing your use of SVideoDownload — acceptable use, your responsibilities, and our liability.",
+    "The terms governing your use of FrenzSave — acceptable use, your responsibilities, and our liability.",
   alternates: { canonical: "/terms" },
 };
 
@@ -13,14 +13,14 @@ export default function TermsPage() {
   return (
     <PageShell title="Terms of Service" updated="June 20, 2026">
       <p>
-        Welcome to SVideoDownload. By accessing or using our website and tools
+        Welcome to FrenzSave. By accessing or using our website and tools
         (the “Service”), you agree to these Terms of Service. If you do not
         agree, please do not use the Service.
       </p>
 
       <h2>1. What the Service does</h2>
       <p>
-        SVideoDownload is a tool that lets you fetch and save publicly available
+        FrenzSave is a tool that lets you fetch and save publicly available
         media from supported platforms by pasting a link. We do not host, store,
         or distribute any third-party content; we simply help you retrieve media
         you request.
@@ -53,7 +53,7 @@ export default function TermsPage() {
 
       <h2>4. Intellectual property</h2>
       <p>
-        The media you download belongs to its respective owners. SVideoDownload
+        The media you download belongs to its respective owners. FrenzSave
         claims no ownership over downloaded content and grants no rights to it.
         The Service itself, including its branding and design, remains our
         property.
@@ -68,7 +68,7 @@ export default function TermsPage() {
 
       <h2>6. Limitation of liability</h2>
       <p>
-        To the maximum extent permitted by law, SVideoDownload shall not be
+        To the maximum extent permitted by law, FrenzSave shall not be
         liable for any indirect, incidental, or consequential damages, or for any
         misuse of the Service or content obtained through it. You use the Service
         at your own risk and discretion.
@@ -84,7 +84,7 @@ export default function TermsPage() {
       <h2>8. Contact</h2>
       <p>
         Questions about these Terms? Email{" "}
-        <a href="mailto:support@svideodownload.com">support@svideodownload.com</a>
+        <a href="mailto:support@frenzsave.com">support@frenzsave.com</a>
         .
       </p>
 

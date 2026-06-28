@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ----------------------------------------------------------------------
-# SVideoDownload production image.
+# FrenzSave production image.
 # Bundles the Next.js standalone server + yt-dlp + ffmpeg (for merging
 # video/audio streams and audio transcoding).
 # ----------------------------------------------------------------------

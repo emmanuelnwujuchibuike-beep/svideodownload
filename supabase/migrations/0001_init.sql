@@ -1,5 +1,5 @@
 -- =====================================================================
--- SVideoDownload — initial schema
+-- FrenzSave — initial schema
 -- Tables: profiles, downloads, analytics, traffic_logs, settings,
 --         platform_stats
 -- Includes: enums, indexes, RLS policies, triggers

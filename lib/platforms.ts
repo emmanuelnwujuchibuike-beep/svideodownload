@@ -2,7 +2,7 @@ import type { Platform, PlatformId } from "@/types";
 
 /**
  * Registry of supported platforms. TikTok is intentionally first — it is the
- * flagship platform for SVideoDownload. The `generic` entry is the fallback
+ * flagship platform for FrenzSave. The `generic` entry is the fallback
  * for any other URL that yt-dlp can still handle.
  */
 export const PLATFORMS: Record<PlatformId, Platform> = {

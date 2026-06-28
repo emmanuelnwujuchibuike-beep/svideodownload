@@ -59,7 +59,7 @@ async function checkDownloadMilestone(
   await sendAdminAlertOnce(
     `downloads-${milestone}`,
     "download_milestone",
-    `🎉 ${milestone.toLocaleString()} downloads on SVideoDownload`,
+    `🎉 ${milestone.toLocaleString()} downloads on FrenzSave`,
     alertEmailHtml({
       heading: `${milestone.toLocaleString()} downloads & counting`,
       intro: "Your downloader just crossed a new milestone. Nice work! 🚀",

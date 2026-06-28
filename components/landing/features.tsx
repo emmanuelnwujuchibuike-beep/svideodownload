@@ -33,7 +33,7 @@ export function Features() {
       <div className="container">
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="inline-flex items-center rounded-full border border-border bg-secondary/60 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Why SVideoDownload
+            Why FrenzSave
           </span>
           <h2 className="mt-6 text-3xl font-bold tracking-[-0.03em] sm:text-[2.75rem] sm:leading-[1.1]">
             Everything you need,

@@ -1,4 +1,4 @@
-# SVideoDownload — Monetization (Phase 4)
+# FrenzSave — Monetization (Phase 4)
 
 A unified, modular revenue layer. Every subsystem is **dormant until configured**
 and **RLS-enforced**. This guide covers setup, seeding, and operations.
@@ -83,7 +83,7 @@ and it renders. Two things decide how it's rendered: **format** and **zone**.
    You must have signed in once for a profile row to exist.
 3. **Create the ad-network accounts**
    - **Adsterra** → adsterra.com → sign up → **Websites → Add website**
-     (`svideodownload.com`) → wait for approval.
+     (`frenzsave.com`) → wait for approval.
    - **PropellerAds** → propellerads.com → sign up → **Sites → Add site** → verify.
 4. **Create ad units & copy the code**
    - Adsterra → **Add new ad unit** (Social Bar, Pop-under, Banner, Native).
@@ -111,7 +111,7 @@ The result page already renders an ad via the decision engine; drop
 `<AdSlot zone="…" />` anywhere to add more.
 
 ### Adsterra (adsterra.com)
-1. Sign up → **Websites → Add website** (`svideodownload.com`) → wait for approval.
+1. Sign up → **Websites → Add website** (`frenzsave.com`) → wait for approval.
 2. **Add new ad unit**, copy the code, and insert:
 
 ```sql
@@ -247,7 +247,7 @@ Tune the MRR estimate with `MONETIZATION_CURRENCY` (default `$`),
 
 ```js
 // extension background/popup
-const me = await fetch("https://svideodownload.com/api/me", {
+const me = await fetch("https://frenzsave.com/api/me", {
   headers: { Authorization: `Bearer ${userApiKey}` }, // optional
 }).then((r) => r.json());
 

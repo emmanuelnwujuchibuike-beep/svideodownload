@@ -12,7 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  */
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY?.trim();
-const FROM = process.env.ALERT_EMAIL_FROM?.trim() || "SVideoDownload <onboarding@resend.dev>";
+const FROM = process.env.ALERT_EMAIL_FROM?.trim() || "FrenzSave <onboarding@resend.dev>";
 
 function recipients(): string[] {
   const raw = process.env.ALERT_EMAIL_TO || process.env.ADMIN_EMAILS || "";
@@ -97,7 +97,7 @@ export async function diagnoseEmail(): Promise<{
       body: JSON.stringify({
         from: FROM,
         to,
-        subject: "✅ SVideoDownload alert test",
+        subject: "✅ FrenzSave alert test",
         html: alertEmailHtml({
           heading: "Alerts are working",
           intro: "This is a test of your admin alert pipeline. If you got this, milestone emails will arrive too.",
@@ -167,6 +167,6 @@ export function alertEmailHtml(opts: {
       ${opts.footnote ? `<p style="margin:18px 0 0;color:#6b7280;font-size:12px">${opts.footnote}</p>` : ""}
     </td></tr>
   </table>
-  <p style="text-align:center;color:#4b5563;font-size:11px;margin:16px 0 0">SVideoDownload · admin alert</p>
+  <p style="text-align:center;color:#4b5563;font-size:11px;margin:16px 0 0">FrenzSave · admin alert</p>
   </body></html>`;
 }

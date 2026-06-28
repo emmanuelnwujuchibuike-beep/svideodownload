@@ -37,7 +37,7 @@ export function SiteHeader() {
             <Download className="h-4 w-4" />
           </span>
           <span className="text-[17px] tracking-tight">
-            S<span className="text-gradient">Video</span>Download
+            Frenz<span className="text-gradient">Save</span>
           </span>
         </Link>
 

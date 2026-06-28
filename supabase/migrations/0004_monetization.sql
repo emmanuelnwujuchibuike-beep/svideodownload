@@ -1,5 +1,5 @@
 -- =====================================================================
--- SVideoDownload — Phase 4: monetization ecosystem
+-- FrenzSave — Phase 4: monetization ecosystem
 -- Tables: events, ads, ad_impressions, ad_clicks, affiliate_offers,
 --         affiliate_clicks, subscriptions, api_keys, api_usage
 -- All RLS-enforced. Inserts for tracking/billing go through the service

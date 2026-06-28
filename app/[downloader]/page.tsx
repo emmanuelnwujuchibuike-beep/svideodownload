@@ -43,7 +43,7 @@ export async function generateMetadata({
     openGraph: {
       type: "website",
       url,
-      siteName: "SVideoDownload",
+      siteName: "FrenzSave",
       title: page.title,
       description: page.description,
     },

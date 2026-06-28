@@ -1,5 +1,5 @@
 -- =====================================================================
--- SVideoDownload — admin alert ledger
+-- FrenzSave — admin alert ledger
 -- Records each admin alert exactly once (download milestones, proxy-budget
 -- warnings, …). The unique `key` is the dedupe lock: only the first writer for
 -- a given key wins, so an alert email is sent at most once. Inserts happen via

@@ -1,7 +1,7 @@
-# SVideoDownload Browser Extension
+# FrenzSave Browser Extension
 
 A Manifest V3 (Chrome/Edge/Brave) extension that downloads the media on the page
-you're viewing, powered by the SVideoDownload API. It reads the current tab's URL,
+you're viewing, powered by the FrenzSave API. It reads the current tab's URL,
 fetches the available formats, and saves the file with the browser's download
 manager — no copy-paste.
 
@@ -34,7 +34,7 @@ tweak: `node extension/icons/generate-icons.mjs`.
 ## Configuration
 
 - **Settings page** (`options.html`): `apiKey` (optional) and `apiBase`
-  (defaults to `https://svideodownload.com`; change only if self-hosting).
+  (defaults to `https://frenzsave.com`; change only if self-hosting).
 - `host_permissions` in `manifest.json` must include your API domain so the
   popup can call it without CORS issues.
 

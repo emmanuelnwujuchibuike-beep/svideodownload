@@ -112,7 +112,7 @@ export async function maybeAlertProxyBudget(proxy: ProxyUsage | null): Promise<v
   await sendAdminAlertOnce(
     `proxy-budget-${day}`,
     "proxy_budget",
-    `⚠️ Proxy budget at ${proxy.alertLevel}% — SVideoDownload`,
+    `⚠️ Proxy budget at ${proxy.alertLevel}% — FrenzSave`,
     alertEmailHtml({
       heading: `Residential proxy at ${proxy.alertLevel}% of budget`,
       intro:

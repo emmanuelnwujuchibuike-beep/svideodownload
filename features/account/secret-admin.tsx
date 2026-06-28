@@ -54,9 +54,9 @@ export function SecretAdminGesture({
         userSelect: "none",
         WebkitTouchCallout: "none",
       }}
-      title="SVideoDownload"
+      title="FrenzSave"
     >
-      {children ?? "SVideoDownload · secure"}
+      {children ?? "FrenzSave · secure"}
     </span>
   );
 }

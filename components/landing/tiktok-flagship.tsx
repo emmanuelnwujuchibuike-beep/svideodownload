@@ -83,7 +83,7 @@ export function TikTokFlagship() {
             <span className="text-gradient">TikTok</span> videos
           </h2>
           <p className="mt-5 max-w-md text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-            SVideoDownload is built TikTok-first. Drop any video, photo carousel,
+            FrenzSave is built TikTok-first. Drop any video, photo carousel,
             or sound link and get a pristine, watermark-free file in moments.
           </p>
 
@@ -152,7 +152,7 @@ export function TikTokFlagship() {
                   <span className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20">
                     <Download className="h-3 w-3" />
                   </span>
-                  SVideoDownload
+                  FrenzSave
                 </span>
                 <span className="rounded-full bg-green-500/30 px-2 py-0.5 text-green-100 backdrop-blur">
                   No watermark

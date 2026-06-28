@@ -5,7 +5,7 @@ import { PageShell } from "@/components/layout/page-shell";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
-    "How SVideoDownload handles your data. We collect the minimum needed to run the service and never store your downloads.",
+    "How FrenzSave handles your data. We collect the minimum needed to run the service and never store your downloads.",
   alternates: { canonical: "/privacy" },
 };
 
@@ -13,7 +13,7 @@ export default function PrivacyPage() {
   return (
     <PageShell title="Privacy Policy" updated="June 20, 2026">
       <p>
-        Your privacy matters. SVideoDownload is built to collect as little data
+        Your privacy matters. FrenzSave is built to collect as little data
         as possible. This policy explains what we process and why.
       </p>
 
@@ -96,7 +96,7 @@ export default function PrivacyPage() {
       <h2>9. Contact</h2>
       <p>
         Privacy questions? Email{" "}
-        <a href="mailto:privacy@svideodownload.com">privacy@svideodownload.com</a>
+        <a href="mailto:privacy@frenzsave.com">privacy@frenzsave.com</a>
         .
       </p>
 

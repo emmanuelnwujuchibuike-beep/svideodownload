@@ -1,6 +1,6 @@
-/* SVideoDownload browser extension — popup logic. */
+/* FrenzSave browser extension — popup logic. */
 
-const DEFAULT_BASE = "https://svideodownload.com";
+const DEFAULT_BASE = "https://frenzsave.com";
 const SUPPORTED =
   /(tiktok|instagram|facebook|fb\.watch|twitter|x\.com|pinterest|pin\.it|reddit|vimeo|youtube|youtu\.be|threads|snapchat|linkedin)\./i;
 

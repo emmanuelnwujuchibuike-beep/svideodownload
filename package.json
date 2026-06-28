@@ -1,8 +1,8 @@
 {
-  "name": "svideodownload",
+  "name": "frenzsave",
   "version": "0.1.0",
   "private": true,
-  "description": "SVideoDownload.com — Premium multi-platform video downloader powered by yt-dlp",
+  "description": "FrenzSave.com — Premium multi-platform video downloader powered by yt-dlp",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

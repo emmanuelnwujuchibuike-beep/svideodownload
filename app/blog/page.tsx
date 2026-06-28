@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/blog" },
   openGraph: {
     type: "website",
-    title: "SVideoDownload Blog — Downloading Guides",
+    title: "FrenzSave Blog — Downloading Guides",
     description:
       "How-to guides for downloading videos from TikTok, Instagram, YouTube and more.",
   },

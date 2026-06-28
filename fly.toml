@@ -3,7 +3,7 @@
 #          fly secrets set WORKER_SECRET=... UPSTASH_REDIS_REST_URL=... UPSTASH_REDIS_REST_TOKEN=...
 #          fly deploy
 # The Vercel frontend then points DOWNLOAD_WORKER_URL at https://<app>.fly.dev
-app = "svideodownload-worker"
+app = "frenzsave-worker"
 primary_region = "iad"
 
 [build]

@@ -5,18 +5,18 @@ import { PageShell } from "@/components/layout/page-shell";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "SVideoDownload is a fast, private, watermark-free downloader for TikTok, Instagram, YouTube, X, Facebook and more.",
+    "FrenzSave is a fast, private, watermark-free downloader for TikTok, Instagram, YouTube, X, Facebook and more.",
   alternates: { canonical: "/about" },
 };
 
 export default function AboutPage() {
   return (
     <PageShell
-      title="About SVideoDownload"
+      title="About FrenzSave"
       subtitle="The fastest, cleanest way to save the videos you love."
     >
       <p>
-        SVideoDownload started with a simple frustration: downloading a video
+        FrenzSave started with a simple frustration: downloading a video
         shouldn&apos;t mean dodging pop-ups, watermarks, fake buttons, and shady
         redirects. So we built the opposite — a downloader that feels like a
         premium product.
@@ -41,7 +41,7 @@ export default function AboutPage() {
       <h2>Built for every platform</h2>
       <p>
         From TikTok, Instagram, and YouTube to X, Facebook, Pinterest, Vimeo,
-        Reddit, LinkedIn and Threads — SVideoDownload supports the platforms you
+        Reddit, LinkedIn and Threads — FrenzSave supports the platforms you
         actually use, with audio extraction and quality selection built in.
       </p>
 
@@ -54,7 +54,7 @@ export default function AboutPage() {
 
       <p>
         Questions or feedback? Reach us any time at{" "}
-        <a href="mailto:hello@svideodownload.com">hello@svideodownload.com</a>.
+        <a href="mailto:hello@frenzsave.com">hello@frenzsave.com</a>.
       </p>
     </PageShell>
   );

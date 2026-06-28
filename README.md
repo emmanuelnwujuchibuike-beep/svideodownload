@@ -1,4 +1,4 @@
-# SVideoDownload.com
+# FrenzSave.com
 
 Premium multi-platform video downloader powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp). TikTok-first, with support for 1000+ platforms (Instagram, YouTube, X, Facebook, Reddit, Vimeo, SoundCloud and more).
 

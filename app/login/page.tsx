@@ -51,7 +51,7 @@ export default async function LoginPage({
         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-white shadow-md shadow-blue-500/30">
           <Download className="h-4 w-4" />
         </span>
-        S<span className="text-gradient">Video</span>Download
+        Frenz<span className="text-gradient">Save</span>
       </Link>
 
       {/* Card */}

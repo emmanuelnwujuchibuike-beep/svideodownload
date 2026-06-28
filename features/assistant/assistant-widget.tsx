@@ -92,7 +92,7 @@ export function AssistantWidget() {
                   <Bot className="h-5 w-5" />
                 </span>
                 <div className="leading-tight">
-                  <p className="text-sm font-semibold">SVideoDownload Assistant</p>
+                  <p className="text-sm font-semibold">FrenzSave Assistant</p>
                   <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
                     <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Online · usually instant
                   </p>

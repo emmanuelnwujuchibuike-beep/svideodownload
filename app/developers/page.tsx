@@ -7,7 +7,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 export const metadata: Metadata = {
   title: "Developer API",
   description:
-    "Programmatic access to SVideoDownload: analyze and download media from every supported platform with a simple REST API.",
+    "Programmatic access to FrenzSave: analyze and download media from every supported platform with a simple REST API.",
   alternates: { canonical: "/developers" },
 };
 
@@ -51,7 +51,7 @@ export default function DevelopersPage() {
             <p className="mb-3 text-sm text-muted-foreground">
               Returns title, thumbnail, duration and available formats.
             </p>
-            <Code>{`curl https://svideodownload.com/api/v1/analyze \\
+            <Code>{`curl https://frenzsave.com/api/v1/analyze \\
   -H "Authorization: Bearer $SVD_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"url":"https://www.tiktok.com/@user/video/123"}'`}</Code>
@@ -64,7 +64,7 @@ export default function DevelopersPage() {
               Optional <code className="font-mono">formatId</code> and{" "}
               <code className="font-mono">kind</code> (<code>video</code>/<code>audio</code>/<code>image</code>).
             </p>
-            <Code>{`curl https://svideodownload.com/api/v1/download \\
+            <Code>{`curl https://frenzsave.com/api/v1/download \\
   -H "Authorization: Bearer $SVD_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"url":"https://www.instagram.com/reel/abc","kind":"video"}'
@@ -77,7 +77,7 @@ export default function DevelopersPage() {
             <p className="mb-3 text-sm text-muted-foreground">
               Check today&apos;s usage and your daily limit.
             </p>
-            <Code>{`curl https://svideodownload.com/api/v1/usage \\
+            <Code>{`curl https://frenzsave.com/api/v1/usage \\
   -H "Authorization: Bearer $SVD_KEY"
 
 # → { "plan": "free", "limit": 50, "used": 12, "remaining": 38 }`}</Code>

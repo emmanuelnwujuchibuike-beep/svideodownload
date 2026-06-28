@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "SVideoDownload — Video Downloader",
+  "name": "FrenzSave — Video Downloader",
   "version": "1.0.0",
   "description": "Download videos, reels & photos from TikTok, Instagram, YouTube, X, Facebook, Pinterest, Snapchat & more — no watermark.",
   "action": {
     "default_popup": "popup.html",
-    "default_title": "SVideoDownload",
+    "default_title": "FrenzSave",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -19,8 +19,8 @@
   },
   "permissions": ["activeTab", "storage", "downloads"],
   "host_permissions": [
-    "https://svideodownload.com/*",
-    "https://svideodownload.vercel.app/*"
+    "https://frenzsave.com/*",
+    "https://frenzsave.vercel.app/*"
   ],
   "options_page": "options.html"
 }

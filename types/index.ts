@@ -1,5 +1,5 @@
 /**
- * Shared domain types for SVideoDownload.
+ * Shared domain types for FrenzSave.
  * Kept framework-agnostic so they can be imported by server services,
  * route handlers, and client components alike.
  */

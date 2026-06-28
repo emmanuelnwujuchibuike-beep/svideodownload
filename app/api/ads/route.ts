@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { getAdForZone, getAdsForZone } from "@/lib/monetization/ads";
+import { getAdsForZone } from "@/lib/monetization/ads";
 import { getUserPlan } from "@/lib/monetization/plan";
-import type { AdZone } from "@/lib/monetization/types";
+import { getMonetizationSettings } from "@/lib/monetization/settings";
+import type { AdSlotData, AdZone } from "@/lib/monetization/types";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -44,14 +45,20 @@ export async function GET(request: Request) {
     /* no session → treat as free */
   }
 
-  if (all) {
-    return NextResponse.json(
-      { ads: await getAdsForZone(zone) },
-      { headers: { "Cache-Control": "private, max-age=30" } },
-    );
-  }
-  return NextResponse.json(
-    { ad: await getAdForZone(zone) },
-    { headers: { "Cache-Control": "private, max-age=30" } },
-  );
+  // Respect the global network/format toggles so an admin can disable a whole
+  // network (Adsterra / PropellerAds) or unit type (pop-under / interstitial).
+  const settings = await getMonetizationSettings();
+  const allowed = (a: AdSlotData): boolean => {
+    const net = a.network.toLowerCase();
+    if (!settings.adsterra && net.includes("adsterra")) return false;
+    if (!settings.propellerads && net.includes("propeller")) return false;
+    if (!settings.popunder && a.format === "pop") return false;
+    if (!settings.interstitial && a.format === "video") return false;
+    return true;
+  };
+
+  const ads = (await getAdsForZone(zone)).filter(allowed);
+  const headers = { "Cache-Control": "private, max-age=30" };
+  if (all) return NextResponse.json({ ads }, { headers });
+  return NextResponse.json({ ad: ads[0] ?? null }, { headers });
 }

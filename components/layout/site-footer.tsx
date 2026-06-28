@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { FooterTools } from "@/components/monetization/footer-tools";
 import { SecretAdminGesture } from "@/features/account/secret-admin";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
 
@@ -51,6 +52,11 @@ export function SiteFooter() {
             ["Contact", "/contact"],
           ]}
         />
+      </div>
+
+      {/* Admin-managed recommended tools (renders nothing when empty/disabled) */}
+      <div className="container">
+        <FooterTools />
       </div>
 
       <div className="container mt-12 flex flex-col items-start justify-between gap-3 border-t border-border/40 pt-6 text-xs text-muted-foreground/70 sm:flex-row sm:items-center">

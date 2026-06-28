@@ -12,6 +12,7 @@ import { notFound } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { RelatedLinks } from "@/components/seo/related-links";
 import { Downloader } from "@/features/downloader/downloader";
 import { BRAND_ICONS } from "@/lib/platform-icons";
@@ -253,6 +254,13 @@ export default async function DownloaderPage({
             </div>
           </div>
         </section>
+
+        <RecommendedTools
+          placement="download_result"
+          title="Recommended tools"
+          subtitle="Useful picks for creators and developers."
+          className="container max-w-5xl border-t border-border/60 py-16 sm:py-20"
+        />
 
         <RelatedLinks slug={page.slug} brand={page.brand} />
       </main>

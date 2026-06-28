@@ -27,11 +27,15 @@ import {
   fetchRecentAlerts,
   maybeAlertProxyBudget,
 } from "@/lib/admin-stats";
+import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { LimitsEditor } from "@/features/admin/limits-editor";
+import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
 import { PricingEditor } from "@/features/admin/pricing-editor";
 import { getPlanLimits } from "@/lib/monetization/plan";
 import { getPricing } from "@/lib/monetization/pricing";
+import { getMonetizationSettings } from "@/lib/monetization/settings";
+import { listAffiliates } from "@/lib/monetization/tools";
 import { fetchRevenueStats, fetchSubscribers } from "@/lib/monetization/stats";
 import { alertsEnabled } from "@/lib/notify";
 import { PLATFORMS } from "@/lib/platforms";
@@ -68,16 +72,27 @@ export default async function AdminPage() {
     .single();
   if (!isAdmin(profile?.role, user.email)) redirect("/");
 
-  const [proxy, downloads, alerts, revenue, subscribers, pricing, planLimits] =
-    await Promise.all([
-      fetchProxyUsage(),
-      fetchDownloadStats(),
-      fetchRecentAlerts(),
-      fetchRevenueStats(),
-      fetchSubscribers(),
-      getPricing(),
-      getPlanLimits(),
-    ]);
+  const [
+    proxy,
+    downloads,
+    alerts,
+    revenue,
+    subscribers,
+    pricing,
+    planLimits,
+    monetization,
+    affiliates,
+  ] = await Promise.all([
+    fetchProxyUsage(),
+    fetchDownloadStats(),
+    fetchRecentAlerts(),
+    fetchRevenueStats(),
+    fetchSubscribers(),
+    getPricing(),
+    getPlanLimits(),
+    getMonetizationSettings(),
+    listAffiliates(),
+  ]);
   // Fire the proxy-budget alert if we've crossed 90% (deduped to once/day).
   await maybeAlertProxyBudget(proxy);
 
@@ -217,6 +232,10 @@ export default async function AdminPage() {
             },
           }}
         />
+
+        {/* Monetization controls + affiliate / recommended-tools manager */}
+        <MonetizationSettings settings={monetization} />
+        <AffiliateManager affiliates={affiliates} />
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
           {/* Proxy widget */}

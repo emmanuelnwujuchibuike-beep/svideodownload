@@ -25,6 +25,24 @@ URL input → metadata → result card
 - **Billing (Paystack)** — `lib/paystack/*`, `/api/checkout`, `/api/paystack/webhook`, `/api/billing/portal`
 - **Analytics** — `lib/analytics/events.ts` (`trackEvent`) → `events` + counters
 
+### Phase 5 — admin-managed monetization (no code edits)
+
+Everything below is controlled from the **admin dashboard** (`/admin`); nothing is hardcoded.
+
+- **Global toggles** — `lib/monetization/settings.ts` (`getMonetizationSettings`), stored in
+  `settings.monetization`. Flip Adsterra / PropellerAds / affiliates / recommended tools /
+  pop-under / interstitial on/off. Enforced in `/api/ads` (network + format filter) and the
+  decision engine. UI: `features/admin/monetization-settings.tsx` → `POST /api/admin/monetization`.
+- **Affiliate & Recommended-Tools manager** — `lib/monetization/tools.ts` over the extended
+  `affiliate_offers` table (migration `0005`: `placements[]`, `sort_order`, `starts_at`, `ends_at`).
+  Full CRUD + reorder + enable + scheduling: `features/admin/affiliate-manager.tsx` →
+  `/api/admin/affiliates` (POST/GET) and `/api/admin/affiliates/[id]` (PATCH/DELETE).
+- **Recommended Tools rendering** — `components/monetization/recommended-tools.tsx` (grid + sidebar)
+  and `footer-tools.tsx` (categorised). Placed on homepage, download-result/SEO pages and the footer.
+  Server-rendered, lazy images, `sponsored nofollow` links, FTC disclosure, `ItemList` JSON-LD.
+  Renders nothing when disabled/empty (no empty boxes). Clicks go through the tracked `/api/go/[id]`.
+- **Placements** — `homepage | download_result | blog | footer | sidebar` (per affiliate row).
+
 ## 1. Database
 
 Run the migration in Supabase → SQL Editor:

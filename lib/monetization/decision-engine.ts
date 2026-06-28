@@ -1,4 +1,5 @@
 import { selectAffiliateOffer } from "./affiliates";
+import { getMonetizationSettings } from "./settings";
 import type { AdZone, RequestContext, RevenueStrategy } from "./types";
 
 /**
@@ -36,20 +37,24 @@ export async function selectRevenueStrategy(
   // 1) Premium users get a clean, ad-free experience.
   if (isPremium(ctx)) return { type: "none" };
 
+  // Respect the admin's global toggles.
+  const settings = await getMonetizationSettings();
+  const adsOn = settings.adsterra || settings.propellerads;
+
   // 2) Try an affiliate offer (rate-limited so we still mix in upgrade prompts).
-  if (Math.random() < AFFILIATE_RATE) {
+  if (settings.affiliates && Math.random() < AFFILIATE_RATE) {
     const offer = await selectAffiliateOffer(ctx);
     if (offer) return { type: "affiliate", offer };
   }
 
   // 3) High-value traffic → ads (best RPM fill).
-  if (ctx.value >= VALUE_THRESHOLD) return { type: "ad", zone };
+  if (adsOn && ctx.value >= VALUE_THRESHOLD) return { type: "ad", zone };
 
   // 4) Developer-looking visit with no fill → API upsell.
   if (ctx.isDeveloper) return { type: "api_upsell" };
 
-  // 5) Occasionally nudge free users toward Pro instead of another ad.
-  if (Math.random() < 0.15) {
+  // 5) Nudge free users toward Pro instead of another ad (always, if ads off).
+  if (!adsOn || Math.random() < 0.15) {
     return { type: "premium_prompt", reason: "remove_ads" };
   }
 

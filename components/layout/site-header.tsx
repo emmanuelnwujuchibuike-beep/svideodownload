@@ -29,6 +29,7 @@ export function SiteHeader() {
   const isPremium = ready && !showAds;
 
   return (
+    <>
     <header className="fixed inset-x-0 top-0 z-50 border-b border-border/40 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
       <div className="container flex h-16 items-center justify-between">
         {/* Brand */}
@@ -80,6 +81,7 @@ export function SiteHeader() {
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
+      </header>
 
       {/* Mobile drawer — right-side panel; left half of the page stays visible */}
       {open && (
@@ -189,6 +191,6 @@ export function SiteHeader() {
           </div>
         </>
       )}
-    </header>
+    </>
   );
 }

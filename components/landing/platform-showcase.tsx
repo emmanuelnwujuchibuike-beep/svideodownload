@@ -1,72 +1,58 @@
-import { CheckCircle2 } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
+import Link from "next/link";
 
-import { Reveal } from "@/components/ui/reveal";
 import { BRAND_ICONS } from "@/lib/platform-icons";
-import { SHOWCASE_PLATFORMS } from "@/lib/platforms";
+import { PLATFORMS } from "@/lib/platforms";
+import type { PlatformId } from "@/types";
+
+// Display order + short labels to match the marketing grid.
+const TILES: { id: PlatformId; label: string }[] = [
+  { id: "tiktok", label: "TikTok" },
+  { id: "instagram", label: "Instagram" },
+  { id: "facebook", label: "Facebook" },
+  { id: "twitter", label: "X (Twitter)" },
+  { id: "youtube", label: "YouTube Shorts" },
+  { id: "snapchat", label: "Snapchat" },
+  { id: "pinterest", label: "Pinterest" },
+  { id: "reddit", label: "Reddit" },
+  { id: "threads", label: "Threads" },
+];
 
 export function PlatformShowcase() {
   return (
-    <section id="platforms" className="relative overflow-hidden border-t border-border/60 py-28 sm:py-36">
-      <div className="container">
-        <Reveal className="mx-auto max-w-2xl text-center">
-          <span className="inline-flex items-center rounded-full border border-border bg-secondary/50 px-3 py-1 text-xs font-medium text-muted-foreground">
-            Universal support
+    <section id="platforms" className="container max-w-6xl py-10 sm:py-14">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold tracking-[-0.02em] sm:text-3xl">Download from 20+ Platforms</h2>
+        <p className="mt-2 text-sm text-muted-foreground">Supports all your favorite platforms and more.</p>
+      </div>
+
+      <div className="mt-8 grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-10">
+        {TILES.map((t) => {
+          const platform = PLATFORMS[t.id];
+          const Icon = BRAND_ICONS[t.id];
+          return (
+            <Link
+              key={t.id}
+              href="/#download"
+              className="group flex flex-col items-center gap-2 rounded-2xl border border-border/70 bg-card p-4 shadow-soft transition hover:-translate-y-1 hover:border-foreground/15 hover:shadow-card"
+            >
+              <span className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${platform.accent} text-white shadow-sm transition-transform duration-300 group-hover:scale-110`}>
+                {Icon ? <Icon className="h-5 w-5" /> : null}
+              </span>
+              <span className="text-center text-[11px] font-medium leading-tight">{t.label}</span>
+            </Link>
+          );
+        })}
+        {/* More */}
+        <Link
+          href="/#download"
+          className="group flex flex-col items-center gap-2 rounded-2xl border border-border/70 bg-card p-4 shadow-soft transition hover:-translate-y-1 hover:border-foreground/15 hover:shadow-card"
+        >
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-muted-foreground transition-transform duration-300 group-hover:scale-110">
+            <MoreHorizontal className="h-5 w-5" />
           </span>
-          <h2 className="mt-5 text-3xl font-semibold tracking-[-0.02em] sm:text-[2.75rem] sm:leading-[1.1]">
-            Every platform you use,
-            <br className="hidden sm:block" /> one downloader
-          </h2>
-          <p className="mx-auto mt-4 max-w-md text-pretty text-base text-muted-foreground sm:text-lg">
-            From short-form video to long-form audio — all through a single,
-            unified extraction engine.
-          </p>
-        </Reveal>
-
-        <div className="mt-16 grid grid-cols-2 gap-3.5 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
-          {SHOWCASE_PLATFORMS.map((p, i) => {
-            const Brand = BRAND_ICONS[p.id];
-            return (
-            <Reveal key={p.id} delay={(i % 4) * 0.06}>
-              <article className="group relative h-full overflow-hidden rounded-2xl border border-border/70 bg-card p-5 shadow-soft transition-all duration-300 hover:-translate-y-1.5 hover:border-transparent hover:shadow-elevated">
-                {/* Soft brand glow on hover */}
-                <div
-                  className={`pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br ${p.accent} opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-40`}
-                />
-                {/* Gradient ring on hover */}
-                <div
-                  className={`pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br ${p.accent} opacity-0 transition-opacity duration-300 group-hover:opacity-100`}
-                  style={{
-                    WebkitMask:
-                      "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
-                    WebkitMaskComposite: "xor",
-                    maskComposite: "exclude",
-                    padding: "1px",
-                  }}
-                />
-
-                <div
-                  className={`mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${p.accent} text-base font-bold text-white shadow-lg ring-1 ring-white/20 transition-transform duration-300 group-hover:scale-110`}
-                >
-                  {Brand ? (
-                    <Brand className="h-6 w-6" />
-                  ) : (
-                    p.name.replace(/[^A-Za-z]/g, "").slice(0, 2)
-                  )}
-                </div>
-
-                <h3 className="font-semibold">{p.name}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {p.audioOnly ? "MP3 · M4A · WAV" : "MP4 · HD · MP3"}
-                </p>
-
-                <span className="mt-3 inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-400 ring-1 ring-inset ring-green-500/20">
-                  <CheckCircle2 className="h-3 w-3" /> No watermark
-                </span>
-              </article>
-            </Reveal>
-            );
-          })}
-        </div>
+          <span className="text-center text-[11px] font-medium leading-tight">More</span>
+        </Link>
       </div>
     </section>
   );

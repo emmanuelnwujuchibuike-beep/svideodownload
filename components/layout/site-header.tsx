@@ -14,11 +14,11 @@ import { PLATFORMS } from "@/lib/platforms";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
 
 const NAV_LINKS = [
-  { href: "/explore", label: "Explore" },
-  { href: "/tiktok-video-downloader", label: "TikTok" },
-  { href: "/instagram-reels-downloader", label: "Instagram" },
-  { href: "/developers", label: "API" },
-  { href: "/blog", label: "Blog" },
+  { href: "/", label: "Home" },
+  { href: "/#platforms", label: "Features" },
+  { href: "/explore", label: "Community" },
+  { href: "/blog", label: "News" },
+  { href: "/#download", label: "Download" },
 ];
 
 const DOWNLOADERS = getPrimaryPages();

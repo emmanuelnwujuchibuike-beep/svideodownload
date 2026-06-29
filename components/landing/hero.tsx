@@ -1,79 +1,68 @@
-import { Lock, Sparkles, UserX, Zap } from "lucide-react";
+import { Lock, Play, Plus, Sparkles, UserX, Zap } from "lucide-react";
+import Link from "next/link";
 
-import { Downloader } from "@/features/downloader/downloader";
-import { BRAND_ICONS, FLAGSHIP_IDS } from "@/lib/platform-icons";
-import { PLATFORMS } from "@/lib/platforms";
+import { PhoneMockup } from "@/components/landing/phone-mockup";
 
 const TRUST = [
-  { icon: UserX, label: "No login required" },
-  { icon: Lock, label: "100% secure & private" },
-  { icon: Zap, label: "Fast downloads" },
+  { icon: UserX, label: "No Login Required", tint: "text-blue-500" },
+  { icon: Lock, label: "100% Secure & Private", tint: "text-emerald-500" },
+  { icon: Zap, label: "Fast Downloads", tint: "text-violet-500" },
 ];
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden pb-16 pt-28 sm:pb-20 sm:pt-36">
-      {/* Dot grid — stays inside this section's paint order */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-grid-pattern bg-[size:40px_40px] opacity-[0.22] [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,black,transparent)]"
-      />
-
-      <div className="container flex flex-col items-center text-center">
-        {/* Badge */}
-        <span className="mb-7 inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/70 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground shadow-soft backdrop-blur-sm">
-          <Sparkles className="h-3.5 w-3.5 text-primary" />
-          All-in-one social super app
-        </span>
-
-        {/* Main heading */}
-        <h1 className="max-w-3xl text-[2.7rem] font-bold leading-[1.02] tracking-[-0.04em] sm:text-[4rem] lg:text-[4.5rem]">
-          Download. Discover. <span className="text-gradient">Connect.</span>
-        </h1>
-
-        <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-          Download videos, watch trending reels, stay updated with the latest news, meet new
-          friends and chat in real time — all in one place.
-        </p>
-
-        {/* Downloader widget — paste a link & download, right at the top */}
-        <div id="download" className="mt-10 w-full max-w-2xl scroll-mt-24">
-          <Downloader />
-        </div>
-
-        {/* Trust points */}
-        <div className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-          {TRUST.map((t) => (
-            <span key={t.label} className="inline-flex items-center gap-1.5">
-              <t.icon className="h-4 w-4 text-primary" /> {t.label}
-            </span>
-          ))}
-        </div>
-
-        {/* Platform badges */}
-        <div className="mt-10 flex flex-col items-center gap-4">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/60">
-            Built for the platforms you love
+    <section className="relative overflow-hidden pb-12 pt-28 sm:pb-16 sm:pt-32">
+      <div className="container grid items-center gap-10 lg:grid-cols-2 lg:gap-8">
+        {/* Left — copy + CTAs */}
+        <div className="text-center lg:text-left">
+          <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500/10 to-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-violet-600 ring-1 ring-inset ring-violet-500/20 dark:text-violet-300">
+            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+            All-in-one social super app
           </span>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {FLAGSHIP_IDS.map((id) => {
-              const platform = PLATFORMS[id];
-              const Icon = BRAND_ICONS[id];
-              return (
-                <span
-                  key={id}
-                  className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3.5 py-1.5 text-sm font-medium shadow-soft transition-colors hover:border-foreground/20"
-                >
-                  <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br ${platform.accent} text-white shadow-sm`}
-                  >
-                    {Icon ? <Icon className="h-3 w-3" /> : null}
-                  </span>
-                  {platform.name}
-                </span>
-              );
-            })}
+
+          <h1 className="text-5xl font-extrabold leading-[1.02] tracking-[-0.04em] sm:text-6xl lg:text-[4.5rem]">
+            Download.<br />
+            Discover.<br />
+            <span className="text-gradient">Connect.</span>
+          </h1>
+
+          <p className="mx-auto mt-6 max-w-lg text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg lg:mx-0">
+            Download videos, watch trending reels, stay updated with the latest news, meet new
+            friends, and chat in real time — all in one place.
+          </p>
+
+          {/* CTAs */}
+          <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:items-start lg:justify-start">
+            <Link
+              href="#download"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:opacity-95 active:scale-[0.99] sm:w-auto"
+            >
+              <Plus className="h-4 w-4" /> Get Started Free
+            </Link>
+            <Link
+              href="/explore"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card px-7 py-3.5 text-sm font-semibold text-foreground shadow-soft transition hover:border-foreground/20 active:scale-[0.99] sm:w-auto"
+            >
+              <Play className="h-4 w-4" /> Explore Features
+            </Link>
           </div>
+
+          {/* Trust points */}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 lg:justify-start">
+            {TRUST.map((t) => (
+              <span key={t.label} className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-secondary ${t.tint}`}>
+                  <t.icon className="h-4 w-4" />
+                </span>
+                {t.label}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Right — phone mockup */}
+        <div className="relative">
+          <PhoneMockup />
         </div>
       </div>
     </section>

@@ -12,6 +12,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { DownloaderLinks } from "@/components/seo/downloader-links";
+import { Downloader } from "@/features/downloader/downloader";
 import { AdSlot } from "@/features/monetization/ad-slot";
 
 export default function HomePage() {
@@ -32,12 +33,13 @@ export default function HomePage() {
         <TrendingToday />
         <LatestNews />
 
-        {/* Stats band */}
-        <div className="container max-w-6xl py-6">
-          <StatsCounter />
-        </div>
+        {/* Paste-link & download bar */}
+        <section id="download" className="container max-w-3xl scroll-mt-24 py-8">
+          <Downloader />
+        </section>
 
-        <Testimonials />
+        {/* Stats band */}
+        <StatsCounter />
 
         {/* Admin-managed recommended tools (renders nothing when empty) */}
         <RecommendedTools
@@ -46,8 +48,11 @@ export default function HomePage() {
           className="container max-w-5xl py-8"
         />
 
-        <DownloaderLinks heading="Popular video downloaders" />
+        <Testimonials />
         <CtaBanner />
+
+        {/* SEO link surface */}
+        <DownloaderLinks heading="Popular video downloaders" />
         <Faq />
       </main>
       <SiteFooter />

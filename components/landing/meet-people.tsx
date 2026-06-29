@@ -11,7 +11,12 @@ const FALLBACK_GRADIENTS = [
   "from-emerald-500 to-teal-600",
 ];
 
-const CLUSTER = ["from-rose-500 to-pink-600", "from-blue-500 to-indigo-600", "from-violet-500 to-purple-600", "from-amber-500 to-orange-600"];
+const CLUSTER = [
+  { from: "from-rose-500 to-pink-600", emoji: "👩🏽" },
+  { from: "from-blue-500 to-indigo-600", emoji: "🧑🏻" },
+  { from: "from-violet-500 to-purple-600", emoji: "👨🏾" },
+  { from: "from-amber-500 to-orange-600", emoji: "👩🏼" },
+];
 
 /** Landing "Meet New People" rail — real public creators + a join CTA card. */
 export async function MeetNewPeople() {
@@ -71,7 +76,9 @@ export async function MeetNewPeople() {
           </h3>
           <div className="mt-3 flex -space-x-2">
             {CLUSTER.map((g, i) => (
-              <span key={i} className={`h-8 w-8 rounded-full bg-gradient-to-br ${g} ring-2 ring-background`} />
+              <span key={i} className={`flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br ${g.from} text-sm ring-2 ring-background`}>
+                {g.emoji}
+              </span>
             ))}
           </div>
           <p className="mt-3 text-xs text-muted-foreground">Join millions of people already on FrenzSave.</p>

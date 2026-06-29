@@ -69,32 +69,34 @@ export default async function BlogPostPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleLd) }}
       />
       <SiteHeader />
-      <main className="container max-w-3xl pb-24 pt-28 sm:pt-36">
+      <main className="container max-w-3xl pb-24 pt-28 sm:pt-32">
         <Link
           href="/blog"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> All guides
         </Link>
 
-        <article className="mt-6">
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <time dateTime={post.date}>
-              {new Date(post.date).toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </time>
-            <span>·</span>
-            <span>{post.readingMinutes} min read</span>
+        {/* Gradient cover hero */}
+        <div className="relative mt-5 overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-violet-600 to-purple-700 p-8 shadow-elevated sm:p-12">
+          <div aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/15 blur-3xl" />
+          <div className="relative">
+            <div className="flex items-center gap-3 text-xs font-medium text-white/80">
+              <time dateTime={post.date}>
+                {new Date(post.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+              </time>
+              <span>·</span>
+              <span>{post.readingMinutes} min read</span>
+            </div>
+            <h1 className="mt-3 text-3xl font-extrabold tracking-[-0.02em] text-white sm:text-4xl sm:leading-[1.1]">
+              {post.title}
+            </h1>
+            <p className="mt-4 max-w-2xl text-base text-white/85 sm:text-lg">{post.description}</p>
           </div>
-          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] sm:text-4xl sm:leading-[1.1]">
-            {post.title}
-          </h1>
-          <p className="mt-4 text-lg text-muted-foreground">{post.description}</p>
+        </div>
 
-          <div className="mt-10 space-y-8">
+        <article className="mt-10">
+          <div className="space-y-8">
             {post.body.map((section, i) => (
               <section key={i}>
                 {section.heading ? (
@@ -132,19 +134,21 @@ export default async function BlogPostPage({
           <RecommendedTools placement="blog" title="Recommended tools" className="my-10" />
 
           {tool ? (
-            <div className="mt-12 rounded-3xl border border-border bg-card p-6 shadow-card sm:p-8">
-              <h2 className="text-xl font-semibold">Try it now</h2>
-              <p className="mt-2 text-muted-foreground">
-                Use our free {tool.primaryKeyword} — no app, no login, no
-                watermark.
-              </p>
-              <Link
-                href={`/${tool.slug}`}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-              >
-                Open the {tool.brand} downloader
-                <ArrowRight className="h-4 w-4" />
-              </Link>
+            <div className="relative mt-12 overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-violet-600 to-fuchsia-600 p-6 shadow-elevated sm:p-8">
+              <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/15 blur-3xl" />
+              <div className="relative">
+                <h2 className="text-xl font-bold text-white">Try it now</h2>
+                <p className="mt-2 text-sm text-white/85">
+                  Use our free {tool.primaryKeyword} — no app, no login, no watermark.
+                </p>
+                <Link
+                  href={`/${tool.slug}`}
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-white/90 active:scale-[0.99]"
+                >
+                  Open the {tool.brand} downloader
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
             </div>
           ) : null}
         </article>

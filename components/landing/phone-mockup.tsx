@@ -1,10 +1,10 @@
-import { Check, Heart, MessageCircle, Play, Search, Smile, UserPlus } from "lucide-react";
+import { Check, Heart, MessageCircle, Play, Search, UserPlus } from "lucide-react";
 
 const PEOPLE = [
-  { name: "Sarah", place: "Lagos", from: "from-rose-500 to-pink-500" },
-  { name: "James", place: "London", from: "from-blue-500 to-indigo-500" },
-  { name: "Maria", place: "Brazil", from: "from-violet-500 to-purple-500" },
-  { name: "Daniel", place: "New York", from: "from-emerald-500 to-teal-500" },
+  { name: "Sarah", emoji: "👩🏽", from: "from-rose-500 to-pink-500" },
+  { name: "James", emoji: "🧑🏻", from: "from-blue-500 to-indigo-500" },
+  { name: "Maria", emoji: "👩🏼", from: "from-violet-500 to-purple-500" },
+  { name: "Daniel", emoji: "🧑🏾", from: "from-emerald-500 to-teal-500" },
 ] as const;
 
 /** Decorative in-app preview shown in the hero — pure presentation. */
@@ -12,8 +12,8 @@ export function PhoneMockup() {
   return (
     <div className="relative mx-auto w-full max-w-[330px]">
       {/* Floating chips */}
-      <div className="absolute -right-3 -top-4 z-20 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400 text-amber-900 shadow-xl shadow-amber-500/30 animate-float">
-        <Smile className="h-6 w-6" />
+      <div className="absolute -right-3 -top-4 z-20 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400 text-2xl shadow-xl shadow-amber-500/30 animate-float">
+        😄
       </div>
       <div className="absolute -right-6 top-28 z-20 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-bold shadow-xl ring-1 ring-border/60">
         <MessageCircle className="h-3.5 w-3.5 text-rose-500" /> 128
@@ -21,8 +21,12 @@ export function PhoneMockup() {
       <div className="absolute -right-8 top-44 z-20 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-bold shadow-xl ring-1 ring-border/60">
         <Heart className="h-3.5 w-3.5 fill-rose-500 text-rose-500" /> 3.2K
       </div>
-      <div className="absolute -left-6 top-32 z-20 h-14 w-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shadow-xl ring-4 ring-background animate-float" />
-      <div className="absolute -right-4 bottom-24 z-20 h-16 w-16 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-xl ring-4 ring-background" />
+      <div className="absolute -left-6 top-32 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-2xl shadow-xl ring-4 ring-background animate-float">
+        😎
+      </div>
+      <div className="absolute -right-4 bottom-24 z-20 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 text-3xl shadow-xl ring-4 ring-background">
+        🥳
+      </div>
 
       {/* Soft glow behind phone */}
       <div aria-hidden className="absolute inset-0 -z-10 scale-110 rounded-[3rem] bg-gradient-to-br from-blue-500/30 via-violet-500/20 to-purple-600/30 blur-3xl" />
@@ -89,7 +93,7 @@ export function PhoneMockup() {
             <div className="mt-1.5 grid grid-cols-4 gap-1.5">
               {PEOPLE.map((p) => (
                 <div key={p.name} className="flex flex-col items-center gap-1 rounded-lg bg-white/[0.05] p-1.5">
-                  <span className={`h-7 w-7 rounded-full bg-gradient-to-br ${p.from}`} />
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br ${p.from} text-sm`}>{p.emoji}</span>
                   <span className="text-[8px] font-semibold leading-none">{p.name}</span>
                   <span className="inline-flex w-full items-center justify-center gap-0.5 rounded-md bg-blue-500 py-0.5 text-[8px] font-semibold">
                     <UserPlus className="h-2 w-2" /> Add

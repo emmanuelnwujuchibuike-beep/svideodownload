@@ -2,6 +2,7 @@ import { Lock, Play, Plus, Sparkles, UserX, Zap } from "lucide-react";
 import Link from "next/link";
 
 import { PhoneMockup } from "@/components/landing/phone-mockup";
+import { Downloader } from "@/features/downloader/downloader";
 
 const TRUST = [
   { icon: UserX, label: "No Login Required", tint: "text-blue-500" },
@@ -12,7 +13,7 @@ const TRUST = [
 export function Hero() {
   return (
     <section className="relative overflow-hidden pb-12 pt-28 sm:pb-16 sm:pt-32">
-      <div className="container grid items-center gap-10 lg:grid-cols-2 lg:gap-8">
+      <div className="container grid items-center gap-10 lg:grid-cols-2 lg:gap-8" id="hero">
         {/* Left — copy + CTAs */}
         <div className="text-center lg:text-left">
           <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500/10 to-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-violet-600 ring-1 ring-inset ring-violet-500/20 dark:text-violet-300">
@@ -64,6 +65,14 @@ export function Hero() {
         <div className="relative">
           <PhoneMockup />
         </div>
+      </div>
+
+      {/* Premium paste-link & download bar — floats below the phone flagship */}
+      <div id="download" className="container mt-12 max-w-2xl scroll-mt-24 sm:mt-14">
+        <div className="mb-3 flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+          <span className="h-px w-8 bg-border" /> Paste a link to download <span className="h-px w-8 bg-border" />
+        </div>
+        <Downloader />
       </div>
     </section>
   );

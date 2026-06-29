@@ -90,11 +90,21 @@ const config: Config = {
           "0%, 100%": { opacity: "0.55" },
           "50%": { opacity: "1" },
         },
+        drift: {
+          "0%, 100%": { transform: "translate3d(0,0,0) scale(1)" },
+          "50%": { transform: "translate3d(-3%,4%,0) scale(1.08)" },
+        },
+        "drift-slow": {
+          "0%, 100%": { transform: "translate3d(0,0,0) scale(1.05)" },
+          "50%": { transform: "translate3d(4%,-3%,0) scale(1)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.5s ease-out both",
         float: "float 3.5s ease-in-out infinite",
         "pulse-glow": "pulse-glow 3s ease-in-out infinite",
+        drift: "drift 16s ease-in-out infinite",
+        "drift-slow": "drift-slow 22s ease-in-out infinite",
       },
     },
   },

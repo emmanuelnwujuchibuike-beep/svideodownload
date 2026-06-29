@@ -92,20 +92,15 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {/* Fixed blue→purple gradient background — pinned to viewport, behind all content, seamless on every page */}
+          {/* Clean light background with a soft, slowly drifting blue wave — matches the marketing mockup. Premium + lightweight (GPU transforms only, paused for reduced-motion). */}
           <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-background">
-            {/* Base blue→purple wash */}
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-violet-600/12 to-purple-700/20" />
-            {/* Blue — top center */}
-            <div className="absolute left-1/2 top-[-8%] h-[65%] w-[80%] -translate-x-1/2 rounded-full bg-gradient-to-b from-blue-600/35 via-indigo-500/18 to-transparent blur-[90px]" />
-            {/* Indigo — top right */}
-            <div className="absolute right-[-4%] top-[-4%] h-[55%] w-[48%] rounded-full bg-gradient-to-bl from-indigo-600/32 via-violet-500/16 to-transparent blur-[80px]" />
-            {/* Violet — bottom left */}
-            <div className="absolute bottom-[-4%] left-[-4%] h-[55%] w-[48%] rounded-full bg-gradient-to-tr from-violet-600/30 to-transparent blur-[80px]" />
-            {/* Purple — mid left */}
-            <div className="absolute left-[-4%] top-[38%] h-[45%] w-[38%] rounded-full bg-gradient-to-r from-purple-600/22 to-transparent blur-[75px]" />
-            {/* Fuchsia/purple — bottom right */}
-            <div className="absolute bottom-[-4%] right-[-4%] h-[45%] w-[40%] rounded-full bg-gradient-to-tl from-fuchsia-600/18 to-transparent blur-[80px]" />
+            {/* Soft blue wave — upper right, behind the hero phone */}
+            <div className="absolute right-[-12%] top-[-6%] h-[70%] w-[60%] rounded-full bg-gradient-to-br from-sky-400/25 via-blue-500/16 to-violet-500/18 blur-[110px] motion-safe:animate-drift" />
+            <div className="absolute right-[6%] top-[26%] h-[42%] w-[34%] rounded-full bg-gradient-to-tr from-cyan-300/22 to-blue-400/14 blur-[90px] motion-safe:animate-drift-slow" />
+            {/* Faint violet accent — left */}
+            <div className="absolute left-[-10%] top-[24%] h-[46%] w-[34%] rounded-full bg-gradient-to-r from-violet-400/12 to-transparent blur-[110px] motion-safe:animate-drift-slow" />
+            {/* Whisper-soft lower wash */}
+            <div className="absolute bottom-[-10%] left-1/3 h-[40%] w-[50%] -translate-x-1/4 rounded-full bg-gradient-to-t from-indigo-400/10 to-transparent blur-[100px] motion-safe:animate-drift" />
           </div>
           {children}
           <AssistantWidget />

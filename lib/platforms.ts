@@ -10,7 +10,8 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     id: "tiktok",
     name: "TikTok",
     hosts: ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"],
-    accent: "from-[#ff0050] via-[#ee1d52] to-[#00f2ea]",
+    // Authentic TikTok look: black with the logo (it is NOT red).
+    accent: "from-neutral-900 to-black",
     watermarkFree: true,
   },
   instagram: {

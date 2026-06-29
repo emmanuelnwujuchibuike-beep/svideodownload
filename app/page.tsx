@@ -6,13 +6,11 @@ import { LatestNews } from "@/components/landing/latest-news";
 import { MeetNewPeople } from "@/components/landing/meet-people";
 import { PlatformShowcase } from "@/components/landing/platform-showcase";
 import { StatsCounter } from "@/components/landing/stats-counter";
-import { Testimonials } from "@/components/landing/testimonials";
 import { TrendingToday } from "@/components/landing/trending-today";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { DownloaderLinks } from "@/components/seo/downloader-links";
-import { Downloader } from "@/features/downloader/downloader";
 import { AdSlot } from "@/features/monetization/ad-slot";
 
 export default function HomePage() {
@@ -33,11 +31,6 @@ export default function HomePage() {
         <TrendingToday />
         <LatestNews />
 
-        {/* Paste-link & download bar */}
-        <section id="download" className="container max-w-3xl scroll-mt-24 py-8">
-          <Downloader />
-        </section>
-
         {/* Stats band */}
         <StatsCounter />
 
@@ -48,7 +41,6 @@ export default function HomePage() {
           className="container max-w-5xl py-8"
         />
 
-        <Testimonials />
         <CtaBanner />
 
         {/* SEO link surface */}

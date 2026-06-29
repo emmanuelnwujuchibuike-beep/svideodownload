@@ -16,7 +16,6 @@ import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { RelatedLinks } from "@/components/seo/related-links";
 import { Downloader } from "@/features/downloader/downloader";
 import { BRAND_ICONS } from "@/lib/platform-icons";
-import { PLATFORMS } from "@/lib/platforms";
 import { getSeoPage, howToSteps, SEO_SLUGS } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
@@ -66,7 +65,6 @@ export default async function DownloaderPage({
   const page = getSeoPage(downloader);
   if (!page) notFound();
 
-  const platform = PLATFORMS[page.platformId];
   const Icon = BRAND_ICONS[page.platformId];
   const steps = howToSteps(page.brand, page.thing);
   const url = `${siteUrl}/${page.slug}`;
@@ -125,29 +123,33 @@ export default async function DownloaderPage({
       />
       <SiteHeader />
       <main>
-        {/* Hero + tool */}
-        <section className="relative overflow-hidden pb-16 pt-28 sm:pt-36">
-          <div className="container flex flex-col items-center text-center">
-            <span
-              className={`mb-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-br ${platform.accent} px-4 py-1.5 text-sm font-semibold text-white shadow-soft`}
-            >
-              {Icon ? <Icon className="h-4 w-4" /> : null}
-              {page.brand} downloader
-            </span>
-            <h1 className="max-w-3xl text-balance text-[2.2rem] font-semibold leading-[1.08] tracking-[-0.03em] sm:text-5xl lg:text-6xl">
-              {page.h1}
-            </h1>
-            <p className="mt-5 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
-              {page.tagline}
-            </p>
+        {/* Hero + tool — gradient cover */}
+        <section className="relative overflow-hidden pb-12 pt-28 sm:pt-32">
+          <div className="container max-w-5xl">
+            <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-blue-600 via-violet-600 to-purple-700 px-6 py-12 shadow-elevated sm:px-10 sm:py-14">
+              <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/15 blur-3xl" />
+              <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-fuchsia-400/20 blur-3xl" />
+              <div className="relative flex flex-col items-center text-center">
+                <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/25 backdrop-blur">
+                  {Icon ? <Icon className="h-4 w-4" /> : null}
+                  {page.brand} downloader
+                </span>
+                <h1 className="max-w-3xl text-balance text-[2.2rem] font-extrabold leading-[1.08] tracking-[-0.03em] text-white sm:text-5xl lg:text-[3.4rem]">
+                  {page.h1}
+                </h1>
+                <p className="mt-5 max-w-xl text-pretty text-lg leading-relaxed text-white/85">
+                  {page.tagline}
+                </p>
 
-            <div className="mt-10 w-full max-w-2xl scroll-mt-24" id="download">
-              <Downloader />
+                <div className="mt-10 w-full max-w-2xl scroll-mt-24" id="download">
+                  <Downloader />
+                </div>
+
+                <p className="mt-5 text-sm text-white/75">
+                  Free · No watermark · No login · Works on iPhone, Android &amp; PC
+                </p>
+              </div>
             </div>
-
-            <p className="mt-5 text-sm text-muted-foreground">
-              Free · No watermark · No login · Works on iPhone, Android & PC
-            </p>
           </div>
         </section>
 

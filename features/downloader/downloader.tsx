@@ -12,6 +12,7 @@ import {
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { RecommendedToolsClient } from "@/components/monetization/recommended-tools-client";
+import { PublishButton } from "@/features/social/publish-button";
 import { FetchedAd } from "@/features/monetization/fetched-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
 import { detectPlatform } from "@/lib/platforms";
@@ -184,7 +185,8 @@ export function Downloader() {
           <ResultOffer key={metadata.id} />
           {/* Admin-managed recommended tools (renders nothing when empty). */}
           <RecommendedToolsClient placement="download_result" />
-          <div className="mt-5 text-center">
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            <PublishButton metadata={metadata} />
             <button
               type="button"
               onClick={() => {

@@ -6,9 +6,11 @@ import { notFound } from "next/navigation";
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { PostGrid } from "@/components/social/post-grid";
 import { FollowButton } from "@/features/social/follow-button";
 import { ProfileActions } from "@/features/social/profile-actions";
 import { getUserPlan } from "@/lib/monetization/plan";
+import { listUserPosts } from "@/lib/social/posts";
 import { getPublicProfile } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
@@ -60,7 +62,10 @@ export default async function ProfilePage({
   const profile = await getPublicProfile(handle, me);
   if (!profile) notFound();
 
-  const plan = await getUserPlan(profile.id);
+  const [plan, posts] = await Promise.all([
+    getUserPlan(profile.id),
+    profile.restricted ? Promise.resolve([]) : listUserPosts(profile.id, me),
+  ]);
 
   const ld = {
     "@context": "https://schema.org",
@@ -184,9 +189,16 @@ export default async function ProfilePage({
                 </Link>
               </div>
 
-              {/* Content (published downloads/reels) lands here in the next phase. */}
-              <div className="mt-10 rounded-2xl border border-dashed border-border/70 p-10 text-center text-sm text-muted-foreground">
-                No public activity yet.
+              {/* Published downloads */}
+              <div className="mt-8">
+                <PostGrid
+                  posts={posts}
+                  emptyText={
+                    profile.isOwner
+                      ? "You haven't published anything yet — publish a download from the result page."
+                      : "No public posts yet."
+                  }
+                />
               </div>
             </>
           )}

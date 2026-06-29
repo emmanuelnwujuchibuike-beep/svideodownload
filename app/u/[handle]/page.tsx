@@ -1,4 +1,4 @@
-import { BadgeCheck, CalendarDays, Link as LinkIcon, Lock } from "lucide-react";
+import { BadgeCheck, CalendarDays, Link as LinkIcon, Lock, MessageCircle } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -127,11 +127,19 @@ export default async function ProfilePage({
                     canFollow={!!me}
                   />
                   {me ? (
-                    <ProfileActions
-                      targetId={profile.id}
-                      handle={profile.handle}
-                      initialBlocked={profile.viewerHasBlocked}
-                    />
+                    <>
+                      <Link
+                        href={`/messages/new/${profile.id}`}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-semibold transition hover:bg-secondary"
+                      >
+                        <MessageCircle className="h-4 w-4" /> Message
+                      </Link>
+                      <ProfileActions
+                        targetId={profile.id}
+                        handle={profile.handle}
+                        initialBlocked={profile.viewerHasBlocked}
+                      />
+                    </>
                   ) : null}
                 </>
               )}

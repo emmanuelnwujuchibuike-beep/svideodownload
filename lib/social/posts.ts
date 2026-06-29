@@ -319,6 +319,34 @@ export async function listUserPosts(
   }
 }
 
+/** The user's saved posts (still-published, visible to them), newest save first. */
+export async function listSavedPosts(userId: string, limit = 24): Promise<PostCard[]> {
+  if (!hasSupabase) return [];
+  try {
+    const db = createAdminClient();
+    const { data: saves } = await db
+      .from("post_reactions")
+      .select("post_id, created_at")
+      .eq("user_id", userId)
+      .eq("type", "save")
+      .order("created_at", { ascending: false })
+      .limit(limit * 2);
+    const ids = ((saves ?? []) as { post_id: string }[]).map((r) => r.post_id);
+    if (ids.length === 0) return [];
+
+    const { data } = await db.from("posts").select(POST_SELECT).in("id", ids).eq("status", "published");
+    const rows = ((data as PostRow[]) ?? []).filter(
+      (p) => p.visibility === "public" || p.publisher_id === userId,
+    );
+    // Preserve save recency.
+    const order = new Map(ids.map((id, i) => [id, i]));
+    rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    return rows.slice(0, limit).map(toCard);
+  } catch {
+    return [];
+  }
+}
+
 /** Related posts (same category, then same publisher), excluding the current. */
 export async function relatedPosts(post: PublicPost, limit = 6): Promise<PostCard[]> {
   if (!hasSupabase) return [];

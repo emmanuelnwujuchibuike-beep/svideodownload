@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, LogOut, User as UserIcon, UserCircle } from "lucide-react";
+import { Bookmark, KeyRound, LogOut, MessageCircle, User as UserIcon, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -95,6 +95,22 @@ export function UserMenu() {
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
           >
             <UserCircle className="h-4 w-4" /> {handle ? "My profile" : "Set up profile"}
+          </Link>
+          <Link
+            href="/messages"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
+          >
+            <MessageCircle className="h-4 w-4" /> Messages
+          </Link>
+          <Link
+            href="/saved"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
+          >
+            <Bookmark className="h-4 w-4" /> Saved
           </Link>
           <Link
             href="/account"

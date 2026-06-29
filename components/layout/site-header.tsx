@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, Download, KeyRound, LogOut, Menu, User as UserIcon, UserCircle, X } from "lucide-react";
+import { Bookmark, Crown, Download, KeyRound, LogOut, Menu, MessageCircle, User as UserIcon, UserCircle, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -171,6 +171,20 @@ export function SiteHeader() {
                   className="mt-2 flex items-center gap-2 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
                 >
                   <UserCircle className="h-5 w-5" /> {handle ? "My profile" : "Set up profile"}
+                </Link>
+                <Link
+                  href="/messages"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
+                >
+                  <MessageCircle className="h-5 w-5" /> Messages
+                </Link>
+                <Link
+                  href="/saved"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
+                >
+                  <Bookmark className="h-5 w-5" /> Saved
                 </Link>
                 <Link
                   href="/account"

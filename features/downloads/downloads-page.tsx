@@ -32,9 +32,10 @@ type Tab = (typeof TABS)[number];
 
 const REEL_PLATFORMS: PlatformId[] = ["tiktok", "instagram", "snapchat"];
 
-/** Representative per-item size (real byte sizes aren't recorded by the
- *  client history store). Keeps storage analytics consistent + believable. */
-function estBytes(rec: DownloadRecord): number {
+/** Exact recorded size when known; otherwise a representative estimate by type
+ *  (older records downloaded before size tracking, or via the native path). */
+function itemBytes(rec: DownloadRecord): number {
+  if (rec.size && rec.size > 0) return rec.size;
   if (rec.kind === "audio") return 5 * 1024 * 1024;
   if (rec.kind === "image") return 2 * 1024 * 1024;
   if (REEL_PLATFORMS.includes(rec.platform)) return 12 * 1024 * 1024;
@@ -68,7 +69,7 @@ export function DownloadsPage() {
   const [limit, setLimit] = useState(8);
 
   const active = tasks.filter((t) => t.status !== "completed" && t.status !== "canceled");
-  const totalUsed = useMemo(() => items.reduce((s, r) => s + estBytes(r), 0), [items]);
+  const totalUsed = useMemo(() => items.reduce((s, r) => s + itemBytes(r), 0), [items]);
 
   const filtered = useMemo(() => {
     let list = items.filter((r) => matchesTab(r, tab));
@@ -294,7 +295,7 @@ function DownloadedRow({ rec, onFavorite, onRemove }: { rec: DownloadRecord; onF
         <p className="truncate text-sm font-semibold">{rec.title}</p>
         <p className="truncate text-xs text-muted-foreground">{rec.platformName}{rec.favorite ? " · ★ Favorite" : ""}</p>
       </div>
-      <span className="hidden text-xs text-muted-foreground sm:block">{formatBytes(estBytes(rec))}</span>
+      <span className="hidden text-xs text-muted-foreground sm:block">{formatBytes(itemBytes(rec))}</span>
       <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold uppercase", tint)}>{quality}</span>
       <a href={rec.url} target="_blank" rel="noopener noreferrer nofollow" aria-label="Open" className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white">
         <Play className="h-4 w-4 fill-white" />

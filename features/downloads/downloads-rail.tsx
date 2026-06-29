@@ -11,7 +11,8 @@ import { cn, formatBytes } from "@/lib/utils";
 const TOTAL_GB = 128;
 const REEL_PLATFORMS: PlatformId[] = ["tiktok", "instagram", "snapchat"];
 
-function estBytes(rec: DownloadRecord): number {
+function itemBytes(rec: DownloadRecord): number {
+  if (rec.size && rec.size > 0) return rec.size;
   if (rec.kind === "audio") return 5 * 1024 * 1024;
   if (rec.kind === "image") return 2 * 1024 * 1024;
   if (REEL_PLATFORMS.includes(rec.platform)) return 12 * 1024 * 1024;
@@ -42,7 +43,7 @@ export function DownloadsRail() {
     let used = 0;
     for (const r of items) {
       const b = bucketOf(r);
-      const sz = estBytes(r);
+      const sz = itemBytes(r);
       byBucket[b] += sz;
       counts[b] += 1;
       used += sz;

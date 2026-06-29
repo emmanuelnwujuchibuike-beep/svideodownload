@@ -98,6 +98,8 @@ export interface DownloadRecord {
   formatId: string;
   kind: MediaKind;
   qualityLabel: string;
+  /** Exact downloaded size in bytes, when known (recorded by the download manager). */
+  size?: number | null;
   createdAt: number;
   favorite: boolean;
 }

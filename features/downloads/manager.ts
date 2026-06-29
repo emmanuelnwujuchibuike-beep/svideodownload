@@ -119,6 +119,7 @@ async function run(id: string) {
       formatId: task.formatId,
       kind: task.kind,
       qualityLabel: task.qualityLabel,
+      size: received, // exact downloaded bytes
     });
   } catch (err) {
     if (controller.signal.aborted) return; // paused/canceled handled elsewhere

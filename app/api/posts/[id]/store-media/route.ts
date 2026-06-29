@@ -1,35 +1,22 @@
 import { NextResponse } from "next/server";
 
+import { storePostMedia } from "@/server/services/store-media-service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { hasWorker, proxyToWorker } from "@/lib/worker";
+import { hasWorker, WORKER_SECRET, WORKER_URL } from "@/lib/worker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MAX_BYTES = 90 * 1024 * 1024; // 90 MB cap for serverless memory safety
-
-const EXT: Record<string, string> = {
-  "video/mp4": "mp4",
-  "video/webm": "webm",
-  "video/quicktime": "mov",
-  "audio/mpeg": "mp3",
-  "audio/mp4": "m4a",
-  "audio/aac": "aac",
-  "audio/wav": "wav",
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/gif": "gif",
-};
 
 /**
- * POST /api/posts/:id/store-media — owner-only. Fetches the post's media via the
- * worker download pipeline and uploads it to the public `post-media` bucket so
- * it plays natively and Pro users can download it. Best-effort + size-capped;
- * large media is skipped (the viewer falls back to on-demand download).
+ * POST /api/posts/:id/store-media — owner-only. Persists the post's media to the
+ * public `post-media` bucket so it plays natively and Pro users can download it.
+ * The heavy download+upload runs on the WORKER (no size/time ceiling); the
+ * frontend just authorizes and delegates. Falls back to running locally when
+ * this IS the worker (single-deployment / dev).
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -50,53 +37,32 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (!post) return NextResponse.json({ ok: false, error: "Not found." }, { status: 404 });
   if (post.publisher_id !== user.id) return NextResponse.json({ ok: false, error: "Not allowed." }, { status: 403 });
   if (post.media_url) return NextResponse.json({ ok: true, mediaUrl: post.media_url });
-  if (!hasWorker) return NextResponse.json({ ok: false, error: "Storage worker unavailable." }, { status: 503 });
 
-  const selector = post.media_kind === "audio" ? "bestaudio" : "best";
+  const job = {
+    postId: id,
+    uid: user.id,
+    url: post.source_url as string,
+    formatId: post.media_kind === "audio" ? "bestaudio" : "best",
+    kind: post.media_kind as "video" | "audio" | "image",
+    title: (post.title as string) ?? "video",
+  };
 
-  try {
-    const res = await proxyToWorker(
-      "/api/download",
-      { url: post.source_url, formatId: selector, kind: post.media_kind, title: post.title },
-      `store:${user.id}`,
-    );
-    if (!res.ok || !res.body) return NextResponse.json({ ok: false, error: "Couldn't fetch media." }, { status: 502 });
-
-    const declared = Number(res.headers.get("content-length") || 0);
-    if (declared > MAX_BYTES) return NextResponse.json({ ok: false, error: "Too large to store.", tooLarge: true });
-
-    // Stream-read with an early size guard so an oversized file can't OOM the
-    // function — we abort the moment we cross the cap instead of buffering it all.
-    const reader = res.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        total += value.length;
-        if (total > MAX_BYTES) {
-          await reader.cancel().catch(() => {});
-          return NextResponse.json({ ok: false, error: "Too large to store.", tooLarge: true });
-        }
-        chunks.push(value);
-      }
+  // Delegate to the worker (preferred): unlimited size, no serverless memory cap.
+  if (hasWorker) {
+    try {
+      const res = await fetch(`${WORKER_URL}/api/internal/store-media`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-worker-secret": WORKER_SECRET },
+        body: JSON.stringify(job),
+      });
+      const data = await res.json().catch(() => ({ ok: false, error: "Worker error." }));
+      return NextResponse.json(data, { status: res.ok ? 200 : 502 });
+    } catch {
+      return NextResponse.json({ ok: false, error: "Storage worker unavailable." }, { status: 503 });
     }
-    const buf = Buffer.concat(chunks);
-
-    const contentType = (res.headers.get("content-type") || "video/mp4").split(";")[0]!.trim();
-    const ext = EXT[contentType] ?? (post.media_kind === "audio" ? "mp3" : "mp4");
-    const path = `${user.id}/${id}.${ext}`;
-
-    const { error: upErr } = await admin.storage.from("post-media").upload(path, buf, { contentType, upsert: true });
-    if (upErr) return NextResponse.json({ ok: false, error: "Upload failed." }, { status: 500 });
-
-    const { data: pub } = admin.storage.from("post-media").getPublicUrl(path);
-    const mediaUrl = pub.publicUrl;
-    await admin.from("posts").update({ media_url: mediaUrl }).eq("id", id);
-
-    return NextResponse.json({ ok: true, mediaUrl });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Couldn't store media." }, { status: 500 });
   }
+
+  // No separate worker configured → run the pipeline here (dev / single box).
+  const result = await storePostMedia(job);
+  return NextResponse.json(result, { status: result.ok ? 200 : result.tooLarge ? 200 : 500 });
 }

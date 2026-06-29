@@ -15,7 +15,7 @@ const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
   !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const SEP = "~|~"; // formatId | kind | qualityLabel
+const SEP = "~|~"; // formatId | kind | qualityLabel | sizeBytes
 
 /** A synced record's id is `remote:<dbId>`; extract the db id (or null). */
 export function remoteId(id: string): string | null {
@@ -33,8 +33,8 @@ async function userId(
   }
 }
 
-function encodeFormat(r: { formatId: string; kind: MediaKind; qualityLabel: string }) {
-  return [r.formatId, r.kind, r.qualityLabel].join(SEP);
+function encodeFormat(r: { formatId: string; kind: MediaKind; qualityLabel: string; size?: number | null }) {
+  return [r.formatId, r.kind, r.qualityLabel, r.size ?? ""].join(SEP);
 }
 
 export async function fetchRemote(): Promise<DownloadRecord[]> {
@@ -52,10 +52,11 @@ export async function fetchRemote(): Promise<DownloadRecord[]> {
   if (error || !data) return [];
 
   return data.map((r) => {
-    const [formatId = "best", kind = "video", qualityLabel = ""] = String(
+    const [formatId = "best", kind = "video", qualityLabel = "", sizeStr = ""] = String(
       r.format ?? "",
     ).split(SEP);
     const platform = r.platform as PlatformId;
+    const size = sizeStr ? Number(sizeStr) || null : null;
     return {
       id: `remote:${r.id}`,
       url: r.source_url,
@@ -66,6 +67,7 @@ export async function fetchRemote(): Promise<DownloadRecord[]> {
       formatId,
       kind: kind as MediaKind,
       qualityLabel,
+      size,
       createdAt: new Date(r.created_at).getTime(),
       favorite: !!r.is_favorite,
     } satisfies DownloadRecord;

@@ -7,28 +7,28 @@ const FEATURES = [
     title: "Download",
     body: "Save videos, reels & audio from every major platform — fast, HD, no watermark.",
     href: "/#download",
-    accent: "from-blue-600 to-cyan-400",
+    accent: "from-blue-600 to-indigo-500",
   },
   {
     icon: Flame,
     title: "Trending",
     body: "Watch what's hot right now and discover the reels everyone's talking about.",
     href: "/explore",
-    accent: "from-rose-500 to-orange-400",
+    accent: "from-indigo-600 to-violet-500",
   },
   {
     icon: Users,
     title: "Community",
     body: "Meet new people, follow creators and build real connections.",
     href: "/explore",
-    accent: "from-violet-600 to-fuchsia-500",
+    accent: "from-violet-600 to-purple-500",
   },
   {
     icon: MessageCircle,
     title: "Chat",
     body: "Message creators and friends — start a private conversation instantly.",
     href: "/messages",
-    accent: "from-emerald-500 to-teal-400",
+    accent: "from-purple-600 to-fuchsia-500",
   },
 ] as const;
 

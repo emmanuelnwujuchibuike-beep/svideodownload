@@ -60,7 +60,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a14" },
+    { media: "(prefers-color-scheme: dark)", color: "#0c0a16" },
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
   ],
 };
@@ -92,18 +92,20 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {/* Fixed gradient background — pinned to viewport, behind all content, seamless on every page */}
+          {/* Fixed blue→purple gradient background — pinned to viewport, behind all content, seamless on every page */}
           <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-background">
+            {/* Base blue→purple wash */}
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-violet-600/12 to-purple-700/20" />
             {/* Blue — top center */}
-            <div className="absolute left-1/2 top-[-8%] h-[65%] w-[80%] -translate-x-1/2 rounded-full bg-gradient-to-b from-blue-600/30 via-sky-500/15 to-transparent blur-[90px]" />
-            {/* Gold — top right */}
-            <div className="absolute right-[-4%] top-[-4%] h-[55%] w-[48%] rounded-full bg-gradient-to-bl from-amber-500/30 via-orange-400/15 to-transparent blur-[80px]" />
-            {/* Cyan — bottom left */}
-            <div className="absolute bottom-[-4%] left-[-4%] h-[55%] w-[48%] rounded-full bg-gradient-to-tr from-cyan-500/26 to-transparent blur-[80px]" />
-            {/* Violet — mid left */}
-            <div className="absolute left-[-4%] top-[38%] h-[45%] w-[38%] rounded-full bg-gradient-to-r from-violet-600/18 to-transparent blur-[75px]" />
-            {/* Extra: rose — bottom right */}
-            <div className="absolute bottom-[-4%] right-[-4%] h-[45%] w-[40%] rounded-full bg-gradient-to-tl from-rose-500/14 to-transparent blur-[80px]" />
+            <div className="absolute left-1/2 top-[-8%] h-[65%] w-[80%] -translate-x-1/2 rounded-full bg-gradient-to-b from-blue-600/35 via-indigo-500/18 to-transparent blur-[90px]" />
+            {/* Indigo — top right */}
+            <div className="absolute right-[-4%] top-[-4%] h-[55%] w-[48%] rounded-full bg-gradient-to-bl from-indigo-600/32 via-violet-500/16 to-transparent blur-[80px]" />
+            {/* Violet — bottom left */}
+            <div className="absolute bottom-[-4%] left-[-4%] h-[55%] w-[48%] rounded-full bg-gradient-to-tr from-violet-600/30 to-transparent blur-[80px]" />
+            {/* Purple — mid left */}
+            <div className="absolute left-[-4%] top-[38%] h-[45%] w-[38%] rounded-full bg-gradient-to-r from-purple-600/22 to-transparent blur-[75px]" />
+            {/* Fuchsia/purple — bottom right */}
+            <div className="absolute bottom-[-4%] right-[-4%] h-[45%] w-[40%] rounded-full bg-gradient-to-tl from-fuchsia-600/18 to-transparent blur-[80px]" />
           </div>
           {children}
           <AssistantWidget />

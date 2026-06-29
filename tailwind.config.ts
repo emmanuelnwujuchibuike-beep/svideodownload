@@ -63,7 +63,7 @@ const config: Config = {
         luxury:
           "inset 0 1px 0 hsl(0 0% 100% / 0.07), 0 4px 20px hsl(0 0% 0% / 0.45), 0 24px 64px hsl(0 0% 0% / 0.28)",
         "glow-blue":
-          "0 0 28px hsl(217 100% 65% / 0.28), 0 0 64px hsl(217 100% 65% / 0.1)",
+          "0 0 28px hsl(252 95% 70% / 0.28), 0 0 64px hsl(270 95% 72% / 0.1)",
         "glow-gold":
           "0 0 28px hsl(43 96% 56% / 0.32), 0 0 64px hsl(43 96% 56% / 0.12)",
       },

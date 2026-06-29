@@ -140,9 +140,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                 {new Date(post.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
               </span>
               {post.category ? (
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-foreground">
+                <Link href={`/explore?category=${post.category}`} className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-foreground transition hover:bg-secondary/70">
                   {categoryLabel(post.category)}
-                </span>
+                </Link>
               ) : null}
             </div>
           </div>

@@ -14,9 +14,9 @@ import { PLATFORMS } from "@/lib/platforms";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
 
 const NAV_LINKS = [
+  { href: "/explore", label: "Explore" },
   { href: "/tiktok-video-downloader", label: "TikTok" },
   { href: "/instagram-reels-downloader", label: "Instagram" },
-  { href: "/#features", label: "Features" },
   { href: "/developers", label: "API" },
   { href: "/blog", label: "Blog" },
 ];
@@ -109,6 +109,13 @@ export function SiteHeader() {
               </Link>
             )}
 
+            <Link
+              href="/explore"
+              onClick={() => setOpen(false)}
+              className="rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
+            >
+              Explore
+            </Link>
             <Link
               href="/blog"
               onClick={() => setOpen(false)}

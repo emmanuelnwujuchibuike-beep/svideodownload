@@ -146,13 +146,19 @@ export async function moderate(
   if (!hasSupabase) return { ok: false };
   const db = createAdminClient();
 
-  // 1) Apply the content/account action.
+  // 1) Apply the content/account action. NOTE: "dismiss" also un-hides content
+  // that was AUTO-hidden by the report trigger (under_review/hidden) — scoped by
+  // status so it never un-removes content an admin explicitly removed.
   if (targetType === "post") {
     if (action === "remove") await db.from("posts").update({ status: "removed" }).eq("id", targetId);
     else if (action === "restore") await db.from("posts").update({ status: "published" }).eq("id", targetId);
+    else if (action === "dismiss")
+      await db.from("posts").update({ status: "published" }).eq("id", targetId).eq("status", "under_review");
   } else if (targetType === "comment") {
     if (action === "remove") await db.from("post_comments").update({ status: "removed" }).eq("id", targetId);
     else if (action === "restore") await db.from("post_comments").update({ status: "visible" }).eq("id", targetId);
+    else if (action === "dismiss")
+      await db.from("post_comments").update({ status: "visible" }).eq("id", targetId).eq("status", "hidden");
   } else if (targetType === "user") {
     if (action === "suspend") await db.from("profiles").update({ is_suspended: true }).eq("id", targetId);
     else if (action === "unsuspend") await db.from("profiles").update({ is_suspended: false }).eq("id", targetId);

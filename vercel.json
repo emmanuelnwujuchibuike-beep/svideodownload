@@ -10,6 +10,9 @@
     },
     "app/api/metadata/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/cron/trending/route.ts": {
+      "maxDuration": 120
     }
   },
   "headers": [

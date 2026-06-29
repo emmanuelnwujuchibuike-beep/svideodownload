@@ -111,50 +111,59 @@ export default async function AccountPage() {
           </header>
 
           <div className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card">
-            {/* Profile header */}
-            <div className="flex items-center gap-5 border-b border-border/60 p-6 sm:p-8">
-              <div className="relative shrink-0">
-                {avatar ? (
+            {/* Profile hero — cover + avatar */}
+            <div className="border-b border-border/60">
+              <div className="h-28 w-full bg-gradient-to-br from-blue-600/30 via-sky-500/15 to-cyan-400/20 sm:h-36">
+                {ownProfile?.bannerUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={avatar}
-                    alt=""
-                    className="h-16 w-16 rounded-full object-cover ring-2 ring-border"
-                  />
-                ) : (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-2xl font-bold text-white shadow-md shadow-blue-500/25">
-                    {initial}
-                  </div>
-                )}
-                {/* Diamond Crown overlay for premium/business */}
-                <DiamondCrownBadge
-                  plan={plan as BillingPlan}
-                  size="md"
-                  className="absolute -bottom-1 -right-1 ring-2 ring-card"
-                />
+                  <img src={ownProfile.bannerUrl} alt="" className="h-full w-full object-cover" />
+                ) : null}
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="truncate text-lg font-semibold">{email}</p>
-                  <DiamondCrownBadge plan={plan as BillingPlan} size="sm" />
-                </div>
-                <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  {admin ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                      <ShieldCheck className="h-3 w-3" /> Admin
-                    </span>
-                  ) : null}
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
-                      isPremium
-                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                        : "bg-secondary text-muted-foreground",
+              <div className="px-6 pb-6 sm:px-8">
+                <div className="-mt-10 flex items-end justify-between gap-3">
+                  <div className="relative">
+                    {avatar ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={avatar} alt="" className="h-20 w-20 rounded-full object-cover ring-4 ring-card" />
+                    ) : (
+                      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-2xl font-bold text-white ring-4 ring-card">
+                        {initial}
+                      </div>
                     )}
-                  >
-                    {isPremium ? <Crown className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
-                    {planLabel}
-                  </span>
+                    <DiamondCrownBadge plan={plan as BillingPlan} size="md" className="absolute -bottom-1 -right-1 ring-2 ring-card" />
+                  </div>
+                  {ownProfile?.handle ? (
+                    <Link href={`/u/${ownProfile.handle}`} className="mb-1 inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">
+                      View profile
+                    </Link>
+                  ) : (
+                    <Link href="#profile" className="mb-1 inline-flex items-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90">
+                      Set up profile
+                    </Link>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <div className="flex items-center gap-2">
+                    <h2 className="truncate text-xl font-bold tracking-[-0.02em]">{ownProfile?.displayName || email}</h2>
+                    <DiamondCrownBadge plan={plan as BillingPlan} size="sm" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">{ownProfile?.handle ? `@${ownProfile.handle}` : email}</p>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    {admin ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                        <ShieldCheck className="h-3 w-3" /> Admin
+                      </span>
+                    ) : null}
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
+                        isPremium ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-secondary text-muted-foreground",
+                      )}
+                    >
+                      {isPremium ? <Crown className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
+                      {planLabel}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

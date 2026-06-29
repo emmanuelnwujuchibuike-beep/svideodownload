@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Activity, Eye, Loader2, MessageSquare, Search, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -49,53 +49,64 @@ export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
 
   return (
     <div id="privacy" className="scroll-mt-24 border-b border-border/60 p-6 sm:p-8">
-      <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
-        <ShieldCheck className="h-5 w-5 text-primary" /> Privacy
-      </h2>
-      <p className="mb-4 text-xs text-muted-foreground">
-        Privacy always overrides recommendations and discovery.
+      <div className="mb-1 flex items-center gap-2">
+        <ShieldCheck className="h-5 w-5 text-primary" />
+        <h2 className="text-base font-semibold">Privacy</h2>
+      </div>
+      <p className="mb-5 text-xs text-muted-foreground">
+        You&apos;re always in control — these settings override discovery and recommendations.
       </p>
 
-      <div className="space-y-3">
-        <Row label="Activity visibility" value={state.activity_visibility} choices={VIS} onChange={(v) => set("activity_visibility", v as PrivacySettings["activity_visibility"])} />
-        <Row label="Who can see followers" value={state.followers_visibility} choices={VIS} onChange={(v) => set("followers_visibility", v as PrivacySettings["followers_visibility"])} />
-        <Row label="Who can comment" value={state.comments_policy} choices={POLICY} onChange={(v) => set("comments_policy", v as PrivacySettings["comments_policy"])} />
-        <Row label="Who can message you" value={state.messages_policy} choices={POLICY} onChange={(v) => set("messages_policy", v as PrivacySettings["messages_policy"])} />
-        <Toggle label="Allow search engines to index my profile" on={state.allow_indexing} onToggle={() => set("allow_indexing", !state.allow_indexing)} />
-        <Toggle label="Show me in recommendations" on={state.show_in_recommendations} onToggle={() => set("show_in_recommendations", !state.show_in_recommendations)} />
+      <div className="space-y-2.5">
+        <SegRow icon={Activity} title="Activity visibility" desc="Who can see your likes, saves and posts" value={state.activity_visibility} choices={VIS} onChange={(v) => set("activity_visibility", v as PrivacySettings["activity_visibility"])} />
+        <SegRow icon={Users} title="Followers list" desc="Who can see who follows you" value={state.followers_visibility} choices={VIS} onChange={(v) => set("followers_visibility", v as PrivacySettings["followers_visibility"])} />
+        <SegRow icon={MessageSquare} title="Comments" desc="Who can comment on your posts" value={state.comments_policy} choices={POLICY} onChange={(v) => set("comments_policy", v as PrivacySettings["comments_policy"])} />
+        <SegRow icon={MessageSquare} title="Messages" desc="Who can send you direct messages" value={state.messages_policy} choices={POLICY} onChange={(v) => set("messages_policy", v as PrivacySettings["messages_policy"])} />
+        <ToggleRow icon={Search} title="Search engine indexing" desc="Let Google show your profile" on={state.allow_indexing} onToggle={() => set("allow_indexing", !state.allow_indexing)} />
+        <ToggleRow icon={Sparkles} title="Recommendations" desc="Show me in suggestions & trending" on={state.show_in_recommendations} onToggle={() => set("show_in_recommendations", !state.show_in_recommendations)} />
       </div>
 
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-6 flex items-center gap-3">
         <button
           type="button"
           onClick={save}
           disabled={busy}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save privacy
         </button>
-        {msg ? (
-          <span className={cn("text-sm", msg.ok ? "text-green-500" : "text-red-400")}>{msg.text}</span>
-        ) : null}
+        {msg ? <span className={cn("text-sm", msg.ok ? "text-green-500" : "text-red-400")}>{msg.text}</span> : null}
       </div>
     </div>
   );
 }
 
-function Row({
-  label,
+function SegRow({
+  icon: Icon,
+  title,
+  desc,
   value,
   choices,
   onChange,
 }: {
-  label: string;
+  icon: typeof Eye;
+  title: string;
+  desc: string;
   value: string;
   choices: Choice[];
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/60 bg-secondary/20 p-3">
-      <span className="text-sm">{label}</span>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/15 p-3.5">
+      <span className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-medium">{title}</span>
+          <span className="block text-xs text-muted-foreground">{desc}</span>
+        </span>
+      </span>
       <div className="inline-flex rounded-lg bg-background p-0.5 ring-1 ring-inset ring-border">
         {choices.map((c) => (
           <button
@@ -104,7 +115,7 @@ function Row({
             onClick={() => onChange(c.value)}
             aria-pressed={value === c.value}
             className={cn(
-              "rounded-md px-2.5 py-1 text-xs font-medium transition",
+              "rounded-md px-2.5 py-1.5 text-xs font-medium transition",
               value === c.value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -116,15 +127,35 @@ function Row({
   );
 }
 
-function Toggle({ label, on, onToggle }: { label: string; on: boolean; onToggle: () => void }) {
+function ToggleRow({
+  icon: Icon,
+  title,
+  desc,
+  on,
+  onToggle,
+}: {
+  icon: typeof Eye;
+  title: string;
+  desc: string;
+  on: boolean;
+  onToggle: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-pressed={on}
-      className="flex w-full items-center justify-between gap-2 rounded-xl border border-border/60 bg-secondary/20 p-3 text-left"
+      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/15 p-3.5 text-left transition hover:border-foreground/15"
     >
-      <span className="text-sm">{label}</span>
+      <span className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-medium">{title}</span>
+          <span className="block text-xs text-muted-foreground">{desc}</span>
+        </span>
+      </span>
       <span
         className={cn(
           "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { BadgeCheck, Bookmark, CalendarDays, Download, Eye, Heart, MessageCircle, Play, Share2 } from "lucide-react";
+import { BadgeCheck, CalendarDays, Download, Eye, Play } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -10,14 +10,24 @@ import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { PostGrid } from "@/components/social/post-grid";
+import { Comments } from "@/features/social/comments";
 import { FollowButton } from "@/features/social/follow-button";
 import { PostDownloadButton } from "@/features/social/post-download-button";
+import { PostEngagement } from "@/features/social/post-engagement";
 import { ReportButton } from "@/features/social/report-button";
 import { categoryLabel } from "@/lib/social/categories";
 import { getUserPlan } from "@/lib/monetization/plan";
+import { canComment, getViewerReactions, listComments } from "@/lib/social/engagement";
 import { getPost, recordPostView, relatedPosts } from "@/lib/social/posts";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
+
+const COMMENT_GATE_MSG: Record<string, string> = {
+  off: "Comments are turned off for this post.",
+  followers: "Only the creator's followers can comment.",
+  blocked: "You can't comment here.",
+  unavailable: "Comments are unavailable.",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +78,15 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     .digest("hex");
   void recordPostView(post.id, me, ipHash);
 
-  const [plan, related] = await Promise.all([getUserPlan(post.publisher_id), relatedPosts(post)]);
+  const [plan, related, reactions, comments, gate] = await Promise.all([
+    getUserPlan(post.publisher_id),
+    relatedPosts(post),
+    getViewerReactions(post.id, me),
+    listComments(post.id, post.publisher_id, me),
+    me ? canComment(post.id, me) : Promise.resolve(null),
+  ]);
+  const commentDisabled =
+    gate && !gate.ok ? (COMMENT_GATE_MSG[gate.reason] ?? "Comments are unavailable.") : null;
 
   const ld = {
     "@context": "https://schema.org",
@@ -83,15 +101,6 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
       userInteractionCount: post.views_count,
     },
   };
-
-  const stats: { icon: typeof Eye; label: string; value: number }[] = [
-    { icon: Eye, label: "Views", value: post.views_count },
-    { icon: Download, label: "Downloads", value: post.downloads_count },
-    { icon: Heart, label: "Likes", value: post.likes_count },
-    { icon: MessageCircle, label: "Comments", value: post.comments_count },
-    { icon: Bookmark, label: "Saves", value: post.saves_count },
-    { icon: Share2, label: "Shares", value: post.shares_count },
-  ];
 
   return (
     <>
@@ -142,15 +151,28 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 
         {post.description ? <p className="mt-4 leading-relaxed text-muted-foreground">{post.description}</p> : null}
 
-        {/* Stats */}
-        <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {stats.map((s) => (
-            <div key={s.label} className="rounded-xl border border-border/60 bg-card p-2.5 text-center">
-              <s.icon className="mx-auto h-4 w-4 text-muted-foreground" />
-              <p className="mt-1 text-sm font-bold tabular-nums">{formatCompactNumber(s.value)}</p>
-              <p className="text-[10px] text-muted-foreground">{s.label}</p>
-            </div>
-          ))}
+        {/* Engagement + reach */}
+        <div className="mt-5">
+          <PostEngagement
+            postId={post.id}
+            loggedIn={!!me}
+            initial={{
+              liked: reactions.liked,
+              saved: reactions.saved,
+              likes: post.likes_count,
+              saves: post.saves_count,
+              shares: post.shares_count,
+              comments: post.comments_count,
+            }}
+          />
+          <p className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <Eye className="h-3.5 w-3.5" /> {formatCompactNumber(post.views_count)} views
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Download className="h-3.5 w-3.5" /> {formatCompactNumber(post.downloads_count)} downloads
+            </span>
+          </p>
         </div>
 
         {/* Creator */}
@@ -175,6 +197,16 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           </Link>
           {post.isOwner ? null : <FollowButton targetId={post.publisher.id} initialFollowing={post.publisher.isFollowing} canFollow={!!me} />}
         </div>
+
+        {/* Comments */}
+        <Comments
+          postId={post.id}
+          comments={comments}
+          loggedIn={!!me}
+          canComment={!!gate?.ok}
+          disabledReason={commentDisabled}
+          count={post.comments_count}
+        />
 
         {/* Related */}
         {related.length > 0 ? (

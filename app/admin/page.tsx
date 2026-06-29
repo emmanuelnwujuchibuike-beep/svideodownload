@@ -34,8 +34,10 @@ import { LimitsEditor } from "@/features/admin/limits-editor";
 import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
 import { PricingEditor } from "@/features/admin/pricing-editor";
+import { ModerationQueue } from "@/features/admin/moderation-queue";
 import { TrendingEditor } from "@/features/admin/trending-editor";
 import { getTrendingSettings } from "@/lib/social/feed";
+import { listReportedTargets } from "@/lib/social/moderation";
 import { listAds } from "@/lib/monetization/ads";
 import { getPlanLimits } from "@/lib/monetization/plan";
 import { getPricing } from "@/lib/monetization/pricing";
@@ -94,6 +96,7 @@ export default async function AdminPage() {
     adRecords,
     analytics,
     trendingSettings,
+    reportedTargets,
   ] = await Promise.all([
     fetchProxyUsage(),
     fetchDownloadStats(),
@@ -107,6 +110,7 @@ export default async function AdminPage() {
     listAds(),
     fetchMonetizationAnalytics(),
     getTrendingSettings(),
+    listReportedTargets(),
   ]);
   // Fire the proxy-budget alert if we've crossed 90% (deduped to once/day).
   await maybeAlertProxyBudget(proxy);
@@ -250,6 +254,7 @@ export default async function AdminPage() {
 
         {/* Monetization controls + managers + analytics */}
         <MonetizationSettings settings={monetization} />
+        <ModerationQueue targets={reportedTargets} />
         <AnalyticsPanel data={analytics} />
         <TrendingEditor settings={trendingSettings} />
         <AffiliateManager affiliates={affiliates} />

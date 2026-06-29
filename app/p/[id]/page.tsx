@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
+import { isAdmin } from "@/lib/admin";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { PostGrid } from "@/components/social/post-grid";
@@ -33,15 +34,17 @@ export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function viewer(): Promise<string | null> {
+async function viewer(): Promise<{ id: string | null; admin: boolean }> {
   try {
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    return user?.id ?? null;
+    if (!user) return { id: null, admin: false };
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    return { id: user.id, admin: isAdmin(profile?.role, user.email) };
   } catch {
-    return null;
+    return { id: null, admin: false };
   }
 }
 
@@ -68,8 +71,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   if (!UUID.test(id)) notFound();
 
-  const me = await viewer();
-  const post = await getPost(id, me);
+  const { id: me, admin: viewerIsAdmin } = await viewer();
+  const post = await getPost(id, me, viewerIsAdmin);
   if (!post) notFound();
 
   // Deduped view (per viewer|ip per day) — fire and forget. Don't count the
@@ -110,6 +113,12 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
       <SiteHeader />
       <main className="container max-w-3xl pb-24 pt-28 sm:pt-32">
+        {post.status !== "published" ? (
+          <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
+            This post is <strong>{post.status.replace("_", " ")}</strong> and isn&apos;t publicly visible.
+          </div>
+        ) : null}
+
         {/* Preview */}
         <div className="relative aspect-video overflow-hidden rounded-3xl border border-border/60 bg-neutral-950 shadow-card">
           {post.thumbnail_url ? (

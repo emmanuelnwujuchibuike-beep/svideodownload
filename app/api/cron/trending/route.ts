@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/admin/guard";
-import { recomputeHotScores } from "@/lib/social/feed";
+import { recomputeHotScores, recomputeTrustScores } from "@/lib/social/feed";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,8 +20,10 @@ async function run(request: Request) {
   if (!(await authorized(request))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const updated = await recomputeHotScores();
-  return NextResponse.json({ ok: true, updated });
+  // Maintenance: refresh trust scores first (feeds into discovery), then
+  // recompute trending with the latest counters.
+  const [trust, updated] = await Promise.all([recomputeTrustScores(), recomputeHotScores()]);
+  return NextResponse.json({ ok: true, updated, trust });
 }
 
 export const GET = run; // Vercel cron uses GET

@@ -113,6 +113,12 @@ export function TrendingEditor({ settings }: { settings: TrendingSettings }) {
           <input type="number" min={1} className={input} value={state.diversityCap} onChange={(e) => set("diversityCap", Math.max(1, Math.floor(Number(e.target.value) || 1)))} />
         </div>
       </div>
+      <div className="mt-3 grid grid-cols-3 gap-3">
+        <div>
+          <label className={label}>Min creator trust (feed)</label>
+          <input type="number" min={0} max={100} className={input} value={state.feedTrustMin} onChange={(e) => set("feedTrustMin", Math.max(0, Math.min(100, Math.floor(Number(e.target.value) || 0))))} />
+        </div>
+      </div>
 
       <div className="mt-4 flex items-center gap-3">
         <button

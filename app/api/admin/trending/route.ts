@@ -18,6 +18,7 @@ const schema = z.object({
   gravity: z.number().min(0).max(10),
   maxAgeHours: z.number().int().min(1).max(8760),
   diversityCap: z.number().int().min(1).max(50),
+  feedTrustMin: z.number().int().min(0).max(100),
 });
 
 /** Admin-only: update the trending weights / gravity / diversity cap. */

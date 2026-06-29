@@ -41,6 +41,9 @@ export async function POST(request: Request) {
     reason: parsed.data.reason,
     note: parsed.data.note ?? null,
   });
-  if (error) return NextResponse.json({ error: "Couldn't submit report." }, { status: 500 });
+  // Duplicate (you already reported this) → treat as success.
+  if (error && error.code !== "23505") {
+    return NextResponse.json({ error: "Couldn't submit report." }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }

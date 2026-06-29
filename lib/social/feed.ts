@@ -24,6 +24,8 @@ export interface TrendingSettings {
   gravity: number;
   maxAgeHours: number;
   diversityCap: number;
+  /** Hide creators below this trust score from the discovery feed (0 = off). */
+  feedTrustMin: number;
 }
 
 export const DEFAULT_TRENDING: TrendingSettings = {
@@ -36,6 +38,7 @@ export const DEFAULT_TRENDING: TrendingSettings = {
   gravity: 1.5,
   maxAgeHours: 168, // 7 days
   diversityCap: 2,
+  feedTrustMin: 0,
 };
 
 let trendingCache: { at: number; value: TrendingSettings } | null = null;
@@ -60,6 +63,13 @@ export async function getTrendingSettings(): Promise<TrendingSettings> {
 export async function setTrendingSettings(s: TrendingSettings): Promise<void> {
   await createAdminClient().from("settings").upsert({ key: "trending", value: s }, { onConflict: "key" });
   trendingCache = null;
+}
+
+/** Recompute trust scores for all (non-suspended) accounts. */
+export async function recomputeTrustScores(): Promise<number> {
+  if (!hasSupabase) return 0;
+  const { data } = await createAdminClient().rpc("recompute_trust_scores");
+  return (data as number) ?? 0;
 }
 
 /** Recompute hot_score for recent posts using the admin-tuned weights. */
@@ -123,14 +133,21 @@ export async function getFeed(opts: {
 
     const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
     const [{ data: profs }, { data: privs }, blocks] = await Promise.all([
-      db.from("profiles").select("id, is_suspended").in("id", publisherIds),
+      db.from("profiles").select("id, is_suspended, trust_score").in("id", publisherIds),
       db.from("privacy_settings").select("user_id, show_in_recommendations").in("user_id", publisherIds),
       opts.viewerId
         ? db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${opts.viewerId},blocked_id.eq.${opts.viewerId}`)
         : Promise.resolve({ data: [] as { blocker_id: string; blocked_id: string }[] }),
     ]);
 
-    const suspended = new Set(((profs ?? []) as { id: string; is_suspended: boolean }[]).filter((p) => p.is_suspended).map((p) => p.id));
+    const profRows = (profs ?? []) as { id: string; is_suspended: boolean; trust_score: number }[];
+    const suspended = new Set(profRows.filter((p) => p.is_suspended).map((p) => p.id));
+    // Shadow-discount: keep low-trust creators out of discovery.
+    const lowTrust = new Set(
+      settings.feedTrustMin > 0
+        ? profRows.filter((p) => (p.trust_score ?? 0) < settings.feedTrustMin).map((p) => p.id)
+        : [],
+    );
     const hidden = new Set(
       ((privs ?? []) as { user_id: string; show_in_recommendations: boolean }[])
         .filter((p) => !p.show_in_recommendations)
@@ -144,7 +161,13 @@ export async function getFeed(opts: {
     const perPublisher = new Map<string, number>();
     const out: PostCard[] = [];
     for (const r of rows) {
-      if (suspended.has(r.publisher_id) || hidden.has(r.publisher_id) || blocked.has(r.publisher_id)) continue;
+      if (
+        suspended.has(r.publisher_id) ||
+        lowTrust.has(r.publisher_id) ||
+        hidden.has(r.publisher_id) ||
+        blocked.has(r.publisher_id)
+      )
+        continue;
       const n = perPublisher.get(r.publisher_id) ?? 0;
       if (n >= settings.diversityCap) continue;
       perPublisher.set(r.publisher_id, n + 1);

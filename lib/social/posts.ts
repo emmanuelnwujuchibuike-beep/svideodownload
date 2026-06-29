@@ -205,22 +205,27 @@ async function canSeePost(
   return (count ?? 0) > 0;
 }
 
-/** A single post with privacy applied + publisher card. Null = hidden/not found. */
-export async function getPost(id: string, viewerId: string | null): Promise<PublicPost | null> {
+/** A single post with privacy applied + publisher card. Null = hidden/not found.
+ *  `viewerIsAdmin` bypasses visibility so admins can review reported content. */
+export async function getPost(
+  id: string,
+  viewerId: string | null,
+  viewerIsAdmin = false,
+): Promise<PublicPost | null> {
   if (!hasSupabase) return null;
   try {
     const db = createAdminClient();
     const { data } = await db.from("posts").select(POST_SELECT).eq("id", id).maybeSingle();
     const post = data as PostRow | null;
     if (!post) return null;
-    if (!(await canSeePost(db, post, viewerId))) return null;
+    if (!viewerIsAdmin && !(await canSeePost(db, post, viewerId))) return null;
 
     const { data: prof } = await db
       .from("profiles")
       .select("id, handle, display_name, avatar_url, is_verified, is_suspended")
       .eq("id", post.publisher_id)
       .maybeSingle();
-    if (!prof || prof.is_suspended || !prof.handle) return null;
+    if (!prof || !prof.handle || (prof.is_suspended && !viewerIsAdmin)) return null;
 
     let isFollowing = false;
     if (viewerId && viewerId !== post.publisher_id) {

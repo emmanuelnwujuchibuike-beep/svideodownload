@@ -1,4 +1,4 @@
-import { CalendarDays, Code2, Crown, Gem, LogOut, Mail, ShieldCheck, Sparkles } from "lucide-react";
+import { BarChart3, CalendarDays, Code2, Crown, Gem, LogOut, Mail, ShieldCheck, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -232,10 +232,16 @@ export default async function AccountPage() {
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link
-                    href="/developers"
+                    href="/account/analytics"
                     className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
                   >
-                    <Code2 className="h-4 w-4" /> API documentation
+                    <BarChart3 className="h-4 w-4" /> Creator analytics
+                  </Link>
+                  <Link
+                    href="/developers"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary"
+                  >
+                    <Code2 className="h-4 w-4" /> API docs
                   </Link>
                   <Link
                     href="/pricing#business"

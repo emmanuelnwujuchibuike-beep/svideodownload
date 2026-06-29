@@ -133,9 +133,6 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               <Play className="h-14 w-14" />
             </div>
           )}
-          <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold capitalize text-white backdrop-blur-md">
-            {post.platform}
-          </span>
         </div>
 
         {/* Title + meta */}

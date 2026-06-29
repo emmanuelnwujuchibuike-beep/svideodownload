@@ -38,3 +38,18 @@ export function downloadToDisk(payload: DownloadPayload): void {
   // Remove on the next tick so the click/navigation is registered first.
   setTimeout(() => a.remove(), 0);
 }
+
+/** Saves an already-fetched Blob to disk (used by the in-app download manager). */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "download";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
+}

@@ -14,7 +14,7 @@
     --secondary: 240 5% 95%;
     --secondary-foreground: 240 10% 8%;
     --muted: 240 5% 95%;
-    --muted-foreground: 240 4% 42%;
+    --muted-foreground: 240 5% 34%;
     --accent: 270 90% 62%;
     --accent-foreground: 0 0% 100%;
     --gold: 43 96% 48%;
@@ -36,7 +36,7 @@
     --secondary: 240 6% 10%;
     --secondary-foreground: 0 0% 97%;
     --muted: 240 6% 9%;
-    --muted-foreground: 240 5% 58%;
+    --muted-foreground: 240 6% 70%;
     --accent: 270 95% 72%;
     --accent-foreground: 0 0% 100%;
     --gold: 43 96% 56%;
@@ -79,6 +79,13 @@
 
   ::selection {
     @apply bg-primary/20;
+  }
+
+  /* Keep placeholders legible — browsers dim them by default. */
+  input::placeholder,
+  textarea::placeholder {
+    color: hsl(var(--muted-foreground));
+    opacity: 1;
   }
 
   ::-webkit-scrollbar {

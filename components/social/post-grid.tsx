@@ -52,10 +52,9 @@ function PostCardItem({ post }: { post: PostCard }) {
       </div>
       <div className="p-2.5">
         <p className="line-clamp-2 text-xs font-semibold leading-snug">{post.title}</p>
-        <p className="mt-1 text-[11px] capitalize text-muted-foreground">
-          {post.platform}
-          {post.category ? ` · ${post.category}` : ""}
-        </p>
+        {post.category ? (
+          <p className="mt-1 text-[11px] capitalize text-muted-foreground">{post.category}</p>
+        ) : null}
       </div>
     </Link>
   );

@@ -13,11 +13,14 @@ export function AppShell({
   handle,
   profile,
   suggestions,
+  rightRail,
   children,
 }: {
   handle: string | null;
-  profile: HomeProfile | null;
-  suggestions: SuggestedCreator[];
+  profile?: HomeProfile | null;
+  suggestions?: SuggestedCreator[];
+  /** Override the default home right rail (e.g. the Downloads page rail). */
+  rightRail?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -28,7 +31,7 @@ export function AppShell({
         <AppTopbar />
         <div className="mx-auto flex w-full max-w-[1600px] flex-1 gap-4 px-3 sm:px-4">
           <main className="min-w-0 flex-1 pb-24 pt-4 lg:pb-6">{children}</main>
-          <RightRail profile={profile} suggestions={suggestions} />
+          {rightRail ?? <RightRail profile={profile ?? null} suggestions={suggestions ?? []} />}
         </div>
       </div>
 

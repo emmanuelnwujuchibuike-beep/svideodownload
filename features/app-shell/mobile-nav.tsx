@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 const ITEMS = [
   { label: "Home", href: "/home", icon: Home },
   { label: "Explore", href: "/explore", icon: Compass },
-  { label: "Create", href: "/home#download", icon: Plus, primary: true },
+  { label: "Create", href: "/downloads", icon: Plus, primary: true },
   { label: "Chat", href: "/messages", icon: MessageCircle },
   { label: "Saved", href: "/saved", icon: Bookmark },
 ];

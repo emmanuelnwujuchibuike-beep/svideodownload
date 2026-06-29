@@ -6,8 +6,6 @@ import { ExploreCategories } from "@/features/app-shell/dashboard/explore-catego
 import { JoinCommunities } from "@/features/app-shell/dashboard/join-communities";
 import { LatestNewsTabs } from "@/features/app-shell/dashboard/latest-news";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
-import { DownloadDock } from "@/features/app-shell/download-dock";
-import { HomeHero } from "@/features/app-shell/home-hero";
 import { FeedClient } from "@/features/feed/feed-client";
 import { getHomeProfile } from "@/lib/social/home";
 import { getHomeFeed } from "@/lib/social/home-feed";
@@ -39,7 +37,6 @@ export default async function HomePage() {
 
   return (
     <AppShell handle={profile?.handle ?? null} profile={profile} suggestions={suggestions}>
-      <HomeHero />
       <TrendingReels />
       <ExploreCategories />
       <LatestNewsTabs />
@@ -47,7 +44,6 @@ export default async function HomePage() {
       <div className="mt-6">
         <FeedClient initialItems={feed.items} initialNextOffset={feed.nextOffset} />
       </div>
-      <DownloadDock />
     </AppShell>
   );
 }

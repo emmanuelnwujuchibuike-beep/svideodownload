@@ -65,8 +65,24 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const declared = Number(res.headers.get("content-length") || 0);
     if (declared > MAX_BYTES) return NextResponse.json({ ok: false, error: "Too large to store.", tooLarge: true });
 
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.byteLength > MAX_BYTES) return NextResponse.json({ ok: false, error: "Too large to store.", tooLarge: true });
+    // Stream-read with an early size guard so an oversized file can't OOM the
+    // function — we abort the moment we cross the cap instead of buffering it all.
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        total += value.length;
+        if (total > MAX_BYTES) {
+          await reader.cancel().catch(() => {});
+          return NextResponse.json({ ok: false, error: "Too large to store.", tooLarge: true });
+        }
+        chunks.push(value);
+      }
+    }
+    const buf = Buffer.concat(chunks);
 
     const contentType = (res.headers.get("content-type") || "video/mp4").split(";")[0]!.trim();
     const ext = EXT[contentType] ?? (post.media_kind === "audio" ? "mp3" : "mp4");

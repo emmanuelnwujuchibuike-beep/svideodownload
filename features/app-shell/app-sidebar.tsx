@@ -38,7 +38,7 @@ export function buildNav(handle: string | null): NavItem[] {
     { label: "Communities", href: "/explore", icon: Users, soon: true },
     { label: "Friends", href: handle ? `/u/${handle}/following` : "/account#profile", icon: UsersRound },
     { label: "Chat", href: "/messages", icon: MessageCircle, badge: "5" },
-    { label: "Downloads", href: "/account", icon: Download },
+    { label: "Downloads", href: "/downloads", icon: Download },
     { label: "Saved", href: "/saved", icon: Bookmark },
   ];
 }

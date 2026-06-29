@@ -31,21 +31,24 @@ export function PhoneMockup() {
       {/* Soft glow behind phone */}
       <div aria-hidden className="absolute inset-0 -z-10 scale-110 rounded-[3.5rem] bg-gradient-to-br from-blue-500/25 via-violet-500/18 to-purple-600/25 blur-3xl" />
 
-      {/* Titanium frame */}
-      <div className="relative z-10 rounded-[3.2rem] bg-gradient-to-b from-neutral-600 via-neutral-800 to-neutral-700 p-[3px] shadow-2xl">
-        {/* Side buttons */}
-        <span aria-hidden className="absolute -left-[3px] top-28 h-9 w-[3px] rounded-l bg-neutral-700" />
-        <span aria-hidden className="absolute -left-[3px] top-40 h-14 w-[3px] rounded-l bg-neutral-700" />
-        <span aria-hidden className="absolute -left-[3px] top-56 h-14 w-[3px] rounded-l bg-neutral-700" />
-        <span aria-hidden className="absolute -right-[3px] top-44 h-16 w-[3px] rounded-r bg-neutral-700" />
+      {/* Titanium frame — iPhone 17 Pro Max */}
+      <div className="relative z-10 rounded-[3rem] bg-gradient-to-b from-zinc-500 via-zinc-700 to-zinc-600 p-[2px] shadow-2xl">
+        {/* Titanium side buttons */}
+        <span aria-hidden className="absolute -left-[3px] top-24 h-7 w-[3px] rounded-l-sm bg-zinc-600" />
+        <span aria-hidden className="absolute -left-[3px] top-36 h-12 w-[3px] rounded-l-sm bg-zinc-600" />
+        <span aria-hidden className="absolute -left-[3px] top-52 h-12 w-[3px] rounded-l-sm bg-zinc-600" />
+        {/* Power button */}
+        <span aria-hidden className="absolute -right-[3px] top-40 h-16 w-[3px] rounded-r-sm bg-zinc-600" />
+        {/* Camera Control button */}
+        <span aria-hidden className="absolute -right-[3px] top-60 h-8 w-[3px] rounded-r-sm bg-zinc-500" />
 
-        <div className="relative overflow-hidden rounded-[3rem] border-[10px] border-black bg-neutral-950">
+        <div className="relative overflow-hidden rounded-[2.85rem] border-[5px] border-black bg-black">
           {/* Dynamic Island */}
-          <div className="absolute left-1/2 top-2.5 z-30 flex h-7 w-24 -translate-x-1/2 items-center justify-end gap-1.5 rounded-full bg-black pr-2 ring-1 ring-white/10">
-            <span className="h-1.5 w-1.5 rounded-full bg-neutral-700" />
+          <div className="absolute left-1/2 top-[0.55rem] z-30 flex h-[1.55rem] w-[5.5rem] -translate-x-1/2 items-center justify-end rounded-full bg-black pr-2.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+            <span className="h-2 w-2 rounded-full bg-zinc-800 ring-1 ring-zinc-700" />
           </div>
 
-          <div className="space-y-3 px-3 pb-5 pt-3 text-white">
+          <div className="space-y-3 rounded-[2.6rem] bg-neutral-950 px-3 pb-5 pt-3 text-white">
             {/* iOS status bar */}
             <div className="flex items-center justify-between px-2 text-[10px] font-semibold text-white/80">
               <span>9:41</span>

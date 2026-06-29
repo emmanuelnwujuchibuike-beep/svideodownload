@@ -2,10 +2,10 @@ import { BadgeCheck, MessageCircle, UserPlus } from "lucide-react";
 import Link from "next/link";
 
 import { getSuggestedCreators } from "@/lib/social/suggest";
+import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
 
-// Sample profiles used to keep the rail balanced (always 4 + CTA) when there
-// aren't yet 4 real public creators to feature.
+// Display profiles used when signed-out (and to pad the rail to a tidy 4).
 const SAMPLE_PEOPLE = [
   { name: "Sarah", sub: "Lagos, Nigeria · Photography", emoji: "👩🏽", from: "from-rose-500 to-pink-600", action: "add" },
   { name: "James", sub: "London, UK · Watching Trending", emoji: "🧑🏻", from: "from-blue-500 to-indigo-600", action: "chat" },
@@ -26,13 +26,34 @@ const ACTION = {
   follow: { label: "Follow", Icon: UserPlus, light: true },
 } as const;
 
-/** Landing "Meet New People" rail — real public creators padded to 4 + a join CTA. */
-export async function MeetNewPeople() {
-  const creators = await getSuggestedCreators(null, 4);
+type Card = {
+  key: string;
+  href: string;
+  name: string;
+  sub: string;
+  verified: boolean;
+  avatarUrl: string | null;
+  emoji: string;
+  from: string;
+  action: keyof typeof ACTION;
+};
 
-  // Always render exactly 4 cards: real creators first, padded with samples.
-  const cards = [
-    ...creators.map((c, i) => {
+/** Landing "Meet New People" — real public creators when signed in; tasteful
+ * display profiles (Add → create account) when signed out. */
+export async function MeetNewPeople() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const signedIn = !!user;
+
+  // Signed-out → display profiles whose CTA leads straight to create-account.
+  const SIGNUP = "/login?signup=1";
+  let cards: Card[];
+
+  if (signedIn) {
+    const creators = await getSuggestedCreators(user.id, 4);
+    const real: Card[] = creators.map((c, i) => {
       const style = SAMPLE_PEOPLE[i % 4] ?? SAMPLE_PEOPLE[0];
       return {
         key: c.handle,
@@ -45,19 +66,33 @@ export async function MeetNewPeople() {
         from: style.from,
         action: style.action as keyof typeof ACTION,
       };
-    }),
-    ...SAMPLE_PEOPLE.slice(creators.length).map((s) => ({
+    });
+    // Pad with sample profiles (linking to Explore) so the rail stays a tidy 4.
+    const pad: Card[] = SAMPLE_PEOPLE.slice(creators.length).map((s) => ({
       key: s.name,
-      href: "/login?signup=1",
+      href: "/explore",
       name: s.name,
       sub: s.sub,
       verified: false,
-      avatarUrl: null as string | null,
+      avatarUrl: null,
       emoji: s.emoji,
       from: s.from,
       action: s.action as keyof typeof ACTION,
-    })),
-  ].slice(0, 4);
+    }));
+    cards = [...real, ...pad].slice(0, 4);
+  } else {
+    cards = SAMPLE_PEOPLE.map((s) => ({
+      key: s.name,
+      href: SIGNUP,
+      name: s.name,
+      sub: s.sub,
+      verified: false,
+      avatarUrl: null,
+      emoji: s.emoji,
+      from: s.from,
+      action: s.action as keyof typeof ACTION,
+    }));
+  }
 
   return (
     <section className="container max-w-6xl py-10 sm:py-14">
@@ -66,7 +101,7 @@ export async function MeetNewPeople() {
           <h2 className="text-2xl font-bold tracking-[-0.02em] sm:text-3xl">Meet New People</h2>
           <p className="mt-1 text-sm text-muted-foreground">Connect with amazing people around the world.</p>
         </div>
-        <Link href="/explore" className="text-sm font-semibold text-primary hover:underline">
+        <Link href={signedIn ? "/explore" : SIGNUP} className="text-sm font-semibold text-primary hover:underline">
           View All
         </Link>
       </div>
@@ -126,10 +161,10 @@ export async function MeetNewPeople() {
           </div>
           <p className="mt-3 text-xs text-muted-foreground">Join millions of people already on Frenz.</p>
           <Link
-            href="/login?signup=1"
+            href={signedIn ? "/explore" : SIGNUP}
             className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-95"
           >
-            Join Community
+            {signedIn ? "Discover more" : "Join Community"}
           </Link>
         </div>
       </div>

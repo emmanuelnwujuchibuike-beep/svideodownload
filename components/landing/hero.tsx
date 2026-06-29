@@ -1,19 +1,22 @@
 import { Lock, Play, Plus, Sparkles, UserX, Zap } from "lucide-react";
 import Link from "next/link";
 
+import { HeroWave } from "@/components/landing/hero-wave";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
 import { Downloader } from "@/features/downloader/downloader";
 
 const TRUST = [
-  { icon: UserX, label: "No Login Required", tint: "text-blue-500" },
-  { icon: Lock, label: "100% Secure & Private", tint: "text-emerald-500" },
-  { icon: Zap, label: "Fast Downloads", tint: "text-violet-500" },
+  { icon: UserX, line1: "No Login", line2: "Required", tint: "text-blue-500" },
+  { icon: Lock, line1: "100% Secure", line2: "& Private", tint: "text-emerald-500" },
+  { icon: Zap, line1: "Fast", line2: "Downloads", tint: "text-violet-500" },
 ];
 
 export function Hero() {
   return (
     <section className="relative overflow-hidden pb-12 pt-28 sm:pb-16 sm:pt-32">
-      <div className="container grid items-center gap-10 lg:grid-cols-2 lg:gap-8" id="hero">
+      <HeroWave />
+
+      <div className="container relative grid items-center gap-10 lg:grid-cols-2 lg:gap-8" id="hero">
         {/* Left — copy + CTAs */}
         <div className="text-center lg:text-left">
           <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500/10 to-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-violet-600 ring-1 ring-inset ring-violet-500/20 dark:text-violet-300">
@@ -48,14 +51,19 @@ export function Hero() {
             </Link>
           </div>
 
-          {/* Trust points */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 lg:justify-start">
-            {TRUST.map((t) => (
-              <span key={t.label} className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-secondary ${t.tint}`}>
-                  <t.icon className="h-4 w-4" />
+          {/* Trust points — icon + two-line label, divided */}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-3 lg:justify-start">
+            {TRUST.map((t, i) => (
+              <span key={t.line1} className="flex items-center">
+                {i > 0 ? <span aria-hidden className="mr-5 hidden h-8 w-px bg-border sm:block" /> : null}
+                <span className="inline-flex items-center gap-2.5">
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg bg-secondary ${t.tint}`}>
+                    <t.icon className="h-4 w-4" />
+                  </span>
+                  <span className="text-left text-sm font-medium leading-tight text-muted-foreground">
+                    {t.line1}<br />{t.line2}
+                  </span>
                 </span>
-                {t.label}
               </span>
             ))}
           </div>
@@ -68,7 +76,7 @@ export function Hero() {
       </div>
 
       {/* Premium paste-link & download bar — floats below the phone flagship */}
-      <div id="download" className="container mt-12 max-w-2xl scroll-mt-24 sm:mt-14">
+      <div id="download" className="container relative mt-12 max-w-2xl scroll-mt-24 sm:mt-14">
         <div className="mb-3 flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
           <span className="h-px w-8 bg-border" /> Paste a link to download <span className="h-px w-8 bg-border" />
         </div>

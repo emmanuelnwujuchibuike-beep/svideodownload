@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { Download, Flame, Lock, MessageCircle, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -23,6 +23,22 @@ const ERROR_MESSAGES: Record<string, string> = {
   auth: "Something went wrong signing you in. Please try again.",
 };
 
+const PERKS = [
+  { icon: Download, text: "Download from 20+ platforms — no watermark" },
+  { icon: Flame, text: "Watch trending reels & the latest news" },
+  { icon: Users, text: "Meet new friends & follow creators" },
+  { icon: MessageCircle, text: "Chat with people in real time" },
+  { icon: Lock, text: "100% secure & private — you're in control" },
+];
+
+const CLUSTER = [
+  { from: "from-rose-500 to-pink-600", emoji: "👩🏽" },
+  { from: "from-blue-500 to-indigo-600", emoji: "🧑🏻" },
+  { from: "from-violet-500 to-purple-600", emoji: "👨🏾" },
+  { from: "from-amber-500 to-orange-600", emoji: "👩🏼" },
+  { from: "from-emerald-500 to-teal-600", emoji: "🧑🏼" },
+];
+
 export default async function LoginPage({
   searchParams,
 }: {
@@ -41,29 +57,72 @@ export default async function LoginPage({
   }
 
   return (
-    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-16">
+    <main className="grid min-h-screen lg:grid-cols-2">
+      {/* Left — brand / marketing panel */}
+      <aside className="relative hidden overflow-hidden bg-gradient-to-br from-blue-600 via-violet-600 to-purple-700 p-12 text-white lg:flex lg:flex-col">
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-72 w-72 rounded-full bg-white/15 blur-3xl motion-safe:animate-drift" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-20 -left-10 h-72 w-72 rounded-full bg-fuchsia-400/20 blur-3xl motion-safe:animate-drift-slow" />
 
-      {/* Brand */}
-      <Link
-        href="/"
-        className="mb-10 flex items-center gap-2.5 text-lg font-bold tracking-tight transition-opacity hover:opacity-80"
-      >
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-white shadow-md shadow-blue-500/30">
-          <Download className="h-4 w-4" />
-        </span>
-        <span className="text-gradient">Frenz</span>
-      </Link>
+        <Link href="/" className="relative inline-flex items-center gap-2.5 text-xl font-bold tracking-tight">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 ring-1 ring-inset ring-white/25 backdrop-blur">
+            <Download className="h-4 w-4" />
+          </span>
+          Frenz
+        </Link>
 
-      {/* Card */}
-      <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-border/70 bg-card shadow-luxury">
-        <div className="p-8">
-          <h1 className="text-center text-2xl font-bold tracking-[-0.02em]">
+        <div className="relative my-auto max-w-md py-10">
+          <h2 className="text-4xl font-extrabold leading-[1.05] tracking-[-0.03em]">
+            Download. Discover. Connect.
+          </h2>
+          <p className="mt-4 text-white/85">
+            One account for everything — save videos, watch what&apos;s trending, meet new
+            people and chat. Free to join.
+          </p>
+
+          <ul className="mt-8 space-y-3.5">
+            {PERKS.map((p) => (
+              <li key={p.text} className="flex items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-inset ring-white/20">
+                  <p.icon className="h-4 w-4" />
+                </span>
+                <span className="text-sm text-white/90">{p.text}</span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-10 flex items-center gap-3">
+            <div className="flex -space-x-2">
+              {CLUSTER.map((g, i) => (
+                <span key={i} className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br ${g.from} text-base ring-2 ring-white/80`}>
+                  {g.emoji}
+                </span>
+              ))}
+            </div>
+            <span className="text-sm font-medium text-white/85">Join 8M+ members already on Frenz</span>
+          </div>
+        </div>
+
+        <p className="relative text-xs text-white/60">© {new Date().getFullYear()} Frenz</p>
+      </aside>
+
+      {/* Right — form panel */}
+      <section className="flex flex-col items-center justify-center px-5 py-12 sm:px-8">
+        <div className="w-full max-w-sm">
+          {/* Mobile brand */}
+          <Link href="/" className="mb-8 flex items-center justify-center gap-2.5 text-lg font-bold tracking-tight lg:hidden">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-violet-600 to-purple-600 text-white shadow-md shadow-violet-500/30">
+              <Download className="h-4 w-4" />
+            </span>
+            <span className="text-gradient">Frenz</span>
+          </Link>
+
+          <h1 className="text-center text-2xl font-extrabold tracking-[-0.02em] sm:text-3xl lg:text-left">
             {isSignUp ? "Create your account" : "Welcome back"}
           </h1>
-          <p className="mb-7 mt-2 text-center text-sm text-muted-foreground">
+          <p className="mb-7 mt-2 text-center text-sm text-muted-foreground lg:text-left">
             {isSignUp
-              ? "Sign up in seconds — then pick your plan."
-              : "Sign in to sync your downloads and access the API."}
+              ? "It's free and takes less than a minute."
+              : "Sign in to sync downloads, follow creators and chat."}
           </p>
 
           {errorMessage ? (
@@ -76,20 +135,20 @@ export default async function LoginPage({
           ) : null}
 
           <LoginForm next={next} initialSignUp={isSignUp} />
-        </div>
 
-        <div className="border-t border-border/50 bg-secondary/30 px-8 py-4 text-center text-xs text-muted-foreground">
-          By continuing you agree to our{" "}
-          <Link href="/terms" className="font-medium underline underline-offset-2 hover:text-foreground">
-            Terms
-          </Link>{" "}
-          and{" "}
-          <Link href="/privacy" className="font-medium underline underline-offset-2 hover:text-foreground">
-            Privacy Policy
-          </Link>
-          .
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            By continuing you agree to our{" "}
+            <Link href="/terms" className="font-medium underline underline-offset-2 hover:text-foreground">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="font-medium underline underline-offset-2 hover:text-foreground">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </div>
-      </div>
+      </section>
     </main>
   );
 }

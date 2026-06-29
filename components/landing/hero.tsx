@@ -1,52 +1,57 @@
-import { StatsCounter } from "@/components/landing/stats-counter";
+import { Lock, Sparkles, UserX, Zap } from "lucide-react";
+
 import { Downloader } from "@/features/downloader/downloader";
 import { BRAND_ICONS, FLAGSHIP_IDS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 
+const TRUST = [
+  { icon: UserX, label: "No login required" },
+  { icon: Lock, label: "100% secure & private" },
+  { icon: Zap, label: "Fast downloads" },
+];
+
 export function Hero() {
   return (
-    <section className="relative overflow-hidden pb-24 pt-32 sm:pb-32 sm:pt-44">
-      {/* Dot grid — no z-index so it stays inside this section's paint order */}
+    <section className="relative overflow-hidden pb-16 pt-28 sm:pb-20 sm:pt-36">
+      {/* Dot grid — stays inside this section's paint order */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-grid-pattern bg-[size:40px_40px] opacity-[0.22] [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,black,transparent)]"
       />
 
       <div className="container flex flex-col items-center text-center">
-        {/* Live badge */}
-        <a
-          href="#flagship"
-          className="group mb-8 inline-flex items-center gap-2.5 rounded-full border border-border/60 bg-card/70 px-4 py-2 text-sm font-medium text-muted-foreground shadow-soft backdrop-blur-sm transition-colors hover:border-foreground/15 hover:text-foreground"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full bg-emerald-400 opacity-70" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
-          All major platforms supported
-          <span className="text-muted-foreground/50 transition-transform group-hover:translate-x-0.5">
-            →
-          </span>
-        </a>
+        {/* Badge */}
+        <span className="mb-7 inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/70 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground shadow-soft backdrop-blur-sm">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          All-in-one social super app
+        </span>
 
         {/* Main heading */}
-        <h1 className="max-w-4xl text-[2.6rem] font-bold leading-[1.04] tracking-[-0.04em] sm:text-[3.75rem] lg:text-[4.5rem]">
-          Download Videos,{" "}
-          <span className="text-gradient">Meet New Friends</span>
-          <br className="hidden sm:block" /> &amp; Discover the Latest News
+        <h1 className="max-w-3xl text-[2.7rem] font-bold leading-[1.02] tracking-[-0.04em] sm:text-[4rem] lg:text-[4.5rem]">
+          Download. Discover. <span className="text-gradient">Connect.</span>
         </h1>
 
-        <p className="mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-xl">
-          Paste any link — get a clean, watermark-free file in seconds. Fast,
-          secure, and completely free. No login required.
+        <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
+          Download videos, watch trending reels, stay updated with the latest news, meet new
+          friends and chat in real time — all in one place.
         </p>
 
-        {/* Downloader widget */}
-        <div id="download" className="mt-12 w-full max-w-2xl scroll-mt-24">
+        {/* Downloader widget — paste a link & download, right at the top */}
+        <div id="download" className="mt-10 w-full max-w-2xl scroll-mt-24">
           <Downloader />
         </div>
 
+        {/* Trust points */}
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+          {TRUST.map((t) => (
+            <span key={t.label} className="inline-flex items-center gap-1.5">
+              <t.icon className="h-4 w-4 text-primary" /> {t.label}
+            </span>
+          ))}
+        </div>
+
         {/* Platform badges */}
-        <div className="mt-12 flex flex-col items-center gap-4">
+        <div className="mt-10 flex flex-col items-center gap-4">
           <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/60">
             Built for the platforms you love
           </span>
@@ -69,10 +74,6 @@ export function Hero() {
               );
             })}
           </div>
-        </div>
-
-        <div className="mt-16 w-full sm:mt-20">
-          <StatsCounter />
         </div>
       </div>
     </section>

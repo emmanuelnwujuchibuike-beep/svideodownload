@@ -21,6 +21,7 @@ const schema = z.object({
   handle: z.string().trim().max(30).optional(),
   display_name: z.string().trim().max(40).nullable().optional().or(z.literal("").transform(() => null)),
   bio: z.string().trim().max(280).nullable().optional().or(z.literal("").transform(() => null)),
+  avatar_url: httpUrl,
   banner_url: httpUrl,
   website: httpUrl,
   visibility: z.enum(["public", "followers", "private"]).optional(),
@@ -59,7 +60,7 @@ export async function PATCH(request: Request) {
     }
     update.handle = norm;
   }
-  for (const k of ["display_name", "bio", "banner_url", "website", "visibility"] as const) {
+  for (const k of ["display_name", "bio", "avatar_url", "banner_url", "website", "visibility"] as const) {
     if (parsed.data[k] !== undefined) update[k] = parsed.data[k];
   }
   if (Object.keys(update).length === 0) {

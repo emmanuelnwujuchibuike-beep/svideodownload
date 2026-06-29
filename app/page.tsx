@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { CtaBanner } from "@/components/landing/cta-banner";
 import { Faq } from "@/components/landing/faq";
 import { FeatureCards } from "@/components/landing/feature-cards";
@@ -12,8 +14,22 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { AdSlot } from "@/features/monetization/ad-slot";
+import { createClient } from "@/lib/supabase/server";
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Signed-in users get the app dashboard, not the marketing landing page.
+  let signedIn = false;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    signedIn = !!user;
+  } catch {
+    /* anon → show landing */
+  }
+  if (signedIn) redirect("/home");
+
   return (
     <>
       <SiteHeader />

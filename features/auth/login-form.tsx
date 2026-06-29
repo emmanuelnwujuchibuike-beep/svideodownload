@@ -9,7 +9,7 @@ type Status = "idle" | "sending" | "sent" | "error";
 type Mode = "magic" | "password";
 
 export function LoginForm({
-  next = "/account",
+  next = "/home",
   initialSignUp = false,
 }: {
   next?: string;

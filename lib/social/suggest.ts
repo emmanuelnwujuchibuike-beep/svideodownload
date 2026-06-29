@@ -11,6 +11,7 @@ const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export interface SuggestedCreator {
+  id: string;
   handle: string;
   displayName: string;
   avatarUrl: string | null;
@@ -72,6 +73,7 @@ export async function getSuggestedCreators(viewerId: string | null, limit = 8): 
     const planById = new Map(((subs ?? []) as { user_id: string; plan: BillingPlan }[]).map((s) => [s.user_id, s.plan]));
 
     return rows.map((r) => ({
+      id: r.id,
       handle: r.handle,
       displayName: r.display_name || `@${r.handle}`,
       avatarUrl: r.avatar_url,

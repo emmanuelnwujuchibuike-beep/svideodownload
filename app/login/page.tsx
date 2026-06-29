@@ -53,7 +53,7 @@ export default async function LoginPage({
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (user) redirect(next || "/account");
+    if (user) redirect(next || "/home");
   }
 
   return (

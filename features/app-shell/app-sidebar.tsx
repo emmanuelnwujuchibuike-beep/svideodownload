@@ -69,8 +69,14 @@ export function AppSidebar({ handle }: { handle: string | null }) {
       {/* Primary nav */}
       <nav className="flex flex-col gap-0.5">
         {nav.map((item) => {
-          const active =
-            item.href === pathname || (item.href !== "/home" && pathname.startsWith(item.href.split("?")[0]!) && item.href !== "/explore" && item.href !== "/account");
+          const base = item.href.split("?")[0] ?? item.href;
+          // Query-param variants (e.g. Trending → /explore?sort=) don't drive
+          // active state; a path match does (incl. nested routes).
+          const active = item.href.includes("?")
+            ? false
+            : base === "/home"
+              ? pathname === "/home"
+              : pathname === base || pathname.startsWith(`${base}/`);
           return (
             <Link
               key={item.label}

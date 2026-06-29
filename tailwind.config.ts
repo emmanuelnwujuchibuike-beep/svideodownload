@@ -91,12 +91,12 @@ const config: Config = {
           "50%": { opacity: "1" },
         },
         drift: {
-          "0%, 100%": { transform: "translate3d(0,0,0) scale(1)" },
-          "50%": { transform: "translate3d(-3%,4%,0) scale(1.08)" },
+          "0%, 100%": { transform: "translate3d(0,0,0)" },
+          "50%": { transform: "translate3d(-2%,3%,0)" },
         },
         "drift-slow": {
-          "0%, 100%": { transform: "translate3d(0,0,0) scale(1.05)" },
-          "50%": { transform: "translate3d(4%,-3%,0) scale(1)" },
+          "0%, 100%": { transform: "translate3d(0,0,0)" },
+          "50%": { transform: "translate3d(3%,-2%,0)" },
         },
       },
       animation: {

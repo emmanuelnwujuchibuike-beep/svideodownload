@@ -1,19 +1,20 @@
 "use client";
 
-import { AnimatePresence } from "framer-motion";
-import { AlertCircle, Loader2, Sparkles } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle, ArrowUp, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const TABS: { key: HomeFeedSort; label: string }[] = [
   { key: "for_you", label: "For You" },
   { key: "following", label: "Following" },
-  { key: "recent", label: "Friends" },
+  { key: "recent", label: "Recent" },
 ];
 
 const PAGE = 8;
@@ -31,6 +32,7 @@ export function FeedClient({
   const [loading, setLoading] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState(false);
+  const [freshCount, setFreshCount] = useState(0);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const seen = useRef(new Set(initialItems.map((i) => i.id)));
 
@@ -72,6 +74,33 @@ export function FeedClient({
 
   const remove = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id));
 
+  const refreshTop = () => {
+    setFreshCount(0);
+    void fetchPage(sort, 0, true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Realtime: surface newly published public posts as a "new posts" pill.
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("feed-posts")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "posts" },
+        (payload) => {
+          const row = payload.new as { status?: string; visibility?: string; id?: string };
+          if (row.status === "published" && row.visibility === "public" && row.id && !seen.current.has(row.id)) {
+            setFreshCount((n) => n + 1);
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      void channel.unsubscribe();
+    };
+  }, []);
+
   // Infinite scroll
   useEffect(() => {
     const el = sentinel.current;
@@ -89,7 +118,27 @@ export function FeedClient({
   }, [nextOffset, loading, switching, sort, fetchPage]);
 
   return (
-    <section className="mt-4">
+    <section className="relative mt-4">
+      {/* Realtime "new posts" pill */}
+      <AnimatePresence>
+        {freshCount > 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="pointer-events-none sticky top-[4.5rem] z-20 flex justify-center"
+          >
+            <button
+              type="button"
+              onClick={refreshTop}
+              className="pointer-events-auto -mt-1 mb-3 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-500/30"
+            >
+              <ArrowUp className="h-4 w-4" /> {freshCount} new {freshCount === 1 ? "post" : "posts"}
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
       {/* Tabs */}
       <div className="mb-4 flex items-center gap-1 rounded-xl bg-secondary/60 p-1">
         {TABS.map((t) => (

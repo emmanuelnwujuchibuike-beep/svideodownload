@@ -97,12 +97,12 @@ export default function RootLayout({
             {/* Base blue→purple wash */}
             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.10] via-violet-500/[0.08] to-purple-500/[0.12]" />
             {/* Blue glow — upper right, behind the hero phone */}
-            <div className="absolute right-[-12%] top-[-6%] h-[72%] w-[62%] rounded-full bg-gradient-to-br from-sky-400/30 via-blue-500/20 to-violet-500/22 blur-[110px] motion-safe:animate-drift" />
-            <div className="absolute right-[4%] top-[24%] h-[44%] w-[36%] rounded-full bg-gradient-to-tr from-cyan-300/28 to-blue-400/18 blur-[90px] motion-safe:animate-drift-slow" />
+            <div className="absolute right-[-12%] top-[-6%] h-[72%] w-[62%] rounded-full bg-gradient-to-br from-sky-400/30 via-blue-500/20 to-violet-500/22 blur-[110px] will-change-transform motion-safe:animate-drift" />
+            <div className="absolute right-[4%] top-[24%] h-[44%] w-[36%] rounded-full bg-gradient-to-tr from-cyan-300/28 to-blue-400/18 blur-[90px] will-change-transform motion-safe:animate-drift-slow" />
             {/* Violet accent — left */}
-            <div className="absolute left-[-10%] top-[22%] h-[50%] w-[38%] rounded-full bg-gradient-to-r from-violet-500/18 to-transparent blur-[110px] motion-safe:animate-drift-slow" />
+            <div className="absolute left-[-10%] top-[22%] h-[50%] w-[38%] rounded-full bg-gradient-to-r from-violet-500/18 to-transparent blur-[110px] will-change-transform motion-safe:animate-drift-slow" />
             {/* Purple wash — lower */}
-            <div className="absolute bottom-[-12%] left-1/3 h-[46%] w-[55%] -translate-x-1/4 rounded-full bg-gradient-to-t from-purple-500/16 to-transparent blur-[100px] motion-safe:animate-drift" />
+            <div className="absolute bottom-[-12%] left-1/3 h-[46%] w-[55%] -translate-x-1/4 rounded-full bg-gradient-to-t from-purple-500/16 to-transparent blur-[100px] will-change-transform motion-safe:animate-drift" />
           </div>
           {children}
           <AssistantWidget />

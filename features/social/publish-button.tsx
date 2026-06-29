@@ -32,7 +32,7 @@ function deriveKind(meta: VideoMetadata): MediaKind {
 export function PublishButton({ metadata }: { metadata: VideoMetadata }) {
   const { user, enabled } = useUser();
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState(metadata.title || "");
+  const [title, setTitle] = useState((metadata.title || "").slice(0, 300));
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<string>("");
   const [visibility, setVisibility] = useState<Visibility>("public");
@@ -64,8 +64,9 @@ export function PublishButton({ metadata }: { metadata: VideoMetadata }) {
           platform: metadata.platform,
           sourceAuthor: metadata.creator ?? null,
           mediaKind: deriveKind(metadata),
-          title: title.trim(),
-          description: description.trim() || null,
+          // Truncate to the server cap so any source length always publishes.
+          title: title.trim().slice(0, 300),
+          description: description.trim().slice(0, 5000) || null,
           category: category || null,
           thumbnailUrl: metadata.thumbnail ?? null,
           durationSec: metadata.durationSeconds ?? null,
@@ -125,7 +126,7 @@ export function PublishButton({ metadata }: { metadata: VideoMetadata }) {
                   <input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    maxLength={140}
+                    maxLength={300}
                     className="h-10 w-full rounded-xl bg-background px-3 text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
                   />
                 </div>
@@ -134,7 +135,7 @@ export function PublishButton({ metadata }: { metadata: VideoMetadata }) {
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    maxLength={1000}
+                    maxLength={5000}
                     className="min-h-[64px] w-full rounded-xl bg-background p-3 text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
                   />
                 </div>

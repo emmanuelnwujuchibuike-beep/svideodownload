@@ -1,17 +1,17 @@
 "use client";
 
-import { Bell, MessageSquare, Plus, Search } from "lucide-react";
+import { MessageSquare, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { UserMenu } from "@/features/auth/user-menu";
 
 export function AppTopbar() {
   const router = useRouter();
   const [q, setQ] = useState("");
-  const [bellOpen, setBellOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // ⌘K / Ctrl+K focuses search.
@@ -68,28 +68,8 @@ export function AppTopbar() {
           <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Create</span>
         </Link>
 
-        {/* Notifications */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setBellOpen((v) => !v)}
-            aria-label="Notifications"
-            aria-expanded={bellOpen}
-            className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-          >
-            <Bell className="h-5 w-5" />
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-background" />
-          </button>
-          {bellOpen ? (
-            <>
-              <button type="button" aria-label="Close" onClick={() => setBellOpen(false)} className="fixed inset-0 z-40 cursor-default" />
-              <div className="absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-elevated">
-                <div className="border-b border-border/60 px-4 py-3 text-sm font-semibold">Notifications</div>
-                <div className="px-4 py-8 text-center text-sm text-muted-foreground">You&apos;re all caught up 🎉</div>
-              </div>
-            </>
-          ) : null}
-        </div>
+        {/* Notifications (realtime) */}
+        <NotificationBell />
 
         {/* Messages */}
         <Link

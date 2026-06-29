@@ -87,12 +87,10 @@ export async function listComments(
     const [{ data: profs }, { data: subs }, blocked] = await Promise.all([
       db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended").in("id", authorIds),
       db.from("subscriptions").select("user_id, plan, status").in("user_id", authorIds).in("status", ["active", "trialing"]),
+      // Fetch only the VIEWER's block edges (bounded) — never one filter per
+      // commenter, which would balloon the URL on busy posts.
       viewerId
-        ? db.from("blocks").select("blocker_id, blocked_id").or(
-            authorIds.map((a) => `and(blocker_id.eq.${a},blocked_id.eq.${viewerId})`).join(",") +
-              "," +
-              authorIds.map((a) => `and(blocker_id.eq.${viewerId},blocked_id.eq.${a})`).join(","),
-          )
+        ? db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`)
         : Promise.resolve({ data: [] as { blocker_id: string; blocked_id: string }[] }),
     ]);
 

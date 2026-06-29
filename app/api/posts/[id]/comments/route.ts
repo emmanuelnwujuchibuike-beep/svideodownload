@@ -58,12 +58,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const gate = await canComment(id, user.id);
   if (!gate.ok) return NextResponse.json({ error: GATE_MSG[gate.reason] }, { status: 403 });
 
+  // Keep threads exactly one level deep: a reply to a reply attaches to the
+  // top-level parent. Ignore parents that aren't on this post.
+  let parentId = parsed.data.parentId ?? null;
+  if (parentId) {
+    const { data: parent } = await supabase
+      .from("post_comments")
+      .select("post_id, parent_id")
+      .eq("id", parentId)
+      .maybeSingle();
+    if (!parent || parent.post_id !== id) parentId = null;
+    else if (parent.parent_id) parentId = parent.parent_id as string;
+  }
+
   const { data, error } = await supabase
     .from("post_comments")
     .insert({
       post_id: id,
       author_id: user.id,
-      parent_id: parsed.data.parentId ?? null,
+      parent_id: parentId,
       body: parsed.data.body.trim(),
     })
     .select("id")

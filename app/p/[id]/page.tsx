@@ -72,11 +72,14 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const post = await getPost(id, me);
   if (!post) notFound();
 
-  // Deduped view (per viewer|ip per day) — fire and forget.
-  const ipHash = createHash("sha256")
-    .update((((await headers()).get("x-forwarded-for") ?? "").split(",")[0] || "anon").trim())
-    .digest("hex");
-  void recordPostView(post.id, me, ipHash);
+  // Deduped view (per viewer|ip per day) — fire and forget. Don't count the
+  // owner viewing their own post.
+  if (!post.isOwner) {
+    const ipHash = createHash("sha256")
+      .update((((await headers()).get("x-forwarded-for") ?? "").split(",")[0] || "anon").trim())
+      .digest("hex");
+    void recordPostView(post.id, me, ipHash);
+  }
 
   const [plan, related, reactions, comments, gate] = await Promise.all([
     getUserPlan(post.publisher_id),
@@ -137,9 +140,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                 {new Date(post.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
               </span>
               {post.category ? (
-                <Link href={`/explore?category=${post.category}`} className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-foreground transition hover:bg-secondary/70">
+                <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-foreground">
                   {categoryLabel(post.category)}
-                </Link>
+                </span>
               ) : null}
             </div>
           </div>

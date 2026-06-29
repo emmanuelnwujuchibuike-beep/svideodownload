@@ -25,9 +25,10 @@ function normalizeUrl(raw: string): string {
     for (const k of [...u.searchParams.keys()]) {
       if (/^(utm_|fbclid|gclid|igshid|si|ref)/i.test(k)) u.searchParams.delete(k);
     }
-    return `${u.protocol}//${u.host}${u.pathname}${u.search}`.replace(/\/$/, "").toLowerCase();
+    // Lowercase only the host — platform video IDs in the path are case-sensitive.
+    return `${u.protocol}//${u.host.toLowerCase()}${u.pathname}${u.search}`.replace(/\/$/, "");
   } catch {
-    return raw.trim().toLowerCase();
+    return raw.trim();
   }
 }
 const urlHash = (raw: string) => createHash("sha256").update(normalizeUrl(raw)).digest("hex");

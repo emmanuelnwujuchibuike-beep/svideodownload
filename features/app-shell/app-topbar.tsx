@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Plus, Search } from "lucide-react";
+import { Download, MessageSquare, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
@@ -65,7 +65,7 @@ export function AppTopbar() {
           href="/downloads"
           className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 py-2 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95"
         >
-          <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Create</span>
+          <Download className="h-4 w-4" /> <span className="hidden sm:inline">Download</span>
         </Link>
 
         {/* Notifications (realtime) */}

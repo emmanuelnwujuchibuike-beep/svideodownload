@@ -1,15 +1,16 @@
 "use client";
 
-import { Bookmark, Compass, Home, MessageCircle, Plus } from "lucide-react";
+import { Bookmark, Compass, Home, MessageCircle, Upload } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { openUpload } from "@/features/create/upload-store";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { label: "Home", href: "/home", icon: Home },
   { label: "Explore", href: "/explore", icon: Compass },
-  { label: "Create", href: "/downloads", icon: Plus, primary: true },
+  { label: "Upload", href: "", icon: Upload, primary: true },
   { label: "Chat", href: "/messages", icon: MessageCircle },
   { label: "Saved", href: "/saved", icon: Bookmark },
 ];
@@ -22,11 +23,11 @@ export function MobileNav() {
         const active = pathname === item.href;
         if (item.primary) {
           return (
-            <Link key={item.label} href={item.href} aria-label={item.label} className="flex flex-col items-center">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-lg shadow-violet-500/30">
-                <item.icon className="h-5 w-5" />
+            <button key={item.label} type="button" onClick={openUpload} aria-label="Upload story or reel" className="-mt-5 flex flex-col items-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-violet-600 to-fuchsia-600 text-white shadow-xl shadow-violet-500/40 ring-4 ring-background transition active:scale-95">
+                <item.icon className="h-6 w-6" />
               </span>
-            </Link>
+            </button>
           );
         }
         return (

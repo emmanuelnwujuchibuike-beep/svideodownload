@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/features/app-shell/app-shell";
-import { ExploreCategories } from "@/features/app-shell/dashboard/explore-categories";
-import { JoinCommunities } from "@/features/app-shell/dashboard/join-communities";
+import { ContinueWatching } from "@/features/app-shell/dashboard/continue-watching";
+import { FeaturedHero } from "@/features/app-shell/dashboard/featured-hero";
+import { HomeDownloadBar } from "@/features/app-shell/dashboard/home-download-bar";
+import { HomeGreeting } from "@/features/app-shell/dashboard/home-greeting";
+import { HomeRail } from "@/features/app-shell/dashboard/home-rail";
 import { LatestNewsTabs } from "@/features/app-shell/dashboard/latest-news";
+import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
-import { FeedClient } from "@/features/feed/feed-client";
 import { getHomeProfile } from "@/lib/social/home";
-import { getHomeFeed } from "@/lib/social/home-feed";
 import { getSuggestedCreators } from "@/lib/social/suggest";
 import { createClient } from "@/lib/supabase/server";
 
@@ -27,23 +29,22 @@ export default async function HomePage() {
   if (!user) redirect("/login?next=/home");
 
   const profile = await getHomeProfile(user.id);
-  // Onboarding gate: a username must be claimed before using the app.
   if (!profile?.handle) redirect("/welcome");
 
-  const [feed, suggestions] = await Promise.all([
-    getHomeFeed({ viewerId: user.id, sort: "for_you", offset: 0, limit: 8 }),
-    getSuggestedCreators(user.id, 4),
-  ]);
+  const suggestions = await getSuggestedCreators(user.id, 5);
+  const firstName = profile.displayName.split(" ")[0] ?? "there";
 
   return (
-    <AppShell handle={profile?.handle ?? null} profile={profile} suggestions={suggestions}>
-      <TrendingReels />
-      <ExploreCategories />
-      <LatestNewsTabs />
-      <JoinCommunities />
-      <div className="mt-6">
-        <FeedClient initialItems={feed.items} initialNextOffset={feed.nextOffset} />
+    <AppShell handle={profile.handle} rightRail={<HomeRail suggestions={suggestions} />}>
+      <div className="space-y-6">
+        <HomeGreeting name={firstName} />
+        <StoriesRow />
+        <FeaturedHero />
+        <TrendingReels />
+        <ContinueWatching />
+        <LatestNewsTabs />
       </div>
+      <HomeDownloadBar />
     </AppShell>
   );
 }

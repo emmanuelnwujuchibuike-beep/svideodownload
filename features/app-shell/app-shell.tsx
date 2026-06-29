@@ -4,6 +4,7 @@ import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { RightRail } from "@/features/app-shell/right-rail";
+import { UploadModal } from "@/features/create/upload-modal";
 import type { HomeProfile } from "@/lib/social/home";
 import type { SuggestedCreator } from "@/lib/social/suggest";
 
@@ -36,6 +37,7 @@ export function AppShell({
       </div>
 
       <MobileNav />
+      <UploadModal />
     </div>
   );
 }

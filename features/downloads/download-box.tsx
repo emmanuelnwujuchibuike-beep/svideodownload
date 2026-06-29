@@ -1,7 +1,7 @@
 "use client";
 
 import { ClipboardPaste, Loader2, Search, X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 import { useDownloader } from "@/features/downloader/use-downloader";
 import { PreviewCard } from "@/features/downloader/preview-card";
@@ -31,6 +31,16 @@ export function DownloadBox() {
     setValidationError(null);
     void fetchMetadata(parsed.data);
   };
+
+  // Prefill + auto-fetch from a ?u= link (the home Download bars route here).
+  useEffect(() => {
+    const u = new URLSearchParams(window.location.search).get("u");
+    if (!u) return;
+    setUrl(u);
+    const parsed = sourceUrlSchema.safeParse(u);
+    if (parsed.success) void fetchMetadata(parsed.data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handlePaste = async () => {
     try {

@@ -75,6 +75,8 @@ export function useDownloader() {
         formatId,
         kind,
         qualityLabel: fmt?.label ?? (kind === "audio" ? "Audio" : "Video"),
+        // Native path can't measure bytes; use the format's known size.
+        size: fmt?.filesize ?? null,
       });
 
       // Briefly show "preparing", then a "download started" confirmation (the

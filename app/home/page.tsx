@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/features/app-shell/app-shell";
+import { ExploreCategories } from "@/features/app-shell/dashboard/explore-categories";
+import { JoinCommunities } from "@/features/app-shell/dashboard/join-communities";
+import { LatestNewsTabs } from "@/features/app-shell/dashboard/latest-news";
+import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
 import { DownloadDock } from "@/features/app-shell/download-dock";
 import { HomeHero } from "@/features/app-shell/home-hero";
 import { FeedClient } from "@/features/feed/feed-client";
@@ -24,8 +28,11 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/home");
 
-  const [profile, feed, suggestions] = await Promise.all([
-    getHomeProfile(user.id),
+  const profile = await getHomeProfile(user.id);
+  // Onboarding gate: a username must be claimed before using the app.
+  if (!profile?.handle) redirect("/welcome");
+
+  const [feed, suggestions] = await Promise.all([
     getHomeFeed({ viewerId: user.id, sort: "for_you", offset: 0, limit: 8 }),
     getSuggestedCreators(user.id, 4),
   ]);
@@ -33,7 +40,13 @@ export default async function HomePage() {
   return (
     <AppShell handle={profile?.handle ?? null} profile={profile} suggestions={suggestions}>
       <HomeHero />
-      <FeedClient initialItems={feed.items} initialNextOffset={feed.nextOffset} />
+      <TrendingReels />
+      <ExploreCategories />
+      <LatestNewsTabs />
+      <JoinCommunities />
+      <div className="mt-6">
+        <FeedClient initialItems={feed.items} initialNextOffset={feed.nextOffset} />
+      </div>
       <DownloadDock />
     </AppShell>
   );

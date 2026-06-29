@@ -105,6 +105,39 @@ export function RightRail({
           Upgrade Now
         </Link>
       </section>
+
+      {/* Active friends */}
+      {suggestions.length > 0 ? (
+        <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-soft">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-sm font-bold">Active Friends</h3>
+            <Link href="/messages" className="text-xs font-medium text-primary hover:underline">See all</Link>
+          </div>
+          <ul className="space-y-3">
+            {suggestions.slice(0, 5).map((s) => (
+              <li key={s.id}>
+                <Link href={`/u/${s.handle}`} className="flex items-center gap-2.5">
+                  <span className="relative shrink-0">
+                    {s.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={s.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover ring-1 ring-border" />
+                    ) : (
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-xs font-bold text-white">
+                        {s.displayName.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-card" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{s.displayName}</span>
+                    <span className="block text-[11px] text-emerald-500">Online</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </aside>
   );
 }

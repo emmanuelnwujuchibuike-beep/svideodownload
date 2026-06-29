@@ -7,7 +7,6 @@ import {
   Bookmark,
   Check,
   Download,
-  ExternalLink,
   Heart,
   Loader2,
   MessageCircle,
@@ -19,10 +18,19 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Comments } from "@/features/social/comments";
-import { getEmbed } from "@/lib/social/embed";
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
+
+/** Builds a native device-download URL: the stored file when available, else
+ *  an on-demand stream via the existing worker pipeline ("best" selector). */
+function downloadHref(item: FeedItem): string {
+  if (item.mediaUrl) return item.mediaUrl;
+  const selector = item.mediaKind === "audio" ? "bestaudio" : "best";
+  const sp = new URLSearchParams({ url: item.sourceUrl, formatId: selector, kind: item.mediaKind, title: item.title });
+  return `/api/download?${sp.toString()}`;
+}
 
 interface CommentsData {
   comments: CommentNode[];
@@ -57,7 +65,7 @@ function ViewerInner({
   startWithComments: boolean;
   onClose: () => void;
 }) {
-  const embed = getEmbed(item.sourceUrl, item.platform, item.mediaKind);
+  const { isPremium } = useEntitlements();
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
   const [following, setFollowing] = useState(item.isFollowing);
@@ -173,38 +181,52 @@ function ViewerInner({
         animate={{ scale: 1 }}
         className="flex min-h-0 flex-1 items-center justify-center p-0 lg:p-6"
       >
-        {embed.kind === "iframe" ? (
-          <div className="aspect-video w-full max-w-5xl overflow-hidden bg-black lg:rounded-2xl">
-            <iframe
-              src={embed.url}
-              title={item.title}
-              className="h-full w-full"
-              allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-              allowFullScreen
-            />
+        {item.mediaKind === "video" && item.mediaUrl ? (
+          // eslint-disable-next-line jsx-a11y/media-has-caption
+          <video
+            src={item.mediaUrl}
+            poster={item.thumbnailUrl ?? undefined}
+            controls
+            autoPlay
+            playsInline
+            className="max-h-full w-full max-w-5xl bg-black lg:rounded-2xl"
+          />
+        ) : item.mediaKind === "audio" && item.mediaUrl ? (
+          <div className="w-full max-w-xl rounded-2xl bg-gradient-to-br from-blue-600 to-violet-700 p-8 text-white">
+            {item.thumbnailUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.thumbnailUrl} alt="" className="mx-auto mb-5 h-40 w-40 rounded-2xl object-cover shadow-xl" />
+            ) : null}
+            <p className="mb-3 text-center font-semibold">{item.title}</p>
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <audio src={item.mediaUrl} controls autoPlay className="w-full" />
           </div>
-        ) : embed.kind === "image" && item.thumbnailUrl ? (
+        ) : item.mediaKind === "image" && item.thumbnailUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={item.thumbnailUrl} alt={item.title} className="max-h-full max-w-full object-contain lg:rounded-2xl" />
         ) : (
           <div className="relative aspect-video w-full max-w-4xl overflow-hidden bg-neutral-900 lg:rounded-2xl">
             {item.thumbnailUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.thumbnailUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-70" />
+              <img src={item.thumbnailUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
             ) : null}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/40 text-white">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/45 text-white">
               <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur">
                 <Play className="h-7 w-7 fill-white" />
               </span>
-              <a
-                href={item.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer nofollow"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-900"
-              >
-                <ExternalLink className="h-4 w-4" /> Watch on {item.platform}
-              </a>
-              <p className="text-xs text-white/60">This platform doesn&apos;t allow inline playback.</p>
+              <p className="text-sm font-medium">Preparing this video for playback…</p>
+              {isPremium ? (
+                <a
+                  href={downloadHref(item)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-900"
+                >
+                  <Download className="h-4 w-4" /> Download
+                </a>
+              ) : (
+                <Link href="/pricing" className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-900">
+                  Go Pro to download
+                </Link>
+              )}
             </div>
           </div>
         )}
@@ -263,16 +285,24 @@ function ViewerInner({
           <Act icon={MessageCircle} label="Comments" count={item.commentsCount} onClick={() => setShowComments(true)} />
           <Act icon={Share2} label="Share" count={item.sharesCount} onClick={share} />
           <Act icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-primary" onClick={() => react("save")} />
-          <a
-            href={item.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer nofollow"
-            onClick={() => fetch(`/api/posts/${item.id}/event`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "download" }) }).catch(() => {})}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary"
-            aria-label="Download"
-          >
-            <Download className="h-[18px] w-[18px]" />
-          </a>
+          {isPremium ? (
+            <a
+              href={downloadHref(item)}
+              onClick={() => fetch(`/api/posts/${item.id}/event`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "download" }) }).catch(() => {})}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary"
+              aria-label="Download to device"
+            >
+              <Download className="h-[18px] w-[18px]" />
+            </a>
+          ) : (
+            <Link
+              href="/pricing"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-amber-500 transition hover:bg-secondary"
+              aria-label="Go Pro to download"
+            >
+              <Download className="h-[18px] w-[18px]" /> Pro
+            </Link>
+          )}
         </div>
 
         {/* Comments — on demand */}

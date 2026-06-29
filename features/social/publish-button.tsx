@@ -79,6 +79,9 @@ export function PublishButton({ metadata }: { metadata: VideoMetadata }) {
         return;
       }
       setDoneId(json.id as string);
+      // Store the media so it plays natively & Pro users can download it
+      // (best-effort, server-side; large files fall back to on-demand download).
+      void fetch(`/api/posts/${json.id}/store-media`, { method: "POST" }).catch(() => {});
     } catch {
       setErr("Network error.");
     } finally {

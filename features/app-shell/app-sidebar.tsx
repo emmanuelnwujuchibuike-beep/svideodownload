@@ -37,7 +37,7 @@ export function buildNav(handle: string | null): NavItem[] {
     { label: "News", href: "/blog", icon: Newspaper },
     { label: "Communities", href: "/explore", icon: Users, soon: true },
     { label: "Friends", href: handle ? `/u/${handle}/following` : "/account#profile", icon: UsersRound },
-    { label: "Chat", href: "/messages", icon: MessageCircle },
+    { label: "Chat", href: "/messages", icon: MessageCircle, badge: "5" },
     { label: "Downloads", href: "/account", icon: Download },
     { label: "Saved", href: "/saved", icon: Bookmark },
   ];
@@ -90,7 +90,9 @@ export function AppSidebar({ handle }: { handle: string | null }) {
             >
               <item.icon className={cn("h-[18px] w-[18px]", active && "text-primary")} />
               <span className="flex-1">{item.label}</span>
-              {item.soon ? (
+              {item.badge ? (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-1.5 text-[10px] font-bold text-white">{item.badge}</span>
+              ) : item.soon ? (
                 <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Soon</span>
               ) : null}
             </Link>

@@ -32,6 +32,7 @@ export interface FeedItem {
   mediaKind: MediaKind;
   thumbnailUrl: string | null;
   sourceUrl: string;
+  mediaUrl: string | null;
   category: string | null;
   durationSec: number | null;
   viewsCount: number;
@@ -63,6 +64,7 @@ interface Row {
   description: string | null;
   category: string | null;
   thumbnail_url: string | null;
+  media_url: string | null;
   duration_sec: number | null;
   visibility: string;
   status: string;
@@ -76,7 +78,7 @@ interface Row {
 }
 
 const SELECT =
-  "id, publisher_id, source_url, platform, media_kind, title, description, category, thumbnail_url, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at";
+  "id, publisher_id, source_url, platform, media_kind, title, description, category, thumbnail_url, media_url, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at";
 
 export type HomeFeedSort = "for_you" | "following" | "recent";
 
@@ -186,6 +188,7 @@ export async function getHomeFeed(opts: {
         mediaKind: r.media_kind,
         thumbnailUrl: r.thumbnail_url,
         sourceUrl: r.source_url,
+        mediaUrl: r.media_url,
         category: r.category,
         durationSec: r.duration_sec,
         viewsCount: r.views_count,

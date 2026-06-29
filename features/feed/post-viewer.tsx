@@ -1,0 +1,337 @@
+"use client";
+
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ArrowLeft,
+  BadgeCheck,
+  Bookmark,
+  Check,
+  Download,
+  ExternalLink,
+  Heart,
+  Loader2,
+  MessageCircle,
+  Play,
+  Share2,
+  UserPlus,
+} from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { Comments } from "@/features/social/comments";
+import { getEmbed } from "@/lib/social/embed";
+import type { CommentNode } from "@/lib/social/engagement";
+import type { FeedItem } from "@/lib/social/home-feed";
+import { cn, formatCompactNumber } from "@/lib/utils";
+
+interface CommentsData {
+  comments: CommentNode[];
+  canComment: boolean;
+  loggedIn: boolean;
+}
+
+/** Fullscreen in-place post viewer — plays inline (no navigation), with a
+ *  premium back button and comments loaded on demand. */
+export function PostViewer({
+  item,
+  startWithComments = false,
+  onClose,
+}: {
+  item: FeedItem | null;
+  startWithComments?: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {item ? <ViewerInner key={item.id} item={item} startWithComments={startWithComments} onClose={onClose} /> : null}
+    </AnimatePresence>
+  );
+}
+
+function ViewerInner({
+  item,
+  startWithComments,
+  onClose,
+}: {
+  item: FeedItem;
+  startWithComments: boolean;
+  onClose: () => void;
+}) {
+  const embed = getEmbed(item.sourceUrl, item.platform, item.mediaKind);
+  const [liked, setLiked] = useState(item.viewerLiked);
+  const [saved, setSaved] = useState(item.viewerSaved);
+  const [following, setFollowing] = useState(item.isFollowing);
+  const [likes, setLikes] = useState(item.likesCount);
+  const [showComments, setShowComments] = useState(startWithComments);
+  const [comments, setComments] = useState<CommentsData | null>(null);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const fetched = useRef(false);
+
+  // Lock body scroll + close on Escape.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  const loadComments = useCallback(async () => {
+    if (fetched.current) return;
+    fetched.current = true;
+    setLoadingComments(true);
+    try {
+      const res = await fetch(`/api/posts/${item.id}/comments`);
+      if (res.ok) setComments((await res.json()) as CommentsData);
+    } catch {
+      /* ignore */
+    } finally {
+      setLoadingComments(false);
+    }
+  }, [item.id]);
+
+  useEffect(() => {
+    if (showComments) void loadComments();
+  }, [showComments, loadComments]);
+
+  const react = async (type: "like" | "save") => {
+    const isLike = type === "like";
+    const cur = isLike ? liked : saved;
+    const next = !cur;
+    if (isLike) {
+      setLiked(next);
+      setLikes((n) => n + (next ? 1 : -1));
+    } else setSaved(next);
+    try {
+      const res = await fetch(`/api/posts/${item.id}/react`, {
+        method: next ? "POST" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      if (isLike) {
+        setLiked(cur);
+        setLikes((n) => n + (next ? -1 : 1));
+      } else setSaved(cur);
+    }
+  };
+
+  const share = async () => {
+    const url = `${window.location.origin}/p/${item.id}`;
+    try {
+      if (navigator.share) await navigator.share({ title: item.title, url });
+      else await navigator.clipboard.writeText(url);
+    } catch {
+      /* cancelled */
+    }
+    fetch(`/api/posts/${item.id}/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "share" }),
+    }).catch(() => {});
+  };
+
+  const toggleFollow = async () => {
+    const next = !following;
+    setFollowing(next);
+    try {
+      const res = await fetch(`/api/follow/${item.publisher.id}`, { method: next ? "POST" : "DELETE" });
+      if (!res.ok) setFollowing(!next);
+    } catch {
+      setFollowing(!next);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[80] flex flex-col bg-black/95 backdrop-blur-sm lg:flex-row"
+      role="dialog"
+      aria-modal="true"
+      aria-label={item.title}
+    >
+      {/* Premium back button — closes instantly, no page load */}
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Back"
+        className="fixed left-4 top-4 z-[90] inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur-md transition hover:bg-white/20 active:scale-95"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back
+      </button>
+
+      {/* Media */}
+      <motion.div
+        initial={{ scale: 0.96 }}
+        animate={{ scale: 1 }}
+        className="flex min-h-0 flex-1 items-center justify-center p-0 lg:p-6"
+      >
+        {embed.kind === "iframe" ? (
+          <div className="aspect-video w-full max-w-5xl overflow-hidden bg-black lg:rounded-2xl">
+            <iframe
+              src={embed.url}
+              title={item.title}
+              className="h-full w-full"
+              allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        ) : embed.kind === "image" && item.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.thumbnailUrl} alt={item.title} className="max-h-full max-w-full object-contain lg:rounded-2xl" />
+        ) : (
+          <div className="relative aspect-video w-full max-w-4xl overflow-hidden bg-neutral-900 lg:rounded-2xl">
+            {item.thumbnailUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.thumbnailUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-70" />
+            ) : null}
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/40 text-white">
+              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur">
+                <Play className="h-7 w-7 fill-white" />
+              </span>
+              <a
+                href={item.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-900"
+              >
+                <ExternalLink className="h-4 w-4" /> Watch on {item.platform}
+              </a>
+              <p className="text-xs text-white/60">This platform doesn&apos;t allow inline playback.</p>
+            </div>
+          </div>
+        )}
+      </motion.div>
+
+      {/* Details / comments panel */}
+      <motion.aside
+        initial={{ y: 30, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.05 }}
+        className="flex max-h-[55vh] w-full shrink-0 flex-col overflow-y-auto rounded-t-3xl bg-card p-5 lg:max-h-none lg:w-[400px] lg:rounded-none lg:rounded-l-3xl"
+      >
+        {/* Publisher */}
+        <div className="flex items-center gap-3">
+          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="shrink-0">
+            {item.publisher.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.publisher.avatarUrl} alt="" className="h-11 w-11 rounded-full object-cover ring-1 ring-border" />
+            ) : (
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white">
+                {item.publisher.displayName.charAt(0).toUpperCase()}
+              </span>
+            )}
+          </Link>
+          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="min-w-0 flex-1">
+            <span className="flex items-center gap-1 font-semibold leading-tight">
+              <span className="truncate">{item.publisher.displayName}</span>
+              {item.publisher.isVerified ? <BadgeCheck className="h-4 w-4 shrink-0 text-primary" /> : null}
+            </span>
+            <span className="block truncate text-sm text-muted-foreground">@{item.publisher.handle}</span>
+          </Link>
+          {!item.isOwner ? (
+            <button
+              type="button"
+              onClick={toggleFollow}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                following ? "bg-secondary text-foreground" : "bg-gradient-to-r from-blue-600 to-violet-600 text-white",
+              )}
+            >
+              {following ? <Check className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
+              {following ? "Following" : "Follow"}
+            </button>
+          ) : null}
+        </div>
+
+        {/* Title + description */}
+        <h2 className="mt-4 text-base font-bold leading-snug">{item.title}</h2>
+        {item.description ? (
+          <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{item.description}</p>
+        ) : null}
+
+        {/* Actions */}
+        <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
+          <Act icon={Heart} label="Like" active={liked} fill={liked} activeClass="text-rose-500" count={likes} onClick={() => react("like")} />
+          <Act icon={MessageCircle} label="Comments" count={item.commentsCount} onClick={() => setShowComments(true)} />
+          <Act icon={Share2} label="Share" count={item.sharesCount} onClick={share} />
+          <Act icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-primary" onClick={() => react("save")} />
+          <a
+            href={item.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            onClick={() => fetch(`/api/posts/${item.id}/event`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "download" }) }).catch(() => {})}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary"
+            aria-label="Download"
+          >
+            <Download className="h-[18px] w-[18px]" />
+          </a>
+        </div>
+
+        {/* Comments — on demand */}
+        {showComments ? (
+          loadingComments ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+          ) : comments ? (
+            <Comments
+              postId={item.id}
+              comments={comments.comments}
+              loggedIn={comments.loggedIn}
+              canComment={comments.canComment}
+              disabledReason={comments.canComment ? null : "Comments are unavailable."}
+              count={item.commentsCount}
+            />
+          ) : null
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowComments(true)}
+            className="mt-4 w-full rounded-xl bg-secondary py-2.5 text-sm font-semibold transition hover:bg-secondary/70"
+          >
+            View comments{item.commentsCount > 0 ? ` (${formatCompactNumber(item.commentsCount)})` : ""}
+          </button>
+        )}
+      </motion.aside>
+    </motion.div>
+  );
+}
+
+function Act({
+  icon: Icon,
+  label,
+  count,
+  active,
+  fill,
+  activeClass,
+  onClick,
+}: {
+  icon: typeof Heart;
+  label: string;
+  count?: number;
+  active?: boolean;
+  fill?: boolean;
+  activeClass?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
+      className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary", active && activeClass)}
+    >
+      <Icon className={cn("h-[18px] w-[18px]", fill && "fill-current")} />
+      {count !== undefined && count > 0 ? <span className="text-xs font-medium tabular-nums">{formatCompactNumber(count)}</span> : null}
+    </button>
+  );
+}

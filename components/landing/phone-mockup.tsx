@@ -1,4 +1,4 @@
-import { Check, Heart, MessageCircle, Play, Search, UserPlus } from "lucide-react";
+import { Check, Heart, MessageCircle, Play, Search, UserPlus, Wifi } from "lucide-react";
 
 const PEOPLE = [
   { name: "Sarah", emoji: "👩🏽", from: "from-rose-500 to-pink-500" },
@@ -49,10 +49,27 @@ export function PhoneMockup() {
           </div>
 
           <div className="space-y-3 rounded-[2.6rem] bg-neutral-950 px-3 pb-5 pt-3 text-white">
-            {/* iOS status bar */}
-            <div className="flex items-center justify-between px-2 text-[10px] font-semibold text-white/80">
-              <span>9:41</span>
-              <span className="flex items-center gap-1 text-white/60">5G ▮▮▮ 100%</span>
+            {/* iOS status bar — time · signal · wifi · battery */}
+            <div className="flex items-center justify-between px-3 text-white">
+              <span className="text-[11px] font-semibold tracking-tight">9:41</span>
+              <div className="flex items-center gap-1.5">
+                {/* Cellular signal */}
+                <span className="flex items-end gap-[1.5px]" aria-label="signal">
+                  <span className="h-[3px] w-[2.5px] rounded-[1px] bg-white" />
+                  <span className="h-[5px] w-[2.5px] rounded-[1px] bg-white" />
+                  <span className="h-[7px] w-[2.5px] rounded-[1px] bg-white" />
+                  <span className="h-[9px] w-[2.5px] rounded-[1px] bg-white" />
+                </span>
+                {/* Wifi */}
+                <Wifi className="h-3 w-3" strokeWidth={2.5} />
+                {/* Battery */}
+                <span className="flex items-center gap-[1px]" aria-label="battery">
+                  <span className="relative h-[11px] w-[22px] rounded-[3px] ring-1 ring-white/80">
+                    <span className="absolute inset-[1.5px] right-[4px] rounded-[1.5px] bg-white" />
+                  </span>
+                  <span className="h-[4px] w-[1.5px] rounded-r-sm bg-white/80" />
+                </span>
+              </div>
             </div>
 
             {/* App brand bar */}

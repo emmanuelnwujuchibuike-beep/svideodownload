@@ -2,13 +2,45 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { assistantLimiter } from "@/lib/rate-limit";
-import { canComment, commentSpamReason } from "@/lib/social/engagement";
+import { canComment, commentSpamReason, listComments } from "@/lib/social/engagement";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** GET /api/posts/:id/comments — threaded comments for the in-feed viewer. */
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  if (!UUID.test(id)) return NextResponse.json({ error: "Bad id." }, { status: 400 });
+
+  let viewerId: string | null = null;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    viewerId = user?.id ?? null;
+  } catch {
+    /* anon */
+  }
+
+  const { data: post } = await createAdminClient()
+    .from("posts")
+    .select("publisher_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!post) return NextResponse.json({ comments: [] });
+
+  const comments = await listComments(id, post.publisher_id as string, viewerId);
+  const gate = viewerId ? await canComment(id, viewerId) : { ok: false as const, reason: "unavailable" as const };
+  return NextResponse.json(
+    { comments, canComment: gate.ok, loggedIn: !!viewerId },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
+}
 const schema = z.object({
   body: z.string().trim().min(1).max(1000),
   parentId: z.string().uuid().nullable().optional(),

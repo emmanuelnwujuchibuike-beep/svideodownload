@@ -35,7 +35,15 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export function FeedPostCard({ item, onRemove }: { item: FeedItem; onRemove: (id: string) => void }) {
+export function FeedPostCard({
+  item,
+  onRemove,
+  onOpen,
+}: {
+  item: FeedItem;
+  onRemove: (id: string) => void;
+  onOpen: (item: FeedItem, startComments?: boolean) => void;
+}) {
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
   const [following, setFollowing] = useState(item.isFollowing);
@@ -43,8 +51,6 @@ export function FeedPostCard({ item, onRemove }: { item: FeedItem; onRemove: (id
   const [shares, setShares] = useState(item.sharesCount);
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  const detail = `/p/${item.id}`;
 
   const react = async (type: "like" | "save") => {
     const isLike = type === "like";
@@ -72,7 +78,7 @@ export function FeedPostCard({ item, onRemove }: { item: FeedItem; onRemove: (id
 
   const share = async () => {
     setShares((n) => n + 1);
-    const url = `${window.location.origin}${detail}`;
+    const url = `${window.location.origin}/p/${item.id}`;
     try {
       if (navigator.share) await navigator.share({ title: item.title, url });
       else await navigator.clipboard.writeText(url);
@@ -201,8 +207,8 @@ export function FeedPostCard({ item, onRemove }: { item: FeedItem; onRemove: (id
         </div>
       ) : null}
 
-      {/* Media */}
-      <Link href={detail} className="block">
+      {/* Media — tap to play inline (no navigation) */}
+      <button type="button" onClick={() => onOpen(item)} className="block w-full text-left" aria-label="Play">
         {item.mediaKind === "audio" ? (
           <div className="mx-4 mb-3 flex items-center gap-3 rounded-xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/15">
             <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white">
@@ -240,18 +246,18 @@ export function FeedPostCard({ item, onRemove }: { item: FeedItem; onRemove: (id
             </span>
           </div>
         )}
-      </Link>
+      </button>
 
       {/* Actions */}
       <div className="flex items-center justify-between border-t border-border/50 px-2 py-1.5">
         <div className="flex items-center">
           <ActionButton active={liked} onClick={() => react("like")} icon={Heart} fill={liked} count={likes} activeClass="text-rose-500" label="Like" />
-          <ActionButton icon={MessageCircle} count={item.commentsCount} href={`${detail}#comments`} label="Comment" />
+          <ActionButton icon={MessageCircle} count={item.commentsCount} onClick={() => onOpen(item, true)} label="Comment" />
           <ActionButton icon={Share2} count={shares} onClick={share} label="Share" />
         </div>
         <div className="flex items-center">
           <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-primary" label="Bookmark" />
-          <ActionButton icon={Download} href={detail} label="Download" />
+          <ActionButton icon={Download} onClick={() => onOpen(item)} label="Download" />
         </div>
       </div>
     </motion.article>

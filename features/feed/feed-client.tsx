@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
+import { PostViewer } from "@/features/feed/post-viewer";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -33,8 +34,11 @@ export function FeedClient({
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState(false);
   const [freshCount, setFreshCount] = useState(0);
+  const [viewer, setViewer] = useState<{ item: FeedItem; comments: boolean } | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const seen = useRef(new Set(initialItems.map((i) => i.id)));
+
+  const openViewer = (it: FeedItem, comments = false) => setViewer({ item: it, comments });
 
   const fetchPage = useCallback(
     async (s: HomeFeedSort, offset: number, replace: boolean) => {
@@ -165,7 +169,7 @@ export function FeedClient({
         <div className="space-y-4">
           <AnimatePresence initial={false}>
             {items.map((item, i) => (
-              <FeedFragment key={item.id} item={item} index={i} onRemove={remove} />
+              <FeedFragment key={item.id} item={item} index={i} onRemove={remove} onOpen={openViewer} />
             ))}
           </AnimatePresence>
         </div>
@@ -197,15 +201,32 @@ export function FeedClient({
           ) : null}
         </>
       )}
+
+      {/* Fullscreen in-place viewer (plays inline; no navigation) */}
+      <PostViewer
+        item={viewer?.item ?? null}
+        startWithComments={viewer?.comments ?? false}
+        onClose={() => setViewer(null)}
+      />
     </section>
   );
 }
 
 /** Renders a post and, every 5th slot, an advertisement placeholder. */
-function FeedFragment({ item, index, onRemove }: { item: FeedItem; index: number; onRemove: (id: string) => void }) {
+function FeedFragment({
+  item,
+  index,
+  onRemove,
+  onOpen,
+}: {
+  item: FeedItem;
+  index: number;
+  onRemove: (id: string) => void;
+  onOpen: (item: FeedItem, startComments?: boolean) => void;
+}) {
   return (
     <>
-      <FeedPostCard item={item} onRemove={onRemove} />
+      <FeedPostCard item={item} onRemove={onRemove} onOpen={onOpen} />
       {(index + 1) % 5 === 0 ? <AdPlaceholder /> : null}
     </>
   );

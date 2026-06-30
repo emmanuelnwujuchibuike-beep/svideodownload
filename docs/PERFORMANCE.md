@@ -36,14 +36,20 @@ The non-negotiables:
 
 ## Phase 1 — Perceived speed (instant feel)
 
-- ⬜ **Skeleton screens** for every async surface (feed, profile, messages,
-  downloads, search). No blank states, ever.
-- ⬜ **Optimistic updates** for like / save / follow / comment / read-receipt.
-- ⬜ **Instant navigation**: `next/link` prefetch on viewport+intent, persistent
-  shells (already have the app shell), preserved scroll position on back.
-- ⬜ **SWR/React Query-style client cache** over the SDK: background refresh,
-  request dedup (SDK has in-flight dedup; add a time-based cache layer),
-  cache keys per entity, optimistic mutation + rollback.
+- ✅ **SWR-style client cache** over the SDK (`features/data`): cached-first
+  render, background revalidation, in-flight dedup, focus/reconnect revalidation,
+  `useQuery` + cursor `useInfiniteQuery` (pages persist across navigation),
+  optimistic `mutate()` with rollback. Dependency-free.
+- ✅ **Skeleton primitives** (`features/ui/skeleton`): `Skeleton` / `SkeletonAvatar`
+  / `SkeletonText` over the shared shimmer. 🟡 Apply per-surface presets next.
+- ✅ **Next-page prefetch hook** (`useInView`, fires ~600px early) — the seamless
+  infinite-scroll trigger.
+- 🟡 **Optimistic updates**: primitive shipped (`mutate`); wire into like / save /
+  follow / comment / read-receipt next.
+- ⬜ **Migrate the home feed** to `useInfiniteQuery` + `getApi().feed()` + skeletons
+  (reference surface; preserves all existing feed features).
+- ⬜ **Instant navigation**: `next/link` prefetch on viewport+intent, preserved
+  scroll position on back (data already persists via the cache).
 - ⬜ **Streaming SSR** (`loading.tsx` + Suspense) so shells stream before data.
 
 ## Phase 2 — Data & feed at scale

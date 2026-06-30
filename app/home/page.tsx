@@ -28,10 +28,14 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/home");
 
-  const profile = await getHomeProfile(user.id);
+  // Fetch profile + suggestions in parallel (one round trip, not two) so the
+  // page's HTML starts streaming sooner on first load.
+  const [profile, suggestions] = await Promise.all([
+    getHomeProfile(user.id),
+    getSuggestedCreators(user.id, 5),
+  ]);
   if (!profile?.handle) redirect("/welcome");
 
-  const suggestions = await getSuggestedCreators(user.id, 5);
   const firstName = profile.displayName.split(" ")[0] ?? "there";
 
   return (

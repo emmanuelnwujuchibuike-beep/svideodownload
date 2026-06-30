@@ -1,3 +1,4 @@
+import { getCached } from "@/lib/cache";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -20,8 +21,18 @@ export interface SuggestedCreator {
   followersCount: number;
 }
 
+/**
+ * Cached per viewer for 60s. Suggestions don't need to be real-time, and this is
+ * the heaviest query on the /home server render (~4 round trips), so caching it
+ * cuts first-load TTFB and DB load on repeat visits. A new block/opt-out takes
+ * effect within the short TTL window.
+ */
 export async function getSuggestedCreators(viewerId: string | null, limit = 8): Promise<SuggestedCreator[]> {
   if (!hasSupabase) return [];
+  return getCached(`suggest:${viewerId ?? "anon"}:${limit}`, 60, () => loadSuggestedCreators(viewerId, limit));
+}
+
+async function loadSuggestedCreators(viewerId: string | null, limit: number): Promise<SuggestedCreator[]> {
   try {
     const db = createAdminClient();
     const { data } = await db

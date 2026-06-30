@@ -3,26 +3,24 @@
 import { BadgeCheck, ChevronRight, Heart, MessageCircle, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useQuery } from "@/features/data";
 import { PostViewer } from "@/features/feed/post-viewer";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /** Featured carousel of top trending video posts. */
 export function FeaturedHero() {
-  const [items, setItems] = useState<FeedItem[] | null>(null);
+  const { data, isLoading } = useQuery<FeedItem[]>("home-feed:featured", async () => {
+    const r = await fetch("/api/home-feed?sort=trending&limit=10");
+    if (!r.ok) return [];
+    const d = (await r.json()) as { items: FeedItem[] };
+    return (d.items ?? []).filter((i) => i.thumbnailUrl).slice(0, 6);
+  });
   const [idx, setIdx] = useState(0);
   const [viewer, setViewer] = useState<FeedItem | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/home-feed?sort=trending&limit=10")
-      .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((d: { items: FeedItem[] }) => alive && setItems((d.items ?? []).filter((i) => i.thumbnailUrl).slice(0, 6)))
-      .catch(() => alive && setItems([]));
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // Cached-first: instant on return visits, silently revalidated in the background.
+  const items = isLoading ? null : data ?? [];
 
   useEffect(() => {
     if (!items || items.length < 2) return;
@@ -33,7 +31,8 @@ export function FeaturedHero() {
   if (items !== null && items.length === 0) return null;
   if (items === null) return <div className="aspect-[16/9] w-full rounded-3xl bg-secondary shimmer sm:aspect-[21/9]" />;
 
-  const post = items[idx]!;
+  // Clamp in case a background refresh returns fewer items than the current index.
+  const post = items[idx % items.length]!;
 
   return (
     <section className="relative overflow-hidden rounded-3xl shadow-card">

@@ -2,8 +2,9 @@
 
 import { BadgeCheck, Play } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
+import { useQuery } from "@/features/data";
 import { PostViewer } from "@/features/feed/post-viewer";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { formatCompactNumber } from "@/lib/utils";
@@ -12,22 +13,16 @@ const FALLBACK = ["from-rose-500 to-fuchsia-600", "from-sky-500 to-blue-600", "f
 
 /** Trending Reels rail — real recent video posts; tap to play inline. */
 export function TrendingReels() {
-  const [items, setItems] = useState<FeedItem[] | null>(null);
+  const { data, isLoading } = useQuery<FeedItem[]>("home-feed:reels", async () => {
+    const r = await fetch("/api/home-feed?sort=recent&limit=15");
+    if (!r.ok) return [];
+    const d = (await r.json()) as { items: FeedItem[] };
+    return (d.items ?? []).filter((i) => i.mediaKind === "video").slice(0, 8);
+  });
   const [viewer, setViewer] = useState<FeedItem | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/home-feed?sort=recent&limit=15")
-      .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((d: { items: FeedItem[] }) => {
-        if (alive) setItems((d.items ?? []).filter((i) => i.mediaKind === "video").slice(0, 8));
-      })
-      .catch(() => alive && setItems([]));
-    return () => {
-      alive = false;
-    };
-  }, []);
-
+  // Cached-first: instant on return visits, silently revalidated in the background.
+  const items = isLoading ? null : data ?? [];
   if (items !== null && items.length === 0) return null;
 
   return (

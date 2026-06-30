@@ -17,7 +17,6 @@
   },
   "headers": [
     {
-      "comment": "Default every API response to no-store EXCEPT the first-party app endpoints (/api/v1/app/*), which declare their own Cache-Control per route (edge-cacheable public reads vs. private personalized ones).",
       "source": "/api/(?!v1/app/)(.*)",
       "headers": [{ "key": "Cache-Control", "value": "no-store" }]
     }

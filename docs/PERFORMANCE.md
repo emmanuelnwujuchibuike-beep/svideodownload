@@ -54,14 +54,16 @@ The non-negotiables:
 
 ## Phase 2 — Data & feed at scale
 
+- ✅ **Edge/CDN caching** primitive (`lib/api/edge-cache.ts`) + applied to the
+  anonymous home feed (`s-maxage`/`stale-while-revalidate`); personalized
+  responses send `private, no-store`. Extend to trending/news/public profiles.
+- ✅ **Hot-read cache** `getCached()` with single-flight dedup over Upstash Redis
+  (memory fallback) in `lib/cache.ts`. Redis already wired for rate limits + daily
+  caps — provision Upstash to share it across instances (see INFRASTRUCTURE.md).
+- 🟡 **Prefetch next page** — `useInView` hook shipped (Phase 1); wire into the feed.
 - ⬜ **Keyset/seek pagination** behind the existing opaque cursor (swap the codec
   in `respond.ts`; clients unaffected).
 - ⬜ **Feed virtualization** (windowed rendering) + memory-efficient recycling.
-- ⬜ **Prefetch next page** before the user reaches the end.
-- ⬜ **Edge/CDN caching** for public, cacheable GETs; `revalidate` + tags for
-  feed/news/trending; per-user data stays dynamic.
-- ⬜ **Redis** (Upstash already a dep) for hot reads: sessions of trending,
-  counts, suggestion sets, rate-limit buckets.
 - ⬜ **N+1 audit** on `lib/social/*` queries; batch + index review.
 
 ## Phase 3 — Media pipeline

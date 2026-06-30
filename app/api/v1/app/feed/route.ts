@@ -1,5 +1,6 @@
 import { getSessionUser } from "@/lib/api/authenticate";
 import { corsPreflight } from "@/lib/api/cors";
+import { noStore, publicCache } from "@/lib/api/edge-cache";
 import { clampLimit, decodeCursor, encodeCursor, fail, ok } from "@/lib/api/respond";
 import { getHomeFeed, type HomeFeedSort } from "@/lib/social/home-feed";
 
@@ -35,10 +36,13 @@ export async function GET(request: Request) {
 
   try {
     const page = await getHomeFeed({ viewerId: user?.id ?? null, sort, offset, limit });
-    return ok(
+    const res = ok(
       { items: page.items, sort },
       { nextCursor: page.nextOffset === null ? null : encodeCursor(page.nextOffset) },
     );
+    // Anonymous "for_you"/"recent" is identical for everyone → cache at the edge.
+    // Anything personalized (signed-in, or the following feed) is never cached.
+    return user ? noStore(res) : publicCache(res, { sMaxAge: 30, swr: 120 });
   } catch {
     return fail("upstream_error", "Couldn't load the feed right now.");
   }

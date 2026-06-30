@@ -70,4 +70,44 @@ export async function cacheSet<T>(
   memSet(key, value, ttlSeconds);
 }
 
+export async function cacheDelete(key: string): Promise<void> {
+  if (redis) {
+    try {
+      await redis.del(key);
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+  mem.delete(key);
+}
+
+/**
+ * Read-through cache with single-flight dedup — the workhorse for Phase 2 hot
+ * reads (trending, suggestions, public counts, news). On a miss, exactly ONE
+ * loader runs even under a stampede of concurrent callers; everyone else awaits
+ * the same promise. A loader failure is never cached and never blocks: it
+ * propagates so the caller can serve stale data or its own fallback.
+ *
+ *   const trending = await getCached("trending:tags", 60, loadTrendingTags);
+ */
+const inflight = new Map<string, Promise<unknown>>();
+
+export async function getCached<T>(key: string, ttlSeconds: number, loader: () => Promise<T>): Promise<T> {
+  const cached = await cacheGet<T>(key);
+  if (cached !== null) return cached;
+
+  const existing = inflight.get(key) as Promise<T> | undefined;
+  if (existing) return existing;
+
+  const promise = (async () => {
+    const value = await loader();
+    await cacheSet(key, value, ttlSeconds);
+    return value;
+  })().finally(() => inflight.delete(key));
+
+  inflight.set(key, promise);
+  return promise;
+}
+
 export const cacheBackend = redis ? "redis" : "memory";

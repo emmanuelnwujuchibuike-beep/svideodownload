@@ -3,9 +3,11 @@
 import { ClipboardPaste, Loader2, Search, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 
+import { addDownload } from "@/features/history/store";
 import { useDownloader } from "@/features/downloader/use-downloader";
 import { PreviewCard } from "@/features/downloader/preview-card";
-import { useDownloadManager } from "@/features/downloads/use-download-manager";
+import { toast } from "@/features/ui/toast";
+import { downloadToDisk } from "@/lib/client-download";
 import { BRAND_ICONS, FLAGSHIP_IDS } from "@/lib/platform-icons";
 import { detectPlatform, PLATFORMS } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
@@ -17,7 +19,6 @@ export function DownloadBox() {
   const [url, setUrl] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const { status, metadata, error, fetchMetadata, reset } = useDownloader();
-  const { startDownload } = useDownloadManager();
   const [justQueued, setJustQueued] = useState(false);
 
   const isBusy = status === "fetching";
@@ -62,16 +63,20 @@ export function DownloadBox() {
   const onDownload = (formatId: string, kind: MediaKind) => {
     if (!metadata) return;
     const fmt = metadata.formats.find((f) => f.formatId === formatId);
-    startDownload({
+    // Fast, reliable native browser download (streams straight to disk; iOS-safe).
+    downloadToDisk({ url: metadata.sourceUrl, formatId, kind, title: metadata.title });
+    addDownload({
       url: metadata.sourceUrl,
-      formatId,
-      kind,
-      title: metadata.title,
-      thumbnail: metadata.thumbnail,
       platform: metadata.platform,
       platformName: metadata.platformName,
+      title: metadata.title,
+      thumbnail: metadata.thumbnail,
+      formatId,
+      kind,
       qualityLabel: fmt?.label ?? (kind === "audio" ? "Audio" : kind === "image" ? "Image" : "Video"),
+      size: fmt?.filesize ?? null,
     });
+    toast("Download started in your browser", "info");
     setJustQueued(true);
     setTimeout(() => setJustQueued(false), 2400);
   };

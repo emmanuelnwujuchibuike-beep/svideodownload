@@ -1,13 +1,12 @@
 "use client";
 
-import { Download, Globe2, Loader2, Play, Share2, X } from "lucide-react";
+import { AlertCircle, Download, Globe2, Loader2, Share2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { getMedia, mediaKey } from "@/features/downloads/local-media";
-import { startDownload } from "@/features/downloads/manager";
+import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { closePlayer, usePlayer } from "@/features/downloads/player-store";
 import { toast } from "@/features/ui/toast";
-import { saveBlob } from "@/lib/client-download";
+import { downloadUrl, saveBlob } from "@/lib/client-download";
 import { createClient } from "@/lib/supabase/client";
 
 export function DownloadPlayer() {
@@ -20,7 +19,8 @@ function PlayerInner() {
   const rec = usePlayer()!;
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [notLocal, setNotLocal] = useState(false);
+  const [cachePct, setCachePct] = useState<number | null>(null);
+  const [error, setError] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [postId, setPostId] = useState<string | null>(null);
   const blobRef = useRef<Blob | null>(null);
@@ -28,42 +28,65 @@ function PlayerInner() {
   useEffect(() => {
     let objectUrl: string | null = null;
     let alive = true;
-    (async () => {
-      const blob = await getMedia(mediaKey(rec.url, rec.formatId, rec.kind));
-      if (!alive) return;
-      if (blob) {
-        blobRef.current = blob;
-        objectUrl = URL.createObjectURL(blob);
-        setUrl(objectUrl);
-      } else {
-        setNotLocal(true);
-      }
+    const controller = new AbortController();
+
+    const play = (blob: Blob) => {
+      blobRef.current = blob;
+      objectUrl = URL.createObjectURL(blob);
+      setUrl(objectUrl);
       setLoading(false);
+      setCachePct(null);
+    };
+
+    (async () => {
+      const key = mediaKey(rec.url, rec.formatId, rec.kind);
+      const cached = await getMedia(key);
+      if (!alive) return;
+      if (cached) return play(cached);
+
+      // Not cached yet → stream it once for in-browser playback, then store it.
+      setCachePct(0);
+      try {
+        const res = await fetch(downloadUrl({ url: rec.url, formatId: rec.formatId, kind: rec.kind, title: rec.title }), { signal: controller.signal });
+        if (!res.ok || !res.body) throw new Error();
+        const total = Number(res.headers.get("content-length")) || 0;
+        const ct = res.headers.get("content-type") || "video/mp4";
+        const reader = res.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let received = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            received += value.length;
+            if (total && alive) setCachePct(Math.min(99, Math.round((received / total) * 100)));
+          }
+        }
+        if (!alive) return;
+        const blob = new Blob(chunks as BlobPart[], { type: ct });
+        void saveMedia(key, blob);
+        play(blob);
+      } catch {
+        if (alive && !controller.signal.aborted) {
+          setError(true);
+          setLoading(false);
+          setCachePct(null);
+        }
+      }
     })();
+
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && closePlayer();
     window.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
       alive = false;
+      controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
   }, [rec]);
-
-  const reDownload = () => {
-    startDownload({
-      url: rec.url,
-      formatId: rec.formatId,
-      kind: rec.kind,
-      title: rec.title,
-      thumbnail: rec.thumbnail,
-      platform: rec.platform,
-      platformName: rec.platformName,
-      qualityLabel: rec.qualityLabel,
-    });
-    closePlayer();
-  };
 
   const publish = async () => {
     const blob = blobRef.current;
@@ -125,17 +148,20 @@ function PlayerInner() {
       </button>
 
       <div className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-6">
-        {loading ? (
-          <Loader2 className="h-8 w-8 animate-spin text-white/70" />
-        ) : notLocal ? (
+        {error ? (
           <div className="max-w-sm text-center text-white">
-            <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10"><Play className="h-7 w-7" /></span>
-            <p className="text-lg font-semibold">Not saved on this device</p>
-            <p className="mt-1 text-sm text-white/70">Download it to watch in the app and publish it.</p>
-            <button type="button" onClick={reDownload} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-900">
-              <Download className="h-4 w-4" /> Download to watch
-            </button>
+            <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10"><AlertCircle className="h-7 w-7" /></span>
+            <p className="text-lg font-semibold">Couldn&apos;t load this video</p>
+            <p className="mt-1 text-sm text-white/70">The source may be unavailable. Try again later.</p>
           </div>
+        ) : cachePct !== null && !url ? (
+          <div className="w-full max-w-xs text-center text-white">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-white/70" />
+            <p className="mt-3 text-sm font-medium">Loading video… {cachePct}%</p>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-white transition-all" style={{ width: `${cachePct}%` }} /></div>
+          </div>
+        ) : loading ? (
+          <Loader2 className="h-8 w-8 animate-spin text-white/70" />
         ) : url && rec.kind === "audio" ? (
           <div className="w-full max-w-md rounded-2xl bg-gradient-to-br from-blue-600 to-violet-700 p-8 text-white">
             {rec.thumbnail ? (
@@ -156,7 +182,7 @@ function PlayerInner() {
       </div>
 
       {/* Action bar */}
-      {!notLocal && !loading ? (
+      {url ? (
         <div className="flex flex-wrap items-center justify-center gap-2 border-t border-white/10 bg-black/40 p-4">
           <p className="mr-auto hidden min-w-0 truncate pl-2 text-sm font-medium text-white sm:block">{rec.title}</p>
           {postId ? (

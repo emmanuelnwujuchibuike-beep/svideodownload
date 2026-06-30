@@ -1,6 +1,8 @@
 "use client";
 
 import { addDownload } from "@/features/history/store";
+import { mediaKey, saveMedia } from "@/features/downloads/local-media";
+import { toast } from "@/features/ui/toast";
 import { saveBlob } from "@/lib/client-download";
 import type { MediaKind, PlatformId } from "@/types";
 
@@ -107,6 +109,11 @@ async function run(id: string) {
 
     const blob = new Blob(chunks as BlobPart[], { type: contentType });
     const ext = contentType.includes("audio") ? "mp3" : contentType.includes("image") ? "jpg" : "mp4";
+
+    // 1) Save into the on-device library so it can be re-watched in the browser
+    //    (and published) without re-fetching or visiting the source platform.
+    await saveMedia(mediaKey(task.url, task.formatId, task.kind), blob).catch(() => {});
+    // 2) Hand the file to the browser so the user can save it to their phone.
     saveBlob(blob, `${task.title || "download"}.${ext}`);
 
     patch(id, { status: "completed", receivedBytes: received, totalBytes: total || received, speed: 0 });
@@ -121,9 +128,11 @@ async function run(id: string) {
       qualityLabel: task.qualityLabel,
       size: received, // exact downloaded bytes
     });
+    toast("Download complete — saved to your device & library", "success");
   } catch (err) {
     if (controller.signal.aborted) return; // paused/canceled handled elsewhere
     patch(id, { status: "failed", error: err instanceof Error ? err.message : "Download failed" });
+    toast("Download failed — tap retry", "error");
   } finally {
     controllers.delete(id);
   }
@@ -154,6 +163,7 @@ export function startDownload(input: {
     ...tasks,
   ];
   emit();
+  toast("Download started…", "info");
   void run(id);
   return id;
 }

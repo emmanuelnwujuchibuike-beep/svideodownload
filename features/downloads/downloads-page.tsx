@@ -4,7 +4,7 @@ import {
   AlertCircle,
   CheckCircle2,
   ChevronDown,
-  Clock,
+  Globe,
   Download,
   HardDrive,
   Heart,
@@ -21,6 +21,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { DownloadBox } from "@/features/downloads/download-box";
+import { openPlayer } from "@/features/downloads/player-store";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
 import { BRAND_ICONS } from "@/lib/platform-icons";
@@ -283,23 +284,23 @@ function DownloadedRow({ rec, onFavorite, onRemove }: { rec: DownloadRecord; onF
 
   return (
     <li className="flex items-center gap-3 py-2.5">
-      <a href={rec.url} target="_blank" rel="noopener noreferrer nofollow" className="relative h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-neutral-800">
+      <button type="button" onClick={() => openPlayer(rec)} aria-label="Watch" className="relative h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-neutral-800">
         {rec.thumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={rec.thumbnail} alt="" className="h-full w-full object-cover" />
         ) : null}
         <span className="absolute inset-0 flex items-center justify-center bg-black/25 text-white"><Play className="h-4 w-4 fill-white" /></span>
         {Brand ? <span className="absolute bottom-0.5 left-0.5 text-white/90"><Brand className="h-2.5 w-2.5" /></span> : null}
-      </a>
-      <div className="min-w-0 flex-1">
+      </button>
+      <button type="button" onClick={() => openPlayer(rec)} className="min-w-0 flex-1 text-left">
         <p className="truncate text-sm font-semibold">{rec.title}</p>
         <p className="truncate text-xs text-muted-foreground">{rec.platformName}{rec.favorite ? " · ★ Favorite" : ""}</p>
-      </div>
+      </button>
       <span className="hidden text-xs text-muted-foreground sm:block">{formatBytes(itemBytes(rec))}</span>
       <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold uppercase", tint)}>{quality}</span>
-      <a href={rec.url} target="_blank" rel="noopener noreferrer nofollow" aria-label="Open" className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white">
+      <button type="button" onClick={() => openPlayer(rec)} aria-label="Watch in browser" className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white">
         <Play className="h-4 w-4 fill-white" />
-      </a>
+      </button>
       <div className="relative">
         <button type="button" onClick={() => setMenu((v) => !v)} aria-label="More" className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-secondary">
           <MoreVertical className="h-4 w-4" />
@@ -308,12 +309,15 @@ function DownloadedRow({ rec, onFavorite, onRemove }: { rec: DownloadRecord; onF
           <>
             <button type="button" aria-label="Close" onClick={() => setMenu(false)} className="fixed inset-0 z-40 cursor-default" />
             <div className="absolute right-0 z-50 mt-1 w-40 overflow-hidden rounded-xl border border-border/70 bg-card py-1 shadow-elevated">
+              <button type="button" onClick={() => { openPlayer(rec); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary">
+                <Play className="h-4 w-4" /> Watch in browser
+              </button>
               <button type="button" onClick={() => { onFavorite(); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary">
                 <Heart className={cn("h-4 w-4", rec.favorite && "fill-rose-500 text-rose-500")} /> {rec.favorite ? "Unfavorite" : "Favorite"}
               </button>
-              <a href={rec.url} target="_blank" rel="noopener noreferrer nofollow" onClick={() => setMenu(false)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary">
-                <Clock className="h-4 w-4" /> Open source
-              </a>
+              <button type="button" onClick={() => { openPlayer(rec); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary">
+                <Globe className="h-4 w-4" /> Publish to everyone
+              </button>
               <button type="button" onClick={() => { onRemove(); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rose-500 hover:bg-secondary">
                 <Trash2 className="h-4 w-4" /> Remove
               </button>

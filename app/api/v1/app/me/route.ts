@@ -1,5 +1,6 @@
 import { getSessionUser } from "@/lib/api/authenticate";
 import { corsPreflight } from "@/lib/api/cors";
+import { noStore } from "@/lib/api/edge-cache";
 import { ok } from "@/lib/api/respond";
 import { getPlanLimits, getUserPlan } from "@/lib/monetization/plan";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -44,19 +45,22 @@ export async function GET(request: Request) {
     }
   }
 
-  return ok({
-    authenticated: !!user,
-    userId: user?.id ?? null,
-    handle,
-    profile,
-    plan,
-    isPremium: plan !== "free",
-    isBusiness: plan === "business",
-    showAds: limits.ads,
-    limits: {
-      dailyDownloads: limits.dailyDownloads,
-      batch: limits.batch,
-      apiDailyLimit: limits.apiDailyLimit,
-    },
-  });
+  // Personalized → never cache at the shared edge.
+  return noStore(
+    ok({
+      authenticated: !!user,
+      userId: user?.id ?? null,
+      handle,
+      profile,
+      plan,
+      isPremium: plan !== "free",
+      isBusiness: plan === "business",
+      showAds: limits.ads,
+      limits: {
+        dailyDownloads: limits.dailyDownloads,
+        batch: limits.batch,
+        apiDailyLimit: limits.apiDailyLimit,
+      },
+    }),
+  );
 }

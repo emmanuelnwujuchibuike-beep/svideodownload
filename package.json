@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "analyze": "cross-env ANALYZE=true next build",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -31,7 +32,9 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^15.1.0",
     "@tailwindcss/typography": "^0.5.20",
+    "cross-env": "^7.0.3",
     "@types/node": "^22.5.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

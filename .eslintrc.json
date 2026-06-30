@@ -4,6 +4,17 @@
     "@typescript-eslint/no-unused-vars": [
       "warn",
       { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@/features/*/internal", "@/features/*/internal/*", "**/features/*/internal/*"],
+            "message": "Module internals are private. Import a module's public API from its index barrel (features/<module>/index.ts), not its internal/ folder. See docs/ARCHITECTURE.md -> Boundaries."
+          }
+        ]
+      }
     ]
   }
 }

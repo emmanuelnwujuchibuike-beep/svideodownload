@@ -2,8 +2,9 @@
 
 import { Bell, Heart, MessageCircle, UserPlus } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
+import { mutate, revalidate, useQuery } from "@/features/data";
 import { createClient } from "@/lib/supabase/client";
 import type { NotificationItem, NotificationType } from "@/lib/social/notifications";
 import { cn } from "@/lib/utils";
@@ -30,36 +31,35 @@ function ago(iso: string): string {
   return `${Math.floor(s / 86400)}d`;
 }
 
+interface NotifData {
+  items: NotificationItem[];
+  unread: number;
+}
+const KEY = "notifications";
+
+async function loadNotifications(): Promise<NotifData> {
+  const res = await fetch("/api/notifications");
+  if (!res.ok) return { items: [], unread: 0 };
+  const d = (await res.json()) as NotifData;
+  return { items: d.items ?? [], unread: d.unread ?? 0 };
+}
+
 export function NotificationBell() {
-  const [items, setItems] = useState<NotificationItem[]>([]);
-  const [unread, setUnread] = useState(0);
+  // Cached-first: the bell shows last-known notifications instantly on every page
+  // (it lives in the topbar app-wide) and revalidates in the background + on focus.
+  const { data } = useQuery<NotifData>(KEY, loadNotifications);
+  const items = data?.items ?? [];
+  const unread = data?.unread ?? 0;
   const [open, setOpen] = useState(false);
-  const loaded = useRef(false);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/notifications");
-      if (!res.ok) return;
-      const data = (await res.json()) as { items: NotificationItem[]; unread: number };
-      setItems(data.items);
-      setUnread(data.unread);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  // Initial load + realtime subscription scoped to the current user.
+  // Realtime subscription scoped to the current user.
   useEffect(() => {
-    if (loaded.current) return;
-    loaded.current = true;
-    void load();
-
     const supabase = createClient();
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
 
-    supabase.auth.getUser().then(({ data }) => {
-      const uid = data.user?.id;
+    supabase.auth.getUser().then(({ data: auth }) => {
+      const uid = auth.user?.id;
       if (!uid || cancelled) return;
       channel = supabase
         .channel(`notifications:${uid}`)
@@ -67,8 +67,9 @@ export function NotificationBell() {
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${uid}` },
           () => {
-            setUnread((n) => n + 1);
-            void load();
+            // Optimistic bump, then pull the real list.
+            mutate<NotifData>(KEY, (prev) => ({ items: prev?.items ?? [], unread: (prev?.unread ?? 0) + 1 }));
+            void revalidate(KEY, loadNotifications, 0).catch(() => {});
           },
         )
         .subscribe();
@@ -78,14 +79,14 @@ export function NotificationBell() {
       cancelled = true;
       if (channel) void channel.unsubscribe();
     };
-  }, [load]);
+  }, []);
 
   const toggle = async () => {
     const next = !open;
     setOpen(next);
     if (next && unread > 0) {
-      setUnread(0);
-      setItems((prev) => prev.map((i) => ({ ...i, read: true })));
+      // Optimistically mark everything read.
+      mutate<NotifData>(KEY, (prev) => ({ items: (prev?.items ?? []).map((i) => ({ ...i, read: true })), unread: 0 }));
       try {
         await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: "{}" });
       } catch {

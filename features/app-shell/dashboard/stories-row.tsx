@@ -3,25 +3,22 @@
 import { Plus, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useQuery } from "@/features/data";
 import { openUpload } from "@/features/create/upload-store";
 import type { StoryGroup } from "@/lib/social/stories";
 
 const IMAGE_MS = 5000;
 
 export function StoriesRow() {
-  const [groups, setGroups] = useState<StoryGroup[]>([]);
+  // Cached-first: the row paints instantly on return visits, refreshed in the background.
+  const { data } = useQuery<StoryGroup[]>("stories", async () => {
+    const r = await fetch("/api/stories");
+    if (!r.ok) return [];
+    const d = (await r.json()) as { groups: StoryGroup[] };
+    return d.groups ?? [];
+  });
+  const groups = data ?? [];
   const [start, setStart] = useState<number | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/stories")
-      .then((r) => (r.ok ? r.json() : { groups: [] }))
-      .then((d: { groups: StoryGroup[] }) => alive && setGroups(d.groups ?? []))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   return (
     <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

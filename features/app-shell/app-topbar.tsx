@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, MessageSquare, Plus, Search, Upload } from "lucide-react";
+import { Download, MessageSquare, Search, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
@@ -35,11 +35,12 @@ export function AppTopbar() {
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border/60 bg-background/85 px-4 backdrop-blur-xl">
-      {/* Mobile brand */}
+      {/* Mobile/tablet brand wordmark (Instagram-style) */}
       <Link href="/home" className="flex items-center gap-2 font-bold lg:hidden">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 via-violet-600 to-purple-600 text-white">
-          <Plus className="h-4 w-4 rotate-45" />
+          <Download className="h-4 w-4" />
         </span>
+        <span className="text-xl tracking-tight text-gradient">Frenz</span>
       </Link>
 
       {/* Search */}
@@ -95,7 +96,10 @@ export function AppTopbar() {
         <div className="hidden sm:block">
           <ThemeToggle />
         </div>
-        <UserMenu />
+        {/* Avatar menu — desktop/tablet; on mobile the Profile tab in the bottom nav covers this */}
+        <div className="hidden sm:block">
+          <UserMenu />
+        </div>
       </div>
     </header>
   );

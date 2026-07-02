@@ -143,8 +143,10 @@ existing videos. To turn it on:
 Notifications and new DMs reach users with the browser closed via the Web Push
 API. Subscriptions live in `push_subscriptions` (migration `0019`); the service
 worker is `public/sw.js`; the server sender is `lib/push/web-push.ts`
-(`sendPushToUser`, already wired into `/api/messages`). It's a no-op until VAPID
-keys are set, so nothing breaks beforehand.
+(`sendPushToUser`). Wired into: DMs (`/api/messages`), likes/saves/comments/
+follows (`lib/push/social-push.ts`), and friend request/accept/reminder events
+(`lib/social/friends.ts`). It's a no-op until VAPID keys are set, so nothing
+breaks beforehand.
 
 To turn it on:
 1. Generate a keypair once: `npx web-push generate-vapid-keys`.
@@ -153,5 +155,23 @@ To turn it on:
    `VAPID_SUBJECT` (a `mailto:` contact). Redeploy.
 3. Run migration `0019` (push_subscriptions + message delivery receipts).
 4. Users click **Turn on push** in the Notification Center (`/notifications`) and
-   accept the browser prompt. iOS Safari requires the site be added to the Home
-   Screen first (PWA) before it can receive push.
+   accept the browser prompt.
+
+iOS Safari only delivers push to web apps installed on the Home Screen
+(16.4+). The install path is shipped: `app/manifest.ts` (standalone PWA),
+`app/apple-icon.png`, and `IosInstallPrompt` — a banner that walks iOS users
+through Share → Add to Home Screen. No extra setup needed.
+
+## Friends (Frenz Connect) — migrations 0020/0021
+
+Mutual, request-based friendships (distinct from follows). Run migrations
+`0020_friends.sql` (friend_requests + friendships + friend notification types)
+and `0021_friend_favorites.sql` (private favorite stars). All writes are
+API-mediated (service role); RLS grants participants read-only.
+
+**Smart reminder**: accepting a request schedules ONE "Start chatting 👋" nudge
+5 minutes later, auto-cancelled if the pair already opened a conversation. It
+fires opportunistically from hot paths (`/api/friends`, the `/friends` page) so
+no cron is required. Optional reliability net: `/api/cron/friend-reminders`
+(auth: `CRON_SECRET` bearer or admin session) — on a Vercel plan that allows
+frequent crons, add it to `vercel.json` with an every-10-minutes schedule.

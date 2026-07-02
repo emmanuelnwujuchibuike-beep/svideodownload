@@ -40,6 +40,8 @@ export interface FriendRequestItem {
 
 export interface FriendItem {
   since: string;
+  /** Private per-viewer star — favorites always sort to the top of the hub. */
+  favorite: boolean;
   user: FriendProfile;
 }
 
@@ -299,16 +301,45 @@ export async function cancelFriendRequest(userId: string, otherId: string): Prom
   }
 }
 
-/** Remove an existing friendship (either side may). */
+/** Remove an existing friendship (either side may). Clears both users' stars. */
 export async function unfriend(userId: string, otherId: string): Promise<FriendActionResult> {
   if (!hasSupabase) return { ok: false, reason: "unavailable" };
   try {
     const db = createAdminClient();
     const [low, high] = pair(userId, otherId);
     await db.from("friendships").delete().eq("user_low", low).eq("user_high", high);
+    await db
+      .from("friend_favorites")
+      .delete()
+      .or(
+        `and(user_id.eq.${userId},friend_id.eq.${otherId}),and(user_id.eq.${otherId},friend_id.eq.${userId})`,
+      );
     return { ok: true, state: "none" };
   } catch {
     return { ok: false, reason: "unavailable" };
+  }
+}
+
+/** Star/unstar a friend (private to the viewer). Requires an actual friendship. */
+export async function setFriendFavorite(
+  userId: string,
+  friendId: string,
+  on: boolean,
+): Promise<boolean> {
+  if (!hasSupabase) return false;
+  try {
+    const db = createAdminClient();
+    if (on) {
+      if (!(await areFriends(db, userId, friendId))) return false;
+      const { error } = await db
+        .from("friend_favorites")
+        .upsert({ user_id: userId, friend_id: friendId }, { onConflict: "user_id,friend_id" });
+      return !error;
+    }
+    await db.from("friend_favorites").delete().eq("user_id", userId).eq("friend_id", friendId);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -323,7 +354,7 @@ export async function friendsOverview(userId: string, limit = 100): Promise<Frie
   if (!hasSupabase) return { friends: [], incoming: [], outgoing: [] };
   try {
     const db = createAdminClient();
-    const [{ data: fr }, { data: inc }, { data: out }] = await Promise.all([
+    const [{ data: fr }, { data: inc }, { data: out }, { data: fav }] = await Promise.all([
       db
         .from("friendships")
         .select("user_low, user_high, created_at")
@@ -344,7 +375,9 @@ export async function friendsOverview(userId: string, limit = 100): Promise<Frie
         .eq("status", "pending")
         .order("created_at", { ascending: false })
         .limit(50),
+      db.from("friend_favorites").select("friend_id").eq("user_id", userId),
     ]);
+    const favorites = new Set(((fav as { friend_id: string }[]) ?? []).map((r) => r.friend_id));
 
     const friendships = (fr as { user_low: string; user_high: string; created_at: string }[]) ?? [];
     const incomingRows = (inc as { id: string; sender_id: string; note: string | null; created_at: string }[]) ?? [];
@@ -361,9 +394,11 @@ export async function friendsOverview(userId: string, limit = 100): Promise<Frie
       friends: friendships
         .map((f) => {
           const u = item(f.user_low === userId ? f.user_high : f.user_low);
-          return u ? { since: f.created_at, user: u } : null;
+          return u ? { since: f.created_at, favorite: favorites.has(u.id), user: u } : null;
         })
-        .filter((x): x is FriendItem => !!x),
+        .filter((x): x is FriendItem => !!x)
+        // Favorites always on top (spec), newest friendship first within each group.
+        .sort((a, b) => Number(b.favorite) - Number(a.favorite)),
       incoming: incomingRows
         .map((r) => {
           const u = item(r.sender_id);

@@ -69,11 +69,12 @@ export const MODULES: PlatformModule[] = [
     canAccess: everyone,
   },
   {
-    id: "ai",
-    name: "Frenzsave AI",
-    shortName: "AI",
+    // Brand rule: never "AI" in product naming — this is the "Smart" suite.
+    id: "smart",
+    name: "Frenzsave Smart",
+    shortName: "Smart",
     tagline: "Summaries, captions and smart search.",
-    basePath: "/ai",
+    basePath: "/smart",
     icon: Sparkles,
     accent: "from-violet-500 to-indigo-600",
     status: "beta",

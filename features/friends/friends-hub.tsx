@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Compass, Loader2, MessageCircle, UserMinus, UserPlus, X } from "lucide-react";
+import { Check, Compass, Loader2, MessageCircle, Star, UserMinus, UserPlus, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -31,7 +31,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
     const prevFriends = friends;
     setIncoming((l) => l.filter((r) => r.id !== req.id));
     if (action === "accept") {
-      setFriends((l) => [{ since: new Date().toISOString(), user: req.user }, ...l]);
+      setFriends((l) => [{ since: new Date().toISOString(), favorite: false, user: req.user }, ...l]);
     }
     try {
       const res = await fetch(`/api/friends/${req.user.id}`, {
@@ -50,6 +50,19 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
       setFriends(prevFriends);
     } finally {
       setBusyId(null);
+    }
+  };
+
+  // Star/unstar — optimistic re-sort (favorites float to the top), revert on error.
+  const toggleFavorite = async (id: string, on: boolean) => {
+    const resort = (l: FriendItem[]) =>
+      [...l].sort((a, b) => Number(b.favorite) - Number(a.favorite));
+    setFriends((l) => resort(l.map((f) => (f.user.id === id ? { ...f, favorite: on } : f))));
+    try {
+      const res = await fetch(`/api/friends/${id}/favorite`, { method: on ? "POST" : "DELETE" });
+      if (!res.ok) throw new Error();
+    } catch {
+      setFriends((l) => resort(l.map((f) => (f.user.id === id ? { ...f, favorite: !on } : f))));
     }
   };
 
@@ -157,7 +170,12 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
         {friends.length > 0 ? (
           <ul className="space-y-1.5">
             {friends.map((f) => (
-              <FriendRow key={f.user.id} item={f} onRemoved={(id) => setFriends((l) => l.filter((x) => x.user.id !== id))} />
+              <FriendRow
+                key={f.user.id}
+                item={f}
+                onFavorite={toggleFavorite}
+                onRemoved={(id) => setFriends((l) => l.filter((x) => x.user.id !== id))}
+              />
             ))}
           </ul>
         ) : (
@@ -191,8 +209,16 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
   );
 }
 
-/** Friend row with Message + two-step remove. */
-function FriendRow({ item, onRemoved }: { item: FriendItem; onRemoved: (id: string) => void }) {
+/** Friend row with favorite star, Message + two-step remove. */
+function FriendRow({
+  item,
+  onFavorite,
+  onRemoved,
+}: {
+  item: FriendItem;
+  onFavorite: (id: string, on: boolean) => void;
+  onRemoved: (id: string) => void;
+}) {
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -224,6 +250,20 @@ function FriendRow({ item, onRemoved }: { item: FriendItem; onRemoved: (id: stri
         </Link>
         <p className="text-xs text-muted-foreground">@{item.user.handle}</p>
       </div>
+      <button
+        type="button"
+        onClick={() => onFavorite(item.user.id, !item.favorite)}
+        aria-pressed={item.favorite}
+        aria-label={item.favorite ? `Unfavorite ${item.user.displayName}` : `Favorite ${item.user.displayName}`}
+        className={cn(
+          "rounded-lg p-1.5 transition",
+          item.favorite
+            ? "text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.45)]"
+            : "text-muted-foreground/50 hover:bg-secondary hover:text-amber-400",
+        )}
+      >
+        <Star className={cn("h-4 w-4", item.favorite && "fill-current")} />
+      </button>
       <Link
         href={`/messages/new/${item.user.id}`}
         className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-secondary"

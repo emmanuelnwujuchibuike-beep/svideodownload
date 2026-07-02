@@ -43,6 +43,48 @@ export function streamThumbnailUrl(uid: string, opts: { time?: string } = {}): s
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
 
+export interface StreamHealth {
+  /** Are the account id + token env vars present? */
+  configured: boolean;
+  /** Did a live call to the Stream API with the token succeed? */
+  ok: boolean;
+  latencyMs: number | null;
+  /** Also confirms the public customer code (needed for HLS/thumbnails) is set. */
+  customerCode: boolean;
+  error?: string;
+}
+
+/**
+ * Verifies Stream is reachable with the configured credentials — used by
+ * /api/health so the token can be validated on the deployment where it's set
+ * (the secret never leaves the server). Lists at most one video as a cheap ping.
+ */
+export async function checkStream(): Promise<StreamHealth> {
+  const configured = hasStream;
+  const customerCode = !!process.env.NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE;
+  if (!configured) return { configured, ok: false, latencyMs: null, customerCode };
+  try {
+    const started = performance.now();
+    const res = await fetch(`${API_BASE}/accounts/${ACCOUNT_ID}/stream?limit=1`, {
+      headers: { Authorization: `Bearer ${API_TOKEN}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    const latencyMs = Math.round(performance.now() - started);
+    if (!res.ok) {
+      return { configured, ok: false, latencyMs, customerCode, error: `Cloudflare ${res.status}` };
+    }
+    return { configured, ok: true, latencyMs, customerCode };
+  } catch (e) {
+    return {
+      configured,
+      ok: false,
+      latencyMs: null,
+      customerCode,
+      error: e instanceof Error ? e.message : "stream probe failed",
+    };
+  }
+}
+
 interface DirectUpload {
   uid: string;
   uploadURL: string;

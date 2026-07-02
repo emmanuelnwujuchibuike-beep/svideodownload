@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { cacheBackend, cacheGet, cacheSet } from "@/lib/cache";
 import { downloadConcurrencyStats } from "@/lib/concurrency";
+import { checkStream } from "@/lib/media/stream";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +29,9 @@ export async function GET() {
     error = e instanceof Error ? e.message : "cache probe failed";
   }
 
+  // Verify Cloudflare Stream credentials on the deployment where they're set.
+  const stream = await checkStream();
+
   return NextResponse.json(
     {
       status: "ok",
@@ -39,6 +43,7 @@ export async function GET() {
         latencyMs,
         ...(error ? { error } : {}),
       },
+      stream, // { configured, ok, latencyMs, customerCode, error? }
       downloads: downloadConcurrencyStats(),
     },
     { headers: { "Cache-Control": "no-store" } },

@@ -140,6 +140,21 @@ async function friendIds(db: ReturnType<typeof createAdminClient>, userId: strin
   );
 }
 
+/** Total friendships for a user (profile stats). */
+export async function friendsCount(userId: string): Promise<number> {
+  if (!hasSupabase) return 0;
+  try {
+    const db = createAdminClient();
+    const { count } = await db
+      .from("friendships")
+      .select("user_low", { head: true, count: "exact" })
+      .or(`user_low.eq.${userId},user_high.eq.${userId}`);
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** How many friends `a` and `b` share (shown in the request modal). */
 export async function mutualFriendsCount(a: string, b: string): Promise<number> {
   if (!hasSupabase) return 0;

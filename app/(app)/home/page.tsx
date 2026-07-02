@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { AppShell } from "@/features/app-shell/app-shell";
+import { AppContent } from "@/features/app-shell/app-content";
 import { BrandSplash } from "@/features/app-shell/brand-splash";
 import { ContinueWatching } from "@/features/app-shell/dashboard/continue-watching";
 import { FeaturedHero } from "@/features/app-shell/dashboard/featured-hero";
@@ -44,7 +44,7 @@ export default async function HomePage() {
   const firstVisit = !(await cookies()).get("frenz_welcomed");
 
   return (
-    <AppShell handle={profile.handle} rightRail={<HomeRail suggestions={suggestions} />}>
+    <AppContent rightRail={<HomeRail suggestions={suggestions} />}>
       {firstVisit ? <BrandSplash /> : null}
       <div className="space-y-6">
         <HomeGreeting name={firstName} />
@@ -55,6 +55,6 @@ export default async function HomePage() {
         <LatestNewsTabs />
       </div>
       <HomeDownloadBar />
-    </AppShell>
+    </AppContent>
   );
 }

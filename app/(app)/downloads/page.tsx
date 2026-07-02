@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { AppShell } from "@/features/app-shell/app-shell";
+import { AppContent } from "@/features/app-shell/app-content";
 import { DownloadsPage } from "@/features/downloads/downloads-page";
 import { DownloadsRail } from "@/features/downloads/downloads-rail";
 import { getHomeProfile } from "@/lib/social/home";
@@ -25,8 +25,8 @@ export default async function Downloads() {
   if (!profile?.handle) redirect("/welcome");
 
   return (
-    <AppShell handle={profile.handle} rightRail={<DownloadsRail />}>
+    <AppContent rightRail={<DownloadsRail />}>
       <DownloadsPage />
-    </AppShell>
+    </AppContent>
   );
 }

@@ -1,0 +1,46 @@
+import { MessageCircle } from "lucide-react";
+import type { ReactNode } from "react";
+
+import { ConversationList } from "@/features/social/conversation-list";
+import { listConversations } from "@/lib/social/messages";
+import { createClient } from "@/lib/supabase/server";
+
+/**
+ * Glass Split (owner-picked design): on desktop the inbox is a persistent left
+ * pane and the thread fills the right panel, so switching chats never reloads
+ * the list. On mobile each route is full-screen (list ↔ thread) and the layout
+ * reserves space for the bottom nav. The pane and the pages share INBOX_KEY,
+ * so one realtime subscription keeps everything in lockstep.
+ */
+export default async function MessagesLayout({ children }: { children: ReactNode }) {
+  let conversations: Awaited<ReturnType<typeof listConversations>> = [];
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) conversations = await listConversations(user.id);
+  } catch {
+    /* pages handle their own auth redirects */
+  }
+
+  return (
+    <div className="mx-auto flex h-[calc(100dvh-4rem-3.6rem)] w-full max-w-[1600px] gap-4 px-0 lg:h-[calc(100dvh-4rem)] lg:px-4 lg:py-4">
+      {/* Desktop inbox pane */}
+      <aside className="hidden w-[340px] shrink-0 flex-col overflow-hidden rounded-3xl border border-border/70 bg-card/60 shadow-sm backdrop-blur-xl lg:flex">
+        <h1 className="flex items-center gap-2 px-4 pb-2 pt-4 text-xl font-bold tracking-[-0.02em]">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-[0_4px_14px_-4px_rgba(124,58,237,0.7)]">
+            <MessageCircle className="h-4 w-4" />
+          </span>
+          Messages
+        </h1>
+        <ConversationList initial={conversations} variant="pane" />
+      </aside>
+
+      {/* Thread / index panel */}
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden lg:rounded-3xl lg:border lg:border-border/70 lg:bg-card/40 lg:shadow-sm lg:backdrop-blur-xl">
+        {children}
+      </main>
+    </div>
+  );
+}

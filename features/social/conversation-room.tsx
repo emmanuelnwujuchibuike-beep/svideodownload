@@ -147,8 +147,10 @@ export function ConversationRoom({
               <div key={m.id} className={cn("flex flex-col", m.mine ? "items-end" : "items-start")}>
                 <div
                   className={cn(
-                    "max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm leading-relaxed",
-                    m.mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-secondary text-foreground",
+                    "max-w-[80%] whitespace-pre-wrap break-words rounded-3xl px-4 py-2.5 text-sm leading-relaxed",
+                    m.mine
+                      ? "rounded-br-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/20"
+                      : "rounded-bl-lg border border-border/60 bg-card text-foreground shadow-sm",
                   )}
                 >
                   {m.body}
@@ -170,20 +172,23 @@ export function ConversationRoom({
         )}
       </div>
 
-      <form onSubmit={submit} className="flex items-center gap-2 border-t border-border/60 bg-background p-3">
+      <form
+        onSubmit={submit}
+        className="flex items-center gap-2 border-t border-border/60 bg-card/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3"
+      >
         <input
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="Message…"
           aria-label="Message"
           maxLength={2000}
-          className="h-11 flex-1 rounded-xl bg-secondary/40 px-4 text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+          className="h-11 flex-1 rounded-2xl border border-border/60 bg-background/60 px-4 text-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20"
         />
         <button
           type="submit"
           disabled={busy || !body.trim()}
           aria-label="Send"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition hover:opacity-90 active:scale-95 disabled:opacity-40"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 active:scale-95 disabled:opacity-40"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </button>

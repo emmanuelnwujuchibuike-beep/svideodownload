@@ -28,6 +28,15 @@ export async function GET() {
     const read = await cacheGet<{ t: string }>(probeKey);
     latencyMs = Math.round(performance.now() - started);
     live = read?.t === token; // round-trip actually persisted + returned our value
+    if (!live) {
+      // Distinguish the two failure modes so the fix is obvious. cacheSet swallows
+      // write errors, so a missing read usually means the write was rejected —
+      // classically an Upstash READ-ONLY token (use the read-write one).
+      error =
+        read == null
+          ? "write did not persist — check UPSTASH_REDIS_REST_TOKEN is the read-WRITE token, not read-only"
+          : "value mismatch on read-back";
+    }
   } catch (e) {
     error = e instanceof Error ? e.message : "cache probe failed";
   }

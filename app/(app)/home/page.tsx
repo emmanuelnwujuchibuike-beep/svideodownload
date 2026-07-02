@@ -13,7 +13,10 @@ import { HomeRail } from "@/features/app-shell/dashboard/home-rail";
 import { LatestNewsTabs } from "@/features/app-shell/dashboard/latest-news";
 import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
+import { FeedSkeleton } from "@/features/feed/feed-skeleton";
+import { SmartFeed } from "@/features/feed/smart-feed";
 import { Skeleton } from "@/features/ui/skeleton";
+import { friendsCount } from "@/lib/social/friends";
 import { getHomeProfile } from "@/lib/social/home";
 import { getHomeFeed } from "@/lib/social/home-feed";
 import { getActiveStories } from "@/lib/social/stories";
@@ -73,6 +76,17 @@ export default async function HomePage() {
 
         <ContinueWatching />
         <LatestNewsTabs />
+
+        {/* Smart Feed — the intelligent, blended, endless heart of the home
+            experience. Rendered last because it never ends. */}
+        <div className="pt-2">
+          <h2 className="flex items-center gap-2 text-base font-bold tracking-tight">
+            <span className="text-gradient">Your Smart Feed</span>
+          </h2>
+          <Suspense fallback={<FeedSkeleton count={3} />}>
+            <SmartFeedSection viewerId={viewerId} />
+          </Suspense>
+        </div>
       </div>
       <HomeDownloadBar />
     </AppContent>
@@ -101,6 +115,16 @@ async function ReelsSection({ viewerId }: { viewerId: string }) {
 async function RailSection({ viewerId }: { viewerId: string }) {
   const suggestions = await getSuggestedCreators(viewerId, 5);
   return <HomeRail suggestions={suggestions} />;
+}
+
+async function SmartFeedSection({ viewerId }: { viewerId: string }) {
+  const [page, friends] = await Promise.all([
+    getHomeFeed({ viewerId, sort: "for_you", offset: 0, limit: 8 }),
+    friendsCount(viewerId),
+  ]);
+  return (
+    <SmartFeed initialItems={page.items} initialNextOffset={page.nextOffset} friendCount={friends} />
+  );
 }
 
 /* ── Section skeletons ─────────────────────────────────────────────────────── */

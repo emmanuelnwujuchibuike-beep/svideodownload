@@ -21,7 +21,16 @@ import Link from "next/link";
 import { useState } from "react";
 
 import type { FeedItem } from "@/lib/social/home-feed";
+import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
+
+const REASON_STYLE: Record<SmartReasonTone, string> = {
+  follow: "text-blue-500 dark:text-blue-300",
+  fresh: "text-emerald-500 dark:text-emerald-300",
+  hot: "text-rose-500 dark:text-rose-300",
+  download: "text-teal-500 dark:text-teal-300",
+  interest: "text-violet-500 dark:text-violet-300",
+};
 
 function timeAgo(iso: string): string {
   const s = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -37,10 +46,12 @@ function timeAgo(iso: string): string {
 
 export function FeedPostCard({
   item,
+  reason,
   onRemove,
   onOpen,
 }: {
   item: FeedItem;
+  reason?: SmartReason | null;
   onRemove: (id: string) => void;
   onOpen: (item: FeedItem, startComments?: boolean) => void;
 }) {
@@ -198,6 +209,16 @@ export function FeedPostCard({
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Smart Explanation — why this is in your feed */}
+      {reason ? (
+        <div className="px-4 pb-1">
+          <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold", REASON_STYLE[reason.tone])}>
+            <span aria-hidden className="text-current">✦</span>
+            {reason.label}
+          </span>
+        </div>
+      ) : null}
 
       {/* Caption */}
       {item.title ? (

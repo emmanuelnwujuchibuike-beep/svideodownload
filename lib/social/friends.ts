@@ -1,4 +1,5 @@
 import { sendPushToUser } from "@/lib/push/web-push";
+import { listConversations } from "@/lib/social/messages";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -42,6 +43,10 @@ export interface FriendItem {
   since: string;
   /** Private per-viewer star — favorites always sort to the top of the hub. */
   favorite: boolean;
+  /** Last DM activity with this friend (null = never chatted). */
+  lastChatAt: string | null;
+  /** Unread messages from this friend. */
+  unread: number;
   user: FriendProfile;
 }
 
@@ -344,6 +349,8 @@ export async function setFriendFavorite(
 }
 
 export interface FriendsOverview {
+  /** The signed-in viewer (for the Friend Orbit centerpiece). */
+  viewer: FriendProfile | null;
   friends: FriendItem[];
   incoming: FriendRequestItem[];
   outgoing: FriendRequestItem[];
@@ -351,10 +358,10 @@ export interface FriendsOverview {
 
 /** Everything the /friends hub needs, in one call. */
 export async function friendsOverview(userId: string, limit = 100): Promise<FriendsOverview> {
-  if (!hasSupabase) return { friends: [], incoming: [], outgoing: [] };
+  if (!hasSupabase) return { viewer: null, friends: [], incoming: [], outgoing: [] };
   try {
     const db = createAdminClient();
-    const [{ data: fr }, { data: inc }, { data: out }, { data: fav }] = await Promise.all([
+    const [{ data: fr }, { data: inc }, { data: out }, { data: fav }, convs] = await Promise.all([
       db
         .from("friendships")
         .select("user_low, user_high, created_at")
@@ -376,14 +383,17 @@ export async function friendsOverview(userId: string, limit = 100): Promise<Frie
         .order("created_at", { ascending: false })
         .limit(50),
       db.from("friend_favorites").select("friend_id").eq("user_id", userId),
+      // Last-activity + unread per friend, from the DM inbox.
+      listConversations(userId),
     ]);
     const favorites = new Set(((fav as { friend_id: string }[]) ?? []).map((r) => r.friend_id));
+    const chatByFriend = new Map(convs.map((c) => [c.other.id, { lastAt: c.lastAt, unread: c.unreadCount }]));
 
     const friendships = (fr as { user_low: string; user_high: string; created_at: string }[]) ?? [];
     const incomingRows = (inc as { id: string; sender_id: string; note: string | null; created_at: string }[]) ?? [];
     const outgoingRows = (out as { id: string; receiver_id: string; note: string | null; created_at: string }[]) ?? [];
 
-    const ids = new Set<string>();
+    const ids = new Set<string>([userId]);
     for (const f of friendships) ids.add(f.user_low === userId ? f.user_high : f.user_low);
     for (const r of incomingRows) ids.add(r.sender_id);
     for (const r of outgoingRows) ids.add(r.receiver_id);
@@ -391,10 +401,19 @@ export async function friendsOverview(userId: string, limit = 100): Promise<Frie
 
     const item = (id: string): FriendProfile | null => profiles.get(id) ?? null;
     return {
+      viewer: item(userId),
       friends: friendships
         .map((f) => {
           const u = item(f.user_low === userId ? f.user_high : f.user_low);
-          return u ? { since: f.created_at, favorite: favorites.has(u.id), user: u } : null;
+          if (!u) return null;
+          const chat = chatByFriend.get(u.id);
+          return {
+            since: f.created_at,
+            favorite: favorites.has(u.id),
+            lastChatAt: chat?.lastAt ?? null,
+            unread: chat?.unread ?? 0,
+            user: u,
+          };
         })
         .filter((x): x is FriendItem => !!x)
         // Favorites always on top (spec), newest friendship first within each group.
@@ -413,7 +432,7 @@ export async function friendsOverview(userId: string, limit = 100): Promise<Frie
         .filter((x): x is FriendRequestItem => !!x),
     };
   } catch {
-    return { friends: [], incoming: [], outgoing: [] };
+    return { viewer: null, friends: [], incoming: [], outgoing: [] };
   }
 }
 

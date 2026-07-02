@@ -4,6 +4,10 @@ Premium multi-platform video downloader powered by [yt-dlp](https://github.com/y
 
 Built with **Next.js 15 (App Router)**, **TypeScript**, **Tailwind CSS**, **Supabase**, and **Upstash Redis**.
 
+> 💙 **[Frenz Core](docs/FRENZ_CORE.md) — read this before building any feature.** It is the mandatory
+> engineering foundation of the whole Frenzsave ecosystem: one backend, one identity, one cloud, one
+> security model, one design system. Every feature integrates with Frenz Core; nothing bypasses it.
+
 ---
 
 ## ✨ Features (current foundation)

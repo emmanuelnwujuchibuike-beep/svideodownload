@@ -33,6 +33,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  // Soft client navigations (React Server Component fetches, `RSC: 1`) to
+  // non-protected pages: skip the blocking getUser() round-trip so the switch is
+  // instant. Safe because (a) full document loads + every /api call still refresh
+  // the session cookie, and (b) protected pages (/account, /admin) fall through to
+  // the full guard below. This is the main lever for snappy in-app navigation.
+  const isRscNav = request.headers.get("rsc") === "1";
+  const needsGuard = path.startsWith("/account") || path.startsWith("/admin");
+  if (isRscNav && !needsGuard) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

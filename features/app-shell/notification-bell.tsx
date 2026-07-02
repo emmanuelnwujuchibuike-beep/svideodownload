@@ -1,48 +1,19 @@
 "use client";
 
-import { Bell, Heart, MessageCircle, UserPlus } from "lucide-react";
+import { Bell } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { mutate, revalidate, useQuery } from "@/features/data";
+import {
+  NOTIF_KEY as KEY,
+  loadFlatNotifications as loadNotifications,
+  type FlatNotifications as NotifData,
+} from "@/features/notifications/data";
+import { iconFor, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
+import { categoryForType } from "@/lib/social/notifications";
 import { createClient } from "@/lib/supabase/client";
-import type { NotificationItem, NotificationType } from "@/lib/social/notifications";
 import { cn } from "@/lib/utils";
-
-const ICON: Record<NotificationType, typeof Heart> = {
-  like: Heart,
-  comment: MessageCircle,
-  follow: UserPlus,
-};
-const TINT: Record<NotificationType, string> = {
-  like: "bg-rose-500/15 text-rose-500",
-  comment: "bg-blue-500/15 text-blue-500",
-  follow: "bg-violet-500/15 text-violet-500",
-};
-
-function verb(t: NotificationType): string {
-  return t === "follow" ? "started following you" : t === "like" ? "liked your post" : "commented on your post";
-}
-function ago(iso: string): string {
-  const s = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h`;
-  return `${Math.floor(s / 86400)}d`;
-}
-
-interface NotifData {
-  items: NotificationItem[];
-  unread: number;
-}
-const KEY = "notifications";
-
-async function loadNotifications(): Promise<NotifData> {
-  const res = await fetch("/api/notifications");
-  if (!res.ok) return { items: [], unread: 0 };
-  const d = (await res.json()) as NotifData;
-  return { items: d.items ?? [], unread: d.unread ?? 0 };
-}
 
 export function NotificationBell() {
   // Cached-first: the bell shows last-known notifications instantly on every page
@@ -116,14 +87,19 @@ export function NotificationBell() {
         <>
           <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
           <div className="absolute right-0 z-50 mt-2 max-h-[28rem] w-80 overflow-y-auto rounded-2xl border border-border/70 bg-card shadow-elevated">
-            <div className="sticky top-0 border-b border-border/60 bg-card px-4 py-3 text-sm font-semibold">Notifications</div>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/60 bg-card px-4 py-3">
+              <span className="text-sm font-semibold">Notifications</span>
+              <Link href="/notifications" onClick={() => setOpen(false)} className="text-xs font-semibold text-primary hover:underline">
+                See all
+              </Link>
+            </div>
             {items.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">You&apos;re all caught up 🎉</div>
             ) : (
               <ul>
                 {items.map((n) => {
-                  const Icon = ICON[n.type];
-                  const href = n.type === "follow" && n.actor ? `/u/${n.actor.handle}` : n.postId ? `/p/${n.postId}` : "#";
+                  const Icon = iconFor(n.type);
+                  const href = n.type === "follow" && n.actor ? `/u/${n.actor.handle}` : n.postId ? `/p/${n.postId}` : "/notifications";
                   return (
                     <li key={n.id}>
                       <Link
@@ -131,15 +107,15 @@ export function NotificationBell() {
                         onClick={() => setOpen(false)}
                         className={cn("flex items-start gap-3 px-4 py-3 transition hover:bg-secondary", !n.read && "bg-primary/[0.04]")}
                       >
-                        <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", TINT[n.type])}>
+                        <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", tintFor(categoryForType(n.type)))}>
                           <Icon className="h-4 w-4" />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="text-sm leading-snug">
-                            <span className="font-semibold">{n.actor?.displayName ?? "Someone"}</span> {verb(n.type)}
+                            <span className="font-semibold">{n.actor?.displayName ?? "Someone"}</span> {verbFor(n.type)}
                             {n.postTitle ? <span className="text-muted-foreground"> · {n.postTitle}</span> : null}
                           </span>
-                          <span className="mt-0.5 block text-[11px] text-muted-foreground">{ago(n.createdAt)} ago</span>
+                          <span className="mt-0.5 block text-[11px] text-muted-foreground">{timeAgo(n.createdAt)} ago</span>
                         </span>
                         {!n.read ? <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" /> : null}
                       </Link>

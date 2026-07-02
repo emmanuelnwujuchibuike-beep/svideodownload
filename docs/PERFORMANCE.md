@@ -93,8 +93,10 @@ The non-negotiables:
   live inbox list + topbar unread badge sharing one cached key (`features/social/inbox.ts`,
   subscribes to `conversations` changes). ⬜ typing indicators, delivered receipts,
   offline queue.
-- ✅ **Notifications**: live unread count + optimistic read, per-user channel
-  subscribed only while mounted (`NotificationBell`).
+- ✅ **Notifications**: live unread count + optimistic read (`NotificationBell`) +
+  a premium **Notification Center** (`/notifications`) with smart grouping ("X, Y and
+  N others…"), category tabs, mark-all/mark/delete, and realtime — see the
+  Notification System memo. ⬜ smart reminders, quick-reply, push/email, daily summary.
 - ⬜ **Presence** for active friends.
 
 ## Phase 5 — Search

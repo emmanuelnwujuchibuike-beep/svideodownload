@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bell,
   Bookmark,
   Clapperboard,
   Compass,
@@ -38,7 +39,8 @@ export function buildNav(handle: string | null): NavItem[] {
     { label: "News", href: "/blog", icon: Newspaper },
     { label: "Communities", href: "/explore", icon: Users, soon: true },
     { label: "Friends", href: handle ? `/u/${handle}/following` : "/account#profile", icon: UsersRound },
-    { label: "Chat", href: "/messages", icon: MessageCircle, badge: "5" },
+    { label: "Notifications", href: "/notifications", icon: Bell },
+    { label: "Chat", href: "/messages", icon: MessageCircle },
     { label: "Downloads", href: "/downloads", icon: Download },
     { label: "Saved", href: "/saved", icon: Bookmark },
   ];

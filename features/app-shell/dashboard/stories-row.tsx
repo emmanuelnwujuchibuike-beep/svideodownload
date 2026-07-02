@@ -9,7 +9,15 @@ import type { StoryGroup } from "@/lib/social/stories";
 
 const IMAGE_MS = 5000;
 
-export function StoriesRow({ initialGroups }: { initialGroups?: StoryGroup[] }) {
+export function StoriesRow({
+  initialGroups,
+  viewerAvatarUrl,
+  viewerName,
+}: {
+  initialGroups?: StoryGroup[];
+  viewerAvatarUrl?: string | null;
+  viewerName?: string;
+}) {
   // Seeded from the server + cached-first: paints instantly, refreshed in background.
   const { data } = useQuery<StoryGroup[]>(
     "stories",
@@ -23,17 +31,28 @@ export function StoriesRow({ initialGroups }: { initialGroups?: StoryGroup[] }) 
   );
   const groups = data ?? [];
   const [start, setStart] = useState<number | null>(null);
+  const initial = (viewerName ?? "").charAt(0).toUpperCase() || "+";
 
   return (
     <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {/* Create story */}
-      <button type="button" onClick={openUpload} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
-        <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-2 ring-border">
+      {/* Create story — shows your own avatar with an add badge */}
+      <button type="button" onClick={() => openUpload("story")} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
+        <span className="relative rounded-full bg-gradient-to-br from-fuchsia-500 via-violet-500 to-blue-500 p-0.5">
+          <span className="block rounded-full bg-background p-0.5">
+            {viewerAvatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={viewerAvatarUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+            ) : (
+              <span className="flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
+                {initial}
+              </span>
+            )}
+          </span>
           <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background">
             <Plus className="h-3.5 w-3.5" />
           </span>
         </span>
-        <span className="text-[11px] font-medium text-muted-foreground">Create Story</span>
+        <span className="text-[11px] font-medium text-muted-foreground">Your Story</span>
       </button>
 
       {groups.map((g, i) => (

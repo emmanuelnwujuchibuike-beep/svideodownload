@@ -20,6 +20,7 @@ import {
 import Link from "next/link";
 import { useState } from "react";
 
+import { FeedVideo } from "@/features/media/feed-video";
 import type { FeedItem } from "@/lib/social/home-feed";
 import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
@@ -228,9 +229,14 @@ export function FeedPostCard({
         </div>
       ) : null}
 
-      {/* Media — tap to play inline (no navigation) */}
-      <button type="button" onClick={() => onOpen(item)} className="block w-full text-left" aria-label="Play">
-        {item.mediaKind === "audio" ? (
+      {/* Media */}
+      {item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
+        // Plays inline: autoplays muted when scrolled into view, full controls.
+        <div className="mx-4 mb-3 overflow-hidden rounded-xl">
+          <FeedVideo src={item.mediaUrl} streamUid={item.streamUid} poster={item.thumbnailUrl} className="aspect-video w-full" />
+        </div>
+      ) : item.mediaKind === "audio" ? (
+        <button type="button" onClick={() => onOpen(item)} className="block w-full text-left" aria-label="Play">
           <div className="mx-4 mb-3 flex items-center gap-3 rounded-xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/15">
             <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white">
               <Music className="h-5 w-5" />
@@ -245,7 +251,9 @@ export function FeedPostCard({
             </div>
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-600 text-white"><Play className="h-4 w-4 fill-white" /></span>
           </div>
-        ) : (
+        </button>
+      ) : (
+        <button type="button" onClick={() => onOpen(item)} className="block w-full text-left" aria-label="Open">
           <div className="relative mx-4 mb-3 aspect-video overflow-hidden rounded-xl bg-neutral-900">
             {item.thumbnailUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -266,8 +274,8 @@ export function FeedPostCard({
               {formatCompactNumber(item.viewsCount)} views
             </span>
           </div>
-        )}
-      </button>
+        </button>
+      )}
 
       {/* Actions */}
       <div className="flex items-center justify-between border-t border-border/50 px-2 py-1.5">

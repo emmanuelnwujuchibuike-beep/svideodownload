@@ -36,7 +36,7 @@ export function MobileNav() {
       <NavTab label="Friends" href="/friends" icon={UsersRound} active={pathname.startsWith("/friends")} />
 
       {/* TikTok-style center create button */}
-      <button type="button" onClick={openUpload} aria-label="Create" className="relative -mt-1 flex h-8 w-[3.25rem] items-center justify-center">
+      <button type="button" onClick={() => openUpload("post")} aria-label="Create post" className="relative -mt-1 flex h-8 w-[3.25rem] items-center justify-center">
         <span aria-hidden className="absolute inset-0 -translate-x-1 rounded-[0.7rem] bg-cyan-400" />
         <span aria-hidden className="absolute inset-0 translate-x-1 rounded-[0.7rem] bg-fuchsia-500" />
         <span className="relative flex h-8 w-[3.25rem] items-center justify-center rounded-[0.7rem] bg-white text-black shadow-sm">

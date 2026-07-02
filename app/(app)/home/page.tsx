@@ -5,12 +5,9 @@ import { Suspense } from "react";
 
 import { AppContent } from "@/features/app-shell/app-content";
 import { BrandSplash } from "@/features/app-shell/brand-splash";
-import { ContinueWatching } from "@/features/app-shell/dashboard/continue-watching";
-import { FeaturedHero } from "@/features/app-shell/dashboard/featured-hero";
 import { HomeDownloadBar } from "@/features/app-shell/dashboard/home-download-bar";
 import { HomeGreeting } from "@/features/app-shell/dashboard/home-greeting";
 import { HomeRail } from "@/features/app-shell/dashboard/home-rail";
-import { LatestNewsTabs } from "@/features/app-shell/dashboard/latest-news";
 import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
@@ -63,19 +60,12 @@ export default async function HomePage() {
         <HomeGreeting name={firstName} />
 
         <Suspense fallback={<StoriesSkeleton />}>
-          <StoriesSection viewerId={viewerId} />
-        </Suspense>
-
-        <Suspense fallback={<Skeleton className="aspect-[16/10] w-full rounded-3xl sm:aspect-[21/9]" />}>
-          <FeaturedSection viewerId={viewerId} />
+          <StoriesSection viewerId={viewerId} avatarUrl={profile.avatarUrl} name={profile.displayName} />
         </Suspense>
 
         <Suspense fallback={<ReelsSkeleton />}>
           <ReelsSection viewerId={viewerId} />
         </Suspense>
-
-        <ContinueWatching />
-        <LatestNewsTabs />
 
         {/* Smart Feed — the intelligent, blended, endless heart of the home
             experience. Rendered last because it never ends. */}
@@ -95,15 +85,17 @@ export default async function HomePage() {
 
 /* ── Streamed sections: each awaits only its own slice ─────────────────────── */
 
-async function StoriesSection({ viewerId }: { viewerId: string }) {
+async function StoriesSection({
+  viewerId,
+  avatarUrl,
+  name,
+}: {
+  viewerId: string;
+  avatarUrl: string | null;
+  name: string;
+}) {
   const groups = await getActiveStories(viewerId, 24);
-  return <StoriesRow initialGroups={groups} />;
-}
-
-async function FeaturedSection({ viewerId }: { viewerId: string }) {
-  const forYou = await getHomeFeed({ viewerId, sort: "for_you", limit: 10 });
-  const featuredItems = forYou.items.filter((i) => i.thumbnailUrl).slice(0, 6);
-  return <FeaturedHero initialItems={featuredItems} />;
+  return <StoriesRow initialGroups={groups} viewerAvatarUrl={avatarUrl} viewerName={name} />;
 }
 
 async function ReelsSection({ viewerId }: { viewerId: string }) {

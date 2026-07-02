@@ -30,10 +30,17 @@ const schema = z.object({
   mediaUrl: z.string().url().max(2048),
   mediaKind: z.enum(["image", "video"]),
   caption: z.string().trim().max(300).optional(),
+  /** Where the upload goes: a public post on your profile, a 24h story, or both. */
+  destination: z.enum(["post", "story", "both"]).optional(),
+  // Legacy flag from the old story-only composer.
   shareReel: z.boolean().optional(),
 });
 
-/** POST /api/stories — create a 24h story; videos can also post as a Reel. */
+/**
+ * POST /api/stories — create content from an upload. Depending on `destination`
+ * it publishes a public post (photo or video) on the user's profile/feed, a 24h
+ * story, or both. Kept here (not /api/posts) because it shares the upload path.
+ */
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -48,20 +55,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
   const parsed = schema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid story." }, { status: 400 });
-  const { mediaUrl, mediaKind, caption, shareReel } = parsed.data;
+  if (!parsed.success) return NextResponse.json({ error: "Invalid upload." }, { status: 400 });
+  const { mediaUrl, mediaKind, caption } = parsed.data;
+  const destination = parsed.data.destination ?? (parsed.data.shareReel ? "both" : "post");
+  const wantStory = destination === "story" || destination === "both";
+  const wantPost = destination === "post" || destination === "both";
 
-  // Create the story (RLS: owner insert).
-  const { data: story, error } = await supabase
-    .from("stories")
-    .insert({ user_id: user.id, media_url: mediaUrl, media_kind: mediaKind, caption: caption ?? null })
-    .select("id")
-    .single();
-  if (error) return NextResponse.json({ error: "Couldn't post story." }, { status: 500 });
+  let storyId: string | null = null;
+  if (wantStory) {
+    const { data: story, error } = await supabase
+      .from("stories")
+      .insert({ user_id: user.id, media_url: mediaUrl, media_kind: mediaKind, caption: caption ?? null })
+      .select("id")
+      .single();
+    if (error) return NextResponse.json({ error: "Couldn't post story." }, { status: 500 });
+    storyId = story.id as string;
+  }
 
-  // Videos auto-publish as a Reel (a normal public post backed by the upload).
+  // Publish a public post backed by the upload (photo or video).
   let postId: string | null = null;
-  if (shareReel && mediaKind === "video") {
+  if (wantPost) {
     const admin = createAdminClient();
     const { data: prof } = await admin.from("profiles").select("handle, is_suspended").eq("id", user.id).maybeSingle();
     if (prof?.handle && !prof.is_suspended) {
@@ -73,18 +86,20 @@ export async function POST(request: Request) {
           source_url: mediaUrl,
           source_url_hash: hash,
           platform: "frenz",
-          media_kind: "video",
-          title: (caption ?? "My reel").slice(0, 300),
+          media_kind: mediaKind,
+          title: (caption ?? (mediaKind === "video" ? "My video" : "My photo")).slice(0, 300),
           media_url: mediaUrl,
-          thumbnail_url: null,
+          thumbnail_url: mediaKind === "image" ? mediaUrl : null,
           visibility: "public",
           status: "published",
         })
         .select("id")
         .maybeSingle();
       postId = (post?.id as string) ?? null;
+    } else if (!wantStory) {
+      return NextResponse.json({ error: "Finish setting up your profile to post." }, { status: 403 });
     }
   }
 
-  return NextResponse.json({ ok: true, storyId: story.id, postId });
+  return NextResponse.json({ ok: true, storyId, postId });
 }

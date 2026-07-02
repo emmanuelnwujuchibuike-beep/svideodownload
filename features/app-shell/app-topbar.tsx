@@ -68,12 +68,12 @@ export function AppTopbar() {
         >
           <Download className="h-4 w-4" /> <span className="hidden sm:inline">Download</span>
         </Link>
-        {/* Upload / create — opens the story+reel composer */}
+        {/* Upload / create — opens the premium composer */}
         <button
           type="button"
-          onClick={openUpload}
-          aria-label="Upload a story or reel"
-          title="Upload"
+          onClick={() => openUpload("post")}
+          aria-label="Create a post"
+          title="Create"
           className="hidden h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-foreground transition hover:border-foreground/20 hover:bg-secondary sm:inline-flex"
         >
           <Upload className="h-[18px] w-[18px]" />

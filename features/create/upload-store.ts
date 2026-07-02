@@ -2,9 +2,13 @@
 
 import { useSyncExternalStore } from "react";
 
-/** Tiny global store for the "upload / create" modal so the top bar, mobile
- *  plus button and the Stories row can all open the same composer. */
+/** Tiny global store for the "upload / create" composer so the top bar, mobile
+ *  plus button and the Stories row can all open the same premium composer — each
+ *  with its own default destination (a post, or a 24h story). */
+export type UploadIntent = "post" | "story";
+
 let open = false;
+let intent: UploadIntent = "post";
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -15,8 +19,10 @@ function subscribe(l: () => void) {
   return () => listeners.delete(l);
 }
 
-export function openUpload() {
+/** Open the composer. Pass "story" to default to the 24h Story destination. */
+export function openUpload(mode: UploadIntent = "post") {
   open = true;
+  intent = mode;
   emit();
 }
 export function closeUpload() {
@@ -25,4 +31,7 @@ export function closeUpload() {
 }
 export function useUploadOpen(): boolean {
   return useSyncExternalStore(subscribe, () => open, () => false);
+}
+export function useUploadIntent(): UploadIntent {
+  return useSyncExternalStore(subscribe, () => intent, () => "post");
 }

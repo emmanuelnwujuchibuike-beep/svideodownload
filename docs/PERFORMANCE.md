@@ -81,8 +81,10 @@ The non-negotiables:
 - 🟡 **Video**: adaptive bitrate (HLS) via **Cloudflare Stream** — `lib/media/stream.ts`
   (direct-upload + copy-from-URL + playback URLs) and `SmartVideo` (`features/media`)
   which plays through Stream when a post has a `streamUid`, else falls back to the R2
-  `<video>`. Wired into `PostViewer`. To activate: add a `stream_uid` column to `posts`,
-  populate it on upload/backfill (`copyToStream`), and add it to the feed SELECT.
+  `<video>`. Wired end-to-end: `posts.stream_uid` (migration `0016`) is in the feed
+  SELECT; new video uploads are copied into Stream on store (`store-media-service`);
+  `npm run backfill:stream` copies existing videos. **Only activation left = set the
+  three `CF_STREAM_*` env vars + run the migration.** Dormant/no-op until then.
 - ⬜ **Thumbnails** generated and cached at upload (Stream auto-generates posters).
 
 ## Phase 4 — Realtime surfaces

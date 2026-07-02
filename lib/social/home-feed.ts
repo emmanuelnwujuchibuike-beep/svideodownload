@@ -82,7 +82,7 @@ interface Row {
 }
 
 const SELECT =
-  "id, publisher_id, source_url, platform, media_kind, title, description, category, thumbnail_url, media_url, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at";
+  "id, publisher_id, source_url, platform, media_kind, title, description, category, thumbnail_url, media_url, stream_uid, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at";
 
 export type HomeFeedSort = "for_you" | "following" | "recent";
 
@@ -204,7 +204,6 @@ async function loadHomeFeed(
         thumbnailUrl: r.thumbnail_url,
         sourceUrl: r.source_url,
         mediaUrl: r.media_url,
-        // Populated once the posts table carries `stream_uid` (add it to SELECT then).
         streamUid: r.stream_uid ?? null,
         category: r.category,
         durationSec: r.duration_sec,

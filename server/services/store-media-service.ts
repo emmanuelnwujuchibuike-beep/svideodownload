@@ -1,3 +1,4 @@
+import { copyToStream, hasStream } from "@/lib/media/stream";
 import { putServerMedia } from "@/lib/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { MediaKind } from "@/types";
@@ -94,5 +95,19 @@ export async function storePostMedia(input: StoreMediaInput): Promise<StoreMedia
 
   const admin = createAdminClient();
   await admin.from("posts").update({ media_url: mediaUrl }).eq("id", postId);
+
+  // Cloudflare Stream (adaptive-bitrate playback), best-effort: pull the just-stored
+  // video into Stream by URL and record its uid so SmartVideo/PostViewer play the
+  // HLS ladder instead of the raw file. No-op unless Stream is configured + it's a
+  // video; never fails the store flow (playback falls back to `media_url`).
+  if (hasStream && kind === "video") {
+    try {
+      const streamUid = await copyToStream(mediaUrl, uid);
+      if (streamUid) await admin.from("posts").update({ stream_uid: streamUid }).eq("id", postId);
+    } catch {
+      /* keep the stored file; Stream can be backfilled later */
+    }
+  }
+
   return { ok: true, mediaUrl };
 }

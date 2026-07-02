@@ -116,14 +116,17 @@ builders) and `features/media/smart-video.tsx` (`SmartVideo`, already used by
 `PostViewer`): a post with a `streamUid` plays through Stream, otherwise it falls
 back to the R2/Supabase `<video>` — fully additive.
 
-To turn it on:
-1. Enable **Stream** in Cloudflare; create an API token with **Stream:Edit**.
-2. Set `CF_STREAM_ACCOUNT_ID`, `CF_STREAM_API_TOKEN`, and the public
-   `NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE` (from any embed URL) on Vercel + Railway.
-3. Add a `stream_uid text` column to `posts`; on upload create a direct-upload
-   ticket (`createStreamDirectUpload`) or backfill existing R2 videos with
-   `copyToStream(mediaUrl)`, store the returned `uid` in `stream_uid`, and add
-   `stream_uid` to the feed SELECT in `lib/social/home-feed.ts`.
+The code path is complete — `posts.stream_uid` (migration `0016_post_stream_uid.sql`)
+is read by the feed, new video uploads are copied into Stream on store
+(`server/services/store-media-service.ts`), and `npm run backfill:stream` copies
+existing videos. To turn it on:
+1. Enable **Stream** in Cloudflare; create an API token with **Account → Stream → Edit**.
+2. Run migration `0016` on the database (Supabase SQL editor or your migration flow).
+3. Set `CF_STREAM_ACCOUNT_ID`, `CF_STREAM_API_TOKEN`, and the public
+   `NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE` (from any embed URL, `customer-<CODE>…`) on
+   Vercel **and** Railway (the worker does the copy). Redeploy.
+4. Optional: `npm run backfill:stream` (needs the same env) to convert already-stored
+   videos. New uploads convert automatically.
 
 ## Summary recommendation
 

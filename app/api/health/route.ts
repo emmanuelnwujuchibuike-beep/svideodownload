@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { cacheBackend, cacheGet, cacheSet } from "@/lib/cache";
 import { downloadConcurrencyStats } from "@/lib/concurrency";
 import { checkStream } from "@/lib/media/stream";
+import { hasWebPush } from "@/lib/push/web-push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,6 +57,9 @@ export async function GET() {
         ...(error ? { error } : {}),
       },
       stream, // { configured, ok, latencyMs, customerCode, error? }
+      // Web Push: true only when VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY are set
+      // on THIS deployment — the definitive "is push on in prod" check.
+      push: { configured: hasWebPush },
       downloads: downloadConcurrencyStats(),
     },
     { headers: { "Cache-Control": "no-store" } },

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { openUpload } from "@/features/create/upload-store";
@@ -36,11 +37,8 @@ export function AppTopbar() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border/60 bg-background/85 px-4 backdrop-blur-xl">
       {/* Mobile/tablet brand wordmark (Instagram-style) */}
-      <Link href="/home" className="flex items-center gap-2 font-bold lg:hidden">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 via-violet-600 to-purple-600 text-white">
-          <Download className="h-4 w-4" />
-        </span>
-        <span className="text-xl tracking-tight text-gradient">Frenz</span>
+      <Link href="/home" className="flex items-center lg:hidden">
+        <FrenzWordmark size={30} textClassName="text-xl" />
       </Link>
 
       {/* Search */}

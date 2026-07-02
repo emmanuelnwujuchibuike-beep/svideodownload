@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { cn } from "@/lib/utils";
 
@@ -59,11 +60,8 @@ export function AppSidebar({ handle }: { handle: string | null }) {
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-border/60 bg-card/40 px-3 py-4 lg:flex">
       {/* Brand */}
-      <Link href="/home" className="mb-5 flex items-center gap-2.5 px-2 font-bold">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-violet-600 to-purple-600 text-white shadow-md shadow-violet-500/30">
-          <Download className="h-4 w-4" />
-        </span>
-        <span className="text-lg tracking-tight text-gradient">Frenz</span>
+      <Link href="/home" className="mb-5 flex items-center px-2">
+        <FrenzWordmark size={34} textClassName="text-lg" />
       </Link>
 
       {/* Primary nav */}

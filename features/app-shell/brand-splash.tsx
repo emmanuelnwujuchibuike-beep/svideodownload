@@ -1,0 +1,69 @@
+"use client";
+
+import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
+
+import { FrenzLogo } from "@/components/brand/frenz-logo";
+
+/**
+ * First-open brand splash (Facebook/Twitter style). Premium, lightweight,
+ * transform/opacity-only animation. It is rendered ONLY on the very first /home
+ * open — the server gates it on the `frenz_welcomed` cookie, so it never mounts
+ * (and never flashes) on repeat visits or any other page. Nothing else loads with
+ * it: it's a full-screen opaque overlay that fades out to reveal the ready home.
+ */
+export function BrandSplash() {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    // Mark as welcomed immediately so it can't reappear mid-session, and lock
+    // scroll while the splash is up.
+    document.cookie = "frenz_welcomed=1; path=/; max-age=31536000; SameSite=Lax";
+    document.body.style.overflow = "hidden";
+    const t = setTimeout(() => setVisible(false), 1500);
+    return () => {
+      clearTimeout(t);
+      document.body.style.overflow = "";
+    };
+  }, []);
+
+  return (
+    <AnimatePresence onExitComplete={() => (document.body.style.overflow = "")}>
+      {visible ? (
+        <motion.div
+          key="frenz-splash"
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5, ease: "easeInOut" }}
+          className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background"
+          role="status"
+          aria-label="Loading Frenz"
+        >
+          {/* Soft brand glow */}
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute h-64 w-64 rounded-full bg-violet-600/25 blur-3xl"
+            animate={{ scale: [0.9, 1.12, 0.9], opacity: [0.35, 0.7, 0.35] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            initial={{ scale: 0.82, opacity: 0, y: 8 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            className="relative flex flex-col items-center gap-4"
+          >
+            <FrenzLogo size={96} className="drop-shadow-[0_8px_30px_rgba(139,92,246,0.45)]" />
+            <motion.span
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25, duration: 0.5 }}
+              className="text-gradient text-3xl font-extrabold tracking-tight"
+            >
+              Frenz
+            </motion.span>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
+}

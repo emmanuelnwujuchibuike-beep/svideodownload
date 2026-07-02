@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/features/app-shell/app-shell";
+import { BrandSplash } from "@/features/app-shell/brand-splash";
 import { ContinueWatching } from "@/features/app-shell/dashboard/continue-watching";
 import { FeaturedHero } from "@/features/app-shell/dashboard/featured-hero";
 import { HomeDownloadBar } from "@/features/app-shell/dashboard/home-download-bar";
@@ -37,9 +39,13 @@ export default async function HomePage() {
   if (!profile?.handle) redirect("/welcome");
 
   const firstName = profile.displayName.split(" ")[0] ?? "there";
+  // Brand splash only on the very first home open (cookie-gated so it never
+  // flashes on repeat visits or other pages).
+  const firstVisit = !(await cookies()).get("frenz_welcomed");
 
   return (
     <AppShell handle={profile.handle} rightRail={<HomeRail suggestions={suggestions} />}>
+      {firstVisit ? <BrandSplash /> : null}
       <div className="space-y-6">
         <HomeGreeting name={firstName} />
         <StoriesRow />

@@ -1,9 +1,10 @@
 "use client";
 
-import { Bookmark, Crown, Download, KeyRound, LogOut, Menu, MessageCircle, User as UserIcon, UserCircle, X } from "lucide-react";
+import { Bookmark, Crown, KeyRound, LogOut, Menu, MessageCircle, User as UserIcon, UserCircle, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useUser } from "@/features/auth/use-user";
@@ -35,13 +36,8 @@ export function SiteHeader() {
     <header className="fixed inset-x-0 top-0 z-50 border-b border-border/40 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
       <div className="container flex h-16 items-center justify-between">
         {/* Brand */}
-        <Link href="/" className="flex items-center gap-2.5 font-bold" onClick={() => setOpen(false)}>
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-white shadow-md shadow-blue-500/30">
-            <Download className="h-4 w-4" />
-          </span>
-          <span className="text-[17px] tracking-tight">
-            <span className="text-gradient">Frenz</span>
-          </span>
+        <Link href="/" className="flex items-center" onClick={() => setOpen(false)}>
+          <FrenzWordmark size={32} />
         </Link>
 
         {/* Desktop nav */}

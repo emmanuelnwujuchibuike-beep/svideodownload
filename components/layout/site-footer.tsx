@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FooterTools } from "@/components/monetization/footer-tools";
 import { SecretAdminGesture } from "@/features/account/secret-admin";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
@@ -18,6 +19,7 @@ export function SiteFooter() {
       <div className="container grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
         <div className="lg:col-span-1">
           <SecretAdminGesture className="inline-flex items-center gap-2 text-lg font-bold tracking-tight">
+            <FrenzLogo size={28} />
             <span className="text-gradient">Frenz</span>
           </SecretAdminGesture>
           <p className="mt-3 max-w-[220px] text-sm leading-relaxed text-muted-foreground">

@@ -59,7 +59,11 @@ export function ConversationList({ initial }: { initial: ConversationSummary[] }
                 {c.lastBody ?? "…"}
               </p>
             </div>
-            {c.unread ? <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary" /> : null}
+            {c.unreadCount > 0 ? (
+              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-1.5 text-[10px] font-bold text-white">
+                {c.unreadCount > 99 ? "99+" : c.unreadCount}
+              </span>
+            ) : null}
           </Link>
         </li>
       ))}

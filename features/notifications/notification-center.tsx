@@ -12,6 +12,7 @@ import {
   loadGroupedNotifications as loadGrouped,
 } from "@/features/notifications/data";
 import { NotificationCard } from "@/features/notifications/notification-card";
+import { PushToggle } from "@/features/notifications/push-toggle";
 import type { GroupedNotificationsResult, NotificationCategory, NotificationGroup } from "@/lib/social/notifications";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -132,14 +133,17 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
           </h1>
           {unread > 0 ? <p className="mt-1 text-sm text-muted-foreground">{unread} unread</p> : null}
         </div>
-        <button
-          type="button"
-          onClick={markAllRead}
-          disabled={unread === 0}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 bg-card/60 px-3.5 py-2 text-sm font-medium backdrop-blur transition hover:bg-secondary disabled:opacity-40"
-        >
-          <CheckCheck className="h-4 w-4" /> Mark all read
-        </button>
+        <div className="flex items-center gap-2">
+          <PushToggle />
+          <button
+            type="button"
+            onClick={markAllRead}
+            disabled={unread === 0}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 bg-card/60 px-3.5 py-2 text-sm font-medium backdrop-blur transition hover:bg-secondary disabled:opacity-40"
+          >
+            <CheckCheck className="h-4 w-4" /> Mark all read
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

@@ -152,6 +152,7 @@ export interface ConversationSummary {
   lastAt: string;
   fromMe: boolean;
   unread: boolean;
+  unreadCount: number;
 }
 
 /** A user's inbox, newest first. */
@@ -182,7 +183,20 @@ export async function listConversations(userId: string): Promise<ConversationSum
       db.from("messages").select("conversation_id").in("conversation_id", convIds).neq("sender_id", userId).is("read_at", null),
     ]);
     const profById = new Map(((profs ?? []) as Record<string, unknown>[]).map((p) => [p.id as string, p]));
-    const unreadConvs = new Set(((unread ?? []) as { conversation_id: string }[]).map((u) => u.conversation_id));
+
+    // Per-conversation unread count for the inbox badges.
+    const unreadByConv = new Map<string, number>();
+    for (const u of (unread ?? []) as { conversation_id: string }[]) {
+      unreadByConv.set(u.conversation_id, (unreadByConv.get(u.conversation_id) ?? 0) + 1);
+    }
+    // Fetching the inbox = the recipient's app has the messages → mark them
+    // delivered (fire-and-forget). Drives the sender's "Delivered" receipt.
+    void db
+      .from("messages")
+      .update({ delivered_at: new Date().toISOString() })
+      .in("conversation_id", convIds)
+      .neq("sender_id", userId)
+      .is("delivered_at", null);
 
     const out: ConversationSummary[] = [];
     for (const c of convs) {
@@ -201,7 +215,8 @@ export async function listConversations(userId: string): Promise<ConversationSum
         lastBody: c.last_body,
         lastAt: c.last_message_at,
         fromMe: c.last_sender_id === userId,
-        unread: unreadConvs.has(c.id),
+        unread: (unreadByConv.get(c.id) ?? 0) > 0,
+        unreadCount: unreadByConv.get(c.id) ?? 0,
       });
     }
     return out;
@@ -215,6 +230,9 @@ export interface MessageItem {
   body: string;
   createdAt: string;
   mine: boolean;
+  /** Receipts (for the sender's own messages): when the other side got/read it. */
+  deliveredAt: string | null;
+  readAt: string | null;
 }
 
 export interface ConversationView {
@@ -238,13 +256,19 @@ export async function getConversation(conversationId: string, userId: string): P
 
     const [{ data: prof }, { data: msgs }] = await Promise.all([
       db.from("profiles").select("id, handle, display_name, avatar_url, is_verified").eq("id", otherId).maybeSingle(),
-      db.from("messages").select("id, sender_id, body, created_at").eq("conversation_id", conversationId).order("created_at", { ascending: true }).limit(300),
+      db
+        .from("messages")
+        .select("id, sender_id, body, created_at, delivered_at, read_at")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true })
+        .limit(300),
     ]);
 
-    // Mark the other side's unread messages as read.
+    // Opening the thread = the other side's messages are delivered AND read.
+    const now = new Date().toISOString();
     void db
       .from("messages")
-      .update({ read_at: new Date().toISOString() })
+      .update({ read_at: now, delivered_at: now })
       .eq("conversation_id", conversationId)
       .neq("sender_id", userId)
       .is("read_at", null);
@@ -262,11 +286,15 @@ export async function getConversation(conversationId: string, userId: string): P
     return {
       id: conversationId,
       other,
-      messages: ((msgs ?? []) as { id: string; sender_id: string; body: string; created_at: string }[]).map((m) => ({
+      messages: (
+        (msgs ?? []) as { id: string; sender_id: string; body: string; created_at: string; delivered_at: string | null; read_at: string | null }[]
+      ).map((m) => ({
         id: m.id,
         body: m.body,
         createdAt: m.created_at,
         mine: m.sender_id === userId,
+        deliveredAt: m.delivered_at,
+        readAt: m.read_at,
       })),
     };
   } catch {

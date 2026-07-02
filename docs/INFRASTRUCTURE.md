@@ -137,3 +137,21 @@ existing videos. To turn it on:
 3. **Optional:** Cloudflare WAF in front of the Railway worker if abuse is a
    concern. Skip Cloudflare in front of Vercel — redundant with Vercel's CDN.
 4. **Later (Phase 3):** Cloudflare Stream for ABR video.
+
+## Web Push notifications (VAPID) — code shipped, opt-in by env
+
+Notifications and new DMs reach users with the browser closed via the Web Push
+API. Subscriptions live in `push_subscriptions` (migration `0019`); the service
+worker is `public/sw.js`; the server sender is `lib/push/web-push.ts`
+(`sendPushToUser`, already wired into `/api/messages`). It's a no-op until VAPID
+keys are set, so nothing breaks beforehand.
+
+To turn it on:
+1. Generate a keypair once: `npx web-push generate-vapid-keys`.
+2. Set on Vercel (Production): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+   `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (= the public key again, for the browser),
+   `VAPID_SUBJECT` (a `mailto:` contact). Redeploy.
+3. Run migration `0019` (push_subscriptions + message delivery receipts).
+4. Users click **Turn on push** in the Notification Center (`/notifications`) and
+   accept the browser prompt. iOS Safari requires the site be added to the Home
+   Screen first (PWA) before it can receive push.

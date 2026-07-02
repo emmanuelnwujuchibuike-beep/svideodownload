@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -30,8 +31,10 @@ export async function POST(request: Request) {
 
   const { endpoint, keys } = parsed.data;
   // Upsert on the unique endpoint so re-subscribing the same browser is idempotent
-  // and re-homes the endpoint to the current user.
-  const { error } = await supabase.from("push_subscriptions").upsert(
+  // and re-homes the endpoint to the current user. Must run as service role: the
+  // conflict UPDATE path has no RLS policy (and the existing row may belong to a
+  // previous account on this browser), so an RLS upsert would 500 on re-subscribe.
+  const { error } = await createAdminClient().from("push_subscriptions").upsert(
     {
       user_id: user.id,
       endpoint,

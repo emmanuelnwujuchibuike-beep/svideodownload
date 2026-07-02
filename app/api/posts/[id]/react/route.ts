@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { pushSocialEvent } from "@/lib/push/social-push";
 import { trackLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -44,6 +45,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (error && error.code !== "23505") {
     return NextResponse.json({ error: "Couldn't react." }, { status: 400 });
   }
+  // Fresh reaction only (not the duplicate no-op): device push to the post owner.
+  if (!error) void pushSocialEvent({ actorId: c.user.id, type: c.type, postId: c.id });
   return NextResponse.json({ ok: true, active: true });
 }
 

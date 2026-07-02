@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { pushSocialEvent } from "@/lib/push/social-push";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -31,6 +32,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (error && error.code !== "23505") {
     return NextResponse.json({ error: "Couldn't follow (blocked or unavailable)." }, { status: 400 });
   }
+  // Fresh follow only: device push to the followed user.
+  if (!error) void pushSocialEvent({ actorId: user.id, type: "follow", recipientId: id });
   return NextResponse.json({ ok: true, following: true });
 }
 

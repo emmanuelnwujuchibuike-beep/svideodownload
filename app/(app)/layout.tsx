@@ -5,6 +5,8 @@ import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { UploadModal } from "@/features/create/upload-modal";
 import { DownloadPlayer } from "@/features/downloads/download-player";
+import { IosInstallPrompt } from "@/features/notifications/ios-install-prompt";
+import { NotificationLiveToast } from "@/features/notifications/live-toast";
 import { Toaster } from "@/features/ui/toast";
 import { getHomeProfile } from "@/lib/social/home";
 import { createClient } from "@/lib/supabase/server";
@@ -44,6 +46,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <UploadModal />
       <DownloadPlayer />
       <Toaster />
+      {/* Live in-app drop-down notification + iOS "install for push" nudge. */}
+      <NotificationLiveToast />
+      <IosInstallPrompt />
     </div>
   );
 }

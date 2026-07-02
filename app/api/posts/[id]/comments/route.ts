@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { pushSocialEvent } from "@/lib/push/social-push";
 import { assistantLimiter } from "@/lib/rate-limit";
 import { canComment, commentSpamReason, listComments } from "@/lib/social/engagement";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -114,5 +115,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .select("id")
     .single();
   if (error) return NextResponse.json({ error: "Couldn't post comment." }, { status: 500 });
+  // Device push to the post owner (skipped when commenting on your own post).
+  void pushSocialEvent({ actorId: user.id, type: "comment", postId: id });
   return NextResponse.json({ ok: true, id: data.id });
 }

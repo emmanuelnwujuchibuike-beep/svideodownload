@@ -50,6 +50,10 @@ export const metadata: Metadata = {
       "Download videos online for free, connect with new friends, watch trending reels, and stay updated with the latest news—all in one place.",
   },
   robots: { index: true, follow: true },
+  // Home-screen install identity (iOS). With app/manifest.ts + app/apple-icon.png
+  // this is what makes "Add to Home Screen" produce a real standalone app — the
+  // prerequisite for Web Push on iPhone/iPad (Safari 16.4+).
+  appleWebApp: { capable: true, title: "Frenz", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

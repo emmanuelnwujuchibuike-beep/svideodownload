@@ -7,6 +7,7 @@ import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media"
 import { closePlayer, usePlayer } from "@/features/downloads/player-store";
 import { toast } from "@/features/ui/toast";
 import { downloadUrl, saveBlob } from "@/lib/client-download";
+import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
 
 export function DownloadPlayer() {
@@ -101,17 +102,23 @@ function PlayerInner() {
         return;
       }
       const ext = rec.kind === "audio" ? "mp3" : rec.kind === "image" ? "jpg" : "mp4";
-      const path = `${user.id}/reels/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("post-media").upload(path, blob, { upsert: true, contentType: blob.type || undefined });
-      if (upErr) {
+      let publicUrl: string;
+      try {
+        // Main media → Cloudflare R2 when configured, else Supabase.
+        publicUrl = await uploadPostMedia({
+          data: blob,
+          kind: rec.kind,
+          ext,
+          contentType: blob.type || (rec.kind === "audio" ? "audio/mpeg" : rec.kind === "image" ? "image/jpeg" : "video/mp4"),
+        });
+      } catch {
         toast("Upload failed.", "error", { id: tid, duration: 3000 });
         return;
       }
-      const { data: pub } = supabase.storage.from("post-media").getPublicUrl(path);
       const res = await fetch("/api/reels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mediaUrl: pub.publicUrl, mediaKind: rec.kind, title: rec.title, thumbnailUrl: rec.thumbnail, sourceUrl: rec.url }),
+        body: JSON.stringify({ mediaUrl: publicUrl, mediaKind: rec.kind, title: rec.title, thumbnailUrl: rec.thumbnail, sourceUrl: rec.url }),
       });
       const json = await res.json();
       if (!res.ok) {

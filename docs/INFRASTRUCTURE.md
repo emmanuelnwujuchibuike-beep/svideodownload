@@ -69,19 +69,55 @@ Cloudflare earns its place when we hit the **media pipeline**, not before:
 domain behind Cloudflare (orange-cloud the DNS record, add a WAF rate-limit rule)
 without touching Vercel. That's a security move, independent of the CDN question.
 
-### When you do adopt Cloudflare media (Phase 3)
+### Cloudflare R2 for main media — wired in code, provision to activate
 
-You'll add env vars roughly like `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
-`R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE_URL` (or
-`CLOUDFLARE_STREAM_TOKEN`), and the worker's store-media step uploads there
-instead of (or in addition to) Supabase Storage. The `media_url` on posts already
-abstracts where media lives, so this is a worker-side swap, not a schema change.
+R2 is the main store for large media (videos, audio, reels, story media). Small
+profile images stay on Supabase. The routing lives in
+[lib/storage](../lib/storage): server uploads go through `putServerMedia`; browser
+uploads get a presigned R2 PUT URL from `/api/uploads/presign` (nothing flows
+through our server). **Until the env vars below are set, everything transparently
+falls back to Supabase Storage — uploads keep working, no code change.**
+
+**Set up (one-time):**
+
+1. Cloudflare dashboard → **R2** → **Create bucket** (e.g. `frenz-media`).
+2. **R2 → Manage API Tokens → Create API Token** (Object Read & Write). Copy the
+   Access Key ID + Secret Access Key and your **Account ID**.
+3. Make the bucket public for reads: **bucket → Settings → Public access →**
+   either connect a **custom domain** (recommended, e.g. `media.frenz.app`) or
+   enable the **r2.dev** subdomain. That URL is `R2_PUBLIC_BASE_URL`.
+4. Add these env vars to **Vercel and Railway** (Production + Preview), then redeploy:
+
+   ```
+   R2_ACCOUNT_ID=<cloudflare account id>
+   R2_ACCESS_KEY_ID=<r2 token access key>
+   R2_SECRET_ACCESS_KEY=<r2 token secret>
+   R2_BUCKET=frenz-media
+   R2_PUBLIC_BASE_URL=https://media.frenz.app   # or https://pub-xxxx.r2.dev
+   ```
+
+5. **CORS on the bucket** (so browser presigned PUTs work): bucket → Settings →
+   CORS policy → allow your site origin(s) with `PUT`, `GET`, headers `*`:
+
+   ```json
+   [{ "AllowedOrigins": ["https://frenz.app","https://*.vercel.app"],
+      "AllowedMethods": ["GET","PUT"], "AllowedHeaders": ["*"], "MaxAgeSeconds": 3600 }]
+   ```
+
+New media then lands in R2 and is served via the Cloudflare CDN (zero egress).
+Existing Supabase-hosted media keeps working — `posts.media_url` stores absolute
+URLs, so old and new coexist with no migration.
+
+**Cloudflare Stream (later):** for adaptive-bitrate (HLS) video, add
+`CLOUDFLARE_STREAM_TOKEN` and route video through Stream instead of raw R2. That's
+a further Phase 3 upgrade on top of this.
 
 ## Summary recommendation
 
 1. **Now:** provision Upstash (2 env vars, both platforms). Real correctness +
    scale win, zero code change.
-2. **Now (optional):** Cloudflare in front of the Railway worker only, for WAF, if
-   abuse is a concern.
-3. **Phase 3:** Cloudflare R2 + Stream for the media pipeline. Skip Cloudflare in
-   front of Vercel — it's redundant with Vercel's CDN.
+2. **Now:** provision R2 (5 env vars, both platforms) to move main media off
+   Supabase egress. Code is already wired; falls back to Supabase until set.
+3. **Optional:** Cloudflare WAF in front of the Railway worker if abuse is a
+   concern. Skip Cloudflare in front of Vercel — redundant with Vercel's CDN.
+4. **Later (Phase 3):** Cloudflare Stream for ABR video.

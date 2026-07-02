@@ -1,3 +1,4 @@
+import { putServerMedia } from "@/lib/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { MediaKind } from "@/types";
 
@@ -80,13 +81,18 @@ export async function storePostMedia(input: StoreMediaInput): Promise<StoreMedia
 
   const safeExt = (ext || (kind === "audio" ? "mp3" : kind === "image" ? "jpg" : "mp4")).toLowerCase();
   const ct = contentType || EXT_CT[safeExt] || "application/octet-stream";
-  const path = `${uid}/${postId}.${safeExt}`;
+  // Deterministic per-post key so a re-store overwrites rather than duplicates.
+  const key = `${uid}/posts/${postId}.${safeExt}`;
+
+  // Main media (usually video) → Cloudflare R2 when configured, else Supabase.
+  let mediaUrl: string;
+  try {
+    ({ url: mediaUrl } = await putServerMedia({ key, body: buf, contentType: ct }));
+  } catch {
+    return { ok: false, error: "Upload failed." };
+  }
 
   const admin = createAdminClient();
-  const { error: upErr } = await admin.storage.from("post-media").upload(path, buf, { contentType: ct, upsert: true });
-  if (upErr) return { ok: false, error: "Upload failed." };
-
-  const { data } = admin.storage.from("post-media").getPublicUrl(path);
-  await admin.from("posts").update({ media_url: data.publicUrl }).eq("id", postId);
-  return { ok: true, mediaUrl: data.publicUrl };
+  await admin.from("posts").update({ media_url: mediaUrl }).eq("id", postId);
+  return { ok: true, mediaUrl };
 }

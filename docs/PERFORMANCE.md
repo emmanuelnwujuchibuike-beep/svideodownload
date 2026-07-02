@@ -68,6 +68,11 @@ The non-negotiables:
 
 ## Phase 3 — Media pipeline
 
+- ✅ **R2 storage + CDN** (`lib/storage`): main/large media (video, audio, reels,
+  story media) → Cloudflare R2 (zero egress, CDN-served); small profile images
+  stay on Supabase. Server uploads via `putServerMedia`; browser uploads via
+  presigned R2 PUT (`/api/uploads/presign`). Falls back to Supabase until R2 env
+  is set (see INFRASTRUCTURE.md). Same path works for native/desktop (bearer auth).
 - ⬜ **Images**: `next/image` everywhere, AVIF→WebP→fallback, responsive
   `srcset`, lazy + blur placeholder, never serve oversized originals.
 - ⬜ **Video**: adaptive bitrate (HLS), poster/first-frame preload, lazy mount,

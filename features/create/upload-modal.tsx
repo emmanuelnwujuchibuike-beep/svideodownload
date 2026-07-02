@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
 import { closeUpload, useUploadOpen } from "@/features/create/upload-store";
+import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -61,14 +62,19 @@ function ModalInner() {
         return;
       }
       const ext = (file.name.split(".").pop() || (kind === "video" ? "mp4" : "jpg")).toLowerCase().replace(/[^a-z0-9]/g, "");
-      const path = `${user.id}/stories/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("post-media").upload(path, file, { upsert: true, contentType: file.type, cacheControl: "3600" });
-      if (upErr) {
-        setErr("Upload failed. Try a smaller file.");
+      let mediaUrl: string;
+      try {
+        // Routes to Cloudflare R2 (main storage) when configured, else Supabase.
+        mediaUrl = await uploadPostMedia({
+          data: file,
+          kind,
+          ext,
+          contentType: file.type || (kind === "video" ? "video/mp4" : "image/jpeg"),
+        });
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Upload failed. Try a smaller file.");
         return;
       }
-      const { data: pub } = supabase.storage.from("post-media").getPublicUrl(path);
-      const mediaUrl = pub.publicUrl;
 
       const res = await fetch("/api/stories", {
         method: "POST",

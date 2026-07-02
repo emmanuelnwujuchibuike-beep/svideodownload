@@ -526,7 +526,7 @@ export async function sendFriendReminders(): Promise<number> {
         .then(() => {});
       const { data: friend } = await db
         .from("profiles")
-        .select("display_name, handle")
+        .select("display_name, handle, avatar_url")
         .eq("id", r.receiver_id)
         .maybeSingle();
       const name =
@@ -535,6 +535,7 @@ export async function sendFriendReminders(): Promise<number> {
         title: `Start chatting with ${name} 👋`,
         body: "You're now friends on Frenz — say hello.",
         url: `/messages/new/${r.receiver_id}`,
+        icon: (friend?.avatar_url as string | null) ?? undefined,
         tag: `friend-rem:${r.receiver_id}`,
       });
       sent++;
@@ -566,7 +567,7 @@ async function notifyPush(
   try {
     const { data: actor } = await db
       .from("profiles")
-      .select("display_name, handle")
+      .select("display_name, handle, avatar_url")
       .eq("id", actorId)
       .maybeSingle();
     const name =
@@ -575,6 +576,7 @@ async function notifyPush(
       title: `${name} ${opts.verb}`,
       body: opts.body,
       url: opts.url,
+      icon: (actor?.avatar_url as string | null) ?? undefined,
       tag: opts.tag,
     });
   } catch {

@@ -71,7 +71,7 @@ async function notifyRecipient(senderId: string, conversationId: string, body: s
 
     const { data: sender } = await db
       .from("profiles")
-      .select("display_name, handle")
+      .select("display_name, handle, avatar_url")
       .eq("id", senderId)
       .maybeSingle();
     const name = (sender?.display_name as string) || (sender?.handle ? `@${sender.handle as string}` : "New message");
@@ -80,6 +80,7 @@ async function notifyRecipient(senderId: string, conversationId: string, body: s
       title: name,
       body: body.length > 140 ? `${body.slice(0, 140)}…` : body,
       url: `/messages/${conversationId}`,
+      icon: (sender?.avatar_url as string | null) ?? undefined,
       tag: `msg:${conversationId}`,
     });
   } catch {

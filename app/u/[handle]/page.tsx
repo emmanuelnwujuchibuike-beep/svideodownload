@@ -115,200 +115,204 @@ export default async function ProfilePage({
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
       <SiteHeader />
-      <main className="pb-24 pt-16">
-        {/* Banner + Living Profile time-of-day glow */}
-        <div className="relative h-40 w-full overflow-hidden bg-gradient-to-br from-blue-600/30 via-violet-500/15 to-purple-500/20 sm:h-52">
-          {profile.bannerUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={profile.bannerUrl} alt="" className="h-full w-full object-cover" />
-          ) : null}
-          <LivingGlow />
-        </div>
+      <main className="pb-24 pt-14 sm:pt-16">
+        <div className="mx-auto max-w-4xl sm:px-4">
+          {/* Banner + Living Profile time-of-day glow. Full-bleed on mobile,
+              a contained rounded hero on larger screens (professional, balanced). */}
+          <div className="relative h-40 w-full overflow-hidden bg-gradient-to-br from-blue-600/30 via-violet-500/15 to-purple-500/20 sm:h-56 sm:rounded-3xl md:h-64">
+            {profile.bannerUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={profile.bannerUrl} alt="" className="h-full w-full object-cover" />
+            ) : null}
+            <LivingGlow />
+          </div>
 
-        <div className="container max-w-3xl">
-          {/* Avatar + actions row */}
-          <div className="flex items-end justify-between">
-            <div className="relative -mt-12 sm:-mt-16">
-              <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
-                {profile.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={profile.avatarUrl}
-                    alt=""
-                    className="block h-24 w-24 rounded-full object-cover sm:h-28 sm:w-28"
-                  />
-                ) : (
-                  <span className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-3xl font-bold text-white sm:h-28 sm:w-28">
-                    {profile.displayName.charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </IdentityRing>
-              <DiamondCrownBadge plan={plan} size="md" className="absolute bottom-1 right-1 z-10 ring-2 ring-background" />
-            </div>
-
-            <div className="mb-2 flex items-center gap-2">
-              {profile.isOwner ? (
-                <>
-                  <ShareProfileButton handle={profile.handle} name={profile.displayName} />
-                  <Link
-                    href="/account#profile"
-                    className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary"
-                  >
-                    Edit profile
-                  </Link>
-                </>
-              ) : (
-                <>
-                  {me && friendState !== "self" ? (
-                    <AddFriendButton
-                      targetId={profile.id}
-                      targetName={profile.displayName}
-                      targetHandle={profile.handle}
-                      targetAvatarUrl={profile.avatarUrl}
-                      mutualCount={mutuals}
-                      initialState={friendState}
+          <div className="px-4 sm:px-6">
+            {/* Avatar + actions — avatar stacks above a full-width wrapping action
+                bar on mobile; sits inline with right-aligned actions on desktop. */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="relative -mt-12 w-fit sm:-mt-20">
+                <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
+                  {profile.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={profile.avatarUrl}
+                      alt=""
+                      className="block h-24 w-24 rounded-full object-cover ring-4 ring-background sm:h-32 sm:w-32"
                     />
-                  ) : null}
-                  <FollowButton
-                    targetId={profile.id}
-                    initialFollowing={profile.isFollowing}
-                    canFollow={!!me}
-                  />
-                  {me ? (
-                    <>
-                      <Link
-                        href={`/messages/new/${profile.id}`}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-semibold transition hover:bg-secondary"
-                      >
-                        <MessageCircle className="h-4 w-4" /> Message
-                      </Link>
-                      <ShareProfileButton handle={profile.handle} name={profile.displayName} />
-                      <ProfileActions
-                        targetId={profile.id}
-                        handle={profile.handle}
-                        initialBlocked={profile.viewerHasBlocked}
-                      />
-                    </>
                   ) : (
-                    <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                    <span className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-3xl font-bold text-white ring-4 ring-background sm:h-32 sm:w-32 sm:text-4xl">
+                      {profile.displayName.charAt(0).toUpperCase()}
+                    </span>
                   )}
-                </>
-              )}
+                </IdentityRing>
+                <DiamondCrownBadge plan={plan} size="md" className="absolute bottom-1 right-1 z-10 ring-2 ring-background" />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 sm:mb-2 sm:justify-end">
+                {profile.isOwner ? (
+                  <>
+                    <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                    <Link
+                      href="/account#profile"
+                      className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary"
+                    >
+                      Edit profile
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    {me && friendState !== "self" ? (
+                      <AddFriendButton
+                        targetId={profile.id}
+                        targetName={profile.displayName}
+                        targetHandle={profile.handle}
+                        targetAvatarUrl={profile.avatarUrl}
+                        mutualCount={mutuals}
+                        initialState={friendState}
+                      />
+                    ) : null}
+                    <FollowButton
+                      targetId={profile.id}
+                      initialFollowing={profile.isFollowing}
+                      canFollow={!!me}
+                    />
+                    {me ? (
+                      <>
+                        <Link
+                          href={`/messages/new/${profile.id}`}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-semibold transition hover:bg-secondary"
+                        >
+                          <MessageCircle className="h-4 w-4" /> Message
+                        </Link>
+                        <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                        <ProfileActions
+                          targetId={profile.id}
+                          handle={profile.handle}
+                          initialBlocked={profile.viewerHasBlocked}
+                        />
+                      </>
+                    ) : (
+                      <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Identity */}
-          <div className="mt-4">
-            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-[-0.02em]">
-              {profile.displayName}
-              {profile.isVerified ? <BadgeCheck className="h-5 w-5 text-primary" /> : null}
-              <DiamondCrownBadge plan={plan} size="sm" showLabel />
-            </h1>
-            <p className="text-muted-foreground">
-              @{profile.handle}
-              {isViewer && mutuals > 0 ? (
-                <span className="ml-2 rounded-full bg-gradient-to-r from-blue-500/15 to-violet-500/15 px-2 py-0.5 text-xs font-semibold text-violet-500 dark:text-violet-300">
-                  {mutuals} mutual friend{mutuals === 1 ? "" : "s"}
-                </span>
-              ) : null}
-            </p>
-          </div>
-
-          {profile.isOwner ? (
-            <ProfileCompletion
-              hasAvatar={!!profile.avatarUrl}
-              hasBio={!!profile.bio}
-              hasBanner={!!profile.bannerUrl}
-              hasWebsite={!!profile.website}
-            />
-          ) : null}
-
-          {profile.restricted ? (
-            <div className="mt-8 rounded-2xl border border-border bg-card p-8 text-center">
-              <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
-              <p className="mt-3 font-semibold">This account is private</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {me ? "Follow to request access to their activity." : "Sign in and follow to see more."}
+            {/* Identity */}
+            <div className="mt-4">
+              <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
+                {profile.displayName}
+                {profile.isVerified ? <BadgeCheck className="h-5 w-5 text-primary sm:h-6 sm:w-6" /> : null}
+                <DiamondCrownBadge plan={plan} size="sm" showLabel />
+              </h1>
+              <p className="mt-0.5 text-muted-foreground">
+                @{profile.handle}
+                {isViewer && mutuals > 0 ? (
+                  <span className="ml-2 rounded-full bg-gradient-to-r from-blue-500/15 to-violet-500/15 px-2 py-0.5 text-xs font-semibold text-violet-500 dark:text-violet-300">
+                    {mutuals} mutual friend{mutuals === 1 ? "" : "s"}
+                  </span>
+                ) : null}
               </p>
             </div>
-          ) : (
-            <>
-              {profile.bio ? <p className="mt-4 leading-relaxed">{profile.bio}</p> : null}
 
-              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                {profile.website ? (
-                  <a
-                    href={profile.website}
-                    target="_blank"
-                    rel="nofollow noopener"
-                    className="inline-flex items-center gap-1.5 text-primary hover:underline"
-                  >
-                    <LinkIcon className="h-4 w-4" />
-                    {profile.website.replace(/^https?:\/\//, "")}
-                  </a>
-                ) : null}
-                <span className="inline-flex items-center gap-1.5">
-                  <CalendarDays className="h-4 w-4" />
-                  Joined {new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                </span>
+            {profile.isOwner ? (
+              <ProfileCompletion
+                hasAvatar={!!profile.avatarUrl}
+                hasBio={!!profile.bio}
+                hasBanner={!!profile.bannerUrl}
+                hasWebsite={!!profile.website}
+              />
+            ) : null}
+
+            {profile.restricted ? (
+              <div className="mt-8 rounded-2xl border border-border bg-card p-8 text-center">
+                <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
+                <p className="mt-3 font-semibold">This account is private</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {me ? "Follow to request access to their activity." : "Sign in and follow to see more."}
+                </p>
               </div>
+            ) : (
+              <>
+                {profile.bio ? <p className="mt-4 max-w-2xl leading-relaxed">{profile.bio}</p> : null}
 
-              {/* Live stats row */}
-              <div className="mt-5 grid grid-cols-4 gap-2 sm:max-w-md">
-                <Link
-                  href={`/u/${profile.handle}/following`}
-                  className="rounded-2xl border border-border/60 bg-card/60 px-2 py-2.5 text-center backdrop-blur transition hover:bg-card"
-                >
-                  <span className="block text-base font-bold tracking-tight">{formatCompactNumber(profile.followingCount)}</span>
-                  <span className="text-[11px] text-muted-foreground">Following</span>
-                </Link>
-                <Link
-                  href={`/u/${profile.handle}/followers`}
-                  className="rounded-2xl border border-border/60 bg-card/60 px-2 py-2.5 text-center backdrop-blur transition hover:bg-card"
-                >
-                  <span className="block text-base font-bold tracking-tight">{formatCompactNumber(profile.followersCount)}</span>
-                  <span className="text-[11px] text-muted-foreground">Followers</span>
-                </Link>
-                <div className="rounded-2xl border border-border/60 bg-card/60 px-2 py-2.5 text-center backdrop-blur">
-                  <span className="block text-base font-bold tracking-tight">{formatCompactNumber(friendTotal)}</span>
-                  <span className="text-[11px] text-muted-foreground">Friends</span>
-                </div>
-                <div className="rounded-2xl border border-border/60 bg-card/60 px-2 py-2.5 text-center backdrop-blur">
-                  <span className="block text-base font-bold tracking-tight">{formatCompactNumber(postsTotal)}</span>
-                  <span className="text-[11px] text-muted-foreground">Posts</span>
-                </div>
-              </div>
-
-              {/* Content tabs + streamed grid */}
-              <div className="mt-8">
-                <div className="mb-4 flex gap-1.5">
-                  {(
-                    [
-                      { id: "posts", label: "Posts" },
-                      { id: "videos", label: "Videos" },
-                      { id: "photos", label: "Photos" },
-                    ] as const
-                  ).map((t) => (
-                    <Link
-                      key={t.id}
-                      href={t.id === "posts" ? `/u/${profile.handle}` : `/u/${profile.handle}?tab=${t.id}`}
-                      scroll={false}
-                      className={
-                        activeTab === t.id
-                          ? "rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-1.5 text-sm font-semibold text-white shadow-md shadow-violet-500/25"
-                          : "rounded-full border border-border/70 bg-card/60 px-4 py-1.5 text-sm font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-                      }
+                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                  {profile.website ? (
+                    <a
+                      href={profile.website}
+                      target="_blank"
+                      rel="nofollow noopener"
+                      className="inline-flex items-center gap-1.5 text-primary hover:underline"
                     >
-                      {t.label}
-                    </Link>
-                  ))}
+                      <LinkIcon className="h-4 w-4" />
+                      {profile.website.replace(/^https?:\/\//, "")}
+                    </a>
+                  ) : null}
+                  <span className="inline-flex items-center gap-1.5">
+                    <CalendarDays className="h-4 w-4" />
+                    Joined {new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                  </span>
                 </div>
-                <Suspense key={activeTab} fallback={<PostGridSkeleton count={6} />}>
-                  <ProfilePosts profileId={profile.id} viewerId={me} isOwner={profile.isOwner} filter={activeTab} />
-                </Suspense>
-              </div>
-            </>
-          )}
+
+                {/* Live stats row — spans the full width for a balanced, pro layout */}
+                <div className="mt-5 grid grid-cols-4 gap-2.5 sm:gap-3">
+                  <Link
+                    href={`/u/${profile.handle}/following`}
+                    className="rounded-2xl border border-border/60 bg-card/60 px-2 py-3 text-center backdrop-blur transition hover:bg-card sm:py-4"
+                  >
+                    <span className="block text-lg font-bold tracking-tight sm:text-xl">{formatCompactNumber(profile.followingCount)}</span>
+                    <span className="text-[11px] text-muted-foreground sm:text-xs">Following</span>
+                  </Link>
+                  <Link
+                    href={`/u/${profile.handle}/followers`}
+                    className="rounded-2xl border border-border/60 bg-card/60 px-2 py-3 text-center backdrop-blur transition hover:bg-card sm:py-4"
+                  >
+                    <span className="block text-lg font-bold tracking-tight sm:text-xl">{formatCompactNumber(profile.followersCount)}</span>
+                    <span className="text-[11px] text-muted-foreground sm:text-xs">Followers</span>
+                  </Link>
+                  <div className="rounded-2xl border border-border/60 bg-card/60 px-2 py-3 text-center backdrop-blur sm:py-4">
+                    <span className="block text-lg font-bold tracking-tight sm:text-xl">{formatCompactNumber(friendTotal)}</span>
+                    <span className="text-[11px] text-muted-foreground sm:text-xs">Friends</span>
+                  </div>
+                  <div className="rounded-2xl border border-border/60 bg-card/60 px-2 py-3 text-center backdrop-blur sm:py-4">
+                    <span className="block text-lg font-bold tracking-tight sm:text-xl">{formatCompactNumber(postsTotal)}</span>
+                    <span className="text-[11px] text-muted-foreground sm:text-xs">Posts</span>
+                  </div>
+                </div>
+
+                {/* Content tabs + streamed grid */}
+                <div className="mt-8">
+                  <div className="mb-4 flex gap-1.5 border-b border-border/60 pb-3">
+                    {(
+                      [
+                        { id: "posts", label: "Posts" },
+                        { id: "videos", label: "Videos" },
+                        { id: "photos", label: "Photos" },
+                      ] as const
+                    ).map((t) => (
+                      <Link
+                        key={t.id}
+                        href={t.id === "posts" ? `/u/${profile.handle}` : `/u/${profile.handle}?tab=${t.id}`}
+                        scroll={false}
+                        className={
+                          activeTab === t.id
+                            ? "rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-violet-500/25"
+                            : "rounded-full border border-border/70 bg-card/60 px-5 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                        }
+                      >
+                        {t.label}
+                      </Link>
+                    ))}
+                  </div>
+                  <Suspense key={activeTab} fallback={<PostGridSkeleton count={6} />}>
+                    <ProfilePosts profileId={profile.id} viewerId={me} isOwner={profile.isOwner} filter={activeTab} />
+                  </Suspense>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </main>
     </>

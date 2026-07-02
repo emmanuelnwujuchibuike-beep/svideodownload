@@ -46,7 +46,7 @@ export async function pushSocialEvent(opts: {
 
     const { data: actor } = await db
       .from("profiles")
-      .select("display_name, handle")
+      .select("display_name, handle, avatar_url")
       .eq("id", opts.actorId)
       .maybeSingle();
     const name =
@@ -56,6 +56,8 @@ export async function pushSocialEvent(opts: {
       title: `${name} ${VERB[opts.type]}`,
       body: postTitle ?? (opts.type === "follow" ? "Tap to see their profile" : ""),
       url: opts.postId ? `/p/${opts.postId}` : actor?.handle ? `/u/${actor.handle as string}` : "/notifications",
+      // The actor's profile picture becomes the notification's circular icon.
+      icon: (actor?.avatar_url as string | null) ?? undefined,
       // Collapse repeats (e.g. a like-unlike-like burst) into one notification.
       tag: opts.postId ? `${opts.type}:${opts.postId}` : `follow:${opts.actorId}`,
     });

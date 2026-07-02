@@ -37,7 +37,11 @@ function isIosNeedingInstall(): boolean {
     /iphone|ipad|ipod/i.test(ua) ||
     // iPadOS 13+ reports as Mac; touch points give it away.
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  return isIos && !isStandalone() && !("PushManager" in window);
+  // Any touch-iOS device that isn't already installed still needs the manual
+  // Add-to-Home-Screen path — that's the *only* way iPhones get Web Push
+  // (Safari 16.4+). We must NOT gate on `PushManager`: modern iOS Safari exposes
+  // it even in the browser tab, which previously hid this banner entirely.
+  return isIos && !isStandalone();
 }
 
 function snoozed(): boolean {

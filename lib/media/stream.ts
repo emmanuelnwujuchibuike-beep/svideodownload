@@ -71,7 +71,17 @@ export async function checkStream(): Promise<StreamHealth> {
     });
     const latencyMs = Math.round(performance.now() - started);
     if (!res.ok) {
-      return { configured, ok: false, latencyMs, customerCode, error: `Cloudflare ${res.status}` };
+      // Surface Cloudflare's own error code/message (e.g. 9109 "Invalid API Token")
+      // so the fix is obvious instead of just a bare status number.
+      let detail = "";
+      try {
+        const body = (await res.json()) as { errors?: { code?: number; message?: string }[] };
+        const first = body.errors?.[0];
+        if (first) detail = ` (${first.code ?? "?"}: ${first.message ?? ""})`;
+      } catch {
+        /* non-JSON error body */
+      }
+      return { configured, ok: false, latencyMs, customerCode, error: `Cloudflare ${res.status}${detail}` };
     }
     return { configured, ok: true, latencyMs, customerCode };
   } catch (e) {

@@ -9,13 +9,13 @@
     --foreground: 240 10% 8%;
     --card: 0 0% 100%;
     --card-foreground: 240 10% 8%;
-    --primary: 250 84% 58%;
+    --primary: 217 91% 53%; /* Electric Blue, deepened for white surfaces */
     --primary-foreground: 0 0% 100%;
     --secondary: 240 5% 95%;
     --secondary-foreground: 240 10% 8%;
     --muted: 240 5% 95%;
     --muted-foreground: 240 5% 34%;
-    --accent: 270 90% 62%;
+    --accent: 262 83% 58%; /* Electric Purple */
     --accent-foreground: 0 0% 100%;
     --gold: 43 96% 48%;
     --gold-foreground: 30 20% 8%;
@@ -26,24 +26,26 @@
   }
 
   .dark {
-    /* Dark — deep obsidian, premium luxury surface */
-    --background: 240 10% 2.5%;
-    --foreground: 0 0% 97%;
-    --card: 240 9% 4.5%;
-    --card-foreground: 0 0% 97%;
-    --primary: 252 95% 70%;
+    /* Dark — the Frenzsave One design language: deep navy #080B14 base,
+       #111827 cards, Electric Blue #3B82F6 primary, Electric Purple #7C3AED
+       accent, Indigo #6366F1 ring. Dark is the brand-first theme. */
+    --background: 225 43% 5.5%;
+    --foreground: 220 25% 97%;
+    --card: 221 39% 11%;
+    --card-foreground: 220 25% 97%;
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 6% 10%;
-    --secondary-foreground: 0 0% 97%;
-    --muted: 240 6% 9%;
-    --muted-foreground: 240 6% 70%;
-    --accent: 270 95% 72%;
+    --secondary: 222 30% 15%;
+    --secondary-foreground: 220 25% 97%;
+    --muted: 222 30% 13%;
+    --muted-foreground: 220 15% 68%;
+    --accent: 262 83% 58%;
     --accent-foreground: 0 0% 100%;
     --gold: 43 96% 56%;
     --gold-foreground: 30 20% 5%;
-    --border: 240 5% 11%;
-    --input: 240 5% 13%;
-    --ring: 252 95% 70%;
+    --border: 222 28% 17%;
+    --input: 222 28% 19%;
+    --ring: 239 84% 67%;
   }
 
   * {

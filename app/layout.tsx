@@ -64,7 +64,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0c0a16" },
+    { media: "(prefers-color-scheme: dark)", color: "#080b14" },
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
   ],
 };
@@ -90,9 +90,11 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        {/* Dark-first: the Frenzsave One identity is the deep-navy premium look;
+            users can still switch, and light mode stays fully supported. */}
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >

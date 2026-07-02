@@ -38,3 +38,6 @@ yarn-error.log*
 /.tmp
 *.part
 *.ytdl
+
+# Local Claude Code session settings (per-machine permission allowlists)
+.claude/settings.json

@@ -1,12 +1,13 @@
 "use client";
 
-import { Download, MessageSquare, Search, Upload } from "lucide-react";
+import { Download, Search, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { MessagesBell } from "@/features/app-shell/messages-bell";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { openUpload } from "@/features/create/upload-store";
 import { UserMenu } from "@/features/auth/user-menu";
@@ -81,15 +82,8 @@ export function AppTopbar() {
         {/* Notifications (realtime) */}
         <NotificationBell />
 
-        {/* Messages */}
-        <Link
-          href="/messages"
-          aria-label="Messages"
-          className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-        >
-          <MessageSquare className="h-5 w-5" />
-          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-background">8</span>
-        </Link>
+        {/* Messages (live unread badge) */}
+        <MessagesBell />
 
         <div className="hidden sm:block">
           <ThemeToggle />

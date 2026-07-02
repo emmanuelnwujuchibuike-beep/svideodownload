@@ -4,8 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
+import { AppContent } from "@/features/app-shell/app-content";
 import { ApiKeys } from "@/features/api/api-keys";
 import { ManageBillingButton } from "@/features/monetization/manage-billing-button";
 import { UserList } from "@/components/social/user-list";
@@ -96,11 +95,8 @@ export default async function AccountPage() {
   ]);
 
   return (
-    <>
-      <SiteHeader />
-      <main className="relative overflow-hidden pb-28 pt-32 sm:pt-44">
-
-        <div className="container max-w-2xl">
+    <AppContent>
+      <div className="mx-auto max-w-2xl">
           <header className="mb-10">
             <h1 className="text-3xl font-bold tracking-[-0.03em] sm:text-4xl">
               Your account
@@ -304,9 +300,7 @@ export default async function AccountPage() {
             </div>
           </div>
         </div>
-      </main>
-      <SiteFooter />
-    </>
+    </AppContent>
   );
 }
 

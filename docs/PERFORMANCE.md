@@ -31,7 +31,7 @@ The non-negotiables:
 - ✅ `optimizePackageImports` for barrel-heavy libs; bundle analyzer (`npm run analyze`).
 - ✅ Unified versioned API (`/api/v1/app/*`) + response envelope + cursor pagination.
 - ✅ Cross-platform SDK with retries, dedup, timeouts, typed errors (`lib/sdk`).
-- 🟡 Realtime notifications (Supabase channels) — live; expand coverage.
+- ✅ Realtime notifications + messages (Supabase channels) — live badges, live thread.
 - 🟡 IndexedDB media cache + localStorage history — live for downloads.
 
 ## Phase 1 — Perceived speed (instant feel)
@@ -48,9 +48,12 @@ The non-negotiables:
   follow / comment / read-receipt next.
 - ⬜ **Migrate the home feed** to `useInfiniteQuery` + `getApi().feed()` + skeletons
   (reference surface; preserves all existing feed features).
-- ⬜ **Instant navigation**: `next/link` prefetch on viewport+intent, preserved
-  scroll position on back (data already persists via the cache).
-- ⬜ **Streaming SSR** (`loading.tsx` + Suspense) so shells stream before data.
+- ✅ **Instant navigation**: persistent `(app)` shell (sidebar/topbar/modals render
+  once, only content swaps) across home, downloads, explore, saved, messages,
+  account — SPA-style, no full rebuild per nav. Middleware skips prefetch requests.
+- ✅ **Streaming SSR** (`loading.tsx` + Suspense): content-only skeletons per (app)
+  route stream instantly while data loads; feed surfaces are SSR-seeded so they
+  paint with the page instead of after a client round-trip.
 
 ## Phase 2 — Data & feed at scale
 
@@ -75,16 +78,21 @@ The non-negotiables:
   is set (see INFRASTRUCTURE.md). Same path works for native/desktop (bearer auth).
 - ⬜ **Images**: `next/image` everywhere, AVIF→WebP→fallback, responsive
   `srcset`, lazy + blur placeholder, never serve oversized originals.
-- ⬜ **Video**: adaptive bitrate (HLS), poster/first-frame preload, lazy mount,
-  smart buffering, background transcode on the worker, CDN delivery.
-- ⬜ **Thumbnails** generated and cached at upload.
+- 🟡 **Video**: adaptive bitrate (HLS) via **Cloudflare Stream** — `lib/media/stream.ts`
+  (direct-upload + copy-from-URL + playback URLs) and `SmartVideo` (`features/media`)
+  which plays through Stream when a post has a `streamUid`, else falls back to the R2
+  `<video>`. Wired into `PostViewer`. To activate: add a `stream_uid` column to `posts`,
+  populate it on upload/backfill (`copyToStream`), and add it to the feed SELECT.
+- ⬜ **Thumbnails** generated and cached at upload (Stream auto-generates posters).
 
 ## Phase 4 — Realtime surfaces
 
-- ⬜ **Messaging**: realtime, typing indicators, read/delivered receipts, offline
-  queue + auto-reconnect, optimistic send.
-- ⬜ **Notifications**: instant unread count, optimistic read, efficient
-  per-user channel subscriptions (subscribe only while mounted).
+- 🟡 **Messaging**: realtime live thread + optimistic send (`ConversationRoom`),
+  live inbox list + topbar unread badge sharing one cached key (`features/social/inbox.ts`,
+  subscribes to `conversations` changes). ⬜ typing indicators, delivered receipts,
+  offline queue.
+- ✅ **Notifications**: live unread count + optimistic read, per-user channel
+  subscribed only while mounted (`NotificationBell`).
 - ⬜ **Presence** for active friends.
 
 ## Phase 5 — Search

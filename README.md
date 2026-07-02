@@ -14,6 +14,9 @@ Built with **Next.js 15 (App Router)**, **TypeScript**, **Tailwind CSS**, **Supa
 - 🗄️ **Supabase schema** — profiles, downloads, analytics, traffic logs, settings, platform stats — with RLS policies, triggers, storage buckets, and realtime.
 - 🎨 **Premium landing page** — glassmorphism, gradients, dark mode, mobile-first, animated, SEO-optimized (metadata, OG, JSON-LD, robots, dynamic sitemap).
 - 🐳 **Production infra** — multi-stage Dockerfile (Next standalone + yt-dlp + ffmpeg), docker-compose (web + redis + nginx), nginx reverse proxy, GitHub Actions CI.
+- ⚡ **Instant-feel app shell** — persistent `(app)` layout (sidebar/topbar/modals render once; only content swaps → SPA-instant nav), content-only `loading.tsx` skeletons, SSR-seeded cached-first feed surfaces, and an SWR-style client cache (`features/data`). See [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+- 🔴 **Realtime** — live notification + messages badges, live conversation list and message thread (optimistic send) over Supabase channels (`features/social/inbox.ts`).
+- 🎬 **Media pipeline** — main media on **Cloudflare R2** (`lib/storage`, Supabase fallback) + optional **Cloudflare Stream** adaptive-bitrate video (`lib/media/stream.ts`, `SmartVideo`). See [docs/INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md).
 
 > This is **Phase 1**: a runnable foundation. See [Roadmap](#-roadmap) for what's intentionally stubbed for later phases.
 

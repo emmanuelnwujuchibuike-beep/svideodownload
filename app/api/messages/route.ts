@@ -2,11 +2,24 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { assistantLimiter } from "@/lib/rate-limit";
-import { sendMessage } from "@/lib/social/messages";
+import { listConversations, sendMessage } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/** GET /api/messages — the signed-in user's inbox (powers the live badge + list). */
+export async function GET() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ conversations: [] });
+
+  const conversations = await listConversations(user.id);
+  const unread = conversations.filter((c) => c.unread).length;
+  return NextResponse.json({ conversations, unread });
+}
 
 const schema = z.object({
   conversationId: z.string().uuid(),

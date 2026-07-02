@@ -108,9 +108,22 @@ New media then lands in R2 and is served via the Cloudflare CDN (zero egress).
 Existing Supabase-hosted media keeps working — `posts.media_url` stores absolute
 URLs, so old and new coexist with no migration.
 
-**Cloudflare Stream (later):** for adaptive-bitrate (HLS) video, add
-`CLOUDFLARE_STREAM_TOKEN` and route video through Stream instead of raw R2. That's
-a further Phase 3 upgrade on top of this.
+**Cloudflare Stream (adaptive-bitrate video) — code shipped, opt-in by env.**
+Stored R2 files download the whole video before playing; Stream serves HLS with a
+quality ladder and instant range-based start (TikTok-style). The integration lives
+in `lib/media/stream.ts` (`createStreamDirectUpload`, `copyToStream`, playback URL
+builders) and `features/media/smart-video.tsx` (`SmartVideo`, already used by
+`PostViewer`): a post with a `streamUid` plays through Stream, otherwise it falls
+back to the R2/Supabase `<video>` — fully additive.
+
+To turn it on:
+1. Enable **Stream** in Cloudflare; create an API token with **Stream:Edit**.
+2. Set `CF_STREAM_ACCOUNT_ID`, `CF_STREAM_API_TOKEN`, and the public
+   `NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE` (from any embed URL) on Vercel + Railway.
+3. Add a `stream_uid text` column to `posts`; on upload create a direct-upload
+   ticket (`createStreamDirectUpload`) or backfill existing R2 videos with
+   `copyToStream(mediaUrl)`, store the returned `uid` in `stream_uid`, and add
+   `stream_uid` to the feed SELECT in `lib/social/home-feed.ts`.
 
 ## Summary recommendation
 

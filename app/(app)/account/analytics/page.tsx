@@ -4,8 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
+import { AppContent } from "@/features/app-shell/app-content";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { getCreatorAnalytics } from "@/lib/social/creator-analytics";
 import { createClient } from "@/lib/supabase/server";
@@ -32,9 +31,8 @@ export default async function CreatorAnalyticsPage() {
   const plan = await getUserPlan(user.id);
 
   return (
-    <>
-      <SiteHeader />
-      <main className="container max-w-3xl pb-24 pt-28 sm:pt-36">
+    <AppContent>
+      <div className="mx-auto max-w-3xl">
         <header className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="flex items-center gap-2 text-3xl font-bold tracking-[-0.03em] sm:text-4xl">
@@ -50,9 +48,8 @@ export default async function CreatorAnalyticsPage() {
         ) : (
           <Analytics userId={user.id} />
         )}
-      </main>
-      <SiteFooter />
-    </>
+      </div>
+    </AppContent>
   );
 }
 

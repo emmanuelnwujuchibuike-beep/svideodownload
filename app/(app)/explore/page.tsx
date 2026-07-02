@@ -2,9 +2,8 @@ import { Flame, Clock } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
 import { PostGrid } from "@/components/social/post-grid";
+import { AppContent } from "@/features/app-shell/app-content";
 import { CATEGORIES, categoryLabel, isCategory, type Category } from "@/lib/social/categories";
 import { getFeed, type FeedSort } from "@/lib/social/feed";
 import { createClient } from "@/lib/supabase/server";
@@ -49,9 +48,8 @@ export default async function ExplorePage({
   const posts = await getFeed({ sort, category, viewerId });
 
   return (
-    <>
-      <SiteHeader />
-      <main className="container max-w-5xl pb-24 pt-28 sm:pt-32">
+    <AppContent>
+      <div className="mx-auto max-w-5xl">
         <header className="mb-6">
           <h1 className="text-3xl font-bold tracking-[-0.03em] sm:text-4xl">Explore</h1>
           <p className="mt-2 text-muted-foreground">Trending &amp; fresh downloads from the community.</p>
@@ -79,9 +77,8 @@ export default async function ExplorePage({
               : "Nothing here yet — publish a download to get started."
           }
         />
-      </main>
-      <SiteFooter />
-    </>
+      </div>
+    </AppContent>
   );
 }
 

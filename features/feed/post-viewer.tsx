@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { SmartVideo } from "@/features/media/smart-video";
 import { Comments } from "@/features/social/comments";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import type { CommentNode } from "@/lib/social/engagement";
@@ -181,16 +182,17 @@ function ViewerInner({
         animate={{ scale: 1 }}
         className="flex min-h-0 flex-1 items-center justify-center p-0 lg:p-6"
       >
-        {item.mediaKind === "video" && item.mediaUrl ? (
-          // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video
-            src={item.mediaUrl}
-            poster={item.thumbnailUrl ?? undefined}
-            controls
-            autoPlay
-            playsInline
-            className="max-h-full w-full max-w-5xl bg-black lg:rounded-2xl"
-          />
+        {item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
+          <div className="flex max-h-full w-full max-w-5xl items-center justify-center bg-black lg:rounded-2xl">
+            <SmartVideo
+              streamUid={item.streamUid}
+              src={item.mediaUrl}
+              poster={item.thumbnailUrl}
+              controls
+              autoPlay
+              className={cn(item.streamUid ? "aspect-video" : "max-h-full", "lg:rounded-2xl")}
+            />
+          </div>
         ) : item.mediaKind === "audio" && item.mediaUrl ? (
           <div className="w-full max-w-xl rounded-2xl bg-gradient-to-br from-blue-600 to-violet-700 p-8 text-white">
             {item.thumbnailUrl ? (

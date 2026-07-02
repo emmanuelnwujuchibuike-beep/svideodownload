@@ -34,6 +34,8 @@ export interface FeedItem {
   thumbnailUrl: string | null;
   sourceUrl: string;
   mediaUrl: string | null;
+  /** Cloudflare Stream UID for adaptive-bitrate playback (null → play `mediaUrl`). */
+  streamUid: string | null;
   category: string | null;
   durationSec: number | null;
   viewsCount: number;
@@ -69,6 +71,7 @@ interface Row {
   duration_sec: number | null;
   visibility: string;
   status: string;
+  stream_uid?: string | null;
   views_count: number;
   likes_count: number;
   saves_count: number;
@@ -201,6 +204,8 @@ async function loadHomeFeed(
         thumbnailUrl: r.thumbnail_url,
         sourceUrl: r.source_url,
         mediaUrl: r.media_url,
+        // Populated once the posts table carries `stream_uid` (add it to SELECT then).
+        streamUid: r.stream_uid ?? null,
         category: r.category,
         durationSec: r.duration_sec,
         viewsCount: r.views_count,

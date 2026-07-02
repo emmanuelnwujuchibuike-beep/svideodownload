@@ -21,10 +21,13 @@ export async function GET() {
 
   try {
     const started = performance.now();
-    await cacheSet(probeKey, token, 30);
-    const read = await cacheGet<string>(probeKey);
+    // Store an OBJECT (exactly how the app caches everything) so the round-trip
+    // matches real usage — a bare string doesn't survive Upstash's automatic
+    // JSON (de)serialization and would give a false negative.
+    await cacheSet(probeKey, { t: token }, 30);
+    const read = await cacheGet<{ t: string }>(probeKey);
     latencyMs = Math.round(performance.now() - started);
-    live = read === token; // round-trip actually persisted + returned our value
+    live = read?.t === token; // round-trip actually persisted + returned our value
   } catch (e) {
     error = e instanceof Error ? e.message : "cache probe failed";
   }

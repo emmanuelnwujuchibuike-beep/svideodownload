@@ -15,11 +15,5 @@
       "maxDuration": 120
     }
   },
-  "headers": [
-    {
-      "source": "/api/(?!v1/app/)(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
-    }
-  ],
   "crons": [{ "path": "/api/cron/trending", "schedule": "0 3 * * *" }]
 }

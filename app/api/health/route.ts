@@ -4,6 +4,7 @@ import { cacheBackend, cacheGet, cacheSet } from "@/lib/cache";
 import { downloadConcurrencyStats } from "@/lib/concurrency";
 import { checkStream } from "@/lib/media/stream";
 import { hasWebPush } from "@/lib/push/web-push";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +46,19 @@ export async function GET() {
   // Verify Cloudflare Stream credentials on the deployment where they're set.
   const stream = await checkStream();
 
+  // Push end-to-end state: configured (server VAPID), browser key present,
+  // and how many devices have actually subscribed (0 = nobody completed
+  // "Turn on push" yet, so no push could ever have been delivered).
+  let pushSubscriptions: number | null = null;
+  try {
+    const { count } = await createAdminClient()
+      .from("push_subscriptions")
+      .select("id", { head: true, count: "exact" });
+    pushSubscriptions = count ?? 0;
+  } catch {
+    /* leave null if unreadable */
+  }
+
   return NextResponse.json(
     {
       status: "ok",
@@ -57,9 +71,13 @@ export async function GET() {
         ...(error ? { error } : {}),
       },
       stream, // { configured, ok, latencyMs, customerCode, error? }
-      // Web Push: true only when VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY are set
-      // on THIS deployment — the definitive "is push on in prod" check.
-      push: { configured: hasWebPush },
+      // Web Push: configured = server VAPID keys; publicKeySet = browser key
+      // env present; subscriptions = devices that completed "Turn on push".
+      push: {
+        configured: hasWebPush,
+        publicKeySet: !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+        subscriptions: pushSubscriptions,
+      },
       downloads: downloadConcurrencyStats(),
     },
     { headers: { "Cache-Control": "no-store" } },

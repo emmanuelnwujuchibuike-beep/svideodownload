@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
 import { AdScripts } from "@/features/monetization/ad-scripts";
+import { RegisterServiceWorker } from "@/features/notifications/register-sw";
 import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
@@ -124,6 +125,7 @@ export default function RootLayout({
           {/* <AssistantWidget /> temporarily removed — re-add later */}
           <StickyBottomAd />
           <AdScripts />
+          <RegisterServiceWorker />
         </ThemeProvider>
       </body>
     </html>

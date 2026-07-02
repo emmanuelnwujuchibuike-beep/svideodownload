@@ -12,8 +12,10 @@
  * See docs/INFRASTRUCTURE.md.
  */
 
-const ACCOUNT_ID = process.env.CF_STREAM_ACCOUNT_ID;
-const API_TOKEN = process.env.CF_STREAM_API_TOKEN;
+// trim() — a trailing space/newline from copy-paste silently breaks the
+// Authorization header and reads as "Authentication error" (seen in prod).
+const ACCOUNT_ID = process.env.CF_STREAM_ACCOUNT_ID?.trim();
+const API_TOKEN = process.env.CF_STREAM_API_TOKEN?.trim();
 
 /** Is Cloudflare Stream provisioned (server-side upload/copy available)? */
 export const hasStream = !!ACCOUNT_ID && !!API_TOKEN;
@@ -80,6 +82,22 @@ export async function checkStream(): Promise<StreamHealth> {
         if (first) detail = ` (${first.code ?? "?"}: ${first.message ?? ""})`;
       } catch {
         /* non-JSON error body */
+      }
+      // Auth failures: distinguish "the token string is wrong" from "the token
+      // is fine but lacks Stream permission / wrong account id" by asking
+      // Cloudflare to verify the raw token.
+      if (res.status === 401 || res.status === 403) {
+        try {
+          const v = await fetch(`${API_BASE}/user/tokens/verify`, {
+            headers: { Authorization: `Bearer ${API_TOKEN}` },
+            signal: AbortSignal.timeout(5000),
+          });
+          detail += v.ok
+            ? " | token itself is VALID → the token lacks the Stream permission for THIS account, or CF_STREAM_ACCOUNT_ID is a different account's id"
+            : " | token string is INVALID → the pasted value isn't the token secret (did you paste the token ID or add a space?)";
+        } catch {
+          /* verify unreachable — keep the base detail */
+        }
       }
       return { configured, ok: false, latencyMs, customerCode, error: `Cloudflare ${res.status}${detail}` };
     }

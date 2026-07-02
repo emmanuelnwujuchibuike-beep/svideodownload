@@ -29,6 +29,9 @@ type LucideIcon = typeof Bell;
 
 const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   follow: UserPlus,
+  friend_request: UserPlus,
+  friend_accepted: PartyPopper,
+  friend_reminder: MessageCircle,
   like: Heart,
   love: Heart,
   comment: MessageCircle,
@@ -95,6 +98,12 @@ export function verbFor(type: NotificationType): string {
   switch (type) {
     case "follow":
       return "started following you";
+    case "friend_request":
+      return "sent you a friend request";
+    case "friend_accepted":
+      return "accepted your friend request 🎉";
+    case "friend_reminder":
+      return "is ready to chat — say hi 👋";
     case "like":
       return "liked your post";
     case "love":
@@ -184,6 +193,20 @@ export function isActorType(type: NotificationType): boolean {
     type !== "milestone" &&
     type !== "system"
   );
+}
+
+/** Deep link for a notification — shared by the bell, live toast and cards. */
+export function hrefFor(n: {
+  type: NotificationType;
+  actor: { handle: string } | null;
+  postId: string | null;
+}): string {
+  if (n.type === "friend_request") return "/friends";
+  if ((n.type === "friend_accepted" || n.type === "friend_reminder" || n.type === "follow") && n.actor) {
+    return `/u/${n.actor.handle}`;
+  }
+  if (n.postId) return `/p/${n.postId}`;
+  return "/notifications";
 }
 
 /** Relative "2m", "3h", "5d" style timestamp. */

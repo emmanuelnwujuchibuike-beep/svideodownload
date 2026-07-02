@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { loadFlatNotifications } from "@/features/notifications/data";
-import { iconFor, timeAgo, tintFor, verbFor } from "@/features/notifications/meta";
+import { hrefFor, iconFor, timeAgo, tintFor, verbFor } from "@/features/notifications/meta";
 import { categoryForType, type NotificationItem } from "@/lib/social/notifications";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -66,9 +66,7 @@ export function NotificationLiveToast() {
 
   const open = (n: NotificationItem) => {
     setItem(null);
-    const href =
-      n.type === "follow" && n.actor ? `/u/${n.actor.handle}` : n.postId ? `/p/${n.postId}` : "/notifications";
-    router.push(href);
+    router.push(hrefFor(n));
   };
 
   const Icon = item ? iconFor(item.type) : null;

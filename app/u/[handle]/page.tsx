@@ -8,10 +8,12 @@ import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { PostGrid } from "@/components/social/post-grid";
+import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { FollowButton } from "@/features/social/follow-button";
 import { ProfileActions } from "@/features/social/profile-actions";
 import { PostGridSkeleton } from "@/features/ui/page-skeletons";
 import { getUserPlan } from "@/lib/monetization/plan";
+import { friendshipState, mutualFriendsCount } from "@/lib/social/friends";
 import { listUserPosts } from "@/lib/social/posts";
 import { getPublicProfile } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -66,7 +68,12 @@ export default async function ProfilePage({
 
   // The profile header renders immediately; the (heavier) posts grid streams in
   // behind a skeleton so the page never blocks on the post query.
-  const plan = await getUserPlan(profile.id);
+  const isViewer = !!me && !profile.isOwner;
+  const [plan, friendState, mutuals] = await Promise.all([
+    getUserPlan(profile.id),
+    isViewer ? friendshipState(me!, profile.id) : Promise.resolve("none" as const),
+    isViewer ? mutualFriendsCount(me!, profile.id) : Promise.resolve(0),
+  ]);
 
   const ld = {
     "@context": "https://schema.org",
@@ -122,6 +129,16 @@ export default async function ProfilePage({
                 </Link>
               ) : (
                 <>
+                  {me && friendState !== "self" ? (
+                    <AddFriendButton
+                      targetId={profile.id}
+                      targetName={profile.displayName}
+                      targetHandle={profile.handle}
+                      targetAvatarUrl={profile.avatarUrl}
+                      mutualCount={mutuals}
+                      initialState={friendState}
+                    />
+                  ) : null}
                   <FollowButton
                     targetId={profile.id}
                     initialFollowing={profile.isFollowing}

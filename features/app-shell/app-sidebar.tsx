@@ -30,7 +30,9 @@ export interface NavItem {
   soon?: boolean;
 }
 
-export function buildNav(handle: string | null): NavItem[] {
+// `_handle` kept for signature stability (mobile nav still passes it; profile
+// deep links may return here when the Friends Hub grows tabs).
+export function buildNav(_handle: string | null): NavItem[] {
   return [
     { label: "Home", href: "/home", icon: Home },
     { label: "Explore", href: "/explore", icon: Compass },
@@ -38,7 +40,7 @@ export function buildNav(handle: string | null): NavItem[] {
     { label: "Reels", href: "/explore", icon: Clapperboard, soon: true },
     { label: "News", href: "/blog", icon: Newspaper },
     { label: "Communities", href: "/explore", icon: Users, soon: true },
-    { label: "Friends", href: handle ? `/u/${handle}/following` : "/account#profile", icon: UsersRound },
+    { label: "Friends", href: "/friends", icon: UsersRound },
     { label: "Notifications", href: "/notifications", icon: Bell },
     { label: "Chat", href: "/messages", icon: MessageCircle },
     { label: "Downloads", href: "/downloads", icon: Download },

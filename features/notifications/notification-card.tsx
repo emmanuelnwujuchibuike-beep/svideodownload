@@ -20,7 +20,15 @@ function actorSummary(g: NotificationGroup): string {
 
 function hrefFor(g: NotificationGroup): string | null {
   if (g.postId) return `/p/${g.postId}`;
-  if (g.type === "follow" && g.totalActors === 1 && g.actors[0]) return `/u/${g.actors[0].handle}`;
+  if (g.type === "friend_request") return "/friends";
+  const first = g.actors[0];
+  if (
+    (g.type === "follow" || g.type === "friend_accepted" || g.type === "friend_reminder") &&
+    g.totalActors === 1 &&
+    first
+  ) {
+    return `/u/${first.handle}`;
+  }
   return null;
 }
 

@@ -10,7 +10,7 @@ import {
   loadFlatNotifications as loadNotifications,
   type FlatNotifications as NotifData,
 } from "@/features/notifications/data";
-import { iconFor, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
+import { hrefFor, iconFor, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
 import { categoryForType } from "@/lib/social/notifications";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -99,7 +99,7 @@ export function NotificationBell() {
               <ul>
                 {items.map((n) => {
                   const Icon = iconFor(n.type);
-                  const href = n.type === "follow" && n.actor ? `/u/${n.actor.handle}` : n.postId ? `/p/${n.postId}` : "/notifications";
+                  const href = hrefFor(n);
                   return (
                     <li key={n.id}>
                       <Link

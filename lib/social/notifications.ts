@@ -22,6 +22,9 @@ export type NotificationType =
   | "profile_view"
   | "invite"
   | "milestone"
+  | "friend_request"
+  | "friend_accepted"
+  | "friend_reminder"
   | "download_complete"
   | "download_failed"
   | "download_ready"
@@ -71,6 +74,9 @@ const CATEGORY_BY_TYPE: Partial<Record<NotificationType, NotificationCategory>> 
   profile_view: "social",
   invite: "social",
   milestone: "social",
+  friend_request: "social",
+  friend_accepted: "social",
+  friend_reminder: "social",
   download_complete: "downloads",
   download_failed: "downloads",
   download_ready: "downloads",

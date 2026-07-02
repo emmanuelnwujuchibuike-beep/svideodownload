@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AdScripts } from "@/features/monetization/ad-scripts";
 import { RegisterServiceWorker } from "@/features/notifications/register-sw";
 import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
+import { WebVitals } from "@/features/perf/web-vitals";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
 import "./globals.css";
@@ -126,6 +127,7 @@ export default function RootLayout({
           <StickyBottomAd />
           <AdScripts />
           <RegisterServiceWorker />
+          <WebVitals />
         </ThemeProvider>
       </body>
     </html>

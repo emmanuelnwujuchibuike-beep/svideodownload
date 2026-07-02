@@ -1,3 +1,4 @@
+import { getCached } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const hasSupabase =
@@ -14,9 +15,18 @@ export interface HomeProfile {
   likesCount: number;
 }
 
-/** Header/right-rail identity card for the signed-in user. */
+/**
+ * Header/right-rail identity card for the signed-in user. Cached briefly because
+ * it runs on the home page's blocking path and sums likes across the user's posts
+ * — recomputing that on every navigation is wasteful; 20s staleness is invisible
+ * for a header stat.
+ */
 export async function getHomeProfile(userId: string): Promise<HomeProfile | null> {
   if (!hasSupabase) return null;
+  return getCached(`home:profile:${userId}`, 20, () => loadHomeProfile(userId));
+}
+
+async function loadHomeProfile(userId: string): Promise<HomeProfile | null> {
   try {
     const db = createAdminClient();
     const { data } = await db

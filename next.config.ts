@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   // Keep barrel-heavy libraries from pulling their entire surface into a route
   // bundle: importing one icon should ship one icon. Central to the platform's
   // "more modules must not bloat existing routes" guarantee (docs/ARCHITECTURE.md).
+  // Restore scroll position on back/forward for a native-feeling history stack.
   experimental: {
     optimizePackageImports: ["lucide-react", "react-icons", "framer-motion"],
     // Client Router Cache: Next 15 defaults dynamic pages to staleTime 0, so every
@@ -15,10 +16,15 @@ const nextConfig: NextConfig = {
     // Caching visited routes briefly makes revisits/back-nav instant (native feel),
     // while realtime + the SWR layer keep content fresh. Tune here, not per-page.
     staleTimes: { dynamic: 60, static: 300 },
+    scrollRestoration: true,
   },
   images: {
     // yt-dlp returns thumbnails from arbitrary CDNs; allow https remotes.
     remotePatterns: [{ protocol: "https", hostname: "**" }],
+    // Serve modern formats (AVIF → WebP) so thumbnails/avatars are a fraction of
+    // the JPEG/PNG weight, and cache the optimized variants for ~31 days.
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 2_678_400,
   },
   async headers() {
     return [

@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ThemeProvider } from "@/components/theme-provider";
-import { AssistantWidget } from "@/features/assistant/assistant-widget";
+// import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
 import { AdScripts } from "@/features/monetization/ad-scripts";
 import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
 import { SITE_URL as siteUrl } from "@/lib/site";
@@ -105,7 +105,7 @@ export default function RootLayout({
             <div className="absolute bottom-[-12%] left-1/3 h-[46%] w-[55%] -translate-x-1/4 rounded-full bg-gradient-to-t from-purple-500/16 to-transparent blur-[100px] will-change-transform motion-safe:animate-drift" />
           </div>
           {children}
-          <AssistantWidget />
+          {/* <AssistantWidget /> temporarily removed — re-add later */}
           <StickyBottomAd />
           <AdScripts />
         </ThemeProvider>

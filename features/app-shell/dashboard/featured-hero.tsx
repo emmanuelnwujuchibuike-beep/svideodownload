@@ -1,6 +1,7 @@
 "use client";
 
 import { BadgeCheck, ChevronRight, Heart, MessageCircle, Play } from "lucide-react";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 import { useQuery } from "@/features/data";
@@ -9,13 +10,17 @@ import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /** Featured carousel of top trending video posts. */
-export function FeaturedHero() {
-  const { data, isLoading } = useQuery<FeedItem[]>("home-feed:featured", async () => {
-    const r = await fetch("/api/home-feed?sort=trending&limit=10");
-    if (!r.ok) return [];
-    const d = (await r.json()) as { items: FeedItem[] };
-    return (d.items ?? []).filter((i) => i.thumbnailUrl).slice(0, 6);
-  });
+export function FeaturedHero({ initialItems }: { initialItems?: FeedItem[] }) {
+  const { data, isLoading } = useQuery<FeedItem[]>(
+    "home-feed:featured",
+    async () => {
+      const r = await fetch("/api/home-feed?sort=trending&limit=10");
+      if (!r.ok) return [];
+      const d = (await r.json()) as { items: FeedItem[] };
+      return (d.items ?? []).filter((i) => i.thumbnailUrl).slice(0, 6);
+    },
+    { initialData: initialItems },
+  );
   const [idx, setIdx] = useState(0);
   const [viewer, setViewer] = useState<FeedItem | null>(null);
 
@@ -36,9 +41,8 @@ export function FeaturedHero() {
 
   return (
     <section className="relative overflow-hidden rounded-3xl shadow-card">
-      <button type="button" onClick={() => setViewer(post)} className="block aspect-[16/10] w-full text-left sm:aspect-[21/9]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img key={post.id} src={post.thumbnailUrl!} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      <button type="button" onClick={() => setViewer(post)} className="relative block aspect-[16/10] w-full text-left sm:aspect-[21/9]">
+        <Image key={post.id} src={post.thumbnailUrl!} alt="" fill priority sizes="(min-width: 1024px) 66vw, 100vw" className="object-cover" />
         <span className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/10" />
         <span className="absolute inset-x-5 bottom-5 text-white sm:inset-x-7 sm:bottom-7">
           {post.category ? (

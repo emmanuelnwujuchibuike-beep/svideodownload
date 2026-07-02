@@ -1,6 +1,7 @@
 "use client";
 
 import { BadgeCheck, Play } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -12,13 +13,17 @@ import { formatCompactNumber } from "@/lib/utils";
 const FALLBACK = ["from-rose-500 to-fuchsia-600", "from-sky-500 to-blue-600", "from-violet-500 to-purple-600", "from-amber-500 to-orange-600", "from-emerald-500 to-teal-600"];
 
 /** Trending Reels rail — real recent video posts; tap to play inline. */
-export function TrendingReels() {
-  const { data, isLoading } = useQuery<FeedItem[]>("home-feed:reels", async () => {
-    const r = await fetch("/api/home-feed?sort=recent&limit=15");
-    if (!r.ok) return [];
-    const d = (await r.json()) as { items: FeedItem[] };
-    return (d.items ?? []).filter((i) => i.mediaKind === "video").slice(0, 8);
-  });
+export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
+  const { data, isLoading } = useQuery<FeedItem[]>(
+    "home-feed:reels",
+    async () => {
+      const r = await fetch("/api/home-feed?sort=recent&limit=15");
+      if (!r.ok) return [];
+      const d = (await r.json()) as { items: FeedItem[] };
+      return (d.items ?? []).filter((i) => i.mediaKind === "video").slice(0, 8);
+    },
+    { initialData: initialItems },
+  );
   const [viewer, setViewer] = useState<FeedItem | null>(null);
 
   // Cached-first: instant on return visits, silently revalidated in the background.
@@ -45,8 +50,7 @@ export function TrendingReels() {
                 className="group relative aspect-[9/14] w-36 shrink-0 overflow-hidden rounded-2xl text-left shadow-soft ring-1 ring-border/60 transition hover:-translate-y-1 hover:shadow-card"
               >
                 {item.thumbnailUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.thumbnailUrl} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                  <Image src={item.thumbnailUrl} alt="" fill sizes="144px" className="object-cover transition duration-300 group-hover:scale-105" />
                 ) : (
                   <span className={`absolute inset-0 bg-gradient-to-br ${FALLBACK[i % FALLBACK.length]}`} />
                 )}

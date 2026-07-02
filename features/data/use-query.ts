@@ -21,11 +21,13 @@ export interface QueryResult<T> {
   refetch: () => Promise<T>;
 }
 
-export interface QueryOptions {
+export interface QueryOptions<T = unknown> {
   /** Skip if false (e.g. waiting on auth). Default true. */
   enabled?: boolean;
   /** Suppress duplicate network calls within this window (ms). Default 2000. */
   dedupeMs?: number;
+  /** Server-rendered seed data — shown instantly on first paint, then revalidated. */
+  initialData?: T;
 }
 
 /**
@@ -33,8 +35,8 @@ export interface QueryOptions {
  * background, dedupes concurrent callers of the same key, and refreshes on window
  * focus/reconnect. The fetcher usually calls the SDK (`getApi().…`).
  */
-export function useQuery<T>(key: string, fetcher: () => Promise<T>, options: QueryOptions = {}): QueryResult<T> {
-  const { enabled = true, dedupeMs } = options;
+export function useQuery<T>(key: string, fetcher: () => Promise<T>, options: QueryOptions<T> = {}): QueryResult<T> {
+  const { enabled = true, dedupeMs, initialData } = options;
 
   const entry = useSyncExternalStore(
     (cb) => subscribe(key, cb),
@@ -57,9 +59,11 @@ export function useQuery<T>(key: string, fetcher: () => Promise<T>, options: Que
   }, [key, enabled, refetch]);
 
   return {
-    data: entry.data,
+    // Fall back to the SSR seed until the cache is populated, so content paints
+    // on first render instead of after a client round-trip.
+    data: entry.data ?? initialData,
     error: entry.error,
-    isLoading: entry.updatedAt === 0 && entry.data === undefined && !entry.error,
+    isLoading: entry.updatedAt === 0 && entry.data === undefined && initialData === undefined && !entry.error,
     isValidating: !!entry.promise,
     refetch,
   };

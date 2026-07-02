@@ -9,14 +9,18 @@ import type { StoryGroup } from "@/lib/social/stories";
 
 const IMAGE_MS = 5000;
 
-export function StoriesRow() {
-  // Cached-first: the row paints instantly on return visits, refreshed in the background.
-  const { data } = useQuery<StoryGroup[]>("stories", async () => {
-    const r = await fetch("/api/stories");
-    if (!r.ok) return [];
-    const d = (await r.json()) as { groups: StoryGroup[] };
-    return d.groups ?? [];
-  });
+export function StoriesRow({ initialGroups }: { initialGroups?: StoryGroup[] }) {
+  // Seeded from the server + cached-first: paints instantly, refreshed in background.
+  const { data } = useQuery<StoryGroup[]>(
+    "stories",
+    async () => {
+      const r = await fetch("/api/stories");
+      if (!r.ok) return [];
+      const d = (await r.json()) as { groups: StoryGroup[] };
+      return d.groups ?? [];
+    },
+    { initialData: initialGroups },
+  );
   const groups = data ?? [];
   const [start, setStart] = useState<number | null>(null);
 

@@ -1,3 +1,4 @@
+import { getCached } from "@/lib/cache";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -93,18 +94,29 @@ export async function getHomeFeed(opts: {
   const offset = opts.offset ?? 0;
   const sort = opts.sort ?? "for_you";
   if (!hasSupabase) return { items: [], nextOffset: null };
+  // Cached briefly per (viewer, sort, page) so SSR seeding + client revalidation
+  // stay cheap. Feed freshness within 20s is fine.
+  const key = `homefeed:${opts.viewerId ?? "anon"}:${sort}:${offset}:${limit}`;
+  return getCached(key, 20, () => loadHomeFeed(opts.viewerId, sort, offset, limit));
+}
 
+async function loadHomeFeed(
+  viewerId: string | null,
+  sort: HomeFeedSort,
+  offset: number,
+  limit: number,
+): Promise<FeedPage> {
   try {
     const db = createAdminClient();
     const settings = await getTrendingSettings();
 
     // "Following" feed needs the viewer's follow set first.
     let followingIds: string[] = [];
-    if (opts.viewerId) {
+    if (viewerId) {
       const { data: follows } = await db
         .from("follows")
         .select("following_id")
-        .eq("follower_id", opts.viewerId);
+        .eq("follower_id", viewerId);
       followingIds = ((follows ?? []) as { following_id: string }[]).map((f) => f.following_id);
     }
     if (sort === "following" && followingIds.length === 0) {
@@ -133,11 +145,11 @@ export async function getHomeFeed(opts: {
       db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, trust_score").in("id", publisherIds),
       db.from("privacy_settings").select("user_id, show_in_recommendations").in("user_id", publisherIds),
       db.from("subscriptions").select("user_id, plan, status").in("user_id", publisherIds).in("status", ["active", "trialing"]),
-      opts.viewerId
-        ? db.from("post_reactions").select("post_id, type").eq("user_id", opts.viewerId).in("post_id", rows.map((r) => r.id))
+      viewerId
+        ? db.from("post_reactions").select("post_id, type").eq("user_id", viewerId).in("post_id", rows.map((r) => r.id))
         : Promise.resolve({ data: [] as { post_id: string; type: string }[] }),
-      opts.viewerId
-        ? db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${opts.viewerId},blocked_id.eq.${opts.viewerId}`)
+      viewerId
+        ? db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`)
         : Promise.resolve({ data: [] as { blocker_id: string; blocked_id: string }[] }),
     ]);
 
@@ -164,7 +176,7 @@ export async function getHomeFeed(opts: {
     }
     const blocked = new Set<string>();
     for (const b of (blocks.data ?? []) as { blocker_id: string; blocked_id: string }[]) {
-      blocked.add(b.blocker_id === opts.viewerId ? b.blocked_id : b.blocker_id);
+      blocked.add(b.blocker_id === viewerId ? b.blocked_id : b.blocker_id);
     }
     const followingSet = new Set(followingIds);
 
@@ -173,7 +185,7 @@ export async function getHomeFeed(opts: {
     for (const r of rows) {
       if (suspended.has(r.publisher_id) || lowTrust.has(r.publisher_id) || blocked.has(r.publisher_id)) continue;
       // Opt-outs are hidden from discovery, but a creator you follow can still appear.
-      if (optedOut.has(r.publisher_id) && !followingSet.has(r.publisher_id) && r.publisher_id !== opts.viewerId) continue;
+      if (optedOut.has(r.publisher_id) && !followingSet.has(r.publisher_id) && r.publisher_id !== viewerId) continue;
       const n = perPublisher.get(r.publisher_id) ?? 0;
       if (n >= Math.max(settings.diversityCap, 2)) continue;
       perPublisher.set(r.publisher_id, n + 1);
@@ -209,7 +221,7 @@ export async function getHomeFeed(opts: {
         viewerLiked: liked.has(r.id),
         viewerSaved: saved.has(r.id),
         isFollowing: followingSet.has(r.publisher_id),
-        isOwner: opts.viewerId === r.publisher_id,
+        isOwner: viewerId === r.publisher_id,
       });
     }
 

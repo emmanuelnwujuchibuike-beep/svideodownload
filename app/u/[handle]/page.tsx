@@ -149,16 +149,20 @@ export default async function ProfilePage({
                 <DiamondCrownBadge plan={plan} size="md" className="absolute bottom-1 right-1 z-10 ring-2 ring-background" />
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 sm:mb-2 sm:justify-end">
+              {/* Edge-to-edge scrollable action bar on mobile (every button
+                  reachable, no cramped wrapping); right-aligned inline on desktop. */}
+              <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:mb-2 sm:justify-end sm:overflow-visible sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {profile.isOwner ? (
                   <>
-                    <ShareProfileButton handle={profile.handle} name={profile.displayName} />
                     <Link
                       href="/account#profile"
-                      className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary"
+                      className="inline-flex shrink-0 items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary"
                     >
                       Edit profile
                     </Link>
+                    <span className="shrink-0">
+                      <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                    </span>
                   </>
                 ) : (
                   <>
@@ -170,30 +174,38 @@ export default async function ProfilePage({
                         targetAvatarUrl={profile.avatarUrl}
                         mutualCount={mutuals}
                         initialState={friendState}
+                        className="shrink-0"
                       />
                     ) : null}
                     <FollowButton
                       targetId={profile.id}
                       initialFollowing={profile.isFollowing}
                       canFollow={!!me}
+                      className="shrink-0"
                     />
                     {me ? (
                       <>
                         <Link
                           href={`/messages/new/${profile.id}`}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-semibold transition hover:bg-secondary"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-semibold transition hover:bg-secondary"
                         >
                           <MessageCircle className="h-4 w-4" /> Message
                         </Link>
-                        <ShareProfileButton handle={profile.handle} name={profile.displayName} />
-                        <ProfileActions
-                          targetId={profile.id}
-                          handle={profile.handle}
-                          initialBlocked={profile.viewerHasBlocked}
-                        />
+                        <span className="shrink-0">
+                          <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                        </span>
+                        <span className="shrink-0">
+                          <ProfileActions
+                            targetId={profile.id}
+                            handle={profile.handle}
+                            initialBlocked={profile.viewerHasBlocked}
+                          />
+                        </span>
                       </>
                     ) : (
-                      <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                      <span className="shrink-0">
+                        <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                      </span>
                     )}
                   </>
                 )}

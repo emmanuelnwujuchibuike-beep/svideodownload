@@ -135,11 +135,12 @@ export function NotificationLiveToast() {
             key={key}
             type="button"
             onClick={() => open(item)}
-            initial={{ y: -84, opacity: 0, scale: 0.96 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: -84, opacity: 0, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 420, damping: 30 }}
-            className="pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-3xl border border-border/70 bg-card/90 p-3 text-left shadow-elevated backdrop-blur-xl transition hover:bg-card"
+            initial={{ y: -80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -80, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.9 }}
+            style={{ willChange: "transform, opacity" }}
+            className="pointer-events-auto flex w-full max-w-sm transform-gpu items-center gap-3 rounded-3xl border border-border/70 bg-card p-3 text-left shadow-elevated transition-colors hover:bg-secondary/60"
             aria-live="polite"
           >
             {avatarUrl ? (

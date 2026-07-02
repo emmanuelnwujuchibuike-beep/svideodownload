@@ -1,20 +1,21 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useId, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
+// Dark is the brand theme; "system" was removed so returning visitors with a
+// stored "system" preference fall back to dark (see ThemeProvider in layout).
 const OPTIONS = [
   { value: "light", label: "Light", icon: Sun },
   { value: "dark", label: "Dark", icon: Moon },
-  { value: "system", label: "System", icon: Monitor },
 ] as const;
 
 /**
- * Premium segmented theme switcher (light / dark / system) with a sliding pill
+ * Premium segmented theme switcher (light / dark) with a sliding pill
  * indicator — styled after the iOS-style control in the Claude app.
  */
 export function ThemeToggle({ size = "md" }: { size?: "sm" | "md" }) {

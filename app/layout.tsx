@@ -86,16 +86,28 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans`}>
+        {/* Runs BEFORE the next-themes bootstrap: returning visitors stored
+            "system" under the old default — migrate them to the dark brand
+            theme once. An explicit "light"/"dark" choice is left untouched. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem("theme");if(!t||t==="system")localStorage.setItem("theme","dark")}catch(e){}`,
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-        {/* Dark-first: the Frenzsave One identity is the deep-navy premium look;
-            users can still switch, and light mode stays fully supported. */}
+        {/* Dark-first: the Frenzsave One identity is the deep-navy premium look.
+            enableSystem is OFF on purpose — returning visitors have "system"
+            stored in localStorage from the old default, which would silently
+            override defaultTheme and keep them on light. Without "system" in
+            the theme list, that stored value falls back to dark; an explicit
+            "light" choice via the toggle is still honored. */}
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
-          enableSystem
+          enableSystem={false}
           disableTransitionOnChange
         >
           {/* Blue→purple gradient background with softly drifting glows — matches the marketing mockup. Premium + lightweight (GPU transforms only, paused for reduced-motion). */}

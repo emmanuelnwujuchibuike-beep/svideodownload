@@ -1,9 +1,11 @@
 import { Flame, Clock } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { PostGrid } from "@/components/social/post-grid";
 import { AppContent } from "@/features/app-shell/app-content";
+import { PostGridSkeleton } from "@/features/ui/page-skeletons";
 import { CATEGORIES, categoryLabel, isCategory, type Category } from "@/lib/social/categories";
 import { getFeed, type FeedSort } from "@/lib/social/feed";
 import { createClient } from "@/lib/supabase/server";
@@ -34,19 +36,8 @@ export default async function ExplorePage({
   const sort: FeedSort = sortParam === "recent" ? "recent" : "trending";
   const category = catParam && isCategory(catParam) ? catParam : null;
 
-  let viewerId: string | null = null;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    viewerId = user?.id ?? null;
-  } catch {
-    /* anon */
-  }
-
-  const posts = await getFeed({ sort, category, viewerId });
-
+  // The frame (header + tabs + chips) renders instantly; only the grid below
+  // streams in behind a skeleton, so the page never blocks on the feed query.
   return (
     <AppContent>
       <div className="mx-auto max-w-5xl">
@@ -69,16 +60,38 @@ export default async function ExplorePage({
           ))}
         </div>
 
-        <PostGrid
-          posts={posts}
-          emptyText={
-            category
-              ? `No ${categoryLabel(category).toLowerCase()} posts yet.`
-              : "Nothing here yet — publish a download to get started."
-          }
-        />
+        <Suspense key={`${sort}:${category ?? "all"}`} fallback={<PostGridSkeleton count={12} />}>
+          <ExploreFeed sort={sort} category={category} />
+        </Suspense>
       </div>
     </AppContent>
+  );
+}
+
+/** Streams the feed independently of the page frame (Suspense boundary above). */
+async function ExploreFeed({ sort, category }: { sort: FeedSort; category: Category | null }) {
+  let viewerId: string | null = null;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    viewerId = user?.id ?? null;
+  } catch {
+    /* anon */
+  }
+
+  const posts = await getFeed({ sort, category, viewerId });
+
+  return (
+    <PostGrid
+      posts={posts}
+      emptyText={
+        category
+          ? `No ${categoryLabel(category).toLowerCase()} posts yet.`
+          : "Nothing here yet — publish a download to get started."
+      }
+    />
   );
 }
 

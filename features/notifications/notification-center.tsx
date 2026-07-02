@@ -122,27 +122,38 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
 
   return (
     <div>
-      {/* Header */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-[-0.02em]">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-[0_6px_20px_-6px_rgba(124,58,237,0.7)]">
-              <BellRing className="h-5 w-5" />
-            </span>
-            Notifications
-          </h1>
-          {unread > 0 ? <p className="mt-1 text-sm text-muted-foreground">{unread} unread</p> : null}
-        </div>
-        <div className="flex items-center gap-2">
-          <PushToggle />
-          <button
-            type="button"
-            onClick={markAllRead}
-            disabled={unread === 0}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 bg-card/60 px-3.5 py-2 text-sm font-medium backdrop-blur transition hover:bg-secondary disabled:opacity-40"
-          >
-            <CheckCheck className="h-4 w-4" /> Mark all read
-          </button>
+      {/* Premium glass hero header */}
+      <div className="relative mb-5 overflow-hidden rounded-3xl border border-border/70 bg-card/70 p-5 shadow-sm backdrop-blur-xl">
+        <div aria-hidden className="pointer-events-none absolute -right-14 -top-14 h-44 w-44 rounded-full bg-gradient-to-br from-blue-500/25 to-violet-500/25 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-10 h-36 w-36 rounded-full bg-gradient-to-tr from-violet-500/15 to-fuchsia-500/15 blur-3xl" />
+        <div className="relative flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-[-0.02em]">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-[0_6px_20px_-6px_rgba(124,58,237,0.7)]">
+                <BellRing className="h-5 w-5" />
+              </span>
+              Notifications
+              {unread > 0 ? (
+                <span className="rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-2.5 py-0.5 text-xs font-bold text-white shadow-sm shadow-violet-500/25">
+                  {unread} new
+                </span>
+              ) : null}
+            </h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Everything happening around you — grouped smartly, delivered live.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <PushToggle />
+            <button
+              type="button"
+              onClick={markAllRead}
+              disabled={unread === 0}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 bg-card/60 px-3.5 py-2 text-sm font-medium backdrop-blur transition hover:bg-secondary disabled:opacity-40"
+            >
+              <CheckCheck className="h-4 w-4" /> Mark all read
+            </button>
+          </div>
         </div>
       </div>
 

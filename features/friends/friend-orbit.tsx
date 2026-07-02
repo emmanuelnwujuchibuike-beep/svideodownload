@@ -13,7 +13,15 @@ import { cn } from "@/lib/utils";
  * Tap any orb to open the chat. Purely presentational — closeness comes from
  * real DM recency, not a black box. Hidden until the user has favorites.
  */
-export function FriendOrbit({ viewer, favorites }: { viewer: FriendProfile; favorites: FriendItem[] }) {
+export function FriendOrbit({
+  viewer,
+  favorites,
+  online,
+}: {
+  viewer: FriendProfile;
+  favorites: FriendItem[];
+  online?: Set<string>;
+}) {
   const reduced = useReducedMotion();
   if (favorites.length === 0) return null;
 
@@ -70,6 +78,12 @@ export function FriendOrbit({ viewer, favorites }: { viewer: FriendProfile; favo
             className="group relative block"
           >
             <OrbAvatar user={f.user} size={i < inner.length ? 48 : 40} ring />
+            {online?.has(f.user.id) ? (
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center">
+                <span className="absolute h-full w-full animate-ping rounded-full bg-emerald-400/60 motion-reduce:hidden" />
+                <span className="relative h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-background" />
+              </span>
+            ) : null}
             {f.unread > 0 ? (
               <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-background">
                 {f.unread > 9 ? "9+" : f.unread}

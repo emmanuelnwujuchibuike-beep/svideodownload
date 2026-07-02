@@ -348,17 +348,27 @@ export async function setFriendFavorite(
   }
 }
 
+export interface FriendActivityItem {
+  postId: string;
+  title: string;
+  mediaKind: string | null;
+  createdAt: string;
+  user: FriendProfile;
+}
+
 export interface FriendsOverview {
   /** The signed-in viewer (for the Friend Orbit centerpiece). */
   viewer: FriendProfile | null;
   friends: FriendItem[];
   incoming: FriendRequestItem[];
   outgoing: FriendRequestItem[];
+  /** Recent PUBLIC posts by friends (last 7 days) — the live activity strip. */
+  activity: FriendActivityItem[];
 }
 
 /** Everything the /friends hub needs, in one call. */
 export async function friendsOverview(userId: string, limit = 100): Promise<FriendsOverview> {
-  if (!hasSupabase) return { viewer: null, friends: [], incoming: [], outgoing: [] };
+  if (!hasSupabase) return { viewer: null, friends: [], incoming: [], outgoing: [], activity: [] };
   try {
     const db = createAdminClient();
     const [{ data: fr }, { data: inc }, { data: out }, { data: fav }, convs] = await Promise.all([
@@ -400,8 +410,35 @@ export async function friendsOverview(userId: string, limit = 100): Promise<Frie
     const profiles = await loadProfiles(db, [...ids]);
 
     const item = (id: string): FriendProfile | null => profiles.get(id) ?? null;
+
+    // Live activity: recent public posts by friends. Public-only on purpose —
+    // a friends-hub surface must never widen a post's audience.
+    const friendIdList = friendships.map((f) => (f.user_low === userId ? f.user_high : f.user_low));
+    let activity: FriendActivityItem[] = [];
+    if (friendIdList.length > 0) {
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: acts } = await db
+        .from("posts")
+        .select("id, publisher_id, title, media_kind, created_at")
+        .in("publisher_id", friendIdList)
+        .eq("status", "published")
+        .eq("visibility", "public")
+        .gte("created_at", weekAgo)
+        .order("created_at", { ascending: false })
+        .limit(8);
+      activity = ((acts as { id: string; publisher_id: string; title: string | null; media_kind: string | null; created_at: string }[]) ?? [])
+        .map((p) => {
+          const u = item(p.publisher_id);
+          return u
+            ? { postId: p.id, title: p.title ?? "a new post", mediaKind: p.media_kind, createdAt: p.created_at, user: u }
+            : null;
+        })
+        .filter((x): x is FriendActivityItem => !!x);
+    }
+
     return {
       viewer: item(userId),
+      activity,
       friends: friendships
         .map((f) => {
           const u = item(f.user_low === userId ? f.user_high : f.user_low);
@@ -432,7 +469,7 @@ export async function friendsOverview(userId: string, limit = 100): Promise<Frie
         .filter((x): x is FriendRequestItem => !!x),
     };
   } catch {
-    return { viewer: null, friends: [], incoming: [], outgoing: [] };
+    return { viewer: null, friends: [], incoming: [], outgoing: [], activity: [] };
   }
 }
 

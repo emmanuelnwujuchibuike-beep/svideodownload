@@ -1,30 +1,39 @@
 "use client";
 
-import { Clapperboard, Compass, Home, User } from "lucide-react";
+import { Home, MessageCircle, User, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { openUpload } from "@/features/create/upload-store";
 import { useEntitlements } from "@/features/auth/use-entitlements";
+import { openUpload } from "@/features/create/upload-store";
+import { useQuery } from "@/features/data";
+import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { cn } from "@/lib/utils";
 
-const LEFT = [
-  { label: "Home", href: "/home", icon: Home },
-  { label: "Explore", href: "/explore", icon: Compass },
-];
-const RIGHT = [{ label: "Reels", href: "/explore", icon: Clapperboard }];
-
+/**
+ * TikTok-style bottom navigation — the mobile spine of the app: Home, Friends,
+ * Create (center), Inbox (live unread badge via the shared inbox cache), and
+ * Profile. Every tab is a client-side <Link> (SPA transition into the
+ * persistent app shell), and it renders on /u and /p pages too so navigation
+ * never disappears on mobile.
+ */
 export function MobileNav() {
   const pathname = usePathname();
   const { handle } = useEntitlements();
+  // Cached-first: shows the last-known unread count instantly, updates live.
+  const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox);
+  const unread = inbox?.unread ?? 0;
+
   const profileHref = handle ? `/u/${handle}` : "/account";
   const profileActive = pathname.startsWith("/u/") || pathname.startsWith("/account");
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-border/60 bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] pt-1.5 backdrop-blur-xl lg:hidden">
-      {LEFT.map((item) => (
-        <NavTab key={item.label} {...item} active={pathname === item.href} />
-      ))}
+    <nav
+      aria-label="Primary"
+      className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-border/60 bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] pt-1.5 backdrop-blur-xl lg:hidden"
+    >
+      <NavTab label="Home" href="/home" icon={Home} active={pathname === "/home"} />
+      <NavTab label="Friends" href="/friends" icon={UsersRound} active={pathname.startsWith("/friends")} />
 
       {/* TikTok-style center create button */}
       <button type="button" onClick={openUpload} aria-label="Create" className="relative -mt-1 flex h-8 w-[3.25rem] items-center justify-center">
@@ -37,9 +46,13 @@ export function MobileNav() {
         </span>
       </button>
 
-      {RIGHT.map((item) => (
-        <NavTab key={item.label} {...item} active={pathname === item.href && item.href !== "/explore"} />
-      ))}
+      <NavTab
+        label="Inbox"
+        href="/messages"
+        icon={MessageCircle}
+        active={pathname.startsWith("/messages")}
+        badge={unread}
+      />
 
       {/* Profile (Instagram-style avatar) */}
       <Link href={profileHref} className="flex flex-col items-center gap-0.5 px-2 py-1">
@@ -52,10 +65,29 @@ export function MobileNav() {
   );
 }
 
-function NavTab({ label, href, icon: Icon, active }: { label: string; href: string; icon: typeof Home; active: boolean }) {
+function NavTab({
+  label,
+  href,
+  icon: Icon,
+  active,
+  badge = 0,
+}: {
+  label: string;
+  href: string;
+  icon: typeof Home;
+  active: boolean;
+  badge?: number;
+}) {
   return (
-    <Link href={href} className="flex flex-col items-center gap-0.5 px-2 py-1">
-      <Icon className={cn("h-6 w-6 transition", active ? "fill-current text-foreground" : "text-muted-foreground")} strokeWidth={active ? 2.5 : 2} />
+    <Link href={href} className="relative flex flex-col items-center gap-0.5 px-2 py-1">
+      <span className="relative">
+        <Icon className={cn("h-6 w-6 transition", active ? "fill-current text-foreground" : "text-muted-foreground")} strokeWidth={active ? 2.5 : 2} />
+        {badge > 0 ? (
+          <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-background">
+            {badge > 9 ? "9+" : badge}
+          </span>
+        ) : null}
+      </span>
       <span className={cn("text-[10px] font-medium", active ? "text-foreground" : "text-muted-foreground")}>{label}</span>
     </Link>
   );

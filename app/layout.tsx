@@ -86,34 +86,32 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans`}>
-        {/* Runs BEFORE the next-themes bootstrap: returning visitors stored
-            "system" under the old default — migrate them to the dark brand
-            theme once. An explicit "light"/"dark" choice is left untouched. */}
+        {/* One-time cleanup (runs before the next-themes bootstrap): an earlier
+            build force-migrated visitors to "dark". Owner decision: the default
+            is SYSTEM; users pick light/dark themselves. Undo that forced value
+            once (flag-guarded so explicit choices made afterwards stick). */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("theme");if(!t||t==="system")localStorage.setItem("theme","dark")}catch(e){}`,
+            __html: `try{if(!localStorage.getItem("frenz:theme-reset")){if(localStorage.getItem("theme")==="dark")localStorage.removeItem("theme");localStorage.setItem("frenz:theme-reset","1")}}catch(e){}`,
           }}
         />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-        {/* Dark-first: the Frenzsave One identity is the deep-navy premium look.
-            enableSystem is OFF on purpose — returning visitors have "system"
-            stored in localStorage from the old default, which would silently
-            override defaultTheme and keep them on light. Without "system" in
-            the theme list, that stored value falls back to dark; an explicit
-            "light" choice via the toggle is still honored. */}
+        {/* Owner decision: SYSTEM is the default; the toggle offers
+            light / dark / system and the user's choice is remembered. */}
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
-          enableSystem={false}
+          defaultTheme="system"
+          enableSystem
           disableTransitionOnChange
         >
           {/* Blue→purple gradient background with softly drifting glows — matches the marketing mockup. Premium + lightweight (GPU transforms only, paused for reduced-motion). */}
           <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-background">
-            {/* Base blue→purple wash */}
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.10] via-violet-500/[0.08] to-purple-500/[0.12]" />
+            {/* Base blue→purple wash — kept faint so pages read clean/white in
+                light mode; the glows below carry the brand color. */}
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.06] via-violet-500/[0.04] to-purple-500/[0.07]" />
             {/* Blue glow — upper right, behind the hero phone */}
             <div className="absolute right-[-12%] top-[-6%] h-[72%] w-[62%] rounded-full bg-gradient-to-br from-sky-400/30 via-blue-500/20 to-violet-500/22 blur-[110px] will-change-transform motion-safe:animate-drift" />
             <div className="absolute right-[4%] top-[24%] h-[44%] w-[36%] rounded-full bg-gradient-to-tr from-cyan-300/28 to-blue-400/18 blur-[90px] will-change-transform motion-safe:animate-drift-slow" />

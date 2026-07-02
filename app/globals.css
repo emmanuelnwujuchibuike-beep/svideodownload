@@ -4,8 +4,8 @@
 
 @layer base {
   :root {
-    /* Light — crisp near-white, warm neutral grays */
-    --background: 0 0% 99%;
+    /* Light — pure white base (owner: "a bit more whiter"), warm neutral grays */
+    --background: 0 0% 100%;
     --foreground: 240 10% 8%;
     --card: 0 0% 100%;
     --card-foreground: 240 10% 8%;

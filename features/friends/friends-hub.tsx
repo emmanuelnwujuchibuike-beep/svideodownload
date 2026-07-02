@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   Check,
   Compass,
   Hand,
@@ -19,6 +20,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { FriendCelebration } from "@/features/friends/friend-celebration";
 import { FriendOrbit } from "@/features/friends/friend-orbit";
+import { usePresence } from "@/features/friends/use-presence";
 import { timeAgo } from "@/features/notifications/meta";
 import type { FriendItem, FriendProfile, FriendRequestItem, FriendsOverview } from "@/lib/social/friends";
 import { cn } from "@/lib/utils";
@@ -32,10 +34,11 @@ import { cn } from "@/lib/utils";
  */
 
 const DAY = 24 * 60 * 60 * 1000;
-type Tab = "all" | "favorites" | "active" | "new";
+type Tab = "all" | "online" | "favorites" | "active" | "new";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
+  { id: "online", label: "Online" },
   { id: "favorites", label: "Favorites" },
   { id: "active", label: "Recently Active" },
   { id: "new", label: "New" },
@@ -50,6 +53,8 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
   const [celebrating, setCelebrating] = useState<FriendProfile | null>(null);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<Tab>("all");
+  // Live green dots — everyone currently in the shared presence channel.
+  const online = usePresence();
 
   const respond = async (req: FriendRequestItem, action: "accept" | "decline") => {
     if (busyId) return;
@@ -121,6 +126,8 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
       );
     }
     switch (tab) {
+      case "online":
+        return list.filter((f) => online.has(f.user.id));
       case "favorites":
         return list.filter((f) => f.favorite);
       case "active":
@@ -134,7 +141,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
       default:
         return list;
     }
-  }, [friends, query, tab, now]);
+  }, [friends, query, tab, now, online]);
 
   // Smart Catch-Up: quiet friendships (3+ days old, no chat in 14+ days). Max 3.
   const catchUp = useMemo(
@@ -157,7 +164,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
       <h1 className="mb-4 text-2xl font-bold tracking-[-0.02em]">Friends</h1>
 
       {initial.viewer && favorites.length > 0 ? (
-        <FriendOrbit viewer={initial.viewer} favorites={favorites} />
+        <FriendOrbit viewer={initial.viewer} favorites={favorites} online={online} />
       ) : null}
 
       {incoming.length > 0 ? (
@@ -248,6 +255,32 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
         </section>
       ) : null}
 
+      {initial.activity.length > 0 ? (
+        <section className="mb-6">
+          <h2 className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+            <Activity className="h-4 w-4 text-blue-500 dark:text-blue-300" /> Friend activity
+          </h2>
+          <ul className="space-y-1.5">
+            {initial.activity.map((a) => (
+              <li key={a.postId}>
+                <Link
+                  href={`/p/${a.postId}`}
+                  className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/60 px-3.5 py-2.5 transition hover:bg-card"
+                >
+                  <ProfileAvatar user={a.user} size="sm" online={online.has(a.user.id)} />
+                  <span className="min-w-0 flex-1 text-sm">
+                    <strong className="font-semibold">{a.user.displayName}</strong>{" "}
+                    <span className="text-muted-foreground">published{a.mediaKind === "video" ? " a video" : ""} ·</span>{" "}
+                    <span className="truncate">{a.title}</span>
+                  </span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(a.createdAt)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {outgoing.length > 0 ? (
         <section className="mb-6">
           <h2 className="mb-2.5 text-sm font-semibold text-muted-foreground">Sent requests</h2>
@@ -319,6 +352,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
                     key={f.user.id}
                     item={f}
                     isNew={now - new Date(f.since).getTime() < 30 * DAY}
+                    online={online.has(f.user.id)}
                     onFavorite={toggleFavorite}
                     onRemoved={(id) => setFriends((l) => l.filter((x) => x.user.id !== id))}
                   />
@@ -365,11 +399,13 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
 function FriendRow({
   item,
   isNew,
+  online,
   onFavorite,
   onRemoved,
 }: {
   item: FriendItem;
   isNew: boolean;
+  online: boolean;
   onFavorite: (id: string, on: boolean) => void;
   onRemoved: (id: string) => void;
 }) {
@@ -397,7 +433,7 @@ function FriendRow({
 
   return (
     <li className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/60 px-3.5 py-2.5 transition hover:bg-card">
-      <ProfileAvatar user={item.user} size="sm" />
+      <ProfileAvatar user={item.user} size="sm" online={online} />
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5">
           <Link href={`/u/${item.user.handle}`} className="truncate text-sm font-semibold hover:underline">
@@ -410,7 +446,11 @@ function FriendRow({
           ) : null}
         </p>
         <p className="truncate text-xs text-muted-foreground">
-          @{item.user.handle} · {item.lastChatAt ? `chatted ${timeAgo(item.lastChatAt)} ago` : "no chats yet"}
+          {online ? (
+            <span className="font-medium text-emerald-500">Online now</span>
+          ) : (
+            <>@{item.user.handle} · {item.lastChatAt ? `chatted ${timeAgo(item.lastChatAt)} ago` : "no chats yet"}</>
+          )}
         </p>
       </div>
       {item.unread > 0 ? (
@@ -454,14 +494,32 @@ function FriendRow({
   );
 }
 
-function ProfileAvatar({ user, size = "md" }: { user: FriendProfile; size?: "sm" | "md" }) {
+function ProfileAvatar({
+  user,
+  size = "md",
+  online = false,
+}: {
+  user: FriendProfile;
+  size?: "sm" | "md";
+  online?: boolean;
+}) {
   const cls = size === "sm" ? "h-10 w-10 text-sm" : "h-12 w-12 text-base";
-  return user.avatarUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={user.avatarUrl} alt="" className={cn(cls, "shrink-0 rounded-full object-cover ring-2 ring-violet-500/20")} />
-  ) : (
-    <span className={cn(cls, "flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 font-bold text-white")}>
-      {user.displayName.charAt(0).toUpperCase()}
+  return (
+    <span className="relative shrink-0">
+      {user.avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={user.avatarUrl} alt="" className={cn(cls, "block rounded-full object-cover ring-2 ring-violet-500/20")} />
+      ) : (
+        <span className={cn(cls, "flex items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 font-bold text-white")}>
+          {user.displayName.charAt(0).toUpperCase()}
+        </span>
+      )}
+      {online ? (
+        <span aria-label="Online" className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center">
+          <span className="absolute h-full w-full animate-ping rounded-full bg-emerald-400/60 motion-reduce:hidden" />
+          <span className="relative h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-background" />
+        </span>
+      ) : null}
     </span>
   );
 }

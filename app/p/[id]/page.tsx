@@ -13,6 +13,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { PostGrid } from "@/components/social/post-grid";
 import { Comments } from "@/features/social/comments";
 import { FollowButton } from "@/features/social/follow-button";
+import { PostDeleteButton } from "@/features/social/post-delete-button";
 import { PostDownloadButton } from "@/features/social/post-download-button";
 import { PostEngagement } from "@/features/social/post-engagement";
 import { ReportButton } from "@/features/social/report-button";
@@ -154,7 +155,11 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           </div>
           <div className="flex items-center gap-2">
             <PostDownloadButton postId={post.id} sourceUrl={post.source_url} mediaKind={post.media_kind} title={post.title} />
-            <ReportButton targetType="post" targetId={post.id} />
+            {post.isOwner ? (
+              <PostDeleteButton postId={post.id} redirectTo={`/u/${post.publisher.handle}`} />
+            ) : (
+              <ReportButton targetType="post" targetId={post.id} />
+            )}
           </div>
         </div>
 

@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
-import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { PostGrid } from "@/components/social/post-grid";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
@@ -312,7 +311,6 @@ export default async function ProfilePage({
           )}
         </div>
       </main>
-      <SiteFooter />
     </>
   );
 }
@@ -339,6 +337,7 @@ async function ProfilePosts({
   return (
     <PostGrid
       posts={posts}
+      layout={filter === "videos" ? "reel" : filter === "photos" ? "photo" : "card"}
       emptyText={
         filter !== "posts"
           ? `No ${filter} yet.`

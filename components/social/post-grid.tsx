@@ -2,12 +2,27 @@ import { Eye, Image as ImageIcon, Music, Play } from "lucide-react";
 import Link from "next/link";
 
 import type { PostCard } from "@/lib/social/posts";
-import { formatCompactNumber } from "@/lib/utils";
+import { cn, formatCompactNumber } from "@/lib/utils";
 
 const KIND_ICON = { video: Play, image: ImageIcon, audio: Music } as const;
 
-/** Responsive grid of post cards (profile posts, related, explore). */
-export function PostGrid({ posts, emptyText = "No posts yet." }: { posts: PostCard[]; emptyText?: string }) {
+/**
+ * Post cards in three responsive layouts:
+ *  - "card"  → the default titled cards (related, explore).
+ *  - "reel"  → edge-to-edge portrait (9:16) tiles, TikTok-style — for Videos.
+ *  - "photo" → edge-to-edge square tiles — for Photos.
+ * Reel/photo tiles fill the row and scale their column count to the device
+ * (3 on phones → up to 5 on desktop) so media always fills the screen width.
+ */
+export function PostGrid({
+  posts,
+  emptyText = "No posts yet.",
+  layout = "card",
+}: {
+  posts: PostCard[];
+  emptyText?: string;
+  layout?: "card" | "reel" | "photo";
+}) {
   if (posts.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border/70 p-10 text-center text-sm text-muted-foreground">
@@ -15,12 +30,60 @@ export function PostGrid({ posts, emptyText = "No posts yet." }: { posts: PostCa
       </div>
     );
   }
+
+  if (layout === "reel" || layout === "photo") {
+    return (
+      <div className="grid grid-cols-3 gap-1 sm:gap-1.5 md:grid-cols-4 lg:grid-cols-5">
+        {posts.map((p) => (
+          <MediaTile key={p.id} post={p} aspect={layout === "reel" ? "portrait" : "square"} />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {posts.map((p) => (
         <PostCardItem key={p.id} post={p} />
       ))}
     </div>
+  );
+}
+
+/** Edge-to-edge media tile (Videos/Photos tabs) — thumbnail fills, minimal chrome. */
+function MediaTile({ post, aspect }: { post: PostCard; aspect: "portrait" | "square" }) {
+  const KindIcon = KIND_ICON[post.mediaKind] ?? Play;
+  return (
+    <Link
+      href={`/p/${post.id}`}
+      className={cn(
+        "group relative overflow-hidden bg-neutral-950 sm:rounded-lg",
+        aspect === "portrait" ? "aspect-[9/16]" : "aspect-square",
+      )}
+    >
+      {post.thumbnailUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={post.thumbnailUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-white/25">
+          <KindIcon className="h-8 w-8" />
+        </div>
+      )}
+      {/* legibility gradient */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/70 to-transparent" />
+      {post.mediaKind === "video" ? (
+        <Play className="absolute left-2 top-2 h-4 w-4 fill-white/90 text-white/90 drop-shadow" />
+      ) : null}
+      <span className="absolute bottom-1.5 left-2 inline-flex items-center gap-1 text-[11px] font-semibold text-white drop-shadow">
+        <Eye className="h-3 w-3" /> {formatCompactNumber(post.viewsCount)}
+      </span>
+    </Link>
   );
 }
 

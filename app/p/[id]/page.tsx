@@ -8,7 +8,6 @@ import { notFound } from "next/navigation";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { isAdmin } from "@/lib/admin";
-import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { PostGrid } from "@/components/social/post-grid";
 import { Comments } from "@/features/social/comments";
@@ -230,7 +229,6 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           </section>
         ) : null}
       </main>
-      <SiteFooter />
     </>
   );
 }

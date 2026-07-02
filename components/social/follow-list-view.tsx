@@ -2,7 +2,6 @@ import { ArrowLeft, Lock } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { UserList } from "@/components/social/user-list";
 import { getPublicProfile, listFollowers, listFollowing } from "@/lib/social/profile";
@@ -74,7 +73,6 @@ export async function FollowListView({
           )}
         </div>
       </main>
-      <SiteFooter />
     </>
   );
 }

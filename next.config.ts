@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
   // "more modules must not bloat existing routes" guarantee (docs/ARCHITECTURE.md).
   experimental: {
     optimizePackageImports: ["lucide-react", "react-icons", "framer-motion"],
+    // Client Router Cache: Next 15 defaults dynamic pages to staleTime 0, so every
+    // in-app navigation refetches from the server and flashes a loading skeleton.
+    // Caching visited routes briefly makes revisits/back-nav instant (native feel),
+    // while realtime + the SWR layer keep content fresh. Tune here, not per-page.
+    staleTimes: { dynamic: 60, static: 300 },
   },
   images: {
     // yt-dlp returns thumbnails from arbitrary CDNs; allow https remotes.

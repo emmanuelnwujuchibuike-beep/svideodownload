@@ -72,7 +72,10 @@ export function NotificationCard({
           <span className={cn(actorLed ? "text-muted-foreground" : "font-semibold")}>{verbFor(group.type)}</span>
           {group.postTitle ? <span className="text-muted-foreground"> · {group.postTitle}</span> : null}
         </p>
-        <p className="mt-1 text-[11px] font-medium text-muted-foreground">{timeAgo(group.createdAt)} ago</p>
+        {/* Relative time differs by a second between server render + hydration. */}
+        <p className="mt-1 text-[11px] font-medium text-muted-foreground" suppressHydrationWarning>
+          {timeAgo(group.createdAt)} ago
+        </p>
       </div>
 
       {/* Unread dot */}

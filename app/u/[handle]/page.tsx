@@ -2,6 +2,7 @@ import { BadgeCheck, CalendarDays, Link as LinkIcon, Lock, MessageCircle } from 
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -9,6 +10,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { PostGrid } from "@/components/social/post-grid";
 import { FollowButton } from "@/features/social/follow-button";
 import { ProfileActions } from "@/features/social/profile-actions";
+import { PostGridSkeleton } from "@/features/ui/page-skeletons";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { listUserPosts } from "@/lib/social/posts";
 import { getPublicProfile } from "@/lib/social/profile";
@@ -62,10 +64,9 @@ export default async function ProfilePage({
   const profile = await getPublicProfile(handle, me);
   if (!profile) notFound();
 
-  const [plan, posts] = await Promise.all([
-    getUserPlan(profile.id),
-    profile.restricted ? Promise.resolve([]) : listUserPosts(profile.id, me),
-  ]);
+  // The profile header renders immediately; the (heavier) posts grid streams in
+  // behind a skeleton so the page never blocks on the post query.
+  const plan = await getUserPlan(profile.id);
 
   const ld = {
     "@context": "https://schema.org",
@@ -197,16 +198,11 @@ export default async function ProfilePage({
                 </Link>
               </div>
 
-              {/* Published downloads */}
+              {/* Published downloads — streamed independently of the header */}
               <div className="mt-8">
-                <PostGrid
-                  posts={posts}
-                  emptyText={
-                    profile.isOwner
-                      ? "You haven't published anything yet — publish a download from the result page."
-                      : "No public posts yet."
-                  }
-                />
+                <Suspense fallback={<PostGridSkeleton count={6} />}>
+                  <ProfilePosts profileId={profile.id} viewerId={me} isOwner={profile.isOwner} />
+                </Suspense>
               </div>
             </>
           )}
@@ -214,5 +210,28 @@ export default async function ProfilePage({
       </main>
       <SiteFooter />
     </>
+  );
+}
+
+/** A user's published posts — streamed behind a Suspense boundary on the profile. */
+async function ProfilePosts({
+  profileId,
+  viewerId,
+  isOwner,
+}: {
+  profileId: string;
+  viewerId: string | null;
+  isOwner: boolean;
+}) {
+  const posts = await listUserPosts(profileId, viewerId);
+  return (
+    <PostGrid
+      posts={posts}
+      emptyText={
+        isOwner
+          ? "You haven't published anything yet — publish a download from the result page."
+          : "No public posts yet."
+      }
+    />
   );
 }

@@ -101,7 +101,10 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids: g.notificationIds }),
     })
-      .then(() => void revalidate(KEY, loadGrouped, 0).catch(() => {}))
+      .then(() => {
+        void revalidate(KEY, loadGrouped, 0).catch(() => {});
+        if (!g.read) void revalidate(BELL_KEY, loadFlatNotifications, 0).catch(() => {});
+      })
       .catch(() => {});
   };
 

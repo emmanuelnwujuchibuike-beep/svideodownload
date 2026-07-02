@@ -4,7 +4,7 @@ import { BadgeCheck } from "lucide-react";
 import Link from "next/link";
 
 import { useQuery } from "@/features/data";
-import { INBOX_KEY, loadInbox, useInboxRealtime, type Inbox } from "@/features/social/inbox";
+import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import type { ConversationSummary } from "@/lib/social/messages";
 import { cn } from "@/lib/utils";
 
@@ -20,10 +20,11 @@ function timeAgo(iso: string): string {
 
 /** Realtime inbox list — seeded server-side (instant paint), then live-updated. */
 export function ConversationList({ initial }: { initial: ConversationSummary[] }) {
+  // Shares the INBOX_KEY cache with the topbar MessagesBell, which owns the
+  // realtime subscription — so this list live-updates without a second channel.
   const { data } = useQuery<Inbox>(INBOX_KEY, loadInbox, {
     initialData: { conversations: initial, unread: initial.filter((c) => c.unread).length },
   });
-  useInboxRealtime();
   const conversations = data?.conversations ?? initial;
 
   if (conversations.length === 0) {

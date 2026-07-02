@@ -37,9 +37,22 @@ export function ConversationRoom({
   const seen = useRef(new Set(initial.map((m) => m.id)));
 
   const append = useCallback((m: MessageItem) => {
-    if (seen.current.has(m.id)) return;
-    seen.current.add(m.id);
-    setMessages((prev) => [...prev, m]);
+    setMessages((prev) => {
+      if (seen.current.has(m.id)) return prev;
+      // My own realtime echo reconciles with the optimistic bubble I already
+      // showed (same body, temp id) instead of appending a duplicate.
+      if (m.mine) {
+        const idx = prev.findIndex((x) => x.id.startsWith("optimistic-") && x.body === m.body);
+        if (idx !== -1) {
+          seen.current.add(m.id);
+          const copy = prev.slice();
+          copy[idx] = m;
+          return copy;
+        }
+      }
+      seen.current.add(m.id);
+      return [...prev, m];
+    });
   }, []);
 
   // Auto-scroll to the newest message.
@@ -71,9 +84,8 @@ export function ConversationRoom({
     const text = body.trim();
     if (!text || busy) return;
     setBusy(true);
-    // Optimistic: show it now; realtime will dedupe the echoed row by id later.
+    // Optimistic: show it now; the realtime echo reconciles it (see `append`).
     const optimisticId = `optimistic-${Date.now()}`;
-    seen.current.add(optimisticId);
     setMessages((prev) => [...prev, { id: optimisticId, body: text, createdAt: new Date().toISOString(), mine: true }]);
     setBody("");
     try {

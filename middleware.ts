@@ -22,6 +22,17 @@ export async function middleware(request: NextRequest) {
     return res;
   }
 
+  // Prefetch requests only warm the route's loading boundary — they don't render
+  // user content or navigate, so skip the Supabase auth round-trip. This makes
+  // link prefetching (which drives instant navigation) return faster, while real
+  // navigations still run the full session refresh + route guards below.
+  if (
+    request.headers.get("next-router-prefetch") === "1" ||
+    request.headers.get("purpose") === "prefetch"
+  ) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

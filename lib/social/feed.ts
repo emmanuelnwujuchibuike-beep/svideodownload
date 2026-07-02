@@ -1,3 +1,4 @@
+import { getCached } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { type Category } from "./categories";
@@ -103,7 +104,11 @@ interface FeedRow {
 
 export type FeedSort = "trending" | "recent";
 
-/** A privacy-filtered, diversity-capped page of the public discovery feed. */
+/**
+ * A privacy-filtered, diversity-capped page of the public discovery feed.
+ * Cached briefly per (sort, category, limit, viewer): discovery content is shared,
+ * so anonymous/SEO traffic hits one warm entry instead of re-running the queries.
+ */
 export async function getFeed(opts: {
   sort: FeedSort;
   category?: Category | null;
@@ -112,6 +117,17 @@ export async function getFeed(opts: {
 }): Promise<PostCard[]> {
   if (!hasSupabase) return [];
   const limit = opts.limit ?? 24;
+  const category = opts.category ?? null;
+  const key = `feed:${opts.sort}:${category ?? "all"}:${limit}:${opts.viewerId ?? "anon"}`;
+  return getCached(key, 45, () => loadFeed(opts.sort, category, opts.viewerId, limit));
+}
+
+async function loadFeed(
+  sort: FeedSort,
+  category: Category | null,
+  viewerId: string | null,
+  limit: number,
+): Promise<PostCard[]> {
   try {
     const db = createAdminClient();
     const settings = await getTrendingSettings();
@@ -122,8 +138,8 @@ export async function getFeed(opts: {
       .eq("status", "published")
       .eq("visibility", "public")
       .limit(limit * 4); // over-fetch for filtering + diversity
-    if (opts.category) q = q.eq("category", opts.category);
-    q = opts.sort === "recent"
+    if (category) q = q.eq("category", category);
+    q = sort === "recent"
       ? q.order("created_at", { ascending: false })
       : q.order("hot_score", { ascending: false }).order("created_at", { ascending: false });
 
@@ -135,8 +151,8 @@ export async function getFeed(opts: {
     const [{ data: profs }, { data: privs }, blocks] = await Promise.all([
       db.from("profiles").select("id, is_suspended, trust_score").in("id", publisherIds),
       db.from("privacy_settings").select("user_id, show_in_recommendations").in("user_id", publisherIds),
-      opts.viewerId
-        ? db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${opts.viewerId},blocked_id.eq.${opts.viewerId}`)
+      viewerId
+        ? db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`)
         : Promise.resolve({ data: [] as { blocker_id: string; blocked_id: string }[] }),
     ]);
 
@@ -155,7 +171,7 @@ export async function getFeed(opts: {
     );
     const blocked = new Set<string>();
     for (const b of (blocks.data ?? []) as { blocker_id: string; blocked_id: string }[]) {
-      blocked.add(b.blocker_id === opts.viewerId ? b.blocked_id : b.blocker_id);
+      blocked.add(b.blocker_id === viewerId ? b.blocked_id : b.blocker_id);
     }
 
     const perPublisher = new Map<string, number>();

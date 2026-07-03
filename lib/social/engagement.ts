@@ -46,6 +46,12 @@ export interface CommentAuthor {
 export interface CommentNode {
   id: string;
   body: string;
+  /** Sticker id (see lib/social/stickers) when the comment is a sticker. */
+  sticker: string | null;
+  /** Attached image URL when the comment carries a picture. */
+  imageUrl: string | null;
+  likesCount: number;
+  viewerLiked: boolean;
   createdAt: string;
   author: CommentAuthor | null;
   canDelete: boolean;
@@ -59,6 +65,9 @@ interface CommentRow {
   body: string;
   status: string;
   created_at: string;
+  sticker?: string | null;
+  image_url?: string | null;
+  likes_count?: number | null;
 }
 
 /** Visible comments for a post, threaded one level, with author cards. */
@@ -71,15 +80,37 @@ export async function listComments(
   if (!hasSupabase) return [];
   try {
     const db = createAdminClient();
-    const { data } = await db
-      .from("post_comments")
-      .select("id, author_id, parent_id, body, status, created_at")
-      .eq("post_id", postId)
-      .eq("status", "visible")
-      .order("created_at", { ascending: true })
-      .limit(300);
-    const rows = (data as CommentRow[]) ?? [];
+    // Prefer the rich columns (sticker/image), but fall back cleanly if the
+    // migration hasn't been applied yet so comments never vanish.
+    const EXT = "id, author_id, parent_id, body, status, created_at, sticker, image_url, likes_count";
+    const BASE = "id, author_id, parent_id, body, status, created_at, likes_count";
+    const runQuery = (cols: string) =>
+      db
+        .from("post_comments")
+        .select(cols)
+        .eq("post_id", postId)
+        .eq("status", "visible")
+        .order("created_at", { ascending: true })
+        .limit(400);
+    const ext = await runQuery(EXT);
+    const raw = (ext.error ? (await runQuery(BASE)).data : ext.data) as unknown as CommentRow[] | null;
+    const rows = raw ?? [];
     if (rows.length === 0) return [];
+
+    // Which of these comments the viewer has liked (best-effort — table is new).
+    const likedIds = new Set<string>();
+    if (viewerId) {
+      try {
+        const { data: cr } = await db
+          .from("comment_reactions")
+          .select("comment_id")
+          .eq("user_id", viewerId)
+          .in("comment_id", rows.map((r) => r.id));
+        for (const r of (cr ?? []) as { comment_id: string }[]) likedIds.add(r.comment_id);
+      } catch {
+        /* comment_reactions not migrated yet */
+      }
+    }
 
     // Batch author cards (profiles + plans), excluding people who block / are
     // blocked by the viewer.
@@ -120,6 +151,10 @@ export async function listComments(
     const toNode = (r: CommentRow): CommentNode => ({
       id: r.id,
       body: r.body,
+      sticker: r.sticker ?? null,
+      imageUrl: r.image_url ?? null,
+      likesCount: r.likes_count ?? 0,
+      viewerLiked: likedIds.has(r.id),
       createdAt: r.created_at,
       author: authorById.get(r.author_id) ?? null,
       canDelete: canDelete(r.author_id),

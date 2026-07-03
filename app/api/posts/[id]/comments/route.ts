@@ -4,6 +4,7 @@ import { z } from "zod";
 import { pushSocialEvent } from "@/lib/push/social-push";
 import { assistantLimiter } from "@/lib/rate-limit";
 import { canComment, commentSpamReason, listComments } from "@/lib/social/engagement";
+import { isStickerId } from "@/lib/social/stickers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -43,7 +44,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   );
 }
 const schema = z.object({
-  body: z.string().trim().min(1).max(1000),
+  body: z.string().trim().max(1000).optional().default(""),
+  sticker: z.string().max(40).nullable().optional(),
+  imageUrl: z.string().url().max(2048).nullable().optional(),
   parentId: z.string().uuid().nullable().optional(),
 });
 
@@ -85,8 +88,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const parsed = schema.safeParse(json);
   if (!parsed.success) return NextResponse.json({ error: "Write a comment first." }, { status: 400 });
 
-  const spam = commentSpamReason(parsed.data.body);
-  if (spam) return NextResponse.json({ error: spam }, { status: 400 });
+  const body = parsed.data.body.trim();
+  const sticker = parsed.data.sticker && isStickerId(parsed.data.sticker) ? parsed.data.sticker : null;
+  const imageUrl = parsed.data.imageUrl ?? null;
+  if (!body && !sticker && !imageUrl) {
+    return NextResponse.json({ error: "Add a comment, sticker, or picture." }, { status: 400 });
+  }
+
+  if (body) {
+    const spam = commentSpamReason(body);
+    if (spam) return NextResponse.json({ error: spam }, { status: 400 });
+  }
 
   const gate = await canComment(id, user.id);
   if (!gate.ok) return NextResponse.json({ error: GATE_MSG[gate.reason] }, { status: 403 });
@@ -104,17 +116,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     else if (parent.parent_id) parentId = parent.parent_id as string;
   }
 
-  const { data, error } = await supabase
-    .from("post_comments")
-    .insert({
-      post_id: id,
-      author_id: user.id,
-      parent_id: parentId,
-      body: parsed.data.body.trim(),
-    })
-    .select("id")
-    .single();
-  if (error) return NextResponse.json({ error: "Couldn't post comment." }, { status: 500 });
+  // Only send the rich columns when they carry a value, so a plain-text comment
+  // still inserts cleanly even if the sticker/image migration hasn't run yet.
+  const insert: Record<string, unknown> = {
+    post_id: id,
+    author_id: user.id,
+    parent_id: parentId,
+    body,
+  };
+  if (sticker) insert.sticker = sticker;
+  if (imageUrl) insert.image_url = imageUrl;
+
+  const { data, error } = await supabase.from("post_comments").insert(insert).select("id").single();
+  if (error) {
+    const msg =
+      (sticker || imageUrl) && /column|schema/i.test(error.message ?? "")
+        ? "Stickers & pictures aren't enabled yet."
+        : "Couldn't post comment.";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
   // Device push to the post owner (skipped when commenting on your own post).
   void pushSocialEvent({ actorId: user.id, type: "comment", postId: id });
   return NextResponse.json({ ok: true, id: data.id });

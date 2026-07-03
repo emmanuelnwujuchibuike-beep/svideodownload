@@ -21,6 +21,8 @@ import { ReportButton } from "@/features/social/report-button";
 import { categoryLabel } from "@/lib/social/categories";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { canComment, getViewerReactions, listComments } from "@/lib/social/engagement";
+import { getPoll } from "@/lib/social/polls";
+import { PostPoll, PollCreator } from "@/features/social/post-poll";
 import { getPost, recordPostView, relatedPosts } from "@/lib/social/posts";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
@@ -86,12 +88,13 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     void recordPostView(post.id, me, ipHash);
   }
 
-  const [plan, related, reactions, comments, gate] = await Promise.all([
+  const [plan, related, reactions, comments, gate, poll] = await Promise.all([
     getUserPlan(post.publisher_id),
     relatedPosts(post),
     getViewerReactions(post.id, me),
     listComments(post.id, post.publisher_id, me),
     me ? canComment(post.id, me) : Promise.resolve(null),
+    getPoll(post.id, me),
   ]);
   const commentDisabled =
     gate && !gate.ok ? (COMMENT_GATE_MSG[gate.reason] ?? "Comments are unavailable.") : null;
@@ -225,6 +228,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           </Link>
           {post.isOwner ? null : <FollowButton targetId={post.publisher.id} initialFollowing={post.publisher.isFollowing} canFollow={!!me} />}
         </div>
+
+        {/* Poll (vote) — render if one exists; otherwise let the owner add one */}
+        {poll ? <PostPoll initial={poll} loggedIn={!!me} /> : post.isOwner ? <PollCreator postId={post.id} /> : null}
 
         {/* Comments */}
         <Comments

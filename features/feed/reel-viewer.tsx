@@ -11,6 +11,8 @@ import {
   Pause,
   Share2,
   UserPlus,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -38,11 +40,13 @@ function fmt(s: number): string {
 }
 
 /**
- * Fullscreen reel player over a playlist. The current reel plays edge-to-edge
- * with sound; when it finishes it auto-advances to the next. Swipe up/down (or
- * let a clip end) to move between reels. A vertical action rail floats on the
- * right; controls auto-hide after 2s and a tap toggles them, while the top-left
- * back button always stays.
+ * Fullscreen reel deck. Reels stack in a native, snap-scrolling column — so
+ * flicking up/down is buttery on every device (the browser owns the scroll).
+ * Only the reel in view plays; its immediate neighbours are kept mounted and
+ * pre-buffered (`preload="auto"`) so the next clip starts the instant it snaps
+ * into place — no black frame, no spinner, unless the network is genuinely slow.
+ * A tap toggles the controls (they auto-hide after 2s), double-tap left/right
+ * seeks ±10s, and a deliberate ~0.5s press pauses.
  */
 export function ReelViewer({
   items,
@@ -55,28 +59,49 @@ export function ReelViewer({
 }) {
   return (
     <AnimatePresence>
-      {items && items.length ? <ReelStack key="reelstack" items={items} startIndex={startIndex} onClose={onClose} /> : null}
+      {items && items.length ? <ReelDeck key="reeldeck" items={items} startIndex={startIndex} onClose={onClose} /> : null}
     </AnimatePresence>
   );
 }
 
-function ReelStack({ items, startIndex, onClose }: { items: FeedItem[]; startIndex: number; onClose: () => void }) {
-  const [index, setIndex] = useState(Math.min(Math.max(0, startIndex), items.length - 1));
+function ReelDeck({ items, startIndex, onClose }: { items: FeedItem[]; startIndex: number; onClose: () => void }) {
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const raf = useRef<number | null>(null);
+  const start = Math.min(Math.max(0, startIndex), items.length - 1);
+  const [active, setActive] = useState(start);
 
+  // Lock the page, jump to the opening reel, wire Escape.
   useEffect(() => {
-    const prev = document.body.style.overflow;
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const el = scroller.current;
+    if (el) el.scrollTop = start * el.clientHeight; // instant, no smooth-scroll flash
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow;
       window.removeEventListener("keydown", onKey);
+      if (raf.current) cancelAnimationFrame(raf.current);
     };
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const goNext = useCallback(() => setIndex((i) => (i < items.length - 1 ? i + 1 : i)), [items.length]);
-  const goPrev = useCallback(() => setIndex((i) => (i > 0 ? i - 1 : i)), []);
-  const item = items[index]!;
+  const onScroll = useCallback(() => {
+    if (raf.current) return;
+    raf.current = requestAnimationFrame(() => {
+      raf.current = null;
+      const el = scroller.current;
+      if (!el || !el.clientHeight) return;
+      const i = Math.round(el.scrollTop / el.clientHeight);
+      setActive((prev) => (i !== prev && i >= 0 && i < items.length ? i : prev));
+    });
+  }, [items.length]);
+
+  const scrollToIndex = useCallback((i: number) => {
+    const el = scroller.current;
+    if (!el) return;
+    el.scrollTo({ top: i * el.clientHeight, behavior: "smooth" });
+  }, []);
 
   return (
     <motion.div
@@ -87,35 +112,55 @@ function ReelStack({ items, startIndex, onClose }: { items: FeedItem[]; startInd
       className="fixed inset-0 z-[85] bg-black"
       role="dialog"
       aria-modal="true"
-      aria-label={item.title}
+      aria-label="Reels"
     >
-      <ReelInner
-        key={item.id}
-        item={item}
-        onClose={onClose}
-        onNext={goNext}
-        onPrev={goPrev}
-        hasNext={index < items.length - 1}
-        hasPrev={index > 0}
-      />
+      {/* Back — ALWAYS visible, above every reel */}
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Back"
+        className="absolute left-4 top-4 z-[60] flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition hover:bg-white/20"
+      >
+        <X className="h-5 w-5" />
+      </button>
+
+      <div
+        ref={scroller}
+        onScroll={onScroll}
+        className="h-full w-full snap-y snap-mandatory overflow-y-scroll overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ scrollSnapType: "y mandatory" }}
+      >
+        {items.map((item, i) => (
+          <section key={item.id} className="relative h-[100dvh] w-full snap-start snap-always">
+            <ReelCard
+              item={item}
+              isActive={i === active}
+              nearby={Math.abs(i - active) <= 1}
+              loop={items.length === 1}
+              onClose={onClose}
+              onEnded={() => (i < items.length - 1 ? scrollToIndex(i + 1) : undefined)}
+            />
+          </section>
+        ))}
+      </div>
     </motion.div>
   );
 }
 
-function ReelInner({
+function ReelCard({
   item,
+  isActive,
+  nearby,
+  loop,
   onClose,
-  onNext,
-  onPrev,
-  hasNext,
-  hasPrev,
+  onEnded,
 }: {
   item: FeedItem;
+  isActive: boolean;
+  nearby: boolean;
+  loop: boolean;
   onClose: () => void;
-  onNext: () => void;
-  onPrev: () => void;
-  hasNext: boolean;
-  hasPrev: boolean;
+  onEnded: () => void;
 }) {
   const video = useRef<HTMLVideoElement | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -125,10 +170,13 @@ function ReelInner({
   const holding = useRef(false);
   const moved = useRef(false);
   const startPt = useRef<{ x: number; y: number } | null>(null);
+
   const [paused, setPaused] = useState(false);
+  const [mutedAuto, setMutedAuto] = useState(false);
   const [progress, setProgress] = useState(0);
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
+  const [buffering, setBuffering] = useState(false);
   const [seekFlash, setSeekFlash] = useState<{ side: "back" | "fwd"; key: number } | null>(null);
   const [ui, setUi] = useState(true);
 
@@ -157,14 +205,41 @@ function ReelInner({
     });
   }, []);
 
+  // Play only the reel in view; pause + rewind the rest so re-entry is fresh.
   useEffect(() => {
-    scheduleHide();
+    const v = video.current;
+    if (!v || !native) return;
+    if (isActive) {
+      claimPlayback(v);
+      setUi(true);
+      scheduleHide();
+      v.play().catch(() => {
+        // Autoplay-with-sound blocked → play muted, offer a tap-to-unmute pill.
+        v.muted = true;
+        setMutedAuto(true);
+        v.play().catch(() => {});
+      });
+    } else {
+      v.pause();
+      try {
+        v.currentTime = 0;
+      } catch {
+        /* not ready */
+      }
+      setPaused(false);
+      setProgress(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, native]);
+
+  useEffect(() => {
     return () => {
       if (hideTimer.current) clearTimeout(hideTimer.current);
       if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
+      if (holdTimer.current) clearTimeout(holdTimer.current);
       if (video.current) releasePlayback(video.current);
     };
-  }, [scheduleHide]);
+  }, []);
 
   const loadComments = useCallback(async () => {
     if (fetched.current) return;
@@ -182,8 +257,8 @@ function ReelInner({
 
   const react = async (type: "like" | "save") => {
     const isLike = type === "like";
-    const cur = isLike ? liked : saved;
-    const next = !cur;
+    const curState = isLike ? liked : saved;
+    const next = !curState;
     if (isLike) {
       setLiked(next);
       setLikes((n) => n + (next ? 1 : -1));
@@ -197,9 +272,9 @@ function ReelInner({
       if (!res.ok) throw new Error();
     } catch {
       if (isLike) {
-        setLiked(cur);
+        setLiked(curState);
         setLikes((n) => n + (next ? -1 : 1));
-      } else setSaved(cur);
+      } else setSaved(curState);
     }
   };
 
@@ -230,6 +305,14 @@ function ReelInner({
     }
   };
 
+  const unmute = () => {
+    const v = video.current;
+    if (!v) return;
+    v.muted = false;
+    setMutedAuto(false);
+    void v.play().catch(() => {});
+  };
+
   const seekBy = (delta: number) => {
     const v = video.current;
     if (!v || !v.duration) return;
@@ -238,10 +321,8 @@ function ReelInner({
     setTimeout(() => setSeekFlash((s) => (s && Date.now() - s.key >= 480 ? null : s)), 500);
   };
 
-  // Gesture model:
-  //  • press-and-HOLD (~2.5s, no movement) → pause; release → resume.
-  //  • any movement → treated as a scroll/swipe, never pauses.
-  //  • vertical swipe → previous/next reel.
+  // Gesture model (vertical scrolling is now native, so movement is never a tap):
+  //  • press-and-HOLD (~0.5s, no movement) → pause; release → resume.
   //  • double-tap left/right → seek −10s / +10s; single tap → toggle the UI.
   const onPointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
@@ -253,21 +334,18 @@ function ReelInner({
       holding.current = true;
       video.current?.pause();
       setPaused(true);
-    }, 2500);
+    }, 500);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!startPt.current || moved.current) return;
     const dx = Math.abs(e.clientX - startPt.current.x);
     const dy = Math.abs(e.clientY - startPt.current.y);
-    if (dx > 12 || dy > 12) {
+    if (dx > 10 || dy > 10) {
       moved.current = true;
-      // Never pause because of a scroll/swipe.
       if (holdTimer.current) clearTimeout(holdTimer.current);
     }
   };
   const onPointerUp = (e: React.PointerEvent) => {
-    const dy = startPt.current ? e.clientY - startPt.current.y : 0;
-    const dx = startPt.current ? e.clientX - startPt.current.x : 0;
     startPt.current = null;
     if (native && holdTimer.current) clearTimeout(holdTimer.current);
     if (native && holding.current) {
@@ -276,14 +354,13 @@ function ReelInner({
       setPaused(false);
       return;
     }
-    if (Math.abs(dy) > 60 && Math.abs(dy) > Math.abs(dx)) {
-      if (dy < 0) onNext();
-      else onPrev();
+    if (moved.current) return; // a scroll — leave it to the native scroller
+
+    if (mutedAuto) {
+      unmute();
       return;
     }
-    if (moved.current) return; // a scroll — do nothing
 
-    // Tap: distinguish single (toggle UI) from double (seek).
     const now = Date.now();
     const x = e.clientX;
     const w = typeof window !== "undefined" ? window.innerWidth : 1;
@@ -302,20 +379,18 @@ function ReelInner({
 
   return (
     <>
+      {/* Cover — always painted underneath so a snapped-in reel never flashes black */}
+      {item.thumbnailUrl ? (
+        <div className="absolute inset-0 bg-black">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={item.thumbnailUrl} alt="" aria-hidden className="h-full w-full object-contain" />
+        </div>
+      ) : null}
+
       {/* Progress (auto-hides) */}
       <div className={cn("absolute inset-x-0 top-0 z-30 h-0.5 bg-white/15 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
         <div className="h-full bg-white" style={{ width: `${progress}%` }} />
       </div>
-
-      {/* Back — ALWAYS visible */}
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Back"
-        className="absolute left-4 top-4 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition hover:bg-white/20"
-      >
-        <X className="h-5 w-5" />
-      </button>
 
       {/* Elapsed / total time — moves with playback, auto-hides with the UI */}
       {native && dur > 0 ? (
@@ -340,32 +415,44 @@ function ReelInner({
         }}
       >
         {native ? (
-          // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video
-            ref={video}
-            src={item.mediaUrl!}
-            poster={item.thumbnailUrl ?? undefined}
-            autoPlay
-            loop={!hasNext}
-            playsInline
-            className="max-h-full max-w-full object-contain"
-            onPlay={() => video.current && claimPlayback(video.current)}
-            onLoadedMetadata={(e) => setDur(e.currentTarget.duration || 0)}
-            onEnded={() => {
-              if (hasNext) onNext();
-            }}
-            onTimeUpdate={(e) => {
-              const v = e.currentTarget;
-              setCur(v.currentTime);
-              if (v.duration) setProgress((v.currentTime / v.duration) * 100);
-            }}
-          />
+          nearby ? (
+            // eslint-disable-next-line jsx-a11y/media-has-caption
+            <video
+              ref={video}
+              src={item.mediaUrl!}
+              poster={item.thumbnailUrl ?? undefined}
+              loop={loop}
+              playsInline
+              preload="auto"
+              className="relative z-10 max-h-full max-w-full object-contain"
+              onPlay={() => {
+                video.current && claimPlayback(video.current);
+                setBuffering(false);
+              }}
+              onWaiting={() => setBuffering(true)}
+              onPlaying={() => setBuffering(false)}
+              onLoadedMetadata={(e) => setDur(e.currentTarget.duration || 0)}
+              onEnded={() => !loop && onEnded()}
+              onTimeUpdate={(e) => {
+                const v = e.currentTarget;
+                setCur(v.currentTime);
+                if (v.duration) setProgress((v.currentTime / v.duration) * 100);
+              }}
+            />
+          ) : null
         ) : (
-          <SmartVideo streamUid={item.streamUid} src={item.mediaUrl} poster={item.thumbnailUrl} controls autoPlay className="max-h-full" />
+          <SmartVideo streamUid={item.streamUid} src={item.mediaUrl} poster={item.thumbnailUrl} controls autoPlay={isActive} className="relative z-10 max-h-full" />
         )}
 
+        {/* Buffering — only when the network can't keep up */}
+        {native && nearby && buffering && !paused ? (
+          <span className="pointer-events-none absolute z-20 flex h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </span>
+        ) : null}
+
         {paused ? (
-          <span className="pointer-events-none absolute flex h-16 w-16 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur">
+          <span className="pointer-events-none absolute z-20 flex h-16 w-16 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur">
             <Pause className="h-7 w-7 fill-white" />
           </span>
         ) : null}
@@ -379,7 +466,7 @@ function ReelInner({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
               className={cn(
-                "pointer-events-none absolute top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-full bg-black/45 px-4 py-2 text-sm font-bold text-white backdrop-blur",
+                "pointer-events-none absolute top-1/2 z-20 flex -translate-y-1/2 items-center gap-1 rounded-full bg-black/45 px-4 py-2 text-sm font-bold text-white backdrop-blur",
                 seekFlash.side === "back" ? "left-[12%]" : "right-[12%]",
               )}
             >
@@ -389,13 +476,15 @@ function ReelInner({
         </AnimatePresence>
       </div>
 
-      {/* Up/down hints (auto-hide) */}
-      {ui && (hasPrev || hasNext) ? (
-        <div className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 text-center text-[10px] font-medium text-white/50">
-          {hasPrev ? <p>▲</p> : null}
-          <p className="my-1">swipe</p>
-          {hasNext ? <p>▼</p> : null}
-        </div>
+      {/* Tap-to-unmute pill */}
+      {native && mutedAuto && isActive ? (
+        <button
+          type="button"
+          onClick={unmute}
+          className="absolute left-1/2 top-16 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-white/15 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur-md"
+        >
+          <VolumeX className="h-4 w-4" /> Tap for sound
+        </button>
       ) : null}
 
       {/* Action rail (auto-hides) */}
@@ -428,6 +517,21 @@ function ReelInner({
         <RailButton icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={() => setShowComments(true)} />
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
         <RailButton icon={Share2} count={shares} label="Share" onClick={share} />
+        {native ? (
+          <RailButton
+            icon={mutedAuto ? VolumeX : Volume2}
+            label={mutedAuto ? "Unmute" : "Mute"}
+            onClick={() => {
+              const v = video.current;
+              if (!v) return;
+              if (mutedAuto) unmute();
+              else {
+                v.muted = true;
+                setMutedAuto(true);
+              }
+            }}
+          />
+        ) : null}
         {following && !item.isOwner ? (
           <span className="flex flex-col items-center text-white/90">
             <Check className="h-6 w-6" />
@@ -462,12 +566,7 @@ function ReelInner({
               className="absolute inset-x-0 bottom-0 z-50 max-h-[72vh] overflow-y-auto rounded-t-3xl bg-card p-5"
               onAnimationStart={loadComments}
             >
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-bold">Comments{item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}</h3>
-                <button type="button" onClick={() => setShowComments(false)} aria-label="Close" className="text-muted-foreground hover:text-foreground">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
               {loadingComments ? (
                 <div className="flex items-center justify-center py-8 text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -480,6 +579,7 @@ function ReelInner({
                   canComment={comments.canComment}
                   disabledReason={comments.canComment ? null : "Comments are unavailable."}
                   count={item.commentsCount}
+                  variant="sheet"
                 />
               ) : null}
             </motion.div>

@@ -12,6 +12,7 @@ export interface StoryItem {
 }
 
 export interface StoryGroup {
+  userId: string;
   handle: string;
   displayName: string;
   avatarUrl: string | null;
@@ -50,6 +51,7 @@ export async function getActiveStories(viewerId: string | null, limit = 20): Pro
       let g = groups.get(r.user_id);
       if (!g) {
         g = {
+          userId: r.user_id,
           handle: p.handle as string,
           displayName: (p.display_name as string) || `@${p.handle as string}`,
           avatarUrl: (p.avatar_url as string) ?? null,

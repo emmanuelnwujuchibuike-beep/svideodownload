@@ -1,11 +1,15 @@
 "use client";
 
-import { Plus, X } from "lucide-react";
+import { Loader2, Plus, Send, Smile, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useQuery } from "@/features/data";
 import { openUpload } from "@/features/create/upload-store";
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import type { StoryGroup } from "@/lib/social/stories";
+
+const QUICK_EMOJI = ["❤️", "😂", "😮", "😍", "🔥", "👏", "🙌"];
+const STICKERS = ["🎉", "💯", "😭", "🥰", "😎", "🤯", "👀", "🫶", "💀", "🤝", "✨", "🙏"];
 
 const IMAGE_MS = 5000;
 
@@ -93,10 +97,13 @@ function StoryViewer({ groups, startGroup, onClose }: { groups: StoryGroup[]; st
   const [gi, setGi] = useState(startGroup);
   const [si, setSi] = useState(0);
   const [pct, setPct] = useState(0);
+  const [replying, setReplying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const { handle } = useEntitlements();
 
   const group = groups[gi]!;
   const story = group?.stories[si];
+  const isOwn = !!handle && group.handle === handle;
 
   const next = useCallback(() => {
     setPct(0);
@@ -118,8 +125,9 @@ function StoryViewer({ groups, startGroup, onClose }: { groups: StoryGroup[]; st
   }, [si, gi, groups]);
 
   // Auto-advance: images on a timer, videos when they end (progress via timeupdate).
+  // Paused while the viewer is composing a reply.
   useEffect(() => {
-    if (!story || story.mediaKind === "video") return;
+    if (!story || story.mediaKind === "video" || replying) return;
     setPct(0);
     const startedAt = performance.now();
     let raf = 0;
@@ -131,7 +139,15 @@ function StoryViewer({ groups, startGroup, onClose }: { groups: StoryGroup[]; st
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [gi, si, story, next]);
+  }, [gi, si, story, next, replying]);
+
+  // Pause the story video while replying.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (replying) v.pause();
+    else void v.play().catch(() => {});
+  }, [replying, gi, si]);
 
   // Escape + scroll lock.
   useEffect(() => {
@@ -199,6 +215,99 @@ function StoryViewer({ groups, startGroup, onClose }: { groups: StoryGroup[]; st
           <img key={`${gi}-${si}`} src={story.mediaUrl} alt="" className="max-h-[92vh] w-full rounded-2xl object-contain" />
         )}
         {story.caption ? <p className="pointer-events-none mt-3 text-center text-sm text-white/90">{story.caption}</p> : null}
+      </div>
+
+      {/* Reply bar — text, emojis & stickers (delivered as a DM) */}
+      {isOwn ? null : (
+        <StoryReplyBar toUserId={group.userId} name={group.displayName.split(" ")[0] || group.displayName} onFocusChange={setReplying} />
+      )}
+    </div>
+  );
+}
+
+function StoryReplyBar({ toUserId, name, onFocusChange }: { toUserId: string; name: string; onFocusChange: (v: boolean) => void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [stickers, setStickers] = useState(false);
+
+  const send = async (payload: string) => {
+    const t = payload.trim();
+    if (!t || busy) return;
+    setBusy(true);
+    setText("");
+    setStickers(false);
+    try {
+      const r = await fetch("/api/stories/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toUserId, text: t }),
+      });
+      if (r.ok) {
+        setSent(true);
+        setTimeout(() => setSent(false), 1600);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/70 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-5">
+      {sent ? (
+        <p className="mb-2 text-center text-xs font-semibold text-emerald-300">Sent to {name} ✓</p>
+      ) : (
+        <div className="mb-2 flex justify-center gap-2">
+          {QUICK_EMOJI.map((e) => (
+            <button key={e} type="button" onClick={() => send(e)} className="text-2xl transition active:scale-125" aria-label={`React ${e}`}>
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {stickers ? (
+        <div className="mx-auto mb-2 grid max-w-md grid-cols-6 gap-1 rounded-2xl bg-white/10 p-2 backdrop-blur">
+          {STICKERS.map((s) => (
+            <button key={s} type="button" onClick={() => send(s)} className="rounded-xl py-1.5 text-2xl transition hover:bg-white/10 active:scale-110" aria-label={`Sticker ${s}`}>
+              {s}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mx-auto flex max-w-md items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setStickers((v) => !v)}
+          aria-label="Stickers"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20"
+        >
+          <Smile className="h-5 w-5" />
+        </button>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onFocus={() => onFocusChange(true)}
+          onBlur={() => onFocusChange(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void send(text);
+          }}
+          maxLength={500}
+          placeholder={`Reply to ${name}…`}
+          className="h-10 min-w-0 flex-1 rounded-full border border-white/20 bg-white/10 px-4 text-sm text-white outline-none backdrop-blur placeholder:text-white/50 focus:border-white/40"
+        />
+        <button
+          type="button"
+          onClick={() => send(text)}
+          disabled={busy || !text.trim()}
+          aria-label="Send reply"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white transition disabled:opacity-40"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </button>
       </div>
     </div>
   );

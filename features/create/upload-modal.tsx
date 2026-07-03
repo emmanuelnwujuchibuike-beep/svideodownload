@@ -17,6 +17,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
+import { openStudio } from "@/features/create/studio/studio-store";
 import { closeUpload, useUploadIntent, useUploadOpen } from "@/features/create/upload-store";
 import { captureVideoPoster } from "@/lib/media/video-poster";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
@@ -271,6 +272,18 @@ function ModalInner() {
                     <Images className="h-5 w-5 text-blue-400" /> Gallery
                   </button>
                 </div>
+                {/* Rich, block-based composer */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeUpload();
+                    openStudio();
+                  }}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card/60 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                >
+                  <Wand2 className="h-4 w-4 text-violet-400" /> Write a story — blocks, text &amp; media
+                </button>
+
                 {err ? <p className="mt-3 text-center text-sm text-rose-400">{err}</p> : null}
                 <p className="mt-3 text-center text-[11px] text-muted-foreground">Photos & videos · up to 100 MB</p>
               </motion.div>

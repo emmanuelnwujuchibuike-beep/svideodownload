@@ -30,6 +30,13 @@ interface CommentsData {
   loggedIn: boolean;
 }
 
+function fmt(s: number): string {
+  if (!Number.isFinite(s) || s < 0) s = 0;
+  const m = Math.floor(s / 60);
+  const r = Math.floor(s % 60);
+  return `${m}:${r.toString().padStart(2, "0")}`;
+}
+
 /**
  * Fullscreen reel player over a playlist. The current reel plays edge-to-edge
  * with sound; when it finishes it auto-advances to the next. Swipe up/down (or
@@ -113,10 +120,16 @@ function ReelInner({
   const video = useRef<HTMLVideoElement | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTap = useRef<{ t: number; x: number }>({ t: 0, x: 0 });
   const holding = useRef(false);
+  const moved = useRef(false);
   const startPt = useRef<{ x: number; y: number } | null>(null);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [cur, setCur] = useState(0);
+  const [dur, setDur] = useState(0);
+  const [seekFlash, setSeekFlash] = useState<{ side: "back" | "fwd"; key: number } | null>(null);
   const [ui, setUi] = useState(true);
 
   const [liked, setLiked] = useState(item.viewerLiked);
@@ -148,6 +161,7 @@ function ReelInner({
     scheduleHide();
     return () => {
       if (hideTimer.current) clearTimeout(hideTimer.current);
+      if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
       if (video.current) releasePlayback(video.current);
     };
   }, [scheduleHide]);
@@ -216,17 +230,40 @@ function ReelInner({
     }
   };
 
-  // Gesture: press-hold pauses; a stationary tap toggles the UI; a vertical
-  // swipe moves between reels.
+  const seekBy = (delta: number) => {
+    const v = video.current;
+    if (!v || !v.duration) return;
+    v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + delta));
+    setSeekFlash({ side: delta < 0 ? "back" : "fwd", key: Date.now() });
+    setTimeout(() => setSeekFlash((s) => (s && Date.now() - s.key >= 480 ? null : s)), 500);
+  };
+
+  // Gesture model:
+  //  • press-and-HOLD (~2.5s, no movement) → pause; release → resume.
+  //  • any movement → treated as a scroll/swipe, never pauses.
+  //  • vertical swipe → previous/next reel.
+  //  • double-tap left/right → seek −10s / +10s; single tap → toggle the UI.
   const onPointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
+    moved.current = false;
     if (!native) return;
     holding.current = false;
     holdTimer.current = setTimeout(() => {
+      if (moved.current) return;
       holding.current = true;
       video.current?.pause();
       setPaused(true);
-    }, 160);
+    }, 2500);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!startPt.current || moved.current) return;
+    const dx = Math.abs(e.clientX - startPt.current.x);
+    const dy = Math.abs(e.clientY - startPt.current.y);
+    if (dx > 12 || dy > 12) {
+      moved.current = true;
+      // Never pause because of a scroll/swipe.
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+    }
   };
   const onPointerUp = (e: React.PointerEvent) => {
     const dy = startPt.current ? e.clientY - startPt.current.y : 0;
@@ -239,13 +276,28 @@ function ReelInner({
       setPaused(false);
       return;
     }
-    // Vertical swipe → navigate reels.
     if (Math.abs(dy) > 60 && Math.abs(dy) > Math.abs(dx)) {
       if (dy < 0) onNext();
       else onPrev();
       return;
     }
-    toggleUi();
+    if (moved.current) return; // a scroll — do nothing
+
+    // Tap: distinguish single (toggle UI) from double (seek).
+    const now = Date.now();
+    const x = e.clientX;
+    const w = typeof window !== "undefined" ? window.innerWidth : 1;
+    if (now - lastTap.current.t < 300) {
+      if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
+      lastTap.current = { t: 0, x: 0 };
+      if (x < w * 0.4) seekBy(-10);
+      else if (x > w * 0.6) seekBy(10);
+      else toggleUi();
+      return;
+    }
+    lastTap.current = { t: now, x };
+    if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
+    singleTapTimer.current = setTimeout(() => toggleUi(), 280);
   };
 
   return (
@@ -265,10 +317,18 @@ function ReelInner({
         <X className="h-5 w-5" />
       </button>
 
+      {/* Elapsed / total time — moves with playback, auto-hides with the UI */}
+      {native && dur > 0 ? (
+        <div className={cn("absolute right-4 top-4 z-30 rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
+          {fmt(cur)} / {fmt(dur)}
+        </div>
+      ) : null}
+
       {/* Media */}
       <div
         className="absolute inset-0 flex items-center justify-center"
         onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={() => {
           if (holdTimer.current) clearTimeout(holdTimer.current);
@@ -290,11 +350,13 @@ function ReelInner({
             playsInline
             className="max-h-full max-w-full object-contain"
             onPlay={() => video.current && claimPlayback(video.current)}
+            onLoadedMetadata={(e) => setDur(e.currentTarget.duration || 0)}
             onEnded={() => {
               if (hasNext) onNext();
             }}
             onTimeUpdate={(e) => {
               const v = e.currentTarget;
+              setCur(v.currentTime);
               if (v.duration) setProgress((v.currentTime / v.duration) * 100);
             }}
           />
@@ -307,6 +369,24 @@ function ReelInner({
             <Pause className="h-7 w-7 fill-white" />
           </span>
         ) : null}
+
+        {/* Double-tap seek flashes */}
+        <AnimatePresence>
+          {seekFlash ? (
+            <motion.span
+              key={seekFlash.key}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              className={cn(
+                "pointer-events-none absolute top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-full bg-black/45 px-4 py-2 text-sm font-bold text-white backdrop-blur",
+                seekFlash.side === "back" ? "left-[12%]" : "right-[12%]",
+              )}
+            >
+              {seekFlash.side === "back" ? "« 10s" : "10s »"}
+            </motion.span>
+          ) : null}
+        </AnimatePresence>
       </div>
 
       {/* Up/down hints (auto-hide) */}

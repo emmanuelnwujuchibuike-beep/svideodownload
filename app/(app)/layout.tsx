@@ -4,6 +4,7 @@ import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { UploadModal } from "@/features/create/upload-modal";
+import { StoryStudio } from "@/features/create/studio/story-studio";
 import { DownloadPlayer } from "@/features/downloads/download-player";
 import { PresenceTracker } from "@/features/friends/use-presence";
 import { IosInstallPrompt } from "@/features/notifications/ios-install-prompt";
@@ -45,6 +46,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       </div>
       <MobileNav />
       <UploadModal />
+      <StoryStudio />
       <DownloadPlayer />
       <Toaster />
       {/* Live in-app drop-down notification + iOS "install for push" nudge. */}

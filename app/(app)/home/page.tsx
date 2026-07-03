@@ -11,6 +11,7 @@ import { HomeRail } from "@/features/app-shell/dashboard/home-rail";
 import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
+import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
 import { SmartFeed } from "@/features/feed/smart-feed";
 import { Skeleton } from "@/features/ui/skeleton";
 import { friendsCount } from "@/lib/social/friends";
@@ -61,6 +62,9 @@ export default async function HomePage() {
     >
       {firstVisit ? <BrandSplash /> : null}
       <div className="space-y-6">
+        <div className="flex">
+          <SuggestionsLauncher />
+        </div>
         <HomeGreeting name={firstName} />
 
         <Suspense fallback={<StoriesSkeleton />}>

@@ -1,0 +1,93 @@
+"use client";
+
+import { AnimatePresence, motion } from "framer-motion";
+import { Heart } from "lucide-react";
+import { useRef, useState } from "react";
+
+import { cn } from "@/lib/utils";
+
+/**
+ * Inline feed image — shown full-size (like a video), with Instagram-style
+ * double-tap-to-like (a big heart pops), while a single tap opens the full
+ * viewer (with comments). Never crops awkwardly: the image sits on a soft
+ * backdrop and shows in full.
+ */
+export function FeedImage({
+  src,
+  alt,
+  liked,
+  onDoubleTapLike,
+  onExpand,
+  className,
+}: {
+  src: string;
+  alt: string;
+  liked: boolean;
+  onDoubleTapLike: () => void;
+  onExpand: () => void;
+  className?: string;
+}) {
+  const lastTap = useRef(0);
+  const singleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startPt = useRef<{ x: number; y: number } | null>(null);
+  const moved = useRef(false);
+  const [burst, setBurst] = useState(0);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    startPt.current = { x: e.clientX, y: e.clientY };
+    moved.current = false;
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!startPt.current || moved.current) return;
+    if (Math.abs(e.clientX - startPt.current.x) > 12 || Math.abs(e.clientY - startPt.current.y) > 12) moved.current = true;
+  };
+  const onPointerUp = () => {
+    if (moved.current) return;
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      // Double tap → like.
+      if (singleTimer.current) clearTimeout(singleTimer.current);
+      lastTap.current = 0;
+      setBurst((b) => b + 1);
+      onDoubleTapLike();
+      return;
+    }
+    lastTap.current = now;
+    if (singleTimer.current) clearTimeout(singleTimer.current);
+    singleTimer.current = setTimeout(() => onExpand(), 280);
+  };
+
+  return (
+    <div
+      className={cn("relative flex items-center justify-center overflow-hidden bg-neutral-950", className)}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={alt} loading="lazy" className="relative max-h-[80vh] w-auto max-w-full object-contain" />
+
+      {/* Double-tap heart burst */}
+      <AnimatePresence>
+        {burst > 0 ? (
+          <motion.span
+            key={burst}
+            initial={{ opacity: 0, scale: 0.4 }}
+            animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.15, 1, 1.2] }}
+            transition={{ duration: 0.8, times: [0, 0.2, 0.7, 1] }}
+            className="pointer-events-none absolute text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
+          >
+            <Heart className="h-24 w-24 fill-white" />
+          </motion.span>
+        ) : null}
+      </AnimatePresence>
+
+      {/* Like hint */}
+      <span className={cn("pointer-events-none absolute bottom-2 left-2.5 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur", liked && "hidden")}>
+        Double-tap to like
+      </span>
+    </div>
+  );
+}

@@ -22,6 +22,7 @@ import { useState } from "react";
 
 import { RichText } from "@/components/social/rich-text";
 import { PostPollInline } from "@/features/social/post-poll-inline";
+import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
 import type { FeedItem } from "@/lib/social/home-feed";
 import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
@@ -258,6 +259,20 @@ export function FeedPostCard({
             className="aspect-[4/5] w-full"
           />
         </div>
+      ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
+        // Image posts behave like videos: full-size, double-tap to like, tap to open.
+        <div className="mx-4 mb-3 overflow-hidden rounded-2xl">
+          <FeedImage
+            src={item.mediaUrl || item.thumbnailUrl!}
+            alt={item.title}
+            liked={liked}
+            onDoubleTapLike={() => {
+              if (!liked) void react("like");
+            }}
+            onExpand={() => onOpen(item)}
+            className="max-h-[80vh] w-full"
+          />
+        </div>
       ) : item.mediaKind === "audio" ? (
         <button type="button" onClick={() => onOpen(item)} className="block w-full text-left" aria-label="Play">
           <div className="mx-4 mb-3 flex items-center gap-3 rounded-xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/15">
@@ -308,7 +323,7 @@ export function FeedPostCard({
           <ActionButton icon={Share2} count={shares} onClick={share} label="Share" />
         </div>
         <div className="flex items-center">
-          <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-primary" label="Bookmark" />
+          <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-foreground" label="Bookmark" />
           <ActionButton icon={Download} onClick={() => onOpen(item)} label="Download" />
         </div>
       </div>
@@ -342,7 +357,7 @@ function ActionButton({
     </>
   );
   const cls = cn(
-    "group/act inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground",
+    "group/act inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-foreground transition hover:bg-secondary",
     active && activeClass,
   );
   if (href) {

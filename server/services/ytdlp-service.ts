@@ -272,15 +272,52 @@ function mapSingleFile(info: RawInfo): MediaFormat[] {
   return [video, ...audio];
 }
 
+/** Consumer-standard quality tiers. Raw heights snap to the nearest of these so
+ *  the card shows clean, correct labels (e.g. 1072p → "1080p") and never lists
+ *  two near-duplicate heights as separate options. */
+const STD_TIERS = [4320, 2160, 1440, 1080, 720, 480, 360, 240, 144] as const;
+
+function snapTier(height: number): number {
+  let best: number = STD_TIERS[0];
+  let bestDelta = Infinity;
+  for (const t of STD_TIERS) {
+    const d = Math.abs(t - height);
+    if (d < bestDelta) {
+      bestDelta = d;
+      best = t;
+    }
+  }
+  return best;
+}
+
+/**
+ * A consistent size estimate for a tier. yt-dlp's per-format `filesize`/
+ * `filesize_approx` is often missing or wrong (a low tier can even report more
+ * than a high one), so when we know the duration we derive size from the total
+ * bitrate — which scales correctly with quality. Falls back to the reported
+ * size otherwise. Returns bytes (or null when nothing is known).
+ */
+function estimateSize(tbrKbps: number, reported: number | null, durationSec: number | null): number | null {
+  if (durationSec && durationSec > 0 && tbrKbps > 0) {
+    return Math.round((tbrKbps * 1000 / 8) * durationSec);
+  }
+  return reported;
+}
+
+/** How many quality options we ever surface — keep the picker tight and clean. */
+const MAX_VIDEO_TIERS = 4;
+
 function mapFormats(info: RawInfo): MediaFormat[] {
   const raw = info.formats;
   if (!raw?.length) {
     return info.url ? mapSingleFile(info) : [];
   }
 
-  // Collapse video formats into one entry per height, preferring the variant
-  // with the highest bitrate so the displayed size is representative.
-  const byHeight = new Map<number, { fps: number | null; tbr: number; filesize: number | null }>();
+  // Collapse video formats into ONE entry per standard quality tier, preferring
+  // the variant with the highest bitrate so the displayed size is representative.
+  // Snapping raw heights to standard tiers dedupes near-duplicates (1072 & 1080)
+  // and keeps labels clean/correct.
+  const byTier = new Map<number, { fps: number | null; tbr: number; filesize: number | null }>();
   let hasAnyAudio = false;
   // Some platforms (Instagram, Facebook, X) return video formats WITHOUT a
   // height. We must still offer a video option for those, or the UI would only
@@ -305,29 +342,52 @@ function mapFormats(info: RawInfo): MediaFormat[] {
     const tbr = f.tbr ?? 0;
 
     if (f.height) {
-      const existing = byHeight.get(f.height);
+      const tier = snapTier(f.height);
+      const existing = byTier.get(tier);
       if (!existing || tbr > existing.tbr) {
-        byHeight.set(f.height, { fps: f.fps ?? null, tbr, filesize: size });
+        byTier.set(tier, { fps: f.fps ?? null, tbr, filesize: size });
       }
     } else if (!bestHeightless || tbr > bestHeightless.tbr) {
       bestHeightless = { tbr, filesize: size };
     }
   }
 
-  let video: MediaFormat[] = [...byHeight.entries()]
+  const durationSec = typeof info.duration === "number" ? info.duration : null;
+
+  // Highest quality first, capped to a tight set of options.
+  const tiers = [...byTier.entries()]
     .sort((a, b) => b[0] - a[0])
-    .map(([height, info]) => ({
-      formatId: String(height),
-      kind: "video" as const,
-      label: `${height}p`,
-      ext: "mp4",
-      resolution: `${height}p`,
-      fps: info.fps,
-      filesize: info.filesize,
-      tbr: info.tbr || null,
-      vcodec: null,
-      acodec: null,
+    .slice(0, MAX_VIDEO_TIERS)
+    .map(([tier, meta]) => ({
+      tier,
+      fps: meta.fps,
+      tbr: meta.tbr || null,
+      size: estimateSize(meta.tbr, meta.filesize, durationSec),
     }));
+
+  // Enforce monotonic sizes: a lower quality must never display a bigger size
+  // than a higher one (yt-dlp sometimes reports exactly that).
+  for (let i = 1; i < tiers.length; i++) {
+    const prevTier = tiers[i - 1];
+    const curTier = tiers[i];
+    if (!prevTier || !curTier) continue;
+    if (prevTier.size != null && curTier.size != null && curTier.size > prevTier.size) {
+      curTier.size = prevTier.size;
+    }
+  }
+
+  let video: MediaFormat[] = tiers.map((t) => ({
+    formatId: String(t.tier),
+    kind: "video" as const,
+    label: `${t.tier}p`,
+    ext: "mp4",
+    resolution: `${t.tier}p`,
+    fps: t.fps,
+    filesize: t.size,
+    tbr: t.tbr,
+    vcodec: null,
+    acodec: null,
+  }));
 
   // No height-tagged video tiers but a video stream exists → offer "Best".
   if (video.length === 0 && bestHeightless) {
@@ -339,7 +399,7 @@ function mapFormats(info: RawInfo): MediaFormat[] {
         ext: "mp4",
         resolution: null,
         fps: null,
-        filesize: bestHeightless.filesize,
+        filesize: estimateSize(bestHeightless.tbr, bestHeightless.filesize, durationSec),
         tbr: bestHeightless.tbr || null,
         vcodec: null,
         acodec: null,

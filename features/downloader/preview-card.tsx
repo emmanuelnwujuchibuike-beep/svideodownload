@@ -19,7 +19,7 @@ import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
-import { cn, formatCompactNumber, formatDuration } from "@/lib/utils";
+import { cn, formatBytes, formatCompactNumber, formatDuration } from "@/lib/utils";
 import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
 type DownloadPhase = "idle" | "working" | "done";
@@ -370,6 +370,8 @@ function FormatRow({
 }) {
   const label =
     kind === "image" ? `Photo ${index + 1}` : format.label || (kind === "audio" ? "Audio" : "Video");
+  // Size shown only when known — never a misleading "—" or an inflated guess.
+  const size = kind === "image" ? null : formatBytes(format.filesize);
   return (
     <button
       type="button"
@@ -389,8 +391,9 @@ function FormatRow({
           </span>
         ) : null}
       </span>
-      <span className="text-[11px] uppercase text-muted-foreground">
-        {format.ext}
+      <span className="flex items-center gap-1.5 text-[11px] uppercase text-muted-foreground">
+        <span>{format.ext}</span>
+        {size && size !== "—" ? <span className="normal-case">· {size}</span> : null}
       </span>
     </button>
   );

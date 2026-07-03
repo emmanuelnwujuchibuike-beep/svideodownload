@@ -97,6 +97,7 @@ interface FeedRow {
   platform: string;
   media_kind: PostCard["mediaKind"];
   thumbnail_url: string | null;
+  media_url: string | null;
   category: string | null;
   views_count: number;
   created_at: string;
@@ -134,7 +135,7 @@ async function loadFeed(
 
     let q = db
       .from("posts")
-      .select("id, publisher_id, title, platform, media_kind, thumbnail_url, category, views_count, created_at")
+      .select("id, publisher_id, title, platform, media_kind, thumbnail_url, media_url, category, views_count, created_at")
       .eq("status", "published")
       .eq("visibility", "public")
       .limit(limit * 4); // over-fetch for filtering + diversity
@@ -193,6 +194,7 @@ async function loadFeed(
         platform: r.platform,
         mediaKind: r.media_kind,
         thumbnailUrl: r.thumbnail_url,
+        mediaUrl: r.media_url,
         category: r.category,
         viewsCount: r.views_count,
         createdAt: r.created_at,

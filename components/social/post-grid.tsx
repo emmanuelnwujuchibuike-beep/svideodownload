@@ -7,6 +7,37 @@ import { cn, formatCompactNumber } from "@/lib/utils";
 const KIND_ICON = { video: Play, image: ImageIcon, audio: Music } as const;
 
 /**
+ * A post's cover image. Prefers the stored thumbnail; for videos without one it
+ * paints the real first frame from the media file (so uploads never show a blank
+ * black tile); otherwise a kind icon.
+ */
+function PostCover({ post, className }: { post: PostCard; className?: string }) {
+  const KindIcon = KIND_ICON[post.mediaKind] ?? Play;
+  if (post.thumbnailUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={post.thumbnailUrl} alt="" loading="lazy" decoding="async" className={className} />;
+  }
+  if (post.mediaKind === "video" && post.mediaUrl) {
+    return (
+      // eslint-disable-next-line jsx-a11y/media-has-caption
+      <video
+        src={`${post.mediaUrl}#t=0.5`}
+        muted
+        playsInline
+        preload="metadata"
+        tabIndex={-1}
+        className={className}
+      />
+    );
+  }
+  return (
+    <div className="flex h-full w-full items-center justify-center text-white/25">
+      <KindIcon className="h-8 w-8" />
+    </div>
+  );
+}
+
+/**
  * Post cards in three responsive layouts:
  *  - "card"  → the default titled cards (related, explore).
  *  - "reel"  → edge-to-edge portrait (9:16) tiles, TikTok-style — for Videos.
@@ -50,9 +81,8 @@ export function PostGrid({
   );
 }
 
-/** Edge-to-edge media tile (Videos/Photos tabs) — thumbnail fills, minimal chrome. */
+/** Edge-to-edge media tile (Videos/Photos tabs) — cover fills, minimal chrome. */
 function MediaTile({ post, aspect }: { post: PostCard; aspect: "portrait" | "square" }) {
-  const KindIcon = KIND_ICON[post.mediaKind] ?? Play;
   return (
     <Link
       href={`/p/${post.id}`}
@@ -61,20 +91,7 @@ function MediaTile({ post, aspect }: { post: PostCard; aspect: "portrait" | "squ
         aspect === "portrait" ? "aspect-[9/16]" : "aspect-square",
       )}
     >
-      {post.thumbnailUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={post.thumbnailUrl}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-white/25">
-          <KindIcon className="h-8 w-8" />
-        </div>
-      )}
+      <PostCover post={post} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
       {/* legibility gradient */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/70 to-transparent" />
       {post.mediaKind === "video" ? (
@@ -88,27 +105,13 @@ function MediaTile({ post, aspect }: { post: PostCard; aspect: "portrait" | "squ
 }
 
 function PostCardItem({ post }: { post: PostCard }) {
-  const KindIcon = KIND_ICON[post.mediaKind] ?? Play;
   return (
     <Link
       href={`/p/${post.id}`}
       className="group overflow-hidden rounded-2xl border border-border/70 bg-card shadow-soft transition hover:-translate-y-0.5 hover:shadow-card"
     >
       <div className="relative aspect-video overflow-hidden bg-neutral-950">
-        {post.thumbnailUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={post.thumbnailUrl}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover opacity-90 transition group-hover:scale-105 group-hover:opacity-100"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-white/25">
-            <KindIcon className="h-8 w-8" />
-          </div>
-        )}
+        <PostCover post={post} className="h-full w-full object-cover opacity-90 transition group-hover:scale-105 group-hover:opacity-100" />
         <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-md">
           <Eye className="h-3 w-3" /> {formatCompactNumber(post.viewsCount)}
         </span>

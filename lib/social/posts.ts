@@ -147,6 +147,7 @@ interface PostRow {
   description: string | null;
   category: string | null;
   thumbnail_url: string | null;
+  media_url: string | null;
   duration_sec: number | null;
   visibility: Visibility;
   status: string;
@@ -160,7 +161,7 @@ interface PostRow {
 }
 
 const POST_SELECT =
-  "id, publisher_id, source_url, platform, source_author, media_kind, title, description, category, thumbnail_url, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at";
+  "id, publisher_id, source_url, platform, source_author, media_kind, title, description, category, thumbnail_url, media_url, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at";
 
 export interface PostPublisher {
   id: string;
@@ -261,6 +262,8 @@ export interface PostCard {
   platform: string;
   mediaKind: MediaKind;
   thumbnailUrl: string | null;
+  /** Media file (upload) — lets grids draw a real first frame when there's no cover. */
+  mediaUrl: string | null;
   category: string | null;
   viewsCount: number;
   createdAt: string;
@@ -273,6 +276,7 @@ function toCard(p: PostRow): PostCard {
     platform: p.platform,
     mediaKind: p.media_kind,
     thumbnailUrl: p.thumbnail_url,
+    mediaUrl: p.media_url,
     category: p.category,
     viewsCount: p.views_count,
     createdAt: p.created_at,
@@ -339,6 +343,33 @@ export async function listSavedPosts(userId: string, limit = 24): Promise<PostCa
       (p) => p.visibility === "public" || p.publisher_id === userId,
     );
     // Preserve save recency.
+    const order = new Map(ids.map((id, i) => [id, i]));
+    rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    return rows.slice(0, limit).map(toCard);
+  } catch {
+    return [];
+  }
+}
+
+/** The user's liked posts (still-published, visible), newest like first. */
+export async function listLikedPosts(userId: string, limit = 24): Promise<PostCard[]> {
+  if (!hasSupabase) return [];
+  try {
+    const db = createAdminClient();
+    const { data: likes } = await db
+      .from("post_reactions")
+      .select("post_id, created_at")
+      .eq("user_id", userId)
+      .eq("type", "like")
+      .order("created_at", { ascending: false })
+      .limit(limit * 2);
+    const ids = ((likes ?? []) as { post_id: string }[]).map((r) => r.post_id);
+    if (ids.length === 0) return [];
+
+    const { data } = await db.from("posts").select(POST_SELECT).in("id", ids).eq("status", "published");
+    const rows = ((data as PostRow[]) ?? []).filter(
+      (p) => p.visibility === "public" || p.publisher_id === userId,
+    );
     const order = new Map(ids.map((id, i) => [id, i]));
     rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     return rows.slice(0, limit).map(toCard);

@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SmartVideo } from "@/features/media/smart-video";
 import { Comments } from "@/features/social/comments";
 import type { CommentNode } from "@/lib/social/engagement";
+import { claimPlayback, releasePlayback } from "@/lib/media/video-coordinator";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
@@ -43,9 +44,13 @@ export function ReelViewer({ item, onClose }: { item: FeedItem | null; onClose: 
 function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
   const video = useRef<HTMLVideoElement | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holding = useRef(false);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
+  // Controls (rail, caption, progress) auto-hide after 2s of no tap for a clean,
+  // full-screen view; a tap toggles them. The back button always stays.
+  const [ui, setUi] = useState(true);
 
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
@@ -59,16 +64,33 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
 
   const native = !!item.mediaUrl;
 
+  const scheduleHide = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setUi(false), 2000);
+  }, []);
+
+  const toggleUi = useCallback(() => {
+    setUi((v) => {
+      const next = !v;
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      if (next) hideTimer.current = setTimeout(() => setUi(false), 2000);
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
+    scheduleHide(); // start the initial 2s auto-hide
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      if (video.current) releasePlayback(video.current);
     };
-  }, [onClose]);
+  }, [onClose, scheduleHide]);
 
   const loadComments = useCallback(async () => {
     if (fetched.current) return;
@@ -134,7 +156,7 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
     }
   };
 
-  // Press-and-hold to pause (native player only).
+  // Press-and-hold to pause (native player only); a quick tap toggles the UI.
   const onPointerDown = () => {
     if (!native) return;
     holding.current = false;
@@ -145,23 +167,13 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
     }, 160);
   };
   const endHold = () => {
-    if (!native) return;
-    if (holdTimer.current) clearTimeout(holdTimer.current);
-    if (holding.current) {
+    if (native && holdTimer.current) clearTimeout(holdTimer.current);
+    if (native && holding.current) {
       holding.current = false;
       void video.current?.play();
       setPaused(false);
     } else {
-      // A quick tap toggles play/pause.
-      const v = video.current;
-      if (!v) return;
-      if (v.paused) {
-        void v.play();
-        setPaused(false);
-      } else {
-        v.pause();
-        setPaused(true);
-      }
+      toggleUi();
     }
   };
 
@@ -176,17 +188,17 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
       aria-modal="true"
       aria-label={item.title}
     >
-      {/* Progress bar */}
-      <div className="absolute inset-x-0 top-0 z-30 h-0.5 bg-white/15">
+      {/* Progress bar (part of the auto-hiding UI) */}
+      <div className={cn("absolute inset-x-0 top-0 z-30 h-0.5 bg-white/15 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
         <div className="h-full bg-white" style={{ width: `${progress}%` }} />
       </div>
 
-      {/* Close */}
+      {/* Close — ALWAYS visible, even when the rest of the UI is hidden */}
       <button
         type="button"
         onClick={onClose}
-        aria-label="Close"
-        className="absolute left-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition hover:bg-white/20"
+        aria-label="Back"
+        className="absolute left-4 top-4 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition hover:bg-white/20"
       >
         <X className="h-5 w-5" />
       </button>
@@ -209,6 +221,7 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
             loop
             playsInline
             className="max-h-full max-w-full object-contain"
+            onPlay={() => video.current && claimPlayback(video.current)}
             onTimeUpdate={(e) => {
               const v = e.currentTarget;
               if (v.duration) setProgress((v.currentTime / v.duration) * 100);
@@ -226,8 +239,8 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
         ) : null}
       </div>
 
-      {/* Action rail */}
-      <div className="absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 sm:bottom-8">
+      {/* Action rail (auto-hides) */}
+      <div className={cn("absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-8", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
         <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="relative mb-1">
           {item.publisher.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -264,8 +277,8 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
         ) : null}
       </div>
 
-      {/* Author + caption */}
-      <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 pb-24 pt-16 sm:pb-8">
+      {/* Author + caption (auto-hides) */}
+      <div className={cn("absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 pb-24 pt-16 transition-opacity duration-200 sm:pb-8", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
         <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="inline-flex items-center gap-1.5 text-white">
           <span className="font-bold">@{item.publisher.handle}</span>
           {item.publisher.isVerified ? <BadgeCheck className="h-4 w-4" /> : null}

@@ -4,6 +4,7 @@ import { Pause, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { streamIframeUrl } from "@/lib/media/stream";
+import { claimPlayback, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
 
 /**
@@ -54,7 +55,10 @@ export function FeedVideo({
       { threshold: [0, 0.6, 1] },
     );
     obs.observe(el);
-    return () => obs.disconnect();
+    return () => {
+      obs.disconnect();
+      releasePlayback(v);
+    };
   }, [iframeMode]);
 
   const toggleMute = useCallback((e: React.MouseEvent) => {
@@ -115,6 +119,7 @@ export function FeedVideo({
         playsInline
         preload="metadata"
         className="h-full w-full object-cover"
+        onPlay={() => video.current && claimPlayback(video.current)}
         onPointerDown={onPointerDown}
         onPointerUp={endHold}
         onPointerLeave={endHold}

@@ -55,23 +55,34 @@ export function StoriesRow({
         <span className="text-[11px] font-medium text-muted-foreground">Your Story</span>
       </button>
 
-      {groups.map((g, i) => (
-        <button key={g.handle} type="button" onClick={() => setStart(i)} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
-          <span className="rounded-full bg-gradient-to-br from-fuchsia-500 via-violet-500 to-blue-500 p-0.5">
-            <span className="block rounded-full bg-background p-0.5">
-              {g.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={g.avatarUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
-              ) : (
-                <span className="flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
-                  {g.displayName.charAt(0).toUpperCase()}
-                </span>
-              )}
+      {groups.map((g, i) => {
+        // Show the story's own cover (most recent first) in the circle so it
+        // teases the content — not the author's profile picture.
+        const cover = g.stories[0];
+        return (
+          <button key={g.handle} type="button" onClick={() => setStart(i)} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
+            <span className="rounded-full bg-gradient-to-br from-fuchsia-500 via-violet-500 to-blue-500 p-0.5">
+              <span className="block overflow-hidden rounded-full bg-background p-0.5">
+                {cover?.mediaKind === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={cover.mediaUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+                ) : cover?.mediaKind === "video" ? (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption
+                  <video src={`${cover.mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+                ) : g.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={g.avatarUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+                ) : (
+                  <span className="flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
+                    {g.displayName.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </span>
             </span>
-          </span>
-          <span className="w-16 truncate text-center text-[11px] font-medium text-foreground">{g.displayName.split(" ")[0]}</span>
-        </button>
-      ))}
+            <span className="w-16 truncate text-center text-[11px] font-medium text-foreground">{g.displayName.split(" ")[0]}</span>
+          </button>
+        );
+      })}
 
       {start !== null ? <StoryViewer groups={groups} startGroup={start} onClose={() => setStart(null)} /> : null}
     </div>

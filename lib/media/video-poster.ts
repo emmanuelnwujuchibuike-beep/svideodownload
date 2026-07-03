@@ -44,16 +44,20 @@ export function captureVideoPoster(file: File): Promise<Blob | null> {
 
       video.onerror = () => finish(null, url);
       video.onloadeddata = () => {
-        video.onseeked = grab;
-        // Seek slightly in so we don't grab a black leading frame.
+        // Seek ~0.5s+ in (never the very first frame) so we don't capture the
+        // black leading frame that made covers look corrupted.
+        const d = video.duration || 0;
+        const t = d > 0.6 ? Math.min(Math.max(0.5, d * 0.1), d - 0.1) : 0.2;
+        // Double rAF ensures the seeked frame has actually painted before we draw.
+        video.onseeked = () => requestAnimationFrame(() => requestAnimationFrame(grab));
         try {
-          video.currentTime = Math.min(0.1, (video.duration || 1) * 0.1);
+          video.currentTime = t;
         } catch {
           grab();
         }
       };
       // Safety net if events never fire.
-      setTimeout(() => finish(null, url), 4000);
+      setTimeout(() => finish(null, url), 5000);
     } catch {
       finish(null);
     }

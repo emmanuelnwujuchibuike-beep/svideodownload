@@ -13,6 +13,7 @@ import { useShowAds } from "@/features/monetization/use-show-ads";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
+import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
@@ -38,10 +39,10 @@ export function SiteHeader({ social = false }: { social?: boolean }) {
 
   return (
     <>
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-border/40 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
+    <header className={cn("fixed inset-x-0 top-0 z-50 backdrop-blur-xl", social ? "border-b border-border/20 bg-background/60" : "border-b border-border/40 bg-background/85 supports-[backdrop-filter]:bg-background/70")}>
       <div className="container flex h-16 items-center justify-between">
-        {/* Brand */}
-        <Link href="/" className="flex items-center" onClick={() => setOpen(false)}>
+        {/* Brand — hidden on mobile social surfaces (plain, full-bleed top bar) */}
+        <Link href="/" className={cn("items-center", social ? "hidden md:flex" : "flex")} onClick={() => setOpen(false)}>
           <FrenzWordmark size={32} />
         </Link>
 

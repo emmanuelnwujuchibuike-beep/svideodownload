@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
-import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { openUpload } from "@/features/create/upload-store";
@@ -35,11 +34,9 @@ export function AppTopbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border/50 bg-background/80 px-4 backdrop-blur-2xl">
-      {/* Mobile/tablet brand wordmark (Instagram-style) */}
-      <Link href="/home" className="flex items-center lg:hidden">
-        <FrenzWordmark size={30} textClassName="text-xl" />
-      </Link>
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border/20 bg-background/60 px-4 backdrop-blur-xl">
+      {/* Plain, full-bleed top bar — no logo, blends with the body (FB/TikTok/IG style) */}
+      <div className="flex-1 sm:hidden" />
 
       {/* Search — pill, Instagram/Snapchat style */}
       <form onSubmit={submit} className="relative hidden max-w-xl flex-1 sm:block">
@@ -56,8 +53,6 @@ export function AppTopbar() {
           ⌘K
         </kbd>
       </form>
-
-      <div className="flex-1 sm:hidden" />
 
       {/* Actions */}
       <div className="flex items-center gap-2">

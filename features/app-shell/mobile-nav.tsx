@@ -40,17 +40,17 @@ export function MobileNav() {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-border/60 bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] pt-1.5 backdrop-blur-xl lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-border/25 bg-background/75 px-2 pb-[env(safe-area-inset-bottom)] pt-1.5 backdrop-blur-2xl lg:hidden"
     >
       <NavTab label="Home" href="/home" icon={IoHomeOutline} activeIcon={IoHome} active={pathname === "/home"} onWarm={router.prefetch} />
       <NavTab label="Friends" href="/friends" icon={IoPeopleCircleOutline} activeIcon={IoPeopleCircle} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />
 
-      {/* TikTok-style center create button */}
-      <button type="button" onClick={() => openUpload("post")} aria-label="Create post" className="relative -mt-1 flex h-8 w-[3.25rem] items-center justify-center transition-transform duration-100 active:scale-90">
-        <span aria-hidden className="absolute inset-0 -translate-x-1 rounded-[0.7rem] bg-cyan-400" />
-        <span aria-hidden className="absolute inset-0 translate-x-1 rounded-[0.7rem] bg-fuchsia-500" />
-        <span className="relative flex h-8 w-[3.25rem] items-center justify-center rounded-[0.7rem] bg-white text-black shadow-sm">
-          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      {/* Signature create button — an elevated gradient orb with a soft halo.
+          Uniquely Frenz: a clean circular FAB that reads as premium, not TikTok. */}
+      <button type="button" onClick={() => openUpload("post")} aria-label="Create" className="group relative -mt-6 flex h-14 w-14 items-center justify-center transition-transform duration-100 active:scale-90">
+        <span aria-hidden className="absolute inset-1 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 opacity-50 blur-md transition group-active:opacity-70" />
+        <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-600/40 ring-4 ring-background">
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
             <path d="M12 5v14M5 12h14" />
           </svg>
         </span>
@@ -97,6 +97,7 @@ function NavTab({
   const Glyph = active ? ActiveIcon : Icon;
   return (
     <Link href={href} onPointerDown={() => onWarm?.(href)} className="relative flex flex-col items-center gap-0.5 px-2 py-1 transition-transform duration-100 active:scale-90">
+      {active ? <span aria-hidden className="absolute -top-[7px] h-1 w-6 rounded-full bg-gradient-to-r from-blue-500 to-violet-600 shadow-[0_0_8px] shadow-violet-500/50" /> : null}
       <span className="relative">
         <Glyph className={cn("h-[26px] w-[26px] transition", active ? "text-foreground" : "text-muted-foreground")} />
         {badge > 0 ? (

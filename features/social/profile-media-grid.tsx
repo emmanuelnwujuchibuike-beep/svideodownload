@@ -20,10 +20,13 @@ import { cn, formatCompactNumber } from "@/lib/utils";
 export function ProfileMediaGrid({
   posts,
   layout = "card",
+  view = "grid",
   emptyText = "Nothing here yet.",
 }: {
   posts: PostCard[];
   layout?: "reel" | "card";
+  /** "grid" = seamless tile grid; "list" = X-style single-column full-size feed. */
+  view?: "grid" | "list";
   emptyText?: string;
 }) {
   const videos = posts.filter((p) => p.mediaKind === "video" && p.mediaUrl);
@@ -42,6 +45,45 @@ export function ProfileMediaGrid({
     setPlayIndex(idx < 0 ? 0 : idx);
   };
   const isPlayable = (p: PostCard) => p.mediaKind === "video" && !!p.mediaUrl;
+
+  const player = (
+    <ProfileVideoPlayer
+      posts={playIndex !== null ? videos : null}
+      startIndex={playIndex ?? 0}
+      onClose={() => setPlayIndex(null)}
+    />
+  );
+
+  // X-style list: one full-size item per row, photos vs videos clearly marked.
+  if (view === "list") {
+    return (
+      <>
+        <div className="space-y-4 sm:space-y-5">
+          {posts.map((p) =>
+            isPlayable(p) ? (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => openVideo(p)}
+                className="group block w-full overflow-hidden rounded-2xl border border-border/60 bg-card text-left shadow-soft transition hover:shadow-elevated"
+              >
+                <ListItem post={p} />
+              </button>
+            ) : (
+              <Link
+                key={p.id}
+                href={`/p/${p.id}`}
+                className="group block overflow-hidden rounded-2xl border border-border/60 bg-card shadow-soft transition hover:shadow-elevated"
+              >
+                <ListItem post={p} />
+              </Link>
+            ),
+          )}
+        </div>
+        {player}
+      </>
+    );
+  }
 
   const aspect = layout === "reel" ? "aspect-[9/16]" : "aspect-square";
   const cols =
@@ -73,11 +115,44 @@ export function ProfileMediaGrid({
           ),
         )}
       </div>
-      <ProfileVideoPlayer
-        posts={playIndex !== null ? videos : null}
-        startIndex={playIndex ?? 0}
-        onClose={() => setPlayIndex(null)}
-      />
+      {player}
+    </>
+  );
+}
+
+/** A single X-style list row: full-size media + a caption/stats strip below. */
+function ListItem({ post }: { post: PostCard }) {
+  const isVideo = post.mediaKind === "video";
+  return (
+    <>
+      <div className={cn("relative overflow-hidden bg-neutral-950", isVideo ? "aspect-video" : "aspect-[4/5]")}>
+        <PostCover post={post} className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.02]" />
+
+        {/* Photo / Video chip (top-left) — clearly differentiates the two */}
+        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+          {isVideo ? <Play className="h-3 w-3 fill-white" /> : <Images className="h-3 w-3" />}
+          {isVideo ? "Video" : "Photo"}
+        </span>
+
+        {/* Big play affordance for videos */}
+        {isVideo ? (
+          <span className="absolute inset-0 flex items-center justify-center">
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/30 backdrop-blur transition group-hover:scale-110">
+              <Play className="h-6 w-6 translate-x-0.5 fill-white" />
+            </span>
+          </span>
+        ) : null}
+      </div>
+
+      <div className="p-3.5">
+        {post.title ? <p className="line-clamp-2 text-sm font-semibold leading-snug">{post.title}</p> : null}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] font-medium text-muted-foreground">
+          <span className="inline-flex items-center gap-1"><Play className="h-3.5 w-3.5 fill-current" /> {formatCompactNumber(post.viewsCount)}</span>
+          <span className="inline-flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> {formatCompactNumber(post.likesCount)}</span>
+          <span className="inline-flex items-center gap-1"><MessageCircle className="h-3.5 w-3.5" /> {formatCompactNumber(post.commentsCount)}</span>
+          <span className="ml-auto">{new Date(post.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+        </div>
+      </div>
     </>
   );
 }

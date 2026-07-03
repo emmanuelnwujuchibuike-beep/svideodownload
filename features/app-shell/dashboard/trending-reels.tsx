@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { useQuery } from "@/features/data";
-import { PostViewer } from "@/features/feed/post-viewer";
+import { ReelViewer } from "@/features/feed/reel-viewer";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { formatCompactNumber } from "@/lib/utils";
 
@@ -70,7 +70,7 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
             ))}
       </div>
 
-      <PostViewer item={viewer} onClose={() => setViewer(null)} />
+      <ReelViewer item={viewer} onClose={() => setViewer(null)} />
     </section>
   );
 }

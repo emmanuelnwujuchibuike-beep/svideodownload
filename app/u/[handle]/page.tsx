@@ -114,7 +114,7 @@ export default async function ProfilePage({
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
-      <SiteHeader />
+      <SiteHeader social />
       <main className="pb-24 pt-14 sm:pt-16">
         <div className="mx-auto max-w-4xl sm:px-4">
           {/* Banner + Living Profile time-of-day glow. Full-bleed on mobile,

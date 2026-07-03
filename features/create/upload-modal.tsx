@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
 import { closeUpload, useUploadIntent, useUploadOpen } from "@/features/create/upload-store";
+import { captureVideoPoster } from "@/lib/media/video-poster";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -88,6 +89,13 @@ function ModalInner() {
       const ext = (file.name.split(".").pop() || (kind === "video" ? "mp4" : "jpg"))
         .toLowerCase()
         .replace(/[^a-z0-9]/g, "");
+      // Capture a cover from the video's first frame (in parallel with nothing —
+      // done before the media upload so a slow encode doesn't delay it further).
+      let posterBlob: Blob | null = null;
+      if (kind === "video") {
+        posterBlob = await captureVideoPoster(file).catch(() => null);
+      }
+
       let mediaUrl: string;
       try {
         mediaUrl = await uploadPostMedia({
@@ -101,10 +109,25 @@ function ModalInner() {
         return;
       }
 
+      // Upload the captured cover (best-effort — the post still publishes without it).
+      let thumbnailUrl: string | undefined;
+      if (posterBlob) {
+        try {
+          thumbnailUrl = await uploadPostMedia({
+            data: posterBlob,
+            kind: "image",
+            ext: "jpg",
+            contentType: "image/jpeg",
+          });
+        } catch {
+          /* cover is optional */
+        }
+      }
+
       const res = await fetch("/api/stories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mediaUrl, mediaKind: kind, caption: caption.trim() || undefined, destination }),
+        body: JSON.stringify({ mediaUrl, mediaKind: kind, caption: caption.trim() || undefined, thumbnailUrl, destination }),
       });
       const json = await res.json();
       if (!res.ok) {

@@ -9,6 +9,7 @@ import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { PostViewer } from "@/features/feed/post-viewer";
+import { ReelViewer } from "@/features/feed/reel-viewer";
 import { SparkCard } from "@/features/feed/spark-card";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
 import {
@@ -77,12 +78,17 @@ export function SmartFeed({
   const [freshCount, setFreshCount] = useState(0);
   const [away, setAway] = useState<AwaySummary | null>(null);
   const [viewer, setViewer] = useState<{ item: FeedItem; comments: boolean } | null>(null);
+  const [reel, setReel] = useState<FeedItem | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const seen = useRef(new Set(initialItems.map((i) => i.id)));
 
   const deck = useMemo(() => buildSparkDeck({ friendCount }), [friendCount]);
 
-  const openViewer = (it: FeedItem, comments = false) => setViewer({ item: it, comments });
+  // Videos open the fullscreen reel; everything else opens the split viewer.
+  const openViewer = (it: FeedItem, comments = false) => {
+    if (it.mediaKind === "video") setReel(it);
+    else setViewer({ item: it, comments });
+  };
 
   const fetchPage = useCallback(
     async (s: HomeFeedSort, offset: number, replace: boolean) => {
@@ -390,6 +396,7 @@ export function SmartFeed({
         startWithComments={viewer?.comments ?? false}
         onClose={() => setViewer(null)}
       />
+      <ReelViewer item={reel} onClose={() => setReel(null)} />
     </section>
   );
 }

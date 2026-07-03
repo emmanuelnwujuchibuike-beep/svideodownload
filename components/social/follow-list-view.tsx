@@ -45,7 +45,7 @@ export async function FollowListView({
 
   return (
     <>
-      <SiteHeader />
+      <SiteHeader social />
       <main className="container max-w-2xl pb-24 pt-28 sm:pt-32">
         <Link
           href={`/u/${profile.handle}`}

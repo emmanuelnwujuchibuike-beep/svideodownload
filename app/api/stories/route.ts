@@ -30,6 +30,8 @@ const schema = z.object({
   mediaUrl: z.string().url().max(2048),
   mediaKind: z.enum(["image", "video"]),
   caption: z.string().trim().max(300).optional(),
+  /** Cover image captured from the first frame of a video upload. */
+  thumbnailUrl: z.string().url().max(2048).optional(),
   /** Where the upload goes: a public post on your profile, a 24h story, or both. */
   destination: z.enum(["post", "story", "both"]).optional(),
   // Legacy flag from the old story-only composer.
@@ -56,7 +58,9 @@ export async function POST(request: Request) {
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid upload." }, { status: 400 });
-  const { mediaUrl, mediaKind, caption } = parsed.data;
+  const { mediaUrl, mediaKind, caption, thumbnailUrl } = parsed.data;
+  // Every post carries a cover: the image itself, or the captured video frame.
+  const cover = mediaKind === "image" ? mediaUrl : (thumbnailUrl ?? null);
   const destination = parsed.data.destination ?? (parsed.data.shareReel ? "both" : "post");
   const wantStory = destination === "story" || destination === "both";
   const wantPost = destination === "post" || destination === "both";
@@ -89,7 +93,7 @@ export async function POST(request: Request) {
           media_kind: mediaKind,
           title: (caption ?? (mediaKind === "video" ? "My video" : "My photo")).slice(0, 300),
           media_url: mediaUrl,
-          thumbnail_url: mediaKind === "image" ? mediaUrl : null,
+          thumbnail_url: cover,
           visibility: "public",
           status: "published",
         })

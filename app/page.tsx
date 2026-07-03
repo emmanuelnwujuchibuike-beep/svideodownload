@@ -13,7 +13,9 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { DownloaderLinks } from "@/components/seo/downloader-links";
+import { AdScripts } from "@/features/monetization/ad-scripts";
 import { AdSlot } from "@/features/monetization/ad-slot";
+import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function HomePage() {
@@ -64,6 +66,9 @@ export default async function HomePage() {
         <Faq />
       </main>
       <SiteFooter />
+      {/* Ads live only here on the marketing landing page. */}
+      <StickyBottomAd />
+      <AdScripts />
     </>
   );
 }

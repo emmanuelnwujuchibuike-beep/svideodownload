@@ -231,9 +231,16 @@ export function FeedPostCard({
 
       {/* Media */}
       {item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
-        // Plays inline: autoplays muted when scrolled into view, full controls.
-        <div className="mx-4 mb-3 overflow-hidden rounded-xl">
-          <FeedVideo src={item.mediaUrl} streamUid={item.streamUid} poster={item.thumbnailUrl} className="aspect-video w-full" />
+        // Big, immersive inline preview: autoplays muted in view, tap → fullscreen
+        // reel, press-hold → pause.
+        <div className="mx-4 mb-3 overflow-hidden rounded-2xl">
+          <FeedVideo
+            src={item.mediaUrl}
+            streamUid={item.streamUid}
+            poster={item.thumbnailUrl}
+            onExpand={() => onOpen(item)}
+            className="aspect-[4/5] w-full"
+          />
         </div>
       ) : item.mediaKind === "audio" ? (
         <button type="button" onClick={() => onOpen(item)} className="block w-full text-left" aria-label="Play">

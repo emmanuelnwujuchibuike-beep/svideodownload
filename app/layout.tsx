@@ -4,9 +4,7 @@ import type { ReactNode } from "react";
 
 import { ThemeProvider } from "@/components/theme-provider";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
-import { AdScripts } from "@/features/monetization/ad-scripts";
 import { RegisterServiceWorker } from "@/features/notifications/register-sw";
-import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
 import { WebVitals } from "@/features/perf/web-vitals";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
@@ -124,8 +122,9 @@ export default function RootLayout({
           </div>
           {children}
           {/* <AssistantWidget /> temporarily removed — re-add later */}
-          <StickyBottomAd />
-          <AdScripts />
+          {/* Ads are intentionally NOT global anymore — they live only on the
+              marketing landing page. The app/social surfaces (home, feed,
+              profiles, messages, …) are ad-free; social monetization comes later. */}
           <RegisterServiceWorker />
           <WebVitals />
         </ThemeProvider>

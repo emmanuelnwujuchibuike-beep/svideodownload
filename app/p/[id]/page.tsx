@@ -111,7 +111,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
-      <SiteHeader />
+      <SiteHeader social />
       <main className="container max-w-3xl pb-24 pt-28 sm:pt-32">
         {post.status !== "published" ? (
           <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">

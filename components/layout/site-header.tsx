@@ -24,7 +24,12 @@ const NAV_LINKS = [
 
 const DOWNLOADERS = getPrimaryPages();
 
-export function SiteHeader() {
+/**
+ * `social` hides the mobile hamburger + drawer: on in-app social surfaces
+ * (profiles, posts) the bottom MobileNav already owns navigation, so the
+ * marketing menu in the top-right is redundant and out of place there.
+ */
+export function SiteHeader({ social = false }: { social?: boolean }) {
   const [open, setOpen] = useState(false);
   const { user, enabled } = useUser();
   const { handle } = useEntitlements();
@@ -68,21 +73,23 @@ export function SiteHeader() {
           <UserMenu />
         </div>
 
-        {/* Mobile trigger */}
-        <button
-          type="button"
-          aria-label={open ? "Close menu" : "Open menu"}
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-card/50 text-foreground backdrop-blur md:hidden"
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        {/* Mobile trigger — hidden on social surfaces (bottom nav owns nav there) */}
+        {social ? null : (
+          <button
+            type="button"
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-card/50 text-foreground backdrop-blur md:hidden"
+          >
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        )}
       </div>
       </header>
 
       {/* Mobile drawer — right-side panel; left half of the page stays visible */}
-      {open && (
+      {open && !social && (
         <>
           {/* Backdrop over the exposed page area */}
           <button

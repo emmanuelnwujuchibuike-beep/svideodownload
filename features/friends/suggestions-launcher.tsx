@@ -4,7 +4,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { BadgeCheck, Check, Loader2, UserPlus, X } from "lucide-react";
 import { IoPersonAddOutline, IoSparkles } from "react-icons/io5";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import type { SuggestedCreator } from "@/lib/social/suggest";
 import { cn, formatCompactNumber } from "@/lib/utils";
@@ -27,6 +28,11 @@ export function SuggestionsLauncher({
   const [open, setOpen] = useState(false);
   const [list, setList] = useState<SuggestedCreator[] | null>(null);
   const [following, setFollowing] = useState<Set<string>>(new Set());
+  // Portal target — only after mount (SSR-safe). The sheet renders into <body> so
+  // a blurred/transformed ancestor (e.g. the backdrop-blur top bar) can't confine
+  // its `fixed` positioning to a tiny box.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const load = useCallback(async () => {
     if (list) return;
@@ -94,9 +100,11 @@ export function SuggestionsLauncher({
         </button>
       )}
 
-      <AnimatePresence>
-        {open ? (
-          <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center" onClick={() => setOpen(false)}>
+      {mounted
+        ? createPortal(
+            <AnimatePresence>
+              {open ? (
+                <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center" onClick={() => setOpen(false)}>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
             <motion.div
               initial={{ opacity: 0, y: 30 }}
@@ -158,10 +166,13 @@ export function SuggestionsLauncher({
                   })}
                 </ul>
               )}
-            </motion.div>
-          </div>
-        ) : null}
-      </AnimatePresence>
+                </motion.div>
+                </div>
+              ) : null}
+            </AnimatePresence>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

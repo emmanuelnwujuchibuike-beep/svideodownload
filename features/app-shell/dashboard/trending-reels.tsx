@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Play } from "lucide-react";
+import { BadgeCheck, Flame, Play } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
@@ -33,7 +33,12 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
   return (
     <section className="mt-5">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-base font-bold">🔥 Trending Reels</h2>
+        <h2 className="flex items-center gap-2 text-base font-bold">
+          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 text-white shadow-sm shadow-orange-500/30">
+            <Flame className="h-3.5 w-3.5 fill-white" />
+          </span>
+          Trending Reels
+        </h2>
         <Link href="/explore?sort=trending" className="text-xs font-semibold text-primary hover:underline">View all</Link>
       </div>
 

@@ -7,7 +7,6 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { MessagesBell } from "@/features/app-shell/messages-bell";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { openUpload } from "@/features/create/upload-store";
 import { UserMenu } from "@/features/auth/user-menu";
@@ -64,26 +63,23 @@ export function AppTopbar() {
       <div className="flex items-center gap-1.5">
         <Link
           href="/downloads"
-          className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 py-2 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95"
+          className="group inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 py-2 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:shadow-lg hover:shadow-violet-500/40"
         >
-          <Download className="h-4 w-4" /> <span className="hidden sm:inline">Download</span>
+          <Download className="h-4 w-4 transition-transform group-hover:translate-y-0.5" /> <span className="hidden sm:inline">Download</span>
         </Link>
-        {/* Upload / create — opens the premium composer */}
+        {/* Create — opens the premium composer */}
         <button
           type="button"
           onClick={() => openUpload("post")}
           aria-label="Create a post"
           title="Create"
-          className="hidden h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-foreground transition hover:border-foreground/20 hover:bg-secondary sm:inline-flex"
+          className="hidden h-10 w-10 items-center justify-center rounded-xl bg-secondary/60 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary sm:inline-flex"
         >
           <Upload className="h-[18px] w-[18px]" />
         </button>
 
         {/* Notifications (realtime) */}
         <NotificationBell />
-
-        {/* Messages (live unread badge) */}
-        <MessagesBell />
 
         <div className="hidden sm:block">
           <ThemeToggle />

@@ -4,8 +4,11 @@ import { Pause, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { streamIframeUrl } from "@/lib/media/stream";
-import { claimPlayback, releasePlayback } from "@/lib/media/video-coordinator";
+import { claimPlayback, recentlyScrolled, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
+
+// A tap only counts if the pointer barely moved AND the page isn't mid-scroll.
+const TAP_MOVE_TOLERANCE = 18;
 
 /**
  * Inline feed video. Autoplays muted when scrolled into view (Reels feel) and
@@ -91,7 +94,7 @@ export function FeedVideo({
     if (!startPt.current || moved.current) return;
     const dx = Math.abs(e.clientX - startPt.current.x);
     const dy = Math.abs(e.clientY - startPt.current.y);
-    if (dx > 10 || dy > 10) {
+    if (dx > TAP_MOVE_TOLERANCE || dy > TAP_MOVE_TOLERANCE) {
       moved.current = true;
       // Cancel a pending hold-pause once it's clearly a scroll.
       if (holdTimer.current) clearTimeout(holdTimer.current);
@@ -108,7 +111,8 @@ export function FeedVideo({
       holding.current = false;
       setHeld(false);
       video.current?.play().catch(() => {});
-    } else if (!moved.current) {
+    } else if (!moved.current && !recentlyScrolled()) {
+      // Only a deliberate, stationary tap on a settled feed opens the reel.
       onExpand?.();
     }
     startPt.current = null;
@@ -133,7 +137,16 @@ export function FeedVideo({
   if (!src) return null;
 
   return (
-    <div ref={wrap} className={cn("group relative overflow-hidden bg-black", className)}>
+    <div
+      ref={wrap}
+      className={cn(
+        "group relative overflow-hidden bg-black",
+        // On laptops/desktops the whole video fits the screen height (never taller
+        // than 82vh) so you never scroll to see a full clip; phones stay immersive.
+        "lg:flex lg:aspect-auto lg:max-h-[82vh] lg:items-center lg:justify-center",
+        className,
+      )}
+    >
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
         ref={video}
@@ -143,7 +156,7 @@ export function FeedVideo({
         muted
         playsInline
         preload="metadata"
-        className="h-full w-full object-cover"
+        className="h-full w-full object-cover lg:h-auto lg:max-h-[82vh] lg:w-auto lg:object-contain"
         onPlay={() => video.current && claimPlayback(video.current)}
         onPlaying={() => setCovered(false)}
         onPointerDown={onPointerDown}
@@ -157,7 +170,7 @@ export function FeedVideo({
           not-yet-decoded clip never flashes a blank black screen. */}
       {covered && poster ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+        <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full object-cover lg:object-contain" />
       ) : null}
 
       {/* Paused (while holding) indicator */}

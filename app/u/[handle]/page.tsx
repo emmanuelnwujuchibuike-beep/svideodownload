@@ -10,6 +10,7 @@ import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
 import { LivingGlow } from "@/features/profile/living-glow";
+import { ProfileMenu } from "@/features/profile/profile-menu";
 import { ProfileCompletion } from "@/features/profile/profile-completion";
 import { ShareProfileButton } from "@/features/profile/share-profile-button";
 import { FollowButton } from "@/features/social/follow-button";
@@ -129,6 +130,8 @@ export default async function ProfilePage({
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
       <SiteHeader social />
+      {/* Owner control center — top-right feature drawer (settings, Creator Studio…) */}
+      {profile.isOwner ? <ProfileMenu /> : null}
       <main className="pb-24 pt-14 sm:pt-16">
         <div className="mx-auto max-w-4xl sm:px-4">
           {/* Banner + Living Profile time-of-day glow. Full-bleed on mobile,

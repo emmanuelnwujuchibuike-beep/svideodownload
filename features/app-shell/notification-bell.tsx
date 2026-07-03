@@ -73,7 +73,7 @@ export function NotificationBell() {
         onClick={toggle}
         aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
         aria-expanded={open}
-        className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+        className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/60 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary"
       >
         <Bell className="h-5 w-5" />
         {unread > 0 ? (

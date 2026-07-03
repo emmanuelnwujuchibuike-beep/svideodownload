@@ -148,6 +148,7 @@ interface PostRow {
   category: string | null;
   thumbnail_url: string | null;
   media_url: string | null;
+  stream_uid: string | null;
   duration_sec: number | null;
   visibility: Visibility;
   status: string;
@@ -161,7 +162,7 @@ interface PostRow {
 }
 
 const POST_SELECT =
-  "id, publisher_id, source_url, platform, source_author, media_kind, title, description, category, thumbnail_url, media_url, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at";
+  "id, publisher_id, source_url, platform, source_author, media_kind, title, description, category, thumbnail_url, media_url, stream_uid, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at";
 
 export interface PostPublisher {
   id: string;

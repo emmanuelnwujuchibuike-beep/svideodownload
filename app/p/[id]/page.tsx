@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { BadgeCheck, CalendarDays, Download, Eye, Play } from "lucide-react";
+import { BadgeCheck, CalendarDays, Download, Eye } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -23,6 +23,8 @@ import { getUserPlan } from "@/lib/monetization/plan";
 import { canComment, getViewerReactions, listComments } from "@/lib/social/engagement";
 import { getPoll } from "@/lib/social/polls";
 import { PostPoll, PollCreator } from "@/features/social/post-poll";
+import { PostMedia } from "@/features/social/post-media";
+import type { FeedItem } from "@/lib/social/home-feed";
 import { getPost, recordPostView, relatedPosts } from "@/lib/social/posts";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
@@ -99,6 +101,40 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const commentDisabled =
     gate && !gate.ok ? (COMMENT_GATE_MSG[gate.reason] ?? "Comments are unavailable.") : null;
 
+  // A rich media item so the hero can play inline + open a full reel-quality viewer.
+  const mediaItem: FeedItem = {
+    id: post.id,
+    title: post.title,
+    description: post.description,
+    platform: post.platform,
+    mediaKind: post.media_kind,
+    thumbnailUrl: post.thumbnail_url,
+    sourceUrl: post.source_url,
+    mediaUrl: post.media_url,
+    streamUid: post.stream_uid,
+    category: post.category,
+    durationSec: post.duration_sec,
+    viewsCount: post.views_count,
+    likesCount: post.likes_count,
+    commentsCount: post.comments_count,
+    sharesCount: post.shares_count,
+    savesCount: post.saves_count,
+    downloadsCount: post.downloads_count,
+    createdAt: post.created_at,
+    publisher: {
+      id: post.publisher.id,
+      handle: post.publisher.handle,
+      displayName: post.publisher.displayName,
+      avatarUrl: post.publisher.avatarUrl,
+      isVerified: post.publisher.isVerified,
+      plan,
+    },
+    viewerLiked: reactions.liked,
+    viewerSaved: reactions.saved,
+    isFollowing: post.publisher.isFollowing,
+    isOwner: post.isOwner,
+  };
+
   const ld = {
     "@context": "https://schema.org",
     "@type": post.media_kind === "image" ? "ImageObject" : "VideoObject",
@@ -124,21 +160,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           </div>
         ) : null}
 
-        {/* Preview */}
-        <div className="relative aspect-video overflow-hidden rounded-3xl border border-border/60 bg-neutral-950 shadow-card">
-          {post.thumbnail_url ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={post.thumbnail_url} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl" aria-hidden />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={post.thumbnail_url} alt={post.title} className="absolute inset-0 h-full w-full object-contain" />
-            </>
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-white/25">
-              <Play className="h-14 w-14" />
-            </div>
-          )}
-        </div>
+        {/* Hero media — plays inline + opens a full reel-quality viewer */}
+        <PostMedia item={mediaItem} />
 
         {/* Title + meta */}
         <div className="mt-5 flex flex-wrap items-start justify-between gap-3">

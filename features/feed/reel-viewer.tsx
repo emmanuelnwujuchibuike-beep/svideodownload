@@ -221,13 +221,13 @@ function ReelCard({
 
   const scheduleHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setUi(false), 2000);
+    hideTimer.current = setTimeout(() => setUi(false), 4000);
   }, []);
   const toggleUi = useCallback(() => {
     setUi((v) => {
       const next = !v;
       if (hideTimer.current) clearTimeout(hideTimer.current);
-      if (next) hideTimer.current = setTimeout(() => setUi(false), 2000);
+      if (next) hideTimer.current = setTimeout(() => setUi(false), 4000);
       return next;
     });
   }, []);

@@ -30,7 +30,7 @@ export function AppTopbar() {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const term = q.trim();
-    if (term) router.push(`/explore?q=${encodeURIComponent(term)}`);
+    router.push(term ? `/search?q=${encodeURIComponent(term)}` : "/search");
   };
 
   return (
@@ -56,6 +56,14 @@ export function AppTopbar() {
 
       {/* Actions */}
       <div className="flex items-center gap-2">
+        {/* Mobile search entry (the search box is tablet+ only) */}
+        <Link
+          href="/search"
+          aria-label="Search"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary active:scale-95 sm:hidden"
+        >
+          <IoSearchOutline className="h-[20px] w-[20px]" />
+        </Link>
         <Link
           href="/downloads"
           className="group inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 ring-1 ring-inset ring-white/10 transition hover:shadow-xl hover:shadow-violet-500/40"

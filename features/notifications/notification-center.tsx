@@ -129,7 +129,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
         <div className="relative flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-[-0.02em]">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-[0_6px_20px_-6px_rgba(124,58,237,0.7)]">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-secondary text-foreground">
                 <BellRing className="h-5 w-5" />
               </span>
               Notifications
@@ -186,7 +186,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
       {/* List */}
       {visible.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-border/70 bg-card/40 p-12 text-center">
-          <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500/15 to-violet-500/15 text-violet-500">
+          <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-secondary text-muted-foreground">
             <BellRing className="h-6 w-6" />
           </span>
           <p className="text-sm font-medium">{tab === "unread" ? "You're all caught up 🎉" : "No notifications yet"}</p>

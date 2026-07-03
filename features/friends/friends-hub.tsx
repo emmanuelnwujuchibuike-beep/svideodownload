@@ -226,7 +226,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
       {catchUp.length > 0 ? (
         <section className="mb-6">
           <h2 className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-            <Sparkles className="h-4 w-4 text-violet-500 dark:text-violet-300" /> Catch up
+            <Sparkles className="h-4 w-4 text-muted-foreground" /> Catch up
           </h2>
           <ul className="space-y-1.5">
             {catchUp.map((f) => (
@@ -262,7 +262,7 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
       {initial.activity.length > 0 ? (
         <section className="mb-6">
           <h2 className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-            <Activity className="h-4 w-4 text-blue-500 dark:text-blue-300" /> Friend activity
+            <Activity className="h-4 w-4 text-muted-foreground" /> Friend activity
           </h2>
           <ul className="space-y-1.5">
             {initial.activity.map((a) => (
@@ -370,8 +370,8 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
           </>
         ) : (
           <div className="rounded-3xl border border-border/70 bg-card/70 p-8 text-center">
-            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/20 to-violet-500/20">
-              <UserPlus className="h-6 w-6 text-violet-500 dark:text-violet-300" />
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+              <UserPlus className="h-6 w-6" />
             </span>
             <p className="mt-3 font-semibold">Start building meaningful friendships</p>
             <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">

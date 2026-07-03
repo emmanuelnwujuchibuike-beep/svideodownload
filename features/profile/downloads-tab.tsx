@@ -25,7 +25,7 @@ export function DownloadsTab({ emptyText }: { emptyText: string }) {
   if (items.length === 0) {
     return (
       <div className="rounded-3xl border border-dashed border-border/70 bg-card/50 p-10 text-center">
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/15 to-violet-500/15 text-primary">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
           <IoDownloadOutline className="h-6 w-6" />
         </span>
         <p className="mt-3 text-sm text-muted-foreground">{emptyText}</p>

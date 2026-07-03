@@ -79,7 +79,7 @@ export default async function HomePage() {
             experience. Rendered last because it never ends. */}
         <div className="pt-2">
           <h2 className="flex items-center gap-2.5 text-lg font-bold tracking-tight">
-            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/30">
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-secondary text-foreground">
               <IoSparklesSharp className="h-4 w-4" />
             </span>
             <span className="text-gradient">Your Smart Feed</span>

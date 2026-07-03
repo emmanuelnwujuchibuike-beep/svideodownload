@@ -34,8 +34,8 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
     <section className="mt-5">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-base font-bold">
-          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 text-white shadow-sm shadow-orange-500/30">
-            <Flame className="h-3.5 w-3.5 fill-white" />
+          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-secondary text-foreground">
+            <Flame className="h-3.5 w-3.5" />
           </span>
           Trending Reels
         </h2>

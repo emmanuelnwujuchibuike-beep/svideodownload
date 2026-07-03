@@ -95,7 +95,7 @@ export function PostPoll({ initial, loggedIn }: { initial: PollView; loggedIn: b
     <div className="mt-6 overflow-hidden rounded-3xl border border-border/70 bg-card p-5 shadow-soft">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/15 to-violet-500/15 text-primary">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
             <BarChart3 className="h-4 w-4" />
           </span>
           <h3 className="truncate text-base font-bold tracking-[-0.01em]">{poll.question || "Cast your vote"}</h3>

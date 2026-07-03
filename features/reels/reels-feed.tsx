@@ -46,7 +46,7 @@ export function ReelsFeed({ initialItems, initialOffset }: { initialItems: FeedI
   if (items.length === 0) {
     return (
       <div className="flex min-h-[70vh] flex-col items-center justify-center px-6 text-center">
-        <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500/15 to-violet-500/15 text-primary">
+        <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-secondary text-muted-foreground">
           <Clapperboard className="h-6 w-6" />
         </span>
         <p className="font-semibold">No reels yet</p>

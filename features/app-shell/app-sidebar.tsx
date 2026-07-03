@@ -116,7 +116,7 @@ export function AppSidebar({ handle }: { handle: string | null }) {
                   <Icon
                     className={cn(
                       "h-[23px] w-[23px] shrink-0 transition-transform group-active:scale-90",
-                      active ? "text-primary drop-shadow-[0_1px_5px_rgba(124,58,237,0.45)]" : "text-muted-foreground group-hover:text-foreground",
+                      active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground",
                     )}
                   />
                 );
@@ -142,8 +142,8 @@ export function AppSidebar({ handle }: { handle: string | null }) {
               <span className="truncate">{s.label}</span>
             </Link>
           ))}
-          <Link href="/explore" className="flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-semibold text-primary transition hover:bg-secondary/70">
-            <span className="flex h-7 w-7 items-center justify-center rounded-xl border border-dashed border-primary/40 text-primary">
+          <Link href="/explore" className="flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-secondary/70">
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground">
               <IoAdd className="h-4 w-4" />
             </span>
             Create New Space

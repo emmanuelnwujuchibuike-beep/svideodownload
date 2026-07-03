@@ -184,7 +184,7 @@ export function Comments({
           <span />
         ) : (
           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-[-0.02em]">
-            <MessageCircle className="h-5 w-5 text-primary" />
+            <MessageCircle className="h-5 w-5 text-foreground" />
             Comments {total > 0 ? <span className="text-muted-foreground">· {formatCompactNumber(total)}</span> : null}
           </h2>
         )}
@@ -225,7 +225,7 @@ export function Comments({
 
       {sorted.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-border/60 bg-card/40 py-10 text-center">
-          <span className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/15 to-violet-500/15 text-primary">
+          <span className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
             <MessageCircle className="h-5 w-5" />
           </span>
           <p className="text-sm text-muted-foreground">No comments yet — start the conversation ✨</p>

@@ -73,12 +73,9 @@ export function NotificationBell() {
         onClick={toggle}
         aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
         aria-expanded={open}
-        className={cn(
-          "relative inline-flex h-10 w-10 items-center justify-center rounded-full text-foreground ring-1 ring-inset transition",
-          unread > 0 ? "bg-primary/10 ring-primary/30 text-primary" : "bg-secondary/50 ring-border/50 hover:bg-secondary",
-        )}
+        className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary"
       >
-        {unread > 0 ? <IoNotifications className="h-[21px] w-[21px] drop-shadow-[0_1px_4px_rgba(124,58,237,0.5)]" /> : <IoNotificationsOutline className="h-[21px] w-[21px]" />}
+        {unread > 0 ? <IoNotifications className="h-[21px] w-[21px]" /> : <IoNotificationsOutline className="h-[21px] w-[21px]" />}
         {unread > 0 ? (
           <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-pink-600 px-1 text-[10px] font-bold text-white shadow-sm shadow-rose-500/40 ring-2 ring-background">
             {unread > 9 ? "9+" : unread}

@@ -93,7 +93,7 @@ export function StoriesRow({
   );
 }
 
-function StoryViewer({ groups, startGroup, onClose }: { groups: StoryGroup[]; startGroup: number; onClose: () => void }) {
+export function StoryViewer({ groups, startGroup, onClose }: { groups: StoryGroup[]; startGroup: number; onClose: () => void }) {
   const [gi, setGi] = useState(startGroup);
   const [si, setSi] = useState(0);
   const [pct, setPct] = useState(0);

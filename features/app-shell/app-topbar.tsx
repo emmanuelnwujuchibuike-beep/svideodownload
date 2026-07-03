@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { openUpload } from "@/features/create/upload-store";
 import { UserMenu } from "@/features/auth/user-menu";
+import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
 
 export function AppTopbar() {
   const router = useRouter();
@@ -64,6 +65,10 @@ export function AppTopbar() {
         >
           <IoSearchOutline className="h-[20px] w-[20px]" />
         </Link>
+
+        {/* Add friends — single top-nav icon, level with search / menu */}
+        <SuggestionsLauncher />
+
         <Link
           href="/downloads"
           className="group inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 ring-1 ring-inset ring-white/10 transition hover:shadow-xl hover:shadow-violet-500/40"

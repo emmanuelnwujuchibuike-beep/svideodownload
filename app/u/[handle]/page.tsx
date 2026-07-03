@@ -123,6 +123,8 @@ export default async function ProfilePage({
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
       <SiteHeader social />
+      {/* Add friends — single top-level icon, mirrors the profile menu on the right */}
+      <SuggestionsLauncher className="fixed left-3 top-3 z-[60] bg-background/70 backdrop-blur-xl" />
       {/* Owner control center — top-right feature drawer (settings, Creator Studio…) */}
       {profile.isOwner ? <ProfileMenu /> : null}
       <main className="pb-24 pt-14 sm:pt-16">
@@ -135,10 +137,6 @@ export default async function ProfilePage({
               <img src={profile.bannerUrl} alt="" className="h-full w-full object-cover" />
             ) : null}
             <LivingGlow />
-            {/* Add-friends / suggestions — top-left, always available */}
-            <div className="absolute left-3 top-3 z-10">
-              <SuggestionsLauncher />
-            </div>
           </div>
 
           <div className="px-4 sm:px-6">

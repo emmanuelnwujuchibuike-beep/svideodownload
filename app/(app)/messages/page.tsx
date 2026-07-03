@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { ConversationList } from "@/features/social/conversation-list";
-import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
 import { listConversations } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/server";
 
@@ -35,9 +34,6 @@ export default async function MessagesPage() {
     <>
       {/* Mobile inbox */}
       <div className="flex-1 overflow-y-auto px-3 pt-4 lg:hidden">
-        <div className="mb-3">
-          <SuggestionsLauncher />
-        </div>
         <h1 className="mb-4 flex items-center gap-2 text-2xl font-bold tracking-[-0.02em]">
           <MessageCircle className="h-6 w-6 text-primary" /> Messages
         </h1>
@@ -46,7 +42,6 @@ export default async function MessagesPage() {
 
       {/* Desktop: pick-a-conversation state */}
       <div className="hidden flex-1 flex-col items-center justify-center gap-3 lg:flex">
-        <SuggestionsLauncher className="mb-2" />
         <span className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/20 to-violet-500/20">
           <MessageCircle className="h-7 w-7 text-violet-500 dark:text-violet-300" />
         </span>

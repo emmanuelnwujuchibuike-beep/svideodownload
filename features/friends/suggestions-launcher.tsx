@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { BadgeCheck, Check, Loader2, UserPlus, X } from "lucide-react";
-import { IoSparkles } from "react-icons/io5";
+import { IoPersonAddOutline, IoSparkles } from "react-icons/io5";
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
@@ -10,12 +10,20 @@ import type { SuggestedCreator } from "@/lib/social/suggest";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
- * Add-friends / Suggestions launcher — a premium top-left button that opens a
- * bottom sheet of "people you may know" (nearby/relevant creators) with instant
- * follow. Lives on friends / chat / profile (non-video) surfaces so discovery is
- * always one tap away, without cluttering the feed or reels.
+ * Add-friends / Suggestions launcher — opens a bottom sheet of "people you may
+ * know" (nearby/relevant creators) with instant follow.
+ *
+ * `variant="icon"` (default now) renders a single top-nav icon so it lives at the
+ * very top, level with search / the profile menu — never a pill below the bar.
+ * `variant="pill"` keeps the older labelled button for legacy spots.
  */
-export function SuggestionsLauncher({ className }: { className?: string }) {
+export function SuggestionsLauncher({
+  className,
+  variant = "icon",
+}: {
+  className?: string;
+  variant?: "icon" | "pill";
+}) {
   const [open, setOpen] = useState(false);
   const [list, setList] = useState<SuggestedCreator[] | null>(null);
   const [following, setFollowing] = useState<Set<string>>(new Set());
@@ -57,19 +65,34 @@ export function SuggestionsLauncher({ className }: { className?: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={openSheet}
-        className={cn(
-          "inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/70 px-3.5 py-2 text-sm font-semibold text-foreground shadow-soft backdrop-blur transition hover:border-primary/40 active:scale-95",
-          className,
-        )}
-      >
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white">
-          <UserPlus className="h-3 w-3" />
-        </span>
-        Add friends
-      </button>
+      {variant === "icon" ? (
+        <button
+          type="button"
+          onClick={openSheet}
+          aria-label="Add friends"
+          title="Add friends"
+          className={cn(
+            "flex h-10 w-10 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary active:scale-95",
+            className,
+          )}
+        >
+          <IoPersonAddOutline className="h-[20px] w-[20px]" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={openSheet}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/70 px-3.5 py-2 text-sm font-semibold text-foreground shadow-soft backdrop-blur transition hover:border-primary/40 active:scale-95",
+            className,
+          )}
+        >
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white">
+            <UserPlus className="h-3 w-3" />
+          </span>
+          Add friends
+        </button>
+      )}
 
       <AnimatePresence>
         {open ? (

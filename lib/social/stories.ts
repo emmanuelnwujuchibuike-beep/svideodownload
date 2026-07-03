@@ -20,19 +20,62 @@ export interface StoryGroup {
   stories: StoryItem[];
 }
 
+/** Who a story feed is scoped to: everyone (default), just friends, or people you follow. */
+export type StoryScope = "all" | "friends" | "following";
+
+/**
+ * The set of author ids a scoped feed is allowed to show (plus the viewer's own,
+ * so your story always leads). Returns null for "all" (no restriction). Degrades
+ * gracefully — if the friends/follows tables error, the scope simply resolves empty.
+ */
+async function audienceForScope(
+  db: ReturnType<typeof createAdminClient>,
+  viewerId: string,
+  scope: Exclude<StoryScope, "all">,
+): Promise<Set<string>> {
+  const ids = new Set<string>([viewerId]);
+  try {
+    if (scope === "following") {
+      const { data } = await db.from("follows").select("following_id").eq("follower_id", viewerId);
+      for (const f of ((data ?? []) as { following_id: string }[])) ids.add(f.following_id);
+    } else {
+      const { data } = await db
+        .from("friendships")
+        .select("user_low, user_high")
+        .or(`user_low.eq.${viewerId},user_high.eq.${viewerId}`);
+      for (const r of ((data ?? []) as { user_low: string; user_high: string }[])) {
+        ids.add(r.user_low === viewerId ? r.user_high : r.user_low);
+      }
+    }
+  } catch {
+    /* table missing / error — leave scope as just the viewer */
+  }
+  return ids;
+}
+
 /** Active (non-expired) stories grouped by author, most recent author first.
- *  Public profiles only; the viewer's own group is surfaced first when present. */
-export async function getActiveStories(viewerId: string | null, limit = 20): Promise<StoryGroup[]> {
+ *  Public profiles only; the viewer's own group is surfaced first when present.
+ *  `scope` narrows to just friends or people you follow (signed-in viewers). */
+export async function getActiveStories(
+  viewerId: string | null,
+  limit = 20,
+  scope: StoryScope = "all",
+): Promise<StoryGroup[]> {
   if (!hasSupabase) return [];
   try {
     const db = createAdminClient();
+
+    // Resolve the allowed author set for scoped feeds up front.
+    const audience = viewerId && scope !== "all" ? await audienceForScope(db, viewerId, scope) : null;
+
     const { data } = await db
       .from("stories")
       .select("id, user_id, media_url, media_kind, caption, created_at")
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false })
       .limit(200);
-    const rows = (data as { id: string; user_id: string; media_url: string; media_kind: "image" | "video"; caption: string | null; created_at: string }[]) ?? [];
+    let rows = (data as { id: string; user_id: string; media_url: string; media_kind: "image" | "video"; caption: string | null; created_at: string }[]) ?? [];
+    if (audience) rows = rows.filter((r) => audience.has(r.user_id));
     if (rows.length === 0) return [];
 
     const userIds = [...new Set(rows.map((r) => r.user_id))];

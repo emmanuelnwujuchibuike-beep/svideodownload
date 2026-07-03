@@ -3,15 +3,15 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getActiveStories } from "@/lib/social/stories";
+import { getActiveStories, type StoryScope } from "@/lib/social/stories";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** GET /api/stories — active (non-expired) stories grouped by author. */
-export async function GET() {
+/** GET /api/stories?scope=all|friends|following — active stories grouped by author. */
+export async function GET(request: Request) {
   let viewerId: string | null = null;
   try {
     const supabase = await createClient();
@@ -22,7 +22,9 @@ export async function GET() {
   } catch {
     /* anon */
   }
-  const groups = await getActiveStories(viewerId, 24);
+  const raw = new URL(request.url).searchParams.get("scope");
+  const scope: StoryScope = raw === "friends" || raw === "following" ? raw : "all";
+  const groups = await getActiveStories(viewerId, 24, scope);
   return NextResponse.json({ groups }, { headers: { "Cache-Control": "private, no-store" } });
 }
 

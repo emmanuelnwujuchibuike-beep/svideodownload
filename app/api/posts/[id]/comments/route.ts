@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { pushSocialEvent } from "@/lib/push/social-push";
 import { assistantLimiter } from "@/lib/rate-limit";
+import { isCommentMood } from "@/lib/social/comment-meta";
 import { canComment, commentSpamReason, listComments } from "@/lib/social/engagement";
 import { isStickerId } from "@/lib/social/stickers";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -47,6 +48,7 @@ const schema = z.object({
   body: z.string().trim().max(1000).optional().default(""),
   sticker: z.string().max(40).nullable().optional(),
   imageUrl: z.string().url().max(2048).nullable().optional(),
+  mood: z.string().max(20).nullable().optional(),
   parentId: z.string().uuid().nullable().optional(),
 });
 
@@ -91,6 +93,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const body = parsed.data.body.trim();
   const sticker = parsed.data.sticker && isStickerId(parsed.data.sticker) ? parsed.data.sticker : null;
   const imageUrl = parsed.data.imageUrl ?? null;
+  const mood = parsed.data.mood && isCommentMood(parsed.data.mood) ? parsed.data.mood : null;
   if (!body && !sticker && !imageUrl) {
     return NextResponse.json({ error: "Add a comment, sticker, or picture." }, { status: 400 });
   }
@@ -126,12 +129,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   };
   if (sticker) insert.sticker = sticker;
   if (imageUrl) insert.image_url = imageUrl;
+  if (mood) insert.mood = mood;
 
   const { data, error } = await supabase.from("post_comments").insert(insert).select("id").single();
   if (error) {
     const msg =
-      (sticker || imageUrl) && /column|schema/i.test(error.message ?? "")
-        ? "Stickers & pictures aren't enabled yet."
+      (sticker || imageUrl || mood) && /column|schema/i.test(error.message ?? "")
+        ? "Some comment features aren't enabled yet."
         : "Couldn't post comment.";
     return NextResponse.json({ error: msg }, { status: 500 });
   }

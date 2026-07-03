@@ -43,6 +43,11 @@ export interface CommentAuthor {
   plan: BillingPlan;
 }
 
+export interface CommentReactionCount {
+  emoji: string;
+  count: number;
+}
+
 export interface CommentNode {
   id: string;
   body: string;
@@ -50,11 +55,22 @@ export interface CommentNode {
   sticker: string | null;
   /** Attached image URL when the comment carries a picture. */
   imageUrl: string | null;
+  /** Total reactions (any emoji). Kept as `likesCount` for compatibility. */
   likesCount: number;
   viewerLiked: boolean;
+  /** Reaction breakdown by emoji, most-used first. */
+  reactions: CommentReactionCount[];
+  /** The emoji the viewer reacted with, if any. */
+  viewerReaction: string | null;
+  /** Mood tag id (see comment-meta), if the author set one. */
+  mood: string | null;
+  pinned: boolean;
+  isBest: boolean;
   createdAt: string;
   author: CommentAuthor | null;
   canDelete: boolean;
+  /** The viewer may pin / mark best (post owner or admin). */
+  canModerate: boolean;
   replies: CommentNode[];
 }
 
@@ -68,6 +84,9 @@ interface CommentRow {
   sticker?: string | null;
   image_url?: string | null;
   likes_count?: number | null;
+  mood?: string | null;
+  pinned?: boolean | null;
+  is_best?: boolean | null;
 }
 
 /** Visible comments for a post, threaded one level, with author cards. */
@@ -82,7 +101,7 @@ export async function listComments(
     const db = createAdminClient();
     // Prefer the rich columns (sticker/image), but fall back cleanly if the
     // migration hasn't been applied yet so comments never vanish.
-    const EXT = "id, author_id, parent_id, body, status, created_at, sticker, image_url, likes_count";
+    const EXT = "id, author_id, parent_id, body, status, created_at, sticker, image_url, likes_count, mood, pinned, is_best";
     const BASE = "id, author_id, parent_id, body, status, created_at, likes_count";
     const runQuery = (cols: string) =>
       db
@@ -97,19 +116,28 @@ export async function listComments(
     const rows = raw ?? [];
     if (rows.length === 0) return [];
 
-    // Which of these comments the viewer has liked (best-effort — table is new).
-    const likedIds = new Set<string>();
-    if (viewerId) {
-      try {
-        const { data: cr } = await db
-          .from("comment_reactions")
-          .select("comment_id")
-          .eq("user_id", viewerId)
-          .in("comment_id", rows.map((r) => r.id));
-        for (const r of (cr ?? []) as { comment_id: string }[]) likedIds.add(r.comment_id);
-      } catch {
-        /* comment_reactions not migrated yet */
+    // Reactions per comment (grouped by emoji) + the viewer's own reaction.
+    // Falls back to a plain ❤️ tally if the emoji column isn't migrated yet.
+    const ids = rows.map((r) => r.id);
+    const reactionsByComment = new Map<string, Map<string, number>>();
+    const viewerReactionBy = new Map<string, string>();
+    const add = (commentId: string, emoji: string) => {
+      const m = reactionsByComment.get(commentId) ?? new Map<string, number>();
+      m.set(emoji, (m.get(emoji) ?? 0) + 1);
+      reactionsByComment.set(commentId, m);
+    };
+    try {
+      const rr = await db.from("comment_reactions").select("comment_id, user_id, emoji").in("comment_id", ids);
+      const rdata = (rr.error
+        ? (await db.from("comment_reactions").select("comment_id, user_id").in("comment_id", ids)).data
+        : rr.data) as unknown as { comment_id: string; user_id: string; emoji?: string }[] | null;
+      for (const r of rdata ?? []) {
+        const emoji = r.emoji || "❤️";
+        add(r.comment_id, emoji);
+        if (viewerId && r.user_id === viewerId) viewerReactionBy.set(r.comment_id, emoji);
       }
+    } catch {
+      /* comment_reactions not migrated yet */
     }
 
     // Batch author cards (profiles + plans), excluding people who block / are
@@ -147,19 +175,35 @@ export async function listComments(
 
     const canDelete = (authorId: string) =>
       isAdmin || viewerId === authorId || viewerId === postPublisherId;
+    const canModerate = isAdmin || (!!viewerId && viewerId === postPublisherId);
 
-    const toNode = (r: CommentRow): CommentNode => ({
-      id: r.id,
-      body: r.body,
-      sticker: r.sticker ?? null,
-      imageUrl: r.image_url ?? null,
-      likesCount: r.likes_count ?? 0,
-      viewerLiked: likedIds.has(r.id),
-      createdAt: r.created_at,
-      author: authorById.get(r.author_id) ?? null,
-      canDelete: canDelete(r.author_id),
-      replies: [],
-    });
+    const toNode = (r: CommentRow): CommentNode => {
+      const rmap = reactionsByComment.get(r.id);
+      const reactions = rmap
+        ? [...rmap.entries()].map(([emoji, count]) => ({ emoji, count })).sort((a, b) => b.count - a.count)
+        : [];
+      const total = reactions.reduce((n, x) => n + x.count, 0);
+      const viewerReaction = viewerReactionBy.get(r.id) ?? null;
+      return {
+        id: r.id,
+        body: r.body,
+        sticker: r.sticker ?? null,
+        imageUrl: r.image_url ?? null,
+        // Prefer the live reaction tally; fall back to the denormalized counter.
+        likesCount: total || (r.likes_count ?? 0),
+        viewerLiked: !!viewerReaction,
+        reactions,
+        viewerReaction,
+        mood: r.mood ?? null,
+        pinned: !!r.pinned,
+        isBest: !!r.is_best,
+        createdAt: r.created_at,
+        author: authorById.get(r.author_id) ?? null,
+        canDelete: canDelete(r.author_id),
+        canModerate,
+        replies: [],
+      };
+    };
 
     const nodes = new Map<string, CommentNode>();
     const top: CommentNode[] = [];

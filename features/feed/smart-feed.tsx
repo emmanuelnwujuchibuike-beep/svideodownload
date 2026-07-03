@@ -300,7 +300,7 @@ export function SmartFeed({
               >
                 <X className="h-4 w-4" />
               </button>
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-violet-500 dark:text-violet-300">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                 <Clock className="h-3.5 w-3.5" /> While you were away
               </p>
               <p className="mt-1 text-sm font-medium">

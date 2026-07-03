@@ -12,18 +12,18 @@ import type { SuggestedCreator } from "@/lib/social/suggest";
 import { formatCompactNumber } from "@/lib/utils";
 
 const SHORTCUTS = [
-  { label: "Reels", href: "/explore", icon: Clapperboard, tint: "bg-rose-500/15 text-rose-500" },
-  { label: "Trending", href: "/explore?sort=trending", icon: TrendingUp, tint: "bg-amber-500/15 text-amber-500" },
-  { label: "Saved", href: "/saved", icon: Bookmark, tint: "bg-blue-500/15 text-blue-500" },
-  { label: "My Downloads", href: "/downloads", icon: Download, tint: "bg-emerald-500/15 text-emerald-500" },
+  { label: "Reels", href: "/explore", icon: Clapperboard },
+  { label: "Trending", href: "/explore?sort=trending", icon: TrendingUp },
+  { label: "Saved", href: "/saved", icon: Bookmark },
+  { label: "My Downloads", href: "/downloads", icon: Download },
 ];
 
 const HASHTAGS = [
-  { tag: "TravelDiaries", views: 23_100_000, icon: Hash, color: "from-sky-500 to-blue-600" },
-  { tag: "FunnyVideos", views: 18_700_000, icon: Hash, color: "from-rose-500 to-pink-600" },
-  { tag: "MusicVibes", views: 12_400_000, icon: Music, color: "from-violet-500 to-purple-600" },
-  { tag: "FootballGoals", views: 15_200_000, icon: Hash, color: "from-emerald-500 to-teal-600" },
-  { tag: "GamingLife", views: 8_700_000, icon: Hash, color: "from-fuchsia-500 to-purple-600" },
+  { tag: "TravelDiaries", views: 23_100_000, icon: Hash },
+  { tag: "FunnyVideos", views: 18_700_000, icon: Hash },
+  { tag: "MusicVibes", views: 12_400_000, icon: Music },
+  { tag: "FootballGoals", views: 15_200_000, icon: Hash },
+  { tag: "GamingLife", views: 8_700_000, icon: Hash },
 ];
 
 export function HomeRail({ suggestions }: { suggestions: SuggestedCreator[] }) {
@@ -73,7 +73,7 @@ export function HomeRail({ suggestions }: { suggestions: SuggestedCreator[] }) {
         <div className="space-y-1">
           {SHORTCUTS.map((s) => (
             <Link key={s.label} href={s.href} className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-secondary">
-              <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${s.tint}`}><s.icon className="h-4 w-4" /></span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-foreground"><s.icon className="h-4 w-4" /></span>
               <span className="flex-1 text-sm font-semibold text-foreground">{s.label}</span>
               <span className="text-muted-foreground">›</span>
             </Link>
@@ -102,7 +102,7 @@ export function HomeRail({ suggestions }: { suggestions: SuggestedCreator[] }) {
           {HASHTAGS.map((h) => (
             <li key={h.tag}>
               <Link href="/explore?sort=trending" className="flex items-center gap-3">
-                <span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${h.color} text-white`}><h.icon className="h-4 w-4" /></span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-foreground"><h.icon className="h-4 w-4" /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold text-foreground">{h.tag}</span>
                   <span className="block text-[11px] text-muted-foreground">{formatCompactNumber(h.views)} views</span>

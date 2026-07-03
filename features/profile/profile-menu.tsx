@@ -88,7 +88,7 @@ export function ProfileMenu() {
                 <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gradient-to-br from-blue-600/25 to-violet-600/25 blur-2xl" />
                 <div className="relative flex items-center justify-between">
                   <h2 className="flex items-center gap-2 text-base font-bold tracking-tight">
-                    <Sparkles className="h-4 w-4 text-violet-400" /> <span className="text-gradient">Your space</span>
+                    <Sparkles className="h-4 w-4 text-foreground" /> <span className="text-gradient">Your space</span>
                   </h2>
                   <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="rounded-lg p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
                     <X className="h-5 w-5" />
@@ -105,7 +105,7 @@ export function ProfileMenu() {
                     onClick={() => setOpen(false)}
                     className="group flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-secondary/70"
                   >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600/15 to-violet-600/15 text-violet-500 ring-1 ring-inset ring-violet-500/15 dark:text-violet-300">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground ring-1 ring-inset ring-border/60">
                       <it.icon className="h-[18px] w-[18px]" />
                     </span>
                     <span className="min-w-0 flex-1">

@@ -121,7 +121,7 @@ export function NotificationLiveToast() {
 
   const tint = item
     ? item.kind === "message"
-      ? "bg-gradient-to-br from-blue-500/20 to-violet-500/20 text-blue-500 dark:text-blue-300"
+      ? "bg-secondary text-foreground"
       : tintFor(categoryForType(item.n.type))
     : "";
   const avatarUrl = item ? (item.kind === "message" ? item.avatarUrl : item.n.actor?.avatarUrl) : null;

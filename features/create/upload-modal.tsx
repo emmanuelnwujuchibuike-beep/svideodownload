@@ -177,7 +177,7 @@ function ModalInner() {
 
         <div className="relative flex items-center justify-between px-5 py-4">
           <h3 className="flex items-center gap-2 text-base font-bold tracking-tight">
-            <Wand2 className="h-4 w-4 text-violet-400" />
+            <Wand2 className="h-4 w-4 text-foreground" />
             <span className="text-gradient">Create</span>
           </h3>
           <button type="button" onClick={close} aria-label="Close" className="rounded-lg p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
@@ -266,10 +266,10 @@ function ModalInner() {
 
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <button type="button" onClick={() => cameraRef.current?.click()} className="flex items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card/60 py-3.5 text-sm font-semibold transition hover:bg-secondary">
-                    <Camera className="h-5 w-5 text-violet-400" /> Record
+                    <Camera className="h-5 w-5 text-foreground" /> Record
                   </button>
                   <button type="button" onClick={() => galleryRef.current?.click()} className="flex items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card/60 py-3.5 text-sm font-semibold transition hover:bg-secondary">
-                    <Images className="h-5 w-5 text-blue-400" /> Gallery
+                    <Images className="h-5 w-5 text-foreground" /> Gallery
                   </button>
                 </div>
                 {/* Rich, block-based composer */}
@@ -281,7 +281,7 @@ function ModalInner() {
                   }}
                   className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card/60 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground"
                 >
-                  <Wand2 className="h-4 w-4 text-violet-400" /> Write a story — blocks, text &amp; media
+                  <Wand2 className="h-4 w-4" /> Write a story — blocks, text &amp; media
                 </button>
 
                 {err ? <p className="mt-3 text-center text-sm text-rose-400">{err}</p> : null}

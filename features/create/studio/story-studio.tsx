@@ -229,7 +229,7 @@ function StudioInner() {
           <X className="h-5 w-5" />
         </button>
         <h2 className="relative flex items-center gap-2 text-sm font-bold tracking-tight">
-          <Wand2 className="h-4 w-4 text-violet-400" /> <span className="text-gradient">Story Studio</span>
+          <Wand2 className="h-4 w-4 text-foreground" /> <span className="text-gradient">Story Studio</span>
         </h2>
         <PublishButtonMorph phase={publishing} disabled={busy} accent={accent} onClick={publish} />
       </header>
@@ -239,7 +239,7 @@ function StudioInner() {
         {recover ? (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-b border-border/60 bg-gradient-to-r from-blue-600/10 to-violet-600/10">
             <div className="flex items-center gap-3 px-4 py-3">
-              <Sparkles className="h-4 w-4 shrink-0 text-violet-400" />
+              <Sparkles className="h-4 w-4 shrink-0 text-foreground" />
               <p className="min-w-0 flex-1 text-sm">
                 <span className="font-semibold">Recover your draft?</span>{" "}
                 <span className="text-muted-foreground">You have unsaved work from {new Date(recover.savedAt).toLocaleString()}.</span>

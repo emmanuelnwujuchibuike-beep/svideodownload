@@ -35,7 +35,7 @@ export function ProfileCompletion({
     >
       <div className="flex items-center justify-between gap-3">
         <p className="flex items-center gap-1.5 text-sm font-semibold">
-          <Sparkles className="h-4 w-4 text-violet-500 dark:text-violet-300" />
+          <Sparkles className="h-4 w-4 text-foreground" />
           Profile {percent}% complete
         </p>
         <span className="text-xs font-medium text-primary">{next} →</span>

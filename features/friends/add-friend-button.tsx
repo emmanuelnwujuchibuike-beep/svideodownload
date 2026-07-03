@@ -291,7 +291,7 @@ function RequestModal({
                 <p className="truncate text-base font-semibold">{targetName}</p>
                 <p className="truncate text-sm text-muted-foreground">@{targetHandle}</p>
                 {mutualCount > 0 ? (
-                  <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-violet-500 dark:text-violet-300">
+                  <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
                     <Users className="h-3.5 w-3.5" />
                     {mutualCount} mutual friend{mutualCount === 1 ? "" : "s"}
                   </p>

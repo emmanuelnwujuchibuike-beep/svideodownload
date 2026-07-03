@@ -73,23 +73,19 @@ export function iconFor(type: NotificationType): LucideIcon {
   return ICONS[type] ?? Bell;
 }
 
-/** Brand-aligned icon-badge tint per category (Electric Blue → Purple family). */
+/**
+ * Icon-badge tint per category. Monochrome by default (black-line look) — color
+ * is reserved for the two categories where it carries real meaning: Premium
+ * (gold) and Security (urgent red).
+ */
 export function tintFor(category: NotificationCategory): string {
   switch (category) {
-    case "social":
-      return "bg-gradient-to-br from-blue-500/20 to-violet-500/20 text-violet-500 dark:text-violet-300";
-    case "downloads":
-      return "bg-gradient-to-br from-indigo-500/20 to-blue-500/20 text-indigo-500 dark:text-indigo-300";
-    case "community":
-      return "bg-gradient-to-br from-fuchsia-500/20 to-violet-500/20 text-fuchsia-500 dark:text-fuchsia-300";
-    case "news":
-      return "bg-amber-500/15 text-amber-500";
     case "premium":
-      return "bg-gradient-to-br from-amber-400/20 to-orange-500/20 text-amber-500";
+      return "bg-amber-500/15 text-amber-500";
     case "security":
       return "bg-rose-500/15 text-rose-500";
     default:
-      return "bg-secondary text-muted-foreground";
+      return "bg-secondary text-foreground";
   }
 }
 

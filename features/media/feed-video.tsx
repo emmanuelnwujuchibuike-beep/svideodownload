@@ -4,7 +4,7 @@ import { Expand, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { streamIframeUrl } from "@/lib/media/stream";
-import { claimPlayback, recentlyScrolled, releasePlayback } from "@/lib/media/video-coordinator";
+import { claimPlayback, recentlyScrolled, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
 
 // A tap only counts if the pointer barely moved AND the page isn't mid-scroll.
@@ -28,12 +28,15 @@ export function FeedVideo({
   streamUid,
   poster,
   className,
+  postId,
   onExpand,
 }: {
   src?: string | null;
   streamUid?: string | null;
   poster?: string | null;
   className?: string;
+  /** Post id — lets an actual watch record a (deduped) view. */
+  postId?: string;
   onExpand?: () => void;
 }) {
   const wrap = useRef<HTMLDivElement | null>(null);
@@ -217,7 +220,10 @@ export function FeedVideo({
           setPlaying(true);
         }}
         onPause={() => setPlaying(false)}
-        onPlaying={() => setCovered(false)}
+        onPlaying={() => {
+          setCovered(false);
+          if (postId) recordView(postId);
+        }}
         {...touchHandlers}
       />
 

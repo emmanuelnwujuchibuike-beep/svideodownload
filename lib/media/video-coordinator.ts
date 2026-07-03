@@ -42,3 +42,20 @@ if (typeof window !== "undefined") {
 export function recentlyScrolled(withinMs = 280): boolean {
   return Date.now() - lastScrollAt < withinMs;
 }
+
+/**
+ * Records a view for a post the first time it's actually watched this session
+ * (in the feed or reels), so view counts reflect real watches — not just visits
+ * to the post page. Deduped client-side (once per post per session) and again at
+ * the DB level (per viewer|ip per day), so it can never inflate.
+ */
+const viewed = new Set<string>();
+export function recordView(postId: string): void {
+  if (!postId || viewed.has(postId)) return;
+  viewed.add(postId);
+  try {
+    fetch(`/api/posts/${postId}/view`, { method: "POST", keepalive: true }).catch(() => {});
+  } catch {
+    /* best-effort */
+  }
+}

@@ -100,6 +100,8 @@ interface FeedRow {
   media_url: string | null;
   category: string | null;
   views_count: number;
+  likes_count: number;
+  comments_count: number;
   created_at: string;
 }
 
@@ -135,7 +137,7 @@ async function loadFeed(
 
     let q = db
       .from("posts")
-      .select("id, publisher_id, title, platform, media_kind, thumbnail_url, media_url, category, views_count, created_at")
+      .select("id, publisher_id, title, platform, media_kind, thumbnail_url, media_url, category, views_count, likes_count, comments_count, created_at")
       .eq("status", "published")
       .eq("visibility", "public")
       .limit(limit * 4); // over-fetch for filtering + diversity
@@ -197,6 +199,8 @@ async function loadFeed(
         mediaUrl: r.media_url,
         category: r.category,
         viewsCount: r.views_count,
+        likesCount: r.likes_count,
+        commentsCount: r.comments_count,
         createdAt: r.created_at,
       });
       if (out.length >= limit) break;

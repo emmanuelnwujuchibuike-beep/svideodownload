@@ -266,6 +266,8 @@ export interface PostCard {
   mediaUrl: string | null;
   category: string | null;
   viewsCount: number;
+  likesCount: number;
+  commentsCount: number;
   createdAt: string;
 }
 
@@ -279,6 +281,8 @@ function toCard(p: PostRow): PostCard {
     mediaUrl: p.media_url,
     category: p.category,
     viewsCount: p.views_count,
+    likesCount: p.likes_count,
+    commentsCount: p.comments_count,
     createdAt: p.created_at,
   };
 }

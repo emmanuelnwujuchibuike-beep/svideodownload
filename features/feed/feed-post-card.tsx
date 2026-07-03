@@ -245,6 +245,7 @@ export function FeedPostCard({
             src={item.mediaUrl}
             streamUid={item.streamUid}
             poster={item.thumbnailUrl}
+            postId={item.id}
             onExpand={() => onOpen(item)}
             className="aspect-[4/5] w-full"
           />

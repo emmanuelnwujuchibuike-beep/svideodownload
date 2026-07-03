@@ -5,7 +5,7 @@ import { ExternalLink, Pause, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { claimPlayback, releasePlayback } from "@/lib/media/video-coordinator";
+import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import type { PostCard } from "@/lib/social/posts";
 import { cn } from "@/lib/utils";
 
@@ -151,7 +151,10 @@ function Inner({ posts, startIndex, onClose }: { posts: PostCard[]; startIndex: 
           loop={!hasNext}
           playsInline
           className="max-h-full max-w-full object-contain"
-          onPlay={() => video.current && claimPlayback(video.current)}
+          onPlay={() => {
+            video.current && claimPlayback(video.current);
+            recordView(post.id);
+          }}
           onEnded={() => hasNext && goNext()}
           onTimeUpdate={(e) => {
             const v = e.currentTarget;

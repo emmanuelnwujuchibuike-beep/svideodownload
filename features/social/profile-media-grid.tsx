@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Play } from "lucide-react";
+import { Heart, Images, MessageCircle, Play } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -10,9 +10,12 @@ import type { PostCard } from "@/lib/social/posts";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
- * Profile content grid. Videos play right here (a fullscreen in-profile player
- * over the profile's videos) instead of navigating away; photos/other tiles open
- * their post page. Two layouts: "reel" (9:16 tiles) and "card" (titled cards).
+ * Profile content grid — a high-class, Instagram/TikTok-style grid. Photos/posts
+ * use a seamless square grid; reels use 9:16 tiles. Every tile is edge-to-edge
+ * cover art (no casual bordered "card" chrome), with a hover overlay that reveals
+ * likes + comments, an always-on view count, and a media-type badge. Videos play
+ * in-profile (fullscreen player over the profile's videos); other tiles open the
+ * post page.
  */
 export function ProfileMediaGrid({
   posts,
@@ -28,7 +31,7 @@ export function ProfileMediaGrid({
 
   if (posts.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border/70 p-10 text-center text-sm text-muted-foreground">
+      <div className="rounded-3xl border border-dashed border-border/70 bg-card/40 p-12 text-center text-sm text-muted-foreground">
         {emptyText}
       </div>
     );
@@ -40,40 +43,36 @@ export function ProfileMediaGrid({
   };
   const isPlayable = (p: PostCard) => p.mediaKind === "video" && !!p.mediaUrl;
 
-  const grid =
-    layout === "reel" ? (
-      <div className="grid grid-cols-3 gap-1 sm:gap-1.5 md:grid-cols-4 lg:grid-cols-5">
-        {posts.map((p) =>
-          isPlayable(p) ? (
-            <button key={p.id} type="button" onClick={() => openVideo(p)} className="group relative aspect-[9/16] overflow-hidden bg-neutral-950 text-left sm:rounded-lg">
-              <ReelTileInner post={p} />
-            </button>
-          ) : (
-            <Link key={p.id} href={`/p/${p.id}`} className="group relative aspect-[9/16] overflow-hidden bg-neutral-950 sm:rounded-lg">
-              <ReelTileInner post={p} />
-            </Link>
-          ),
-        )}
-      </div>
-    ) : (
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {posts.map((p) =>
-          isPlayable(p) ? (
-            <button key={p.id} type="button" onClick={() => openVideo(p)} className="group overflow-hidden rounded-2xl border border-border/70 bg-card text-left shadow-soft transition hover:-translate-y-0.5 hover:shadow-card">
-              <CardTileInner post={p} />
-            </button>
-          ) : (
-            <Link key={p.id} href={`/p/${p.id}`} className="group overflow-hidden rounded-2xl border border-border/70 bg-card shadow-soft transition hover:-translate-y-0.5 hover:shadow-card">
-              <CardTileInner post={p} />
-            </Link>
-          ),
-        )}
-      </div>
-    );
+  const aspect = layout === "reel" ? "aspect-[9/16]" : "aspect-square";
+  const cols =
+    layout === "reel"
+      ? "grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+      : "grid-cols-3 lg:grid-cols-4";
 
   return (
     <>
-      {grid}
+      <div className={cn("grid gap-1 sm:gap-1.5", cols)}>
+        {posts.map((p) =>
+          isPlayable(p) ? (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => openVideo(p)}
+              className={cn("group relative block overflow-hidden rounded-xl bg-neutral-950 text-left", aspect)}
+            >
+              <Tile post={p} />
+            </button>
+          ) : (
+            <Link
+              key={p.id}
+              href={`/p/${p.id}`}
+              className={cn("group relative block overflow-hidden rounded-xl bg-neutral-950", aspect)}
+            >
+              <Tile post={p} />
+            </Link>
+          ),
+        )}
+      </div>
       <ProfileVideoPlayer
         posts={playIndex !== null ? videos : null}
         startIndex={playIndex ?? 0}
@@ -83,38 +82,32 @@ export function ProfileMediaGrid({
   );
 }
 
-function ReelTileInner({ post }: { post: PostCard }) {
+function Tile({ post }: { post: PostCard }) {
+  const isVideo = post.mediaKind === "video";
+  const isImage = post.mediaKind === "image";
   return (
     <>
-      <PostCover post={post} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/70 to-transparent" />
-      {post.mediaKind === "video" ? <Play className="absolute left-2 top-2 h-4 w-4 fill-white/90 text-white/90 drop-shadow" /> : null}
-      <span className="absolute bottom-1.5 left-2 inline-flex items-center gap-1 text-[11px] font-semibold text-white drop-shadow">
-        <Eye className="h-3 w-3" /> {formatCompactNumber(post.viewsCount)}
-      </span>
-    </>
-  );
-}
+      <PostCover post={post} className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.05]" />
 
-function CardTileInner({ post }: { post: PostCard }) {
-  return (
-    <>
-      <div className="relative aspect-video overflow-hidden bg-neutral-950">
-        <PostCover post={post} className={cn("h-full w-full object-cover opacity-90 transition group-hover:scale-105 group-hover:opacity-100")} />
-        {post.mediaKind === "video" ? (
-          <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 backdrop-blur">
-              <Play className="h-5 w-5 fill-white text-white" />
-            </span>
-          </span>
-        ) : null}
-        <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-md">
-          <Eye className="h-3 w-3" /> {formatCompactNumber(post.viewsCount)}
+      {/* Type badge (top-right) */}
+      <span className="absolute right-2 top-2 text-white/95 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
+        {isVideo ? <Play className="h-[18px] w-[18px] fill-white/95" /> : isImage ? <Images className="h-[18px] w-[18px]" /> : null}
+      </span>
+
+      {/* Always-on bottom scrim + view count (TikTok style) */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
+      <span className="absolute bottom-1.5 left-2 inline-flex items-center gap-1 text-[11px] font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]">
+        <Play className="h-3 w-3 fill-white" /> {formatCompactNumber(post.viewsCount)}
+      </span>
+
+      {/* Hover reveal (desktop): likes + comments centered (Instagram style) */}
+      <div className="absolute inset-0 flex items-center justify-center gap-5 bg-black/45 opacity-0 backdrop-blur-[1px] transition-opacity duration-200 group-hover:opacity-100">
+        <span className="inline-flex items-center gap-1.5 text-sm font-bold text-white">
+          <Heart className="h-4 w-4 fill-white" /> {formatCompactNumber(post.likesCount)}
         </span>
-      </div>
-      <div className="p-2.5">
-        <p className="line-clamp-2 text-xs font-semibold leading-snug">{post.title}</p>
-        {post.category ? <p className="mt-1 text-[11px] capitalize text-muted-foreground">{post.category}</p> : null}
+        <span className="inline-flex items-center gap-1.5 text-sm font-bold text-white">
+          <MessageCircle className="h-4 w-4 fill-white" /> {formatCompactNumber(post.commentsCount)}
+        </span>
       </div>
     </>
   );

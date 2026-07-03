@@ -22,7 +22,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RichText } from "@/components/social/rich-text";
 import { SmartVideo } from "@/features/media/smart-video";
 import { Comments } from "@/features/social/comments";
-import { claimPlayback, releasePlayback } from "@/lib/media/video-coordinator";
+import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
@@ -470,6 +470,7 @@ function ReelCard({
               onPlay={() => {
                 video.current && claimPlayback(video.current);
                 setBuffering(false);
+                recordView(item.id);
               }}
               onWaiting={() => setBuffering(true)}
               onPlaying={() => setBuffering(false)}

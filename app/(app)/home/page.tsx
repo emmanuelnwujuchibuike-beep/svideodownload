@@ -47,10 +47,14 @@ export default async function HomePage() {
   return (
     <AppContent
       rightRail={
-        <div className="hidden w-80 shrink-0 py-4 xl:block">
-          <Suspense fallback={<Skeleton className="h-64 w-full rounded-2xl" />}>
-            <RailSection viewerId={viewerId} />
-          </Suspense>
+        <div className="hidden w-80 shrink-0 xl:block">
+          {/* Fixed rail (Instagram-style): stays put while the feed scrolls, so
+              there's never empty space beside a long feed. */}
+          <div className="sticky top-16 max-h-[calc(100vh-4.5rem)] overflow-y-auto py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <Suspense fallback={<Skeleton className="h-64 w-full rounded-2xl" />}>
+              <RailSection viewerId={viewerId} />
+            </Suspense>
+          </div>
         </div>
       }
     >

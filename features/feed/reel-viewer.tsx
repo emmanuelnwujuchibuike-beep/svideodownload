@@ -383,13 +383,18 @@ function ReelCard({
       {item.thumbnailUrl ? (
         <div className="absolute inset-0 bg-black">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.thumbnailUrl} alt="" aria-hidden className="h-full w-full object-contain" />
+          <img src={item.thumbnailUrl} alt="" aria-hidden className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={item.thumbnailUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full object-contain" />
         </div>
       ) : null}
 
+      {/* Top / bottom legibility scrims */}
+      <div className={cn("pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-black/50 to-transparent transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")} />
+
       {/* Progress (auto-hides) */}
-      <div className={cn("absolute inset-x-0 top-0 z-30 h-0.5 bg-white/15 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
-        <div className="h-full bg-white" style={{ width: `${progress}%` }} />
+      <div className={cn("absolute inset-x-0 top-0 z-30 h-1 bg-white/10 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
+        <div className="h-full rounded-r-full bg-gradient-to-r from-blue-400 via-violet-400 to-fuchsia-400 shadow-[0_0_8px] shadow-violet-400/50" style={{ width: `${progress}%` }} />
       </div>
 
       {/* Elapsed / total time — moves with playback, auto-hides with the UI */}
@@ -609,10 +614,15 @@ function RailButton({
 }) {
   return (
     <button type="button" onClick={onClick} aria-label={label} aria-pressed={active} className="flex flex-col items-center gap-1 text-white">
-      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 backdrop-blur transition active:scale-90">
-        <Icon className={cn("h-6 w-6", fill && "fill-current", active && activeClass)} />
+      <span
+        className={cn(
+          "flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/15 backdrop-blur-md transition active:scale-90",
+          active && "bg-white/15 ring-white/25",
+        )}
+      >
+        <Icon className={cn("h-6 w-6 drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]", fill && "fill-current", active && activeClass)} strokeWidth={2.1} />
       </span>
-      {count !== undefined && count > 0 ? <span className="text-[11px] font-semibold tabular-nums">{formatCompactNumber(count)}</span> : null}
+      {count !== undefined && count > 0 ? <span className="text-[11px] font-bold tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">{formatCompactNumber(count)}</span> : null}
     </button>
   );
 }

@@ -141,7 +141,7 @@ export function FeedPostCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.25 }}
-      className="overflow-hidden rounded-3xl border border-border/50 bg-card shadow-soft ring-1 ring-white/[0.02]"
+      className="overflow-hidden rounded-3xl border border-border/60 bg-card shadow-card ring-1 ring-white/[0.02] transition-shadow duration-300 hover:shadow-elevated"
     >
       {/* Header */}
       <div className="flex items-center gap-3 p-4 pb-3">
@@ -328,12 +328,12 @@ function ActionButton({
 }) {
   const inner = (
     <>
-      <Icon className={cn("h-[18px] w-[18px]", fill && "fill-current")} />
-      {count !== undefined && count > 0 ? <span className="text-xs font-medium tabular-nums">{formatCompactNumber(count)}</span> : null}
+      <Icon className={cn("h-[19px] w-[19px] transition-transform group-active/act:scale-90", fill && "fill-current")} strokeWidth={2.1} />
+      {count !== undefined && count > 0 ? <span className="text-xs font-semibold tabular-nums">{formatCompactNumber(count)}</span> : null}
     </>
   );
   const cls = cn(
-    "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary",
+    "group/act inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground",
     active && activeClass,
   );
   if (href) {

@@ -65,7 +65,7 @@ export function AppTopbar() {
           href="/downloads"
           className="group inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 py-2 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:shadow-lg hover:shadow-violet-500/40"
         >
-          <Download className="h-4 w-4 transition-transform group-hover:translate-y-0.5" /> <span className="hidden sm:inline">Download</span>
+          <Download className="h-4 w-4 transition-transform group-hover:translate-y-0.5" strokeWidth={2.4} /> <span className="hidden sm:inline">Download</span>
         </Link>
         {/* Create — opens the premium composer */}
         <button
@@ -73,9 +73,9 @@ export function AppTopbar() {
           onClick={() => openUpload("post")}
           aria-label="Create a post"
           title="Create"
-          className="hidden h-10 w-10 items-center justify-center rounded-xl bg-secondary/60 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary sm:inline-flex"
+          className="hidden h-10 w-10 items-center justify-center rounded-xl bg-secondary/60 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary hover:ring-primary/40 sm:inline-flex"
         >
-          <Upload className="h-[18px] w-[18px]" />
+          <Upload className="h-[18px] w-[18px]" strokeWidth={2.4} />
         </button>
 
         {/* Notifications (realtime) */}

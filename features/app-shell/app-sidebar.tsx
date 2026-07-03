@@ -62,14 +62,14 @@ export function AppSidebar({ handle }: { handle: string | null }) {
   const isPremium = ready && !showAds;
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-border/60 bg-card/40 px-3 py-4 lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-border/60 bg-gradient-to-b from-card/70 to-card/30 px-3 py-4 backdrop-blur-xl [scrollbar-width:none] lg:flex [&::-webkit-scrollbar]:hidden">
       {/* Brand */}
-      <Link href="/home" className="mb-5 flex items-center px-2">
+      <Link href="/home" className="mb-6 flex items-center px-2">
         <FrenzWordmark size={34} textClassName="text-lg" />
       </Link>
 
       {/* Primary nav */}
-      <nav className="flex flex-col gap-0.5">
+      <nav className="flex flex-col gap-1">
         {nav.map((item) => {
           const base = item.href.split("?")[0] ?? item.href;
           // Query-param variants (e.g. Trending → /explore?sort=) don't drive
@@ -84,16 +84,26 @@ export function AppSidebar({ handle }: { handle: string | null }) {
               key={item.label}
               href={item.href}
               className={cn(
-                "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
+                "group relative flex items-center gap-3.5 rounded-2xl px-3 py-2.5 text-[15px] font-semibold transition-all duration-200",
                 active
-                  ? "bg-gradient-to-r from-blue-600/15 to-violet-600/15 text-foreground ring-1 ring-inset ring-violet-500/20"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  ? "bg-gradient-to-r from-blue-600/12 via-violet-600/10 to-transparent text-foreground shadow-[0_1px_0_0_hsl(var(--border))] ring-1 ring-inset ring-violet-500/25"
+                  : "text-muted-foreground hover:translate-x-0.5 hover:bg-secondary/70 hover:text-foreground",
               )}
             >
-              <item.icon className={cn("h-[18px] w-[18px]", active && "text-primary")} />
+              {/* Active accent bar */}
+              {active ? (
+                <span aria-hidden className="absolute -left-3 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-blue-500 to-violet-600 shadow-[0_0_12px_2px] shadow-violet-500/40" />
+              ) : null}
+              <item.icon
+                className={cn(
+                  "h-[22px] w-[22px] shrink-0 transition-transform group-active:scale-90",
+                  active ? "text-primary drop-shadow-[0_1px_5px_rgba(124,58,237,0.45)]" : "text-muted-foreground group-hover:text-foreground",
+                )}
+                strokeWidth={active ? 2.4 : 2}
+              />
               <span className="flex-1">{item.label}</span>
               {item.badge ? (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-1.5 text-[10px] font-bold text-white">{item.badge}</span>
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-1.5 text-[10px] font-bold text-white shadow-sm shadow-violet-500/40">{item.badge}</span>
               ) : item.soon ? (
                 <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Soon</span>
               ) : null}
@@ -103,28 +113,34 @@ export function AppSidebar({ handle }: { handle: string | null }) {
       </nav>
 
       {/* Spaces */}
-      <div className="mt-6">
-        <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/60">Your Spaces</p>
-        <div className="mt-2 flex flex-col gap-0.5">
+      <div className="mt-7">
+        <p className="px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground/50">Your Spaces</p>
+        <div className="mt-2.5 flex flex-col gap-0.5">
           {SPACES.map((s) => (
-            <Link key={s.label} href="/explore" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-muted-foreground transition hover:bg-secondary hover:text-foreground">
-              <span className={cn("h-6 w-6 rounded-lg bg-gradient-to-br", s.color)} />
+            <Link key={s.label} href="/explore" className="group flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary/70 hover:text-foreground">
+              <span className={cn("h-7 w-7 rounded-xl bg-gradient-to-br shadow-sm ring-1 ring-inset ring-white/10 transition group-hover:scale-105", s.color)} />
               <span className="truncate">{s.label}</span>
             </Link>
           ))}
-          <Link href="/explore" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-primary transition hover:bg-secondary">
-            <Plus className="h-[18px] w-[18px]" /> Create New Space
+          <Link href="/explore" className="flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-semibold text-primary transition hover:bg-secondary/70">
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl border border-dashed border-primary/40 text-primary">
+              <Plus className="h-4 w-4" strokeWidth={2.4} />
+            </span>
+            Create New Space
           </Link>
         </div>
       </div>
 
       {/* Premium card */}
       {!isPremium ? (
-        <div className="mt-auto rounded-2xl bg-gradient-to-br from-blue-600/10 via-violet-600/10 to-purple-600/10 p-4 ring-1 ring-inset ring-violet-500/20">
+        <div className="mt-auto overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600/12 via-violet-600/12 to-purple-600/12 p-4 ring-1 ring-inset ring-violet-500/25">
           <p className="flex items-center gap-1.5 text-sm font-bold">
-            <Crown className="h-4 w-4 text-amber-500" /> Frenz Premium
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-sm">
+              <Crown className="h-3.5 w-3.5 fill-white" />
+            </span>
+            Frenz Premium
           </p>
-          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+          <ul className="mt-2.5 space-y-1 text-xs text-muted-foreground">
             <li>• No Ads</li>
             <li>• Download 4K videos</li>
             <li>• Faster downloads</li>
@@ -132,7 +148,7 @@ export function AppSidebar({ handle }: { handle: string | null }) {
           </ul>
           <Link
             href="/pricing"
-            className="mt-3 flex items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 py-2 text-xs font-semibold text-white shadow-md transition hover:opacity-95"
+            className="mt-3 flex items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 py-2 text-xs font-bold text-white shadow-md shadow-violet-500/30 transition hover:opacity-95 hover:shadow-lg hover:shadow-violet-500/40"
           >
             Upgrade Now
           </Link>

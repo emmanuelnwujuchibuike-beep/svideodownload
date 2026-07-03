@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { BootSplash } from "@/features/app-shell/boot-splash";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
 import { RegisterServiceWorker } from "@/features/notifications/register-sw";
 import { WebVitals } from "@/features/perf/web-vitals";
@@ -86,6 +87,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans`}>
+        {/* Branded boot loader baked into the first HTML so cold entries never
+            flash an empty page; it fades itself out once the document is ready. */}
+        <BootSplash />
         {/* One-time cleanup (runs before the next-themes bootstrap): an earlier
             build force-migrated visitors to "dark". Owner decision: the default
             is SYSTEM; users pick light/dark themselves. Undo that forced value

@@ -1,24 +1,50 @@
 import type { ReactNode } from "react";
 
+import { AppSidebar } from "@/features/app-shell/app-sidebar";
+import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { StoryStudio } from "@/features/create/studio/story-studio";
 import { UploadModal } from "@/features/create/upload-modal";
+import { getHomeProfile } from "@/lib/social/home";
+import { createClient } from "@/lib/supabase/server";
 
 /**
- * Profile pages live outside the (app) shell (public/SEO surface with the
- * marketing header), but on mobile the bottom nav must never disappear —
- * navigation stays connected across every page. The create surfaces
- * (UploadModal + StoryStudio) are mounted here too, so the bottom-nav "+" button
- * actually opens the composer on profile pages (they only live in the (app)
- * layout otherwise, which doesn't wrap /u).
+ * Profile pages get the same shell as the rest of the app on desktop — the
+ * home-style left sidebar + top bar — so navigation is identical everywhere.
+ * On mobile the page's own top bar + the bottom MobileNav own navigation (the
+ * desktop sidebar/topbar are hidden on small screens), so nothing is duplicated.
+ *
+ * Anonymous-safe: public profiles still render for signed-out visitors
+ * (`handle = null`); each page keeps its own guard.
  */
-export default function ProfileSectionLayout({ children }: { children: ReactNode }) {
+export default async function ProfileSectionLayout({ children }: { children: ReactNode }) {
+  let handle: string | null = null;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const profile = await getHomeProfile(user.id);
+      handle = profile?.handle ?? null;
+    }
+  } catch {
+    /* anonymous — render the shell in signed-out mode */
+  }
+
   return (
-    <>
-      {children}
+    <div className="flex min-h-screen">
+      <AppSidebar handle={handle} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Desktop top bar — mobile uses the page's own SiteHeader instead */}
+        <div className="hidden lg:block">
+          <AppTopbar />
+        </div>
+        {children}
+      </div>
       <MobileNav />
       <UploadModal />
       <StoryStudio />
-    </>
+    </div>
   );
 }

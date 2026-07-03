@@ -122,13 +122,13 @@ export default async function ProfilePage({
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
-      <SiteHeader social />
-      {/* Add friends — single top-level icon, mirrors the profile menu on the right */}
-      <SuggestionsLauncher className="fixed left-3 top-3 z-[60] bg-background/70 backdrop-blur-xl" />
-      {/* Owner control center — top-right feature drawer (settings, Creator Studio…) */}
-      {profile.isOwner ? <ProfileMenu /> : null}
-      <main className="pb-24 pt-14 sm:pt-16">
-        <div className="mx-auto max-w-4xl sm:px-4">
+      {/* Mobile top bar — desktop uses the app shell's sidebar + top bar */}
+      <SiteHeader social desktopHidden />
+      {/* Add friends — single top-level icon (mobile only; desktop uses the top bar) */}
+      <SuggestionsLauncher className="fixed left-3 top-3 z-[60] bg-background/70 backdrop-blur-xl lg:hidden" />
+      <main className="pb-24 pt-14 sm:pt-16 lg:pt-4">
+        <div className="mx-auto flex w-full max-w-6xl gap-6">
+          <div className="mx-auto min-w-0 max-w-4xl flex-1 sm:px-4">
           {/* Banner + Living Profile time-of-day glow. Full-bleed on mobile,
               a contained rounded hero on larger screens (professional, balanced). */}
           <div className="relative h-40 w-full overflow-hidden bg-gradient-to-br from-blue-600/30 via-violet-500/15 to-purple-500/20 sm:h-56 sm:rounded-3xl md:h-64">
@@ -321,6 +321,9 @@ export default async function ProfilePage({
               </>
             )}
           </div>
+          </div>
+          {/* Owner feature panel — docked open on desktop, a toggle drawer on mobile */}
+          {profile.isOwner ? <ProfileMenu /> : null}
         </div>
       </main>
     </>

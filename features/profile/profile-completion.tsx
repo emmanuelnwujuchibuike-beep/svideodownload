@@ -3,7 +3,7 @@ import Link from "next/link";
 
 /**
  * Owner-only profile completion card: a gradient meter plus the single next
- * best action. Weights: avatar 30, bio 30, banner 20, website 20.
+ * best action. Weights: avatar 30, bio 30, banner 20, business link 20.
  */
 export function ProfileCompletion({
   hasAvatar,
@@ -26,7 +26,7 @@ export function ProfileCompletion({
       ? "Write a short bio"
       : !hasBanner
         ? "Add a banner"
-        : "Add your website";
+        : "Add your business link";
 
   return (
     <Link

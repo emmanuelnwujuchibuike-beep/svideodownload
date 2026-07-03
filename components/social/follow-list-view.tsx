@@ -45,8 +45,8 @@ export async function FollowListView({
 
   return (
     <>
-      <SiteHeader social />
-      <main className="container max-w-2xl pb-24 pt-28 sm:pt-32">
+      <SiteHeader social desktopHidden />
+      <main className="container max-w-2xl pb-24 pt-28 sm:pt-32 lg:pt-8">
         <Link
           href={`/u/${profile.handle}`}
           className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"

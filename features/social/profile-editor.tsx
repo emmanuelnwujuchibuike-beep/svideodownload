@@ -109,7 +109,7 @@ export function ProfileEditor({ profile }: { profile: OwnProfile }) {
           />
         </div>
         <div className="sm:col-span-2">
-          <label className={label}>Website or business link <span className="font-normal text-muted-foreground/70">· optional</span></label>
+          <label className={label}>Business link <span className="font-normal text-muted-foreground/70">· optional</span></label>
           <input className={input} value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://your-business.com" />
         </div>
       </div>

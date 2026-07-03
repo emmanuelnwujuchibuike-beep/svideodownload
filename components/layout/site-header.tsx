@@ -29,8 +29,12 @@ const DOWNLOADERS = getPrimaryPages();
  * `social` hides the mobile hamburger + drawer: on in-app social surfaces
  * (profiles, posts) the bottom MobileNav already owns navigation, so the
  * marketing menu in the top-right is redundant and out of place there.
+ *
+ * `desktopHidden` hides the whole header on lg+ — used on profile pages where the
+ * app shell (left sidebar + top bar) owns desktop nav, while this bar still
+ * provides the mobile top bar.
  */
-export function SiteHeader({ social = false }: { social?: boolean }) {
+export function SiteHeader({ social = false, desktopHidden = false }: { social?: boolean; desktopHidden?: boolean }) {
   const [open, setOpen] = useState(false);
   const { user, enabled } = useUser();
   const { handle } = useEntitlements();
@@ -39,7 +43,7 @@ export function SiteHeader({ social = false }: { social?: boolean }) {
 
   return (
     <>
-    <header className={cn("fixed inset-x-0 top-0 z-50 backdrop-blur-xl", social ? "border-b border-border/20 bg-background/60" : "border-b border-border/40 bg-background/85 supports-[backdrop-filter]:bg-background/70")}>
+    <header className={cn("fixed inset-x-0 top-0 z-50 backdrop-blur-xl", desktopHidden && "lg:hidden", social ? "border-b border-border/20 bg-background/60" : "border-b border-border/40 bg-background/85 supports-[backdrop-filter]:bg-background/70")}>
       <div className="container flex h-16 items-center justify-between">
         {/* Brand — hidden on mobile social surfaces (plain, full-bleed top bar) */}
         <Link href="/" className={cn("items-center", social ? "hidden md:flex" : "flex")} onClick={() => setOpen(false)}>

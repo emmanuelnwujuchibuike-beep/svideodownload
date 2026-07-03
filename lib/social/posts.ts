@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { getCached } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { type Category } from "./categories";
@@ -288,7 +289,10 @@ function toCard(p: PostRow): PostCard {
   };
 }
 
-/** A creator's published posts, filtered to what `viewerId` may see. */
+/** A creator's published posts, filtered to what `viewerId` may see.
+ *  Cached 30s per (creator, viewer) via Upstash — repeat profile views are served
+ *  from the cache, not re-queried, which sharply cuts Supabase egress. Failures
+ *  are never cached (the loader throws) so a blip can't stick an empty profile. */
 export async function listUserPosts(
   publisherId: string,
   viewerId: string | null,
@@ -296,36 +300,43 @@ export async function listUserPosts(
 ): Promise<PostCard[]> {
   if (!hasSupabase) return [];
   try {
-    const db = createAdminClient();
-    const isOwner = viewerId === publisherId;
-    let q = db
-      .from("posts")
-      .select(POST_SELECT)
-      .eq("publisher_id", publisherId)
-      .order("created_at", { ascending: false })
-      .limit(limit);
-    if (!isOwner) q = q.eq("status", "published");
-    const { data } = await q;
-    let rows = (data as PostRow[]) ?? [];
-    if (!isOwner) {
-      // Drop followers-only/private unless the viewer follows (one check).
-      let follows = false;
-      if (viewerId) {
-        const { count } = await db
-          .from("follows")
-          .select("follower_id", { head: true, count: "exact" })
-          .eq("follower_id", viewerId)
-          .eq("following_id", publisherId);
-        follows = (count ?? 0) > 0;
-      }
-      rows = rows.filter(
-        (p) => p.visibility === "public" || (p.visibility === "followers" && follows),
-      );
-    }
-    return rows.map(toCard);
+    return await getCached(`userposts:${publisherId}:${viewerId ?? "anon"}:${limit}`, 30, () =>
+      loadUserPosts(publisherId, viewerId, limit),
+    );
   } catch {
     return [];
   }
+}
+
+async function loadUserPosts(publisherId: string, viewerId: string | null, limit: number): Promise<PostCard[]> {
+  const db = createAdminClient();
+  const isOwner = viewerId === publisherId;
+  let q = db
+    .from("posts")
+    .select(POST_SELECT)
+    .eq("publisher_id", publisherId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (!isOwner) q = q.eq("status", "published");
+  const { data, error } = await q;
+  if (error) throw error; // don't cache DB failures as "no posts"
+  let rows = (data as PostRow[]) ?? [];
+  if (!isOwner) {
+    // Drop followers-only/private unless the viewer follows (one check).
+    let follows = false;
+    if (viewerId) {
+      const { count } = await db
+        .from("follows")
+        .select("follower_id", { head: true, count: "exact" })
+        .eq("follower_id", viewerId)
+        .eq("following_id", publisherId);
+      follows = (count ?? 0) > 0;
+    }
+    rows = rows.filter(
+      (p) => p.visibility === "public" || (p.visibility === "followers" && follows),
+    );
+  }
+  return rows.map(toCard);
 }
 
 /** The user's saved posts (still-published, visible to them), newest save first. */

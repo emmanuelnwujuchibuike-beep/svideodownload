@@ -133,6 +133,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     viewerSaved: reactions.saved,
     isFollowing: post.publisher.isFollowing,
     isOwner: post.isOwner,
+    hasPoll: false, // the post page renders the poll separately, above comments
   };
 
   const ld = {

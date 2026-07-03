@@ -21,6 +21,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { RichText } from "@/components/social/rich-text";
+import { PostPollInline } from "@/features/social/post-poll-inline";
 import { FeedVideo } from "@/features/media/feed-video";
 import type { FeedItem } from "@/lib/social/home-feed";
 import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
@@ -233,6 +234,13 @@ export function FeedPostCard({
               #{item.category}
             </Link>
           ) : null}
+        </div>
+      ) : null}
+
+      {/* Poll (vote) — below the caption */}
+      {item.hasPoll ? (
+        <div className="px-4 pb-3">
+          <PostPollInline postId={item.id} />
         </div>
       ) : null}
 

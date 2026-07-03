@@ -11,6 +11,7 @@ import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
 import { LivingGlow } from "@/features/profile/living-glow";
 import { ProfileMenu } from "@/features/profile/profile-menu";
+import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
 import { ProfileCompletion } from "@/features/profile/profile-completion";
 import { ShareProfileButton } from "@/features/profile/share-profile-button";
 import { FollowButton } from "@/features/social/follow-button";
@@ -134,6 +135,10 @@ export default async function ProfilePage({
               <img src={profile.bannerUrl} alt="" className="h-full w-full object-cover" />
             ) : null}
             <LivingGlow />
+            {/* Add-friends / suggestions — top-left, always available */}
+            <div className="absolute left-3 top-3 z-10">
+              <SuggestionsLauncher />
+            </div>
           </div>
 
           <div className="px-4 sm:px-6">

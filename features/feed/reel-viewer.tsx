@@ -22,6 +22,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RichText } from "@/components/social/rich-text";
 import { SmartVideo } from "@/features/media/smart-video";
 import { Comments } from "@/features/social/comments";
+import { PostPollInline } from "@/features/social/post-poll-inline";
 import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
@@ -609,6 +610,11 @@ function ReelCard({
             <RichText text={item.title} linkClassName="font-semibold text-white hover:underline" />
           </p>
         ) : null}
+        {item.hasPoll ? (
+          <div className="mt-2 max-w-md text-white">
+            <PostPollInline postId={item.id} compact />
+          </div>
+        ) : null}
       </div>
 
       {/* Comments sheet — fixed half-height panel. The reel behind it is frozen
@@ -658,15 +664,22 @@ function ReelCard({
                     <Loader2 className="h-5 w-5 animate-spin" />
                   </div>
                 ) : comments ? (
-                  <Comments
-                    postId={item.id}
-                    comments={comments.comments}
-                    loggedIn={comments.loggedIn}
-                    canComment={comments.canComment}
-                    disabledReason={comments.canComment ? null : "Comments are unavailable."}
-                    count={item.commentsCount}
-                    variant="sheet"
-                  />
+                  <>
+                    {item.hasPoll ? (
+                      <div className="mb-4">
+                        <PostPollInline postId={item.id} loggedIn={comments.loggedIn} />
+                      </div>
+                    ) : null}
+                    <Comments
+                      postId={item.id}
+                      comments={comments.comments}
+                      loggedIn={comments.loggedIn}
+                      canComment={comments.canComment}
+                      disabledReason={comments.canComment ? null : "Comments are unavailable."}
+                      count={item.commentsCount}
+                      variant="sheet"
+                    />
+                  </>
                 ) : null}
               </div>
             </motion.div>

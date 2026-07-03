@@ -20,6 +20,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { FriendCelebration } from "@/features/friends/friend-celebration";
 import { FriendOrbit } from "@/features/friends/friend-orbit";
+import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
 import { usePresence } from "@/features/friends/use-presence";
 import { timeAgo } from "@/features/notifications/meta";
 import type { FriendItem, FriendProfile, FriendRequestItem, FriendsOverview } from "@/lib/social/friends";
@@ -161,6 +162,9 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
 
   return (
     <div className="mx-auto w-full max-w-2xl">
+      <div className="mb-3">
+        <SuggestionsLauncher />
+      </div>
       <h1 className="mb-4 text-2xl font-bold tracking-[-0.02em]">Friends</h1>
 
       {initial.viewer && favorites.length > 0 ? (

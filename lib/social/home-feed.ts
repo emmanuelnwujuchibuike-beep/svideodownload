@@ -50,6 +50,8 @@ export interface FeedItem {
   viewerSaved: boolean;
   isFollowing: boolean;
   isOwner: boolean;
+  /** True when the post carries a poll (vote) — the card fetches + renders it. */
+  hasPoll: boolean;
 }
 
 export interface FeedPage {
@@ -226,11 +228,24 @@ async function loadHomeFeed(
         viewerSaved: saved.has(r.id),
         isFollowing: followingSet.has(r.publisher_id),
         isOwner: viewerId === r.publisher_id,
+        hasPoll: false,
       });
     }
 
     const items = kept.slice(offset, offset + limit);
     const nextOffset = kept.length > offset + limit ? offset + limit : null;
+
+    // Flag which of the shown posts carry a poll, so only those cards fetch +
+    // render it (best-effort — the polls table may not be migrated yet).
+    if (items.length) {
+      try {
+        const { data: polls } = await db.from("post_polls").select("post_id").in("post_id", items.map((i) => i.id));
+        const withPoll = new Set(((polls ?? []) as { post_id: string }[]).map((p) => p.post_id));
+        for (const it of items) it.hasPoll = withPoll.has(it.id);
+      } catch {
+        /* polls not migrated — leave hasPoll false */
+      }
+    }
     return { items, nextOffset };
   } catch {
     return { items: [], nextOffset: null };

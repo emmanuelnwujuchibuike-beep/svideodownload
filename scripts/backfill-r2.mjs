@@ -1,27 +1,35 @@
 #!/usr/bin/env node
 /**
- * Backfill: move media that's still on Supabase Storage over to Cloudflare R2
- * (zero egress) and rewrite the DB URLs to the R2 CDN.
+ * Media storage utility: move existing media to Cloudflare R2, re-point URLs to a
+ * new R2 host, or prune the migrated originals off Supabase. Three modes:
  *
- * For every media column below, any value that is a Supabase Storage public URL
- * (`.../storage/v1/object/public/<bucket>/<key>`) is downloaded, re-uploaded to
- * R2 at the SAME key (`<bucket>/<key>`, so runs are deterministic/idempotent),
- * and the column is updated to the R2 public URL. Values that already point to
- * R2, or to an external CDN (e.g. a TikTok thumbnail), are left untouched.
+ *   MIGRATE (default) — for every media column below, any value that's a Supabase
+ *     Storage public URL is downloaded, re-uploaded to R2 at the SAME key
+ *     (`<bucket>/<key>`, deterministic), and the column is rewritten to the R2
+ *     public URL. Already-R2 or external URLs are left alone. Idempotent.
  *
- * Safe to re-run: already-migrated rows are skipped; a per-item failure leaves
- * that row's Supabase URL in place (nothing breaks). Nothing is deleted from
- * Supabase — you can prune the old objects yourself once you're satisfied.
+ *   REHOST (--rehost <oldBase> <newBase>) — pure DB rewrite: swap the host on
+ *     URLs that start with <oldBase> to <newBase> (same object key). No downloads
+ *     — use this to move from the r2.dev URL to a custom domain later.
  *
- * Usage (env must be set, or present in .env.local):
- *   node scripts/backfill-r2.mjs                 # migrate everything pending
- *   node scripts/backfill-r2.mjs --limit 200     # cap total objects moved
- *   node scripts/backfill-r2.mjs --dry-run       # report only, change nothing
- *   node scripts/backfill-r2.mjs --table posts   # one table only
+ *   PRUNE (--prune) — delete the original objects from Supabase Storage for media
+ *     that's now on R2. Each object is only removed after confirming its R2 copy
+ *     serves (HEAD 200). Nothing referenced by a non-R2 URL is touched.
  *
- * Required env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
- *               R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
- *               R2_BUCKET, R2_PUBLIC_BASE_URL
+ * The media columns scanned: posts(media_url, thumbnail_url),
+ * profiles(avatar_url, banner_url), stories(media_url), post_comments(image_url).
+ *
+ * Usage (env in .env.local or the real environment):
+ *   node scripts/backfill-r2.mjs                          # migrate everything pending
+ *   node scripts/backfill-r2.mjs --dry-run                # report only, change nothing
+ *   node scripts/backfill-r2.mjs --limit 200              # cap objects processed
+ *   node scripts/backfill-r2.mjs --table posts           # one table only
+ *   node scripts/backfill-r2.mjs --rehost https://pub-x.r2.dev https://media.frenzsave.com
+ *   node scripts/backfill-r2.mjs --prune --dry-run        # list what prune would delete
+ *   node scripts/backfill-r2.mjs --prune                  # delete migrated originals
+ *
+ * Required env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, R2_ACCOUNT_ID,
+ *               R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_BASE_URL
  */
 import { readFileSync } from "node:fs";
 
@@ -67,8 +75,10 @@ const flag = (name) => argv.indexOf(name);
 const LIMIT = flag("--limit") > -1 ? Number(argv[flag("--limit") + 1]) : Infinity;
 const DRY_RUN = flag("--dry-run") > -1;
 const ONLY_TABLE = flag("--table") > -1 ? argv[flag("--table") + 1] : null;
+const PRUNE = flag("--prune") > -1;
+const REHOST = flag("--rehost") > -1 ? { old: argv[flag("--rehost") + 1], neu: argv[flag("--rehost") + 2] } : null;
 
-// Tables + the media columns on each that may hold a Supabase Storage URL.
+// Tables + the media columns on each that may hold a media URL.
 const TARGETS = [
   { table: "posts", cols: ["media_url", "thumbnail_url"] },
   { table: "profiles", cols: ["avatar_url", "banner_url"] },
@@ -92,6 +102,8 @@ const EXT_CT = {
   webp: "image/webp",
   gif: "image/gif",
 };
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Extract the storage object key (`<bucket>/<path>`, decoded) from a Supabase
  *  public URL, or null if the URL isn't one of ours / is already on R2. */
@@ -136,14 +148,11 @@ async function migrateObject(sourceUrl, key) {
   return { url: r2PublicUrl(key), bytes: body.length };
 }
 
-const stats = { moved: 0, skipped: 0, failed: 0, bytes: 0 };
-let budget = LIMIT;
-
-async function processTable({ table, cols }) {
+/** Async-iterate every row of a table (id + the given cols), paged. */
+async function* eachRow(table, cols) {
   const PAGE = 200;
   let from = 0;
   for (;;) {
-    if (budget <= 0) return;
     let rows;
     try {
       const { data, error } = await db
@@ -155,24 +164,34 @@ async function processTable({ table, cols }) {
       rows = data ?? [];
     } catch (e) {
       console.warn(`• skipping ${table} (${e.message})`);
-      return; // table/column not present — move on
+      return;
     }
     if (rows.length === 0) return;
     from += rows.length;
+    for (const row of rows) yield row;
+  }
+}
 
-    for (const row of rows) {
-      if (budget <= 0) return;
+const targets = () => TARGETS.filter((t) => !ONLY_TABLE || t.table === ONLY_TABLE);
+let budget = LIMIT;
+
+// ── MIGRATE ──────────────────────────────────────────────────────────────────
+async function migrateAll() {
+  const stats = { moved: 0, failed: 0, skipped: 0, bytes: 0 };
+  for (const t of targets()) {
+    if (budget <= 0) break;
+    console.log(`→ ${t.table} (${t.cols.join(", ")})`);
+    for await (const row of eachRow(t.table, t.cols)) {
+      if (budget <= 0) break;
       const update = {};
-      for (const col of cols) {
+      for (const col of t.cols) {
         const key = keyFromSupabaseUrl(row[col]);
-        if (!key) {
-          continue;
-        }
+        if (!key) continue;
         if (DRY_RUN) {
-          console.log(`  would move ${table}.${col} ${row.id} → ${key}`);
-          update[col] = r2PublicUrl(key); // mark as "would change" for the count
-          budget--;
+          console.log(`  would move ${t.table}.${col} ${row.id} → ${key}`);
+          update[col] = r2PublicUrl(key);
           stats.moved++;
+          budget--;
           if (budget <= 0) break;
           continue;
         }
@@ -181,51 +200,153 @@ async function processTable({ table, cols }) {
           update[col] = url;
           stats.bytes += bytes;
           budget--;
-          await new Promise((r) => setTimeout(r, 120)); // gentle pace
+          await sleep(120);
           if (budget <= 0) break;
         } catch (e) {
           stats.failed++;
-          console.warn(`  ✗ ${table}.${col} ${row.id}: ${e.message}`);
+          console.warn(`  ✗ ${t.table}.${col} ${row.id}: ${e.message}`);
         }
       }
-      if (Object.keys(update).length > 0) {
-        if (DRY_RUN) {
-          // counts already tallied above
+      if (!DRY_RUN && Object.keys(update).length > 0) {
+        const { error } = await db.from(t.table).update(update).eq("id", row.id);
+        if (error) {
+          stats.failed += Object.keys(update).length;
+          console.warn(`  ✗ update ${t.table} ${row.id}: ${error.message}`);
         } else {
-          const { error: upErr } = await db.from(table).update(update).eq("id", row.id);
-          if (upErr) {
-            stats.failed += Object.keys(update).length;
-            console.warn(`  ✗ update ${table} ${row.id}: ${upErr.message}`);
-          } else {
-            stats.moved += Object.keys(update).length;
-            console.log(`  ✓ ${table} ${row.id} (${Object.keys(update).join(", ")})`);
-          }
+          stats.moved += Object.keys(update).length;
+          console.log(`  ✓ ${t.table} ${row.id} (${Object.keys(update).join(", ")})`);
         }
-      } else {
+      } else if (Object.keys(update).length === 0) {
         stats.skipped++;
       }
     }
-  }
-}
-
-async function main() {
-  console.log(
-    `${DRY_RUN ? "[dry-run] " : ""}Backfilling Supabase Storage → R2 (${R2_PUBLIC_BASE_URL})` +
-      (Number.isFinite(LIMIT) ? `, up to ${LIMIT} object(s)` : "") +
-      (ONLY_TABLE ? `, table=${ONLY_TABLE}` : "") +
-      "\n",
-  );
-  for (const target of TARGETS) {
-    if (ONLY_TABLE && target.table !== ONLY_TABLE) continue;
-    if (budget <= 0) break;
-    console.log(`→ ${target.table} (${target.cols.join(", ")})`);
-    await processTable(target);
   }
   const mb = (stats.bytes / (1024 * 1024)).toFixed(1);
   console.log(
     `\nDone. ${stats.moved} moved, ${stats.failed} failed, ${stats.skipped} rows already clean.` +
       (DRY_RUN ? " (dry-run — nothing changed)" : ` ~${mb} MB transferred.`),
   );
+}
+
+// ── REHOST ───────────────────────────────────────────────────────────────────
+async function rehostAll(oldBase, newBase) {
+  oldBase = oldBase.replace(/\/$/, "");
+  newBase = newBase.replace(/\/$/, "");
+  let changed = 0;
+  for (const t of targets()) {
+    if (budget <= 0) break;
+    for await (const row of eachRow(t.table, t.cols)) {
+      if (budget <= 0) break;
+      const update = {};
+      for (const col of t.cols) {
+        const v = row[col];
+        if (typeof v === "string" && v.startsWith(oldBase + "/")) update[col] = newBase + v.slice(oldBase.length);
+      }
+      const n = Object.keys(update).length;
+      if (n === 0) continue;
+      if (DRY_RUN) {
+        console.log(`  would rehost ${t.table} ${row.id} (${Object.keys(update).join(", ")})`);
+      } else {
+        const { error } = await db.from(t.table).update(update).eq("id", row.id);
+        if (error) {
+          console.warn(`  ✗ ${t.table} ${row.id}: ${error.message}`);
+          continue;
+        }
+        console.log(`  ✓ ${t.table} ${row.id}`);
+      }
+      changed += n;
+      budget -= n;
+    }
+  }
+  console.log(`\n${DRY_RUN ? "[dry-run] " : ""}Rehost done. ${changed} URL(s) ${DRY_RUN ? "would change" : "updated"}.`);
+}
+
+// ── PRUNE ────────────────────────────────────────────────────────────────────
+async function pruneAll() {
+  // Collect the Supabase (bucket → key → sample R2 url) for everything now on R2.
+  const byBucket = new Map();
+  for (const t of targets()) {
+    for await (const row of eachRow(t.table, t.cols)) {
+      for (const col of t.cols) {
+        const v = row[col];
+        if (typeof v !== "string" || !v.startsWith(R2_PUBLIC_BASE_URL + "/")) continue;
+        const path = v.slice(R2_PUBLIC_BASE_URL.length + 1).split("?")[0];
+        const decoded = path.split("/").map(decodeURIComponent).join("/");
+        const i = decoded.indexOf("/");
+        if (i < 1) continue;
+        const bucket = decoded.slice(0, i);
+        const key = decoded.slice(i + 1);
+        if (!byBucket.has(bucket)) byBucket.set(bucket, new Map());
+        byBucket.get(bucket).set(key, v);
+      }
+    }
+  }
+  let total = 0;
+  for (const keys of byBucket.values()) total += keys.size;
+  console.log(`Found ${total} migrated object(s) across ${byBucket.size} Supabase bucket(s).`);
+
+  let deleted = 0;
+  let kept = 0;
+  let failed = 0;
+  for (const [bucket, keys] of byBucket) {
+    for (const [key, url] of keys) {
+      if (budget <= 0) break;
+      // Only delete the Supabase original once the R2 copy is confirmed serving.
+      let onR2 = false;
+      try {
+        const h = await fetch(url, { method: "HEAD" });
+        onR2 = h.ok;
+      } catch {
+        onR2 = false;
+      }
+      if (!onR2) {
+        kept++;
+        console.warn(`  ! keep ${bucket}/${key} — R2 copy not confirmed`);
+        continue;
+      }
+      if (DRY_RUN) {
+        console.log(`  would delete ${bucket}/${key}`);
+        deleted++;
+        budget--;
+        continue;
+      }
+      const { error } = await db.storage.from(bucket).remove([key]);
+      if (error) {
+        failed++;
+        console.warn(`  ✗ ${bucket}/${key}: ${error.message}`);
+      } else {
+        deleted++;
+        budget--;
+      }
+    }
+  }
+  console.log(
+    `\n${DRY_RUN ? "[dry-run] " : ""}Prune done. ${deleted} ${DRY_RUN ? "would be deleted" : "deleted"}, ${kept} kept (not confirmed on R2)` +
+      (failed ? `, ${failed} failed` : "") +
+      ".",
+  );
+}
+
+// ── main ─────────────────────────────────────────────────────────────────────
+async function main() {
+  const cap = Number.isFinite(LIMIT) ? `, up to ${LIMIT} object(s)` : "";
+  const only = ONLY_TABLE ? `, table=${ONLY_TABLE}` : "";
+  if (REHOST) {
+    if (!REHOST.old || !REHOST.neu || REHOST.neu.startsWith("--")) {
+      console.error("Usage: --rehost <oldBaseUrl> <newBaseUrl>");
+      process.exit(1);
+    }
+    console.log(`${DRY_RUN ? "[dry-run] " : ""}Rehost ${REHOST.old} → ${REHOST.neu}${cap}${only}\n`);
+    await rehostAll(REHOST.old, REHOST.neu);
+  } else if (PRUNE) {
+    console.log(`${DRY_RUN ? "[dry-run] " : ""}Prune migrated originals from Supabase Storage${cap}${only}\n`);
+    await pruneAll();
+  } else {
+    console.log(
+      `${DRY_RUN ? "[dry-run] " : ""}Backfilling Supabase Storage → R2 (${R2_PUBLIC_BASE_URL})${cap}${only}\n`,
+    );
+    await migrateAll();
+  }
 }
 
 main().catch((e) => {

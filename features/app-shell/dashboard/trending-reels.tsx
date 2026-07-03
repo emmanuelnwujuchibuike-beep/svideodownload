@@ -51,6 +51,9 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
               >
                 {item.thumbnailUrl ? (
                   <Image src={item.thumbnailUrl} alt="" fill sizes="144px" className="object-cover transition duration-300 group-hover:scale-105" />
+                ) : item.mediaUrl ? (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption
+                  <video src={`${item.mediaUrl}#t=0.5`} muted playsInline preload="metadata" className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105" />
                 ) : (
                   <span className={`absolute inset-0 bg-gradient-to-br ${FALLBACK[i % FALLBACK.length]}`} />
                 )}

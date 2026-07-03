@@ -11,7 +11,7 @@ const KIND_ICON = { video: Play, image: ImageIcon, audio: Music } as const;
  * paints the real first frame from the media file (so uploads never show a blank
  * black tile); otherwise a kind icon.
  */
-function PostCover({ post, className }: { post: PostCard; className?: string }) {
+export function PostCover({ post, className }: { post: PostCard; className?: string }) {
   const KindIcon = KIND_ICON[post.mediaKind] ?? Play;
   if (post.thumbnailUrl) {
     // eslint-disable-next-line @next/next/no-img-element

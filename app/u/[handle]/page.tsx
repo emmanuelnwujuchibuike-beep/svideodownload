@@ -6,7 +6,7 @@ import { Suspense } from "react";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteHeader } from "@/components/layout/site-header";
-import { PostGrid } from "@/components/social/post-grid";
+import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
 import { LivingGlow } from "@/features/profile/living-glow";
@@ -378,7 +378,7 @@ async function ProfilePosts({
   };
 
   return (
-    <PostGrid
+    <ProfileMediaGrid
       posts={posts}
       layout={filter === "reels" ? "reel" : "card"}
       emptyText={empty[filter]}

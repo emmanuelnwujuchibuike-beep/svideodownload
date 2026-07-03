@@ -185,8 +185,21 @@ export function Downloader() {
           <ResultOffer key={metadata.id} />
           {/* Admin-managed recommended tools (renders nothing when empty). */}
           <RecommendedToolsClient placement="download_result" />
+
+          {/* Once the download starts, invite the user to publish it to their
+              profile — the moment they're most likely to share. */}
+          {status === "started" ? (
+            <div className="mt-5 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-4 text-center ring-1 ring-inset ring-violet-500/20">
+              <p className="text-sm font-bold">Downloaded 🎉 — share it with your Frenz</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Publish it to your profile so your followers can watch and save it too.</p>
+              <div className="mt-3 flex justify-center">
+                <PublishButton metadata={metadata} highlight />
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            <PublishButton metadata={metadata} />
+            {status !== "started" ? <PublishButton metadata={metadata} /> : null}
             <button
               type="button"
               onClick={() => {

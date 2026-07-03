@@ -37,9 +37,11 @@ export function FeedVideo({
   const userPaused = useRef(false);
   const [muted, setMuted] = useState(true);
   const [held, setHeld] = useState(false);
+  const [covered, setCovered] = useState(true);
   const iframeMode = !src && !!streamUid;
 
-  // In-view autoplay / pause (native player only).
+  // In-view autoplay / pause (native player only). Plays as soon as 40% of the
+  // video is on screen — it's usually already playing by the time it's centered.
   useEffect(() => {
     if (iframeMode) return;
     const el = wrap.current;
@@ -48,13 +50,13 @@ export function FeedVideo({
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (!entry) return;
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.4) {
           if (!userPaused.current) v.play().catch(() => {});
         } else {
           v.pause();
         }
       },
-      { threshold: [0, 0.6, 1] },
+      { threshold: [0, 0.4, 1] },
     );
     obs.observe(el);
     return () => {
@@ -143,12 +145,20 @@ export function FeedVideo({
         preload="metadata"
         className="h-full w-full object-cover"
         onPlay={() => video.current && claimPlayback(video.current)}
+        onPlaying={() => setCovered(false)}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endHold}
         onPointerLeave={endHold}
         onPointerCancel={endHold}
       />
+
+      {/* Cover — shows the poster until the first frame actually plays, so a
+          not-yet-decoded clip never flashes a blank black screen. */}
+      {covered && poster ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+      ) : null}
 
       {/* Paused (while holding) indicator */}
       {held ? (

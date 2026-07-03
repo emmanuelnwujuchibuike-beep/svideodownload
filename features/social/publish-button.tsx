@@ -29,7 +29,7 @@ function deriveKind(meta: VideoMetadata): MediaKind {
  * user's profile (directory model: metadata only, no file stored). Signed-in
  * users only; opens a small composer for title/description/category/visibility.
  */
-export function PublishButton({ metadata }: { metadata: VideoMetadata }) {
+export function PublishButton({ metadata, highlight = false }: { metadata: VideoMetadata; highlight?: boolean }) {
   const { user, enabled } = useUser();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState((metadata.title || "").slice(0, 300));
@@ -94,7 +94,12 @@ export function PublishButton({ metadata }: { metadata: VideoMetadata }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-semibold text-foreground shadow-soft transition hover:bg-secondary active:scale-[0.98]"
+        className={cn(
+          "inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition active:scale-[0.98]",
+          highlight
+            ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25 hover:opacity-95"
+            : "border border-border bg-card text-foreground shadow-soft hover:bg-secondary",
+        )}
       >
         <Share2 className="h-4 w-4" /> Publish to profile
       </button>

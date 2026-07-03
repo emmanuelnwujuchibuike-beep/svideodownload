@@ -1,5 +1,6 @@
 import { BadgeCheck, CalendarDays, Link as LinkIcon, Lock, MessageCircle } from "lucide-react";
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -280,29 +281,29 @@ export default async function ProfilePage({
                   </span>
                 </div>
 
-                {/* Live stats row — spans the full width for a balanced, pro layout */}
-                <div className="mt-5 grid grid-cols-4 gap-2.5 sm:gap-3">
+                {/* Live stats — one premium glass panel, divided into columns */}
+                <div className="mt-6 grid grid-cols-4 divide-x divide-border/50 overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-b from-card/80 to-card/40 shadow-soft ring-1 ring-inset ring-white/5 backdrop-blur">
                   <Link
                     href={`/u/${profile.handle}/following`}
-                    className="rounded-2xl border border-border/60 bg-card/60 px-2 py-3 text-center backdrop-blur transition hover:bg-card sm:py-4"
+                    className="px-2 py-4 text-center transition hover:bg-secondary/40 sm:py-5"
                   >
-                    <span className="block text-lg font-bold tracking-tight sm:text-xl">{formatCompactNumber(profile.followingCount)}</span>
-                    <span className="text-[11px] text-muted-foreground sm:text-xs">Following</span>
+                    <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(profile.followingCount)}</span>
+                    <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Following</span>
                   </Link>
                   <Link
                     href={`/u/${profile.handle}/followers`}
-                    className="rounded-2xl border border-border/60 bg-card/60 px-2 py-3 text-center backdrop-blur transition hover:bg-card sm:py-4"
+                    className="px-2 py-4 text-center transition hover:bg-secondary/40 sm:py-5"
                   >
-                    <span className="block text-lg font-bold tracking-tight sm:text-xl">{formatCompactNumber(profile.followersCount)}</span>
-                    <span className="text-[11px] text-muted-foreground sm:text-xs">Followers</span>
+                    <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(profile.followersCount)}</span>
+                    <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Followers</span>
                   </Link>
-                  <div className="rounded-2xl border border-border/60 bg-card/60 px-2 py-3 text-center backdrop-blur sm:py-4">
-                    <span className="block text-lg font-bold tracking-tight sm:text-xl">{formatCompactNumber(friendTotal)}</span>
-                    <span className="text-[11px] text-muted-foreground sm:text-xs">Friends</span>
+                  <div className="px-2 py-4 text-center sm:py-5">
+                    <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(friendTotal)}</span>
+                    <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Friends</span>
                   </div>
-                  <div className="rounded-2xl border border-border/60 bg-card/60 px-2 py-3 text-center backdrop-blur sm:py-4">
-                    <span className="block text-lg font-bold tracking-tight sm:text-xl">{formatCompactNumber(postsTotal)}</span>
-                    <span className="text-[11px] text-muted-foreground sm:text-xs">Posts</span>
+                  <div className="px-2 py-4 text-center sm:py-5">
+                    <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(postsTotal)}</span>
+                    <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Posts</span>
                   </div>
                 </div>
 
@@ -347,13 +348,25 @@ async function ProfileTabsLoader({
   tabs: ProfileTab[];
   initialTab: ProfileTab;
 }) {
-  const [posts, liked, saved] = await Promise.all([
+  const [posts, liked, saved, jar] = await Promise.all([
     listUserPosts(profileId, viewerId),
     isOwner ? listLikedPosts(profileId) : Promise.resolve([]),
     isOwner ? listSavedPosts(profileId) : Promise.resolve([]),
+    cookies(),
   ]);
+  // Seed the grid/list choice from the cookie so the layout paints instantly.
+  const initialView = jar.get("svd_profile_view")?.value === "list" ? "list" : "grid";
 
   return (
-    <ProfileTabs handle={handle} isOwner={isOwner} tabs={tabs} initialTab={initialTab} posts={posts} liked={liked} saved={saved} />
+    <ProfileTabs
+      handle={handle}
+      isOwner={isOwner}
+      tabs={tabs}
+      initialTab={initialTab}
+      initialView={initialView}
+      posts={posts}
+      liked={liked}
+      saved={saved}
+    />
   );
 }

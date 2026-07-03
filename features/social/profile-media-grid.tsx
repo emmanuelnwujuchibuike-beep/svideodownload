@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { PostCover } from "@/components/social/post-grid";
+import { FeedVideo } from "@/features/media/feed-video";
 import { ProfileVideoPlayer } from "@/features/social/profile-video-player";
 import type { PostCard } from "@/lib/social/posts";
 import { cn, formatCompactNumber } from "@/lib/utils";
@@ -54,31 +55,39 @@ export function ProfileMediaGrid({
     />
   );
 
-  // X-style list: one full-size item per row, photos vs videos clearly marked.
+  // X-style list: one full-size item per row. Videos show a full-length,
+  // play-in-place preview (like the feed); photos show full-size, all clearly
+  // labelled Photo/Video.
   if (view === "list") {
     return (
       <>
-        <div className="space-y-4 sm:space-y-5">
-          {posts.map((p) =>
-            isPlayable(p) ? (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => openVideo(p)}
-                className="group block w-full overflow-hidden rounded-2xl border border-border/60 bg-card text-left shadow-soft transition hover:shadow-elevated"
-              >
-                <ListItem post={p} />
-              </button>
-            ) : (
-              <Link
-                key={p.id}
-                href={`/p/${p.id}`}
-                className="group block overflow-hidden rounded-2xl border border-border/60 bg-card shadow-soft transition hover:shadow-elevated"
-              >
-                <ListItem post={p} />
+        <div className="space-y-5 sm:space-y-6">
+          {posts.map((p) => (
+            <article
+              key={p.id}
+              className="group overflow-hidden rounded-3xl border border-border/60 bg-card shadow-soft transition hover:shadow-elevated"
+            >
+              {isPlayable(p) ? (
+                <FeedVideo
+                  src={p.mediaUrl}
+                  poster={p.thumbnailUrl}
+                  postId={p.id}
+                  onExpand={() => openVideo(p)}
+                  className="aspect-[4/5] w-full"
+                />
+              ) : (
+                <Link href={`/p/${p.id}`} className="relative block aspect-[4/5] overflow-hidden bg-neutral-950">
+                  <PostCover post={p} className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.02]" />
+                  <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+                    <Images className="h-3 w-3" /> Photo
+                  </span>
+                </Link>
+              )}
+              <Link href={`/p/${p.id}`} className="block p-4">
+                <ListMeta post={p} />
               </Link>
-            ),
-          )}
+            </article>
+          ))}
         </div>
         {player}
       </>
@@ -120,38 +129,16 @@ export function ProfileMediaGrid({
   );
 }
 
-/** A single X-style list row: full-size media + a caption/stats strip below. */
-function ListItem({ post }: { post: PostCard }) {
-  const isVideo = post.mediaKind === "video";
+/** The caption + stats strip shown under each X-style list item. */
+function ListMeta({ post }: { post: PostCard }) {
   return (
     <>
-      <div className={cn("relative overflow-hidden bg-neutral-950", isVideo ? "aspect-video" : "aspect-[4/5]")}>
-        <PostCover post={post} className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.02]" />
-
-        {/* Photo / Video chip (top-left) — clearly differentiates the two */}
-        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
-          {isVideo ? <Play className="h-3 w-3 fill-white" /> : <Images className="h-3 w-3" />}
-          {isVideo ? "Video" : "Photo"}
-        </span>
-
-        {/* Big play affordance for videos */}
-        {isVideo ? (
-          <span className="absolute inset-0 flex items-center justify-center">
-            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/30 backdrop-blur transition group-hover:scale-110">
-              <Play className="h-6 w-6 translate-x-0.5 fill-white" />
-            </span>
-          </span>
-        ) : null}
-      </div>
-
-      <div className="p-3.5">
-        {post.title ? <p className="line-clamp-2 text-sm font-semibold leading-snug">{post.title}</p> : null}
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] font-medium text-muted-foreground">
-          <span className="inline-flex items-center gap-1"><Play className="h-3.5 w-3.5 fill-current" /> {formatCompactNumber(post.viewsCount)}</span>
-          <span className="inline-flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> {formatCompactNumber(post.likesCount)}</span>
-          <span className="inline-flex items-center gap-1"><MessageCircle className="h-3.5 w-3.5" /> {formatCompactNumber(post.commentsCount)}</span>
-          <span className="ml-auto">{new Date(post.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
-        </div>
+      {post.title ? <p className="line-clamp-2 text-sm font-semibold leading-snug">{post.title}</p> : null}
+      <div className={cn("flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] font-medium text-muted-foreground", post.title && "mt-1.5")}>
+        <span className="inline-flex items-center gap-1"><Play className="h-3.5 w-3.5 fill-current" /> {formatCompactNumber(post.viewsCount)}</span>
+        <span className="inline-flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> {formatCompactNumber(post.likesCount)}</span>
+        <span className="inline-flex items-center gap-1"><MessageCircle className="h-3.5 w-3.5" /> {formatCompactNumber(post.commentsCount)}</span>
+        <span className="ml-auto">{new Date(post.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
       </div>
     </>
   );

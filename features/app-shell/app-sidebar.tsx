@@ -75,12 +75,15 @@ export function AppSidebar({ handle }: { handle: string | null }) {
   const isPremium = ready && !showAds;
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-border/60 bg-gradient-to-b from-card/70 to-card/30 px-3 py-4 backdrop-blur-xl [scrollbar-width:none] lg:flex [&::-webkit-scrollbar]:hidden">
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-hidden border-r border-border/60 bg-gradient-to-b from-card/70 to-card/30 px-3 py-4 backdrop-blur-xl lg:flex">
       {/* Brand */}
-      <Link href="/home" className="mb-6 flex items-center px-2">
+      <Link href="/home" className="mb-6 flex shrink-0 items-center px-2">
         <FrenzWordmark size={34} textClassName="text-lg" />
       </Link>
 
+      {/* Scrollable middle — nav + spaces. Keeps the Premium card always visible
+          at the bottom (it never gets cut off on shorter laptop screens). */}
+      <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {/* Primary nav */}
       <nav className="flex flex-col gap-1">
         {nav.map((item) => {
@@ -147,10 +150,12 @@ export function AppSidebar({ handle }: { handle: string | null }) {
           </Link>
         </div>
       </div>
+      </div>
+      {/* End scrollable middle */}
 
-      {/* Premium card */}
+      {/* Premium card — pinned to the bottom, always fully visible */}
       {!isPremium ? (
-        <div className="mt-auto overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600/12 via-violet-600/12 to-purple-600/12 p-4 ring-1 ring-inset ring-violet-500/25">
+        <div className="mt-3 shrink-0 overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600/12 via-violet-600/12 to-purple-600/12 p-4 ring-1 ring-inset ring-violet-500/25">
           <p className="flex items-center gap-1.5 text-sm font-bold">
             <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-sm">
               <Crown className="h-3.5 w-3.5 fill-white" />

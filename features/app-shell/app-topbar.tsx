@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Search, Upload } from "lucide-react";
+import { IoCloudDownloadOutline, IoCloudUploadOutline, IoSearchOutline } from "react-icons/io5";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
@@ -35,24 +35,24 @@ export function AppTopbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border/60 bg-background/85 px-4 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border/50 bg-background/80 px-4 backdrop-blur-2xl">
       {/* Mobile/tablet brand wordmark (Instagram-style) */}
       <Link href="/home" className="flex items-center lg:hidden">
         <FrenzWordmark size={30} textClassName="text-xl" />
       </Link>
 
-      {/* Search */}
+      {/* Search — pill, Instagram/Snapchat style */}
       <form onSubmit={submit} className="relative hidden max-w-xl flex-1 sm:block">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <IoSearchOutline className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
         <input
           ref={inputRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search videos, people, hashtags…"
           aria-label="Search"
-          className="h-10 w-full rounded-xl bg-secondary/60 pl-10 pr-12 text-sm outline-none ring-1 ring-inset ring-transparent transition focus:bg-background focus:ring-primary"
+          className="h-11 w-full rounded-full bg-secondary/50 pl-11 pr-12 text-sm outline-none ring-1 ring-inset ring-transparent transition focus:bg-background focus:ring-2 focus:ring-primary/40"
         />
-        <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
+        <kbd className="pointer-events-none absolute right-3.5 top-1/2 hidden -translate-y-1/2 rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
           ⌘K
         </kbd>
       </form>
@@ -60,26 +60,31 @@ export function AppTopbar() {
       <div className="flex-1 sm:hidden" />
 
       {/* Actions */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <Link
           href="/downloads"
-          className="group inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 py-2 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:shadow-lg hover:shadow-violet-500/40"
+          className="group inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 ring-1 ring-inset ring-white/10 transition hover:shadow-xl hover:shadow-violet-500/40"
         >
-          <Download className="h-4 w-4 transition-transform group-hover:translate-y-0.5" strokeWidth={2.4} /> <span className="hidden sm:inline">Download</span>
+          <IoCloudDownloadOutline className="h-[18px] w-[18px] transition-transform group-hover:translate-y-0.5" />
+          <span className="hidden sm:inline">Download</span>
         </Link>
-        {/* Create — opens the premium composer */}
+
+        {/* Create / upload — opens the premium composer */}
         <button
           type="button"
           onClick={() => openUpload("post")}
           aria-label="Create a post"
           title="Create"
-          className="hidden h-10 w-10 items-center justify-center rounded-xl bg-secondary/60 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary hover:ring-primary/40 sm:inline-flex"
+          className="hidden h-11 w-11 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary hover:text-primary hover:ring-primary/40 sm:inline-flex"
         >
-          <Upload className="h-[18px] w-[18px]" strokeWidth={2.4} />
+          <IoCloudUploadOutline className="h-[21px] w-[21px]" />
         </button>
 
-        {/* Notifications (realtime) */}
-        <NotificationBell />
+        {/* Notifications — mobile/tablet only (large screens use the sidebar
+            Notifications item, so the top-right stays uncluttered). */}
+        <span className="lg:hidden">
+          <NotificationBell />
+        </span>
 
         <div className="hidden sm:block">
           <ThemeToggle />

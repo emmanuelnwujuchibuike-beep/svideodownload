@@ -48,17 +48,30 @@ export function FeedVideo({
   const [covered, setCovered] = useState(true);
   const [playing, setPlaying] = useState(false);
   const [hoverable, setHoverable] = useState(false);
+  const [bigScreen, setBigScreen] = useState(false);
   const iframeMode = !src && !!streamUid;
 
-  // Detect a real hover-capable pointer (laptop/desktop) vs touch.
+  // Detect a real hover-capable pointer (mouse) AND a large screen. On any large
+  // screen a plain click must never open the reel — even touchscreen laptops —
+  // it only plays/pauses; opening is an explicit action (button / double-click).
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(hover: hover) and (pointer: fine)");
-    const update = () => setHoverable(mq.matches);
+    const hoverMq = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const sizeMq = window.matchMedia("(min-width: 1024px)");
+    const update = () => {
+      setHoverable(hoverMq.matches);
+      setBigScreen(sizeMq.matches);
+    };
     update();
-    mq.addEventListener?.("change", update);
-    return () => mq.removeEventListener?.("change", update);
+    hoverMq.addEventListener?.("change", update);
+    sizeMq.addEventListener?.("change", update);
+    return () => {
+      hoverMq.removeEventListener?.("change", update);
+      sizeMq.removeEventListener?.("change", update);
+    };
   }, []);
+  // "Desktop mode" = never tap-to-open; click toggles playback instead.
+  const desktop = hoverable || bigScreen;
 
   // In-view autoplay / pause (native player only). Plays as soon as 40% of the
   // video is on screen — usually already playing by the time it's centered.
@@ -170,9 +183,9 @@ export function FeedVideo({
 
   if (!src) return null;
 
-  // Touch handlers only bind on touch devices — on desktop a click must never
-  // open the reel, it toggles playback instead.
-  const touchHandlers = hoverable
+  // Touch handlers only bind on small touch screens — on any large screen a
+  // click must never open the reel, it toggles playback instead.
+  const touchHandlers = desktop
     ? {}
     : { onPointerDown, onPointerMove, onPointerUp: endHold, onPointerLeave: endHold, onPointerCancel: endHold };
 
@@ -186,8 +199,8 @@ export function FeedVideo({
         "lg:flex lg:aspect-auto lg:max-h-[82vh] lg:items-center lg:justify-center",
         className,
       )}
-      onClick={hoverable ? togglePlay : undefined}
-      onDoubleClick={hoverable ? expand : undefined}
+      onClick={desktop ? togglePlay : undefined}
+      onDoubleClick={desktop ? expand : undefined}
     >
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
@@ -224,12 +237,13 @@ export function FeedVideo({
         </span>
       ) : null}
 
-      {/* Desktop: hover reveals a play/pause control (also shown while paused) */}
-      {hoverable ? (
+      {/* Desktop: a play/pause control — revealed on hover (mouse), or shown
+          persistently on a large touch screen (no hover to reveal it). */}
+      {desktop ? (
         <span
           className={cn(
             "pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-150",
-            playing ? "opacity-0 group-hover:opacity-100" : "opacity-100",
+            hoverable ? (playing ? "opacity-0 group-hover:opacity-100" : "opacity-100") : playing ? "opacity-70" : "opacity-100",
           )}
         >
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white shadow-lg backdrop-blur-md ring-1 ring-white/20">
@@ -238,13 +252,17 @@ export function FeedVideo({
         </span>
       ) : null}
 
-      {/* Desktop: explicit "Open reel" button (a click on the video only pauses) */}
-      {hoverable ? (
+      {/* Desktop: explicit "Open reel" button — the ONLY way a click opens the
+          reel (a plain click on the video just plays/pauses). */}
+      {desktop ? (
         <button
           type="button"
           onClick={expand}
           aria-label="Open reel"
-          className="absolute left-2.5 top-2.5 z-10 flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white opacity-0 backdrop-blur-md transition hover:bg-black/65 group-hover:opacity-100"
+          className={cn(
+            "absolute left-2.5 top-2.5 z-10 flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-md transition hover:bg-black/65",
+            hoverable ? "opacity-0 group-hover:opacity-100" : "opacity-100",
+          )}
         >
           <Expand className="h-3.5 w-3.5" /> Open reel
         </button>
@@ -262,7 +280,7 @@ export function FeedVideo({
 
       {/* Hint */}
       <span className="pointer-events-none absolute bottom-2 left-2.5 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur">
-        {hoverable ? "Click to play · double-click for reel" : "Tap to watch · hold to pause"}
+        {desktop ? "Click to play · Open reel to watch" : "Tap to watch · hold to pause"}
       </span>
     </div>
   );

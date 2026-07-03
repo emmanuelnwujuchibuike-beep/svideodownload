@@ -1,3 +1,4 @@
+import { BrandLoader } from "@/features/app-shell/brand-loader";
 import { Skeleton } from "@/features/ui/skeleton";
 
 /**
@@ -7,6 +8,7 @@ import { Skeleton } from "@/features/ui/skeleton";
 export default function HomeLoading() {
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-1 gap-4 px-3 sm:px-4">
+      <BrandLoader />
       <main className="min-w-0 flex-1 pb-24 pt-4 lg:pb-6">
         <div className="space-y-6">
           {/* Greeting */}

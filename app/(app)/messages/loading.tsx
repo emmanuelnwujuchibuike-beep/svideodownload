@@ -1,9 +1,11 @@
+import { BrandLoader } from "@/features/app-shell/brand-loader";
 import { Skeleton, SkeletonAvatar } from "@/features/ui/skeleton";
 
 /** Inbox skeleton — fills the Glass Split panel (mobile list / desktop empty state). */
 export default function MessagesLoading() {
   return (
     <div className="flex-1 overflow-hidden px-3 pt-4 lg:px-6">
+      <BrandLoader />
       <Skeleton className="mb-4 h-8 w-36 lg:hidden" />
       <div className="space-y-1 lg:hidden" aria-hidden>
         {Array.from({ length: 8 }).map((_, i) => (

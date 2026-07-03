@@ -174,9 +174,9 @@ function StoryViewer({ groups, startGroup, onClose }: { groups: StoryGroup[]; st
         <span className="text-sm font-semibold">{group.displayName}</span>
       </div>
 
-      {/* tap zones: left = back, right = forward */}
+      {/* tap zones: left third = back, the rest = forward (full-screen coverage) */}
       <button type="button" aria-label="Previous" onClick={prev} className="absolute inset-y-0 left-0 z-10 w-1/3" />
-      <button type="button" aria-label="Next" onClick={next} className="absolute inset-y-0 right-0 z-10 w-1/3" />
+      <button type="button" aria-label="Next" onClick={next} className="absolute inset-y-0 left-1/3 right-0 z-10" />
 
       <div className="max-h-[92vh] w-full max-w-md px-2">
         {story.mediaKind === "video" ? (

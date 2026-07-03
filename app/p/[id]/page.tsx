@@ -9,6 +9,8 @@ import { notFound } from "next/navigation";
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { isAdmin } from "@/lib/admin";
 import { SiteHeader } from "@/components/layout/site-header";
+import { RichText } from "@/components/social/rich-text";
+import { PostEditButton } from "@/features/social/post-edit-button";
 import { PostGrid } from "@/components/social/post-grid";
 import { Comments } from "@/features/social/comments";
 import { FollowButton } from "@/features/social/follow-button";
@@ -155,14 +157,27 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           <div className="flex items-center gap-2">
             <PostDownloadButton postId={post.id} sourceUrl={post.source_url} mediaKind={post.media_kind} title={post.title} />
             {post.isOwner ? (
-              <PostDeleteButton postId={post.id} redirectTo={`/u/${post.publisher.handle}`} />
+              <>
+                <PostEditButton
+                  postId={post.id}
+                  initialTitle={post.title}
+                  initialDescription={post.description}
+                  initialCategory={post.category}
+                  initialVisibility={post.visibility}
+                />
+                <PostDeleteButton postId={post.id} redirectTo={`/u/${post.publisher.handle}`} />
+              </>
             ) : (
               <ReportButton targetType="post" targetId={post.id} />
             )}
           </div>
         </div>
 
-        {post.description ? <p className="mt-4 leading-relaxed text-muted-foreground">{post.description}</p> : null}
+        {post.description ? (
+          <p className="mt-4 leading-relaxed text-muted-foreground">
+            <RichText text={post.description} />
+          </p>
+        ) : null}
 
         {/* Engagement + reach */}
         <div className="mt-5">

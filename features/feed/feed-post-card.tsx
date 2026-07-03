@@ -20,6 +20,7 @@ import {
 import Link from "next/link";
 import { useState } from "react";
 
+import { RichText } from "@/components/social/rich-text";
 import { FeedVideo } from "@/features/media/feed-video";
 import type { FeedItem } from "@/lib/social/home-feed";
 import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
@@ -140,7 +141,7 @@ export function FeedPostCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.25 }}
-      className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-soft"
+      className="overflow-hidden rounded-3xl border border-border/50 bg-card shadow-soft ring-1 ring-white/[0.02]"
     >
       {/* Header */}
       <div className="flex items-center gap-3 p-4 pb-3">
@@ -224,8 +225,14 @@ export function FeedPostCard({
       {/* Caption */}
       {item.title ? (
         <div className="px-4 pb-3">
-          <p className="text-sm leading-relaxed">{item.title}</p>
-          {item.category ? <span className="mt-1 inline-block text-xs font-medium text-primary">#{item.category}</span> : null}
+          <p className="text-sm leading-relaxed">
+            <RichText text={item.title} />
+          </p>
+          {item.category ? (
+            <Link href={`/explore?q=${encodeURIComponent(`#${item.category}`)}`} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
+              #{item.category}
+            </Link>
+          ) : null}
         </div>
       ) : null}
 

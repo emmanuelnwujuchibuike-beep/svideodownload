@@ -24,7 +24,7 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
     },
     { initialData: initialItems },
   );
-  const [viewer, setViewer] = useState<FeedItem | null>(null);
+  const [start, setStart] = useState<number | null>(null);
 
   // Cached-first: instant on return visits, silently revalidated in the background.
   const items = isLoading ? null : data ?? [];
@@ -46,7 +46,7 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setViewer(item)}
+                onClick={() => setStart(i)}
                 className="group relative aspect-[9/14] w-36 shrink-0 overflow-hidden rounded-2xl text-left shadow-soft ring-1 ring-border/60 transition hover:-translate-y-1 hover:shadow-card"
               >
                 {item.thumbnailUrl ? (
@@ -70,7 +70,7 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
             ))}
       </div>
 
-      <ReelViewer item={viewer} onClose={() => setViewer(null)} />
+      <ReelViewer items={start !== null && items ? items : null} startIndex={start ?? 0} onClose={() => setStart(null)} />
     </section>
   );
 }

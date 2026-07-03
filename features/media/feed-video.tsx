@@ -32,6 +32,8 @@ export function FeedVideo({
   const video = useRef<HTMLVideoElement | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holding = useRef(false);
+  const moved = useRef(false);
+  const startPt = useRef<{ x: number; y: number } | null>(null);
   const userPaused = useRef(false);
   const [muted, setMuted] = useState(true);
   const [held, setHeld] = useState(false);
@@ -69,14 +71,34 @@ export function FeedVideo({
     setMuted(v.muted);
   }, []);
 
-  // Press-and-hold to pause; a quick tap opens the fullscreen reel.
-  const onPointerDown = () => {
+  // Press-and-hold to pause; a *stationary* quick tap opens the fullscreen reel.
+  // A drag/scroll (pointer moved past a small threshold) never counts as a tap,
+  // so scrolling the feed can't accidentally open a reel.
+  const onPointerDown = (e: React.PointerEvent) => {
     holding.current = false;
+    moved.current = false;
+    startPt.current = { x: e.clientX, y: e.clientY };
     holdTimer.current = setTimeout(() => {
+      if (moved.current) return;
       holding.current = true;
       setHeld(true);
       video.current?.pause();
     }, 170);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!startPt.current || moved.current) return;
+    const dx = Math.abs(e.clientX - startPt.current.x);
+    const dy = Math.abs(e.clientY - startPt.current.y);
+    if (dx > 10 || dy > 10) {
+      moved.current = true;
+      // Cancel a pending hold-pause once it's clearly a scroll.
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+      if (holding.current) {
+        holding.current = false;
+        setHeld(false);
+        video.current?.play().catch(() => {});
+      }
+    }
   };
   const endHold = () => {
     if (holdTimer.current) clearTimeout(holdTimer.current);
@@ -84,9 +106,10 @@ export function FeedVideo({
       holding.current = false;
       setHeld(false);
       video.current?.play().catch(() => {});
-    } else {
+    } else if (!moved.current) {
       onExpand?.();
     }
+    startPt.current = null;
   };
 
   if (iframeMode) {
@@ -121,6 +144,7 @@ export function FeedVideo({
         className="h-full w-full object-cover"
         onPlay={() => video.current && claimPlayback(video.current)}
         onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
         onPointerUp={endHold}
         onPointerLeave={endHold}
         onPointerCancel={endHold}

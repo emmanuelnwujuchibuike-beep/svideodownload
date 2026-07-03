@@ -5,7 +5,6 @@ import { Suspense } from "react";
 
 import { AppContent } from "@/features/app-shell/app-content";
 import { BrandSplash } from "@/features/app-shell/brand-splash";
-import { HomeDownloadBar } from "@/features/app-shell/dashboard/home-download-bar";
 import { HomeGreeting } from "@/features/app-shell/dashboard/home-greeting";
 import { HomeRail } from "@/features/app-shell/dashboard/home-rail";
 import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
@@ -78,7 +77,6 @@ export default async function HomePage() {
           </Suspense>
         </div>
       </div>
-      <HomeDownloadBar />
     </AppContent>
   );
 }

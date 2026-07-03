@@ -16,10 +16,11 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { RichText } from "@/components/social/rich-text";
 import { SmartVideo } from "@/features/media/smart-video";
 import { Comments } from "@/features/social/comments";
-import type { CommentNode } from "@/lib/social/engagement";
 import { claimPlayback, releasePlayback } from "@/lib/media/video-coordinator";
+import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
@@ -30,26 +31,92 @@ interface CommentsData {
 }
 
 /**
- * Fullscreen reel player. A video plays edge-to-edge with sound; a vertical
- * action rail (like / comment / share / save) floats on the right and the
- * author + caption sit at the bottom. Playback is press-and-hold to pause —
- * hold anywhere on the video and release to resume, like TikTok/Reels.
+ * Fullscreen reel player over a playlist. The current reel plays edge-to-edge
+ * with sound; when it finishes it auto-advances to the next. Swipe up/down (or
+ * let a clip end) to move between reels. A vertical action rail floats on the
+ * right; controls auto-hide after 2s and a tap toggles them, while the top-left
+ * back button always stays.
  */
-export function ReelViewer({ item, onClose }: { item: FeedItem | null; onClose: () => void }) {
+export function ReelViewer({
+  items,
+  startIndex = 0,
+  onClose,
+}: {
+  items: FeedItem[] | null;
+  startIndex?: number;
+  onClose: () => void;
+}) {
   return (
-    <AnimatePresence>{item ? <ReelInner key={item.id} item={item} onClose={onClose} /> : null}</AnimatePresence>
+    <AnimatePresence>
+      {items && items.length ? <ReelStack key="reelstack" items={items} startIndex={startIndex} onClose={onClose} /> : null}
+    </AnimatePresence>
   );
 }
 
-function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
+function ReelStack({ items, startIndex, onClose }: { items: FeedItem[]; startIndex: number; onClose: () => void }) {
+  const [index, setIndex] = useState(Math.min(Math.max(0, startIndex), items.length - 1));
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  const goNext = useCallback(() => setIndex((i) => (i < items.length - 1 ? i + 1 : i)), [items.length]);
+  const goPrev = useCallback(() => setIndex((i) => (i > 0 ? i - 1 : i)), []);
+  const item = items[index]!;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[85] bg-black"
+      role="dialog"
+      aria-modal="true"
+      aria-label={item.title}
+    >
+      <ReelInner
+        key={item.id}
+        item={item}
+        onClose={onClose}
+        onNext={goNext}
+        onPrev={goPrev}
+        hasNext={index < items.length - 1}
+        hasPrev={index > 0}
+      />
+    </motion.div>
+  );
+}
+
+function ReelInner({
+  item,
+  onClose,
+  onNext,
+  onPrev,
+  hasNext,
+  hasPrev,
+}: {
+  item: FeedItem;
+  onClose: () => void;
+  onNext: () => void;
+  onPrev: () => void;
+  hasNext: boolean;
+  hasPrev: boolean;
+}) {
   const video = useRef<HTMLVideoElement | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holding = useRef(false);
+  const startPt = useRef<{ x: number; y: number } | null>(null);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
-  // Controls (rail, caption, progress) auto-hide after 2s of no tap for a clean,
-  // full-screen view; a tap toggles them. The back button always stays.
   const [ui, setUi] = useState(true);
 
   const [liked, setLiked] = useState(item.viewerLiked);
@@ -68,7 +135,6 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => setUi(false), 2000);
   }, []);
-
   const toggleUi = useCallback(() => {
     setUi((v) => {
       const next = !v;
@@ -79,18 +145,12 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
   }, []);
 
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    scheduleHide(); // start the initial 2s auto-hide
+    scheduleHide();
     return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
       if (hideTimer.current) clearTimeout(hideTimer.current);
       if (video.current) releasePlayback(video.current);
     };
-  }, [onClose, scheduleHide]);
+  }, [scheduleHide]);
 
   const loadComments = useCallback(async () => {
     if (fetched.current) return;
@@ -156,8 +216,10 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
     }
   };
 
-  // Press-and-hold to pause (native player only); a quick tap toggles the UI.
-  const onPointerDown = () => {
+  // Gesture: press-hold pauses; a stationary tap toggles the UI; a vertical
+  // swipe moves between reels.
+  const onPointerDown = (e: React.PointerEvent) => {
+    startPt.current = { x: e.clientX, y: e.clientY };
     if (!native) return;
     holding.current = false;
     holdTimer.current = setTimeout(() => {
@@ -166,34 +228,34 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
       setPaused(true);
     }, 160);
   };
-  const endHold = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
+    const dy = startPt.current ? e.clientY - startPt.current.y : 0;
+    const dx = startPt.current ? e.clientX - startPt.current.x : 0;
+    startPt.current = null;
     if (native && holdTimer.current) clearTimeout(holdTimer.current);
     if (native && holding.current) {
       holding.current = false;
       void video.current?.play();
       setPaused(false);
-    } else {
-      toggleUi();
+      return;
     }
+    // Vertical swipe → navigate reels.
+    if (Math.abs(dy) > 60 && Math.abs(dy) > Math.abs(dx)) {
+      if (dy < 0) onNext();
+      else onPrev();
+      return;
+    }
+    toggleUi();
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[85] bg-black"
-      role="dialog"
-      aria-modal="true"
-      aria-label={item.title}
-    >
-      {/* Progress bar (part of the auto-hiding UI) */}
+    <>
+      {/* Progress (auto-hides) */}
       <div className={cn("absolute inset-x-0 top-0 z-30 h-0.5 bg-white/15 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
         <div className="h-full bg-white" style={{ width: `${progress}%` }} />
       </div>
 
-      {/* Close — ALWAYS visible, even when the rest of the UI is hidden */}
+      {/* Back — ALWAYS visible */}
       <button
         type="button"
         onClick={onClose}
@@ -203,13 +265,19 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
         <X className="h-5 w-5" />
       </button>
 
-      {/* Media (press-and-hold to pause) */}
+      {/* Media */}
       <div
         className="absolute inset-0 flex items-center justify-center"
         onPointerDown={onPointerDown}
-        onPointerUp={endHold}
-        onPointerLeave={endHold}
-        onPointerCancel={endHold}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => {
+          if (holdTimer.current) clearTimeout(holdTimer.current);
+          if (holding.current) {
+            holding.current = false;
+            void video.current?.play();
+            setPaused(false);
+          }
+        }}
       >
         {native ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
@@ -218,10 +286,13 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
             src={item.mediaUrl!}
             poster={item.thumbnailUrl ?? undefined}
             autoPlay
-            loop
+            loop={!hasNext}
             playsInline
             className="max-h-full max-w-full object-contain"
             onPlay={() => video.current && claimPlayback(video.current)}
+            onEnded={() => {
+              if (hasNext) onNext();
+            }}
             onTimeUpdate={(e) => {
               const v = e.currentTarget;
               if (v.duration) setProgress((v.currentTime / v.duration) * 100);
@@ -231,13 +302,21 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
           <SmartVideo streamUid={item.streamUid} src={item.mediaUrl} poster={item.thumbnailUrl} controls autoPlay className="max-h-full" />
         )}
 
-        {/* Paused indicator */}
         {paused ? (
           <span className="pointer-events-none absolute flex h-16 w-16 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur">
             <Pause className="h-7 w-7 fill-white" />
           </span>
         ) : null}
       </div>
+
+      {/* Up/down hints (auto-hide) */}
+      {ui && (hasPrev || hasNext) ? (
+        <div className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 text-center text-[10px] font-medium text-white/50">
+          {hasPrev ? <p>▲</p> : null}
+          <p className="my-1">swipe</p>
+          {hasNext ? <p>▼</p> : null}
+        </div>
+      ) : null}
 
       {/* Action rail (auto-hides) */}
       <div className={cn("absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-8", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
@@ -270,10 +349,10 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
         <RailButton icon={Share2} count={shares} label="Share" onClick={share} />
         {following && !item.isOwner ? (
-          <button type="button" onClick={toggleFollow} aria-label="Following" className="flex flex-col items-center text-white/90">
+          <span className="flex flex-col items-center text-white/90">
             <Check className="h-6 w-6" />
             <span className="text-[10px] font-semibold">Following</span>
-          </button>
+          </span>
         ) : null}
       </div>
 
@@ -283,7 +362,11 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
           <span className="font-bold">@{item.publisher.handle}</span>
           {item.publisher.isVerified ? <BadgeCheck className="h-4 w-4" /> : null}
         </Link>
-        {item.title ? <p className="mt-1.5 line-clamp-2 max-w-md text-sm text-white/90">{item.title}</p> : null}
+        {item.title ? (
+          <p className="mt-1.5 line-clamp-2 max-w-md text-sm text-white/90">
+            <RichText text={item.title} linkClassName="font-semibold text-white hover:underline" />
+          </p>
+        ) : null}
       </div>
 
       {/* Comments sheet */}
@@ -323,7 +406,7 @@ function ReelInner({ item, onClose }: { item: FeedItem; onClose: () => void }) {
           </>
         ) : null}
       </AnimatePresence>
-    </motion.div>
+    </>
   );
 }
 

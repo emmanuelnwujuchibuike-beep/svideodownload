@@ -78,16 +78,20 @@ export function SmartFeed({
   const [freshCount, setFreshCount] = useState(0);
   const [away, setAway] = useState<AwaySummary | null>(null);
   const [viewer, setViewer] = useState<{ item: FeedItem; comments: boolean } | null>(null);
-  const [reel, setReel] = useState<FeedItem | null>(null);
+  const [reel, setReel] = useState<{ items: FeedItem[]; index: number } | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const seen = useRef(new Set(initialItems.map((i) => i.id)));
 
   const deck = useMemo(() => buildSparkDeck({ friendCount }), [friendCount]);
 
-  // Videos open the fullscreen reel; everything else opens the split viewer.
+  // Videos open the fullscreen reel over a playlist of every loaded video (so it
+  // auto-advances); everything else opens the split viewer.
   const openViewer = (it: FeedItem, comments = false) => {
-    if (it.mediaKind === "video") setReel(it);
-    else setViewer({ item: it, comments });
+    if (it.mediaKind === "video") {
+      const vids = items.filter((v) => v.mediaKind === "video");
+      const index = Math.max(0, vids.findIndex((v) => v.id === it.id));
+      setReel({ items: vids, index });
+    } else setViewer({ item: it, comments });
   };
 
   const fetchPage = useCallback(
@@ -396,7 +400,7 @@ export function SmartFeed({
         startWithComments={viewer?.comments ?? false}
         onClose={() => setViewer(null)}
       />
-      <ReelViewer item={reel} onClose={() => setReel(null)} />
+      <ReelViewer items={reel?.items ?? null} startIndex={reel?.index ?? 0} onClose={() => setReel(null)} />
     </section>
   );
 }

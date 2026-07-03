@@ -6,7 +6,7 @@ import { Suspense } from "react";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteHeader } from "@/components/layout/site-header";
-import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
+import { ProfileTabs } from "@/features/profile/profile-tabs";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
 import { LivingGlow } from "@/features/profile/living-glow";
@@ -19,7 +19,7 @@ import { PostGridSkeleton } from "@/features/ui/page-skeletons";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { friendsCount, friendshipState, mutualFriendsCount } from "@/lib/social/friends";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { listLikedPosts, listSavedPosts, listUserPosts, type PostCard } from "@/lib/social/posts";
+import { listLikedPosts, listSavedPosts, listUserPosts } from "@/lib/social/posts";
 import { getPublicProfile } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
@@ -27,14 +27,6 @@ import { formatCompactNumber } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 type ProfileTab = "posts" | "reels" | "downloads" | "reposted" | "liked" | "saved";
-const TAB_LABEL: Record<ProfileTab, string> = {
-  posts: "Posts",
-  reels: "Reels",
-  downloads: "Downloads",
-  reposted: "Reposts",
-  liked: "Liked",
-  saved: "Saved",
-};
 // Liked / Saved / Reposts are private — only the owner sees those tabs.
 const OWNER_TABS: ProfileTab[] = ["posts", "reels", "downloads", "reposted", "liked", "saved"];
 const VISITOR_TABS: ProfileTab[] = ["posts", "reels", "downloads"];
@@ -311,28 +303,18 @@ export default async function ProfilePage({
                   </div>
                 </div>
 
-                {/* Content tabs (by category) + streamed grid */}
-                <div className="mt-8">
-                  <div className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto border-b border-border/60 px-4 pb-3 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    {tabs.map((id) => (
-                      <Link
-                        key={id}
-                        href={id === "posts" ? `/u/${profile.handle}` : `/u/${profile.handle}?tab=${id}`}
-                        scroll={false}
-                        className={
-                          activeTab === id
-                            ? "shrink-0 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-violet-500/25"
-                            : "shrink-0 rounded-full border border-border/70 bg-card/60 px-5 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-                        }
-                      >
-                        {TAB_LABEL[id]}
-                      </Link>
-                    ))}
-                  </div>
-                  <Suspense key={activeTab} fallback={<PostGridSkeleton count={6} />}>
-                    <ProfilePosts profileId={profile.id} viewerId={me} isOwner={profile.isOwner} filter={activeTab} />
-                  </Suspense>
-                </div>
+                {/* Content tabs — all datasets are fetched once and switched
+                    instantly client-side (never reloads on tab change). */}
+                <Suspense fallback={<PostGridSkeleton count={6} />}>
+                  <ProfileTabsLoader
+                    profileId={profile.id}
+                    handle={profile.handle}
+                    viewerId={me}
+                    isOwner={profile.isOwner}
+                    tabs={tabs}
+                    initialTab={activeTab}
+                  />
+                </Suspense>
               </>
             )}
           </div>
@@ -342,49 +324,30 @@ export default async function ProfilePage({
   );
 }
 
-/** A user's content for the active category tab — streamed behind Suspense. */
-async function ProfilePosts({
+/** Fetches every tab's dataset ONCE (behind Suspense), then hands them to the
+ *  instant client-side tabs. Posts/Reels/Downloads all derive from one query. */
+async function ProfileTabsLoader({
   profileId,
+  handle,
   viewerId,
   isOwner,
-  filter = "posts",
+  tabs,
+  initialTab,
 }: {
   profileId: string;
+  handle: string;
   viewerId: string | null;
   isOwner: boolean;
-  filter?: ProfileTab;
+  tabs: ProfileTab[];
+  initialTab: ProfileTab;
 }) {
-  let posts: PostCard[];
-  if (filter === "liked") {
-    posts = isOwner ? await listLikedPosts(profileId) : [];
-  } else if (filter === "saved") {
-    posts = isOwner ? await listSavedPosts(profileId) : [];
-  } else if (filter === "reposted") {
-    posts = []; // Reposts arrive with the repost feature.
-  } else {
-    const all = await listUserPosts(profileId, viewerId);
-    posts =
-      filter === "reels"
-        ? all.filter((p) => p.mediaKind === "video")
-        : filter === "downloads"
-          ? all.filter((p) => p.platform && p.platform !== "frenz")
-          : all;
-  }
-
-  const empty: Record<ProfileTab, string> = {
-    posts: isOwner ? "You haven't posted anything yet — tap + to create." : "No public posts yet.",
-    reels: "No reels yet.",
-    downloads: "No published downloads yet.",
-    reposted: "Reposts are coming soon.",
-    liked: "Posts you like will show up here.",
-    saved: "Posts you save will show up here.",
-  };
+  const [posts, liked, saved] = await Promise.all([
+    listUserPosts(profileId, viewerId),
+    isOwner ? listLikedPosts(profileId) : Promise.resolve([]),
+    isOwner ? listSavedPosts(profileId) : Promise.resolve([]),
+  ]);
 
   return (
-    <ProfileMediaGrid
-      posts={posts}
-      layout={filter === "reels" ? "reel" : "card"}
-      emptyText={empty[filter]}
-    />
+    <ProfileTabs handle={handle} isOwner={isOwner} tabs={tabs} initialTab={initialTab} posts={posts} liked={liked} saved={saved} />
   );
 }

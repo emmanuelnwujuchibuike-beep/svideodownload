@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
+import { FloatingMessages } from "@/features/app-shell/floating-messages";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { UploadModal } from "@/features/create/upload-modal";
 import { StoryStudio } from "@/features/create/studio/story-studio";
@@ -45,6 +46,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         {children}
       </div>
       <MobileNav />
+      <FloatingMessages />
       <UploadModal />
       <StoryStudio />
       <DownloadPlayer />

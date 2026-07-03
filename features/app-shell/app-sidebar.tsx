@@ -1,20 +1,30 @@
 "use client";
 
+import type { ComponentType } from "react";
+import { Crown } from "lucide-react";
 import {
-  Bell,
-  Bookmark,
-  Clapperboard,
-  Compass,
-  Crown,
-  Download,
-  Home,
-  MessageCircle,
-  Newspaper,
-  Plus,
-  TrendingUp,
-  Users,
-  UsersRound,
-} from "lucide-react";
+  IoBookmark,
+  IoBookmarkOutline,
+  IoCompass,
+  IoCompassOutline,
+  IoDownload,
+  IoDownloadOutline,
+  IoFilm,
+  IoFilmOutline,
+  IoFlame,
+  IoFlameOutline,
+  IoHome,
+  IoHomeOutline,
+  IoNewspaper,
+  IoNewspaperOutline,
+  IoNotifications,
+  IoNotificationsOutline,
+  IoPeople,
+  IoPeopleCircle,
+  IoPeopleCircleOutline,
+  IoPeopleOutline,
+  IoAdd,
+} from "react-icons/io5";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -22,10 +32,14 @@ import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { cn } from "@/lib/utils";
 
+type IconType = ComponentType<{ className?: string }>;
+
 export interface NavItem {
   label: string;
   href: string;
-  icon: typeof Home;
+  /** Outline glyph (inactive) + filled glyph (active) — the Instagram pattern. */
+  icon: IconType;
+  activeIcon: IconType;
   badge?: string;
   soon?: boolean;
 }
@@ -34,17 +48,16 @@ export interface NavItem {
 // deep links may return here when the Friends Hub grows tabs).
 export function buildNav(_handle: string | null): NavItem[] {
   return [
-    { label: "Home", href: "/home", icon: Home },
-    { label: "Explore", href: "/explore", icon: Compass },
-    { label: "Trending", href: "/explore?sort=trending", icon: TrendingUp },
-    { label: "Reels", href: "/explore", icon: Clapperboard, soon: true },
-    { label: "News", href: "/blog", icon: Newspaper },
-    { label: "Communities", href: "/explore", icon: Users, soon: true },
-    { label: "Friends", href: "/friends", icon: UsersRound },
-    { label: "Notifications", href: "/notifications", icon: Bell },
-    { label: "Chat", href: "/messages", icon: MessageCircle },
-    { label: "Downloads", href: "/downloads", icon: Download },
-    { label: "Saved", href: "/saved", icon: Bookmark },
+    { label: "Home", href: "/home", icon: IoHomeOutline, activeIcon: IoHome },
+    { label: "Explore", href: "/explore", icon: IoCompassOutline, activeIcon: IoCompass },
+    { label: "Trending", href: "/explore?sort=trending", icon: IoFlameOutline, activeIcon: IoFlame },
+    { label: "Reels", href: "/explore", icon: IoFilmOutline, activeIcon: IoFilm, soon: true },
+    { label: "News", href: "/blog", icon: IoNewspaperOutline, activeIcon: IoNewspaper },
+    { label: "Communities", href: "/explore", icon: IoPeopleOutline, activeIcon: IoPeople, soon: true },
+    { label: "Friends", href: "/friends", icon: IoPeopleCircleOutline, activeIcon: IoPeopleCircle },
+    { label: "Notifications", href: "/notifications", icon: IoNotificationsOutline, activeIcon: IoNotifications },
+    { label: "Downloads", href: "/downloads", icon: IoDownloadOutline, activeIcon: IoDownload },
+    { label: "Saved", href: "/saved", icon: IoBookmarkOutline, activeIcon: IoBookmark },
   ];
 }
 
@@ -94,13 +107,17 @@ export function AppSidebar({ handle }: { handle: string | null }) {
               {active ? (
                 <span aria-hidden className="absolute -left-3 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-blue-500 to-violet-600 shadow-[0_0_12px_2px] shadow-violet-500/40" />
               ) : null}
-              <item.icon
-                className={cn(
-                  "h-[22px] w-[22px] shrink-0 transition-transform group-active:scale-90",
-                  active ? "text-primary drop-shadow-[0_1px_5px_rgba(124,58,237,0.45)]" : "text-muted-foreground group-hover:text-foreground",
-                )}
-                strokeWidth={active ? 2.4 : 2}
-              />
+              {(() => {
+                const Icon = active ? item.activeIcon : item.icon;
+                return (
+                  <Icon
+                    className={cn(
+                      "h-[23px] w-[23px] shrink-0 transition-transform group-active:scale-90",
+                      active ? "text-primary drop-shadow-[0_1px_5px_rgba(124,58,237,0.45)]" : "text-muted-foreground group-hover:text-foreground",
+                    )}
+                  />
+                );
+              })()}
               <span className="flex-1">{item.label}</span>
               {item.badge ? (
                 <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-1.5 text-[10px] font-bold text-white shadow-sm shadow-violet-500/40">{item.badge}</span>
@@ -124,7 +141,7 @@ export function AppSidebar({ handle }: { handle: string | null }) {
           ))}
           <Link href="/explore" className="flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-semibold text-primary transition hover:bg-secondary/70">
             <span className="flex h-7 w-7 items-center justify-center rounded-xl border border-dashed border-primary/40 text-primary">
-              <Plus className="h-4 w-4" strokeWidth={2.4} />
+              <IoAdd className="h-4 w-4" />
             </span>
             Create New Space
           </Link>

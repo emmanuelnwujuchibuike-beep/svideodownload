@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "analyze": "cross-env ANALYZE=true next build",
     "backfill:stream": "node scripts/backfill-stream.mjs",
+    "backfill:r2": "node scripts/backfill-r2.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

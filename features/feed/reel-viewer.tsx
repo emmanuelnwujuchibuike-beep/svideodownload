@@ -9,6 +9,7 @@ import {
   Loader2,
   MessageCircle,
   Pause,
+  Play,
   Share2,
   UserPlus,
   Volume2,
@@ -69,6 +70,9 @@ function ReelDeck({ items, startIndex, onClose }: { items: FeedItem[]; startInde
   const raf = useRef<number | null>(null);
   const start = Math.min(Math.max(0, startIndex), items.length - 1);
   const [active, setActive] = useState(start);
+  // While a comments sheet is open the deck must NOT snap-scroll to the next
+  // reel — the sheet stays put and the reel behind it is frozen.
+  const [locked, setLocked] = useState(false);
 
   // Lock the page, jump to the opening reel, wire Escape.
   useEffect(() => {
@@ -127,8 +131,11 @@ function ReelDeck({ items, startIndex, onClose }: { items: FeedItem[]; startInde
       <div
         ref={scroller}
         onScroll={onScroll}
-        className="h-full w-full snap-y snap-mandatory overflow-y-scroll overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        style={{ scrollSnapType: "y mandatory" }}
+        className={cn(
+          "h-full w-full overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          locked ? "overflow-hidden" : "snap-y snap-mandatory overflow-y-scroll",
+        )}
+        style={locked ? undefined : { scrollSnapType: "y mandatory" }}
       >
         {items.map((item, i) => (
           <section key={item.id} className="relative h-[100dvh] w-full snap-start snap-always">
@@ -139,6 +146,7 @@ function ReelDeck({ items, startIndex, onClose }: { items: FeedItem[]; startInde
               loop={items.length === 1}
               onClose={onClose}
               onEnded={() => (i < items.length - 1 ? scrollToIndex(i + 1) : undefined)}
+              onCommentsOpen={setLocked}
             />
           </section>
         ))}
@@ -154,6 +162,7 @@ function ReelCard({
   loop,
   onClose,
   onEnded,
+  onCommentsOpen,
 }: {
   item: FeedItem;
   isActive: boolean;
@@ -161,6 +170,7 @@ function ReelCard({
   loop: boolean;
   onClose: () => void;
   onEnded: () => void;
+  onCommentsOpen: (open: boolean) => void;
 }) {
   const video = useRef<HTMLVideoElement | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -186,6 +196,7 @@ function ReelCard({
   const [likes, setLikes] = useState(item.likesCount);
   const [shares, setShares] = useState(item.sharesCount);
   const [showComments, setShowComments] = useState(false);
+  const [sheetVideoPaused, setSheetVideoPaused] = useState(false);
   const [comments, setComments] = useState<CommentsData | null>(null);
   const [loadingComments, setLoadingComments] = useState(false);
   const fetched = useRef(false);
@@ -254,6 +265,32 @@ function ReelCard({
       setLoadingComments(false);
     }
   }, [item.id]);
+
+  // Opening comments freezes the reel (no snap to the next video) and pauses
+  // playback so people can read/type calmly; closing resumes it.
+  const openComments = useCallback(() => {
+    setShowComments(true);
+    onCommentsOpen(true);
+    video.current?.pause();
+    setSheetVideoPaused(true);
+  }, [onCommentsOpen]);
+  const closeComments = useCallback(() => {
+    setShowComments(false);
+    onCommentsOpen(false);
+    if (isActive) void video.current?.play().catch(() => {});
+    setSheetVideoPaused(false);
+  }, [onCommentsOpen, isActive]);
+  const toggleSheetVideo = useCallback(() => {
+    const v = video.current;
+    if (!v) return;
+    if (v.paused) {
+      void v.play().catch(() => {});
+      setSheetVideoPaused(false);
+    } else {
+      v.pause();
+      setSheetVideoPaused(true);
+    }
+  }, []);
 
   const react = async (type: "like" | "save") => {
     const isLike = type === "like";
@@ -519,7 +556,7 @@ function ReelCard({
         </Link>
 
         <RailButton icon={Heart} active={liked} fill={liked} activeClass="text-rose-500" count={likes} label="Like" onClick={() => react("like")} />
-        <RailButton icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={() => setShowComments(true)} />
+        <RailButton icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
         <RailButton icon={Share2} count={shares} label="Share" onClick={share} />
         {native ? (
@@ -558,35 +595,64 @@ function ReelCard({
         ) : null}
       </div>
 
-      {/* Comments sheet */}
+      {/* Comments sheet — fixed half-height panel. The reel behind it is frozen
+          (the deck is scroll-locked), so scrolling to the bottom of the comments
+          never jumps to the next video. The video is paused; a toggle lets you
+          keep watching while you type. */}
       <AnimatePresence>
         {showComments ? (
           <>
-            <button type="button" aria-label="Close comments" onClick={() => setShowComments(false)} className="absolute inset-0 z-40 bg-black/40" />
+            <button type="button" aria-label="Close comments" onClick={closeComments} className="absolute inset-0 z-40 bg-black/50 backdrop-blur-[2px]" />
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 380, damping: 36 }}
-              className="absolute inset-x-0 bottom-0 z-50 max-h-[72vh] overflow-y-auto rounded-t-3xl bg-card p-5"
+              className="absolute inset-x-0 bottom-0 z-50 flex h-[68vh] flex-col rounded-t-3xl bg-card shadow-[0_-8px_40px_rgba(0,0,0,0.35)]"
               onAnimationStart={loadComments}
             >
-              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
-              {loadingComments ? (
-                <div className="flex items-center justify-center py-8 text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin" />
+              {/* Grabber + controls */}
+              <div className="shrink-0 px-5 pt-3">
+                <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border" />
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold">
+                    Comments{item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}
+                  </h3>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={toggleSheetVideo}
+                      aria-label={sheetVideoPaused ? "Play video" : "Pause video"}
+                      className="flex items-center gap-1 rounded-full bg-secondary/70 px-2.5 py-1 text-xs font-semibold text-muted-foreground transition hover:text-foreground"
+                    >
+                      {sheetVideoPaused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
+                      {sheetVideoPaused ? "Play" : "Pause"}
+                    </button>
+                    <button type="button" onClick={closeComments} aria-label="Close comments" className="rounded-full p-1.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
-              ) : comments ? (
-                <Comments
-                  postId={item.id}
-                  comments={comments.comments}
-                  loggedIn={comments.loggedIn}
-                  canComment={comments.canComment}
-                  disabledReason={comments.canComment ? null : "Comments are unavailable."}
-                  count={item.commentsCount}
-                  variant="sheet"
-                />
-              ) : null}
+              </div>
+
+              {/* Scrollable list — contained so its scroll never chains out */}
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-1">
+                {loadingComments ? (
+                  <div className="flex items-center justify-center py-8 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  </div>
+                ) : comments ? (
+                  <Comments
+                    postId={item.id}
+                    comments={comments.comments}
+                    loggedIn={comments.loggedIn}
+                    canComment={comments.canComment}
+                    disabledReason={comments.canComment ? null : "Comments are unavailable."}
+                    count={item.commentsCount}
+                    variant="sheet"
+                  />
+                ) : null}
+              </div>
             </motion.div>
           </>
         ) : null}

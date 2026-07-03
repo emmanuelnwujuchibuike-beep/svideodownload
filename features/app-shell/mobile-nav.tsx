@@ -2,7 +2,7 @@
 
 import { Home, MessageCircle, User, UsersRound } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { openUpload } from "@/features/create/upload-store";
@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
  */
 export function MobileNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const { handle } = useEntitlements();
   // Cached-first: shows the last-known unread count instantly, updates live.
   const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox);
@@ -32,8 +33,8 @@ export function MobileNav() {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-border/60 bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] pt-1.5 backdrop-blur-xl lg:hidden"
     >
-      <NavTab label="Home" href="/home" icon={Home} active={pathname === "/home"} />
-      <NavTab label="Friends" href="/friends" icon={UsersRound} active={pathname.startsWith("/friends")} />
+      <NavTab label="Home" href="/home" icon={Home} active={pathname === "/home"} onWarm={router.prefetch} />
+      <NavTab label="Friends" href="/friends" icon={UsersRound} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />
 
       {/* TikTok-style center create button */}
       <button type="button" onClick={() => openUpload("post")} aria-label="Create post" className="relative -mt-1 flex h-8 w-[3.25rem] items-center justify-center">
@@ -52,10 +53,11 @@ export function MobileNav() {
         icon={MessageCircle}
         active={pathname.startsWith("/messages")}
         badge={unread}
+        onWarm={router.prefetch}
       />
 
       {/* Profile (Instagram-style avatar) */}
-      <Link href={profileHref} className="flex flex-col items-center gap-0.5 px-2 py-1">
+      <Link href={profileHref} onPointerDown={() => router.prefetch(profileHref)} className="flex flex-col items-center gap-0.5 px-2 py-1">
         <span className={cn("flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white ring-2 transition", profileActive ? "ring-primary" : "ring-transparent")}>
           <User className="h-3.5 w-3.5" />
         </span>
@@ -71,15 +73,17 @@ function NavTab({
   icon: Icon,
   active,
   badge = 0,
+  onWarm,
 }: {
   label: string;
   href: string;
   icon: typeof Home;
   active: boolean;
   badge?: number;
+  onWarm?: (href: string) => void;
 }) {
   return (
-    <Link href={href} className="relative flex flex-col items-center gap-0.5 px-2 py-1">
+    <Link href={href} onPointerDown={() => onWarm?.(href)} className="relative flex flex-col items-center gap-0.5 px-2 py-1">
       <span className="relative">
         <Icon className={cn("h-6 w-6 transition", active ? "fill-current text-foreground" : "text-muted-foreground")} strokeWidth={active ? 2.5 : 2} />
         {badge > 0 ? (

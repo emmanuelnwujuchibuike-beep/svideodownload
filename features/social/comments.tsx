@@ -2,7 +2,7 @@
 
 import { BadgeCheck, Heart, ImagePlus, Loader2, Send, Smile, Trash2, X } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { RichText } from "@/components/social/rich-text";
@@ -93,10 +93,14 @@ export function Comments({
 
   return (
     <section id="comments" className={cn(!sheet && "mt-10 scroll-mt-24")}>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className={cn("font-semibold tracking-[-0.02em]", sheet ? "text-base" : "text-lg")}>
-          Comments {total > 0 ? <span className="text-muted-foreground">· {formatCompactNumber(total)}</span> : null}
-        </h2>
+      <div className={cn("flex items-center justify-between", sheet ? "mb-3" : "mb-4")}>
+        {sheet ? (
+          <span />
+        ) : (
+          <h2 className="text-lg font-semibold tracking-[-0.02em]">
+            Comments {total > 0 ? <span className="text-muted-foreground">· {formatCompactNumber(total)}</span> : null}
+          </h2>
+        )}
         {nodes.length > 1 ? (
           <div className="flex items-center gap-1 rounded-full bg-secondary/60 p-0.5 text-xs font-semibold">
             <button type="button" onClick={() => setSort("top")} className={cn("rounded-full px-2.5 py-1 transition", sort === "top" ? "bg-background shadow-soft" : "text-muted-foreground")}>
@@ -296,6 +300,36 @@ function Composer({
   );
 }
 
+/** In-app image viewer — opens instantly, no redirect to the storage URL. */
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Image"
+      onClick={onClose}
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
+    >
+      <button type="button" onClick={onClose} aria-label="Close" className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20">
+        <X className="h-5 w-5" />
+      </button>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" onClick={(e) => e.stopPropagation()} className="max-h-[90vh] max-w-full rounded-xl object-contain shadow-2xl" />
+    </div>
+  );
+}
+
 function CommentItem({
   node,
   postId,
@@ -311,6 +345,7 @@ function CommentItem({
 }) {
   const [replying, setReplying] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [zoom, setZoom] = useState(false);
 
   const del = async () => {
     if (!confirm("Delete this comment?")) return;
@@ -362,10 +397,13 @@ function CommentItem({
           </p>
         ) : null}
         {node.imageUrl ? (
-          <a href={node.imageUrl} target="_blank" rel="noreferrer" className="mt-1.5 block w-fit">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={node.imageUrl} alt="attachment" className="max-h-64 max-w-full rounded-2xl border border-border/60 object-cover" />
-          </a>
+          <>
+            <button type="button" onClick={() => setZoom(true)} className="mt-1.5 block w-fit" aria-label="Open image">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={node.imageUrl} alt="attachment" loading="lazy" className="max-h-64 max-w-full cursor-zoom-in rounded-2xl border border-border/60 object-cover transition hover:opacity-95" />
+            </button>
+            {zoom ? <ImageLightbox src={node.imageUrl} onClose={() => setZoom(false)} /> : null}
+          </>
         ) : null}
 
         <div className="mt-1.5 flex items-center gap-4 text-xs">

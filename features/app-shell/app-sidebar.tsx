@@ -51,7 +51,7 @@ export function buildNav(_handle: string | null): NavItem[] {
     { label: "Home", href: "/home", icon: IoHomeOutline, activeIcon: IoHome },
     { label: "Explore", href: "/explore", icon: IoCompassOutline, activeIcon: IoCompass },
     { label: "Trending", href: "/explore?sort=trending", icon: IoFlameOutline, activeIcon: IoFlame },
-    { label: "Reels", href: "/explore", icon: IoFilmOutline, activeIcon: IoFilm, soon: true },
+    { label: "Reels", href: "/reels", icon: IoFilmOutline, activeIcon: IoFilm },
     { label: "News", href: "/blog", icon: IoNewspaperOutline, activeIcon: IoNewspaper },
     { label: "Communities", href: "/explore", icon: IoPeopleOutline, activeIcon: IoPeople, soon: true },
     { label: "Friends", href: "/friends", icon: IoPeopleCircleOutline, activeIcon: IoPeopleCircle },

@@ -65,7 +65,21 @@ export function ReelViewer({
   );
 }
 
-function ReelDeck({ items, startIndex, onClose }: { items: FeedItem[]; startIndex: number; onClose: () => void }) {
+export function ReelDeck({
+  items,
+  startIndex,
+  onClose,
+  onEndReached,
+  variant = "modal",
+}: {
+  items: FeedItem[];
+  startIndex: number;
+  onClose: () => void;
+  /** Called as the viewer nears the end — powers infinite loading on the page. */
+  onEndReached?: () => void;
+  /** "modal" (over the app) or "page" (a route; sits below the mobile nav). */
+  variant?: "modal" | "page";
+}) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const raf = useRef<number | null>(null);
   const start = Math.min(Math.max(0, startIndex), items.length - 1);
@@ -98,8 +112,9 @@ function ReelDeck({ items, startIndex, onClose }: { items: FeedItem[]; startInde
       if (!el || !el.clientHeight) return;
       const i = Math.round(el.scrollTop / el.clientHeight);
       setActive((prev) => (i !== prev && i >= 0 && i < items.length ? i : prev));
+      if (i >= items.length - 3) onEndReached?.();
     });
-  }, [items.length]);
+  }, [items.length, onEndReached]);
 
   const scrollToIndex = useCallback((i: number) => {
     const el = scroller.current;
@@ -113,7 +128,7 @@ function ReelDeck({ items, startIndex, onClose }: { items: FeedItem[]; startInde
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[85] bg-black"
+      className={cn("fixed inset-0 bg-black", variant === "page" ? "z-30" : "z-[85]")}
       role="dialog"
       aria-modal="true"
       aria-label="Reels"

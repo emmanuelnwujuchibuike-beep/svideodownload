@@ -75,6 +75,22 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Instant taps on touch devices: `touch-action: manipulation` removes the
+     legacy ~300ms click delay + double-tap-zoom wait, and a transparent tap
+     highlight lets our own :active states show immediately (so a press never
+     feels ignored on iOS). */
+  a,
+  button,
+  [role="button"],
+  label,
+  summary,
+  input,
+  textarea,
+  select {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
   h1,
   h2,
   h3 {

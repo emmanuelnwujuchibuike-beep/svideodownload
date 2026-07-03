@@ -46,7 +46,7 @@ export function MobileNav() {
       <NavTab label="Friends" href="/friends" icon={IoPeopleCircleOutline} activeIcon={IoPeopleCircle} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />
 
       {/* TikTok-style center create button */}
-      <button type="button" onClick={() => openUpload("post")} aria-label="Create post" className="relative -mt-1 flex h-8 w-[3.25rem] items-center justify-center">
+      <button type="button" onClick={() => openUpload("post")} aria-label="Create post" className="relative -mt-1 flex h-8 w-[3.25rem] items-center justify-center transition-transform duration-100 active:scale-90">
         <span aria-hidden className="absolute inset-0 -translate-x-1 rounded-[0.7rem] bg-cyan-400" />
         <span aria-hidden className="absolute inset-0 translate-x-1 rounded-[0.7rem] bg-fuchsia-500" />
         <span className="relative flex h-8 w-[3.25rem] items-center justify-center rounded-[0.7rem] bg-white text-black shadow-sm">
@@ -67,7 +67,7 @@ export function MobileNav() {
       />
 
       {/* Profile (Instagram-style avatar) */}
-      <Link href={profileHref} onPointerDown={() => router.prefetch(profileHref)} className="flex flex-col items-center gap-0.5 px-2 py-1">
+      <Link href={profileHref} onPointerDown={() => router.prefetch(profileHref)} className="flex flex-col items-center gap-0.5 px-2 py-1 transition-transform duration-100 active:scale-90">
         <span className={cn("flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white ring-2 transition", profileActive ? "ring-primary" : "ring-transparent")}>
           <IoPerson className="h-3.5 w-3.5" />
         </span>
@@ -96,7 +96,7 @@ function NavTab({
 }) {
   const Glyph = active ? ActiveIcon : Icon;
   return (
-    <Link href={href} onPointerDown={() => onWarm?.(href)} className="relative flex flex-col items-center gap-0.5 px-2 py-1">
+    <Link href={href} onPointerDown={() => onWarm?.(href)} className="relative flex flex-col items-center gap-0.5 px-2 py-1 transition-transform duration-100 active:scale-90">
       <span className="relative">
         <Glyph className={cn("h-[26px] w-[26px] transition", active ? "text-foreground" : "text-muted-foreground")} />
         {badge > 0 ? (

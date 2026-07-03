@@ -39,7 +39,7 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
           </span>
           Trending Reels
         </h2>
-        <Link href="/explore?sort=trending" className="text-xs font-semibold text-primary hover:underline">View all</Link>
+        <Link href="/reels" className="text-xs font-semibold text-primary hover:underline">View all</Link>
       </div>
 
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

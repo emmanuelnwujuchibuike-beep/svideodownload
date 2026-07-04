@@ -112,10 +112,13 @@ export function ProfileMenu() {
 
   return (
     <>
-      {/* Desktop dock — fixed, full-height panel on the right edge (mirrors the
-          left sidebar). Starts below the top bar (top-16) so it never covers it. */}
-      <aside className="fixed right-0 top-16 bottom-0 z-20 hidden w-72 flex-col overflow-y-auto border-l border-border/60 bg-gradient-to-b from-card/70 to-card/30 backdrop-blur-xl lg:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <PanelBody />
+      {/* Desktop dock — an always-open, full-height panel that sits alongside the
+          content (in-flow, so it stays visually tied to the profile). Sticks
+          below the top bar and never scrolls away — like the left sidebar. */}
+      <aside className="hidden shrink-0 lg:block lg:w-72">
+        <div className="sticky top-16 flex h-[calc(100vh-4rem)] flex-col overflow-y-auto border-l border-border/60 bg-gradient-to-b from-card/70 to-card/30 backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <PanelBody />
+        </div>
       </aside>
 
       {/* Mobile trigger — hidden once the dock is shown */}

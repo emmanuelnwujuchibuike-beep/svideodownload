@@ -24,7 +24,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { listLikedPosts, listSavedPosts, listUserPosts } from "@/lib/social/posts";
 import { getPublicProfile } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
-import { cn, formatCompactNumber } from "@/lib/utils";
+import { formatCompactNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -127,8 +127,8 @@ export default async function ProfilePage({
       <SiteHeader social desktopHidden />
       {/* Add friends — single top-level icon (mobile only; desktop uses the top bar) */}
       <SuggestionsLauncher className="fixed left-3 top-3 z-[60] bg-background/70 backdrop-blur-xl lg:hidden" />
-      <main className={cn("pb-24 pt-14 sm:pt-16 lg:pt-4", profile.isOwner && "lg:pr-72")}>
-        <div className="mx-auto flex w-full max-w-5xl gap-6">
+      <main className="pb-24 pt-14 sm:pt-16 lg:pt-4">
+        <div className="mx-auto flex w-full max-w-6xl gap-6">
           <div className="mx-auto min-w-0 max-w-4xl flex-1 sm:px-4">
           {/* Banner + Living Profile time-of-day glow. Full-bleed on mobile,
               a contained rounded hero on larger screens (professional, balanced). */}

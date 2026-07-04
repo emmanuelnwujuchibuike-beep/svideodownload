@@ -24,6 +24,7 @@ import { SmartVideo } from "@/features/media/smart-video";
 import { Comments } from "@/features/social/comments";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
+import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
@@ -273,14 +274,19 @@ function ReelCard({
     fetched.current = true;
     setLoadingComments(true);
     try {
-      const res = await fetch(`/api/posts/${item.id}/comments`);
-      if (res.ok) setComments((await res.json()) as CommentsData);
-    } catch {
-      /* ignore */
+      // Served instantly from the prefetch cache when the reel was warmed.
+      const data = await loadPostComments<CommentsData>(item.id);
+      if (data) setComments(data);
     } finally {
       setLoadingComments(false);
     }
   }, [item.id]);
+
+  // Predictively warm this reel's comments the moment it becomes the active one,
+  // so tapping the comment button opens instantly.
+  useEffect(() => {
+    if (isActive) prefetchPostComments(item.id);
+  }, [isActive, item.id]);
 
   // Opening comments freezes the reel (no snap to the next video) and pauses
   // playback so people can read/type calmly; closing resumes it.

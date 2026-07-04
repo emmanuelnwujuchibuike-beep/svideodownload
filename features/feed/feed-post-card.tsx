@@ -24,6 +24,7 @@ import { RichText } from "@/components/social/rich-text";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
+import { prefetchPostComments } from "@/lib/social/comments-cache";
 import type { FeedItem } from "@/lib/social/home-feed";
 import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
@@ -142,6 +143,8 @@ export function FeedPostCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      // Warm this post's comments on hover so opening the sheet is instant.
+      onPointerEnter={() => prefetchPostComments(item.id)}
       className="group cv-auto overflow-hidden rounded-3xl border border-border/50 bg-card shadow-soft ring-1 ring-inset ring-white/[0.03] transition-all duration-300 hover:shadow-elevated hover:ring-primary/15"
     >
       {/* Header */}

@@ -631,7 +631,7 @@ function ReelCard({
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 380, damping: 36 }}
-              className="absolute inset-x-0 bottom-0 z-50 flex h-[68vh] flex-col rounded-t-3xl bg-card shadow-[0_-8px_40px_rgba(0,0,0,0.35)]"
+              className="absolute inset-x-0 bottom-0 z-50 flex h-[68vh] flex-col rounded-t-3xl border-t border-white/10 bg-card/95 shadow-[0_-8px_40px_rgba(0,0,0,0.35)] backdrop-blur-2xl"
               onAnimationStart={loadComments}
             >
               {/* Grabber + controls */}

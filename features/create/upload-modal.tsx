@@ -168,12 +168,15 @@ function ModalInner() {
       <motion.div
         initial={{ y: 80, opacity: 0, scale: 0.98 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
-        transition={{ type: "spring", stiffness: 320, damping: 30 }}
-        className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-card text-foreground shadow-luxury sm:rounded-3xl"
+        transition={{ type: "spring", stiffness: 340, damping: 32 }}
+        className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-card/95 text-foreground shadow-luxury backdrop-blur-2xl sm:rounded-3xl"
       >
-        {/* Ambient gradient wash */}
-        <div aria-hidden className="pointer-events-none absolute -left-16 -top-20 h-52 w-52 rounded-full bg-blue-600/25 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -right-16 top-10 h-52 w-52 rounded-full bg-violet-600/25 blur-3xl" />
+        {/* Ambient gradient wash — electric blue → royal purple */}
+        <div aria-hidden className="pointer-events-none absolute -left-16 -top-20 h-52 w-52 rounded-full bg-primary/25 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -right-16 top-10 h-52 w-52 rounded-full bg-accent/25 blur-3xl" />
+
+        {/* Grab handle — bottom-sheet affordance on mobile */}
+        <div aria-hidden className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-foreground/15 sm:hidden" />
 
         <div className="relative flex items-center justify-between px-5 py-4">
           <h3 className="flex items-center gap-2 text-base font-bold tracking-tight">

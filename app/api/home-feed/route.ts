@@ -28,5 +28,10 @@ export async function GET(request: Request) {
   }
 
   const page = await getHomeFeed({ viewerId, sort, offset, limit });
-  return NextResponse.json(page, { headers: { "Cache-Control": "private, max-age=15" } });
+  // Anon feeds are identical for everyone → let the CDN edge (incl. African PoPs)
+  // serve them without a function hop; personalized feeds stay private to the browser.
+  const cacheControl = viewerId
+    ? "private, max-age=15, stale-while-revalidate=60"
+    : "public, s-maxage=20, stale-while-revalidate=90";
+  return NextResponse.json(page, { headers: { "Cache-Control": cacheControl } });
 }

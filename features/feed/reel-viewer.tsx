@@ -206,6 +206,10 @@ function ReelCard({
   const [buffering, setBuffering] = useState(false);
   const [seekFlash, setSeekFlash] = useState<{ side: "back" | "fwd"; key: number } | null>(null);
   const [ui, setUi] = useState(true);
+  const [scrubbing, setScrubbing] = useState(false);
+  const [scrubPct, setScrubPct] = useState(0);
+  const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([]);
+  const seekBar = useRef<HTMLDivElement | null>(null);
 
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
@@ -380,6 +384,47 @@ function ReelCard({
     setTimeout(() => setSeekFlash((s) => (s && Date.now() - s.key >= 480 ? null : s)), 500);
   };
 
+  // Drag-to-seek scrubber (only when we own the <video> and know its duration).
+  const pctAt = (clientX: number) => {
+    const el = seekBar.current;
+    if (!el) return 0;
+    const r = el.getBoundingClientRect();
+    return Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+  };
+  const scrubStart = (e: React.PointerEvent) => {
+    if (!native || !dur) return;
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    setScrubbing(true);
+    setUi(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    setScrubPct(pctAt(e.clientX));
+  };
+  const scrubMove = (e: React.PointerEvent) => {
+    if (!scrubbing) return;
+    e.stopPropagation();
+    setScrubPct(pctAt(e.clientX));
+  };
+  const scrubEnd = (e: React.PointerEvent) => {
+    if (!scrubbing) return;
+    e.stopPropagation();
+    const v = video.current;
+    const p = pctAt(e.clientX);
+    if (v && v.duration) {
+      v.currentTime = p * v.duration;
+      setProgress(p * 100);
+      setCur(p * v.duration);
+    }
+    setScrubbing(false);
+    scheduleHide();
+  };
+
+  // Double-tap to like: a heart blooms at the tap point; never un-likes.
+  const likeBurst = (x: number, y: number) => {
+    setBursts((b) => [...b.slice(-4), { id: Date.now() + Math.random(), x, y }]);
+    if (!liked) void react("like");
+  };
+
   // Gesture model (vertical scrolling is now native, so movement is never a tap):
   //  • press-and-HOLD (~0.5s, no movement) → pause; release → resume.
   //  • double-tap left/right → seek −10s / +10s; single tap → toggle the UI.
@@ -428,7 +473,7 @@ function ReelCard({
       lastTap.current = { t: 0, x: 0 };
       if (x < w * 0.4) seekBy(-10);
       else if (x > w * 0.6) seekBy(10);
-      else toggleUi();
+      else likeBurst(e.clientX, e.clientY); // double-tap center → like ❤
       return;
     }
     lastTap.current = { t: now, x };
@@ -451,10 +496,39 @@ function ReelCard({
       {/* Top / bottom legibility scrims */}
       <div className={cn("pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-black/50 to-transparent transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")} />
 
-      {/* Progress (auto-hides) */}
-      <div className={cn("absolute inset-x-0 top-0 z-30 h-1 bg-white/10 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
-        <div className="h-full rounded-r-full bg-gradient-to-r from-blue-400 via-violet-400 to-fuchsia-400 shadow-[0_0_8px] shadow-violet-400/50" style={{ width: `${progress}%` }} />
-      </div>
+      {/* Progress / scrubber (auto-hides). Drag to seek when we own the <video>. */}
+      {(() => {
+        const scrubbable = native && dur > 0;
+        const displayPct = scrubbing ? scrubPct * 100 : progress;
+        return (
+          <div className={cn("absolute inset-x-0 top-0 z-40 transition-opacity duration-200", ui || scrubbing ? "opacity-100" : "opacity-0")}>
+            <div
+              ref={seekBar}
+              onPointerDown={scrubbable ? scrubStart : undefined}
+              onPointerMove={scrubbable ? scrubMove : undefined}
+              onPointerUp={scrubbable ? scrubEnd : undefined}
+              onPointerCancel={scrubbable ? scrubEnd : undefined}
+              className={cn("group/seek relative flex items-center", scrubbable ? "h-5 cursor-pointer touch-none" : "h-1")}
+            >
+              <div className={cn("absolute inset-x-0 top-0 bg-white/15 transition-[height] duration-150", scrubbing ? "h-1.5" : "h-1 group-hover/seek:h-1.5")}>
+                <div className="h-full rounded-r-full bg-gradient-to-r from-blue-400 via-violet-400 to-fuchsia-400 shadow-[0_0_8px] shadow-violet-400/50" style={{ width: `${displayPct}%` }} />
+              </div>
+              {scrubbable ? (
+                <span
+                  aria-hidden
+                  className={cn("absolute top-0 h-3 w-3 -translate-x-1/2 rounded-full bg-white shadow ring-2 ring-violet-400 transition-transform", scrubbing ? "scale-125 opacity-100" : "opacity-0 group-hover/seek:opacity-100")}
+                  style={{ left: `${displayPct}%` }}
+                />
+              ) : null}
+              {scrubbing ? (
+                <span className="absolute -top-8 -translate-x-1/2 rounded-md bg-black/80 px-2 py-1 text-[11px] font-bold tabular-nums text-white shadow-lg" style={{ left: `${displayPct}%` }}>
+                  {fmt(scrubPct * dur)}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Elapsed / total time — moves with playback, auto-hides with the UI */}
       {native && dur > 0 ? (
@@ -540,6 +614,21 @@ function ReelCard({
             </motion.span>
           ) : null}
         </AnimatePresence>
+
+        {/* Double-tap-to-like heart bursts */}
+        {bursts.map((b) => (
+          <span key={b.id} aria-hidden style={{ position: "fixed", left: b.x, top: b.y, zIndex: 45 }} className="pointer-events-none -translate-x-1/2 -translate-y-1/2">
+            <motion.span
+              initial={{ opacity: 0, scale: 0.4, y: 0 }}
+              animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.3, 1.1, 1.5], y: [0, -10, -18, -46] }}
+              transition={{ duration: 0.9, ease: "easeOut", times: [0, 0.2, 0.6, 1] }}
+              onAnimationComplete={() => setBursts((x) => x.filter((i) => i.id !== b.id))}
+              className="block"
+            >
+              <Heart className="h-16 w-16 fill-rose-500 text-rose-500 drop-shadow-[0_2px_12px_rgba(244,63,94,0.6)]" />
+            </motion.span>
+          </span>
+        ))}
       </div>
 
       {/* Tap-to-unmute pill */}

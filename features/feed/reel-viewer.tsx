@@ -709,16 +709,24 @@ function RailButton({
   onClick: () => void;
 }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} aria-pressed={active} className="flex flex-col items-center gap-1 text-white">
+    <motion.button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
+      whileTap={{ scale: 0.86 }}
+      transition={{ type: "spring", stiffness: 520, damping: 22 }}
+      className="flex flex-col items-center gap-1 text-white"
+    >
       <span
         className={cn(
-          "flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/15 backdrop-blur-md transition active:scale-90",
+          "flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors",
           active && "bg-white/15 ring-white/25",
         )}
       >
         <Icon className={cn("h-6 w-6 drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]", fill && "fill-current", active && activeClass)} strokeWidth={2.1} />
       </span>
       {count !== undefined && count > 0 ? <span className="text-[11px] font-bold tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">{formatCompactNumber(count)}</span> : null}
-    </button>
+    </motion.button>
   );
 }

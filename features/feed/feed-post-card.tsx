@@ -138,12 +138,11 @@ export function FeedPostCard({
 
   return (
     <motion.article
-      layout
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
-      transition={{ duration: 0.25 }}
-      className="overflow-hidden rounded-3xl border border-border/60 bg-card shadow-card ring-1 ring-white/[0.02] transition-shadow duration-300 hover:shadow-elevated"
+      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      className="group overflow-hidden rounded-3xl border border-border/50 bg-card shadow-soft ring-1 ring-inset ring-white/[0.03] transition-all duration-300 hover:shadow-elevated hover:ring-primary/15"
     >
       {/* Header */}
       <div className="flex items-center gap-3 p-4 pb-3">
@@ -357,7 +356,7 @@ function ActionButton({
     </>
   );
   const cls = cn(
-    "group/act inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-foreground transition hover:bg-secondary",
+    "group/act inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-foreground transition-colors hover:bg-secondary/70 active:scale-95",
     active && activeClass,
   );
   if (href) {

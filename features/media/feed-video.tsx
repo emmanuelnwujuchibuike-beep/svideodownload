@@ -208,7 +208,9 @@ export function FeedVideo({
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
         ref={video}
-        src={src}
+        // With no poster image, seek to a frame (#t) so the video shows a still
+        // instead of black before it autoplays — matches the profile grid.
+        src={poster ? src : `${src}#t=0.1`}
         poster={poster ?? undefined}
         loop
         muted

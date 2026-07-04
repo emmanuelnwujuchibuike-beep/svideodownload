@@ -477,7 +477,8 @@ function ReelCard({
             // eslint-disable-next-line jsx-a11y/media-has-caption
             <video
               ref={video}
-              src={item.mediaUrl!}
+              // Seek to a frame when there's no poster so it isn't black pre-play.
+              src={item.thumbnailUrl ? item.mediaUrl! : `${item.mediaUrl}#t=0.1`}
               poster={item.thumbnailUrl ?? undefined}
               loop={loop}
               playsInline

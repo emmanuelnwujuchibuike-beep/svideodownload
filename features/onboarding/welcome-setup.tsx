@@ -1,7 +1,6 @@
 "use client";
 
 import { ArrowRight, Check, Loader2, Sparkles } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ImageUpload } from "@/components/social/image-upload";
@@ -19,7 +18,6 @@ export function WelcomeSetup({
   initialDisplayName: string;
   initialAvatarUrl: string | null;
 }) {
-  const router = useRouter();
   const [handle, setHandle] = useState("");
   const [displayName, setDisplayName] = useState(initialDisplayName || (email ? email.split("@")[0] ?? "" : ""));
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialAvatarUrl);
@@ -48,8 +46,9 @@ export function WelcomeSetup({
         setErr(json.error ?? "Couldn't save. Try another username.");
         return;
       }
-      router.replace("/home");
-      router.refresh();
+      // Hard navigation guarantees /home re-renders with the fresh handle (no
+      // stale-profile bounce back to /welcome).
+      window.location.assign("/home");
     } catch {
       setErr("Network error.");
     } finally {

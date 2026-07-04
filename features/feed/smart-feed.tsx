@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertCircle, ArrowUp, Clock, Loader2, Sparkles, X } from "lucide-react";
+import { AlertCircle, ArrowUp, Clock, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -385,8 +385,8 @@ export function SmartFeed({
         <>
           <div ref={sentinel} aria-hidden className="h-px" />
           {loading ? (
-            <div className="flex items-center justify-center py-6 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
+            <div className="mt-6" aria-hidden>
+              <FeedSkeleton count={2} />
             </div>
           ) : null}
           {nextOffset === null && stream.length > 0 && !switching ? (

@@ -142,7 +142,7 @@ export function FeedPostCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-      className="group overflow-hidden rounded-3xl border border-border/50 bg-card shadow-soft ring-1 ring-inset ring-white/[0.03] transition-all duration-300 hover:shadow-elevated hover:ring-primary/15"
+      className="group cv-auto overflow-hidden rounded-3xl border border-border/50 bg-card shadow-soft ring-1 ring-inset ring-white/[0.03] transition-all duration-300 hover:shadow-elevated hover:ring-primary/15"
     >
       {/* Header */}
       <div className="flex items-center gap-3 p-4 pb-3">

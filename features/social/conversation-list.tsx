@@ -73,7 +73,7 @@ export function ConversationList({
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search chats…"
           aria-label="Search conversations"
-          className="w-full rounded-xl border border-border/60 bg-background/60 py-2 pl-9 pr-3 text-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20"
+          className="w-full rounded-xl border border-border/60 bg-background/60 py-2 pl-9 pr-3 text-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-accent/50 focus:ring-2 focus:ring-accent/25"
         />
       </label>
 
@@ -81,7 +81,7 @@ export function ConversationList({
         className={cn(
           pane
             ? "min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-3"
-            : "overflow-hidden rounded-2xl border border-border/70 bg-card shadow-soft",
+            : "overflow-hidden rounded-2xl border border-border/50 bg-card shadow-soft ring-1 ring-inset ring-white/[0.03]",
         )}
       >
         {visible.map((c) => {

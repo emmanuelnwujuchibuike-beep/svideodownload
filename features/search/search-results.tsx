@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Check, Loader2, Search } from "lucide-react";
+import { BadgeCheck, Check, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useRef, useState } from "react";

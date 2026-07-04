@@ -35,11 +35,23 @@ export function AppTopbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border/20 bg-background/60 px-4 backdrop-blur-xl">
-      {/* Plain, full-bleed top bar — no logo, blends with the body (FB/TikTok/IG style) */}
-      <div className="flex-1 sm:hidden" />
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-border/20 bg-background/60 px-4 backdrop-blur-xl">
+      {/* Far-left: search + add friends — kept apart from the action cluster so
+          the right side never gets crowded. */}
+      <div className="flex shrink-0 items-center gap-2">
+        {/* Mobile search entry (the search box is tablet+ only) */}
+        <Link
+          href="/search"
+          aria-label="Search"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary active:scale-95 sm:hidden"
+        >
+          <IoSearchOutline className="h-[20px] w-[20px]" />
+        </Link>
+        {/* Add friends — single top-nav icon */}
+        <SuggestionsLauncher />
+      </div>
 
-      {/* Search — pill, Instagram/Snapchat style */}
+      {/* Search — pill, Instagram/Snapchat style (desktop, fills the middle) */}
       <form onSubmit={submit} className="relative hidden max-w-xl flex-1 sm:block">
         <IoSearchOutline className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
         <input
@@ -55,20 +67,11 @@ export function AppTopbar() {
         </kbd>
       </form>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2">
-        {/* Mobile search entry (the search box is tablet+ only) */}
-        <Link
-          href="/search"
-          aria-label="Search"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary active:scale-95 sm:hidden"
-        >
-          <IoSearchOutline className="h-[20px] w-[20px]" />
-        </Link>
+      {/* Mobile spacer — pushes the action cluster to the far right */}
+      <div className="flex-1 sm:hidden" />
 
-        {/* Add friends — single top-nav icon, level with search / menu */}
-        <SuggestionsLauncher />
-
+      {/* Right action cluster */}
+      <div className="flex shrink-0 items-center gap-2">
         <Link
           href="/downloads"
           className="group inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 ring-1 ring-inset ring-white/10 transition hover:shadow-xl hover:shadow-violet-500/40"

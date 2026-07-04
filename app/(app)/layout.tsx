@@ -1,14 +1,11 @@
 import type { ReactNode } from "react";
 
+import { AppOverlays } from "@/features/app-shell/app-overlays";
 import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { FloatingMessages } from "@/features/app-shell/floating-messages";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
-import { UploadModal } from "@/features/create/upload-modal";
-import { StoryStudio } from "@/features/create/studio/story-studio";
-import { DownloadPlayer } from "@/features/downloads/download-player";
 import { PresenceTracker } from "@/features/friends/use-presence";
-import { IosInstallPrompt } from "@/features/notifications/ios-install-prompt";
 import { NotificationLiveToast } from "@/features/notifications/live-toast";
 import { Toaster } from "@/features/ui/toast";
 import { getHomeProfile } from "@/lib/social/home";
@@ -47,13 +44,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       </div>
       <MobileNav />
       <FloatingMessages />
-      <UploadModal />
-      <StoryStudio />
-      <DownloadPlayer />
       <Toaster />
-      {/* Live in-app drop-down notification + iOS "install for push" nudge. */}
+      {/* Live in-app drop-down notification. */}
       <NotificationLiveToast />
-      <IosInstallPrompt />
+      {/* Heavy, hidden-until-triggered overlays — code-split out of the initial
+          bundle (composer, Story Studio, download player, iOS install nudge). */}
+      <AppOverlays />
       {/* Joins the shared presence channel so this user shows as online. */}
       <PresenceTracker />
     </div>

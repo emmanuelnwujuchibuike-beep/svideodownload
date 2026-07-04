@@ -1,10 +1,9 @@
 import type { ReactNode } from "react";
 
+import { AppOverlays } from "@/features/app-shell/app-overlays";
 import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
-import { StoryStudio } from "@/features/create/studio/story-studio";
-import { UploadModal } from "@/features/create/upload-modal";
 import { getHomeProfile } from "@/lib/social/home";
 import { createClient } from "@/lib/supabase/server";
 
@@ -43,8 +42,7 @@ export default async function ProfileSectionLayout({ children }: { children: Rea
         {children}
       </div>
       <MobileNav />
-      <UploadModal />
-      <StoryStudio />
+      <AppOverlays />
     </div>
   );
 }

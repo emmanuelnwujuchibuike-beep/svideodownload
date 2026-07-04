@@ -1,3 +1,4 @@
+import { getCached } from "@/lib/cache";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -107,52 +108,60 @@ export async function getPublicProfile(
   if (!hasSupabase) return null;
   const norm = handle.trim().toLowerCase().replace(/^@/, "");
   if (!HANDLE_RE.test(norm)) return null;
+  // Cached 30s per (handle, viewer) via Upstash — the profile is the most-viewed
+  // page after home, so this cuts a lot of repeat DB reads. Failures throw (below)
+  // so a blip is never cached; the caller degrades to notFound for that render.
   try {
-    const db = createAdminClient();
-    // Handles are stored lowercased, so match exactly — NOT with ilike, whose
-    // `_`/`%` would be treated as wildcards (handles allow underscores).
-    const { data } = await db
-      .from("profiles")
-      .select(SELECT)
-      .eq("handle", norm)
-      .maybeSingle();
-    const row = data as ProfileRow | null;
-    if (!row || row.is_suspended) return null;
-
-    const isOwner = viewerId === row.id;
-    const { isFollowing, blockedByTarget, viewerHasBlocked } = isOwner
-      ? { isFollowing: false, blockedByTarget: false, viewerHasBlocked: false }
-      : await relationship(db, viewerId, row.id);
-
-    // A block by the target hides the profile entirely (treat as not found).
-    if (blockedByTarget) return null;
-
-    const restricted =
-      !isOwner &&
-      (row.visibility === "private" ||
-        (row.visibility === "followers" && !isFollowing));
-
-    return {
-      id: row.id,
-      handle: row.handle ?? "",
-      displayName: fallbackName(row),
-      bio: restricted ? null : row.bio,
-      avatarUrl: row.avatar_url,
-      bannerUrl: restricted ? null : row.banner_url,
-      website: restricted ? null : row.website,
-      visibility: row.visibility,
-      isVerified: row.is_verified,
-      followersCount: restricted ? 0 : row.followers_count,
-      followingCount: restricted ? 0 : row.following_count,
-      createdAt: row.created_at,
-      restricted,
-      isOwner,
-      isFollowing,
-      viewerHasBlocked,
-    };
+    return await getCached(`pubprofile:${norm}:${viewerId ?? "anon"}`, 30, () => loadPublicProfile(norm, viewerId));
   } catch {
     return null;
   }
+}
+
+async function loadPublicProfile(norm: string, viewerId: string | null): Promise<PublicProfile | null> {
+  const db = createAdminClient();
+  // Handles are stored lowercased, so match exactly — NOT with ilike, whose
+  // `_`/`%` would be treated as wildcards (handles allow underscores).
+  const { data, error } = await db
+    .from("profiles")
+    .select(SELECT)
+    .eq("handle", norm)
+    .maybeSingle();
+  if (error) throw error; // don't cache a DB failure as "not found"
+  const row = data as ProfileRow | null;
+  if (!row || row.is_suspended) return null;
+
+  const isOwner = viewerId === row.id;
+  const { isFollowing, blockedByTarget, viewerHasBlocked } = isOwner
+    ? { isFollowing: false, blockedByTarget: false, viewerHasBlocked: false }
+    : await relationship(db, viewerId, row.id);
+
+  // A block by the target hides the profile entirely (treat as not found).
+  if (blockedByTarget) return null;
+
+  const restricted =
+    !isOwner &&
+    (row.visibility === "private" ||
+      (row.visibility === "followers" && !isFollowing));
+
+  return {
+    id: row.id,
+    handle: row.handle ?? "",
+    displayName: fallbackName(row),
+    bio: restricted ? null : row.bio,
+    avatarUrl: row.avatar_url,
+    bannerUrl: restricted ? null : row.banner_url,
+    website: restricted ? null : row.website,
+    visibility: row.visibility,
+    isVerified: row.is_verified,
+    followersCount: restricted ? 0 : row.followers_count,
+    followingCount: restricted ? 0 : row.following_count,
+    createdAt: row.created_at,
+    restricted,
+    isOwner,
+    isFollowing,
+    viewerHasBlocked,
+  };
 }
 
 export interface OwnProfile {

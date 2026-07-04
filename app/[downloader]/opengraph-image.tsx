@@ -1,15 +1,16 @@
 import { ImageResponse } from "next/og";
 
 import { OG_SIZE, OgImage } from "@/components/og-image";
-import { getSeoPage, SEO_SLUGS } from "@/lib/seo/seo-pages";
+import { getSeoPage } from "@/lib/seo/seo-pages";
 
 export const alt = "FrenzSave";
 export const size = OG_SIZE;
 export const contentType = "image/png";
 
-export function generateStaticParams() {
-  return SEO_SLUGS.map((downloader) => ({ downloader }));
-}
+// Generate on-demand + cache (not one image per slug at build). This keeps
+// builds fast — there are many downloader slugs and each render is otherwise a
+// build-time cost — while the image still caches after its first request.
+export const revalidate = 604800; // 7 days
 
 export default async function Image({
   params,

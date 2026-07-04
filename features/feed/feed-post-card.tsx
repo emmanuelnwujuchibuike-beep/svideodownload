@@ -145,16 +145,18 @@ export function FeedPostCard({
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
       // Warm this post's comments on hover so opening the sheet is instant.
       onPointerEnter={() => prefetchPostComments(item.id)}
-      className="group cv-auto overflow-hidden rounded-3xl border border-border/50 bg-card shadow-soft ring-1 ring-inset ring-white/[0.03] transition-all duration-300 hover:shadow-elevated hover:ring-primary/15"
+      className="group relative cv-auto overflow-hidden rounded-3xl border border-border/50 bg-card shadow-soft ring-1 ring-inset ring-white/[0.03] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-elevated hover:ring-primary/25"
     >
+      {/* Brand sheen that lights up on hover */}
+      <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
       {/* Header */}
       <div className="flex items-center gap-3 p-4 pb-3">
-        <Link href={`/u/${item.publisher.handle}`} className="shrink-0">
+        <Link href={`/u/${item.publisher.handle}`} className="shrink-0 rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] transition-transform duration-300 group-hover:scale-105">
           {item.publisher.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={item.publisher.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover ring-1 ring-border" />
+            <img src={item.publisher.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover ring-2 ring-card" />
           ) : (
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white ring-2 ring-card">
               {item.publisher.displayName.charAt(0).toUpperCase()}
             </span>
           )}

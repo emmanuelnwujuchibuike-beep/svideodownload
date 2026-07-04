@@ -145,10 +145,10 @@ export function FeedPostCard({
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
       // Warm this post's comments on hover so opening the sheet is instant.
       onPointerEnter={() => prefetchPostComments(item.id)}
-      className="group relative cv-auto overflow-hidden rounded-3xl border border-border/50 bg-card shadow-soft ring-1 ring-inset ring-white/[0.03] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-elevated hover:ring-primary/25"
+      className="group relative cv-auto overflow-hidden rounded-[26px] border border-border/60 bg-card shadow-soft ring-1 ring-inset ring-white/[0.04] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-elevated hover:ring-primary/25"
     >
-      {/* Brand sheen that lights up on hover */}
-      <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      {/* Always-on premium accent bar — visible on every device (no hover needed) */}
+      <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[3px] bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500" />
       {/* Header */}
       <div className="flex items-center gap-3 p-4 pb-3">
         <Link href={`/u/${item.publisher.handle}`} className="shrink-0 rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] transition-transform duration-300 group-hover:scale-105">
@@ -319,15 +319,15 @@ export function FeedPostCard({
         </button>
       )}
 
-      {/* Actions */}
-      <div className="flex items-center justify-between border-t border-border/50 px-2 py-1.5">
+      {/* Actions — premium tinted engagement bar (always visible, mobile-first) */}
+      <div className="mx-3 mb-3 mt-1 flex items-center justify-between rounded-2xl bg-secondary/40 px-1 py-1 ring-1 ring-inset ring-border/40">
         <div className="flex items-center">
           <ActionButton active={liked} onClick={() => react("like")} icon={Heart} fill={liked} count={likes} activeClass="text-rose-500" label="Like" />
           <ActionButton icon={MessageCircle} count={item.commentsCount} onClick={() => onOpen(item, true)} label="Comment" />
           <ActionButton icon={Share2} count={shares} onClick={share} label="Share" />
         </div>
         <div className="flex items-center">
-          <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-foreground" label="Bookmark" />
+          <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-amber-500" label="Bookmark" />
           <ActionButton icon={Download} onClick={() => onOpen(item)} label="Download" />
         </div>
       </div>
@@ -356,7 +356,15 @@ function ActionButton({
 }) {
   const inner = (
     <>
-      <Icon className={cn("h-[19px] w-[19px] transition-transform group-active/act:scale-90", fill && "fill-current")} strokeWidth={2.1} />
+      <motion.span
+        key={String(active)}
+        initial={false}
+        animate={active ? { scale: [1, 1.35, 1] } : { scale: 1 }}
+        transition={{ duration: 0.32, ease: [0.34, 1.4, 0.5, 1] }}
+        className="inline-flex"
+      >
+        <Icon className={cn("h-[19px] w-[19px]", fill && "fill-current")} strokeWidth={2.1} />
+      </motion.span>
       {count !== undefined && count > 0 ? <span className="text-xs font-semibold tabular-nums">{formatCompactNumber(count)}</span> : null}
     </>
   );

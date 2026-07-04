@@ -130,7 +130,8 @@ export function ReelDeck({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className={cn("fixed inset-0 bg-black", variant === "page" ? "z-30" : "z-[85]")}
+      className={cn("fixed inset-0 overflow-hidden overscroll-none bg-black", variant === "page" ? "z-30" : "z-[85]")}
+      style={{ touchAction: "pan-y" }}
       role="dialog"
       aria-modal="true"
       aria-label="Reels"
@@ -149,10 +150,13 @@ export function ReelDeck({
         ref={scroller}
         onScroll={onScroll}
         className={cn(
-          "h-full w-full overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-          locked ? "overflow-hidden" : "snap-y snap-mandatory overflow-y-scroll",
+          "h-full w-full overflow-x-hidden overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          locked ? "overflow-y-hidden" : "snap-y snap-mandatory overflow-y-scroll",
         )}
-        style={locked ? undefined : { scrollSnapType: "y mandatory" }}
+        // pan-y locks touch gestures to vertical scrolling only, so the deck can
+        // never slide/swipe left-right (and horizontal swipes won't trigger
+        // browser back/forward navigation).
+        style={locked ? { touchAction: "none" } : { scrollSnapType: "y mandatory", touchAction: "pan-y", overscrollBehaviorX: "none" }}
       >
         {items.map((item, i) => (
           <section key={item.id} className="relative h-[100dvh] w-full snap-start snap-always">

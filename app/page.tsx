@@ -1,4 +1,6 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { CtaBanner } from "@/components/landing/cta-banner";
 import { Faq } from "@/components/landing/faq";
@@ -20,17 +22,23 @@ import { createClient } from "@/lib/supabase/server";
 
 export default async function HomePage() {
   // Signed-in users get the app dashboard, not the marketing landing page.
+  // Only pay for the getUser() auth round-trip when a session cookie exists —
+  // brand-new visitors skip it entirely and the landing renders immediately.
+  const jar = await cookies();
+  const maybeSignedIn = jar.getAll().some((c) => c.name.includes("-auth-token"));
   let signedIn = false;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    signedIn = !!user;
-  } catch {
-    /* anon → show landing */
+  if (maybeSignedIn) {
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      signedIn = !!user;
+    } catch {
+      /* anon → show landing */
+    }
   }
-  if (signedIn) redirect("/home");
+  if (signedIn) redirect("/home"); // outside try/catch — redirect() throws by design
 
   return (
     <>
@@ -45,19 +53,30 @@ export default async function HomePage() {
         </div>
 
         <PlatformShowcase />
-        <MeetNewPeople />
-        <TrendingToday />
-        <LatestNews />
+
+        {/* Data-backed sections stream in behind the hero so the page paints
+            instantly instead of blocking the first byte on their DB queries. */}
+        <Suspense fallback={<section className="min-h-[280px]" />}>
+          <MeetNewPeople />
+        </Suspense>
+        <Suspense fallback={<section className="min-h-[280px]" />}>
+          <TrendingToday />
+        </Suspense>
+        <Suspense fallback={<section className="min-h-[240px]" />}>
+          <LatestNews />
+        </Suspense>
 
         {/* Stats band */}
         <StatsCounter />
 
         {/* Admin-managed recommended tools (renders nothing when empty) */}
-        <RecommendedTools
-          placement="homepage"
-          title="Recommended tools"
-          className="container max-w-5xl py-8"
-        />
+        <Suspense fallback={null}>
+          <RecommendedTools
+            placement="homepage"
+            title="Recommended tools"
+            className="container max-w-5xl py-8"
+          />
+        </Suspense>
 
         <CtaBanner />
 

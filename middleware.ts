@@ -44,6 +44,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  // No Supabase auth cookie → the visitor is definitely signed out. Skip the
+  // getUser() network round-trip entirely (the biggest latency on a cold entry).
+  // Protected routes still bounce to /login; everything public passes straight
+  // through with no auth work — this is what makes first loads fast.
+  const hasAuthCookie = request.cookies.getAll().some((c) => c.name.includes("-auth-token"));
+  if (!hasAuthCookie) {
+    if (needsGuard) {
+      const redirectUrl = new URL("/login", request.url);
+      redirectUrl.searchParams.set("next", path);
+      return NextResponse.redirect(redirectUrl);
+    }
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

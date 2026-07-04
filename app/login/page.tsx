@@ -35,15 +35,15 @@ type Tile =
   | { kind: "emoji"; emoji: string; grad: string; h: string };
 
 const TILES: Tile[] = [
-  { kind: "platform", id: FLAGSHIP_IDS[0]!, h: "h-32" },
-  { kind: "emoji", emoji: "🎬", grad: "from-blue-500 to-indigo-600", h: "h-24" },
-  { kind: "platform", id: FLAGSHIP_IDS[1]!, h: "h-24" },
-  { kind: "emoji", emoji: "🔥", grad: "from-rose-500 to-pink-600", h: "h-32" },
-  { kind: "platform", id: FLAGSHIP_IDS[2]!, h: "h-28" },
-  { kind: "emoji", emoji: "🎧", grad: "from-violet-500 to-purple-600", h: "h-24" },
-  { kind: "emoji", emoji: "✨", grad: "from-amber-400 to-orange-500", h: "h-24" },
-  { kind: "platform", id: FLAGSHIP_IDS[3]!, h: "h-32" },
-  { kind: "emoji", emoji: "🎉", grad: "from-emerald-500 to-teal-600", h: "h-28" },
+  { kind: "platform", id: FLAGSHIP_IDS[0]!, h: "h-24 sm:h-32" },
+  { kind: "emoji", emoji: "🎬", grad: "from-blue-500 to-indigo-600", h: "h-16 sm:h-24" },
+  { kind: "platform", id: FLAGSHIP_IDS[1]!, h: "h-16 sm:h-24" },
+  { kind: "emoji", emoji: "🔥", grad: "from-rose-500 to-pink-600", h: "h-24 sm:h-32" },
+  { kind: "platform", id: FLAGSHIP_IDS[2]!, h: "h-20 sm:h-28" },
+  { kind: "emoji", emoji: "🎧", grad: "from-violet-500 to-purple-600", h: "h-16 sm:h-24" },
+  { kind: "emoji", emoji: "✨", grad: "from-amber-400 to-orange-500", h: "h-16 sm:h-24" },
+  { kind: "platform", id: FLAGSHIP_IDS[3]!, h: "h-24 sm:h-32" },
+  { kind: "emoji", emoji: "🎉", grad: "from-emerald-500 to-teal-600", h: "h-20 sm:h-28" },
 ];
 
 function Collage() {

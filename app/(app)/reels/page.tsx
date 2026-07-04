@@ -24,8 +24,9 @@ export default async function ReelsPage() {
     /* anon — reels are public discovery */
   }
 
-  // Pull a wide first page and keep the videos so the deck opens full.
-  const page = await getHomeFeed({ viewerId, sort: "recent", offset: 0, limit: 24 });
+  // Pull a wide first page (personalized "For You") and keep the videos so the
+  // deck opens full. The Following tab is fetched client-side on demand.
+  const page = await getHomeFeed({ viewerId, sort: "for_you", offset: 0, limit: 24 });
   const reels = page.items.filter((i) => i.mediaKind === "video");
 
   return <ReelsFeed initialItems={reels} initialOffset={page.nextOffset} />;

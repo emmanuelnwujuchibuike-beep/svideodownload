@@ -13,6 +13,7 @@ import {
   User,
 } from "lucide-react";
 import type { Metadata } from "next";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import type { ComponentType } from "react";
 
@@ -51,19 +52,19 @@ type Card = {
 
 const CARDS: Card[] = [
   // center — person (clock girl)
-  { grad: "from-violet-500 via-purple-600 to-fuchsia-700", content: User, img: "2.jpg", pos: { top: "10%", left: "33%", width: "34%", height: "80%" }, rotate: "rotate-0", z: "z-20" },
+  { grad: "from-violet-500 via-purple-600 to-fuchsia-700", content: User, img: "2.png", pos: { top: "10%", left: "33%", width: "34%", height: "80%" }, rotate: "rotate-0", z: "z-20" },
   // top-left — paint splash
-  { grad: "from-indigo-500 to-violet-700", content: Mountain, img: "1.jpg", pos: { top: "0%", left: "6%", width: "31%", height: "44%" }, rotate: "-rotate-6", drift: "motion-safe:animate-drift", badge: { icon: Heart, corner: "tl" } },
+  { grad: "from-indigo-500 to-violet-700", content: Mountain, img: "1.png", pos: { top: "0%", left: "6%", width: "31%", height: "44%" }, rotate: "-rotate-6", drift: "motion-safe:animate-drift", badge: { icon: Heart, corner: "tl" } },
   // top-right — circuit globe
-  { grad: "from-blue-600 to-violet-700", content: Building2, img: "4.jpg", pos: { top: "3%", left: "60%", width: "33%", height: "42%" }, rotate: "rotate-6", drift: "motion-safe:animate-drift-slow", badge: { icon: TrendingUp, corner: "tr" } },
+  { grad: "from-blue-600 to-violet-700", content: Building2, img: "4.png", pos: { top: "3%", left: "60%", width: "33%", height: "42%" }, rotate: "rotate-6", drift: "motion-safe:animate-drift-slow", badge: { icon: TrendingUp, corner: "tr" } },
   // left — music note
-  { grad: "from-purple-500 to-violet-800", content: Headphones, img: "3.jpg", pos: { top: "35%", left: "-1%", width: "27%", height: "35%" }, rotate: "-rotate-3", badge: { icon: Sparkles, corner: "bl" } },
+  { grad: "from-purple-500 to-violet-800", content: Headphones, img: "3.png", pos: { top: "35%", left: "-1%", width: "27%", height: "35%" }, rotate: "-rotate-3", badge: { icon: Sparkles, corner: "bl" } },
   // right — blue geometric
-  { grad: "from-fuchsia-600 to-purple-800", content: Sofa, img: "6.jpg", pos: { top: "35%", left: "72%", width: "29%", height: "35%" }, rotate: "rotate-3", badge: { icon: Bookmark, corner: "br" } },
+  { grad: "from-fuchsia-600 to-purple-800", content: Sofa, img: "6.png", pos: { top: "35%", left: "72%", width: "29%", height: "35%" }, rotate: "rotate-3", badge: { icon: Bookmark, corner: "br" } },
   // bottom-left — neon rock
-  { grad: "from-violet-600 to-indigo-800", content: Coffee, img: "7.jpg", pos: { top: "63%", left: "4%", width: "30%", height: "34%" }, rotate: "rotate-3", drift: "motion-safe:animate-drift-slow", badge: { icon: Pencil, corner: "bl" } },
+  { grad: "from-violet-600 to-indigo-800", content: Coffee, img: "7.png", pos: { top: "63%", left: "4%", width: "30%", height: "34%" }, rotate: "rotate-3", drift: "motion-safe:animate-drift-slow", badge: { icon: Pencil, corner: "bl" } },
   // bottom-right — social chains
-  { grad: "from-purple-600 to-fuchsia-800", content: ShoppingBag, img: "5.jpg", pos: { top: "61%", left: "62%", width: "32%", height: "36%" }, rotate: "-rotate-3", drift: "motion-safe:animate-drift", badge: { icon: ShoppingBag, corner: "br" } },
+  { grad: "from-purple-600 to-fuchsia-800", content: ShoppingBag, img: "5.png", pos: { top: "61%", left: "62%", width: "32%", height: "36%" }, rotate: "-rotate-3", drift: "motion-safe:animate-drift", badge: { icon: ShoppingBag, corner: "br" } },
 ];
 
 const CORNER: Record<Corner, string> = {
@@ -85,13 +86,18 @@ function Collage() {
             style={{ top: c.pos.top, left: c.pos.left, width: c.pos.width, height: c.pos.height }}
           >
             <div className={cn("relative h-full w-full overflow-hidden rounded-[26px] bg-gradient-to-br shadow-xl ring-1 ring-inset ring-white/15", c.grad, c.rotate, c.drift)}>
-              {/* Gradient + icon show first; when the photo file exists it covers them.
-                  A missing file paints nothing (transparent), so the gradient remains. */}
+              {/* Gradient + icon show first; Next optimizes the photo (AVIF/WebP,
+                  resized) so the collage stays light on slow connections. */}
               <Content className="absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 text-white/25" />
-              <span
+              <Image
+                src={`/login/${c.img}`}
+                alt=""
                 aria-hidden
-                className="absolute inset-0 bg-cover bg-center"
-                style={{ backgroundImage: `url(/login/${c.img})` }}
+                fill
+                sizes="200px"
+                quality={65}
+                priority={i === 0}
+                className="object-cover"
               />
               {/* Legibility scrim so the white badge chips pop over any photo */}
               <span aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />

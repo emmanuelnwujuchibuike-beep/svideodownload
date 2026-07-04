@@ -3,10 +3,11 @@ import { cn } from "@/lib/utils";
 /**
  * The Frenz "F" mark — the single source of truth for the brand logo.
  *
- * Pure SVG (no hooks) so it's usable in both Server and Client Components and
- * stays crisp at every size. A bold gradient F with an integrated play triangle,
- * echoing the download/play identity. Use <FrenzLogo /> for the mark alone and
- * <FrenzWordmark /> for the mark + "Frenz" (no tagline).
+ * A premium, luxury F: a bold rounded letterform in an indigo→violet→fuchsia
+ * gradient with a subtle glossy highlight and a sparkle accent. Pure SVG (no
+ * hooks) so it works in Server and Client Components and stays crisp at any size.
+ * <FrenzLogo /> = the mark alone · <FrenzMark /> = the mark inside a luxury tile ·
+ * <FrenzWordmark /> = mark + "Frenz".
  */
 export function FrenzLogo({ className, size = 32 }: { className?: string; size?: number }) {
   return (
@@ -22,22 +23,47 @@ export function FrenzLogo({ className, size = 32 }: { className?: string; size?:
     >
       <defs>
         <linearGradient id="frenz-f" x1="10" y1="6" x2="40" y2="44" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#d946ef" />
-          <stop offset="0.5" stopColor="#8b5cf6" />
-          <stop offset="1" stopColor="#3b82f6" />
+          <stop stopColor="#6366F1" />
+          <stop offset="0.52" stopColor="#8B5CF6" />
+          <stop offset="1" stopColor="#D946EF" />
         </linearGradient>
-        <linearGradient id="frenz-play" x1="24" y1="28" x2="38" y2="42" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#22d3ee" />
-          <stop offset="1" stopColor="#3b82f6" />
+        <linearGradient id="frenz-gloss" x1="14" y1="7" x2="14" y2="24" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ffffff" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
         </linearGradient>
       </defs>
-      {/* F: stem + top arm + mid arm (overlapping rounded strokes) */}
-      <rect x="13" y="8" width="9" height="32" rx="4.5" fill="url(#frenz-f)" />
-      <rect x="13" y="8" width="25" height="9" rx="4.5" fill="url(#frenz-f)" />
-      <rect x="13" y="20" width="18" height="8.5" rx="4.25" fill="url(#frenz-f)" />
-      {/* Play accent */}
-      <path d="M26 29.5 L38 36 L26 42.5 Z" fill="url(#frenz-play)" stroke="url(#frenz-play)" strokeWidth="1.5" strokeLinejoin="round" />
+
+      {/* F — stem + top arm + mid arm, all rounded, one gradient */}
+      <rect x="14.5" y="7" width="8.5" height="34" rx="4.25" fill="url(#frenz-f)" />
+      <rect x="14.5" y="7" width="25.5" height="8.5" rx="4.25" fill="url(#frenz-f)" />
+      <rect x="14.5" y="19.5" width="18.5" height="8" rx="4" fill="url(#frenz-f)" />
+      {/* Glossy highlight down the stem for a premium sheen */}
+      <rect x="16.4" y="8.6" width="3" height="16" rx="1.5" fill="url(#frenz-gloss)" />
+
+      {/* Luxury 4-point sparkle */}
+      <path
+        d="M36.4 19.6 l1.15 2.55 2.55 1.15 -2.55 1.15 -1.15 2.55 -1.15 -2.55 -2.55 -1.15 2.55 -1.15 z"
+        fill="#22D3EE"
+      />
     </svg>
+  );
+}
+
+/**
+ * The mark inside a soft white rounded tile with a glow — the "app icon" lockup
+ * used as a hero (e.g. the login collage centerpiece).
+ */
+export function FrenzMark({ className, size = 72 }: { className?: string; size?: number }) {
+  return (
+    <span
+      className={cn(
+        "relative inline-flex items-center justify-center rounded-[28%] bg-white shadow-[0_18px_50px_-12px_rgba(124,58,237,0.55)] ring-1 ring-black/5",
+        className,
+      )}
+      style={{ width: size, height: size }}
+    >
+      <FrenzLogo size={Math.round(size * 0.62)} />
+    </span>
   );
 }
 

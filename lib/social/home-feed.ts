@@ -185,6 +185,12 @@ async function loadHomeFeed(
     }
     const followingSet = new Set(followingIds);
 
+    // Per-publisher diversity cap keeps one creator from flooding the feed — but
+    // on a small creator base it starves it (2 creators × cap 2 = only 4 posts).
+    // So relax the cap hard when there are few distinct creators to show.
+    const distinctPublishers = new Set(rows.map((r) => r.publisher_id)).size;
+    const diversityCap = distinctPublishers <= 8 ? 1000 : Math.max(settings.diversityCap, 2);
+
     const perPublisher = new Map<string, number>();
     const kept: FeedItem[] = [];
     for (const r of rows) {
@@ -192,7 +198,7 @@ async function loadHomeFeed(
       // Opt-outs are hidden from discovery, but a creator you follow can still appear.
       if (optedOut.has(r.publisher_id) && !followingSet.has(r.publisher_id) && r.publisher_id !== viewerId) continue;
       const n = perPublisher.get(r.publisher_id) ?? 0;
-      if (n >= Math.max(settings.diversityCap, 2)) continue;
+      if (n >= diversityCap) continue;
       perPublisher.set(r.publisher_id, n + 1);
 
       const prof = profById.get(r.publisher_id);

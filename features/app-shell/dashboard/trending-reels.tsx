@@ -3,8 +3,10 @@
 import { BadgeCheck, Flame, Play } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 
 import { useQuery } from "@/features/data";
+import { ReelDeck } from "@/features/feed/reel-viewer";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { formatCompactNumber } from "@/lib/utils";
 
@@ -22,6 +24,7 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
     },
     { initialData: initialItems },
   );
+  const [start, setStart] = useState<number | null>(null);
   // Cached-first: instant on return visits, silently revalidated in the background.
   const items = isLoading ? null : data ?? [];
   if (items !== null && items.length === 0) return null;
@@ -44,12 +47,11 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
               <div key={i} className="aspect-[9/14] w-36 shrink-0 rounded-2xl bg-secondary shimmer" />
             ))
           : items.map((item, i) => (
-              // Real navigation (not a modal) — lands on /reels with the same
-              // tabs, infinite scroll and scrubber the page itself has.
-              <Link
+              // Opens the full reel deck instantly in place (no navigation lag).
+              <button
                 key={item.id}
-                href={`/reels?start=${item.id}`}
-                prefetch={false}
+                type="button"
+                onClick={() => setStart(i)}
                 className="group relative aspect-[9/14] w-36 shrink-0 overflow-hidden rounded-2xl text-left shadow-soft ring-1 ring-border/60 transition hover:-translate-y-1 hover:shadow-card"
               >
                 {item.thumbnailUrl ? (
@@ -72,9 +74,13 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
                   <span className="mt-0.5 line-clamp-1 text-[10px] text-white/80">{item.title}</span>
                   <span className="mt-1 inline-flex items-center gap-1 text-[10px] text-white/70"><Play className="h-2.5 w-2.5 fill-white" /> {formatCompactNumber(item.viewsCount)}</span>
                 </span>
-              </Link>
+              </button>
             ))}
       </div>
+
+      {start !== null && items ? (
+        <ReelDeck items={items} startIndex={start} variant="page" onClose={() => setStart(null)} />
+      ) : null}
     </section>
   );
 }

@@ -9,9 +9,11 @@ import {
   Heart,
   Loader2,
   MessageCircle,
+  MoreHorizontal,
   Pause,
   Pencil,
   Play,
+  Repeat2,
   Share2,
   UserPlus,
   Volume2,
@@ -20,6 +22,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { RichText } from "@/components/social/rich-text";
 import { SmartVideo } from "@/features/media/smart-video";
@@ -27,6 +30,7 @@ import { Comments } from "@/features/social/comments";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
+import { toast } from "@/features/ui/toast";
 import { downloadPost } from "@/lib/media/download-post";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
@@ -144,12 +148,13 @@ export function ReelDeck({
       aria-modal="true"
       aria-label="Reels"
     >
-      {/* Back — ALWAYS visible, above every reel */}
+      {/* Back — ALWAYS visible and tappable, above every reel element (incl. the
+          scrubber) so it reliably closes the reel on every device. */}
       <button
         type="button"
         onClick={onClose}
-        aria-label="Back"
-        className="absolute left-4 top-4 z-[60] flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition hover:bg-white/20"
+        aria-label="Close reels"
+        className="absolute left-4 top-4 z-[80] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
       >
         <X className="h-5 w-5" />
       </button>
@@ -250,7 +255,12 @@ function ReelCard({
   const [loadingComments, setLoadingComments] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [editOpen, setEditOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [reposted, setReposted] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const fetched = useRef(false);
+
+  useEffect(() => setMounted(true), []);
 
   const native = !!item.mediaUrl;
 
@@ -408,6 +418,43 @@ function ReelCard({
     void v.play().catch(() => {});
   };
 
+  const toggleMute = () => {
+    const v = video.current;
+    if (!v) return;
+    if (mutedAuto) unmute();
+    else {
+      v.muted = true;
+      setMutedAuto(true);
+    }
+  };
+
+  const repost = async () => {
+    if (reposted) {
+      toast("Already reposted.", "info");
+      return;
+    }
+    setReposted(true);
+    setMoreOpen(false);
+    try {
+      const res = await fetch(`/api/posts/${item.id}/repost`, { method: "POST" });
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      if (res.status === 401) {
+        toast("Sign in to repost.", "error");
+        setReposted(false);
+        return;
+      }
+      if (!res.ok) {
+        toast(d.error ?? "Couldn't repost.", "error");
+        if (res.status !== 409) setReposted(false);
+        return;
+      }
+      toast("Reposted to your profile.", "success");
+    } catch {
+      toast("Couldn't repost.", "error");
+      setReposted(false);
+    }
+  };
+
   const seekBy = (delta: number) => {
     const v = video.current;
     if (!v || !v.duration) return;
@@ -521,7 +568,7 @@ function ReelCard({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={item.thumbnailUrl} alt="" aria-hidden className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.thumbnailUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full object-contain" />
+          <img src={item.thumbnailUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover lg:object-contain" />
         </div>
       ) : null}
 
@@ -595,7 +642,7 @@ function ReelCard({
               loop={loop}
               playsInline
               preload="auto"
-              className="relative z-10 max-h-full max-w-full object-contain"
+              className="relative z-10 h-full w-full object-cover lg:h-auto lg:max-h-full lg:w-auto lg:max-w-full lg:object-contain"
               onPlay={() => {
                 video.current && claimPlayback(video.current);
                 setBuffering(false);
@@ -700,33 +747,14 @@ function ReelCard({
           ) : null}
         </Link>
 
+        {/* Core actions only — everything else lives in the "More" menu so the
+            rail never gets clustered. */}
         <RailButton icon={Heart} active={liked} fill={liked} activeClass="text-rose-500" count={likes} label="Like" onClick={() => react("like")} />
         <RailButton icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
         <RailButton icon={Share2} count={shares} label="Share" onClick={share} />
-        <RailButton icon={Download} label="Download" onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined })} />
-        {item.isOwner ? <RailButton icon={Pencil} label="Edit" onClick={() => setEditOpen(true)} /> : null}
-        {native ? (
-          <RailButton
-            icon={mutedAuto ? VolumeX : Volume2}
-            label={mutedAuto ? "Unmute" : "Mute"}
-            onClick={() => {
-              const v = video.current;
-              if (!v) return;
-              if (mutedAuto) unmute();
-              else {
-                v.muted = true;
-                setMutedAuto(true);
-              }
-            }}
-          />
-        ) : null}
-        {following && !item.isOwner ? (
-          <span className="flex flex-col items-center text-white/90">
-            <Check className="h-6 w-6" />
-            <span className="text-[10px] font-semibold">Following</span>
-          </span>
-        ) : null}
+        <RailButton icon={Repeat2} active={reposted} fill={reposted} activeClass="text-emerald-400" label="Repost" onClick={repost} />
+        <RailButton icon={MoreHorizontal} label="More" onClick={() => setMoreOpen(true)} />
       </div>
 
       {/* Author + caption (auto-hides) */}
@@ -751,16 +779,18 @@ function ReelCard({
           (the deck is scroll-locked), so scrolling to the bottom of the comments
           never jumps to the next video. The video is paused; a toggle lets you
           keep watching while you type. */}
+      {mounted ? createPortal(
       <AnimatePresence>
         {showComments ? (
           <>
-            <button type="button" aria-label="Close comments" onClick={closeComments} className="absolute inset-0 z-40 bg-black/50 backdrop-blur-[2px]" />
+            {/* Portaled to <body> + fixed so it sits above the bottom nav. */}
+            <button type="button" aria-label="Close comments" onClick={closeComments} className="fixed inset-0 z-[90] bg-black/50 backdrop-blur-[2px]" />
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 380, damping: 36 }}
-              className="absolute inset-x-0 bottom-0 z-50 flex h-[68vh] flex-col rounded-t-3xl border-t border-white/10 bg-card/95 shadow-[0_-8px_40px_rgba(0,0,0,0.35)] backdrop-blur-2xl"
+              className="fixed inset-x-0 bottom-0 z-[95] mx-auto flex h-[68vh] max-w-2xl flex-col rounded-t-3xl border-t border-white/10 bg-card/95 shadow-[0_-8px_40px_rgba(0,0,0,0.35)] backdrop-blur-2xl"
               onAnimationStart={loadComments}
             >
               {/* Grabber + controls */}
@@ -815,7 +845,32 @@ function ReelCard({
             </motion.div>
           </>
         ) : null}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+    ) : null}
+
+      {/* "More" menu — the decluttered overflow: download, edit, follow, mute.
+          Portaled to <body> so it sits above the bottom nav. */}
+      {mounted && moreOpen
+        ? createPortal(
+            <div className="fixed inset-0 z-[95]">
+              <button type="button" aria-label="Close" onClick={() => setMoreOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                transition={{ type: "spring", stiffness: 380, damping: 36 }}
+                className="absolute inset-x-0 bottom-0 mx-auto max-w-lg rounded-t-3xl border-t border-border/60 bg-card p-2 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"
+              >
+                <div className="mx-auto my-2 h-1 w-10 rounded-full bg-border" />
+                <MoreItem icon={Download} label="Download" onClick={() => { setMoreOpen(false); void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined }); }} />
+                {item.isOwner ? <MoreItem icon={Pencil} label="Edit post" onClick={() => { setMoreOpen(false); setEditOpen(true); }} /> : null}
+                {!item.isOwner ? <MoreItem icon={following ? Check : UserPlus} label={following ? "Following" : "Follow creator"} onClick={() => void toggleFollow()} /> : null}
+                {native ? <MoreItem icon={mutedAuto ? VolumeX : Volume2} label={mutedAuto ? "Unmute" : "Mute"} onClick={() => { toggleMute(); setMoreOpen(false); }} /> : null}
+              </motion.div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {/* Inline editor — a creator edits caption/visibility (or deletes) without
           leaving the reel. */}
@@ -829,6 +884,14 @@ function ReelCard({
         />
       ) : null}
     </>
+  );
+}
+
+function MoreItem({ icon: Icon, label, onClick }: { icon: typeof Heart; label: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold text-foreground transition hover:bg-secondary active:scale-[0.99]">
+      <Icon className="h-5 w-5" /> {label}
+    </button>
   );
 }
 

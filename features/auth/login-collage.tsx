@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Image from "next/image";
+import Link from "next/link";
 
 import { FrenzMark } from "@/components/brand/frenz-logo";
 import { cn } from "@/lib/utils";
@@ -59,14 +60,17 @@ export function LoginCollage() {
         </motion.div>
       ))}
 
-      {/* Center brand mark — springs in last, sits in the lower gap between tiles */}
+      {/* Center brand mark — springs in last, sits in the clear central gap, and
+          doubles as a button back to the landing page. */}
       <motion.div
-        className="absolute left-1/2 top-[57%] z-30 -translate-x-1/2 -translate-y-1/2"
+        className="absolute left-1/2 top-[56%] z-30 -translate-x-1/2 -translate-y-1/2"
         initial={{ opacity: 0, scale: 0.4 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.05 + TILES.length * 0.09, type: "spring", stiffness: 200, damping: 14 }}
       >
-        <FrenzMark size={64} className="drop-shadow-2xl motion-safe:animate-drift-slow" />
+        <Link href="/" aria-label="Frenz home" className="block rounded-[22px] transition-transform duration-200 hover:scale-105 active:scale-95">
+          <FrenzMark size={68} className="drop-shadow-2xl motion-safe:animate-drift-slow" />
+        </Link>
       </motion.div>
     </div>
   );

@@ -2,7 +2,8 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { toast } from "@/features/ui/toast";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,10 @@ export function PostEditSheet({
   const [vis, setVis] = useState<Vis>(item.visibility ?? "public");
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
+  // Portal to <body> so the sheet escapes the reel deck's stacking context and
+  // renders ABOVE the bottom nav (it was being covered by it).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const save = async () => {
     setBusy(true);
@@ -74,7 +79,9 @@ export function PostEditSheet({
     }
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {open ? (
         <>
@@ -150,6 +157,7 @@ export function PostEditSheet({
           </motion.div>
         </>
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

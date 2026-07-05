@@ -23,6 +23,7 @@ import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { PostViewer } from "@/features/feed/post-viewer";
+import { ReelDeck } from "@/features/feed/reel-viewer";
 import { SparkCard } from "@/features/feed/spark-card";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
 import {
@@ -93,18 +94,23 @@ export function SmartFeed({
   const [freshCount, setFreshCount] = useState(0);
   const [away, setAway] = useState<AwaySummary | null>(null);
   const [viewer, setViewer] = useState<{ item: FeedItem; comments: boolean } | null>(null);
+  const [reel, setReel] = useState<{ start: number; commentsId: string | null } | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const seen = useRef(new Set(initialItems.map((i) => i.id)));
   const router = useRouter();
 
   const deck = useMemo(() => buildSparkDeck({ friendCount }), [friendCount]);
+  // Every loaded video, in feed order — the reel playlist. Kept live so the open
+  // deck keeps growing as the feed loads more (infinite, TikTok-style).
+  const videos = useMemo(() => items.filter((i) => i.mediaKind === "video"), [items]);
 
-  // Videos navigate to the real /reels page (tabs, infinite scroll, scrubber —
-  // the full experience, not just a modal); everything else opens the split
-  // viewer in place.
+  // Videos open the full-screen reel INSTANTLY (client-side, no navigation/server
+  // round-trip) seeded on the tapped clip; everything else opens the split viewer.
   const openViewer = (it: FeedItem, comments = false) => {
-    if (it.mediaKind === "video") router.push(`/reels?start=${it.id}${comments ? "&comments=1" : ""}`);
-    else setViewer({ item: it, comments });
+    if (it.mediaKind === "video") {
+      const start = Math.max(0, videos.findIndex((v) => v.id === it.id));
+      setReel({ start, commentsId: comments ? it.id : null });
+    } else setViewer({ item: it, comments });
   };
 
   const fetchPage = useCallback(
@@ -456,6 +462,21 @@ export function SmartFeed({
         startWithComments={viewer?.comments ?? false}
         onClose={() => setViewer(null)}
       />
+
+      {/* Instant, in-place reel deck — nav stays visible; closes via state (no
+          server round-trip on open OR close). */}
+      {reel && videos.length ? (
+        <ReelDeck
+          items={videos}
+          startIndex={reel.start}
+          variant="page"
+          autoOpenCommentsId={reel.commentsId}
+          onEndReached={() => {
+            if (nextOffset !== null && !loading) void fetchPage(sort, nextOffset, false);
+          }}
+          onClose={() => setReel(null)}
+        />
+      ) : null}
     </section>
   );
 }

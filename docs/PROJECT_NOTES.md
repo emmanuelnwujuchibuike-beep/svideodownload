@@ -9,7 +9,7 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑05 (adaptive streaming slice 4)._
+_Last updated: 2026‑07‑05 (sticky-sidebar regression fix + reels polish)._
 
 ---
 
@@ -47,6 +47,13 @@ _Last updated: 2026‑07‑05 (adaptive streaming slice 4)._
   take audio focus except on the user's explicit unmute (fade via
   `lib/media/audio-playback.ts`). No Web Audio API, no hidden audio elements, no
   `navigator.mediaSession`.
+- **Sticky-sidebar gotcha:** `<body>` uses `overflow-x: clip` (not `hidden`) so it
+  never becomes a scroll container — `hidden` breaks `position: sticky` on the app
+  sidebars, which then scroll away and leave empty space. Any body-scroll-lock
+  effect (opening a full-screen viewer, sheet, or modal) must set
+  `document.body.style.overflowY` only — never the `overflow` **shorthand**, which
+  silently resets `overflow-x` back to the browser default and reintroduces the
+  exact same breakage. Every full-screen overlay in the app follows this rule.
 
 ## Product surfaces (shipped highlights)
 

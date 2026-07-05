@@ -22,6 +22,7 @@ import type { ComponentType } from "react";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
+import { ImageViewer } from "@/features/feed/image-viewer";
 import { PostViewer } from "@/features/feed/post-viewer";
 import { ReelDeck } from "@/features/feed/reel-viewer";
 import { SparkCard } from "@/features/feed/spark-card";
@@ -95,6 +96,7 @@ export function SmartFeed({
   const [freshCount, setFreshCount] = useState(0);
   const [away, setAway] = useState<AwaySummary | null>(null);
   const [viewer, setViewer] = useState<{ item: FeedItem; comments: boolean } | null>(null);
+  const [image, setImage] = useState<FeedItem | null>(null);
   const [reel, setReel] = useState<{ start: number; commentsId: string | null } | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const seen = useRef(new Set(initialItems.map((i) => i.id)));
@@ -115,6 +117,9 @@ export function SmartFeed({
     if (it.mediaKind === "video") {
       const start = Math.max(0, videosRef.current.findIndex((v) => v.id === it.id));
       setReel({ start, commentsId: comments ? it.id : null });
+    } else if (it.mediaKind === "image") {
+      // Photos open full-screen + immersive (closeable like X / Instagram).
+      setImage(it);
     } else setViewer({ item: it, comments });
   }, []);
 
@@ -470,6 +475,7 @@ export function SmartFeed({
         startWithComments={viewer?.comments ?? false}
         onClose={() => setViewer(null)}
       />
+      <ImageViewer item={image} onClose={() => setImage(null)} />
 
       {/* Instant, in-place reel deck — nav stays visible; closes via state (no
           server round-trip on open OR close). */}

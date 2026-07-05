@@ -100,9 +100,13 @@ caches, router `staleTimes`, barrel-import optimization, AVIF/WebP via next/imag
 **Pass 1:** code-split the interaction-only overlays (reels engine, post/image
 viewers), per-card sheets, and profile Downloads/Collections tabs off the initial
 bundles via `next/dynamic` (kept mounted after first open so close animations
-play), and cut the sticky feed-nav backdrop-blur cost on scroll. Next passes:
-migrate remaining raw `<img>` thumbnails/avatars to `next/image`, and windowing
-for very long feeds.
+play), and cut the sticky feed-nav backdrop-blur cost on scroll. **Pass 2:**
+migrated the high-byte images to `next/image` (AVIF/WebP + right-sized srcset +
+lazy) — the shared grid cover (cascades to every profile/explore/collection grid),
+collection covers, profile banner + avatar, and the feed-card header avatar. The
+inline feed photo stays a raw `<img>` on purpose (variable aspect, natural size, no
+stored dimensions — next/image would crop/distort); optimizing it needs image
+dimensions stored at upload. Next: that, plus windowing for very long feeds.
 
 ## Infrastructure & ops
 

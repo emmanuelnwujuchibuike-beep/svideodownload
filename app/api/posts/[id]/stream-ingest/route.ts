@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getRequestUser } from "@/lib/auth/request-user";
-import { copyToStream, hasStream } from "@/lib/media/stream";
+import { copyToStream, generateStreamCaptions, hasStream } from "@/lib/media/stream";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -52,5 +52,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } catch {
     /* column exists (migration 0016) — but stay resilient */
   }
+  // Auto-generate captions (accessibility) — queued by Cloudflare, rendered
+  // automatically through HLS. Fire-and-forget so it never delays the response.
+  void generateStreamCaptions(uid).catch(() => {});
   return NextResponse.json({ ok: true, uid });
 }

@@ -337,7 +337,7 @@ function ReelCard({
   // Plain MP4 can attach across the nearby window — the `preload` attribute keeps
   // the far ones to metadata only, so it's cheap.
   const attachSource = hlsUrl ? isActive || isNext : nearby;
-  useAdaptiveSource(video, { hlsUrl, src: item.mediaUrl, poster: item.thumbnailUrl, active: attachSource, onReady: markSrcReady });
+  useAdaptiveSource(video, { hlsUrl, src: item.mediaUrl, poster: item.thumbnailUrl, active: attachSource, onReady: markSrcReady, postId: item.id });
 
   // Report readiness so the deck can extend its scroll ceiling. Stream clips
   // buffer themselves; native clips report on canplay/error, with a fallback so a

@@ -146,6 +146,26 @@ export async function createStreamDirectUpload(opts: {
 }
 
 /**
+ * Ask Cloudflare Stream to auto-generate captions for a video in `language`
+ * (default English). Best-effort + fire-and-forget: generated captions are exposed
+ * as a subtitle rendition in the HLS manifest, so native HLS and hls.js render them
+ * automatically (accessibility) with no player changes. Safe to call after ingest;
+ * Cloudflare queues it until the video finishes processing.
+ */
+export async function generateStreamCaptions(uid: string, language = "en"): Promise<boolean> {
+  if (!hasStream) return false;
+  try {
+    const res = await fetch(
+      `${API_BASE}/accounts/${ACCOUNT_ID}/stream/${encodeURIComponent(uid)}/captions/${encodeURIComponent(language)}/generate`,
+      { method: "POST", headers: { Authorization: `Bearer ${API_TOKEN}` } },
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Pull an already-stored video (e.g. an R2 public URL) into Cloudflare Stream by
  * URL. Returns the new Stream `uid`. Useful for backfilling existing posts so they
  * gain instant adaptive playback without a re-upload from the client.

@@ -3,6 +3,10 @@
 import { useEffect } from "react";
 
 import { attachHls, supportsNativeHls } from "@/lib/media/hls";
+import { type PlaybackMode, reportPlayback } from "@/lib/media/playback-metrics";
+
+// Sample ~1 in 6 playbacks for metrics — representative signal, low beacon volume.
+const METRICS_SAMPLE = 0.16;
 
 /**
  * Feed a `<video>` element the best available source and manage its lifecycle:
@@ -21,12 +25,15 @@ export function useAdaptiveSource(
     poster,
     active = true,
     onReady,
+    postId,
   }: {
     hlsUrl?: string | null;
     src?: string | null;
     poster?: string | null;
     active?: boolean;
     onReady?: () => void;
+    /** For playback observability (time-to-first-frame / rebuffers), sampled. */
+    postId?: string;
   },
 ) {
   useEffect(() => {
@@ -35,6 +42,27 @@ export function useAdaptiveSource(
 
     let destroyed = false;
     let destroyHls: (() => void) | null = null;
+
+    // ── Observability (sampled): time-to-first-frame + rebuffer count ──────────
+    const sampled = Math.random() < METRICS_SAMPLE;
+    const t0 = performance.now();
+    let mode: PlaybackMode = "mp4";
+    let firstFrame = false;
+    let ttffMs: number | undefined;
+    let rebuffers = 0;
+    const onPlaying = () => {
+      if (!firstFrame) {
+        firstFrame = true;
+        ttffMs = Math.round(performance.now() - t0);
+      }
+    };
+    const onWaiting = () => {
+      if (firstFrame) rebuffers += 1;
+    };
+    if (sampled) {
+      video.addEventListener("playing", onPlaying);
+      video.addEventListener("waiting", onWaiting);
+    }
 
     // Plain MP4. #t seeks to a frame when there's no poster so it isn't black
     // before play (matches the profile grid / prior behaviour). Signals ready
@@ -48,13 +76,18 @@ export function useAdaptiveSource(
 
     if (hlsUrl) {
       if (supportsNativeHls(video)) {
+        mode = "native-hls";
         if (video.src !== hlsUrl) video.src = hlsUrl; // native ABR (Safari/iOS)
         onReady?.();
       } else {
+        mode = "hls";
         void attachHls(video, hlsUrl, {
           onReady,
           onFatal: () => {
-            if (!destroyed) setNative(); // Stream not ready / decode error → MP4
+            if (!destroyed) {
+              mode = "mp4";
+              setNative(); // Stream not ready / decode error → MP4
+            }
           },
         }).then((d) => {
           if (destroyed) d();
@@ -67,6 +100,11 @@ export function useAdaptiveSource(
 
     return () => {
       destroyed = true;
+      if (sampled) {
+        video.removeEventListener("playing", onPlaying);
+        video.removeEventListener("waiting", onWaiting);
+        if (firstFrame) reportPlayback({ postId, mode, ttffMs, rebuffers });
+      }
       if (destroyHls) destroyHls();
       // Release the decoder + buffers.
       try {
@@ -76,5 +114,5 @@ export function useAdaptiveSource(
         /* element already torn down */
       }
     };
-  }, [videoRef, hlsUrl, src, poster, active, onReady]);
+  }, [videoRef, hlsUrl, src, poster, active, onReady, postId]);
 }

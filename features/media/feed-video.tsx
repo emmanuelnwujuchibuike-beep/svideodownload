@@ -3,8 +3,9 @@
 import { Pause, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
-import { streamIframeUrl } from "@/lib/media/stream";
+import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
 import { claimPlayback, recentlyScrolled, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
 
@@ -48,10 +49,32 @@ export function FeedVideo({
   const [muted, setMuted] = useState(true);
   const [showPause, setShowPause] = useState(false);
   const [covered, setCovered] = useState(true);
-  const iframeMode = !src && !!streamUid;
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const inViewRef = useRef(false);
+  const readyRef = useRef(false);
 
-  // In-view autoplay / pause (native player only). Plays as soon as 40% of the
-  // video is on screen — usually already playing by the time it's centered.
+  // Adaptive playback: a Cloudflare Stream video plays HLS/ABR through our own
+  // <video>; anything else plays the plain MP4. Fall back to the Stream iframe only
+  // when there's a uid but neither an HLS URL (no customer code) nor an MP4.
+  const hlsUrl = streamUid ? streamHlsUrl(streamUid) : null;
+  const hasNative = !!src || !!hlsUrl;
+  const iframeMode = !hasNative && !!streamUid;
+
+  const playIfReady = useCallback(() => {
+    const v = video.current;
+    if (v && inViewRef.current && readyRef.current && !userPaused.current) v.play().catch(() => {});
+  }, []);
+  const onSrcReady = useCallback(() => {
+    readyRef.current = true;
+    playIfReady();
+  }, [playIfReady]);
+  // Only wire the source when the clip is near the viewport (releases decoders +
+  // avoids buffering every feed video at once — battery/data), and re-attach as it
+  // scrolls back. `preload="metadata"` on the element keeps the MP4 path light too.
+  useAdaptiveSource(video, { hlsUrl, src, poster, active: shouldLoad, onReady: onSrcReady, postId: postId ?? undefined });
+
+  // In-view autoplay / pause. Loads at a 200px margin (just before visible), plays
+  // muted once 40% on screen. Plays as soon as the source is ready.
   useEffect(() => {
     if (iframeMode) return;
     const el = wrap.current;
@@ -60,23 +83,26 @@ export function FeedVideo({
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (!entry) return;
+        setShouldLoad(entry.isIntersecting);
         if (entry.isIntersecting && entry.intersectionRatio >= 0.4) {
-          if (!userPaused.current) v.play().catch(() => {});
+          inViewRef.current = true;
+          playIfReady();
         } else {
           // Leaving view resets a manual pause so it resumes fresh on return.
+          inViewRef.current = false;
           v.pause();
           userPaused.current = false;
           setShowPause(false);
         }
       },
-      { threshold: [0, 0.4, 1] },
+      { threshold: [0, 0.4, 1], rootMargin: "200px 0px" },
     );
     obs.observe(el);
     return () => {
       obs.disconnect();
       releasePlayback(v);
     };
-  }, [iframeMode]);
+  }, [iframeMode, playIfReady]);
 
   // Clear pending timers on unmount (no leaks during long scroll sessions).
   useEffect(
@@ -179,7 +205,7 @@ export function FeedVideo({
     );
   }
 
-  if (!src) return null;
+  if (!hasNative) return null;
 
   return (
     <div
@@ -195,9 +221,8 @@ export function FeedVideo({
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
         ref={video}
-        // With no poster image, seek to a frame (#t) so the video shows a still
-        // instead of black before it autoplays — matches the profile grid.
-        src={poster ? src : `${src}#t=0.1`}
+        // Source (HLS or MP4, seeked to a first frame when there's no poster) is
+        // attached imperatively by useAdaptiveSource when near the viewport.
         poster={poster ?? undefined}
         loop
         muted

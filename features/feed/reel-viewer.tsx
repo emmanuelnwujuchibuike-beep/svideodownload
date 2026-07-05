@@ -1151,7 +1151,8 @@ function MoreItem({ icon: Icon, label, onClick, danger }: { icon: typeof Heart; 
         danger ? "text-red-500 hover:bg-red-500/10" : "text-foreground hover:bg-secondary/70",
       )}
     >
-      <Icon className="h-5 w-5 shrink-0 opacity-90" strokeWidth={1.9} /> {label}
+      <Icon className="h-5 w-5 shrink-0 opacity-90" strokeWidth={1.9} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
     </button>
   );
 }

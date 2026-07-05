@@ -45,20 +45,37 @@ export interface HlsHandle {
 
 type HlsInstance = InstanceType<typeof import("hls.js").default>;
 
+/**
+ * Picks the level index for a height cap by actual height, not array position —
+ * hls.js doesn't guarantee `levels` is sorted ascending by height (it sorts by
+ * bitrate, and a rendition ladder can have same-height/different-bitrate pairs),
+ * so scanning "last index that qualifies" can pick the wrong rung.
+ */
 function applyHeightCap(hls: HlsInstance, maxHeight: number | null | undefined) {
   if (!maxHeight) {
     hls.autoLevelCapping = -1; // no extra cap — capLevelToPlayerSize still applies
     return;
   }
   const levels = hls.levels ?? [];
-  let capIndex = -1;
+  let bestIndex = -1;
+  let bestHeight = -1;
+  let lowestIndex = -1;
+  let lowestHeight = Infinity;
   levels.forEach((lvl, i) => {
-    if (lvl.height && lvl.height <= maxHeight) capIndex = i;
+    const h = lvl.height || 0;
+    if (!h) return;
+    if (h < lowestHeight) {
+      lowestHeight = h;
+      lowestIndex = i;
+    }
+    if (h <= maxHeight && h > bestHeight) {
+      bestHeight = h;
+      bestIndex = i;
+    }
   });
   // Nothing at/under the cap (e.g. ladder starts above it) — keep the lowest rung
   // rather than forcing an unbounded auto level.
-  if (capIndex === -1 && levels.length) capIndex = 0;
-  hls.autoLevelCapping = capIndex;
+  hls.autoLevelCapping = bestIndex !== -1 ? bestIndex : lowestIndex;
 }
 
 /**
@@ -116,8 +133,13 @@ export async function attachHls(
   });
   if (opts.onReady) hls.once(Hls.Events.FRAG_BUFFERED, () => opts.onReady?.());
   // Never default to the top of the ladder on a weak connection / data-saver /
-  // low battery — apply the caller's cap as soon as levels are known.
-  hls.once(Hls.Events.MANIFEST_PARSED, () => applyHeightCap(hls, opts.maxHeight));
+  // low battery — apply the caller's cap as soon as levels are known. Tracked in
+  // a mutable var (not the closed-over `opts.maxHeight`) so a `setMaxHeightCap`
+  // call that lands BEFORE the manifest parses (the battery read can resolve
+  // faster than the manifest's network round-trip) isn't clobbered when this
+  // handler fires afterward with the stale initial value.
+  let desiredMaxHeight = opts.maxHeight;
+  hls.once(Hls.Events.MANIFEST_PARSED, () => applyHeightCap(hls, desiredMaxHeight));
 
   hls.loadSource(url);
   hls.attachMedia(video);
@@ -130,7 +152,10 @@ export async function attachHls(
         /* already gone */
       }
     },
-    setMaxHeightCap: (maxHeight) => applyHeightCap(hls, maxHeight),
+    setMaxHeightCap: (maxHeight) => {
+      desiredMaxHeight = maxHeight;
+      applyHeightCap(hls, maxHeight); // no-op if levels aren't parsed yet; desiredMaxHeight still wins later
+    },
     getBitrateKbps: () => {
       const level = hls.levels?.[hls.currentLevel];
       return level?.bitrate ? Math.round(level.bitrate / 1000) : undefined;

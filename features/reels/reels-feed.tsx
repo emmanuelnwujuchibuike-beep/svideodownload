@@ -19,19 +19,33 @@ type Tab = "for_you" | "following";
  * personalized deck (seeded from the server); "Following" refetches to reels only
  * from people you follow. Each tab keeps its own infinite scroll.
  */
-export function ReelsFeed({ initialItems, initialOffset }: { initialItems: FeedItem[]; initialOffset: number | null }) {
+export function ReelsFeed({
+  initialItems,
+  initialOffset,
+  startId,
+  commentsId,
+  onClose,
+}: {
+  initialItems: FeedItem[];
+  initialOffset: number | null;
+  /** Seed the For You deck on this video (feed/trending tap opens here). */
+  startId?: string;
+  /** Open this reel's comments on entry. */
+  commentsId?: string | null;
+  /** When rendered as an in-place overlay (from the feed), closes via state. */
+  onClose?: () => void;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Deep-linked from a "Comment" tap elsewhere (?start=<id>&comments=1) — the
-  // seeded item sits at index 0 of the initial deck, so open its sheet on entry.
-  const autoOpenCommentsId = searchParams.get("comments") === "1" ? searchParams.get("start") : null;
-  // Prefer going back (Next reuses the cached render of wherever we came from —
-  // instant, no server round-trip) and only push to /home when there's nowhere
-  // to go back to (e.g. /reels was opened directly in a fresh tab).
+  // Deep-linked from a "Comment" tap (?start=<id>&comments=1) OR passed directly.
+  const autoOpenCommentsId = commentsId ?? (searchParams.get("comments") === "1" ? searchParams.get("start") : null);
+  // Overlay use closes via state; the /reels route goes back (instant, cached) or
+  // falls back to /home.
   const close = useCallback(() => {
+    if (onClose) return onClose();
     if (typeof window !== "undefined" && window.history.length > 1) router.back();
     else router.push("/home");
-  }, [router]);
+  }, [router, onClose]);
   const [tab, setTab] = useState<Tab>("for_you");
   const [items, setItems] = useState<FeedItem[]>(initialItems);
   const [offset, setOffset] = useState<number | null>(initialOffset);
@@ -132,7 +146,7 @@ export function ReelsFeed({ initialItems, initialOffset }: { initialItems: FeedI
         <ReelDeck
           key={tab}
           items={items}
-          startIndex={0}
+          startIndex={tab === "for_you" && startId ? Math.max(0, items.findIndex((i) => i.id === startId)) : 0}
           variant="page"
           onEndReached={loadMore}
           onClose={close}

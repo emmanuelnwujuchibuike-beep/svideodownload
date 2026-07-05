@@ -40,6 +40,7 @@ import { PostPollInline } from "@/features/social/post-poll-inline";
 import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
 import { toast } from "@/features/ui/toast";
+import { FrenzsaveError } from "@/lib/sdk";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { downloadPost } from "@/lib/media/download-post";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
@@ -486,8 +487,8 @@ function ReelCard({
     try {
       await toggleRepost(item.id, next, repostState.count);
       toast(next ? "Reposted to your profile." : "Removed repost.", "success");
-    } catch {
-      toast("Couldn't repost.", "error");
+    } catch (e) {
+      toast(e instanceof FrenzsaveError ? e.message : "Couldn't repost.", "error");
     }
   };
 

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { useQuery } from "@/features/data";
-import { ReelDeck } from "@/features/feed/reel-viewer";
+import { ReelsFeed } from "@/features/reels/reels-feed";
 import { getApi } from "@/lib/sdk/browser";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { formatCompactNumber } from "@/lib/utils";
@@ -27,7 +27,7 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
     },
     { initialData: initialItems },
   );
-  const [start, setStart] = useState<number | null>(null);
+  const [startId, setStartId] = useState<string | null>(null);
   // Cached-first: instant on return visits, silently revalidated in the background.
   const items = isLoading ? null : data ?? [];
   if (items !== null && items.length === 0) return null;
@@ -50,11 +50,11 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
               <div key={i} className="aspect-[9/14] w-36 shrink-0 rounded-2xl bg-secondary shimmer" />
             ))
           : items.map((item, i) => (
-              // Opens the full reel deck instantly in place (no navigation lag).
+              // Opens the full tabbed reels instantly in place (no navigation lag).
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setStart(i)}
+                onClick={() => setStartId(item.id)}
                 className="group relative aspect-[9/14] w-36 shrink-0 overflow-hidden rounded-2xl text-left shadow-soft ring-1 ring-border/60 transition hover:-translate-y-1 hover:shadow-card"
               >
                 {item.thumbnailUrl ? (
@@ -81,8 +81,8 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
             ))}
       </div>
 
-      {start !== null && items ? (
-        <ReelDeck items={items} startIndex={start} variant="page" onClose={() => setStart(null)} />
+      {startId && items ? (
+        <ReelsFeed initialItems={items} initialOffset={null} startId={startId} onClose={() => setStartId(null)} />
       ) : null}
     </section>
   );

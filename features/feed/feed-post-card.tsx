@@ -31,6 +31,7 @@ import { PostEditSheet } from "@/features/social/post-edit-sheet";
 import { toast } from "@/features/ui/toast";
 import { downloadPost } from "@/lib/media/download-post";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
+import { FrenzsaveError } from "@/lib/sdk";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
 import type { FeedItem } from "@/lib/social/home-feed";
@@ -136,8 +137,8 @@ function FeedPostCardImpl({
     try {
       await toggleRepost(item.id, next, repostState.count);
       toast(next ? "Reposted to your profile." : "Removed repost.", "success");
-    } catch {
-      toast("Couldn't repost.", "error");
+    } catch (e) {
+      toast(e instanceof FrenzsaveError ? e.message : "Couldn't repost.", "error");
     }
   };
 
@@ -225,9 +226,6 @@ function FeedPostCardImpl({
                 >
                   {item.isOwner ? (
                     <MenuItem icon={Pencil} label="Edit post" onClick={() => { setMenuOpen(false); setEditOpen(true); }} />
-                  ) : null}
-                  {!item.isOwner ? (
-                    <MenuItem icon={Repeat2} label={repostState.reposted ? "Remove repost" : "Repost"} onClick={repost} />
                   ) : null}
                   {!item.isOwner ? (
                     <MenuItem icon={UserPlus} label={following ? "Unfollow creator" : "Follow creator"} onClick={toggleFollow} />
@@ -348,6 +346,9 @@ function FeedPostCardImpl({
         <div className="flex items-center">
           <ActionButton active={liked} onClick={() => react("like")} icon={Heart} fill={liked} count={likes} activeClass="text-rose-500" label="Like" />
           <ActionButton icon={MessageCircle} count={item.commentsCount} onClick={() => onOpen(item, true)} label="Comment" />
+          {!item.isOwner ? (
+            <ActionButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-500" onClick={repost} label="Repost" />
+          ) : null}
           <ActionButton icon={Share2} count={shares} onClick={share} label="Share" />
         </div>
         <div className="flex items-center">

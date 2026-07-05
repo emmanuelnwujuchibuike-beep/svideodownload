@@ -24,8 +24,8 @@ import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { ImageViewer } from "@/features/feed/image-viewer";
 import { PostViewer } from "@/features/feed/post-viewer";
-import { ReelDeck } from "@/features/feed/reel-viewer";
 import { SparkCard } from "@/features/feed/spark-card";
+import { ReelsFeed } from "@/features/reels/reels-feed";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
 import {
   type AwaySummary,
@@ -97,7 +97,7 @@ export function SmartFeed({
   const [away, setAway] = useState<AwaySummary | null>(null);
   const [viewer, setViewer] = useState<{ item: FeedItem; comments: boolean } | null>(null);
   const [image, setImage] = useState<FeedItem | null>(null);
-  const [reel, setReel] = useState<{ start: number; commentsId: string | null } | null>(null);
+  const [reel, setReel] = useState<{ startId: string; commentsId: string | null } | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const seen = useRef(new Set(initialItems.map((i) => i.id)));
   const router = useRouter();
@@ -115,8 +115,7 @@ export function SmartFeed({
   // round-trip) seeded on the tapped clip; everything else opens the split viewer.
   const openViewer = useCallback((it: FeedItem, comments = false) => {
     if (it.mediaKind === "video") {
-      const start = Math.max(0, videosRef.current.findIndex((v) => v.id === it.id));
-      setReel({ start, commentsId: comments ? it.id : null });
+      setReel({ startId: it.id, commentsId: comments ? it.id : null });
     } else if (it.mediaKind === "image") {
       // Photos open full-screen + immersive (closeable like X / Instagram).
       setImage(it);
@@ -477,17 +476,14 @@ export function SmartFeed({
       />
       <ImageViewer item={image} onClose={() => setImage(null)} />
 
-      {/* Instant, in-place reel deck — nav stays visible; closes via state (no
-          server round-trip on open OR close). */}
+      {/* Instant, in-place full reels experience (For You / Following tabs), nav
+          visible, seeded on the tapped video — closes via state (no navigation). */}
       {reel && videos.length ? (
-        <ReelDeck
-          items={videos}
-          startIndex={reel.start}
-          variant="page"
-          autoOpenCommentsId={reel.commentsId}
-          onEndReached={() => {
-            if (nextOffset !== null && !loading) void fetchPage(sort, nextOffset, false);
-          }}
+        <ReelsFeed
+          initialItems={videos}
+          initialOffset={nextOffset}
+          startId={reel.startId}
+          commentsId={reel.commentsId}
           onClose={() => setReel(null)}
         />
       ) : null}

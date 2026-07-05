@@ -23,30 +23,44 @@ export interface SearchPerson {
   avatarUrl: string | null;
   isVerified: boolean;
   followersCount: number;
+  /** Whether the viewer already follows them — so we never re-offer "Follow". */
+  isFollowing: boolean;
 }
 
-export async function searchPeople(q: string, limit = 12): Promise<SearchPerson[]> {
+export async function searchPeople(q: string, limit = 12, viewerId: string | null = null): Promise<SearchPerson[]> {
   if (!hasSupabase) return [];
   const term = clean(q);
   if (!term) return [];
   try {
-    const { data } = await createAdminClient()
+    const db = createAdminClient();
+    const { data } = await db
       .from("profiles")
       .select("id, handle, display_name, avatar_url, is_verified, followers_count, is_suspended")
       .or(`handle.ilike.%${term}%,display_name.ilike.%${term}%`)
       .order("followers_count", { ascending: false })
       .limit(limit * 2);
-    return ((data ?? []) as Record<string, unknown>[])
-      .filter((p) => !p.is_suspended && p.handle)
-      .slice(0, limit)
-      .map((p) => ({
-        id: p.id as string,
-        handle: p.handle as string,
-        displayName: (p.display_name as string) || `@${p.handle as string}`,
-        avatarUrl: (p.avatar_url as string) ?? null,
-        isVerified: (p.is_verified as boolean) ?? false,
-        followersCount: (p.followers_count as number) ?? 0,
-      }));
+    const people = ((data ?? []) as Record<string, unknown>[]).filter((p) => !p.is_suspended && p.handle).slice(0, limit);
+
+    // Which of these the viewer already follows.
+    let followingSet = new Set<string>();
+    if (viewerId && people.length) {
+      const { data: follows } = await db
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", viewerId)
+        .in("following_id", people.map((p) => p.id as string));
+      followingSet = new Set(((follows ?? []) as { following_id: string }[]).map((f) => f.following_id));
+    }
+
+    return people.map((p) => ({
+      id: p.id as string,
+      handle: p.handle as string,
+      displayName: (p.display_name as string) || `@${p.handle as string}`,
+      avatarUrl: (p.avatar_url as string) ?? null,
+      isVerified: (p.is_verified as boolean) ?? false,
+      followersCount: (p.followers_count as number) ?? 0,
+      isFollowing: followingSet.has(p.id as string),
+    }));
   } catch {
     return [];
   }
@@ -95,13 +109,13 @@ export interface SearchResult {
   posts: PostCard[];
 }
 
-export async function searchAll(q: string, type: SearchType): Promise<SearchResult> {
+export async function searchAll(q: string, type: SearchType, viewerId: string | null = null): Promise<SearchResult> {
   const term = clean(q);
   if (!term) return { people: [], posts: [] };
-  if (type === "people") return { people: await searchPeople(q, 30), posts: [] };
+  if (type === "people") return { people: await searchPeople(q, 30, viewerId), posts: [] };
   if (type === "video" || type === "image" || type === "audio") {
     return { people: [], posts: await searchPosts(q, { kind: type, limit: 30 }) };
   }
-  const [people, posts] = await Promise.all([searchPeople(q, 8), searchPosts(q, { limit: 24 })]);
+  const [people, posts] = await Promise.all([searchPeople(q, 8, viewerId), searchPosts(q, { limit: 24 })]);
   return { people, posts };
 }

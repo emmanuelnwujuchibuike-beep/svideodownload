@@ -9,7 +9,7 @@ import type { SearchPerson } from "@/lib/social/search";
 import type { SuggestedCreator } from "@/lib/social/suggest";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
-type Person = { id: string; handle: string; displayName: string; avatarUrl: string | null; isVerified: boolean; followersCount: number };
+type Person = { id: string; handle: string; displayName: string; avatarUrl: string | null; isVerified: boolean; followersCount: number; isFollowing?: boolean };
 
 /**
  * Full-page "Add friends" — opens instantly (suggestions are server-rendered) and
@@ -113,13 +113,13 @@ function PersonRow({ person }: { person: Person }) {
         </span>
         <span className="block truncate text-xs text-muted-foreground">@{person.handle} · {formatCompactNumber(person.followersCount)} followers</span>
       </Link>
-      <FollowChip id={person.id} />
+      <FollowChip id={person.id} initial={person.isFollowing ?? false} />
     </li>
   );
 }
 
-function FollowChip({ id }: { id: string }) {
-  const following = useFollowState(id, false);
+function FollowChip({ id, initial }: { id: string; initial: boolean }) {
+  const following = useFollowState(id, initial);
   return (
     <button
       type="button"

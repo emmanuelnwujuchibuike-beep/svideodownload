@@ -19,6 +19,8 @@ export interface SuggestedCreator {
   isVerified: boolean;
   plan: BillingPlan;
   followersCount: number;
+  /** Whether the viewer already follows them — so we never re-offer "Follow". */
+  isFollowing: boolean;
 }
 
 /**
@@ -76,12 +78,14 @@ async function loadSuggestedCreators(viewerId: string | null, limit: number): Pr
     rows = rows.filter((r) => !optedOut.has(r.id) && !blocked.has(r.id)).slice(0, limit);
     if (rows.length === 0) return [];
 
-    const { data: subs } = await db
-      .from("subscriptions")
-      .select("user_id, plan, status")
-      .in("user_id", rows.map((r) => r.id))
-      .in("status", ["active", "trialing"]);
+    const [{ data: subs }, followsRes] = await Promise.all([
+      db.from("subscriptions").select("user_id, plan, status").in("user_id", rows.map((r) => r.id)).in("status", ["active", "trialing"]),
+      viewerId
+        ? db.from("follows").select("following_id").eq("follower_id", viewerId).in("following_id", rows.map((r) => r.id))
+        : Promise.resolve({ data: [] as { following_id: string }[] }),
+    ]);
     const planById = new Map(((subs ?? []) as { user_id: string; plan: BillingPlan }[]).map((s) => [s.user_id, s.plan]));
+    const followingSet = new Set(((followsRes.data ?? []) as { following_id: string }[]).map((f) => f.following_id));
 
     return rows.map((r) => ({
       id: r.id,
@@ -91,6 +95,7 @@ async function loadSuggestedCreators(viewerId: string | null, limit: number): Pr
       isVerified: r.is_verified,
       plan: planById.get(r.id) ?? "free",
       followersCount: r.followers_count,
+      isFollowing: followingSet.has(r.id),
     }));
   } catch {
     return [];

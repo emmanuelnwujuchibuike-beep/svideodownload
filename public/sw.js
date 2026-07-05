@@ -7,7 +7,7 @@
  *  - Everything else (API, realtime, POST) → straight to network (never cached).
  */
 
-const VERSION = "v2";
+const VERSION = "v3";
 const STATIC_CACHE = `frenz-static-${VERSION}`;
 const IMAGE_CACHE = `frenz-img-${VERSION}`;
 const PAGE_CACHE = `frenz-pages-${VERSION}`;

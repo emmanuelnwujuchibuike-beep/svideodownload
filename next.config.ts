@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
     // in-app navigation refetches from the server and flashes a loading skeleton.
     // Caching visited routes briefly makes revisits/back-nav instant (native feel),
     // while realtime + the SWR layer keep content fresh. Tune here, not per-page.
-    staleTimes: { dynamic: 60, static: 300 },
+    staleTimes: { dynamic: 180, static: 300 },
     scrollRestoration: true,
   },
   images: {

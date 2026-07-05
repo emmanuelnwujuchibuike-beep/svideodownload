@@ -168,6 +168,23 @@ function FeedPostCardImpl({
     >
       {/* Always-on premium accent bar — visible on every device (no hover needed) */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[3px] bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500" />
+
+      {/* Repost discovery — lightweight "@x reposted" attribution when someone you
+          follow reposted this. Never distracts from the content below. */}
+      {item.repostBadge && item.repostBadge.count > 0 ? (
+        <Link href={`/u/${item.repostBadge.handles[0]}`} className="flex items-center gap-2 px-4 pt-3 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+          <Repeat2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          {item.repostBadge.avatars[0] ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={item.repostBadge.avatars[0]} alt="" className="h-4 w-4 rounded-full object-cover ring-1 ring-border" />
+          ) : null}
+          <span className="truncate">
+            @{item.repostBadge.handles[0]}
+            {item.repostBadge.count > 1 ? ` and ${item.repostBadge.count - 1} other${item.repostBadge.count > 2 ? "s" : ""}` : ""} reposted
+          </span>
+        </Link>
+      ) : null}
+
       {/* Header */}
       <div className="flex items-center gap-3 p-4 pb-3">
         <Link href={`/u/${item.publisher.handle}`} className="shrink-0 rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] transition-transform duration-300 group-hover:scale-105">

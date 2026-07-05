@@ -86,7 +86,7 @@ export function ReelsFeed({ initialItems, initialOffset }: { initialItems: FeedI
   return (
     <>
       {/* For You / Following toggle — floating glass pill */}
-      <div className="fixed left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/35 p-1 ring-1 ring-inset ring-white/15 backdrop-blur-md lg:top-[4.75rem]">
+      <div className="fixed left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/35 p-1 ring-1 ring-inset ring-white/15 backdrop-blur-md lg:left-[calc(50%+8rem)] lg:top-[4.75rem]">
         {([
           { id: "for_you" as const, label: "For You" },
           { id: "following" as const, label: "Following" },

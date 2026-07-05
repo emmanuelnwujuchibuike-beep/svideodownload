@@ -153,7 +153,12 @@ export function ReelDeck({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className={cn("fixed inset-0 overflow-hidden overscroll-none bg-black", variant === "page" ? "z-30" : "z-[85]")}
+      className={cn(
+        "fixed inset-0 overflow-hidden overscroll-none bg-black",
+        // On large screens the /reels page sits BESIDE the app sidebar (which stays
+        // visible + scrollable) instead of covering it.
+        variant === "page" ? "z-30 lg:left-64" : "z-[85]",
+      )}
       style={{ touchAction: "pan-y" }}
       role="dialog"
       aria-modal="true"
@@ -185,13 +190,16 @@ export function ReelDeck({
         {items.map((item, i) => (
           <section key={item.id} className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black">
             {/* On phones the reel fills the screen; on tablets/desktop it becomes a
-                centered 9:16 column (black to the sides) so it reads as ONE player
-                instead of a small video floating inside a blurred one. */}
-            <div className="relative h-full w-full overflow-hidden bg-black lg:w-[min(100%,56.25vh)]">
+                centered 9:16 column (black to the sides). On lg the column lets its
+                overflow show so the action rail can sit OUTSIDE the video, in the
+                right gutter (YouTube-Shorts-style). */}
+            <div className="relative h-full w-full overflow-hidden bg-black lg:w-[min(100%,56.25vh)] lg:overflow-visible">
               <ReelCard
                 item={item}
                 isActive={i === active}
-                nearby={Math.abs(i - active) <= 1}
+                // Mount + buffer the previous clip and the NEXT TWO so scrolling
+                // forward never hits an unbuffered video (only the active one plays).
+                nearby={i >= active - 1 && i <= active + 2}
                 loop={items.length === 1}
                 onClose={onClose}
                 onEnded={() => (i < items.length - 1 ? scrollToIndex(i + 1) : undefined)}
@@ -611,7 +619,7 @@ function ReelCard({
       {item.thumbnailUrl ? (
         <div className="absolute inset-0 bg-black">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.thumbnailUrl} alt="" aria-hidden loading="lazy" decoding="async" className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
+          <img src={item.thumbnailUrl} alt="" aria-hidden loading="lazy" decoding="async" className="h-full w-full scale-110 object-cover opacity-40 blur-2xl lg:hidden" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={item.thumbnailUrl} alt="" aria-hidden loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover lg:object-contain" />
         </div>
@@ -766,8 +774,9 @@ function ReelCard({
         </button>
       ) : null}
 
-      {/* Action rail (auto-hides) */}
-      <div className={cn("absolute right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200", railBottom, ui ? "opacity-100" : "pointer-events-none opacity-0")}>
+      {/* Action rail — auto-hides over the video on mobile; on lg it lives OUTSIDE
+          the video in the right gutter and stays put. */}
+      <div className={cn("absolute right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 lg:-right-[4.5rem] lg:!opacity-100", railBottom, ui ? "opacity-100" : "pointer-events-none opacity-0")}>
         <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="relative mb-1">
           {item.publisher.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element

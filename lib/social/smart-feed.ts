@@ -79,7 +79,6 @@ export type SparkKind = "creator" | "community" | "download" | "milestone" | "fr
 export interface SparkCard {
   id: string;
   kind: SparkKind;
-  emoji: string;
   title: string;
   body: string;
   href: string;
@@ -101,7 +100,6 @@ export function buildSparkDeck(ctx: SparkContext = {}): SparkCard[] {
     {
       id: "spark-creator",
       kind: "creator",
-      emoji: "✨",
       title: "Discover a new creator",
       body: "People with taste like yours are worth following.",
       href: "/explore",
@@ -110,7 +108,6 @@ export function buildSparkDeck(ctx: SparkContext = {}): SparkCard[] {
     {
       id: "spark-download",
       kind: "download",
-      emoji: "📥",
       title: "Trending downloads today",
       body: "The videos and reels everyone is saving right now.",
       href: "/explore?sort=trending",
@@ -119,7 +116,6 @@ export function buildSparkDeck(ctx: SparkContext = {}): SparkCard[] {
     {
       id: "spark-friends",
       kind: "friends",
-      emoji: "🤝",
       title: "Find your people",
       body: "Suggested friends who share your interests.",
       href: "/friends",
@@ -132,7 +128,6 @@ export function buildSparkDeck(ctx: SparkContext = {}): SparkCard[] {
     deck.unshift({
       id: `spark-milestone-${ctx.friendCount}`,
       kind: "milestone",
-      emoji: "🎉",
       title: `You reached ${ctx.friendCount} friends`,
       body: "Your circle is growing. Keep the momentum going.",
       href: "/friends",

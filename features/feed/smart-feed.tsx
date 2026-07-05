@@ -424,7 +424,9 @@ export function SmartFeed({
             </div>
           ) : null}
           {nextOffset === null && stream.length > 0 && !switching ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">You&apos;re all caught up ✨</p>
+            <p className="flex items-center justify-center gap-1.5 py-6 text-center text-sm text-muted-foreground">
+              <Sparkles className="h-4 w-4" /> You&apos;re all caught up
+            </p>
           ) : null}
         </>
       )}
@@ -465,7 +467,7 @@ function ZeroEmptyFeed({
           <Sparkles className="h-6 w-6" />
         </span>
         <p className="text-sm font-semibold">{heading}</p>
-        <p className="mt-1 text-sm text-muted-foreground">Here&apos;s where to start 👇</p>
+        <p className="mt-1 text-sm text-muted-foreground">Here&apos;s where to start</p>
       </div>
       {deck.map((card) => (
         <SparkCard key={card.id} card={card} />

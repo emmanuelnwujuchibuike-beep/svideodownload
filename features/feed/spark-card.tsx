@@ -1,8 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Download, PartyPopper, Sparkles, Users, UsersRound } from "lucide-react";
 import Link from "next/link";
+import type { ComponentType } from "react";
 
 import type { SparkCard as SparkCardData } from "@/lib/social/smart-feed";
 
@@ -14,12 +15,22 @@ const TINT: Record<SparkCardData["kind"], string> = {
   milestone: "from-amber-500/25 to-orange-500/20 ring-amber-500/30",
 };
 
+// Colorless line icons in place of emoji (see [[no-emoji-design]]).
+const ICON: Record<SparkCardData["kind"], ComponentType<{ className?: string }>> = {
+  creator: Sparkles,
+  download: Download,
+  friends: UsersRound,
+  community: Users,
+  milestone: PartyPopper,
+};
+
 /**
  * An elegant, interactive discovery card woven between posts (Feature 5,
  * exclusive #3). It reads as a delightful discovery — never an advertisement —
  * with a soft electric glow and a clear, honest destination.
  */
 export function SparkCard({ card }: { card: SparkCardData }) {
+  const Icon = ICON[card.kind];
   return (
     <motion.div layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
       <Link
@@ -29,8 +40,8 @@ export function SparkCard({ card }: { card: SparkCardData }) {
         {/* ambient glow */}
         <div aria-hidden className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/20 blur-3xl dark:bg-white/10" />
         <div className="relative flex items-center gap-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-background/60 text-2xl shadow-soft ring-1 ring-border/50">
-            {card.emoji}
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-background/60 text-foreground shadow-soft ring-1 ring-border/50">
+            <Icon className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-bold uppercase tracking-wide text-foreground/60">Discover</p>

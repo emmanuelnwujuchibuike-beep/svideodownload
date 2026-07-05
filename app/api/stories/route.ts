@@ -93,7 +93,9 @@ export async function POST(request: Request) {
           source_url_hash: hash,
           platform: "frenz",
           media_kind: mediaKind,
-          title: (caption ?? (mediaKind === "video" ? "My video" : "My photo")).slice(0, 300),
+          // No caption → store an empty title (the feed/reel simply shows no
+          // caption). Never invent an automatic "My video"/"My photo".
+          title: (caption ?? "").slice(0, 300),
           media_url: mediaUrl,
           thumbnail_url: cover,
           visibility: "public",

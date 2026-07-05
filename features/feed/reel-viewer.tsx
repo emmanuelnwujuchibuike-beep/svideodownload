@@ -162,17 +162,22 @@ export function ReelDeck({
         style={locked ? { touchAction: "none" } : { scrollSnapType: "y mandatory", touchAction: "pan-y", overscrollBehaviorX: "none" }}
       >
         {items.map((item, i) => (
-          <section key={item.id} className="relative h-[100dvh] w-full snap-start snap-always">
-            <ReelCard
-              item={item}
-              isActive={i === active}
-              nearby={Math.abs(i - active) <= 1}
-              loop={items.length === 1}
-              onClose={onClose}
-              onEnded={() => (i < items.length - 1 ? scrollToIndex(i + 1) : undefined)}
-              onCommentsOpen={setLocked}
-              autoOpenComments={item.id === autoOpenCommentsId}
-            />
+          <section key={item.id} className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black">
+            {/* On phones the reel fills the screen; on tablets/desktop it becomes a
+                centered 9:16 column (black to the sides) so it reads as ONE player
+                instead of a small video floating inside a blurred one. */}
+            <div className="relative h-full w-full overflow-hidden bg-black lg:w-[min(100%,56.25vh)]">
+              <ReelCard
+                item={item}
+                isActive={i === active}
+                nearby={Math.abs(i - active) <= 1}
+                loop={items.length === 1}
+                onClose={onClose}
+                onEnded={() => (i < items.length - 1 ? scrollToIndex(i + 1) : undefined)}
+                onCommentsOpen={setLocked}
+                autoOpenComments={item.id === autoOpenCommentsId}
+              />
+            </div>
           </section>
         ))}
       </div>
@@ -491,7 +496,7 @@ function ReelCard({
       lastTap.current = { t: 0, x: 0 };
       if (x < w * 0.4) seekBy(-10);
       else if (x > w * 0.6) seekBy(10);
-      else likeBurst(e.clientX, e.clientY); // double-tap center → like ❤
+      else likeBurst(e.clientX, e.clientY); // double-tap center to like
       return;
     }
     lastTap.current = { t: now, x };

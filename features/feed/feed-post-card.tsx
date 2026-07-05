@@ -15,6 +15,7 @@ import {
   Music,
   Play,
   Share2,
+  Sparkles,
   UserPlus,
 } from "lucide-react";
 import Link from "next/link";
@@ -222,7 +223,7 @@ export function FeedPostCard({
       {reason ? (
         <div className="px-4 pb-1">
           <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold", REASON_STYLE[reason.tone])}>
-            <span aria-hidden className="text-current">✦</span>
+            <Sparkles aria-hidden className="h-3 w-3" />
             {reason.label}
           </span>
         </div>

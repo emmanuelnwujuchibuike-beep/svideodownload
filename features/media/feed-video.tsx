@@ -1,6 +1,6 @@
 "use client";
 
-import { Expand, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { Pause, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { streamIframeUrl } from "@/lib/media/stream";
@@ -45,36 +45,12 @@ export function FeedVideo({
   const holding = useRef(false);
   const moved = useRef(false);
   const startPt = useRef<{ x: number; y: number } | null>(null);
+  const downAt = useRef(0);
   const userPaused = useRef(false);
   const [muted, setMuted] = useState(true);
   const [held, setHeld] = useState(false);
   const [covered, setCovered] = useState(true);
-  const [playing, setPlaying] = useState(false);
-  const [hoverable, setHoverable] = useState(false);
-  const [bigScreen, setBigScreen] = useState(false);
   const iframeMode = !src && !!streamUid;
-
-  // Detect a real hover-capable pointer (mouse) AND a large screen. On any large
-  // screen a plain click must never open the reel — even touchscreen laptops —
-  // it only plays/pauses; opening is an explicit action (button / double-click).
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const hoverMq = window.matchMedia("(hover: hover) and (pointer: fine)");
-    const sizeMq = window.matchMedia("(min-width: 1024px)");
-    const update = () => {
-      setHoverable(hoverMq.matches);
-      setBigScreen(sizeMq.matches);
-    };
-    update();
-    hoverMq.addEventListener?.("change", update);
-    sizeMq.addEventListener?.("change", update);
-    return () => {
-      hoverMq.removeEventListener?.("change", update);
-      sizeMq.removeEventListener?.("change", update);
-    };
-  }, []);
-  // "Desktop mode" = never tap-to-open; click toggles playback instead.
-  const desktop = hoverable || bigScreen;
 
   // In-view autoplay / pause (native player only). Plays as soon as 40% of the
   // video is on screen — usually already playing by the time it's centered.
@@ -109,37 +85,21 @@ export function FeedVideo({
     setMuted(v.muted);
   }, []);
 
-  const togglePlay = useCallback(() => {
-    const v = video.current;
-    if (!v) return;
-    if (v.paused) {
-      userPaused.current = false;
-      v.play().catch(() => {});
-    } else {
-      userPaused.current = true;
-      v.pause();
-    }
-  }, []);
-
-  const expand = useCallback(
-    (e?: React.SyntheticEvent) => {
-      e?.stopPropagation();
-      onExpand?.();
-    },
-    [onExpand],
-  );
-
-  // ── Touch gesture model (only wired on non-hover devices) ────────────────
+  // ── Unified tap-to-open gesture (all devices) ────────────────────────────
+  // A deliberate tap/click anywhere on the video opens the fullscreen reel. It is
+  // heavily guarded so it never fires on a slight graze, a drag, a hover, or the
+  // tail of a scroll — press-and-hold pauses instead (and never opens).
   const onPointerDown = (e: React.PointerEvent) => {
     holding.current = false;
     moved.current = false;
     startPt.current = { x: e.clientX, y: e.clientY };
+    downAt.current = Date.now();
     holdTimer.current = setTimeout(() => {
       if (moved.current) return;
       holding.current = true;
       setHeld(true);
       video.current?.pause();
-    }, 170);
+    }, 220);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!startPt.current || moved.current) return;
@@ -157,13 +117,29 @@ export function FeedVideo({
   };
   const endHold = () => {
     if (holdTimer.current) clearTimeout(holdTimer.current);
+    const started = startPt.current !== null;
+    const dur = Date.now() - downAt.current;
+    if (holding.current) {
+      // Was a press-and-hold to pause → resume, never open.
+      holding.current = false;
+      setHeld(false);
+      video.current?.play().catch(() => {});
+      startPt.current = null;
+      return;
+    }
+    startPt.current = null;
+    // Deliberate tap only: pressed here, barely moved, quick (not a graze/hold),
+    // and the feed isn't mid-scroll.
+    if (started && !moved.current && dur >= 60 && dur <= 500 && !recentlyScrolled(500)) {
+      onExpand?.();
+    }
+  };
+  const onPointerLeaveCancel = () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
     if (holding.current) {
       holding.current = false;
       setHeld(false);
       video.current?.play().catch(() => {});
-    } else if (!moved.current && !recentlyScrolled()) {
-      // Only a deliberate, stationary tap on a settled feed opens the reel.
-      onExpand?.();
     }
     startPt.current = null;
   };
@@ -186,12 +162,6 @@ export function FeedVideo({
 
   if (!src) return null;
 
-  // Touch handlers only bind on small touch screens — on any large screen a
-  // click must never open the reel, it toggles playback instead.
-  const touchHandlers = desktop
-    ? {}
-    : { onPointerDown, onPointerMove, onPointerUp: endHold, onPointerLeave: endHold, onPointerCancel: endHold };
-
   return (
     <div
       ref={wrap}
@@ -202,8 +172,6 @@ export function FeedVideo({
         "lg:flex lg:aspect-auto lg:max-h-[82vh] lg:items-center lg:justify-center",
         className,
       )}
-      onClick={desktop ? togglePlay : undefined}
-      onDoubleClick={desktop ? expand : undefined}
     >
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
@@ -216,17 +184,19 @@ export function FeedVideo({
         muted
         playsInline
         preload="metadata"
-        className="h-full w-full object-cover lg:h-auto lg:max-h-[82vh] lg:w-auto lg:object-contain"
+        className="h-full w-full touch-pan-y object-cover lg:h-auto lg:max-h-[82vh] lg:w-auto lg:object-contain"
         onPlay={() => {
           video.current && claimPlayback(video.current);
-          setPlaying(true);
         }}
-        onPause={() => setPlaying(false)}
         onPlaying={() => {
           setCovered(false);
           if (postId) recordView(postId);
         }}
-        {...touchHandlers}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endHold}
+        onPointerLeave={onPointerLeaveCancel}
+        onPointerCancel={onPointerLeaveCancel}
       />
 
       {/* Cover — shows the poster until the first frame actually plays, so a
@@ -236,44 +206,13 @@ export function FeedVideo({
         <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full object-cover lg:object-contain" />
       ) : null}
 
-      {/* Touch: paused-while-holding indicator */}
+      {/* Paused-while-holding indicator */}
       {held ? (
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
             <Pause className="h-6 w-6 fill-white" />
           </span>
         </span>
-      ) : null}
-
-      {/* Desktop: a play/pause control — revealed on hover (mouse), or shown
-          persistently on a large touch screen (no hover to reveal it). */}
-      {desktop ? (
-        <span
-          className={cn(
-            "pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-150",
-            hoverable ? (playing ? "opacity-0 group-hover:opacity-100" : "opacity-100") : playing ? "opacity-70" : "opacity-100",
-          )}
-        >
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white shadow-lg backdrop-blur-md ring-1 ring-white/20">
-            {playing ? <Pause className="h-7 w-7 fill-white" /> : <Play className="h-7 w-7 translate-x-0.5 fill-white" />}
-          </span>
-        </span>
-      ) : null}
-
-      {/* Desktop: explicit "Open reel" button — the ONLY way a click opens the
-          reel (a plain click on the video just plays/pauses). */}
-      {desktop ? (
-        <button
-          type="button"
-          onClick={expand}
-          aria-label="Open reel"
-          className={cn(
-            "absolute left-2.5 top-2.5 z-10 flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-md transition hover:bg-black/65",
-            hoverable ? "opacity-0 group-hover:opacity-100" : "opacity-100",
-          )}
-        >
-          <Expand className="h-3.5 w-3.5" /> Open reel
-        </button>
       ) : null}
 
       {/* Mute toggle */}
@@ -287,8 +226,8 @@ export function FeedVideo({
       </button>
 
       {/* Hint */}
-      <span className="pointer-events-none absolute bottom-2 left-2.5 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur">
-        {desktop ? "Click to play · Open reel to watch" : "Tap to watch · hold to pause"}
+      <span className="pointer-events-none absolute bottom-2 left-2.5 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 opacity-0 backdrop-blur transition-opacity duration-200 group-hover:opacity-100">
+        Tap to watch · hold to pause
       </span>
     </div>
   );

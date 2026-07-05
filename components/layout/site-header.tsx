@@ -46,12 +46,13 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
     <header className={cn("fixed inset-x-0 top-0 z-50 backdrop-blur-xl", desktopHidden && "lg:hidden", social ? "border-b border-border/20 bg-background/60" : "border-b border-border/40 bg-background/85 supports-[backdrop-filter]:bg-background/70")}>
       <div className="container flex h-16 items-center justify-between">
         {/* Brand — hidden on mobile social surfaces (plain, full-bleed top bar) */}
-        <Link href="/" className={cn("items-center", social ? "hidden md:flex" : "flex")} onClick={() => setOpen(false)}>
+        <Link href="/" className={cn("items-center", social ? "hidden lg:flex" : "flex")} onClick={() => setOpen(false)}>
           <FrenzWordmark size={32} />
         </Link>
 
-        {/* Desktop nav */}
-        <nav className="hidden items-center gap-6 text-sm font-medium text-muted-foreground md:flex">
+        {/* Desktop nav — only at lg+; iPad-portrait (md) uses the roomy drawer so
+            the bar never gets cramped. */}
+        <nav className="hidden items-center gap-6 text-sm font-medium text-muted-foreground lg:flex">
           {NAV_LINKS.map((l) => (
             <Link
               key={l.href}
@@ -64,7 +65,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
         </nav>
 
         {/* Desktop right */}
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-3 lg:flex">
           {!isPremium && (
             <Link
               href="/pricing"
@@ -85,7 +86,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-card/50 text-foreground backdrop-blur md:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-card/50 text-foreground backdrop-blur lg:hidden"
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -101,9 +102,9 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
             type="button"
             aria-label="Close menu"
             onClick={() => setOpen(false)}
-            className="fixed inset-x-0 bottom-0 top-16 z-40 bg-background/50 backdrop-blur-sm md:hidden"
+            className="fixed inset-x-0 bottom-0 top-16 z-40 bg-background/50 backdrop-blur-sm lg:hidden"
           />
-          <div className="fixed bottom-0 right-0 top-16 z-50 w-[62%] min-w-[18rem] max-w-sm overflow-y-auto overscroll-contain border-l border-border/40 bg-background/97 shadow-2xl md:hidden">
+          <div className="fixed bottom-0 right-0 top-16 z-50 w-[62%] min-w-[18rem] max-w-sm overflow-y-auto overscroll-contain border-l border-border/40 bg-background/97 shadow-2xl lg:hidden">
             <nav className="flex flex-col gap-1 p-4">
             {/* Go Pro — top CTA, hidden for paying users */}
             {!isPremium && (

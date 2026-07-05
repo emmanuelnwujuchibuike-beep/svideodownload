@@ -368,8 +368,152 @@ async function loadHomeFeed(
         it.repostBadge = badges.get(it.id);
       }
     }
+
+    // Surface friend reposts that aren't already in your feed (Repost spec §5): a
+    // followed user's repost PULLS the original post in — near the top, tagged with
+    // the "X reposted" attribution badge. First page of the For You feed only.
+    if (offset === 0 && sort === "for_you" && viewerId && followingIds.length) {
+      try {
+        const exclude = new Set(kept.map((k) => k.id));
+        const surfaced = await surfaceFollowedReposts(viewerId, followingIds, exclude, 2);
+        if (surfaced.length) {
+          const at = Math.min(1, items.length); // after the first organic post
+          items.splice(at, 0, ...surfaced);
+        }
+      } catch {
+        /* surfacing is best-effort */
+      }
+    }
     return { items, nextOffset };
   } catch {
     return { items: [], nextOffset: null };
   }
+}
+
+/**
+ * Posts that people you FOLLOW have reposted but that aren't already in your
+ * ranked feed — so a friend's repost actually brings new content in (Repost spec
+ * §5). Returns fully-formed `FeedItem`s (with the "X reposted" badge attached),
+ * newest-repost first. Best-effort: returns [] before migration 0025 or when
+ * there's nothing to surface. Privacy still wins (suspended / blocked / your own
+ * posts are dropped).
+ */
+async function surfaceFollowedReposts(
+  viewerId: string,
+  followingIds: string[],
+  excludeIds: Set<string>,
+  max: number,
+): Promise<FeedItem[]> {
+  if (followingIds.length === 0) return [];
+  const db = createAdminClient();
+
+  // Most-recent reposts by people you follow → distinct target posts not already
+  // shown. Over-fetch so privacy filtering below still yields `max`.
+  const { data: repRows } = await db
+    .from("reposts")
+    .select("post_id, user_id, created_at")
+    .in("user_id", followingIds)
+    .order("created_at", { ascending: false })
+    .limit(60);
+  const wantIds: string[] = [];
+  const dedupe = new Set<string>();
+  for (const r of (repRows ?? []) as { post_id: string }[]) {
+    if (excludeIds.has(r.post_id) || dedupe.has(r.post_id)) continue;
+    dedupe.add(r.post_id);
+    wantIds.push(r.post_id);
+    if (wantIds.length >= max * 3) break;
+  }
+  if (wantIds.length === 0) return [];
+
+  const { data: postRows } = await db.from("posts").select(SELECT).in("id", wantIds);
+  let rows = ((postRows ?? []) as Row[]).filter(
+    (r) => r.status === "published" && r.visibility === "public" && r.publisher_id !== viewerId,
+  );
+  // Preserve repost-recency order (the `.in()` query returns rows unordered).
+  rows.sort((a, b) => wantIds.indexOf(a.id) - wantIds.indexOf(b.id));
+  if (rows.length === 0) return [];
+
+  const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
+  const [{ data: profs }, { data: subs }, { data: reactions }, { data: blocks }] = await Promise.all([
+    db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended").in("id", publisherIds),
+    db.from("subscriptions").select("user_id, plan").in("user_id", publisherIds).in("status", ["active", "trialing"]),
+    db.from("post_reactions").select("post_id, type").eq("user_id", viewerId).in("post_id", rows.map((r) => r.id)),
+    db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`),
+  ]);
+
+  const profById = new Map<string, Record<string, unknown>>();
+  const suspended = new Set<string>();
+  for (const p of (profs ?? []) as { id: string; handle: string | null; is_suspended: boolean }[]) {
+    profById.set(p.id, p as unknown as Record<string, unknown>);
+    if (p.is_suspended || !p.handle) suspended.add(p.id);
+  }
+  const planById = new Map(((subs ?? []) as { user_id: string; plan: BillingPlan }[]).map((s) => [s.user_id, s.plan]));
+  const blocked = new Set<string>();
+  for (const b of (blocks ?? []) as { blocker_id: string; blocked_id: string }[]) {
+    blocked.add(b.blocker_id === viewerId ? b.blocked_id : b.blocker_id);
+  }
+  const liked = new Set<string>();
+  const saved = new Set<string>();
+  for (const r of (reactions ?? []) as { post_id: string; type: string }[]) {
+    if (r.type === "like") liked.add(r.post_id);
+    else if (r.type === "save") saved.add(r.post_id);
+  }
+
+  rows = rows.filter((r) => !suspended.has(r.publisher_id) && !blocked.has(r.publisher_id)).slice(0, max);
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.id);
+  const [badges, counts, reposted, pollSet] = await Promise.all([
+    followedReposters(ids, followingIds),
+    repostCounts(ids),
+    viewerReposts(ids, viewerId),
+    (async () => {
+      try {
+        const { data } = await db.from("post_polls").select("post_id").in("post_id", ids);
+        return new Set(((data ?? []) as { post_id: string }[]).map((p) => p.post_id));
+      } catch {
+        return new Set<string>();
+      }
+    })(),
+  ]);
+
+  return rows.map((r) => {
+    const prof = profById.get(r.publisher_id) as Record<string, unknown>;
+    return {
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      platform: r.platform,
+      mediaKind: r.media_kind,
+      thumbnailUrl: r.thumbnail_url,
+      sourceUrl: r.source_url,
+      mediaUrl: r.media_url,
+      streamUid: r.stream_uid ?? null,
+      category: r.category,
+      durationSec: r.duration_sec,
+      viewsCount: r.views_count,
+      likesCount: r.likes_count,
+      commentsCount: r.comments_count,
+      sharesCount: r.shares_count,
+      savesCount: r.saves_count,
+      downloadsCount: r.downloads_count,
+      createdAt: r.created_at,
+      publisher: {
+        id: r.publisher_id,
+        handle: prof.handle as string,
+        displayName: (prof.display_name as string) || `@${prof.handle as string}`,
+        avatarUrl: (prof.avatar_url as string) ?? null,
+        isVerified: (prof.is_verified as boolean) ?? false,
+        plan: planById.get(r.publisher_id) ?? "free",
+      },
+      viewerLiked: liked.has(r.id),
+      viewerSaved: saved.has(r.id),
+      isFollowing: true, // surfaced because someone you follow reposted it
+      isOwner: false,
+      hasPoll: pollSet.has(r.id),
+      viewerReposted: reposted.has(r.id),
+      repostsCount: counts.get(r.id) ?? 0,
+      repostBadge: badges.get(r.id),
+    };
+  });
 }

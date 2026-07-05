@@ -128,8 +128,11 @@ export function ReelDeck({
       return next;
     });
   }, []);
+  // Render (and pre-buffer) the next TWO clips at all times, extending to the
+  // third once the next is ready — so scrolling forward always lands on a warm,
+  // already-loaded video instead of a spinner.
   const next1 = items[active + 1];
-  const ceiling = Math.min(items.length - 1, active + (next1 && readyIds.has(next1.id) ? 2 : 1));
+  const ceiling = Math.min(items.length - 1, active + (next1 && readyIds.has(next1.id) ? 3 : 2));
   const visible = items.slice(0, ceiling + 1);
 
   // Lock the page, jump to the opening reel, wire Escape.
@@ -216,9 +219,9 @@ export function ReelDeck({
               <ReelCard
                 item={item}
                 isActive={i === active}
-                // Mount + buffer the previous clip and the NEXT TWO so scrolling
+                // Mount + buffer the previous clip and the NEXT THREE so scrolling
                 // forward never hits an unbuffered video (only the active one plays).
-                nearby={i >= active - 1 && i <= active + 2}
+                nearby={i >= active - 1 && i <= active + 3}
                 loop={items.length === 1}
                 onClose={onClose}
                 onEnded={() => (i < items.length - 1 ? scrollToIndex(i + 1) : undefined)}

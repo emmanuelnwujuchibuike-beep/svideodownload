@@ -162,11 +162,15 @@ export function SmartFeed({
     void fetchPage(s, 0, true);
   };
 
-  // The third tab is "Fresh" on desktop (recent feed) but "Reels" on mobile,
-  // where it jumps straight into the full-screen reels experience.
+  // The third tab is "Fresh" on desktop (recent feed) but "Reels" on mobile.
+  // On mobile it opens the full reels experience IN PLACE — instant, no route
+  // change or loader — seeded on the first already-loaded video. Only if nothing
+  // is loaded yet do we fall back to navigating to the /reels route.
   const onSegment = (key: HomeFeedSort) => {
     if (key === "recent" && typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
-      router.push("/reels");
+      const first = videosRef.current[0];
+      if (first) setReel({ startId: first.id, commentsId: null });
+      else router.push("/reels");
       return;
     }
     changeSegment(key);
@@ -352,12 +356,14 @@ export function SmartFeed({
         ) : null}
       </AnimatePresence>
 
-      {/* Controls — sticky under the top bar so you never have to scroll up to
-          switch, with a matured monochrome sliding pill (Facebook/X-like, not a
-          bright gradient). */}
-      <div className="sticky top-16 z-20 -mx-3 mb-4 bg-background/85 px-3 pb-2 pt-2 backdrop-blur-xl sm:-mx-4 sm:px-4">
-        {/* Segments */}
-        <div className="relative flex items-center gap-1 rounded-2xl bg-secondary/50 p-1 ring-1 ring-inset ring-border/50">
+      {/* Controls — a sticky, world-class nav bar. A hairline-bordered glass rail
+          holds the hero segmented control (smooth spring-slid indicator) and a
+          quiet, edge-faded row of filter chips, so switching is one clean glance
+          with nothing crowding it. Animations are transform/opacity only (GPU) —
+          premium motion, no jank. */}
+      <div className="sticky top-16 z-20 -mx-3 mb-4 border-b border-border/50 bg-background/75 px-3 pb-2.5 pt-2.5 backdrop-blur-2xl sm:-mx-4 sm:px-4">
+        {/* Hero segmented control */}
+        <div className="relative flex items-center gap-0.5 rounded-full bg-secondary/40 p-1 ring-1 ring-inset ring-border/40">
           {SEGMENTS.map((t) => {
             const on = sort === t.key;
             return (
@@ -366,16 +372,16 @@ export function SmartFeed({
                 type="button"
                 onClick={() => onSegment(t.key)}
                 aria-pressed={on}
-                className="relative flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition active:scale-[0.97]"
+                className="relative flex-1 rounded-full px-3 py-2 text-[13px] font-semibold tracking-tight transition-colors duration-200 active:scale-[0.98]"
               >
                 {on ? (
                   <motion.span
                     layoutId="seg-pill"
-                    transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                    className="absolute inset-0 rounded-xl bg-foreground shadow-sm"
+                    transition={{ type: "spring", stiffness: 480, damping: 40 }}
+                    className="absolute inset-0 rounded-full bg-background shadow-[0_1px_4px_rgba(0,0,0,0.14)] ring-1 ring-inset ring-border/60"
                   />
                 ) : null}
-                <span className={cn("relative z-10", on ? "text-background" : "text-muted-foreground hover:text-foreground")}>
+                <span className={cn("relative z-10", on ? "text-foreground" : "text-muted-foreground hover:text-foreground/80")}>
                   {t.key === "recent" ? (
                     <>
                       <span className="lg:hidden">Reels</span>
@@ -390,8 +396,9 @@ export function SmartFeed({
           })}
         </div>
 
-        {/* Filters */}
-        <div className="-mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Quiet filter chips — ghost by default, fill when active. Edge-faded
+            horizontal scroll keeps them on one uncluttered line. */}
+        <div className="-mx-1 mt-2.5 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [-webkit-mask-image:linear-gradient(90deg,transparent,#000_20px,#000_92%,transparent)] [mask-image:linear-gradient(90deg,transparent,#000_20px,#000_92%,transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {FILTERS.map((f) => {
             const on = filter === f.id;
             return (
@@ -401,21 +408,19 @@ export function SmartFeed({
                 onClick={() => setFilter(f.id)}
                 aria-pressed={on}
                 className={cn(
-                  "relative shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition active:scale-95",
-                  on ? "text-background" : "border border-border/70 text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+                  "relative flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition active:scale-95",
+                  on ? "text-background" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {on ? (
                   <motion.span
                     layoutId="filter-pill"
-                    transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                    transition={{ type: "spring", stiffness: 480, damping: 40 }}
                     className="absolute inset-0 rounded-full bg-foreground"
                   />
                 ) : null}
-                <span className="relative z-10 flex items-center gap-1.5">
-                  <f.icon className="h-3.5 w-3.5" />
-                  {f.label}
-                </span>
+                <f.icon className={cn("relative z-10 h-3.5 w-3.5", on ? "opacity-100" : "opacity-70")} strokeWidth={2.1} />
+                <span className="relative z-10">{f.label}</span>
               </button>
             );
           })}

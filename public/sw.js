@@ -7,7 +7,7 @@
  *  - Everything else (API, realtime, POST) → straight to network (never cached).
  */
 
-const VERSION = "v3";
+const VERSION = "v4";
 const STATIC_CACHE = `frenz-static-${VERSION}`;
 const IMAGE_CACHE = `frenz-img-${VERSION}`;
 const PAGE_CACHE = `frenz-pages-${VERSION}`;
@@ -18,6 +18,14 @@ const OFFLINE_HTML =
   '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline · Frenz</title><style>html,body{height:100%;margin:0;background:#080b14;color:#e5e7eb;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;text-align:center}div{padding:2rem}h1{font-size:1.25rem;margin:.5rem 0}p{color:#9ca3af;font-size:.9rem}</style></head><body><div><h1>You’re offline</h1><p>Check your connection — Frenz will be right back.</p></div></body></html>';
 
 self.addEventListener("install", () => self.skipWaiting());
+
+// The page can tell a freshly-installed worker to take over now (instead of
+// waiting for every tab to close) — powers instant updates on open laptop tabs.
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING" || (event.data && event.data.type === "SKIP_WAITING")) {
+    self.skipWaiting();
+  }
+});
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(

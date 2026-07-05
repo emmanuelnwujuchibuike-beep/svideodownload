@@ -81,8 +81,13 @@ _Last updated: 2026‑07‑05._
   rank; and **per-tab profile privacy** — Reposts / Liked / Saved each have their
   own Public / Followers / Private visibility (a disallowed tab is hidden entirely
   and its data never loads), in **migration `0026_profile_tab_privacy.sql` (must
-  be applied in Supabase)**. Still deferred: Collections, repost conversations,
-  grouped repost notifications, the repost bubble animation.
+  be applied in Supabase)**. **Phase 2b is complete:** an OS-style repost bubble
+  animation on the feed + reels; grouped repost notifications ("X and N others
+  reposted your post"); and **Collections** — user-curated, privacy-scoped sets of
+  posts ("Save to collection") with a picker sheet and a profile Collections tab,
+  in **migration `0027_collections.sql` (must be applied in Supabase)**. Repost
+  conversations stay unified on the original post by design (a repost is a
+  pointer). The repost feature set is now complete.
 
 ## Infrastructure & ops
 

@@ -3,10 +3,18 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BadgeCheck,
+  Ban,
+  BellOff,
   Bookmark,
   Check,
   Download,
+  ExternalLink,
+  EyeOff,
+  Flag,
+  FolderPlus,
   Heart,
+  Info,
+  Link2,
   Loader2,
   MessageCircle,
   MoreHorizontal,
@@ -16,6 +24,7 @@ import {
   Repeat2,
   Share2,
   UserPlus,
+  UserX,
   Volume2,
   VolumeX,
   X,
@@ -249,7 +258,6 @@ function ReelCard({
   const [saved, setSaved] = useState(item.viewerSaved);
   const following = useFollowState(item.publisher.id, item.isFollowing);
   const [likes, setLikes] = useState(item.likesCount);
-  const [shares, setShares] = useState(item.sharesCount);
   const [showComments, setShowComments] = useState(false);
   const [sheetVideoPaused, setSheetVideoPaused] = useState(false);
   const [comments, setComments] = useState<CommentsData | null>(null);
@@ -391,7 +399,7 @@ function ReelCard({
   };
 
   const share = async () => {
-    setShares((n) => n + 1);
+    setMoreOpen(false);
     const url = `${window.location.origin}/p/${item.id}`;
     try {
       if (navigator.share) await navigator.share({ title: item.title, url });
@@ -453,6 +461,59 @@ function ReelCard({
       toast("Couldn't repost.", "error");
       setReposted(false);
     }
+  };
+
+  // ── Overflow (•••) actions ────────────────────────────────────────────────
+  const postUrl = () => `${window.location.origin}/p/${item.id}`;
+  const copyLink = async () => {
+    setMoreOpen(false);
+    try {
+      await navigator.clipboard.writeText(postUrl());
+      toast("Link copied.", "success");
+    } catch {
+      toast("Couldn't copy the link.", "error");
+    }
+  };
+  const openInBrowser = () => {
+    setMoreOpen(false);
+    window.open(postUrl(), "_blank", "noopener");
+  };
+  const viewDetails = () => {
+    setMoreOpen(false);
+    window.location.assign(`/p/${item.id}`);
+  };
+  const reportPost = async () => {
+    setMoreOpen(false);
+    try {
+      await fetch("/api/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetType: "post", targetId: item.id, reason: "inappropriate" }),
+      });
+      toast("Reported. Thanks for keeping Frenz safe.", "success");
+    } catch {
+      toast("Couldn't send the report.", "error");
+    }
+  };
+  const blockUser = async () => {
+    setMoreOpen(false);
+    try {
+      const r = await fetch(`/api/block/${item.publisher.id}`, { method: "POST" });
+      if (!r.ok) throw new Error();
+      toast(`Blocked @${item.publisher.handle}.`, "success");
+      onClose();
+    } catch {
+      toast("Couldn't block.", "error");
+    }
+  };
+  const hidePost = () => {
+    setMoreOpen(false);
+    toast("We'll show less like this.", "info");
+    onClose();
+  };
+  const comingSoon = (what: string) => {
+    setMoreOpen(false);
+    toast(`${what} — coming soon.`, "info");
   };
 
   const seekBy = (delta: number) => {
@@ -747,13 +808,12 @@ function ReelCard({
           ) : null}
         </Link>
 
-        {/* Core actions only — everything else lives in the "More" menu so the
-            rail never gets clustered. */}
+        {/* Refined action stack: Like · Comment · Repost · Save · More. Share and
+            everything else live in the premium overflow sheet. */}
         <RailButton icon={Heart} active={liked} fill={liked} activeClass="text-rose-500" count={likes} label="Like" onClick={() => react("like")} />
-        <RailButton icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
-        <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
-        <RailButton icon={Share2} count={shares} label="Share" onClick={share} />
+        <RailButton icon={MessageCircle} count={item.commentsCount} label="Comment" onClick={openComments} />
         <RailButton icon={Repeat2} active={reposted} fill={reposted} activeClass="text-emerald-400" label="Repost" onClick={repost} />
+        <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
         <RailButton icon={MoreHorizontal} label="More" onClick={() => setMoreOpen(true)} />
       </div>
 
@@ -853,19 +913,70 @@ function ReelCard({
           Portaled to <body> so it sits above the bottom nav. */}
       {mounted && moreOpen
         ? createPortal(
-            <div className="fixed inset-0 z-[95]">
-              <button type="button" aria-label="Close" onClick={() => setMoreOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div className="fixed inset-0 z-[95] flex items-end justify-center">
+              <motion.button
+                type="button"
+                aria-label="Close"
+                onClick={() => setMoreOpen(false)}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/60 backdrop-blur-md"
+              />
               <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                transition={{ type: "spring", stiffness: 380, damping: 36 }}
-                className="absolute inset-x-0 bottom-0 mx-auto max-w-lg rounded-t-3xl border-t border-border/60 bg-card p-2 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"
+                role="menu"
+                initial={{ y: 24, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 420, damping: 38 }}
+                className="relative m-2 w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur-2xl"
               >
-                <div className="mx-auto my-2 h-1 w-10 rounded-full bg-border" />
-                <MoreItem icon={Download} label="Download" onClick={() => { setMoreOpen(false); void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined }); }} />
-                {item.isOwner ? <MoreItem icon={Pencil} label="Edit post" onClick={() => { setMoreOpen(false); setEditOpen(true); }} /> : null}
-                {!item.isOwner ? <MoreItem icon={following ? Check : UserPlus} label={following ? "Following" : "Follow creator"} onClick={() => void toggleFollow()} /> : null}
-                {native ? <MoreItem icon={mutedAuto ? VolumeX : Volume2} label={mutedAuto ? "Unmute" : "Mute"} onClick={() => { toggleMute(); setMoreOpen(false); }} /> : null}
+                <div className="mx-auto mt-2.5 mb-1 h-1 w-9 rounded-full bg-border" />
+                <div className="max-h-[70vh] overflow-y-auto p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {/* Share & link */}
+                  <MoreGroup>
+                    <MoreItem icon={Share2} label="Share" onClick={share} />
+                    <MoreItem icon={Link2} label="Copy link" onClick={copyLink} />
+                    <MoreItem icon={ExternalLink} label="Open in browser" onClick={openInBrowser} />
+                    <MoreItem icon={Info} label="View post details" onClick={viewDetails} />
+                  </MoreGroup>
+
+                  {/* Organize & creator */}
+                  <MoreGroup>
+                    <MoreItem icon={FolderPlus} label="Add to collection" onClick={() => comingSoon("Collections")} />
+                    <MoreItem icon={Download} label="Download" onClick={() => { setMoreOpen(false); void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined }); }} />
+                    {item.isOwner ? (
+                      <MoreItem icon={Pencil} label="Edit post" onClick={() => { setMoreOpen(false); setEditOpen(true); }} />
+                    ) : (
+                      <>
+                        <MoreItem icon={following ? Check : UserPlus} label={following ? "Following creator" : "Follow creator"} onClick={() => void toggleFollow()} />
+                        <MoreItem icon={BellOff} label="Mute creator" onClick={() => comingSoon("Mute creator")} />
+                      </>
+                    )}
+                    {native ? <MoreItem icon={mutedAuto ? VolumeX : Volume2} label={mutedAuto ? "Unmute audio" : "Mute audio"} onClick={() => { toggleMute(); setMoreOpen(false); }} /> : null}
+                  </MoreGroup>
+
+                  {/* Feedback */}
+                  {!item.isOwner ? (
+                    <MoreGroup>
+                      <MoreItem icon={EyeOff} label="Hide this post" onClick={hidePost} />
+                      <MoreItem icon={Ban} label="Not interested" onClick={hidePost} />
+                    </MoreGroup>
+                  ) : null}
+
+                  {/* Danger */}
+                  {!item.isOwner ? (
+                    <MoreGroup>
+                      <MoreItem icon={Flag} label="Report post" onClick={reportPost} danger />
+                      <MoreItem icon={UserX} label={`Block @${item.publisher.handle}`} onClick={blockUser} danger />
+                    </MoreGroup>
+                  ) : null}
+                </div>
+
+                <div className="p-1.5 pt-0">
+                  <button type="button" onClick={() => setMoreOpen(false)} className="w-full rounded-2xl bg-secondary/70 py-3 text-sm font-semibold text-foreground transition hover:bg-secondary active:scale-[0.99]">
+                    Cancel
+                  </button>
+                </div>
               </motion.div>
             </div>,
             document.body,
@@ -887,10 +998,23 @@ function ReelCard({
   );
 }
 
-function MoreItem({ icon: Icon, label, onClick }: { icon: typeof Heart; label: string; onClick: () => void }) {
+/** A visually grouped block of overflow rows, separated by a subtle divider. */
+function MoreGroup({ children }: { children: React.ReactNode }) {
+  return <div className="mb-1.5 overflow-hidden rounded-2xl bg-secondary/30 last:mb-0">{children}</div>;
+}
+
+function MoreItem({ icon: Icon, label, onClick, danger }: { icon: typeof Heart; label: string; onClick: () => void; danger?: boolean }) {
   return (
-    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold text-foreground transition hover:bg-secondary active:scale-[0.99]">
-      <Icon className="h-5 w-5" /> {label}
+    <button
+      type="button"
+      onClick={onClick}
+      role="menuitem"
+      className={cn(
+        "flex w-full items-center gap-3.5 px-4 py-3 text-left text-[15px] font-medium transition first:rounded-t-2xl last:rounded-b-2xl active:scale-[0.99]",
+        danger ? "text-red-500 hover:bg-red-500/10" : "text-foreground hover:bg-secondary/70",
+      )}
+    >
+      <Icon className="h-5 w-5 shrink-0 opacity-90" strokeWidth={1.9} /> {label}
     </button>
   );
 }

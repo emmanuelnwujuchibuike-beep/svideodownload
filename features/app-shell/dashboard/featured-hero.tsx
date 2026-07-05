@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { useQuery } from "@/features/data";
 import { PostViewer } from "@/features/feed/post-viewer";
+import { getApi } from "@/lib/sdk/browser";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
@@ -14,10 +15,12 @@ export function FeaturedHero({ initialItems }: { initialItems?: FeedItem[] }) {
   const { data, isLoading } = useQuery<FeedItem[]>(
     "home-feed:featured",
     async () => {
-      const r = await fetch("/api/home-feed?sort=trending&limit=10");
-      if (!r.ok) return [];
-      const d = (await r.json()) as { items: FeedItem[] };
-      return (d.items ?? []).filter((i) => i.thumbnailUrl).slice(0, 6);
+      try {
+        const d = await getApi().action<{ items: FeedItem[] }>("/api/home-feed", { method: "GET", query: { sort: "trending", limit: 10 } });
+        return (d.items ?? []).filter((i) => i.thumbnailUrl).slice(0, 6);
+      } catch {
+        return [];
+      }
     },
     { initialData: initialItems },
   );

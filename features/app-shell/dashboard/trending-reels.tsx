@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { useQuery } from "@/features/data";
 import { ReelDeck } from "@/features/feed/reel-viewer";
+import { getApi } from "@/lib/sdk/browser";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { formatCompactNumber } from "@/lib/utils";
 
@@ -17,10 +18,12 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
   const { data, isLoading } = useQuery<FeedItem[]>(
     "home-feed:reels",
     async () => {
-      const r = await fetch("/api/home-feed?sort=recent&limit=15");
-      if (!r.ok) return [];
-      const d = (await r.json()) as { items: FeedItem[] };
-      return (d.items ?? []).filter((i) => i.mediaKind === "video").slice(0, 8);
+      try {
+        const d = await getApi().action<{ items: FeedItem[] }>("/api/home-feed", { method: "GET", query: { sort: "recent", limit: 15 } });
+        return (d.items ?? []).filter((i) => i.mediaKind === "video").slice(0, 8);
+      } catch {
+        return [];
+      }
     },
     { initialData: initialItems },
   );

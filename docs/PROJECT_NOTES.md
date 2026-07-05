@@ -68,6 +68,13 @@ _Last updated: 2026‑07‑05._
   divider), drafts + recovery, morph publish animation.
 - **Downloader** — the SEO/download product; direct download of posts (free tier
   capped at 5/day, premium unlimited).
+- **Repost & Share (Phase 1)** — reels action stack is Like · Comment · Repost ·
+  Save + a premium overflow (•••) sheet (Share, Copy link, Open in browser, View
+  details, Add to collection, Download, Follow/Mute creator, Mute audio, Hide, Not
+  interested, Report, Block). Repost also on feed posts. `POST /api/posts/:id/
+  repost` creates an attributed repost. Phase 2+ (attribution model, profile
+  Reposts tab, per-tab privacy, "X reposted" discovery, repost badges,
+  notifications) needs a `reposts` migration.
 
 ## Infrastructure & ops
 

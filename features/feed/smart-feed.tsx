@@ -33,6 +33,7 @@ import {
   buildSparkDeck,
   summarizeAway,
 } from "@/lib/social/smart-feed";
+import { getApi } from "@/lib/sdk/browser";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -123,9 +124,12 @@ export function SmartFeed({
       else setLoading(true);
       setError(false);
       try {
-        const res = await fetch(`/api/home-feed?sort=${s}&offset=${offset}&limit=${PAGE}`);
-        if (!res.ok) throw new Error();
-        const data = (await res.json()) as { items: FeedItem[]; nextOffset: number | null };
+        // Through the shared SDK — same client/path (auth, dedupe, retry, timeout)
+        // the native apps use.
+        const data = await getApi().action<{ items: FeedItem[]; nextOffset: number | null }>("/api/home-feed", {
+          method: "GET",
+          query: { sort: s, offset, limit: PAGE },
+        });
         if (replace) {
           seen.current = new Set(data.items.map((i) => i.id));
           setItems(balanceByKind(data.items));

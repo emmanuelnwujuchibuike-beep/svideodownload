@@ -8,6 +8,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { BrandLoader } from "@/features/app-shell/brand-loader";
 import { ReelDeck } from "@/features/feed/reel-viewer";
+import { getApi } from "@/lib/sdk/browser";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn } from "@/lib/utils";
 
@@ -40,9 +41,11 @@ export function ReelsFeed({ initialItems, initialOffset }: { initialItems: FeedI
 
   const fetchPage = useCallback(async (sort: Tab, off: number) => {
     try {
-      const res = await fetch(`/api/home-feed?sort=${sort}&offset=${off}&limit=24`);
-      if (!res.ok) return { items: [] as FeedItem[], nextOffset: null as number | null };
-      return (await res.json()) as { items: FeedItem[]; nextOffset: number | null };
+      // Through the shared SDK — same path the native apps use.
+      return await getApi().action<{ items: FeedItem[]; nextOffset: number | null }>("/api/home-feed", {
+        method: "GET",
+        query: { sort, offset: off, limit: 24 },
+      });
     } catch {
       return { items: [] as FeedItem[], nextOffset: null as number | null };
     }

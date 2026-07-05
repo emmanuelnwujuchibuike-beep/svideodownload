@@ -15,6 +15,7 @@ import {
   Music,
   Pencil,
   Play,
+  Repeat2,
   Share2,
   Sparkles,
   UserPlus,
@@ -27,6 +28,7 @@ import { PostPollInline } from "@/features/social/post-poll-inline";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
+import { toast } from "@/features/ui/toast";
 import { downloadPost } from "@/lib/media/download-post";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
@@ -126,6 +128,19 @@ function FeedPostCardImpl({
     }
   };
 
+  const repost = async () => {
+    setMenuOpen(false);
+    try {
+      const res = await fetch(`/api/posts/${item.id}/repost`, { method: "POST" });
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      if (res.status === 401) return toast("Sign in to repost.", "error");
+      if (!res.ok) return toast(d.error ?? "Couldn't repost.", "error");
+      toast("Reposted to your profile.", "success");
+    } catch {
+      toast("Couldn't repost.", "error");
+    }
+  };
+
   const report = async () => {
     setMenuOpen(false);
     try {
@@ -210,6 +225,9 @@ function FeedPostCardImpl({
                 >
                   {item.isOwner ? (
                     <MenuItem icon={Pencil} label="Edit post" onClick={() => { setMenuOpen(false); setEditOpen(true); }} />
+                  ) : null}
+                  {!item.isOwner ? (
+                    <MenuItem icon={Repeat2} label="Repost" onClick={repost} />
                   ) : null}
                   {!item.isOwner ? (
                     <MenuItem icon={UserPlus} label={following ? "Unfollow creator" : "Follow creator"} onClick={toggleFollow} />

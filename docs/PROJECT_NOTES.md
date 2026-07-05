@@ -104,9 +104,14 @@ play), and cut the sticky feed-nav backdrop-blur cost on scroll. **Pass 2:**
 migrated the high-byte images to `next/image` (AVIF/WebP + right-sized srcset +
 lazy) — the shared grid cover (cascades to every profile/explore/collection grid),
 collection covers, profile banner + avatar, and the feed-card header avatar. The
-inline feed photo stays a raw `<img>` on purpose (variable aspect, natural size, no
-stored dimensions — next/image would crop/distort); optimizing it needs image
-dimensions stored at upload. Next: that, plus windowing for very long feeds.
+**Pass 3:** the inline feed photo now uses next/image too — an image's natural
+dimensions are captured client-side at upload and stored (nullable
+`media_width`/`media_height`, **migration `0028_post_media_dimensions.sql`**), so
+the photo renders AVIF/WebP at the right size with no crop or layout shift; older
+posts without dims keep the plain `<img>`. Dimensions are written and read via
+separate best-effort paths so a not-yet-applied migration can't break publishing or
+the feed. More avatars moved to next/image too. Windowing isn't needed —
+`content-visibility` already gives feed cards virtualization-lite.
 
 ## Infrastructure & ops
 

@@ -18,7 +18,7 @@ import {
   Link2,
   Loader2,
   MessageCircle,
-  MoreHorizontal,
+  MoreVertical,
   Pause,
   Pencil,
   Play,
@@ -179,12 +179,6 @@ export function ReelDeck({
     });
   }, [items.length, onEndReached]);
 
-  const scrollToIndex = useCallback((i: number) => {
-    const el = scroller.current;
-    if (!el) return;
-    el.scrollTo({ top: i * el.clientHeight, behavior: "smooth" });
-  }, []);
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -248,9 +242,7 @@ export function ReelDeck({
                 // about to reach; the neighbours load metadata only.
                 nearby={i >= active - 1 && i <= active + 3}
                 preload={i >= active && i <= active + 2 ? "auto" : "metadata"}
-                loop={items.length === 1}
                 onClose={onClose}
-                onEnded={() => (i < items.length - 1 ? scrollToIndex(i + 1) : undefined)}
                 onCommentsOpen={setLocked}
                 autoOpenComments={item.id === autoOpenCommentsId}
                 variant={variant}
@@ -269,9 +261,7 @@ function ReelCard({
   isActive,
   isNext,
   nearby,
-  loop,
   onClose,
-  onEnded,
   onCommentsOpen,
   autoOpenComments,
   variant = "modal",
@@ -282,9 +272,7 @@ function ReelCard({
   isActive: boolean;
   isNext: boolean;
   nearby: boolean;
-  loop: boolean;
   onClose: () => void;
-  onEnded: () => void;
   onCommentsOpen: (open: boolean) => void;
   autoOpenComments?: boolean;
   variant?: "modal" | "page";
@@ -321,6 +309,12 @@ function ReelCard({
   const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([]);
   const seekBar = useRef<HTMLDivElement | null>(null);
   const pauseSignTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Press-and-hold pauses (existing gesture) AND now also opens the full options
+  // sheet — one gesture reaches everything instead of hunting for the small
+  // corner button. Tracks whether THIS hold caused the pause, so releasing after
+  // the sheet has taken over doesn't fight the user by auto-resuming underneath
+  // it, and closing the sheet (any of its many close paths) correctly resumes.
+  const [pausedForMore, setPausedForMore] = useState(false);
 
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
@@ -458,6 +452,20 @@ function ReelCard({
   useEffect(() => {
     if (isActive) prefetchPostComments(item.id);
   }, [isActive, item.id]);
+
+  // If the press-and-hold gesture paused playback to open the options sheet,
+  // resume once it's dismissed — however it closes (backdrop tap, an action
+  // that itself closes it, Cancel). Reacting to the state change (rather than
+  // wrapping every close call site) keeps this correct regardless of which
+  // path closed it.
+  useEffect(() => {
+    if (moreOpen || !pausedForMore) return;
+    setPausedForMore(false);
+    if (isActive) {
+      void video.current?.play().catch(() => {});
+      setPaused(false);
+    }
+  }, [moreOpen, pausedForMore, isActive]);
 
   // Opening comments freezes the reel (no snap to the next video) and pauses
   // playback so people can read/type calmly; closing resumes it.
@@ -691,7 +699,8 @@ function ReelCard({
   // Gesture model (vertical scrolling is native, so movement is never a tap):
   //  • single tap → pause / play (pause sign fades in ~1s after pausing).
   //  • double-tap left/right → seek −10s / +10s; double-tap centre → like.
-  //  • press-and-HOLD (~0.5s) → pause while held; release resumes.
+  //  • press-and-HOLD (~0.5s) → pauses AND opens the full options sheet, so one
+  //    gesture reaches every action; release resumes UNLESS the sheet took over.
   const onPointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
@@ -702,6 +711,8 @@ function ReelCard({
       holding.current = true;
       video.current?.pause();
       setPaused(true);
+      setPausedForMore(true);
+      setMoreOpen(true);
     }, 500);
   };
   const onPointerMove = (e: React.PointerEvent) => {
@@ -718,8 +729,13 @@ function ReelCard({
     if (native && holdTimer.current) clearTimeout(holdTimer.current);
     if (native && holding.current) {
       holding.current = false;
-      void video.current?.play();
-      setPaused(false);
+      // The options sheet is now open and has the user's attention — don't
+      // fight it by resuming playback underneath; the sheet-close effect below
+      // resumes once it's dismissed.
+      if (!moreOpen) {
+        void video.current?.play();
+        setPaused(false);
+      }
       return;
     }
     if (moved.current) return; // a scroll — leave it to the native scroller
@@ -794,12 +810,26 @@ function ReelCard({
         );
       })()}
 
-      {/* Elapsed / total time — moves with playback, auto-hides with the UI */}
+      {/* Elapsed / total time — top-center, below the For You/Following tabs;
+          auto-hides with the rest of the UI and returns the moment the screen
+          is tapped. */}
       {native && dur > 0 ? (
-        <div className={cn("absolute right-4 top-4 z-30 rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
+        <div className={cn("absolute left-1/2 top-14 z-30 -translate-x-1/2 rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
           {fmt(cur)} / {fmt(dur)}
         </div>
       ) : null}
+
+      {/* Options — top-right, mirroring the close (X) button at top-left. Also
+          opens on press-and-hold (see onPointerDown below) — one gesture reaches
+          every action, not just the small corner button. */}
+      <button
+        type="button"
+        onClick={() => setMoreOpen(true)}
+        aria-label="More options"
+        className="absolute right-4 top-4 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
+      >
+        <MoreVertical className="h-5 w-5" />
+      </button>
 
       {/* Media */}
       <div
@@ -823,7 +853,13 @@ function ReelCard({
               ref={video}
               // Source (HLS or MP4) is attached imperatively by useAdaptiveSource.
               poster={item.thumbnailUrl ?? undefined}
-              loop={loop}
+              // Every reel repeats continuously while it's the one in view —
+              // advancing only ever happens by the viewer's own scroll, never
+              // automatically. Preloading of the upcoming clips is entirely
+              // scroll/active-index driven (see `nearby`/`preload` above), so it
+              // keeps happening in the background regardless of the current
+              // clip looping.
+              loop
               playsInline
               preload={preload}
               className="relative z-10 h-full w-full object-cover lg:h-auto lg:max-h-full lg:w-auto lg:max-w-full lg:object-contain"
@@ -837,7 +873,6 @@ function ReelCard({
               onCanPlay={() => onReady?.(item.id)}
               onError={() => onReady?.(item.id)}
               onLoadedMetadata={(e) => setDur(e.currentTarget.duration || 0)}
-              onEnded={() => !loop && onEnded()}
               onTimeUpdate={(e) => {
                 const v = e.currentTarget;
                 setCur(v.currentTime);
@@ -846,7 +881,7 @@ function ReelCard({
             />
           ) : null
         ) : (
-          <SmartVideo streamUid={item.streamUid} src={item.mediaUrl} poster={item.thumbnailUrl} controls autoPlay={isActive} className="relative z-10 max-h-full" />
+          <SmartVideo streamUid={item.streamUid} src={item.mediaUrl} poster={item.thumbnailUrl} controls autoPlay={isActive} loop className="relative z-10 max-h-full" />
         )}
 
         {/* Buffering — only when the network can't keep up */}
@@ -962,7 +997,6 @@ function ReelCard({
           <RailButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-400" label="Repost" onClick={repost} />
         </div>
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
-        <RailButton icon={MoreHorizontal} label="More" onClick={() => setMoreOpen(true)} />
       </div>
 
       {/* Author + caption (auto-hides) */}

@@ -5,6 +5,7 @@ import {
   AlertCircle,
   ArrowUp,
   Clapperboard,
+  ChevronUp,
   Clock,
   Flame,
   Image as ImageIcon,
@@ -76,6 +77,7 @@ type FilterId = (typeof FILTERS)[number]["id"];
 
 const PAGE = 8;
 const SEEN_KEY = "frenz:feed-seen-at";
+const NAV_OPEN_KEY = "frenz:feed-nav-open";
 const PULL_THRESHOLD = 72;
 
 function applyFilter(items: FeedItem[], f: FilterId): FeedItem[] {
@@ -121,6 +123,29 @@ export function SmartFeed({
   // never loaded.
   const [viewerReady, setViewerReady] = useState(false);
   const [imageReady, setImageReady] = useState(false);
+  // The nav (segmented control + filter chips) can be tucked away via the tiny
+  // handle at its bottom edge — remembered across visits like the quality
+  // preference elsewhere in the app.
+  const [navOpen, setNavOpen] = useState(true);
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(NAV_OPEN_KEY);
+      if (v === "0") setNavOpen(false);
+    } catch {
+      /* storage unavailable — default open */
+    }
+  }, []);
+  const toggleNavOpen = useCallback(() => {
+    setNavOpen((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(NAV_OPEN_KEY, next ? "1" : "0");
+      } catch {
+        /* private mode — just won't persist */
+      }
+      return next;
+    });
+  }, []);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const seen = useRef(new Set(initialItems.map((i) => i.id)));
   const router = useRouter();
@@ -398,72 +423,98 @@ export function SmartFeed({
 
       {/* Controls — a sticky, world-class nav bar. A hairline-bordered glass rail
           holds the hero segmented control (smooth spring-slid indicator) and a
-          quiet, edge-faded row of filter chips, so switching is one clean glance
-          with nothing crowding it. Animations are transform/opacity only (GPU) —
-          premium motion, no jank. */}
-      <div className="sticky top-16 z-20 -mx-3 mb-4 border-b border-border/50 bg-background/90 px-3 pb-2.5 pt-2.5 backdrop-blur-lg sm:-mx-4 sm:px-4">
-        {/* Hero segmented control */}
-        <div className="relative flex items-center gap-0.5 rounded-full bg-secondary/40 p-1 ring-1 ring-inset ring-border/40">
-          {SEGMENTS.map((t) => {
-            const on = sort === t.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => onSegment(t.key)}
-                // Belt-and-suspenders on top of the idle-time warm-up above:
-                // pointerdown fires before click on both mouse and touch, so if
-                // the idle callback hasn't run yet on a busy device this still
-                // buys the chunk fetch a head start before the tap completes.
-                onPointerDown={t.key === "recent" ? preloadReelsFeed : undefined}
-                aria-pressed={on}
-                className="relative flex-1 rounded-full px-3 py-2 text-[13px] font-semibold tracking-tight transition-colors duration-200 active:scale-[0.98]"
-              >
-                {on ? (
-                  <motion.span
-                    layoutId="seg-pill"
-                    transition={{ type: "spring", stiffness: 480, damping: 40 }}
-                    className="absolute inset-0 rounded-full bg-background shadow-[0_1px_4px_rgba(0,0,0,0.14)] ring-1 ring-inset ring-border/60"
-                  />
-                ) : null}
-                <span className={cn("relative z-10", on ? "text-foreground" : "text-muted-foreground hover:text-foreground/80")}>
-                  {t.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+          quiet row of filter chips (edge-faded on mobile; on large screens they
+          spread edge-to-edge since there's room). Collapsible via the tiny handle
+          at its bottom edge — remembered across visits. Animations are
+          transform/opacity/height only (GPU) — premium motion, no jank.
+          `backdrop-blur-lg` (not the heavier `-2xl`) — a deliberate perf trim from
+          the earlier nav pass; the inset highlight below gives the same premium
+          glass feel without the extra GPU cost. */}
+      <div className="sticky top-16 z-20 -mx-3 mb-4 rounded-b-2xl border-b border-border/50 bg-background/90 px-3 pb-2.5 pt-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_28px_-18px_rgba(0,0,0,0.3)] backdrop-blur-lg sm:-mx-4 sm:px-4">
+        <motion.div
+          initial={false}
+          animate={{ height: navOpen ? "auto" : 0, opacity: navOpen ? 1 : 0 }}
+          transition={{ type: "spring", stiffness: 340, damping: 34 }}
+          className="overflow-hidden"
+        >
+          {/* Hero segmented control */}
+          <div className="relative flex items-center gap-0.5 rounded-full bg-secondary/40 p-1 ring-1 ring-inset ring-border/40">
+            {SEGMENTS.map((t) => {
+              const on = sort === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => onSegment(t.key)}
+                  // Belt-and-suspenders on top of the idle-time warm-up above:
+                  // pointerdown fires before click on both mouse and touch, so if
+                  // the idle callback hasn't run yet on a busy device this still
+                  // buys the chunk fetch a head start before the tap completes.
+                  onPointerDown={t.key === "recent" ? preloadReelsFeed : undefined}
+                  aria-pressed={on}
+                  className="relative flex-1 rounded-full px-3 py-2 text-[13px] font-semibold tracking-tight transition-colors duration-200 active:scale-[0.98]"
+                >
+                  {on ? (
+                    <motion.span
+                      layoutId="seg-pill"
+                      transition={{ type: "spring", stiffness: 480, damping: 40 }}
+                      className="absolute inset-0 rounded-full bg-background shadow-[0_1px_4px_rgba(0,0,0,0.14)] ring-1 ring-inset ring-border/60"
+                    />
+                  ) : null}
+                  <span className={cn("relative z-10", on ? "text-foreground" : "text-muted-foreground hover:text-foreground/80")}>
+                    {t.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-        {/* Quiet filter chips — ghost by default, fill when active. Edge-faded
-            horizontal scroll keeps them on one uncluttered line. */}
-        {/* Right-only fade — never clips the (usually-active) first chip. */}
-        <div className="-mx-1 mt-2.5 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [-webkit-mask-image:linear-gradient(90deg,#000_0,#000_90%,transparent)] [mask-image:linear-gradient(90deg,#000_0,#000_90%,transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {FILTERS.map((f) => {
-            const on = filter === f.id;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFilter(f.id)}
-                aria-pressed={on}
-                className={cn(
-                  "relative flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition active:scale-95",
-                  on ? "text-background" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {on ? (
-                  <motion.span
-                    layoutId="filter-pill"
-                    transition={{ type: "spring", stiffness: 480, damping: 40 }}
-                    className="absolute inset-0 rounded-full bg-foreground"
-                  />
-                ) : null}
-                <f.icon className={cn("relative z-10 h-3.5 w-3.5", on ? "opacity-100" : "opacity-70")} strokeWidth={2.1} />
-                <span className="relative z-10">{f.label}</span>
-              </button>
-            );
-          })}
-        </div>
+          {/* Quiet filter chips — ghost by default, brand-gradient glow when
+              active. Edge-faded horizontal scroll on mobile (right-only — never
+              clips the usually-active first chip); on large screens there's
+              always room for all five, so they justify edge-to-edge instead. */}
+          <div className="-mx-1 mt-2.5 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [-webkit-mask-image:linear-gradient(90deg,#000_0,#000_90%,transparent)] [mask-image:linear-gradient(90deg,#000_0,#000_90%,transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:justify-between lg:overflow-visible lg:[-webkit-mask-image:none] lg:[mask-image:none]">
+            {FILTERS.map((f) => {
+              const on = filter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFilter(f.id)}
+                  aria-pressed={on}
+                  className={cn(
+                    "relative flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition active:scale-95",
+                    on ? "text-white" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {on ? (
+                    <motion.span
+                      layoutId="filter-pill"
+                      transition={{ type: "spring", stiffness: 480, damping: 40 }}
+                      className="bg-brand brand-glow absolute inset-0 rounded-full"
+                    />
+                  ) : null}
+                  <f.icon className={cn("relative z-10 h-3.5 w-3.5", on ? "opacity-100" : "opacity-70")} strokeWidth={2.1} />
+                  <span className="relative z-10">{f.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+
+        {/* Tiny collapse/expand handle — a small tab at the very bottom edge of
+            the nav, on every screen size. */}
+        <button
+          type="button"
+          onClick={toggleNavOpen}
+          aria-label={navOpen ? "Hide filters" : "Show filters"}
+          aria-expanded={navOpen}
+          className="absolute -bottom-2.5 left-1/2 z-10 flex h-5 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-border/60 bg-background shadow-sm transition hover:bg-secondary active:scale-90"
+        >
+          <motion.span animate={{ rotate: navOpen ? 0 : 180 }} transition={{ type: "spring", stiffness: 380, damping: 30 }} className="flex">
+            <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+          </motion.span>
+        </button>
       </div>
 
       {switching ? (

@@ -29,6 +29,7 @@ import { PostPollInline } from "@/features/social/post-poll-inline";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 
 import { RepostBurst } from "@/features/social/repost-burst";
 import { toast } from "@/features/ui/toast";
@@ -212,8 +213,7 @@ function FeedPostCardImpl({
       <div className="flex items-center gap-3 p-4 pb-3">
         <Link href={`/u/${item.publisher.handle}`} className="shrink-0 rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] transition-transform duration-300 group-hover:scale-105">
           {item.publisher.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={item.publisher.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover ring-2 ring-card" />
+            <Image src={item.publisher.avatarUrl} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover ring-2 ring-card" />
           ) : (
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white ring-2 ring-card">
               {item.publisher.displayName.charAt(0).toUpperCase()}

@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft, Globe, Images, Loader2, Lock, Trash2, Users } from "lucide-react";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
@@ -146,8 +147,7 @@ export function CollectionsTab({ ownerId, isOwner, emptyText }: { ownerId: strin
           >
             <div className="relative aspect-[4/3] w-full overflow-hidden bg-secondary">
               {c.coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={c.coverUrl} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                <Image src={c.coverUrl} alt="" fill sizes="(max-width: 640px) 50vw, 33vw" className="object-cover transition-transform duration-500 group-hover:scale-105" />
               ) : (
                 <span className="flex h-full w-full items-center justify-center text-muted-foreground">
                   <Images className="h-7 w-7" />

@@ -1,4 +1,5 @@
 import { Eye, Image as ImageIcon, Music, Play } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 import type { PostCard } from "@/lib/social/posts";
@@ -9,13 +10,23 @@ const KIND_ICON = { video: Play, image: ImageIcon, audio: Music } as const;
 /**
  * A post's cover image. Prefers the stored thumbnail; for videos without one it
  * paints the real first frame from the media file (so uploads never show a blank
- * black tile); otherwise a kind icon.
+ * black tile); otherwise a kind icon. Every call site places this inside a
+ * `relative` + fixed-aspect container, so the thumbnail uses next/image `fill`
+ * (AVIF/WebP + a right-sized srcset + lazy) — grids never download oversized art.
  */
-export function PostCover({ post, className }: { post: PostCard; className?: string }) {
+export function PostCover({
+  post,
+  className,
+  sizes = "(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 300px",
+}: {
+  post: PostCard;
+  className?: string;
+  /** Match the tile's rendered width so the optimizer picks the smallest image. */
+  sizes?: string;
+}) {
   const KindIcon = KIND_ICON[post.mediaKind] ?? Play;
   if (post.thumbnailUrl) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={post.thumbnailUrl} alt="" loading="lazy" decoding="async" className={className} />;
+    return <Image src={post.thumbnailUrl} alt="" fill sizes={sizes} loading="lazy" className={cn("object-cover", className)} />;
   }
   if (post.mediaKind === "video" && post.mediaUrl) {
     return (

@@ -1,6 +1,7 @@
 import { BadgeCheck, CalendarDays, Link as LinkIcon, Lock, MessageCircle } from "lucide-react";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -147,8 +148,7 @@ export default async function ProfilePage({
               a contained rounded hero on larger screens (professional, balanced). */}
           <div className="relative h-40 w-full overflow-hidden bg-gradient-to-br from-blue-600/30 via-violet-500/15 to-purple-500/20 sm:h-56 sm:rounded-3xl md:h-64">
             {profile.bannerUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={profile.bannerUrl} alt="" className="h-full w-full object-cover" />
+              <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 896px) 100vw, 896px" className="object-cover" />
             ) : null}
             <LivingGlow />
           </div>
@@ -160,10 +160,12 @@ export default async function ProfilePage({
               <div className="relative -mt-12 w-fit sm:-mt-20">
                 <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
                   {profile.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={profile.avatarUrl}
                       alt=""
+                      width={128}
+                      height={128}
+                      priority
                       className="block h-24 w-24 rounded-full object-cover ring-4 ring-background sm:h-32 sm:w-32"
                     />
                   ) : (

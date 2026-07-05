@@ -77,7 +77,7 @@ export function ProfileMediaGrid({
                 />
               ) : (
                 <Link href={`/p/${p.id}`} className="relative block aspect-[4/5] overflow-hidden bg-neutral-950">
-                  <PostCover post={p} className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.02]" />
+                  <PostCover post={p} sizes="(max-width: 768px) 100vw, 640px" className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.02]" />
                   <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
                     <Images className="h-3 w-3" /> Photo
                   </span>

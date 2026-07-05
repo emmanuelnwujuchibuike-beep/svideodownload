@@ -10,6 +10,7 @@ import {
   Heart,
   Loader2,
   MessageCircle,
+  Pencil,
   Play,
   Share2,
   UserPlus,
@@ -19,7 +20,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SmartVideo } from "@/features/media/smart-video";
 import { Comments } from "@/features/social/comments";
+import { PostEditSheet } from "@/features/social/post-edit-sheet";
 import { useEntitlements } from "@/features/auth/use-entitlements";
+import { downloadPost } from "@/lib/media/download-post";
 import type { CommentNode } from "@/lib/social/engagement";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import type { FeedItem } from "@/lib/social/home-feed";
@@ -72,6 +75,8 @@ function ViewerInner({
   const [saved, setSaved] = useState(item.viewerSaved);
   const following = useFollowState(item.publisher.id, item.isFollowing);
   const [likes, setLikes] = useState(item.likesCount);
+  const [title, setTitle] = useState(item.title);
+  const [editOpen, setEditOpen] = useState(false);
   const [showComments, setShowComments] = useState(startWithComments);
   const [comments, setComments] = useState<CommentsData | null>(null);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -254,7 +259,15 @@ function ViewerInner({
             </span>
             <span className="block truncate text-sm text-muted-foreground">@{item.publisher.handle}</span>
           </Link>
-          {!item.isOwner ? (
+          {item.isOwner ? (
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="inline-flex items-center gap-1 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-secondary/70"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Edit
+            </button>
+          ) : (
             <button
               type="button"
               onClick={toggleFollow}
@@ -266,11 +279,11 @@ function ViewerInner({
               {following ? <Check className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
               {following ? "Following" : "Follow"}
             </button>
-          ) : null}
+          )}
         </div>
 
         {/* Title + description */}
-        <h2 className="mt-4 text-base font-bold leading-snug">{item.title}</h2>
+        {title ? <h2 className="mt-4 text-base font-bold leading-snug">{title}</h2> : null}
         {item.description ? (
           <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{item.description}</p>
         ) : null}
@@ -281,7 +294,17 @@ function ViewerInner({
           <Act icon={MessageCircle} label="Comments" count={item.commentsCount} onClick={() => setShowComments(true)} />
           <Act icon={Share2} label="Share" count={item.sharesCount} onClick={share} />
           <Act icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-primary" onClick={() => react("save")} />
-          {isPremium ? (
+          {item.platform === "frenz" && item.mediaUrl ? (
+            // Frenz-hosted post → direct download (free members get 5/day).
+            <button
+              type="button"
+              onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title })}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary"
+              aria-label="Download to device"
+            >
+              <Download className="h-[18px] w-[18px]" />
+            </button>
+          ) : isPremium ? (
             <a
               href={downloadHref(item)}
               onClick={() => fetch(`/api/posts/${item.id}/event`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "download" }) }).catch(() => {})}
@@ -327,6 +350,16 @@ function ViewerInner({
           </button>
         )}
       </motion.aside>
+
+      {item.isOwner ? (
+        <PostEditSheet
+          item={{ id: item.id, title: title ?? "" }}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSaved={(p) => setTitle(p.title)}
+          onDeleted={onClose}
+        />
+      ) : null}
     </motion.div>
   );
 }

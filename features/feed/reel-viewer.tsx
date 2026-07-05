@@ -5,10 +5,12 @@ import {
   BadgeCheck,
   Bookmark,
   Check,
+  Download,
   Heart,
   Loader2,
   MessageCircle,
   Pause,
+  Pencil,
   Play,
   Share2,
   UserPlus,
@@ -24,6 +26,8 @@ import { SmartVideo } from "@/features/media/smart-video";
 import { Comments } from "@/features/social/comments";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
+import { PostEditSheet } from "@/features/social/post-edit-sheet";
+import { downloadPost } from "@/lib/media/download-post";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import type { CommentNode } from "@/lib/social/engagement";
@@ -236,6 +240,8 @@ function ReelCard({
   const [sheetVideoPaused, setSheetVideoPaused] = useState(false);
   const [comments, setComments] = useState<CommentsData | null>(null);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [title, setTitle] = useState(item.title);
+  const [editOpen, setEditOpen] = useState(false);
   const fetched = useRef(false);
 
   const native = !!item.mediaUrl;
@@ -690,6 +696,8 @@ function ReelCard({
         <RailButton icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
         <RailButton icon={Share2} count={shares} label="Share" onClick={share} />
+        <RailButton icon={Download} label="Download" onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined })} />
+        {item.isOwner ? <RailButton icon={Pencil} label="Edit" onClick={() => setEditOpen(true)} /> : null}
         {native ? (
           <RailButton
             icon={mutedAuto ? VolumeX : Volume2}
@@ -719,9 +727,9 @@ function ReelCard({
           <span className="font-bold">@{item.publisher.handle}</span>
           {item.publisher.isVerified ? <BadgeCheck className="h-4 w-4" /> : null}
         </Link>
-        {item.title ? (
+        {title ? (
           <p className="mt-1.5 line-clamp-2 max-w-md text-sm text-white/90">
-            <RichText text={item.title} linkClassName="font-semibold text-white hover:underline" />
+            <RichText text={title} linkClassName="font-semibold text-white hover:underline" />
           </p>
         ) : null}
         {item.hasPoll ? (
@@ -800,6 +808,18 @@ function ReelCard({
           </>
         ) : null}
       </AnimatePresence>
+
+      {/* Inline editor — a creator edits caption/visibility (or deletes) without
+          leaving the reel. */}
+      {item.isOwner ? (
+        <PostEditSheet
+          item={{ id: item.id, title: title ?? "" }}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSaved={(p) => setTitle(p.title)}
+          onDeleted={onClose}
+        />
+      ) : null}
     </>
   );
 }

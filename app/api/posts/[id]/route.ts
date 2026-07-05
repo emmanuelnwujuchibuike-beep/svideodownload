@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const schema = z.object({
-  title: z.string().trim().min(1).max(300).optional(),
+  // Caption maps to title; allow clearing it (empty string) — no auto caption.
+  title: z.string().trim().max(300).optional(),
   description: z.string().trim().max(5000).nullable().optional(),
   category: z.enum(CATEGORIES).nullable().optional(),
   visibility: z.enum(["public", "followers", "private"]).optional(),

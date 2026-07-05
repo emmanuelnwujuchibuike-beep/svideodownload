@@ -13,6 +13,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   Music,
+  Pencil,
   Play,
   Share2,
   Sparkles,
@@ -25,6 +26,8 @@ import { RichText } from "@/components/social/rich-text";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
+import { PostEditSheet } from "@/features/social/post-edit-sheet";
+import { downloadPost } from "@/lib/media/download-post";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import type { FeedItem } from "@/lib/social/home-feed";
@@ -69,6 +72,8 @@ export function FeedPostCard({
   const [shares, setShares] = useState(item.sharesCount);
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [title, setTitle] = useState(item.title);
+  const [editOpen, setEditOpen] = useState(false);
 
   const react = async (type: "like" | "save") => {
     const isLike = type === "like";
@@ -203,6 +208,9 @@ export function FeedPostCard({
                   exit={{ opacity: 0, scale: 0.95 }}
                   className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-xl border border-border/70 bg-card py-1 shadow-elevated"
                 >
+                  {item.isOwner ? (
+                    <MenuItem icon={Pencil} label="Edit post" onClick={() => { setMenuOpen(false); setEditOpen(true); }} />
+                  ) : null}
                   {!item.isOwner ? (
                     <MenuItem icon={UserPlus} label={following ? "Unfollow creator" : "Follow creator"} onClick={toggleFollow} />
                   ) : null}
@@ -227,10 +235,10 @@ export function FeedPostCard({
       ) : null}
 
       {/* Caption */}
-      {item.title ? (
+      {title ? (
         <div className="px-4 pb-3">
           <p className="text-sm leading-relaxed">
-            <RichText text={item.title} />
+            <RichText text={title} />
           </p>
           {item.category ? (
             <Link href={`/explore?q=${encodeURIComponent(`#${item.category}`)}`} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
@@ -326,9 +334,19 @@ export function FeedPostCard({
         </div>
         <div className="flex items-center">
           <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-amber-500" label="Bookmark" />
-          <ActionButton icon={Download} onClick={() => onOpen(item)} label="Download" />
+          <ActionButton icon={Download} onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title })} label="Download" />
         </div>
       </div>
+
+      {item.isOwner ? (
+        <PostEditSheet
+          item={{ id: item.id, title: title ?? "" }}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSaved={(p) => setTitle(p.title)}
+          onDeleted={() => onRemove(item.id)}
+        />
+      ) : null}
     </motion.article>
   );
 }

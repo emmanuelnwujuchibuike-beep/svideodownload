@@ -21,6 +21,7 @@ import { PostGridSkeleton } from "@/features/ui/page-skeletons";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { friendsCount, friendshipState, mutualFriendsCount } from "@/lib/social/friends";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { viewableCollectionsCount } from "@/lib/social/collections";
 import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "@/lib/social/posts";
 import { getPrivacySettings, getPublicProfile, tabVisible } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -28,10 +29,10 @@ import { formatCompactNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-type ProfileTab = "posts" | "reels" | "downloads" | "reposted" | "liked" | "saved";
+type ProfileTab = "posts" | "reels" | "downloads" | "reposted" | "liked" | "saved" | "collections";
 // Posts / Reels / Downloads are always public; the activity tabs (Reposts, Liked,
-// Saved) each honour their own per-tab visibility (Repost spec §7) and are hidden
-// entirely from viewers who aren't allowed to see them.
+// Saved, Collections) each honour their own per-tab visibility (Repost spec §7)
+// and are hidden entirely from viewers who aren't allowed to see them.
 const BASE_TABS: ProfileTab[] = ["posts", "reels", "downloads"];
 
 async function viewerId(): Promise<string | null> {
@@ -99,21 +100,25 @@ export default async function ProfilePage({
   // The profile header renders immediately; the (heavier) posts grid streams in
   // behind a skeleton so the page never blocks on the post query.
   const isViewer = !!me && !profile.isOwner;
-  const [plan, friendState, mutuals, friendTotal, postsTotal, privacy] = await Promise.all([
+  const [plan, friendState, mutuals, friendTotal, postsTotal, privacy, collectionsN] = await Promise.all([
     getUserPlan(profile.id),
     isViewer ? friendshipState(me!, profile.id) : Promise.resolve("none" as const),
     isViewer ? mutualFriendsCount(me!, profile.id) : Promise.resolve(0),
     friendsCount(profile.id),
     publishedPostsCount(profile.id, profile.isOwner),
     getPrivacySettings(profile.id),
+    viewableCollectionsCount(profile.id, me, profile.isFollowing),
   ]);
 
   // Per-tab visibility: activity tabs appear only when the viewer is allowed to
   // see them (owner always; public → everyone; followers → the viewer follows).
+  // Collections gate on whether any collection is actually visible to the viewer
+  // (each collection carries its own visibility).
   const tabs: ProfileTab[] = [...BASE_TABS];
   if (tabVisible(privacy.reposts_visibility, profile.isOwner, profile.isFollowing)) tabs.push("reposted");
   if (tabVisible(privacy.likes_visibility, profile.isOwner, profile.isFollowing)) tabs.push("liked");
   if (tabVisible(privacy.saves_visibility, profile.isOwner, profile.isFollowing)) tabs.push("saved");
+  if (profile.isOwner || collectionsN > 0) tabs.push("collections");
   const activeTab: ProfileTab = tabs.includes(tab as ProfileTab) ? (tab as ProfileTab) : "posts";
 
   const ld = {
@@ -371,6 +376,7 @@ async function ProfileTabsLoader({
   return (
     <ProfileTabs
       handle={handle}
+      ownerId={profileId}
       isOwner={isOwner}
       tabs={tabs}
       initialTab={initialTab}

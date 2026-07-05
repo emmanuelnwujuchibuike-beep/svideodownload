@@ -36,6 +36,7 @@ import { createPortal } from "react-dom";
 import { RichText } from "@/components/social/rich-text";
 import { SmartVideo } from "@/features/media/smart-video";
 import { Comments } from "@/features/social/comments";
+import { CollectionPicker } from "@/features/social/collection-picker";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { RepostBurst } from "@/features/social/repost-burst";
 import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
@@ -302,6 +303,7 @@ function ReelCard({
   const [title, setTitle] = useState(item.title);
   const [editOpen, setEditOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
   const [repostBurst, setRepostBurst] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -1019,7 +1021,7 @@ function ReelCard({
 
                   {/* Organize & creator */}
                   <MoreGroup>
-                    <MoreItem icon={FolderPlus} label="Add to collection" onClick={() => comingSoon("Collections")} />
+                    <MoreItem icon={FolderPlus} label="Add to collection" onClick={() => { setMoreOpen(false); setPickerOpen(true); }} />
                     <MoreItem icon={Download} label="Download" onClick={() => { setMoreOpen(false); void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined }); }} />
                     {item.isOwner ? (
                       <MoreItem icon={Pencil} label="Edit post" onClick={() => { setMoreOpen(false); setEditOpen(true); }} />
@@ -1059,6 +1061,9 @@ function ReelCard({
             document.body,
           )
         : null}
+
+      {/* Save-to-collection picker */}
+      <CollectionPicker postId={item.id} open={pickerOpen} onClose={() => setPickerOpen(false)} />
 
       {/* Inline editor — a creator edits caption/visibility (or deletes) without
           leaving the reel. */}

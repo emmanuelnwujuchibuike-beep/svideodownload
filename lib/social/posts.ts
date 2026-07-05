@@ -419,6 +419,53 @@ export async function listUserReposts(userId: string, limit = 24): Promise<PostC
   }
 }
 
+/** Posts in a collection the viewer may see, newest-added first. Visibility of
+ *  the collection itself is checked by the caller; here we filter the POSTS to
+ *  what the viewer can see (public, own, or followers-only if they follow). */
+export async function listCollectionPosts(
+  collectionId: string,
+  viewerId: string | null,
+  limit = 48,
+): Promise<PostCard[]> {
+  if (!hasSupabase) return [];
+  try {
+    const db = createAdminClient();
+    const { data: items } = await db
+      .from("collection_items")
+      .select("post_id, added_at")
+      .eq("collection_id", collectionId)
+      .order("added_at", { ascending: false })
+      .limit(limit * 2);
+    const ids = ((items ?? []) as { post_id: string }[]).map((r) => r.post_id);
+    if (ids.length === 0) return [];
+
+    const { data } = await db.from("posts").select(POST_SELECT).in("id", ids).eq("status", "published");
+    let rows = (data as PostRow[]) ?? [];
+    // Followers-only posts show only to the publisher or a follower.
+    let follows = new Set<string>();
+    if (viewerId) {
+      const publisherIds = [...new Set(rows.map((p) => p.publisher_id))];
+      const { data: f } = await db
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", viewerId)
+        .in("following_id", publisherIds);
+      follows = new Set(((f ?? []) as { following_id: string }[]).map((x) => x.following_id));
+    }
+    rows = rows.filter(
+      (p) =>
+        p.visibility === "public" ||
+        p.publisher_id === viewerId ||
+        (p.visibility === "followers" && follows.has(p.publisher_id)),
+    );
+    const order = new Map(ids.map((id, i) => [id, i]));
+    rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    return rows.slice(0, limit).map(toCard);
+  } catch {
+    return [];
+  }
+}
+
 /** Related posts (same category, then same publisher), excluding the current. */
 export async function relatedPosts(post: PublicPost, limit = 6): Promise<PostCard[]> {
   if (!hasSupabase) return [];

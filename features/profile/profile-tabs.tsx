@@ -1,14 +1,15 @@
 "use client";
 
-import { Bookmark, Clapperboard, Download, Grid3x3, Heart, LayoutGrid, Repeat2, Rows3 } from "lucide-react";
+import { Bookmark, Clapperboard, Download, FolderHeart, Grid3x3, Heart, LayoutGrid, Repeat2, Rows3 } from "lucide-react";
 import { type ComponentType, useMemo, useState } from "react";
 
+import { CollectionsTab } from "@/features/profile/collections-tab";
 import { DownloadsTab } from "@/features/profile/downloads-tab";
 import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
 import type { PostCard } from "@/lib/social/posts";
 import { cn } from "@/lib/utils";
 
-export type ProfileTab = "posts" | "reels" | "downloads" | "reposted" | "liked" | "saved";
+export type ProfileTab = "posts" | "reels" | "downloads" | "reposted" | "liked" | "saved" | "collections";
 type MediaView = "grid" | "list";
 const VIEW_COOKIE = "svd_profile_view";
 
@@ -21,6 +22,7 @@ const TAB_LABEL: Record<ProfileTab, string> = {
   reposted: "Reposts",
   liked: "Liked",
   saved: "Saved",
+  collections: "Collections",
 };
 
 const TAB_ICON: Record<ProfileTab, IconType> = {
@@ -30,6 +32,7 @@ const TAB_ICON: Record<ProfileTab, IconType> = {
   reposted: Repeat2,
   liked: Heart,
   saved: Bookmark,
+  collections: FolderHeart,
 };
 
 /**
@@ -42,6 +45,7 @@ const TAB_ICON: Record<ProfileTab, IconType> = {
  */
 export function ProfileTabs({
   handle,
+  ownerId,
   isOwner,
   tabs,
   initialTab,
@@ -52,6 +56,7 @@ export function ProfileTabs({
   reposted = [],
 }: {
   handle: string;
+  ownerId: string;
   isOwner: boolean;
   tabs: ProfileTab[];
   initialTab: ProfileTab;
@@ -94,9 +99,10 @@ export function ProfileTabs({
     reposted: isOwner ? "Posts you repost will show up here." : "No reposts yet.",
     liked: "Posts you like will show up here.",
     saved: "Posts you save will show up here.",
+    collections: isOwner ? "Save posts into collections to organize them." : "No collections yet.",
   };
 
-  const showViewToggle = active !== "downloads";
+  const showViewToggle = active !== "downloads" && active !== "collections";
 
   return (
     <div className="mt-8">
@@ -161,6 +167,8 @@ export function ProfileTabs({
       {/* Keep it a single mounted content region that swaps instantly */}
       {active === "downloads" && isOwner ? (
         <DownloadsTab emptyText={empty.downloads} />
+      ) : active === "collections" ? (
+        <CollectionsTab ownerId={ownerId} isOwner={isOwner} emptyText={empty.collections} />
       ) : (
         <ProfileMediaGrid
           posts={

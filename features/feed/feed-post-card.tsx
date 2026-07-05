@@ -9,6 +9,7 @@ import {
   Download,
   EyeOff,
   Flag,
+  FolderPlus,
   Heart,
   MessageCircle,
   MoreHorizontal,
@@ -27,6 +28,7 @@ import { RichText } from "@/components/social/rich-text";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
+import { CollectionPicker } from "@/features/social/collection-picker";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
 import { RepostBurst } from "@/features/social/repost-burst";
 import { toast } from "@/features/ui/toast";
@@ -81,6 +83,7 @@ function FeedPostCardImpl({
   const [title, setTitle] = useState(item.title);
   const [editOpen, setEditOpen] = useState(false);
   const [repostBurst, setRepostBurst] = useState<number | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const react = async (type: "like" | "save") => {
     const isLike = type === "like";
@@ -258,6 +261,7 @@ function FeedPostCardImpl({
                   {!item.isOwner ? (
                     <MenuItem icon={UserPlus} label={following ? "Unfollow creator" : "Follow creator"} onClick={toggleFollow} />
                   ) : null}
+                  <MenuItem icon={FolderPlus} label="Save to collection" onClick={() => { setMenuOpen(false); setPickerOpen(true); }} />
                   <MenuItem icon={EyeOff} label="Hide this post" onClick={() => onRemove(item.id)} />
                   <MenuItem icon={Ban} label="Not interested" onClick={() => onRemove(item.id)} />
                   <MenuItem icon={Flag} label="Report" danger onClick={report} />
@@ -397,6 +401,8 @@ function FeedPostCardImpl({
           onDeleted={() => onRemove(item.id)}
         />
       ) : null}
+
+      <CollectionPicker postId={item.id} open={pickerOpen} onClose={() => setPickerOpen(false)} />
     </motion.article>
   );
 }

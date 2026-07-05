@@ -28,6 +28,7 @@ import { PostPollInline } from "@/features/social/post-poll-inline";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
+import { RepostBurst } from "@/features/social/repost-burst";
 import { toast } from "@/features/ui/toast";
 import { downloadPost } from "@/lib/media/download-post";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
@@ -79,6 +80,7 @@ function FeedPostCardImpl({
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [editOpen, setEditOpen] = useState(false);
+  const [repostBurst, setRepostBurst] = useState<number | null>(null);
 
   const react = async (type: "like" | "save") => {
     const isLike = type === "like";
@@ -134,10 +136,19 @@ function FeedPostCardImpl({
   const repost = async () => {
     setMenuOpen(false);
     const next = !repostState.reposted;
+    if (next) {
+      setRepostBurst(Date.now()); // OS-style bubble pops on repost (not on undo)
+      try {
+        navigator.vibrate?.(10);
+      } catch {
+        /* no haptics */
+      }
+    }
     try {
       await toggleRepost(item.id, next, repostState.count);
       toast(next ? "Reposted to your profile." : "Removed repost.", "success");
     } catch (e) {
+      setRepostBurst(null);
       toast(e instanceof FrenzsaveError ? e.message : "Couldn't repost.", "error");
     }
   };
@@ -364,7 +375,10 @@ function FeedPostCardImpl({
           <ActionButton active={liked} onClick={() => react("like")} icon={Heart} fill={liked} count={likes} activeClass="text-rose-500" label="Like" />
           <ActionButton icon={MessageCircle} count={item.commentsCount} onClick={() => onOpen(item, true)} label="Comment" />
           {!item.isOwner ? (
-            <ActionButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-500" onClick={repost} label="Repost" />
+            <span className="relative inline-flex">
+              <RepostBurst triggerKey={repostBurst} />
+              <ActionButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-500" onClick={repost} label="Repost" />
+            </span>
           ) : null}
           <ActionButton icon={Share2} count={shares} onClick={share} label="Share" />
         </div>

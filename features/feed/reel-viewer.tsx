@@ -37,6 +37,7 @@ import { RichText } from "@/components/social/rich-text";
 import { SmartVideo } from "@/features/media/smart-video";
 import { Comments } from "@/features/social/comments";
 import { PostPollInline } from "@/features/social/post-poll-inline";
+import { RepostBurst } from "@/features/social/repost-burst";
 import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
 import { toast } from "@/features/ui/toast";
@@ -302,6 +303,7 @@ function ReelCard({
   const [editOpen, setEditOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
+  const [repostBurst, setRepostBurst] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const fetched = useRef(false);
 
@@ -499,10 +501,19 @@ function ReelCard({
 
   const repost = async () => {
     const next = !repostState.reposted;
+    if (next) {
+      setRepostBurst(Date.now()); // OS-style bubble pops on repost (not on undo)
+      try {
+        navigator.vibrate?.(10);
+      } catch {
+        /* no haptics */
+      }
+    }
     try {
       await toggleRepost(item.id, next, repostState.count);
       toast(next ? "Reposted to your profile." : "Removed repost.", "success");
     } catch (e) {
+      setRepostBurst(null);
       toast(e instanceof FrenzsaveError ? e.message : "Couldn't repost.", "error");
     }
   };
@@ -860,7 +871,8 @@ function ReelCard({
             everything else live in the premium overflow sheet. */}
         <RailButton icon={Heart} active={liked} fill={liked} activeClass="text-rose-500" count={likes} label="Like" onClick={() => react("like")} />
         <RailButton icon={MessageCircle} count={item.commentsCount} label="Comment" onClick={openComments} />
-        <div className="flex flex-col items-center gap-1">
+        <div className="relative flex flex-col items-center gap-1">
+          <RepostBurst triggerKey={repostBurst} />
           {item.repostBadge && item.repostBadge.count > 0 ? (
             <div className="flex items-center" aria-label={`${item.repostBadge.count} people you follow reposted this`}>
               <span className="flex -space-x-2">

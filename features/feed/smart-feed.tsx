@@ -398,7 +398,8 @@ export function SmartFeed({
 
         {/* Quiet filter chips — ghost by default, fill when active. Edge-faded
             horizontal scroll keeps them on one uncluttered line. */}
-        <div className="-mx-1 mt-2.5 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [-webkit-mask-image:linear-gradient(90deg,transparent,#000_20px,#000_92%,transparent)] [mask-image:linear-gradient(90deg,transparent,#000_20px,#000_92%,transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Right-only fade — never clips the (usually-active) first chip. */}
+        <div className="-mx-1 mt-2.5 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [-webkit-mask-image:linear-gradient(90deg,#000_0,#000_90%,transparent)] [mask-image:linear-gradient(90deg,#000_0,#000_90%,transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {FILTERS.map((f) => {
             const on = filter === f.id;
             return (

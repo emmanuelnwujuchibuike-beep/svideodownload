@@ -462,6 +462,10 @@ async function surfaceFollowedReposts(
   rows = rows.filter((r) => !suspended.has(r.publisher_id) && !blocked.has(r.publisher_id)).slice(0, max);
   if (rows.length === 0) return [];
 
+  // The viewer follows the REPOSTER, not necessarily the original author — so the
+  // card's follow state must reflect the actual author relationship.
+  const followingSet = new Set(followingIds);
+
   const ids = rows.map((r) => r.id);
   const [badges, counts, reposted, pollSet] = await Promise.all([
     followedReposters(ids, followingIds),
@@ -508,7 +512,7 @@ async function surfaceFollowedReposts(
       },
       viewerLiked: liked.has(r.id),
       viewerSaved: saved.has(r.id),
-      isFollowing: true, // surfaced because someone you follow reposted it
+      isFollowing: followingSet.has(r.publisher_id),
       isOwner: false,
       hasPoll: pollSet.has(r.id),
       viewerReposted: reposted.has(r.id),

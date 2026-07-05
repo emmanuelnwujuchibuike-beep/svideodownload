@@ -221,9 +221,12 @@ export function ReelDeck({
               <ReelCard
                 item={item}
                 isActive={i === active}
-                // Mount + buffer the previous clip and the NEXT THREE so scrolling
-                // forward never hits an unbuffered video (only the active one plays).
+                // Mount the previous clip + the next three so scrolling forward
+                // never hits an unmounted video. To protect battery/data we only
+                // FULLY buffer (preload=auto) the active clip and the next two you're
+                // about to reach; the neighbours load metadata only.
                 nearby={i >= active - 1 && i <= active + 3}
+                preload={i >= active && i <= active + 2 ? "auto" : "metadata"}
                 loop={items.length === 1}
                 onClose={onClose}
                 onEnded={() => (i < items.length - 1 ? scrollToIndex(i + 1) : undefined)}
@@ -251,6 +254,7 @@ function ReelCard({
   autoOpenComments,
   variant = "modal",
   onReady,
+  preload = "auto",
 }: {
   item: FeedItem;
   isActive: boolean;
@@ -263,6 +267,9 @@ function ReelCard({
   variant?: "modal" | "page";
   /** Report this reel as buffered/ready so the deck can extend the scroll ceiling. */
   onReady?: (id: string) => void;
+  /** How aggressively to buffer this clip — "auto" for the ones you'll reach next,
+   *  "metadata" for the further neighbours (saves mobile battery/data). */
+  preload?: "auto" | "metadata";
 }) {
   // Anchor the caption + action rail low. On the /reels route (page) they sit just
   // above the mobile bottom nav and drop to the very bottom on large screens; in
@@ -760,7 +767,7 @@ function ReelCard({
               poster={item.thumbnailUrl ?? undefined}
               loop={loop}
               playsInline
-              preload="auto"
+              preload={preload}
               className="relative z-10 h-full w-full object-cover lg:h-auto lg:max-h-full lg:w-auto lg:max-w-full lg:object-contain"
               onPlay={() => {
                 video.current && claimPlayback(video.current);

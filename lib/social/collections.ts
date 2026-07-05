@@ -101,13 +101,24 @@ export async function listViewableCollections(
   }
 }
 
-/** How many collections `viewerId` can see on this profile — powers the tab gate. */
+/** How many collections `viewerId` can see on this profile — powers the tab gate.
+ *  Lightweight (one query, no items/covers) since it runs on every profile load. */
 export async function viewableCollectionsCount(
   ownerId: string,
   viewerId: string | null,
   isFollowing: boolean,
 ): Promise<number> {
-  return (await listViewableCollections(ownerId, viewerId, isFollowing)).length;
+  if (!hasSupabase) return 0;
+  try {
+    const db = createAdminClient();
+    const isOwner = viewerId === ownerId;
+    const { data } = await db.from("collections").select("visibility").eq("user_id", ownerId);
+    return ((data ?? []) as { visibility: Visibility }[]).filter((c) =>
+      canViewCollection(c.visibility, isOwner, isFollowing),
+    ).length;
+  } catch {
+    return 0;
+  }
 }
 
 /** The viewer's own collections + whether each already contains `postId` (picker). */

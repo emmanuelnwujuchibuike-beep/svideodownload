@@ -113,6 +113,21 @@ separate best-effort paths so a not-yet-applied migration can't break publishing
 the feed. More avatars moved to next/image too. Windowing isn't needed —
 `content-visibility` already gives feed cards virtualization-lite.
 
+## Adaptive video streaming
+
+Reels play through **Cloudflare Stream** (adaptive HLS: an automatic quality ladder
++ AV1/H.265/H.264, delivered from the global edge) using our own controllable
+`<video>` — native HLS on Safari/iOS, **hls.js** (dynamically imported, lazy chunk)
+elsewhere, tuned for a reels feed (small buffer, cap-to-player-size, worker parsing)
+and always falling back to the plain MP4 if a stream isn't ready. Only the active +
+next reel wire HLS (predictive preload of the next; decoders released for the rest).
+Publishing a video kicks off **ingestion** (`/api/posts/:id/stream-ingest` →
+`copyToStream`, storing `stream_uid`); the original R2 MP4 stays as the archival +
+fallback source. Entirely additive and **env-gated** — with no Stream credentials
+(`CF_STREAM_ACCOUNT_ID`, `CF_STREAM_API_TOKEN`, `NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE`)
+everything plays exactly as before. Next: inline feed-video HLS, a backfill job for
+existing videos, and playback observability.
+
 ## Infrastructure & ops
 
 - **Deploys:** GitHub → Vercel. **Always `git push origin main` after committing**

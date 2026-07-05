@@ -285,6 +285,7 @@ function ReelCard({
   const [scrubPct, setScrubPct] = useState(0);
   const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([]);
   const seekBar = useRef<HTMLDivElement | null>(null);
+  const pauseSignTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
@@ -323,14 +324,24 @@ function ReelCard({
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => setUi(false), 4000);
   }, []);
-  const toggleUi = useCallback(() => {
-    setUi((v) => {
-      const next = !v;
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      if (next) hideTimer.current = setTimeout(() => setUi(false), 4000);
-      return next;
-    });
-  }, []);
+  // A single tap toggles play/pause; the pause sign fades in ~1s after pausing
+  // (so a quick play/pause tap never flashes it). Shows the controls too.
+  const togglePauseTap = useCallback(() => {
+    const v = video.current;
+    if (!v) return;
+    setUi(true);
+    scheduleHide();
+    if (pauseSignTimer.current) clearTimeout(pauseSignTimer.current);
+    if (v.paused) {
+      setPaused(false);
+      void v.play().catch(() => {});
+    } else {
+      v.pause();
+      pauseSignTimer.current = setTimeout(() => {
+        if (video.current?.paused) setPaused(true);
+      }, 1000);
+    }
+  }, [scheduleHide]);
 
   // Play only the reel in view; pause + rewind the rest so re-entry is fresh.
   useEffect(() => {
@@ -364,6 +375,7 @@ function ReelCard({
       if (hideTimer.current) clearTimeout(hideTimer.current);
       if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
       if (holdTimer.current) clearTimeout(holdTimer.current);
+      if (pauseSignTimer.current) clearTimeout(pauseSignTimer.current);
       if (video.current) releasePlayback(video.current);
     };
   }, []);
@@ -594,9 +606,10 @@ function ReelCard({
     if (!liked) void react("like");
   };
 
-  // Gesture model (vertical scrolling is now native, so movement is never a tap):
-  //  • press-and-HOLD (~0.5s, no movement) → pause; release → resume.
-  //  • double-tap left/right → seek −10s / +10s; single tap → toggle the UI.
+  // Gesture model (vertical scrolling is native, so movement is never a tap):
+  //  • single tap → pause / play (pause sign fades in ~1s after pausing).
+  //  • double-tap left/right → seek −10s / +10s; double-tap centre → like.
+  //  • press-and-HOLD (~0.5s) → pause while held; release resumes.
   const onPointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
@@ -647,7 +660,7 @@ function ReelCard({
     }
     lastTap.current = { t: now, x };
     if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
-    singleTapTimer.current = setTimeout(() => toggleUi(), 280);
+    singleTapTimer.current = setTimeout(() => togglePauseTap(), 280);
   };
 
   return (

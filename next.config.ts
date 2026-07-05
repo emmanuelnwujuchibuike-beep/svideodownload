@@ -29,6 +29,13 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // The service worker itself must never be HTTP-cached, or clients keep
+        // running an old worker (and old assets) after a deploy — the "my laptop
+        // still shows the old UI" bug. Always revalidate it.
+        source: "/sw.js",
+        headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }],
+      },
+      {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },

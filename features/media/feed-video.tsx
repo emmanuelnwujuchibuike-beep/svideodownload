@@ -98,27 +98,17 @@ export function FeedVideo({
     setMuted(v.muted);
   }, []);
 
-  // Play/pause with a delayed pause sign (so a quick play/pause never flashes it).
-  const togglePause = () => {
+  const resumePlay = () => {
     const v = video.current;
     if (!v) return;
-    if (pauseSignTimer.current) clearTimeout(pauseSignTimer.current);
-    if (v.paused) {
-      userPaused.current = false;
-      setShowPause(false);
-      void v.play().catch(() => {});
-    } else {
-      userPaused.current = true;
-      v.pause();
-      pauseSignTimer.current = setTimeout(() => {
-        if (video.current?.paused) setShowPause(true);
-      }, 1000);
-    }
+    userPaused.current = false;
+    setShowPause(false);
+    void v.play().catch(() => {});
   };
 
-  // ── Gesture model ────────────────────────────────────────────────────────
-  //   • single tap  → pause / play (pause sign fades in ~1s after pausing)
-  //   • press-hold  → open the full-screen reels
+  // ── Feed video gesture model ─────────────────────────────────────────────
+  //   • single tap  → open the full-screen reels
+  //   • press-hold  → pause (while held); release resumes
   // Guarded so a graze, drag, hover, or scroll-tail never triggers either.
   const onPointerDown = (e: React.PointerEvent) => {
     holding.current = false;
@@ -127,9 +117,14 @@ export function FeedVideo({
     downAt.current = Date.now();
     holdTimer.current = setTimeout(() => {
       if (moved.current) return;
-      holding.current = true; // press-and-hold → full screen
-      onExpand?.();
-    }, 450);
+      holding.current = true; // press-and-hold → pause
+      const v = video.current;
+      if (v) {
+        userPaused.current = true;
+        v.pause();
+        setShowPause(true);
+      }
+    }, 300);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!startPt.current || moved.current) return;
@@ -138,6 +133,10 @@ export function FeedVideo({
     if (dx > TAP_MOVE_TOLERANCE || dy > TAP_MOVE_TOLERANCE) {
       moved.current = true;
       if (holdTimer.current) clearTimeout(holdTimer.current);
+      if (holding.current) {
+        holding.current = false;
+        resumePlay();
+      }
     }
   };
   const endHold = () => {
@@ -146,17 +145,21 @@ export function FeedVideo({
     const dur = Date.now() - downAt.current;
     startPt.current = null;
     if (holding.current) {
-      holding.current = false; // already opened full screen
+      holding.current = false; // was a press-hold pause → resume
+      resumePlay();
       return;
     }
-    // Deliberate quick tap → pause/play.
-    if (started && !moved.current && dur >= 40 && dur < 450 && !recentlyScrolled(500)) {
-      togglePause();
+    // Deliberate quick tap → open full-screen reels.
+    if (started && !moved.current && dur >= 40 && dur < 300 && !recentlyScrolled(500)) {
+      onExpand?.();
     }
   };
   const onPointerLeaveCancel = () => {
     if (holdTimer.current) clearTimeout(holdTimer.current);
-    holding.current = false;
+    if (holding.current) {
+      holding.current = false;
+      resumePlay();
+    }
     startPt.current = null;
   };
 
@@ -222,9 +225,9 @@ export function FeedVideo({
         <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full object-cover lg:object-contain" />
       ) : null}
 
-      {/* Paused indicator — fades in ~1s after a tap-pause */}
+      {/* Paused-while-holding indicator */}
       {showPause ? (
-        <span className="pointer-events-none absolute inset-0 flex animate-fade-up items-center justify-center">
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
             <Pause className="h-7 w-7 fill-white" />
           </span>
@@ -243,7 +246,7 @@ export function FeedVideo({
 
       {/* Hint */}
       <span className="pointer-events-none absolute bottom-2 left-2.5 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 opacity-0 backdrop-blur transition-opacity duration-200 group-hover:opacity-100">
-        Tap to pause · hold for full screen
+        Tap to watch · hold to pause
       </span>
     </div>
   );

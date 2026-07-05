@@ -74,9 +74,15 @@ _Last updated: 2026‑07‑05._
   `posts.reposts_count` + notify trigger, in **migration `0025_reposts.sql`
   (must be applied in Supabase)**. Repost is a toggle (`POST`/`DELETE
   /api/posts/:id/repost`), synced across surfaces via a client repost store, with
-  a live count; the profile **Reposts tab** is public. Phase 2b (per-tab privacy,
-  "X reposted" feed discovery, overlapping-avatar badges, repost conversations,
-  grouped notifications) is deferred.
+  a live count; the profile **Reposts tab** is public. **Phase 2b (mostly
+  shipped):** overlapping-avatar repost badge; a "@handle reposted" discovery
+  header on feed cards; **surfacing** — a followed user's repost pulls the
+  original post into the top of your For You feed even when it wouldn't otherwise
+  rank; and **per-tab profile privacy** — Reposts / Liked / Saved each have their
+  own Public / Followers / Private visibility (a disallowed tab is hidden entirely
+  and its data never loads), in **migration `0026_profile_tab_privacy.sql` (must
+  be applied in Supabase)**. Still deferred: Collections, repost conversations,
+  grouped repost notifications, the repost bubble animation.
 
 ## Infrastructure & ops
 

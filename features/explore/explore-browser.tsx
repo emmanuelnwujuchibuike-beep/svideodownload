@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { Clock, Flame } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -116,12 +117,14 @@ function TabButton({ active, icon: Icon, label, onClick }: { active: boolean; ic
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition",
-        active ? "bg-background shadow" : "text-muted-foreground hover:text-foreground",
-      )}
+      className="relative inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-semibold transition"
     >
-      <Icon className="h-4 w-4" /> {label}
+      {active ? (
+        <motion.span layoutId="explore-tab-pill" transition={{ type: "spring", stiffness: 420, damping: 34 }} className="absolute inset-0 rounded-lg bg-background shadow" />
+      ) : null}
+      <span className={cn("relative z-10 inline-flex items-center gap-1.5", active ? "text-foreground" : "text-muted-foreground hover:text-foreground")}>
+        <Icon className="h-4 w-4" /> {label}
+      </span>
     </button>
   );
 }

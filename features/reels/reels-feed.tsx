@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { Clapperboard } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -86,20 +87,23 @@ export function ReelsFeed({ initialItems, initialOffset }: { initialItems: FeedI
         {([
           { id: "for_you" as const, label: "For You" },
           { id: "following" as const, label: "Following" },
-        ]).map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => switchTab(t.id)}
-            aria-pressed={tab === t.id}
-            className={cn(
-              "rounded-full px-4 py-1.5 text-sm font-bold transition active:scale-95",
-              tab === t.id ? "bg-white text-black shadow-sm" : "text-white/85 hover:text-white",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
+        ]).map((t) => {
+          const on = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => switchTab(t.id)}
+              aria-pressed={on}
+              className="relative rounded-full px-5 py-1.5 text-sm font-bold transition active:scale-95"
+            >
+              {on ? (
+                <motion.span layoutId="reel-tab-pill" transition={{ type: "spring", stiffness: 420, damping: 34 }} className="absolute inset-0 rounded-full bg-white shadow-sm" />
+              ) : null}
+              <span className={cn("relative z-10", on ? "text-black" : "text-white/85 hover:text-white")}>{t.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {switching ? (

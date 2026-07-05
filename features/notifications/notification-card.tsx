@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Check, MoreHorizontal, Trash2, UserRound } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -54,8 +55,7 @@ export function NotificationCard({
       <div className="relative shrink-0">
         {actorLed ? (
           actor?.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={actor.avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover ring-1 ring-border/60" />
+            <Image src={actor.avatarUrl} alt="" width={48} height={48} className="h-12 w-12 rounded-full object-cover ring-1 ring-border/60" />
           ) : (
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white">
               {actor?.displayName?.charAt(0).toUpperCase() ?? <UserRound className="h-5 w-5" />}

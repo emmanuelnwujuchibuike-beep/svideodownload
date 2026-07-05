@@ -20,6 +20,8 @@ const schema = z.object({
   thumbnailUrl: z.string().url().max(2048).nullable().optional().or(z.literal("").transform(() => null)),
   durationSec: z.number().int().min(0).max(86_400).nullable().optional(),
   visibility: z.enum(["public", "followers", "private"]).optional(),
+  mediaWidth: z.number().int().positive().max(30_000).nullable().optional(),
+  mediaHeight: z.number().int().positive().max(30_000).nullable().optional(),
 });
 
 /** POST /api/posts — publish a download to the user's profile. */
@@ -59,6 +61,8 @@ export async function POST(request: Request) {
     thumbnailUrl: parsed.data.thumbnailUrl ?? null,
     durationSec: parsed.data.durationSec ?? null,
     visibility: parsed.data.visibility,
+    mediaWidth: parsed.data.mediaWidth ?? null,
+    mediaHeight: parsed.data.mediaHeight ?? null,
   });
 
   if (!result.ok) {

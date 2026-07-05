@@ -29,6 +29,7 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -854,8 +855,7 @@ function ReelCard({
       <div className={cn("absolute right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 lg:-right-[4.5rem] lg:!opacity-100", railBottom, ui ? "opacity-100" : "pointer-events-none opacity-0")}>
         <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="relative mb-1">
           {item.publisher.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={item.publisher.avatarUrl} alt="" className="h-11 w-11 rounded-full object-cover ring-2 ring-white" />
+            <Image src={item.publisher.avatarUrl} alt="" width={44} height={44} className="h-11 w-11 rounded-full object-cover ring-2 ring-white" />
           ) : (
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white ring-2 ring-white">
               {item.publisher.displayName.charAt(0).toUpperCase()}
@@ -887,8 +887,7 @@ function ReelCard({
               <span className="flex -space-x-2">
                 {item.repostBadge.avatars.slice(0, 3).map((a, i) =>
                   a ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={i} src={a} alt="" className="h-5 w-5 rounded-full object-cover shadow ring-2 ring-white" />
+                    <Image key={i} src={a} alt="" width={20} height={20} className="h-5 w-5 rounded-full object-cover shadow ring-2 ring-white" />
                   ) : (
                     <span key={i} className="h-5 w-5 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 shadow ring-2 ring-white" />
                   ),

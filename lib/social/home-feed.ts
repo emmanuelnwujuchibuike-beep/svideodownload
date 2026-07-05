@@ -58,6 +58,9 @@ export interface FeedItem {
   repostsCount?: number;
   /** Followed users who reposted this — the premium repost badge (avatars + "+N"). */
   repostBadge?: { avatars: (string | null)[]; handles: string[]; count: number };
+  /** Natural pixel size of an image post — lets the feed render it with next/image. */
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
 }
 
 export interface FeedPage {
@@ -188,6 +191,24 @@ export async function getFeedItemById(id: string, viewerId: string | null): Prom
   } catch {
     return null;
   }
+}
+
+/** Natural pixel sizes for image posts (best-effort — empty before migration 0028). */
+async function imageDimensions(
+  db: ReturnType<typeof createAdminClient>,
+  ids: string[],
+): Promise<Map<string, { w: number; h: number }>> {
+  const out = new Map<string, { w: number; h: number }>();
+  if (ids.length === 0) return out;
+  try {
+    const { data } = await db.from("posts").select("id, media_width, media_height").in("id", ids);
+    for (const r of (data ?? []) as { id: string; media_width: number | null; media_height: number | null }[]) {
+      if (r.media_width && r.media_height) out.set(r.id, { w: r.media_width, h: r.media_height });
+    }
+  } catch {
+    /* columns not migrated yet */
+  }
+  return out;
 }
 
 /** A page of the rich home feed. Offset-based so it powers infinite scroll. */
@@ -367,6 +388,20 @@ async function loadHomeFeed(
         it.repostsCount = counts.get(it.id) ?? 0;
         it.repostBadge = badges.get(it.id);
       }
+
+      // Image dimensions for the feed photo's next/image (best-effort — before
+      // migration 0028 this no-ops and the photo falls back to a plain <img>).
+      const imageIds = items.filter((i) => i.mediaKind === "image").map((i) => i.id);
+      if (imageIds.length) {
+        const dims = await imageDimensions(db, imageIds);
+        for (const it of items) {
+          const d = dims.get(it.id);
+          if (d) {
+            it.mediaWidth = d.w;
+            it.mediaHeight = d.h;
+          }
+        }
+      }
     }
 
     // Surface friend reposts that aren't already in your feed (Repost spec §5): a
@@ -467,7 +502,8 @@ async function surfaceFollowedReposts(
   const followingSet = new Set(followingIds);
 
   const ids = rows.map((r) => r.id);
-  const [badges, counts, reposted, pollSet] = await Promise.all([
+  const imageIds = rows.filter((r) => r.media_kind === "image").map((r) => r.id);
+  const [badges, counts, reposted, pollSet, dims] = await Promise.all([
     followedReposters(ids, followingIds),
     repostCounts(ids),
     viewerReposts(ids, viewerId),
@@ -479,6 +515,7 @@ async function surfaceFollowedReposts(
         return new Set<string>();
       }
     })(),
+    imageDimensions(db, imageIds),
   ]);
 
   return rows.map((r) => {
@@ -518,6 +555,8 @@ async function surfaceFollowedReposts(
       viewerReposted: reposted.has(r.id),
       repostsCount: counts.get(r.id) ?? 0,
       repostBadge: badges.get(r.id),
+      mediaWidth: dims.get(r.id)?.w ?? null,
+      mediaHeight: dims.get(r.id)?.h ?? null,
     };
   });
 }

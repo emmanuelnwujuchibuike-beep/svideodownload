@@ -199,8 +199,7 @@ function FeedPostCardImpl({
         <Link href={`/u/${item.repostBadge.handles[0]}`} className="flex items-center gap-2 px-4 pt-3 text-xs font-medium text-muted-foreground transition hover:text-foreground">
           <Repeat2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
           {item.repostBadge.avatars[0] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={item.repostBadge.avatars[0]} alt="" className="h-4 w-4 rounded-full object-cover ring-1 ring-border" />
+            <Image src={item.repostBadge.avatars[0]} alt="" width={16} height={16} className="h-4 w-4 rounded-full object-cover ring-1 ring-border" />
           ) : null}
           <span className="truncate">
             @{item.repostBadge.handles[0]}
@@ -332,6 +331,8 @@ function FeedPostCardImpl({
           <FeedImage
             src={item.mediaUrl || item.thumbnailUrl!}
             alt={item.title}
+            width={item.mediaWidth ?? undefined}
+            height={item.mediaHeight ?? undefined}
             liked={liked}
             onDoubleTapLike={() => {
               if (!liked) void react("like");

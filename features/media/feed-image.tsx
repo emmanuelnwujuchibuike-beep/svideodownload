@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Heart } from "lucide-react";
+import Image from "next/image";
 import { useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -15,6 +16,8 @@ import { cn } from "@/lib/utils";
 export function FeedImage({
   src,
   alt,
+  width,
+  height,
   liked,
   onDoubleTapLike,
   onExpand,
@@ -22,11 +25,15 @@ export function FeedImage({
 }: {
   src: string;
   alt: string;
+  /** Natural pixel size — when known, the photo renders via next/image (AVIF/WebP). */
+  width?: number;
+  height?: number;
   liked: boolean;
   onDoubleTapLike: () => void;
   onExpand: () => void;
   className?: string;
 }) {
+  const hasDims = !!width && !!height && width > 0 && height > 0;
   const lastTap = useRef(0);
   const singleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPt = useRef<{ x: number; y: number } | null>(null);
@@ -66,8 +73,21 @@ export function FeedImage({
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl" />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} loading="lazy" className="relative max-h-[80vh] w-auto max-w-full object-contain" />
+      {/* Foreground: next/image (AVIF/WebP + right-sized) when the natural size is
+          known; otherwise a plain lazy <img> at natural aspect (older posts). */}
+      {hasDims ? (
+        <Image
+          src={src}
+          alt={alt}
+          width={width}
+          height={height}
+          sizes="(max-width: 768px) 100vw, 640px"
+          className="relative h-auto max-h-[80vh] w-auto max-w-full object-contain"
+        />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={alt} loading="lazy" className="relative max-h-[80vh] w-auto max-w-full object-contain" />
+      )}
 
       {/* Double-tap heart burst */}
       <AnimatePresence>

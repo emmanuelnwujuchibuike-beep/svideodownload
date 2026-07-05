@@ -37,6 +37,36 @@ interface Block {
   url?: string | null;
   poster?: string | null;
   uploading?: boolean;
+  /** Natural pixel size of an image block (so the feed can use next/image). */
+  width?: number;
+  height?: number;
+}
+
+/** Read an image file's natural pixel size (cheap; decoded off the main thread). */
+async function readImageSize(file: File): Promise<{ w: number; h: number } | null> {
+  try {
+    if (typeof createImageBitmap === "function") {
+      const bmp = await createImageBitmap(file);
+      const size = { w: bmp.width, h: bmp.height };
+      bmp.close?.();
+      return size;
+    }
+  } catch {
+    /* fall through */
+  }
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => {
+      resolve(null);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
 }
 
 const MOODS = [
@@ -141,13 +171,16 @@ function StudioInner() {
     setBlocks((bs) => [...bs, { id, type: kind, url: null, uploading: true }]);
     try {
       let poster: string | undefined;
+      let size: { w: number; h: number } | null = null;
       if (kind === "video") {
         const blob = await captureVideoPoster(file).catch(() => null);
         if (blob) poster = await uploadPostMedia({ data: blob, kind: "image", ext: "jpg", contentType: "image/jpeg" }).catch(() => undefined);
+      } else {
+        size = await readImageSize(file); // capture natural dimensions for next/image
       }
       const ext = (file.name.split(".").pop() || (kind === "video" ? "mp4" : "jpg")).toLowerCase().replace(/[^a-z0-9]/g, "");
       const url = await uploadPostMedia({ data: file, kind, ext, contentType: file.type || (kind === "video" ? "video/mp4" : "image/jpeg") });
-      update(id, { url, poster, uploading: false });
+      update(id, { url, poster, uploading: false, width: size?.w, height: size?.h });
     } catch {
       setErr("Upload failed — try a smaller file.");
       remove(id);
@@ -185,6 +218,8 @@ function StudioInner() {
           description,
           thumbnailUrl: media.type === "image" ? media.url : media.poster ?? null,
           visibility: "public",
+          mediaWidth: media.type === "image" ? media.width ?? null : null,
+          mediaHeight: media.type === "image" ? media.height ?? null : null,
         }),
       });
       const json = await res.json();

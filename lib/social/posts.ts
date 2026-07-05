@@ -69,6 +69,9 @@ export interface PublishInput {
   thumbnailUrl?: string | null;
   durationSec?: number | null;
   visibility?: Visibility;
+  /** Natural pixel size of an uploaded image (lets the feed use next/image). */
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
 }
 
 export type PublishResult =
@@ -129,7 +132,18 @@ export async function publishPost(
       }
       return { ok: false, error: "Couldn't publish.", code: "error" };
     }
-    return { ok: true, id: data.id as string };
+    const id = data.id as string;
+
+    // Store image dimensions as a SEPARATE best-effort update so a not-yet-applied
+    // migration 0028 can never block publishing (unknown-column errors are ignored).
+    if (input.mediaWidth && input.mediaHeight) {
+      try {
+        await db.from("posts").update({ media_width: input.mediaWidth, media_height: input.mediaHeight }).eq("id", id);
+      } catch {
+        /* columns not migrated yet — dimensions are optional */
+      }
+    }
+    return { ok: true, id };
   } catch {
     return { ok: false, error: "Couldn't publish.", code: "error" };
   }

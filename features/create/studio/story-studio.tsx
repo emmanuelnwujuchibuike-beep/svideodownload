@@ -230,6 +230,9 @@ function StudioInner() {
       }
       // Store the media so it plays natively (best-effort).
       if (json.id) void fetch(`/api/posts/${json.id}/store-media`, { method: "POST" }).catch(() => {});
+      // Kick off adaptive-streaming ingestion for videos (best-effort, env-gated —
+      // no-ops without Stream credentials). Gives the reel instant HLS/ABR playback.
+      if (json.id && media.type === "video") void fetch(`/api/posts/${json.id}/stream-ingest`, { method: "POST" }).catch(() => {});
       try {
         navigator.vibrate?.(18);
       } catch {

@@ -36,6 +36,7 @@ import { createPortal } from "react-dom";
 
 import { RichText } from "@/components/social/rich-text";
 import { SmartVideo } from "@/features/media/smart-video";
+import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { Comments } from "@/features/social/comments";
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { PostPollInline } from "@/features/social/post-poll-inline";
@@ -46,6 +47,7 @@ import { toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { downloadPost } from "@/lib/media/download-post";
+import { streamHlsUrl } from "@/lib/media/stream";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
@@ -315,11 +317,19 @@ function ReelCard({
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
   const [repostBurst, setRepostBurst] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [srcReady, setSrcReady] = useState(false);
   const fetched = useRef(false);
 
   useEffect(() => setMounted(true), []);
 
-  const native = !!item.mediaUrl;
+  // Adaptive playback: a Cloudflare Stream video plays HLS (auto quality ladder,
+  // instant start, edge-delivered) through our own <video>; anything without a
+  // Stream uid keeps playing the plain MP4. Either way it's the controllable native
+  // element (our gestures/scrubber), never the heavy iframe.
+  const hlsUrl = item.streamUid ? streamHlsUrl(item.streamUid) : null;
+  const native = !!item.mediaUrl || !!hlsUrl;
+  const markSrcReady = useCallback(() => setSrcReady(true), []);
+  useAdaptiveSource(video, { hlsUrl, src: item.mediaUrl, poster: item.thumbnailUrl, active: nearby, onReady: markSrcReady });
 
   // Report readiness so the deck can extend its scroll ceiling. Stream clips
   // buffer themselves; native clips report on canplay/error, with a fallback so a
@@ -359,10 +369,13 @@ function ReelCard({
   }, [scheduleHide]);
 
   // Play only the reel in view; pause + rewind the rest so re-entry is fresh.
+  // Waits for `srcReady` so an async HLS attach (hls.js) still autoplays once the
+  // stream is wired up.
   useEffect(() => {
     const v = video.current;
     if (!v || !native) return;
     if (isActive) {
+      if (!srcReady) return;
       claimPlayback(v);
       setUi(true);
       scheduleHide();
@@ -383,7 +396,7 @@ function ReelCard({
       setProgress(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, native]);
+  }, [isActive, native, srcReady]);
 
   useEffect(() => {
     return () => {
@@ -763,8 +776,7 @@ function ReelCard({
             // eslint-disable-next-line jsx-a11y/media-has-caption
             <video
               ref={video}
-              // Seek to a frame when there's no poster so it isn't black pre-play.
-              src={item.thumbnailUrl ? item.mediaUrl! : `${item.mediaUrl}#t=0.1`}
+              // Source (HLS or MP4) is attached imperatively by useAdaptiveSource.
               poster={item.thumbnailUrl ?? undefined}
               loop={loop}
               playsInline

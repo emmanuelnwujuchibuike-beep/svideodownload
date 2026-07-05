@@ -9,7 +9,7 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑05._
+_Last updated: 2026‑07‑05 (adaptive streaming slice 4)._
 
 ---
 
@@ -128,9 +128,26 @@ fallback source. Entirely additive and **env-gated** — with no Stream credenti
 everything plays exactly as before. The **inline feed video** uses the same adaptive
 path (attaching only near the viewport, releasing off-screen). An **admin backfill**
 (`/api/admin/stream-backfill`) ingests existing videos; **auto-captions** are
-generated on ingest and render through HLS automatically; and **playback metrics**
-(time-to-first-frame, rebuffers, source) are logged via a sampled beacon
-(`/api/metrics/playback`). Next: a Stream ready-webhook and multi-language subtitles.
+generated on ingest (English + French by default — `DEFAULT_CAPTION_LANGUAGES`,
+chosen for the Africa-primary, Francophone-heavy audience) and render through HLS
+automatically; and **playback metrics** (time-to-first-frame, rebuffers, dropped-frame
+ratio, last bitrate, errors) are logged via a sampled beacon (`/api/metrics/playback`).
+
+**Slice 4 (network/battery-aware quality + reliability):** the HLS ladder never
+defaults to its top rung — `lib/media/network-conditions.ts` reads Data Saver +
+connection type synchronously (so it never delays stream attach) and the async
+Battery API to refine the cap moments later, applied to hls.js via
+`autoLevelCapping`. Viewers can also override it — a three-way **Auto / Data saver /
+Highest quality** control (localStorage) in the reel's overflow (•••) menu, the one
+manual knob the spec asks for. A **Stream ready-webhook**
+(`/api/webhooks/stream`, HMAC-verified) flips `stream_ready`/`stream_error` on posts
+when Cloudflare finishes transcoding — a confirmed encode failure makes the player
+skip HLS entirely rather than wasting a fetch; register it once via
+`/api/admin/stream-webhook-setup` (admin-only) and set the returned secret as
+`CF_STREAM_WEBHOOK_SECRET`. It's also the reliability net for captions, re-requesting
+any language that didn't take right after ingest. **Migration
+`0029_stream_status.sql`** adds `stream_ready`/`stream_error`/`caption_languages` —
+best-effort/optional, so none of this gates playback before it's applied.
 
 ## Infrastructure & ops
 

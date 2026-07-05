@@ -12,6 +12,9 @@ const policy = z.enum(["everyone", "followers", "off"]);
 const schema = z.object({
   activity_visibility: vis.optional(),
   followers_visibility: vis.optional(),
+  reposts_visibility: vis.optional(),
+  likes_visibility: vis.optional(),
+  saves_visibility: vis.optional(),
   comments_policy: policy.optional(),
   messages_policy: policy.optional(),
   allow_indexing: z.boolean().optional(),

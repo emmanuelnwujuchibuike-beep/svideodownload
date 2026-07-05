@@ -201,6 +201,10 @@ export async function getOwnProfile(userId: string): Promise<OwnProfile | null> 
 export interface PrivacySettings {
   activity_visibility: Visibility;
   followers_visibility: Visibility;
+  /** Per-tab visibility for the profile activity tabs (Repost spec §7). */
+  reposts_visibility: Visibility;
+  likes_visibility: Visibility;
+  saves_visibility: Visibility;
   comments_policy: "everyone" | "followers" | "off";
   messages_policy: "everyone" | "followers" | "off";
   allow_indexing: boolean;
@@ -210,6 +214,10 @@ export interface PrivacySettings {
 export const DEFAULT_PRIVACY: PrivacySettings = {
   activity_visibility: "public",
   followers_visibility: "public",
+  // Preserve today's behaviour: reposts were public, likes/saves owner-only.
+  reposts_visibility: "public",
+  likes_visibility: "private",
+  saves_visibility: "private",
   comments_policy: "everyone",
   messages_policy: "followers",
   allow_indexing: true,
@@ -376,12 +384,25 @@ export async function getPrivacySettings(userId: string): Promise<PrivacySetting
     const { data } = await db
       .from("privacy_settings")
       .select(
-        "activity_visibility, followers_visibility, comments_policy, messages_policy, allow_indexing, show_in_recommendations",
+        "activity_visibility, followers_visibility, reposts_visibility, likes_visibility, saves_visibility, comments_policy, messages_policy, allow_indexing, show_in_recommendations",
       )
       .eq("user_id", userId)
       .maybeSingle();
     return { ...DEFAULT_PRIVACY, ...((data ?? {}) as Partial<PrivacySettings>) };
   } catch {
+    // Columns not migrated yet (or a transient error) → safe defaults.
     return DEFAULT_PRIVACY;
   }
+}
+
+/**
+ * Can a viewer see a profile activity tab governed by `vis`? Owner always can;
+ * "public" everyone; "followers" only followers; "private" only the owner. Pure
+ * (no DB) — pass the viewer's follow relationship in.
+ */
+export function tabVisible(vis: Visibility, isOwner: boolean, isFollowing: boolean): boolean {
+  if (isOwner) return true;
+  if (vis === "public") return true;
+  if (vis === "followers") return isFollowing;
+  return false;
 }

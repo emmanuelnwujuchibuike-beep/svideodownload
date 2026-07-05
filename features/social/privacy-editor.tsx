@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Eye, Loader2, MessageSquare, Search, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { Activity, Bookmark, Eye, Heart, Loader2, MessageSquare, Repeat2, Search, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -60,6 +60,10 @@ export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
       <div className="space-y-2.5">
         <SegRow icon={Activity} title="Activity visibility" desc="Who can see your likes, saves and posts" value={state.activity_visibility} choices={VIS} onChange={(v) => set("activity_visibility", v as PrivacySettings["activity_visibility"])} />
         <SegRow icon={Users} title="Followers list" desc="Who can see who follows you" value={state.followers_visibility} choices={VIS} onChange={(v) => set("followers_visibility", v as PrivacySettings["followers_visibility"])} />
+        {/* Per-tab visibility — a hidden tab never appears on your profile. */}
+        <SegRow icon={Repeat2} title="Reposts tab" desc="Who can see the posts you repost" value={state.reposts_visibility} choices={VIS} onChange={(v) => set("reposts_visibility", v as PrivacySettings["reposts_visibility"])} />
+        <SegRow icon={Heart} title="Liked tab" desc="Who can see the posts you like" value={state.likes_visibility} choices={VIS} onChange={(v) => set("likes_visibility", v as PrivacySettings["likes_visibility"])} />
+        <SegRow icon={Bookmark} title="Saved tab" desc="Who can see the posts you save" value={state.saves_visibility} choices={VIS} onChange={(v) => set("saves_visibility", v as PrivacySettings["saves_visibility"])} />
         <SegRow icon={MessageSquare} title="Comments" desc="Who can comment on your posts" value={state.comments_policy} choices={POLICY} onChange={(v) => set("comments_policy", v as PrivacySettings["comments_policy"])} />
         <SegRow icon={MessageSquare} title="Messages" desc="Who can send you direct messages" value={state.messages_policy} choices={POLICY} onChange={(v) => set("messages_policy", v as PrivacySettings["messages_policy"])} />
         <ToggleRow icon={Search} title="Search engine indexing" desc="Let Google show your profile" on={state.allow_indexing} onToggle={() => set("allow_indexing", !state.allow_indexing)} />

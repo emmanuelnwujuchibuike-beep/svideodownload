@@ -22,16 +22,17 @@ import { getUserPlan } from "@/lib/monetization/plan";
 import { friendsCount, friendshipState, mutualFriendsCount } from "@/lib/social/friends";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "@/lib/social/posts";
-import { getPublicProfile } from "@/lib/social/profile";
+import { getPrivacySettings, getPublicProfile, tabVisible } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 type ProfileTab = "posts" | "reels" | "downloads" | "reposted" | "liked" | "saved";
-// Liked / Saved / Reposts are private — only the owner sees those tabs.
-const OWNER_TABS: ProfileTab[] = ["posts", "reels", "downloads", "reposted", "liked", "saved"];
-const VISITOR_TABS: ProfileTab[] = ["posts", "reels", "downloads", "reposted"];
+// Posts / Reels / Downloads are always public; the activity tabs (Reposts, Liked,
+// Saved) each honour their own per-tab visibility (Repost spec §7) and are hidden
+// entirely from viewers who aren't allowed to see them.
+const BASE_TABS: ProfileTab[] = ["posts", "reels", "downloads"];
 
 async function viewerId(): Promise<string | null> {
   try {
@@ -98,14 +99,21 @@ export default async function ProfilePage({
   // The profile header renders immediately; the (heavier) posts grid streams in
   // behind a skeleton so the page never blocks on the post query.
   const isViewer = !!me && !profile.isOwner;
-  const [plan, friendState, mutuals, friendTotal, postsTotal] = await Promise.all([
+  const [plan, friendState, mutuals, friendTotal, postsTotal, privacy] = await Promise.all([
     getUserPlan(profile.id),
     isViewer ? friendshipState(me!, profile.id) : Promise.resolve("none" as const),
     isViewer ? mutualFriendsCount(me!, profile.id) : Promise.resolve(0),
     friendsCount(profile.id),
     publishedPostsCount(profile.id, profile.isOwner),
+    getPrivacySettings(profile.id),
   ]);
-  const tabs = profile.isOwner ? OWNER_TABS : VISITOR_TABS;
+
+  // Per-tab visibility: activity tabs appear only when the viewer is allowed to
+  // see them (owner always; public → everyone; followers → the viewer follows).
+  const tabs: ProfileTab[] = [...BASE_TABS];
+  if (tabVisible(privacy.reposts_visibility, profile.isOwner, profile.isFollowing)) tabs.push("reposted");
+  if (tabVisible(privacy.likes_visibility, profile.isOwner, profile.isFollowing)) tabs.push("liked");
+  if (tabVisible(privacy.saves_visibility, profile.isOwner, profile.isFollowing)) tabs.push("saved");
   const activeTab: ProfileTab = tabs.includes(tab as ProfileTab) ? (tab as ProfileTab) : "posts";
 
   const ld = {
@@ -348,11 +356,13 @@ async function ProfileTabsLoader({
   tabs: ProfileTab[];
   initialTab: ProfileTab;
 }) {
+  // Only fetch a tab's dataset when it's actually visible to this viewer — a
+  // hidden (private) tab never even loads its data, so nothing can leak.
   const [posts, liked, saved, reposted, jar] = await Promise.all([
     listUserPosts(profileId, viewerId),
-    isOwner ? listLikedPosts(profileId) : Promise.resolve([]),
-    isOwner ? listSavedPosts(profileId) : Promise.resolve([]),
-    listUserReposts(profileId), // reposts are public
+    tabs.includes("liked") ? listLikedPosts(profileId) : Promise.resolve([]),
+    tabs.includes("saved") ? listSavedPosts(profileId) : Promise.resolve([]),
+    tabs.includes("reposted") ? listUserReposts(profileId) : Promise.resolve([]),
     cookies(),
   ]);
   // Seed the grid/list choice from the cookie so the layout paints instantly.

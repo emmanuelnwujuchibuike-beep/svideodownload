@@ -9,7 +9,7 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑05 (sticky-sidebar regression fix + reels polish)._
+_Last updated: 2026‑07‑05 (collapsible feed nav + reels gesture/layout pass)._
 
 ---
 
@@ -61,10 +61,19 @@ _Last updated: 2026‑07‑05 (sticky-sidebar regression fix + reels polish)._
   redirects logged‑in users here.
 - **Smart Home Feed** — smart‑feed engine (reasons, content balance, spark cards,
   "while you were away"), premium `SmartFeed` on `/home` with pull‑to‑refresh,
-  filters, zero‑empty fallback. Called **Smart**, never "AI".
+  filters, zero‑empty fallback. Called **Smart**, never "AI". The nav (segmented
+  control + filter chips) is collapsible via a tiny handle on its bottom edge, on
+  every screen size (remembered across visits); filter chips justify‑between and
+  drop their edge fade on large screens, and the active chip uses the brand
+  gradient + glow.
 - **Reels** — full‑screen deck (For You / Following tabs, scrubber, double‑tap
-  like, decluttered rail + "More" menu, Repost, inline edit, direct download).
-  Muted‑by‑default independent audio.
+  like, decluttered rail, Repost, inline edit, direct download). Muted‑by‑default
+  independent audio. Every reel **loops continuously** while in view — advancing
+  only ever happens by scrolling, never automatically. The options (•••) button
+  sits top‑right (mirroring the close X at top‑left, always visible); elapsed/
+  total time sits top‑center below the tabs (auto‑hides with the rest of the UI).
+  Press‑and‑hold pauses **and** opens the options sheet — one gesture reaches
+  every action.
 - **Notifications** — premium realtime Notification Center, Web Push, iOS install
   path, social push, live toast.
 - **Friends (Frenz Connect)** — requests with notes, friendships, `/friends` hub,

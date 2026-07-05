@@ -258,19 +258,18 @@ export function SmartFeed({
         style={{ height: pull, opacity: pull > 4 ? 1 : 0 }}
       >
         <div className="relative flex items-center justify-center" style={{ transform: `translateY(${pull - 40}px)` }}>
-          {/* electric energy wave */}
-          <span
-            className="absolute rounded-full bg-gradient-to-br from-blue-500 to-violet-600 blur-md"
-            style={{ height: 44, width: 44, opacity: 0.35 + pullProgress * 0.4, transform: `scale(${0.6 + pullProgress * 0.8})` }}
-          />
+          {/* Colorless, quiet refresh hint — a faint grayscale F (no colorful
+              spinner). Rotates a touch with the pull; gently pulses while working. */}
           <span
             className={cn(
-              "relative flex h-9 w-9 items-center justify-center rounded-full bg-background shadow-elevated ring-1 ring-violet-500/40",
-              refreshing && "animate-spin",
+              "relative flex h-9 w-9 items-center justify-center rounded-full bg-secondary/60 ring-1 ring-border/50 backdrop-blur",
+              refreshing && "motion-safe:animate-pulse",
             )}
-            style={{ transform: `rotate(${pull * 3}deg)` }}
+            style={{ transform: `rotate(${pull * 2}deg)` }}
           >
-            <FrenzLogo size={20} />
+            <span className="block [filter:grayscale(1)]" style={{ opacity: 0.3 + pullProgress * 0.45 }}>
+              <FrenzLogo size={18} />
+            </span>
           </span>
         </div>
       </div>

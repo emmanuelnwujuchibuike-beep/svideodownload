@@ -44,6 +44,7 @@ import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { downloadPost } from "@/lib/media/download-post";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
+import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
@@ -265,7 +266,7 @@ function ReelCard({
   const [title, setTitle] = useState(item.title);
   const [editOpen, setEditOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [reposted, setReposted] = useState(false);
+  const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
   const [mounted, setMounted] = useState(false);
   const fetched = useRef(false);
 
@@ -437,29 +438,12 @@ function ReelCard({
   };
 
   const repost = async () => {
-    if (reposted) {
-      toast("Already reposted.", "info");
-      return;
-    }
-    setReposted(true);
-    setMoreOpen(false);
+    const next = !repostState.reposted;
     try {
-      const res = await fetch(`/api/posts/${item.id}/repost`, { method: "POST" });
-      const d = (await res.json().catch(() => ({}))) as { error?: string };
-      if (res.status === 401) {
-        toast("Sign in to repost.", "error");
-        setReposted(false);
-        return;
-      }
-      if (!res.ok) {
-        toast(d.error ?? "Couldn't repost.", "error");
-        if (res.status !== 409) setReposted(false);
-        return;
-      }
-      toast("Reposted to your profile.", "success");
+      await toggleRepost(item.id, next, repostState.count);
+      toast(next ? "Reposted to your profile." : "Removed repost.", "success");
     } catch {
       toast("Couldn't repost.", "error");
-      setReposted(false);
     }
   };
 
@@ -812,7 +796,7 @@ function ReelCard({
             everything else live in the premium overflow sheet. */}
         <RailButton icon={Heart} active={liked} fill={liked} activeClass="text-rose-500" count={likes} label="Like" onClick={() => react("like")} />
         <RailButton icon={MessageCircle} count={item.commentsCount} label="Comment" onClick={openComments} />
-        <RailButton icon={Repeat2} active={reposted} fill={reposted} activeClass="text-emerald-400" label="Repost" onClick={repost} />
+        <RailButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-400" label="Repost" onClick={repost} />
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
         <RailButton icon={MoreHorizontal} label="More" onClick={() => setMoreOpen(true)} />
       </div>

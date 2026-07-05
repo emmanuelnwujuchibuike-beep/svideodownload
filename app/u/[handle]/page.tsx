@@ -21,7 +21,7 @@ import { PostGridSkeleton } from "@/features/ui/page-skeletons";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { friendsCount, friendshipState, mutualFriendsCount } from "@/lib/social/friends";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { listLikedPosts, listSavedPosts, listUserPosts } from "@/lib/social/posts";
+import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "@/lib/social/posts";
 import { getPublicProfile } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
@@ -31,7 +31,7 @@ export const dynamic = "force-dynamic";
 type ProfileTab = "posts" | "reels" | "downloads" | "reposted" | "liked" | "saved";
 // Liked / Saved / Reposts are private — only the owner sees those tabs.
 const OWNER_TABS: ProfileTab[] = ["posts", "reels", "downloads", "reposted", "liked", "saved"];
-const VISITOR_TABS: ProfileTab[] = ["posts", "reels", "downloads"];
+const VISITOR_TABS: ProfileTab[] = ["posts", "reels", "downloads", "reposted"];
 
 async function viewerId(): Promise<string | null> {
   try {
@@ -348,10 +348,11 @@ async function ProfileTabsLoader({
   tabs: ProfileTab[];
   initialTab: ProfileTab;
 }) {
-  const [posts, liked, saved, jar] = await Promise.all([
+  const [posts, liked, saved, reposted, jar] = await Promise.all([
     listUserPosts(profileId, viewerId),
     isOwner ? listLikedPosts(profileId) : Promise.resolve([]),
     isOwner ? listSavedPosts(profileId) : Promise.resolve([]),
+    listUserReposts(profileId), // reposts are public
     cookies(),
   ]);
   // Seed the grid/list choice from the cookie so the layout paints instantly.
@@ -367,6 +368,7 @@ async function ProfileTabsLoader({
       posts={posts}
       liked={liked}
       saved={saved}
+      reposted={reposted}
     />
   );
 }

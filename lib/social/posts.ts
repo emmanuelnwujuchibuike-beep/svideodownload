@@ -394,6 +394,31 @@ export async function listLikedPosts(userId: string, limit = 24): Promise<PostCa
   }
 }
 
+/** The user's reposted posts (original cards, attribution preserved), newest
+ *  repost first. Best-effort — returns [] before the reposts table is migrated. */
+export async function listUserReposts(userId: string, limit = 24): Promise<PostCard[]> {
+  if (!hasSupabase) return [];
+  try {
+    const db = createAdminClient();
+    const { data: rows } = await db
+      .from("reposts")
+      .select("post_id, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(limit * 2);
+    const ids = ((rows ?? []) as { post_id: string }[]).map((r) => r.post_id);
+    if (ids.length === 0) return [];
+
+    const { data } = await db.from("posts").select(POST_SELECT).in("id", ids).eq("status", "published");
+    const posts = ((data as PostRow[]) ?? []).filter((p) => p.visibility === "public");
+    const order = new Map(ids.map((id, i) => [id, i]));
+    posts.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    return posts.slice(0, limit).map(toCard);
+  } catch {
+    return [];
+  }
+}
+
 /** Related posts (same category, then same publisher), excluding the current. */
 export async function relatedPosts(post: PublicPost, limit = 6): Promise<PostCard[]> {
   if (!hasSupabase) return [];

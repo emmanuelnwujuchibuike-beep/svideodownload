@@ -32,6 +32,7 @@ import { toast } from "@/features/ui/toast";
 import { downloadPost } from "@/lib/media/download-post";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
+import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
 import type { FeedItem } from "@/lib/social/home-feed";
 import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
@@ -70,6 +71,7 @@ function FeedPostCardImpl({
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
   const following = useFollowState(item.publisher.id, item.isFollowing);
+  const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
   const [likes, setLikes] = useState(item.likesCount);
   const [shares, setShares] = useState(item.sharesCount);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -130,12 +132,10 @@ function FeedPostCardImpl({
 
   const repost = async () => {
     setMenuOpen(false);
+    const next = !repostState.reposted;
     try {
-      const res = await fetch(`/api/posts/${item.id}/repost`, { method: "POST" });
-      const d = (await res.json().catch(() => ({}))) as { error?: string };
-      if (res.status === 401) return toast("Sign in to repost.", "error");
-      if (!res.ok) return toast(d.error ?? "Couldn't repost.", "error");
-      toast("Reposted to your profile.", "success");
+      await toggleRepost(item.id, next, repostState.count);
+      toast(next ? "Reposted to your profile." : "Removed repost.", "success");
     } catch {
       toast("Couldn't repost.", "error");
     }
@@ -227,7 +227,7 @@ function FeedPostCardImpl({
                     <MenuItem icon={Pencil} label="Edit post" onClick={() => { setMenuOpen(false); setEditOpen(true); }} />
                   ) : null}
                   {!item.isOwner ? (
-                    <MenuItem icon={Repeat2} label="Repost" onClick={repost} />
+                    <MenuItem icon={Repeat2} label={repostState.reposted ? "Remove repost" : "Repost"} onClick={repost} />
                   ) : null}
                   {!item.isOwner ? (
                     <MenuItem icon={UserPlus} label={following ? "Unfollow creator" : "Follow creator"} onClick={toggleFollow} />

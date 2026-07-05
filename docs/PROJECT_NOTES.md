@@ -68,13 +68,15 @@ _Last updated: 2026‑07‑05._
   divider), drafts + recovery, morph publish animation.
 - **Downloader** — the SEO/download product; direct download of posts (free tier
   capped at 5/day, premium unlimited).
-- **Repost & Share (Phase 1)** — reels action stack is Like · Comment · Repost ·
-  Save + a premium overflow (•••) sheet (Share, Copy link, Open in browser, View
-  details, Add to collection, Download, Follow/Mute creator, Mute audio, Hide, Not
-  interested, Report, Block). Repost also on feed posts. `POST /api/posts/:id/
-  repost` creates an attributed repost. Phase 2+ (attribution model, profile
-  Reposts tab, per-tab privacy, "X reposted" discovery, repost badges,
-  notifications) needs a `reposts` migration.
+- **Repost & Share (Phase 1 + 2)** — reels action stack is Like · Comment ·
+  Repost · Save + a premium overflow (•••) sheet. **Phase 2** (attribution model)
+  is a `reposts` table (a pointer to the original — never copies media) +
+  `posts.reposts_count` + notify trigger, in **migration `0025_reposts.sql`
+  (must be applied in Supabase)**. Repost is a toggle (`POST`/`DELETE
+  /api/posts/:id/repost`), synced across surfaces via a client repost store, with
+  a live count; the profile **Reposts tab** is public. Phase 2b (per-tab privacy,
+  "X reposted" feed discovery, overlapping-avatar badges, repost conversations,
+  grouped notifications) is deferred.
 
 ## Infrastructure & ops
 

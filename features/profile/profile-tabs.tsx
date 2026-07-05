@@ -49,6 +49,7 @@ export function ProfileTabs({
   posts,
   liked,
   saved,
+  reposted = [],
 }: {
   handle: string;
   isOwner: boolean;
@@ -58,6 +59,7 @@ export function ProfileTabs({
   posts: PostCard[];
   liked: PostCard[];
   saved: PostCard[];
+  reposted?: PostCard[];
 }) {
   const [active, setActive] = useState<ProfileTab>(tabs.includes(initialTab) ? initialTab : "posts");
   // Grid vs X-style list — seeded from a cookie (instant, no flash), remembered on-device.
@@ -89,7 +91,7 @@ export function ProfileTabs({
     downloads: isOwner
       ? "Videos you download will appear here — even ones you grabbed before signing up."
       : "No published downloads yet.",
-    reposted: "Reposts are coming soon.",
+    reposted: isOwner ? "Posts you repost will show up here." : "No reposts yet.",
     liked: "Posts you like will show up here.",
     saved: "Posts you save will show up here.",
   };
@@ -171,7 +173,7 @@ export function ProfileTabs({
                   : active === "saved"
                     ? saved
                     : active === "reposted"
-                      ? []
+                      ? reposted
                       : posts
           }
           layout={active === "reels" ? "reel" : "card"}

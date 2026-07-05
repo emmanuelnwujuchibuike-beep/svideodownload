@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { getTrendingSettings } from "./feed";
 import type { MediaKind } from "./posts";
+import { repostCounts, viewerReposts } from "./reposts";
 
 /**
  * Rich, privacy-filtered home feed. Unlike the lean Explore `getFeed`, each item
@@ -52,6 +53,9 @@ export interface FeedItem {
   isOwner: boolean;
   /** True when the post carries a poll (vote) — the card fetches + renders it. */
   hasPoll: boolean;
+  /** Repost state — optional/best-effort (0/false before the reposts migration). */
+  viewerReposted?: boolean;
+  repostsCount?: number;
 }
 
 export interface FeedPage {
@@ -176,6 +180,8 @@ export async function getFeedItemById(id: string, viewerId: string | null): Prom
       isFollowing,
       isOwner: viewerId === row.publisher_id,
       hasPoll,
+      viewerReposted: (await viewerReposts([id], viewerId)).has(id),
+      repostsCount: (await repostCounts([id])).get(id) ?? 0,
     };
   } catch {
     return null;
@@ -344,6 +350,14 @@ async function loadHomeFeed(
         for (const it of items) it.hasPoll = withPoll.has(it.id);
       } catch {
         /* polls not migrated — leave hasPoll false */
+      }
+
+      // Repost state + counts (best-effort — 0/false before migration 0025).
+      const ids = items.map((i) => i.id);
+      const [reposted, counts] = await Promise.all([viewerReposts(ids, viewerId), repostCounts(ids)]);
+      for (const it of items) {
+        it.viewerReposted = reposted.has(it.id);
+        it.repostsCount = counts.get(it.id) ?? 0;
       }
     }
     return { items, nextOffset };

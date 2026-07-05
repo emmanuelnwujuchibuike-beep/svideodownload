@@ -9,13 +9,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * `void pushSocialEvent(...)` after the write succeeds.
  */
 
-type SocialPushType = "like" | "save" | "comment" | "follow";
+type SocialPushType = "like" | "save" | "comment" | "follow" | "repost";
 
 const VERB: Record<SocialPushType, string> = {
   like: "liked your post",
   save: "saved your post",
   comment: "commented on your post",
   follow: "started following you",
+  repost: "reposted your post",
 };
 
 export async function pushSocialEvent(opts: {

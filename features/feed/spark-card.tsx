@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Download, PartyPopper, Sparkles, Users, UsersRound } from "lucide-react";
 import Link from "next/link";
-import type { ComponentType } from "react";
+import { memo, type ComponentType } from "react";
 
 import type { SparkCard as SparkCardData } from "@/lib/social/smart-feed";
 
@@ -29,10 +29,10 @@ const ICON: Record<SparkCardData["kind"], ComponentType<{ className?: string }>>
  * exclusive #3). It reads as a delightful discovery — never an advertisement —
  * with a soft electric glow and a clear, honest destination.
  */
-export function SparkCard({ card }: { card: SparkCardData }) {
+export const SparkCard = memo(function SparkCard({ card }: { card: SparkCardData }) {
   const Icon = ICON[card.kind];
   return (
-    <motion.div layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
       <Link
         href={card.href}
         className={`group relative block overflow-hidden rounded-3xl bg-gradient-to-br ${TINT[card.kind]} p-5 ring-1 ring-inset backdrop-blur-xl transition hover:-translate-y-0.5`}
@@ -56,4 +56,4 @@ export function SparkCard({ card }: { card: SparkCardData }) {
       </Link>
     </motion.div>
   );
-}
+});

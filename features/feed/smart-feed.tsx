@@ -103,15 +103,19 @@ export function SmartFeed({
   // Every loaded video, in feed order — the reel playlist. Kept live so the open
   // deck keeps growing as the feed loads more (infinite, TikTok-style).
   const videos = useMemo(() => items.filter((i) => i.mediaKind === "video"), [items]);
+  // Latest videos via a ref so openViewer stays a STABLE callback — memoized feed
+  // cards then never re-render just because the list grew.
+  const videosRef = useRef(videos);
+  videosRef.current = videos;
 
   // Videos open the full-screen reel INSTANTLY (client-side, no navigation/server
   // round-trip) seeded on the tapped clip; everything else opens the split viewer.
-  const openViewer = (it: FeedItem, comments = false) => {
+  const openViewer = useCallback((it: FeedItem, comments = false) => {
     if (it.mediaKind === "video") {
-      const start = Math.max(0, videos.findIndex((v) => v.id === it.id));
+      const start = Math.max(0, videosRef.current.findIndex((v) => v.id === it.id));
       setReel({ start, commentsId: comments ? it.id : null });
     } else setViewer({ item: it, comments });
-  };
+  }, []);
 
   const fetchPage = useCallback(
     async (s: HomeFeedSort, offset: number, replace: boolean) => {
@@ -160,7 +164,7 @@ export function SmartFeed({
     changeSegment(key);
   };
 
-  const remove = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id));
+  const remove = useCallback((id: string) => setItems((prev) => prev.filter((i) => i.id !== id)), []);
 
   const refreshTop = useCallback(() => {
     setFreshCount(0);

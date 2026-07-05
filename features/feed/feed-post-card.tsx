@@ -20,7 +20,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { memo, useState } from "react";
 
 import { RichText } from "@/components/social/rich-text";
 import { PostPollInline } from "@/features/social/post-poll-inline";
@@ -54,7 +54,7 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export function FeedPostCard({
+function FeedPostCardImpl({
   item,
   reason,
   onRemove,
@@ -350,6 +350,23 @@ export function FeedPostCard({
     </motion.article>
   );
 }
+
+/**
+ * Memoized so a feed state change (loading the next page, opening a viewer)
+ * never re-renders every already-mounted card — only cards whose props actually
+ * change repaint. Requires the parent to pass STABLE onRemove/onOpen callbacks.
+ * The smart stream hands each card a fresh `reason` object on every rebuild, so
+ * we compare it by value (label/tone) rather than identity.
+ */
+export const FeedPostCard = memo(
+  FeedPostCardImpl,
+  (a, b) =>
+    a.item === b.item &&
+    a.onRemove === b.onRemove &&
+    a.onOpen === b.onOpen &&
+    a.reason?.label === b.reason?.label &&
+    a.reason?.tone === b.reason?.tone,
+);
 
 function ActionButton({
   icon: Icon,

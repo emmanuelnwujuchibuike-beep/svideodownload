@@ -24,6 +24,34 @@ export function releasePlayback(el: HTMLMediaElement): void {
 }
 
 /**
+ * Battery/thermal saver: when the tab/app goes to the background, immediately
+ * pause the one playing video (no point decoding frames nobody can see) and
+ * resume it when the user comes back. One listener for the whole app.
+ */
+let resumeOnReturn = false;
+if (typeof document !== "undefined") {
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+      if (document.hidden) {
+        if (active && !active.paused) {
+          resumeOnReturn = true;
+          try {
+            active.pause();
+          } catch {
+            /* gone */
+          }
+        }
+      } else if (resumeOnReturn && active) {
+        resumeOnReturn = false;
+        void active.play().catch(() => {});
+      }
+    },
+    { passive: true },
+  );
+}
+
+/**
  * Tracks when the page last scrolled, so feed videos can ignore a "tap" that's
  * really the tail end of a scroll gesture (prevents accidentally opening a reel
  * while flicking through the feed). One passive listener for the whole app.

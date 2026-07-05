@@ -27,3 +27,12 @@ export function getApi(): FrenzsaveClient {
   });
   return instance;
 }
+
+/**
+ * React hook returning the shared web client. Prefer this in components/features
+ * so the web exercises the exact same SDK path (dedupe, retry, auth, timeouts) as
+ * the native/desktop apps — one code path, app-fast everywhere.
+ */
+export function useApi(): FrenzsaveClient {
+  return getApi();
+}

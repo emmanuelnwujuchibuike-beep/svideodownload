@@ -29,8 +29,23 @@ export function FeaturedHero({ initialItems }: { initialItems?: FeedItem[] }) {
 
   useEffect(() => {
     if (!items || items.length < 2) return;
-    const t = setInterval(() => setIdx((n) => (n + 1) % items.length), 6000);
-    return () => clearInterval(t);
+    let t: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (t) return;
+      t = setInterval(() => setIdx((n) => (n + 1) % items.length), 6000);
+    };
+    const stop = () => {
+      if (t) clearInterval(t);
+      t = null;
+    };
+    // Only advance while the tab is visible — no background wakeups (battery).
+    const onVis = () => (document.hidden ? stop() : start());
+    onVis();
+    document.addEventListener("visibilitychange", onVis, { passive: true });
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [items]);
 
   if (items !== null && items.length === 0) return null;

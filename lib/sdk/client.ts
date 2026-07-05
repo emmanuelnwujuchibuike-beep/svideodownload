@@ -96,12 +96,86 @@ export class FrenzsaveClient {
     return { items: data.items, nextCursor: meta?.nextCursor ?? null };
   }
 
-  /** Escape hatch for endpoints not yet wrapped above. Returns unwrapped `data`. */
+  /** Escape hatch for enveloped endpoints not yet wrapped above. Returns unwrapped `data`. */
   get<T>(path: string, options?: RequestOptions): Promise<T> {
     return this.request<T>(path, { ...options, method: "GET" });
   }
   post<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
     return this.request<T>(path, { ...options, method: "POST", body });
+  }
+
+  /* ----------------------------- core actions ---------------------------- */
+  // Typed helpers for the plain (non-enveloped) REST routes that every client —
+  // web, iOS, Android, desktop — shares. They return the route's JSON on success
+  // and throw a FrenzsaveError (with the server's message) on failure.
+
+  /** Like / unlike a post. */
+  like(postId: string, on = true): Promise<{ ok: true }> {
+    return this.action(`/api/posts/${postId}/react`, { method: on ? "POST" : "DELETE", body: { type: "like" } });
+  }
+  /** Save / unsave a post. */
+  save(postId: string, on = true): Promise<{ ok: true }> {
+    return this.action(`/api/posts/${postId}/react`, { method: on ? "POST" : "DELETE", body: { type: "save" } });
+  }
+  /** Follow / unfollow a user. */
+  follow(userId: string, on = true): Promise<{ ok: true; following: boolean }> {
+    return this.action(`/api/follow/${userId}`, { method: on ? "POST" : "DELETE" });
+  }
+  /** Repost a public post to your own profile. */
+  repost(postId: string): Promise<{ ok: true; id: string | null }> {
+    return this.action(`/api/posts/${postId}/repost`, { method: "POST" });
+  }
+  /** Authorize a direct download (enforces the free daily cap server-side). */
+  authorizeDownload(postId: string): Promise<{ url: string; filename: string; remaining: number | null }> {
+    return this.action(`/api/posts/${postId}/download`, { method: "POST" });
+  }
+
+  /**
+   * Call a plain REST action route (the existing `{ ok: true, ... }` / `{ error }`
+   * endpoints, not the enveloped `/api/v1/app/*` ones). Injects auth + client tag,
+   * applies the timeout, and normalizes failures into a FrenzsaveError.
+   */
+  async action<T = { ok: true }>(
+    path: string,
+    opts: { method?: RequestOptions["method"]; body?: unknown; query?: RequestOptions["query"]; signal?: AbortSignal } = {},
+  ): Promise<T> {
+    const url = this.buildUrl(path, opts.query);
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (this.client) headers["X-Client"] = this.client;
+    const token = this.getToken ? await this.getToken() : null;
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+
+    const ctrl = new AbortController();
+    const onAbort = () => ctrl.abort();
+    opts.signal?.addEventListener("abort", onAbort, { once: true });
+    const timer = setTimeout(() => ctrl.abort(new DOMExceptionLike("timeout")), this.timeoutMs);
+
+    let res: Response;
+    try {
+      res = await this.fetchImpl(url, {
+        method: opts.method ?? "POST",
+        headers,
+        body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      const timedOut = (e as { message?: string })?.message === "timeout" || ctrl.signal.reason === "timeout";
+      throw new FrenzsaveError(timedOut ? "timeout" : "network", timedOut ? "Request timed out." : "Network request failed.", 0);
+    } finally {
+      clearTimeout(timer);
+      opts.signal?.removeEventListener("abort", onAbort);
+    }
+
+    let json: Record<string, unknown> | null = null;
+    try {
+      json = (await res.json()) as Record<string, unknown>;
+    } catch {
+      /* non-JSON */
+    }
+    if (res.ok) return (json ?? { ok: true }) as T;
+    const message = typeof json?.error === "string" ? (json.error as string) : `Request failed (${res.status}).`;
+    throw new FrenzsaveError(res.status >= 500 ? "upstream_error" : "bad_request", message, res.status);
   }
 
   /* ------------------------------ internals ------------------------------ */

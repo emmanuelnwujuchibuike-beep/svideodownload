@@ -224,6 +224,7 @@ export function ReelDeck({
               <ReelCard
                 item={item}
                 isActive={i === active}
+                isNext={i === active + 1}
                 // Mount the previous clip + the next three so scrolling forward
                 // never hits an unmounted video. To protect battery/data we only
                 // FULLY buffer (preload=auto) the active clip and the next two you're
@@ -249,6 +250,7 @@ export function ReelDeck({
 function ReelCard({
   item,
   isActive,
+  isNext,
   nearby,
   loop,
   onClose,
@@ -261,6 +263,7 @@ function ReelCard({
 }: {
   item: FeedItem;
   isActive: boolean;
+  isNext: boolean;
   nearby: boolean;
   loop: boolean;
   onClose: () => void;
@@ -329,7 +332,12 @@ function ReelCard({
   const hlsUrl = item.streamUid ? streamHlsUrl(item.streamUid) : null;
   const native = !!item.mediaUrl || !!hlsUrl;
   const markSrcReady = useCallback(() => setSrcReady(true), []);
-  useAdaptiveSource(video, { hlsUrl, src: item.mediaUrl, poster: item.thumbnailUrl, active: nearby, onReady: markSrcReady });
+  // HLS (hls.js) buffers whatever is attached, so only wire the ACTIVE + NEXT reel
+  // (predictive preload of exactly the next clip; decoders released for the rest).
+  // Plain MP4 can attach across the nearby window — the `preload` attribute keeps
+  // the far ones to metadata only, so it's cheap.
+  const attachSource = hlsUrl ? isActive || isNext : nearby;
+  useAdaptiveSource(video, { hlsUrl, src: item.mediaUrl, poster: item.thumbnailUrl, active: attachSource, onReady: markSrcReady });
 
   // Report readiness so the deck can extend its scroll ceiling. Stream clips
   // buffer themselves; native clips report on canplay/error, with a fallback so a

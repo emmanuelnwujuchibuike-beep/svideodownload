@@ -25,6 +25,7 @@ import { Comments } from "@/features/social/comments";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
+import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
@@ -228,7 +229,7 @@ function ReelCard({
 
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
-  const [following, setFollowing] = useState(item.isFollowing);
+  const following = useFollowState(item.publisher.id, item.isFollowing);
   const [likes, setLikes] = useState(item.likesCount);
   const [shares, setShares] = useState(item.sharesCount);
   const [showComments, setShowComments] = useState(false);
@@ -381,14 +382,8 @@ function ReelCard({
   };
 
   const toggleFollow = async () => {
-    const next = !following;
-    setFollowing(next);
-    try {
-      const res = await fetch(`/api/follow/${item.publisher.id}`, { method: next ? "POST" : "DELETE" });
-      if (!res.ok) setFollowing(!next);
-    } catch {
-      setFollowing(!next);
-    }
+    // Shared store keeps this in sync with the feed card + every other reel.
+    await toggleFollowShared(item.publisher.id, !following);
   };
 
   const unmute = () => {

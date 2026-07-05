@@ -21,6 +21,7 @@ import { SmartVideo } from "@/features/media/smart-video";
 import { Comments } from "@/features/social/comments";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import type { CommentNode } from "@/lib/social/engagement";
+import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
@@ -69,7 +70,7 @@ function ViewerInner({
   const { isPremium } = useEntitlements();
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
-  const [following, setFollowing] = useState(item.isFollowing);
+  const following = useFollowState(item.publisher.id, item.isFollowing);
   const [likes, setLikes] = useState(item.likesCount);
   const [showComments, setShowComments] = useState(startWithComments);
   const [comments, setComments] = useState<CommentsData | null>(null);
@@ -145,14 +146,7 @@ function ViewerInner({
   };
 
   const toggleFollow = async () => {
-    const next = !following;
-    setFollowing(next);
-    try {
-      const res = await fetch(`/api/follow/${item.publisher.id}`, { method: next ? "POST" : "DELETE" });
-      if (!res.ok) setFollowing(!next);
-    } catch {
-      setFollowing(!next);
-    }
+    await toggleFollowShared(item.publisher.id, !following);
   };
 
   return (

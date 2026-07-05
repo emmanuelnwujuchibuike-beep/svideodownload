@@ -4,6 +4,7 @@ import { Loader2, UserCheck, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,7 +23,7 @@ export function FollowButton({
   className?: string;
 }) {
   const router = useRouter();
-  const [following, setFollowing] = useState(initialFollowing);
+  const following = useFollowState(targetId, initialFollowing);
   const [busy, setBusy] = useState(false);
 
   if (!canFollow) {
@@ -42,17 +43,9 @@ export function FollowButton({
   const toggle = async () => {
     if (busy) return;
     setBusy(true);
-    const next = !following;
-    setFollowing(next); // optimistic
-    try {
-      const res = await fetch(`/api/follow/${targetId}`, { method: next ? "POST" : "DELETE" });
-      if (!res.ok) setFollowing(!next);
-      else router.refresh();
-    } catch {
-      setFollowing(!next);
-    } finally {
-      setBusy(false);
-    }
+    const settled = await toggleFollowShared(targetId, !following);
+    if (settled === !following) router.refresh(); // succeeded
+    setBusy(false);
   };
 
   return (

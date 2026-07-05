@@ -26,6 +26,7 @@ import { PostPollInline } from "@/features/social/post-poll-inline";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
+import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import type { FeedItem } from "@/lib/social/home-feed";
 import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
@@ -63,7 +64,7 @@ export function FeedPostCard({
 }) {
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
-  const [following, setFollowing] = useState(item.isFollowing);
+  const following = useFollowState(item.publisher.id, item.isFollowing);
   const [likes, setLikes] = useState(item.likesCount);
   const [shares, setShares] = useState(item.sharesCount);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -110,14 +111,10 @@ export function FeedPostCard({
   };
 
   const toggleFollow = async () => {
-    const next = !following;
-    setFollowing(next);
     setBusy(true);
     try {
-      const res = await fetch(`/api/follow/${item.publisher.id}`, { method: next ? "POST" : "DELETE" });
-      if (!res.ok) setFollowing(!next);
-    } catch {
-      setFollowing(!next);
+      // Shared store updates every card/reel for this creator at once.
+      await toggleFollowShared(item.publisher.id, !following);
     } finally {
       setBusy(false);
       setMenuOpen(false);

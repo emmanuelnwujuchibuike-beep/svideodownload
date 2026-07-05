@@ -25,28 +25,63 @@ export interface AttachHlsOptions {
   onFatal?: () => void;
   /** Fired once the first frames are parsed — for time-to-first-frame metrics. */
   onReady?: () => void;
+  /**
+   * Never auto-select a level taller than this (px). Spec: "do not default to
+   * the highest resolution" — a weak connection, data-saver, or low battery
+   * should cap the ladder instead of quietly buffering 4K. `null`/omitted = no
+   * extra cap beyond `capLevelToPlayerSize`.
+   */
+  maxHeight?: number | null;
+}
+
+export interface HlsHandle {
+  /** Fully releases the decoder + buffers (important for a long reels session). */
+  destroy: () => void;
+  /** Re-apply a quality cap after attach (e.g. once a battery reading resolves). */
+  setMaxHeightCap: (maxHeight: number | null) => void;
+  /** Last-observed rendition bitrate (kbps), for observability. */
+  getBitrateKbps: () => number | undefined;
+}
+
+type HlsInstance = InstanceType<typeof import("hls.js").default>;
+
+function applyHeightCap(hls: HlsInstance, maxHeight: number | null | undefined) {
+  if (!maxHeight) {
+    hls.autoLevelCapping = -1; // no extra cap — capLevelToPlayerSize still applies
+    return;
+  }
+  const levels = hls.levels ?? [];
+  let capIndex = -1;
+  levels.forEach((lvl, i) => {
+    if (lvl.height && lvl.height <= maxHeight) capIndex = i;
+  });
+  // Nothing at/under the cap (e.g. ladder starts above it) — keep the lowest rung
+  // rather than forcing an unbounded auto level.
+  if (capIndex === -1 && levels.length) capIndex = 0;
+  hls.autoLevelCapping = capIndex;
 }
 
 /**
- * Attach an HLS stream to a `<video>` via hls.js. Returns a destroy function that
- * fully releases the decoder + buffers (important for a long reels session).
+ * Attach an HLS stream to a `<video>` via hls.js. Returns a handle to destroy
+ * (release decoder + buffers) or refine the quality cap later.
  */
 export async function attachHls(
   video: HTMLVideoElement,
   url: string,
   opts: AttachHlsOptions = {},
-): Promise<() => void> {
+): Promise<HlsHandle> {
+  const noop: HlsHandle = { destroy: () => {}, setMaxHeightCap: () => {}, getBitrateKbps: () => undefined };
   let mod;
   try {
     mod = (await import("hls.js")).default;
   } catch {
     opts.onFatal?.();
-    return () => {};
+    return noop;
   }
   const Hls = mod;
   if (!Hls.isSupported()) {
     opts.onFatal?.();
-    return () => {};
+    return noop;
   }
 
   const hls = new Hls({
@@ -80,15 +115,25 @@ export async function attachHls(
     opts.onFatal?.();
   });
   if (opts.onReady) hls.once(Hls.Events.FRAG_BUFFERED, () => opts.onReady?.());
+  // Never default to the top of the ladder on a weak connection / data-saver /
+  // low battery — apply the caller's cap as soon as levels are known.
+  hls.once(Hls.Events.MANIFEST_PARSED, () => applyHeightCap(hls, opts.maxHeight));
 
   hls.loadSource(url);
   hls.attachMedia(video);
 
-  return () => {
-    try {
-      hls.destroy();
-    } catch {
-      /* already gone */
-    }
+  return {
+    destroy: () => {
+      try {
+        hls.destroy();
+      } catch {
+        /* already gone */
+      }
+    },
+    setMaxHeightCap: (maxHeight) => applyHeightCap(hls, maxHeight),
+    getBitrateKbps: () => {
+      const level = hls.levels?.[hls.currentLevel];
+      return level?.bitrate ? Math.round(level.bitrate / 1000) : undefined;
+    },
   };
 }

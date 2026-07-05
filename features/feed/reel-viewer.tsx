@@ -12,6 +12,7 @@ import {
   EyeOff,
   Flag,
   FolderPlus,
+  Gauge,
   Heart,
   Info,
   Link2,
@@ -47,6 +48,7 @@ import { toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { downloadPost } from "@/lib/media/download-post";
+import { getQualityPreference, setQualityPreference, type QualityPreference } from "@/lib/media/network-conditions";
 import { streamHlsUrl } from "@/lib/media/stream";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
@@ -67,6 +69,12 @@ function fmt(s: number): string {
   const r = Math.floor(s % 60);
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
+
+const QUALITY_LABELS: Record<QualityPreference, string> = {
+  auto: "Auto (recommended)",
+  "data-saver": "Data saver",
+  high: "Highest quality",
+};
 
 /**
  * Fullscreen reel deck. Reels stack in a native, snap-scrolling column — so
@@ -321,15 +329,22 @@ function ReelCard({
   const [repostBurst, setRepostBurst] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const [srcReady, setSrcReady] = useState(false);
+  const [qualityPref, setQualityPref] = useState<QualityPreference>("auto");
   const fetched = useRef(false);
 
-  useEffect(() => setMounted(true), []);
+  // Client-only read (localStorage) after mount — avoids an SSR/CSR mismatch.
+  useEffect(() => {
+    setMounted(true);
+    setQualityPref(getQualityPreference());
+  }, []);
 
   // Adaptive playback: a Cloudflare Stream video plays HLS (auto quality ladder,
   // instant start, edge-delivered) through our own <video>; anything without a
   // Stream uid keeps playing the plain MP4. Either way it's the controllable native
-  // element (our gestures/scrubber), never the heavy iframe.
-  const hlsUrl = item.streamUid ? streamHlsUrl(item.streamUid) : null;
+  // element (our gestures/scrubber), never the heavy iframe. A confirmed encode
+  // failure (the Stream webhook) skips HLS entirely — no point retrying a manifest
+  // that will never exist.
+  const hlsUrl = item.streamUid && !item.streamFailed ? streamHlsUrl(item.streamUid) : null;
   const native = !!item.mediaUrl || !!hlsUrl;
   const markSrcReady = useCallback(() => setSrcReady(true), []);
   // HLS (hls.js) buffers whatever is attached, so only wire the ACTIVE + NEXT reel
@@ -600,6 +615,19 @@ function ReelCard({
   const comingSoon = (what: string) => {
     setMoreOpen(false);
     toast(`${what} — coming soon.`, "info");
+  };
+
+  // Manual quality override (spec: automatic selection is the default, but let
+  // the viewer force it). A three-way cycle — same shape as every major
+  // short-video app uses instead of a per-rendition picker. Takes effect from
+  // the next video that attaches (this one keeps playing at its current level).
+  const cycleQuality = () => {
+    const order: QualityPreference[] = ["auto", "data-saver", "high"];
+    const next = order[(order.indexOf(qualityPref) + 1) % order.length] ?? "auto";
+    setQualityPref(next);
+    setQualityPreference(next);
+    setMoreOpen(false);
+    toast(`Video quality: ${QUALITY_LABELS[next]} — applies from your next video`, "info");
   };
 
   const seekBy = (delta: number) => {
@@ -1058,6 +1086,7 @@ function ReelCard({
                       </>
                     )}
                     {native ? <MoreItem icon={mutedAuto ? VolumeX : Volume2} label={mutedAuto ? "Unmute audio" : "Mute audio"} onClick={() => { toggleMute(); setMoreOpen(false); }} /> : null}
+                    {hlsUrl ? <MoreItem icon={Gauge} label={`Video quality: ${QUALITY_LABELS[qualityPref]}`} onClick={cycleQuality} /> : null}
                   </MoreGroup>
 
                   {/* Feedback */}

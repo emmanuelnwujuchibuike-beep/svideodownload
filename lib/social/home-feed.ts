@@ -37,6 +37,10 @@ export interface FeedItem {
   mediaUrl: string | null;
   /** Cloudflare Stream UID for adaptive-bitrate playback (null → play `mediaUrl`). */
   streamUid: string | null;
+  /** Has Cloudflare confirmed this Stream video finished transcoding? Informational (best-effort, default false pre-migration/webhook) — never gates playback, since "false" also means "haven't heard back yet". */
+  streamReady?: boolean;
+  /** Cloudflare confirmed this Stream video's transcode FAILED — skip HLS entirely and go straight to the MP4 fallback rather than wasting a fetch on a manifest that will never exist. */
+  streamFailed?: boolean;
   category: string | null;
   durationSec: number | null;
   viewsCount: number;
@@ -145,6 +149,8 @@ export async function getFeedItemById(id: string, viewerId: string | null): Prom
       isFollowing = (followCount ?? 0) > 0;
     }
 
+    const streamStat = row.stream_uid ? (await streamStatus(db, [row.id])).get(row.id) : undefined;
+
     let hasPoll = false;
     try {
       const { count: pollCount } = await db.from("post_polls").select("post_id", { head: true, count: "exact" }).eq("post_id", id);
@@ -163,6 +169,8 @@ export async function getFeedItemById(id: string, viewerId: string | null): Prom
       sourceUrl: row.source_url,
       mediaUrl: row.media_url,
       streamUid: row.stream_uid ?? null,
+      streamReady: streamStat?.ready ?? false,
+      streamFailed: streamStat?.failed ?? false,
       category: row.category,
       durationSec: row.duration_sec,
       viewsCount: row.views_count,
@@ -204,6 +212,29 @@ async function imageDimensions(
     const { data } = await db.from("posts").select("id, media_width, media_height").in("id", ids);
     for (const r of (data ?? []) as { id: string; media_width: number | null; media_height: number | null }[]) {
       if (r.media_width && r.media_height) out.set(r.id, { w: r.media_width, h: r.media_height });
+    }
+  } catch {
+    /* columns not migrated yet */
+  }
+  return out;
+}
+
+/**
+ * Cloudflare Stream processing status for video posts, driven by the Stream
+ * webhook (best-effort — empty/false-y for all before migration 0029 or until
+ * the webhook fires). `ready` is informational only; `failed` is the one signal
+ * safe to act on (skip HLS for a video that will never transcode).
+ */
+async function streamStatus(
+  db: ReturnType<typeof createAdminClient>,
+  ids: string[],
+): Promise<Map<string, { ready: boolean; failed: boolean }>> {
+  const out = new Map<string, { ready: boolean; failed: boolean }>();
+  if (ids.length === 0) return out;
+  try {
+    const { data } = await db.from("posts").select("id, stream_ready, stream_error").in("id", ids);
+    for (const r of (data ?? []) as { id: string; stream_ready: boolean | null; stream_error: string | null }[]) {
+      out.set(r.id, { ready: !!r.stream_ready, failed: !!r.stream_error });
     }
   } catch {
     /* columns not migrated yet */
@@ -402,6 +433,19 @@ async function loadHomeFeed(
           }
         }
       }
+
+      // Stream processing status for Stream-backed videos (best-effort — before
+      // migration 0029 / the webhook firing, every video just defaults to "unknown"
+      // and HLS is attempted as before).
+      const streamIds = items.filter((i) => i.mediaKind === "video" && i.streamUid).map((i) => i.id);
+      if (streamIds.length) {
+        const status = await streamStatus(db, streamIds);
+        for (const it of items) {
+          const s = status.get(it.id);
+          it.streamReady = s?.ready ?? false;
+          it.streamFailed = s?.failed ?? false;
+        }
+      }
     }
 
     // Surface friend reposts that aren't already in your feed (Repost spec §5): a
@@ -503,7 +547,8 @@ async function surfaceFollowedReposts(
 
   const ids = rows.map((r) => r.id);
   const imageIds = rows.filter((r) => r.media_kind === "image").map((r) => r.id);
-  const [badges, counts, reposted, pollSet, dims] = await Promise.all([
+  const streamIds = rows.filter((r) => r.media_kind === "video" && r.stream_uid).map((r) => r.id);
+  const [badges, counts, reposted, pollSet, dims, streamStat] = await Promise.all([
     followedReposters(ids, followingIds),
     repostCounts(ids),
     viewerReposts(ids, viewerId),
@@ -516,6 +561,7 @@ async function surfaceFollowedReposts(
       }
     })(),
     imageDimensions(db, imageIds),
+    streamStatus(db, streamIds),
   ]);
 
   return rows.map((r) => {
@@ -557,6 +603,8 @@ async function surfaceFollowedReposts(
       repostBadge: badges.get(r.id),
       mediaWidth: dims.get(r.id)?.w ?? null,
       mediaHeight: dims.get(r.id)?.h ?? null,
+      streamReady: streamStat.get(r.id)?.ready ?? false,
+      streamFailed: streamStat.get(r.id)?.failed ?? false,
     };
   });
 }

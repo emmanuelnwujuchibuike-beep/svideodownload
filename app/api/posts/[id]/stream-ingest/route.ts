@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getRequestUser } from "@/lib/auth/request-user";
-import { copyToStream, generateStreamCaptions, hasStream } from "@/lib/media/stream";
+import { DEFAULT_CAPTION_LANGUAGES, copyToStream, generateStreamCaptionsMulti, hasStream } from "@/lib/media/stream";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -53,7 +53,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     /* column exists (migration 0016) — but stay resilient */
   }
   // Auto-generate captions (accessibility) — queued by Cloudflare, rendered
-  // automatically through HLS. Fire-and-forget so it never delays the response.
-  void generateStreamCaptions(uid).catch(() => {});
+  // automatically through HLS. Fire-and-forget so it never delays the response;
+  // the video may not be processed yet, so the Stream webhook (stream-ready
+  // route) requests any languages that didn't take once it's actually ready.
+  void generateStreamCaptionsMulti(uid, DEFAULT_CAPTION_LANGUAGES)
+    .then((langs) => {
+      if (langs.length) return db.from("posts").update({ caption_languages: langs }).eq("id", id);
+    })
+    .catch(() => {});
   return NextResponse.json({ ok: true, uid });
 }

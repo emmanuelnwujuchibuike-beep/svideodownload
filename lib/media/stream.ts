@@ -166,6 +166,48 @@ export async function generateStreamCaptions(uid: string, language = "en"): Prom
 }
 
 /**
+ * Default multi-language subtitle set: English plus French, since the platform's
+ * infra is deliberately Africa-primary (Vercel `cdg1`/Paris — see docs) and
+ * Francophone Africa is a large share of that audience. Requested sequentially
+ * (rare, one-time per video) at ingest and again once the Stream webhook confirms
+ * the video is actually ready (a video not yet processed may silently drop the
+ * request — the webhook retry makes captions reliable either way).
+ */
+export const DEFAULT_CAPTION_LANGUAGES = ["en", "fr"] as const;
+
+/** Requests captions for each language; returns the ones Cloudflare accepted. */
+export async function generateStreamCaptionsMulti(uid: string, languages: readonly string[]): Promise<string[]> {
+  const ok: string[] = [];
+  for (const lang of languages) {
+    if (await generateStreamCaptions(uid, lang)) ok.push(lang);
+  }
+  return ok;
+}
+
+/**
+ * Registers (or rotates) the account-wide Stream webhook that notifies us when a
+ * video finishes processing or errors — see app/api/webhooks/stream. Call once
+ * (via POST /api/admin/stream-webhook-setup); Cloudflare returns a signing secret
+ * that must be set as `CF_STREAM_WEBHOOK_SECRET` for the webhook route to verify
+ * incoming requests.
+ */
+export async function configureStreamWebhook(notificationUrl: string): Promise<{ secret: string } | null> {
+  if (!hasStream) return null;
+  try {
+    const res = await fetch(`${API_BASE}/accounts/${ACCOUNT_ID}/stream/webhook`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${API_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ notificationUrl }),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { result?: { secret?: string } };
+    return json.result?.secret ? { secret: json.result.secret } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Pull an already-stored video (e.g. an R2 public URL) into Cloudflare Stream by
  * URL. Returns the new Stream `uid`. Useful for backfilling existing posts so they
  * gain instant adaptive playback without a re-upload from the client.

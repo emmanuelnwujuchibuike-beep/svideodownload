@@ -24,6 +24,7 @@ const TAP_MOVE_TOLERANCE = 18;
 export function FeedVideo({
   src,
   streamUid,
+  streamFailed,
   poster,
   className,
   postId,
@@ -31,6 +32,8 @@ export function FeedVideo({
 }: {
   src?: string | null;
   streamUid?: string | null;
+  /** A confirmed Stream encode failure (webhook) — skip HLS, go straight to MP4. */
+  streamFailed?: boolean;
   poster?: string | null;
   className?: string;
   /** Post id — lets an actual watch record a (deduped) view. */
@@ -56,7 +59,7 @@ export function FeedVideo({
   // Adaptive playback: a Cloudflare Stream video plays HLS/ABR through our own
   // <video>; anything else plays the plain MP4. Fall back to the Stream iframe only
   // when there's a uid but neither an HLS URL (no customer code) nor an MP4.
-  const hlsUrl = streamUid ? streamHlsUrl(streamUid) : null;
+  const hlsUrl = streamUid && !streamFailed ? streamHlsUrl(streamUid) : null;
   const hasNative = !!src || !!hlsUrl;
   const iframeMode = !hasNative && !!streamUid;
 

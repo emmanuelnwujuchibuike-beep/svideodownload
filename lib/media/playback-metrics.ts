@@ -14,6 +14,14 @@ export interface PlaybackReport {
   ttffMs?: number;
   /** How many times playback stalled to rebuffer after starting. */
   rebuffers: number;
+  /** Frames the decoder dropped (thermal/CPU pressure signal), when available. */
+  droppedFrames?: number;
+  /** Frames decoded in the session, for a dropped-frame ratio. */
+  decodedFrames?: number;
+  /** Last-observed HLS rendition bitrate (kbps), when adaptive. */
+  bitrateKbps?: number;
+  /** A fatal decode/network error ended playback before completion. */
+  errored?: boolean;
 }
 
 export function reportPlayback(p: PlaybackReport): void {

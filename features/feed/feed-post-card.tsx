@@ -319,6 +319,7 @@ function FeedPostCardImpl({
           <FeedVideo
             src={item.mediaUrl}
             streamUid={item.streamUid}
+            streamFailed={item.streamFailed}
             poster={item.thumbnailUrl}
             postId={item.id}
             onExpand={() => onOpen(item)}

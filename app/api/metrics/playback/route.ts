@@ -11,10 +11,19 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { mode, ttffMs, rebuffers, postId } = (body ?? {}) as Record<string, unknown>;
+    const { mode, ttffMs, rebuffers, postId, droppedFrames, decodedFrames, bitrateKbps, errored } = (body ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const dropRatio =
+      typeof droppedFrames === "number" && typeof decodedFrames === "number" && decodedFrames > 0
+        ? ((droppedFrames / decodedFrames) * 100).toFixed(1)
+        : null;
     // One compact line per playback — grep "[playback]" in logs.
     console.log(
-      `[playback] mode=${mode ?? "?"} ttffMs=${ttffMs ?? "-"} rebuffers=${rebuffers ?? 0}${postId ? ` post=${postId}` : ""}`,
+      `[playback] mode=${mode ?? "?"} ttffMs=${ttffMs ?? "-"} rebuffers=${rebuffers ?? 0}` +
+        `${bitrateKbps ? ` bitrateKbps=${bitrateKbps}` : ""}${dropRatio ? ` droppedPct=${dropRatio}` : ""}` +
+        `${errored ? " errored=1" : ""}${postId ? ` post=${postId}` : ""}`,
     );
   } catch {
     /* malformed beacon — ignore */

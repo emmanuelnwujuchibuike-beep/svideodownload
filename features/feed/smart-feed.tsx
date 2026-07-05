@@ -36,6 +36,13 @@ const ReelsFeed = dynamic(() => import("@/features/reels/reels-feed").then((m) =
   // Paint black instantly on first tap while the (cached-after) chunk loads.
   loading: () => <div className="fixed inset-0 z-[85] bg-black" aria-hidden />,
 });
+// Warms the reels chunk ahead of the actual tap so opening feels instant instead
+// of showing that black loading frame — the exact same import `dynamic` uses, so
+// once it resolves the browser's module cache already has it and mounting is
+// synchronous. Safe to call repeatedly (the import is memoized by the runtime).
+function preloadReelsFeed() {
+  void import("@/features/reels/reels-feed");
+}
 const PostViewer = dynamic(() => import("@/features/feed/post-viewer").then((m) => m.PostViewer), { ssr: false });
 const ImageViewer = dynamic(() => import("@/features/feed/image-viewer").then((m) => m.ImageViewer), { ssr: false });
 import {
@@ -126,6 +133,19 @@ export function SmartFeed({
   // cards then never re-render just because the list grew.
   const videosRef = useRef(videos);
   videosRef.current = videos;
+
+  // Warm the reels chunk once the feed itself has settled — Reels is the single
+  // most likely next tap, so by the time anyone actually hits the button its code
+  // is already sitting in the browser's module cache and opening it never shows
+  // the black loading frame. Deferred to idle time so it never competes with the
+  // feed's own first paint/hydration.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ric = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(() => cb({} as IdleDeadline), 1500));
+    const cic = window.cancelIdleCallback ?? window.clearTimeout;
+    const id = ric(preloadReelsFeed);
+    return () => cic(id);
+  }, []);
 
   // Videos open the full-screen reel INSTANTLY (client-side, no navigation/server
   // round-trip) seeded on the tapped clip; everything else opens the split viewer.
@@ -391,6 +411,11 @@ export function SmartFeed({
                 key={t.key}
                 type="button"
                 onClick={() => onSegment(t.key)}
+                // Belt-and-suspenders on top of the idle-time warm-up above:
+                // pointerdown fires before click on both mouse and touch, so if
+                // the idle callback hasn't run yet on a busy device this still
+                // buys the chunk fetch a head start before the tap completes.
+                onPointerDown={t.key === "recent" ? preloadReelsFeed : undefined}
                 aria-pressed={on}
                 className="relative flex-1 rounded-full px-3 py-2 text-[13px] font-semibold tracking-tight transition-colors duration-200 active:scale-[0.98]"
               >

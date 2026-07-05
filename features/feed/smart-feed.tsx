@@ -19,14 +19,24 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType } from "react";
 
+import dynamic from "next/dynamic";
+
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
-import { ImageViewer } from "@/features/feed/image-viewer";
-import { PostViewer } from "@/features/feed/post-viewer";
 import { SparkCard } from "@/features/feed/spark-card";
-import { ReelsFeed } from "@/features/reels/reels-feed";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
+
+// The full-screen overlays are interaction-only — code-split so the entire reels
+// engine, post viewer and image viewer stay OUT of the initial /home bundle and
+// load on first tap. `ssr: false` because they never render on the server.
+const ReelsFeed = dynamic(() => import("@/features/reels/reels-feed").then((m) => m.ReelsFeed), {
+  ssr: false,
+  // Paint black instantly on first tap while the (cached-after) chunk loads.
+  loading: () => <div className="fixed inset-0 z-[85] bg-black" aria-hidden />,
+});
+const PostViewer = dynamic(() => import("@/features/feed/post-viewer").then((m) => m.PostViewer), { ssr: false });
+const ImageViewer = dynamic(() => import("@/features/feed/image-viewer").then((m) => m.ImageViewer), { ssr: false });
 import {
   type AwaySummary,
   balanceByKind,
@@ -98,6 +108,11 @@ export function SmartFeed({
   const [viewer, setViewer] = useState<{ item: FeedItem; comments: boolean } | null>(null);
   const [image, setImage] = useState<FeedItem | null>(null);
   const [reel, setReel] = useState<{ startId: string; commentsId: string | null } | null>(null);
+  // Once an overlay has been opened we keep it mounted (it hides itself when its
+  // item is null) so its close animation plays; before first use its chunk is
+  // never loaded.
+  const [viewerReady, setViewerReady] = useState(false);
+  const [imageReady, setImageReady] = useState(false);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const seen = useRef(new Set(initialItems.map((i) => i.id)));
   const router = useRouter();
@@ -118,8 +133,12 @@ export function SmartFeed({
       setReel({ startId: it.id, commentsId: comments ? it.id : null });
     } else if (it.mediaKind === "image") {
       // Photos open full-screen + immersive (closeable like X / Instagram).
+      setImageReady(true);
       setImage(it);
-    } else setViewer({ item: it, comments });
+    } else {
+      setViewerReady(true);
+      setViewer({ item: it, comments });
+    }
   }, []);
 
   const fetchPage = useCallback(
@@ -361,7 +380,7 @@ export function SmartFeed({
           quiet, edge-faded row of filter chips, so switching is one clean glance
           with nothing crowding it. Animations are transform/opacity only (GPU) —
           premium motion, no jank. */}
-      <div className="sticky top-16 z-20 -mx-3 mb-4 border-b border-border/50 bg-background/75 px-3 pb-2.5 pt-2.5 backdrop-blur-2xl sm:-mx-4 sm:px-4">
+      <div className="sticky top-16 z-20 -mx-3 mb-4 border-b border-border/50 bg-background/90 px-3 pb-2.5 pt-2.5 backdrop-blur-lg sm:-mx-4 sm:px-4">
         {/* Hero segmented control */}
         <div className="relative flex items-center gap-0.5 rounded-full bg-secondary/40 p-1 ring-1 ring-inset ring-border/40">
           {SEGMENTS.map((t) => {
@@ -475,12 +494,14 @@ export function SmartFeed({
         </>
       )}
 
-      <PostViewer
-        item={viewer?.item ?? null}
-        startWithComments={viewer?.comments ?? false}
-        onClose={() => setViewer(null)}
-      />
-      <ImageViewer item={image} onClose={() => setImage(null)} />
+      {viewerReady ? (
+        <PostViewer
+          item={viewer?.item ?? null}
+          startWithComments={viewer?.comments ?? false}
+          onClose={() => setViewer(null)}
+        />
+      ) : null}
+      {imageReady ? <ImageViewer item={image} onClose={() => setImage(null)} /> : null}
 
       {/* Instant, in-place full reels experience (For You / Following tabs), nav
           visible, seeded on the tapped video — closes via state (no navigation). */}

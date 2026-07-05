@@ -1,13 +1,17 @@
 "use client";
 
 import { Bookmark, Clapperboard, Download, FolderHeart, Grid3x3, Heart, LayoutGrid, Repeat2, Rows3 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { type ComponentType, useMemo, useState } from "react";
 
-import { CollectionsTab } from "@/features/profile/collections-tab";
-import { DownloadsTab } from "@/features/profile/downloads-tab";
 import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
 import type { PostCard } from "@/lib/social/posts";
 import { cn } from "@/lib/utils";
+
+// These tabs render only when selected (initial tab is Posts), so defer their
+// chunks off the initial profile load.
+const CollectionsTab = dynamic(() => import("@/features/profile/collections-tab").then((m) => m.CollectionsTab), { ssr: false });
+const DownloadsTab = dynamic(() => import("@/features/profile/downloads-tab").then((m) => m.DownloadsTab), { ssr: false });
 
 export type ProfileTab = "posts" | "reels" | "downloads" | "reposted" | "liked" | "saved" | "collections";
 type MediaView = "grid" | "list";

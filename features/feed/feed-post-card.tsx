@@ -28,10 +28,15 @@ import { RichText } from "@/components/social/rich-text";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
-import { CollectionPicker } from "@/features/social/collection-picker";
-import { PostEditSheet } from "@/features/social/post-edit-sheet";
+import dynamic from "next/dynamic";
+
 import { RepostBurst } from "@/features/social/repost-burst";
 import { toast } from "@/features/ui/toast";
+
+// These sheets appear only on interaction (edit / save-to-collection) and this
+// card renders many times per feed — code-split so they never weigh down the feed.
+const CollectionPicker = dynamic(() => import("@/features/social/collection-picker").then((m) => m.CollectionPicker), { ssr: false });
+const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").then((m) => m.PostEditSheet), { ssr: false });
 import { downloadPost } from "@/lib/media/download-post";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
 import { FrenzsaveError } from "@/lib/sdk";
@@ -84,6 +89,10 @@ function FeedPostCardImpl({
   const [editOpen, setEditOpen] = useState(false);
   const [repostBurst, setRepostBurst] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Gate the code-split sheets: mount only after first open (keeps their chunks
+  // out of the feed until actually needed, then stays mounted for exit animations).
+  const [editReady, setEditReady] = useState(false);
+  const [pickerReady, setPickerReady] = useState(false);
 
   const react = async (type: "like" | "save") => {
     const isLike = type === "like";
@@ -256,12 +265,12 @@ function FeedPostCardImpl({
                   className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-xl border border-border/70 bg-card py-1 shadow-elevated"
                 >
                   {item.isOwner ? (
-                    <MenuItem icon={Pencil} label="Edit post" onClick={() => { setMenuOpen(false); setEditOpen(true); }} />
+                    <MenuItem icon={Pencil} label="Edit post" onClick={() => { setMenuOpen(false); setEditReady(true); setEditOpen(true); }} />
                   ) : null}
                   {!item.isOwner ? (
                     <MenuItem icon={UserPlus} label={following ? "Unfollow creator" : "Follow creator"} onClick={toggleFollow} />
                   ) : null}
-                  <MenuItem icon={FolderPlus} label="Save to collection" onClick={() => { setMenuOpen(false); setPickerOpen(true); }} />
+                  <MenuItem icon={FolderPlus} label="Save to collection" onClick={() => { setMenuOpen(false); setPickerReady(true); setPickerOpen(true); }} />
                   <MenuItem icon={EyeOff} label="Hide this post" onClick={() => onRemove(item.id)} />
                   <MenuItem icon={Ban} label="Not interested" onClick={() => onRemove(item.id)} />
                   <MenuItem icon={Flag} label="Report" danger onClick={report} />
@@ -392,7 +401,7 @@ function FeedPostCardImpl({
         </div>
       </div>
 
-      {item.isOwner ? (
+      {item.isOwner && editReady ? (
         <PostEditSheet
           item={{ id: item.id, title: title ?? "" }}
           open={editOpen}
@@ -402,7 +411,7 @@ function FeedPostCardImpl({
         />
       ) : null}
 
-      <CollectionPicker postId={item.id} open={pickerOpen} onClose={() => setPickerOpen(false)} />
+      {pickerReady ? <CollectionPicker postId={item.id} open={pickerOpen} onClose={() => setPickerOpen(false)} /> : null}
     </motion.article>
   );
 }

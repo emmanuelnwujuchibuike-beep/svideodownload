@@ -9,7 +9,7 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑05 (collapsible feed nav + reels gesture/layout pass)._
+_Last updated: 2026‑07‑05 (fixed sidebar, comments side panels, swipe reel tabs)._
 
 ---
 
@@ -54,6 +54,10 @@ _Last updated: 2026‑07‑05 (collapsible feed nav + reels gesture/layout pass)
   `document.body.style.overflowY` only — never the `overflow` **shorthand**, which
   silently resets `overflow-x` back to the browser default and reintroduces the
   exact same breakage. Every full-screen overlay in the app follows this rule.
+  The main app sidebar (`app-sidebar.tsx`) no longer relies on `sticky` at all —
+  it's `position: fixed` (pinned to the viewport unconditionally, preceded by an
+  invisible spacer that reserves its width in the layout's flex row), so it
+  can't be affected by scroll state under any overlay, full stop.
 
 ## Product surfaces (shipped highlights)
 
@@ -73,7 +77,13 @@ _Last updated: 2026‑07‑05 (collapsible feed nav + reels gesture/layout pass)
   sits top‑right (mirroring the close X at top‑left, always visible); elapsed/
   total time sits top‑center below the tabs (auto‑hides with the rest of the UI).
   Press‑and‑hold pauses **and** opens the options sheet — one gesture reaches
-  every action.
+  every action. A decisive **horizontal swipe switches For You/Following**
+  instantly, same as tapping the tab.
+- **Comments side panels** — on large screens, opening an image or video from the
+  feed shows a persistent right‑side comments panel (publisher+follow, caption,
+  quick actions, always‑visible comments — no tap needed) instead of empty space
+  beside the media; same split‑pane pattern as PostViewer. Mobile/tablet keep the
+  tap‑to‑open bottom sheet.
 - **Notifications** — premium realtime Notification Center, Web Push, iOS install
   path, social push, live toast.
 - **Friends (Frenz Connect)** — requests with notes, friendships, `/friends` hub,

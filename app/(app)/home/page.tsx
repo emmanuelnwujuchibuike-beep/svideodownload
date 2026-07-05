@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { IoSparklesSharp } from "react-icons/io5";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -74,17 +73,6 @@ export default async function HomePage() {
         {/* Smart Feed — the intelligent, blended, endless heart of the home
             experience. Rendered last because it never ends. */}
         <div className="pt-2">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-lg shadow-violet-500/25">
-              <IoSparklesSharp className="h-[18px] w-[18px]" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-lg font-extrabold leading-none tracking-tight">
-                <span className="text-gradient">Your Smart Feed</span>
-              </h2>
-              <p className="mt-1 text-xs font-medium text-muted-foreground">Curated for you · updated live</p>
-            </div>
-          </div>
           <Suspense fallback={<FeedSkeleton count={3} />}>
             <SmartFeedSection viewerId={viewerId} />
           </Suspense>

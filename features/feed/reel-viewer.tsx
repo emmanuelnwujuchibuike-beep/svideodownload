@@ -181,6 +181,7 @@ export function ReelDeck({
                 onEnded={() => (i < items.length - 1 ? scrollToIndex(i + 1) : undefined)}
                 onCommentsOpen={setLocked}
                 autoOpenComments={item.id === autoOpenCommentsId}
+                variant={variant}
               />
             </div>
           </section>
@@ -199,6 +200,7 @@ function ReelCard({
   onEnded,
   onCommentsOpen,
   autoOpenComments,
+  variant = "modal",
 }: {
   item: FeedItem;
   isActive: boolean;
@@ -208,7 +210,13 @@ function ReelCard({
   onEnded: () => void;
   onCommentsOpen: (open: boolean) => void;
   autoOpenComments?: boolean;
+  variant?: "modal" | "page";
 }) {
+  // Anchor the caption + action rail low. On the /reels route (page) they sit just
+  // above the mobile bottom nav and drop to the very bottom on large screens; in
+  // the modal (no nav) they hug the bottom on every size — no empty gap.
+  const railBottom = variant === "page" ? "bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-6" : "bottom-6";
+  const captionPad = variant === "page" ? "pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-8" : "pb-6 lg:pb-8";
   const video = useRef<HTMLVideoElement | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -667,7 +675,7 @@ function ReelCard({
       ) : null}
 
       {/* Action rail (auto-hides) */}
-      <div className={cn("absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-8", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
+      <div className={cn("absolute right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200", railBottom, ui ? "opacity-100" : "pointer-events-none opacity-0")}>
         <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="relative mb-1">
           {item.publisher.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -722,7 +730,7 @@ function ReelCard({
       </div>
 
       {/* Author + caption (auto-hides) */}
-      <div className={cn("absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 pb-24 pt-16 transition-opacity duration-200 sm:pb-8", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
+      <div className={cn("absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 pt-16 transition-opacity duration-200", captionPad, ui ? "opacity-100" : "pointer-events-none opacity-0")}>
         <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="inline-flex items-center gap-1.5 text-white">
           <span className="font-bold">@{item.publisher.handle}</span>
           {item.publisher.isVerified ? <BadgeCheck className="h-4 w-4" /> : null}

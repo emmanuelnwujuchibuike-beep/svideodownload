@@ -144,6 +144,16 @@ export function SmartFeed({
     void fetchPage(s, 0, true);
   };
 
+  // The third tab is "Fresh" on desktop (recent feed) but "Reels" on mobile,
+  // where it jumps straight into the full-screen reels experience.
+  const onSegment = (key: HomeFeedSort) => {
+    if (key === "recent" && typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+      router.push("/reels");
+      return;
+    }
+    changeSegment(key);
+  };
+
   const remove = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id));
 
   const refreshTop = useCallback(() => {
@@ -324,63 +334,74 @@ export function SmartFeed({
         ) : null}
       </AnimatePresence>
 
-      {/* Segments — luxury segmented control with a sliding gradient pill */}
-      <div className="relative flex items-center gap-1 rounded-2xl bg-secondary/50 p-1 ring-1 ring-inset ring-border/50 backdrop-blur-sm">
-        {SEGMENTS.map((t) => {
-          const on = sort === t.key;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => changeSegment(t.key)}
-              aria-pressed={on}
-              className="relative flex-1 rounded-xl px-3 py-2.5 text-sm font-bold transition active:scale-[0.97]"
-            >
-              {on ? (
-                <motion.span
-                  layoutId="seg-pill"
-                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                  className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 shadow-lg shadow-violet-500/30"
-                />
-              ) : null}
-              <span className={cn("relative z-10 flex items-center justify-center gap-1.5", on ? "text-white" : "text-muted-foreground hover:text-foreground")}>
-                <t.icon className="h-4 w-4" />
-                {t.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Controls — sticky under the top bar so you never have to scroll up to
+          switch, with a matured monochrome sliding pill (Facebook/X-like, not a
+          bright gradient). */}
+      <div className="sticky top-16 z-20 -mx-3 mb-4 bg-background/85 px-3 pb-2 pt-2 backdrop-blur-xl sm:-mx-4 sm:px-4">
+        {/* Segments */}
+        <div className="relative flex items-center gap-1 rounded-2xl bg-secondary/50 p-1 ring-1 ring-inset ring-border/50">
+          {SEGMENTS.map((t) => {
+            const on = sort === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => onSegment(t.key)}
+                aria-pressed={on}
+                className="relative flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition active:scale-[0.97]"
+              >
+                {on ? (
+                  <motion.span
+                    layoutId="seg-pill"
+                    transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                    className="absolute inset-0 rounded-xl bg-foreground shadow-sm"
+                  />
+                ) : null}
+                <span className={cn("relative z-10", on ? "text-background" : "text-muted-foreground hover:text-foreground")}>
+                  {t.key === "recent" ? (
+                    <>
+                      <span className="lg:hidden">Reels</span>
+                      <span className="hidden lg:inline">Fresh</span>
+                    </>
+                  ) : (
+                    t.label
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Smart Filters — refined pills with a matching sliding highlight */}
-      <div className="-mx-1 mt-3 mb-4 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {FILTERS.map((f) => {
-          const on = filter === f.id;
-          return (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              aria-pressed={on}
-              className={cn(
-                "relative shrink-0 rounded-full px-4 py-2 text-xs font-bold transition active:scale-95",
-                on ? "text-white" : "border border-border/70 bg-card/60 text-muted-foreground hover:border-primary/40 hover:text-foreground",
-              )}
-            >
-              {on ? (
-                <motion.span
-                  layoutId="filter-pill"
-                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                  className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 shadow-sm shadow-violet-500/30"
-                />
-              ) : null}
-              <span className="relative z-10 flex items-center gap-1.5">
-                <f.icon className="h-3.5 w-3.5" />
-                {f.label}
-              </span>
-            </button>
-          );
-        })}
+        {/* Filters */}
+        <div className="-mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {FILTERS.map((f) => {
+            const on = filter === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
+                aria-pressed={on}
+                className={cn(
+                  "relative shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition active:scale-95",
+                  on ? "text-background" : "border border-border/70 text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+                )}
+              >
+                {on ? (
+                  <motion.span
+                    layoutId="filter-pill"
+                    transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                    className="absolute inset-0 rounded-full bg-foreground"
+                  />
+                ) : null}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <f.icon className="h-3.5 w-3.5" />
+                  {f.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {switching ? (

@@ -89,6 +89,21 @@ _Last updated: 2026‑07‑05._
   conversations stay unified on the original post by design (a repost is a
   pointer). The repost feature set is now complete.
 
+## Performance, battery & thermal
+
+An app-wide performance mandate (feel native-fast, no phone heat/battery drain,
+premium look intact; Lighthouse 95+). Every feature also passes a perf review
+before it's done. Already in place: `content-visibility` on feed cards
+(virtualization-lite), memoized feed cards with stable callbacks, single-video
+playback via a coordinator + Page-Visibility pause, versioned service-worker
+caches, router `staleTimes`, barrel-import optimization, AVIF/WebP via next/image.
+**Pass 1:** code-split the interaction-only overlays (reels engine, post/image
+viewers), per-card sheets, and profile Downloads/Collections tabs off the initial
+bundles via `next/dynamic` (kept mounted after first open so close animations
+play), and cut the sticky feed-nav backdrop-blur cost on scroll. Next passes:
+migrate remaining raw `<img>` thumbnails/avatars to `next/image`, and windowing
+for very long feeds.
+
 ## Infrastructure & ops
 
 - **Deploys:** GitHub → Vercel. **Always `git push origin main` after committing**

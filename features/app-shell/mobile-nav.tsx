@@ -12,6 +12,7 @@ import {
 } from "react-icons/io5";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { openUpload } from "@/features/create/upload-store";
@@ -36,6 +37,16 @@ export function MobileNav() {
 
   const profileHref = handle ? `/u/${handle}` : "/account";
   const profileActive = pathname.startsWith("/u/") || pathname.startsWith("/account");
+
+  // Warm the primary destinations once so the FIRST tap opens instantly — dynamic
+  // routes (Messages/Friends) otherwise fetch on first navigation, which felt like
+  // "tap twice before it opens". Runs after mount so it never blocks first paint.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      for (const r of ["/home", "/friends", "/messages", profileHref]) router.prefetch(r);
+    }, 400);
+    return () => clearTimeout(id);
+  }, [router, profileHref]);
 
   return (
     <nav

@@ -113,6 +113,24 @@ export function ReelDeck({
   // reel — the sheet stays put and the reel behind it is frozen.
   const [locked, setLocked] = useState(false);
 
+  // Buffer-gated scrolling: reels are marked "ready" when their first frames are
+  // buffered (or after a short fallback). We only render up to `ceiling` — the
+  // next clip always, and the 2nd-next once the next is ready — so a fast fling
+  // can never land on a cold, unbuffered video. There's simply nothing rendered
+  // past the buffer to scroll into; the ceiling extends as clips become ready.
+  const [readyIds, setReadyIds] = useState<Set<string>>(() => new Set());
+  const markReady = useCallback((id: string) => {
+    setReadyIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
+  const next1 = items[active + 1];
+  const ceiling = Math.min(items.length - 1, active + (next1 && readyIds.has(next1.id) ? 2 : 1));
+  const visible = items.slice(0, ceiling + 1);
+
   // Lock the page, jump to the opening reel, wire Escape.
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
@@ -187,7 +205,7 @@ export function ReelDeck({
         // browser back/forward navigation).
         style={locked ? { touchAction: "none" } : { scrollSnapType: "y mandatory", touchAction: "pan-y", overscrollBehaviorX: "none" }}
       >
-        {items.map((item, i) => (
+        {visible.map((item, i) => (
           <section key={item.id} className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black">
             {/* On phones the reel fills the screen; on tablets/desktop it becomes a
                 centered 9:16 column (black to the sides). On lg the column lets its
@@ -206,6 +224,7 @@ export function ReelDeck({
                 onCommentsOpen={setLocked}
                 autoOpenComments={item.id === autoOpenCommentsId}
                 variant={variant}
+                onReady={markReady}
               />
             </div>
           </section>
@@ -225,6 +244,7 @@ function ReelCard({
   onCommentsOpen,
   autoOpenComments,
   variant = "modal",
+  onReady,
 }: {
   item: FeedItem;
   isActive: boolean;
@@ -235,6 +255,8 @@ function ReelCard({
   onCommentsOpen: (open: boolean) => void;
   autoOpenComments?: boolean;
   variant?: "modal" | "page";
+  /** Report this reel as buffered/ready so the deck can extend the scroll ceiling. */
+  onReady?: (id: string) => void;
 }) {
   // Anchor the caption + action rail low. On the /reels route (page) they sit just
   // above the mobile bottom nav and drop to the very bottom on large screens; in
@@ -281,6 +303,20 @@ function ReelCard({
   useEffect(() => setMounted(true), []);
 
   const native = !!item.mediaUrl;
+
+  // Report readiness so the deck can extend its scroll ceiling. Stream clips
+  // buffer themselves; native clips report on canplay/error, with a fallback so a
+  // slow/broken clip can never permanently block scrolling.
+  useEffect(() => {
+    if (!nearby) return;
+    if (!native) {
+      onReady?.(item.id);
+      return;
+    }
+    const t = setTimeout(() => onReady?.(item.id), 3500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nearby, native, item.id]);
 
   const scheduleHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -703,6 +739,8 @@ function ReelCard({
               }}
               onWaiting={() => setBuffering(true)}
               onPlaying={() => setBuffering(false)}
+              onCanPlay={() => onReady?.(item.id)}
+              onError={() => onReady?.(item.id)}
               onLoadedMetadata={(e) => setDur(e.currentTarget.duration || 0)}
               onEnded={() => !loop && onEnded()}
               onTimeUpdate={(e) => {

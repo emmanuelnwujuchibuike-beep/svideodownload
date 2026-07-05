@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
   ArrowUp,
+  Clapperboard,
   Clock,
   Flame,
   Image as ImageIcon,
@@ -53,7 +54,7 @@ type Icon = ComponentType<{ className?: string }>;
 const SEGMENTS: { key: HomeFeedSort; label: string; icon: Icon }[] = [
   { key: "for_you", label: "For You", icon: Sparkles },
   { key: "following", label: "Following", icon: Users },
-  { key: "recent", label: "Fresh", icon: Clock },
+  { key: "recent", label: "Reels", icon: Clapperboard },
 ];
 
 /** Smart Filters reshape the loaded stream — kind filters + honest reorders. */
@@ -181,12 +182,12 @@ export function SmartFeed({
     void fetchPage(s, 0, true);
   };
 
-  // The third tab is "Fresh" on desktop (recent feed) but "Reels" on mobile.
-  // On mobile it opens the full reels experience IN PLACE — instant, no route
-  // change or loader — seeded on the first already-loaded video. Only if nothing
-  // is loaded yet do we fall back to navigating to the /reels route.
+  // The third tab is "Reels" on every device — it opens the full reels
+  // experience IN PLACE — instant, no route change or loader — seeded on the
+  // first already-loaded video. Only if nothing is loaded yet do we fall back
+  // to navigating to the /reels route.
   const onSegment = (key: HomeFeedSort) => {
-    if (key === "recent" && typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+    if (key === "recent") {
       const first = videosRef.current[0];
       if (first) setReel({ startId: first.id, commentsId: null });
       else router.push("/reels");
@@ -401,14 +402,7 @@ export function SmartFeed({
                   />
                 ) : null}
                 <span className={cn("relative z-10", on ? "text-foreground" : "text-muted-foreground hover:text-foreground/80")}>
-                  {t.key === "recent" ? (
-                    <>
-                      <span className="lg:hidden">Reels</span>
-                      <span className="hidden lg:inline">Fresh</span>
-                    </>
-                  ) : (
-                    t.label
-                  )}
+                  {t.label}
                 </span>
               </button>
             );

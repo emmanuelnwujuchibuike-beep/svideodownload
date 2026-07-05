@@ -125,8 +125,12 @@ Publishing a video kicks off **ingestion** (`/api/posts/:id/stream-ingest` →
 `copyToStream`, storing `stream_uid`); the original R2 MP4 stays as the archival +
 fallback source. Entirely additive and **env-gated** — with no Stream credentials
 (`CF_STREAM_ACCOUNT_ID`, `CF_STREAM_API_TOKEN`, `NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE`)
-everything plays exactly as before. Next: inline feed-video HLS, a backfill job for
-existing videos, and playback observability.
+everything plays exactly as before. The **inline feed video** uses the same adaptive
+path (attaching only near the viewport, releasing off-screen). An **admin backfill**
+(`/api/admin/stream-backfill`) ingests existing videos; **auto-captions** are
+generated on ingest and render through HLS automatically; and **playback metrics**
+(time-to-first-frame, rebuffers, source) are logged via a sampled beacon
+(`/api/metrics/playback`). Next: a Stream ready-webhook and multi-language subtitles.
 
 ## Infrastructure & ops
 

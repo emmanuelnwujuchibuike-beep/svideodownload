@@ -14,14 +14,10 @@ const TAP_MOVE_TOLERANCE = 18;
  * Inline feed video. Autoplays muted when scrolled into view (Reels feel) and
  * pauses when out of view.
  *
- * Interaction is device-aware:
- *   • Laptop / desktop (hover + fine pointer): a click toggles play/pause — it
- *     NEVER opens the reel by itself. Hovering reveals the play/pause control and
- *     an "Open reel" (expand) button; a deliberate click on that button, or a
- *     double-click, opens the fullscreen reel.
- *   • Touch: a stationary tap opens the reel; press-and-hold pauses while held.
- * A mute toggle is always reachable. Cloudflare Stream items fall back to the
- * Stream player.
+ * Interaction (same on every device): a deliberate tap/click opens the fullscreen
+ * reel — heavily guarded so it never fires on a graze, drag, hover, or the tail of
+ * a scroll. Press-and-hold pauses while held (and never opens). A mute toggle is
+ * always reachable. Cloudflare Stream items fall back to the Stream player.
  */
 export function FeedVideo({
   src,

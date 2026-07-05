@@ -73,6 +73,7 @@ export function ReelDeck({
   onClose,
   onEndReached,
   variant = "modal",
+  autoOpenCommentsId,
 }: {
   items: FeedItem[];
   startIndex: number;
@@ -81,6 +82,8 @@ export function ReelDeck({
   onEndReached?: () => void;
   /** "modal" (over the app) or "page" (a route; sits below the mobile nav). */
   variant?: "modal" | "page";
+  /** Deep-link support: open this reel's comments sheet the moment it mounts. */
+  autoOpenCommentsId?: string | null;
 }) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const raf = useRef<number | null>(null);
@@ -168,6 +171,7 @@ export function ReelDeck({
               onClose={onClose}
               onEnded={() => (i < items.length - 1 ? scrollToIndex(i + 1) : undefined)}
               onCommentsOpen={setLocked}
+              autoOpenComments={item.id === autoOpenCommentsId}
             />
           </section>
         ))}
@@ -184,6 +188,7 @@ function ReelCard({
   onClose,
   onEnded,
   onCommentsOpen,
+  autoOpenComments,
 }: {
   item: FeedItem;
   isActive: boolean;
@@ -192,6 +197,7 @@ function ReelCard({
   onClose: () => void;
   onEnded: () => void;
   onCommentsOpen: (open: boolean) => void;
+  autoOpenComments?: boolean;
 }) {
   const video = useRef<HTMLVideoElement | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -304,6 +310,14 @@ function ReelCard({
     video.current?.pause();
     setSheetVideoPaused(true);
   }, [onCommentsOpen]);
+
+  // Deep-link support: a "Comment" tap elsewhere in the app lands here with the
+  // sheet already open (?comments=1), so it feels like one continuous action.
+  useEffect(() => {
+    if (autoOpenComments) openComments();
+    // Only ever fires once, right when this specific reel is deep-linked to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const closeComments = useCallback(() => {
     setShowComments(false);
     onCommentsOpen(false);

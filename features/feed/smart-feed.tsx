@@ -1,15 +1,28 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertCircle, ArrowUp, Clock, Sparkles, X } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowUp,
+  Clock,
+  Flame,
+  Image as ImageIcon,
+  LayoutGrid,
+  MessageSquare,
+  Sparkles,
+  Users,
+  Video,
+  X,
+} from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ComponentType } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { PostViewer } from "@/features/feed/post-viewer";
-import { ReelViewer } from "@/features/feed/reel-viewer";
 import { SparkCard } from "@/features/feed/spark-card";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
 import {
@@ -22,20 +35,22 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-const SEGMENTS: { key: HomeFeedSort; label: string }[] = [
-  { key: "for_you", label: "For You" },
-  { key: "following", label: "Following" },
-  { key: "recent", label: "Fresh" },
+type Icon = ComponentType<{ className?: string }>;
+
+const SEGMENTS: { key: HomeFeedSort; label: string; icon: Icon }[] = [
+  { key: "for_you", label: "For You", icon: Sparkles },
+  { key: "following", label: "Following", icon: Users },
+  { key: "recent", label: "Fresh", icon: Clock },
 ];
 
 /** Smart Filters reshape the loaded stream — kind filters + honest reorders. */
 const FILTERS = [
-  { id: "all", label: "All" },
-  { id: "video", label: "Videos" },
-  { id: "photo", label: "Photos" },
-  { id: "popular", label: "Popular" },
-  { id: "discussed", label: "Discussed" },
-] as const;
+  { id: "all", label: "All", icon: LayoutGrid },
+  { id: "video", label: "Videos", icon: Video },
+  { id: "photo", label: "Photos", icon: ImageIcon },
+  { id: "popular", label: "Popular", icon: Flame },
+  { id: "discussed", label: "Discussed", icon: MessageSquare },
+] as const satisfies readonly { id: string; label: string; icon: Icon }[];
 type FilterId = (typeof FILTERS)[number]["id"];
 
 const PAGE = 8;
@@ -78,20 +93,18 @@ export function SmartFeed({
   const [freshCount, setFreshCount] = useState(0);
   const [away, setAway] = useState<AwaySummary | null>(null);
   const [viewer, setViewer] = useState<{ item: FeedItem; comments: boolean } | null>(null);
-  const [reel, setReel] = useState<{ items: FeedItem[]; index: number } | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const seen = useRef(new Set(initialItems.map((i) => i.id)));
+  const router = useRouter();
 
   const deck = useMemo(() => buildSparkDeck({ friendCount }), [friendCount]);
 
-  // Videos open the fullscreen reel over a playlist of every loaded video (so it
-  // auto-advances); everything else opens the split viewer.
+  // Videos navigate to the real /reels page (tabs, infinite scroll, scrubber —
+  // the full experience, not just a modal); everything else opens the split
+  // viewer in place.
   const openViewer = (it: FeedItem, comments = false) => {
-    if (it.mediaKind === "video") {
-      const vids = items.filter((v) => v.mediaKind === "video");
-      const index = Math.max(0, vids.findIndex((v) => v.id === it.id));
-      setReel({ items: vids, index });
-    } else setViewer({ item: it, comments });
+    if (it.mediaKind === "video") router.push(`/reels?start=${it.id}${comments ? "&comments=1" : ""}`);
+    else setViewer({ item: it, comments });
   };
 
   const fetchPage = useCallback(
@@ -312,42 +325,63 @@ export function SmartFeed({
         ) : null}
       </AnimatePresence>
 
-      {/* Segments */}
-      <div className="flex items-center gap-1 rounded-2xl bg-secondary/60 p-1">
-        {SEGMENTS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => changeSegment(t.key)}
-            aria-pressed={sort === t.key}
-            className={cn(
-              "flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition",
-              sort === t.key ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
+      {/* Segments — luxury segmented control with a sliding gradient pill */}
+      <div className="relative flex items-center gap-1 rounded-2xl bg-secondary/50 p-1 ring-1 ring-inset ring-border/50 backdrop-blur-sm">
+        {SEGMENTS.map((t) => {
+          const on = sort === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => changeSegment(t.key)}
+              aria-pressed={on}
+              className="relative flex-1 rounded-xl px-3 py-2.5 text-sm font-bold transition active:scale-[0.97]"
+            >
+              {on ? (
+                <motion.span
+                  layoutId="seg-pill"
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                  className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 shadow-lg shadow-violet-500/30"
+                />
+              ) : null}
+              <span className={cn("relative z-10 flex items-center justify-center gap-1.5", on ? "text-white" : "text-muted-foreground hover:text-foreground")}>
+                <t.icon className="h-4 w-4" />
+                {t.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Smart Filters */}
+      {/* Smart Filters — refined pills with a matching sliding highlight */}
       <div className="-mx-1 mt-3 mb-4 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => setFilter(f.id)}
-            aria-pressed={filter === f.id}
-            className={cn(
-              "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition",
-              filter === f.id
-                ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm shadow-violet-500/25"
-                : "border border-border/70 bg-card/60 text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
+        {FILTERS.map((f) => {
+          const on = filter === f.id;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFilter(f.id)}
+              aria-pressed={on}
+              className={cn(
+                "relative shrink-0 rounded-full px-4 py-2 text-xs font-bold transition active:scale-95",
+                on ? "text-white" : "border border-border/70 bg-card/60 text-muted-foreground hover:border-primary/40 hover:text-foreground",
+              )}
+            >
+              {on ? (
+                <motion.span
+                  layoutId="filter-pill"
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                  className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 shadow-sm shadow-violet-500/30"
+                />
+              ) : null}
+              <span className="relative z-10 flex items-center gap-1.5">
+                <f.icon className="h-3.5 w-3.5" />
+                {f.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {switching ? (
@@ -400,7 +434,6 @@ export function SmartFeed({
         startWithComments={viewer?.comments ?? false}
         onClose={() => setViewer(null)}
       />
-      <ReelViewer items={reel?.items ?? null} startIndex={reel?.index ?? 0} onClose={() => setReel(null)} />
     </section>
   );
 }

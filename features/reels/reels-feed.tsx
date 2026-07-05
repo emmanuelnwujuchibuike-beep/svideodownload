@@ -2,7 +2,7 @@
 
 import { Clapperboard } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
 import { BrandLoader } from "@/features/app-shell/brand-loader";
@@ -19,6 +19,17 @@ type Tab = "for_you" | "following";
  */
 export function ReelsFeed({ initialItems, initialOffset }: { initialItems: FeedItem[]; initialOffset: number | null }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Deep-linked from a "Comment" tap elsewhere (?start=<id>&comments=1) — the
+  // seeded item sits at index 0 of the initial deck, so open its sheet on entry.
+  const autoOpenCommentsId = searchParams.get("comments") === "1" ? searchParams.get("start") : null;
+  // Prefer going back (Next reuses the cached render of wherever we came from —
+  // instant, no server round-trip) and only push to /home when there's nowhere
+  // to go back to (e.g. /reels was opened directly in a fresh tab).
+  const close = useCallback(() => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/home");
+  }, [router]);
   const [tab, setTab] = useState<Tab>("for_you");
   const [items, setItems] = useState<FeedItem[]>(initialItems);
   const [offset, setOffset] = useState<number | null>(initialOffset);
@@ -111,7 +122,15 @@ export function ReelsFeed({ initialItems, initialOffset }: { initialItems: FeedI
           </Link>
         </div>
       ) : (
-        <ReelDeck key={tab} items={items} startIndex={0} variant="page" onEndReached={loadMore} onClose={() => router.push("/home")} />
+        <ReelDeck
+          key={tab}
+          items={items}
+          startIndex={0}
+          variant="page"
+          onEndReached={loadMore}
+          onClose={close}
+          autoOpenCommentsId={tab === "for_you" ? autoOpenCommentsId : null}
+        />
       )}
     </>
   );

@@ -88,6 +88,100 @@ const SELECT =
 
 export type HomeFeedSort = "for_you" | "following" | "recent";
 
+/**
+ * A single feed item by post id, in the exact `FeedItem` shape the reel deck
+ * expects — used to deep-link straight into `/reels?start=<id>` (e.g. tapping a
+ * video from the home feed or the trending rail) without waiting on the full
+ * paginated query. Returns null for anything private, missing, or non-video.
+ */
+export async function getFeedItemById(id: string, viewerId: string | null): Promise<FeedItem | null> {
+  if (!hasSupabase) return null;
+  try {
+    const db = createAdminClient();
+    const { data } = await db.from("posts").select(SELECT).eq("id", id).maybeSingle();
+    const row = data as Row | null;
+    if (!row || row.status !== "published" || row.visibility !== "public" || row.media_kind !== "video") return null;
+
+    const { data: prof } = await db
+      .from("profiles")
+      .select("id, handle, display_name, avatar_url, is_verified, is_suspended")
+      .eq("id", row.publisher_id)
+      .maybeSingle();
+    if (!prof || !prof.handle || prof.is_suspended) return null;
+
+    const { data: subs } = await db
+      .from("subscriptions")
+      .select("plan")
+      .eq("user_id", row.publisher_id)
+      .in("status", ["active", "trialing"])
+      .maybeSingle();
+
+    let viewerLiked = false;
+    let viewerSaved = false;
+    let isFollowing = false;
+    if (viewerId) {
+      const [{ count: blockedCount }, { data: reactions }, { count: followCount }] = await Promise.all([
+        db
+          .from("blocks")
+          .select("blocker_id", { head: true, count: "exact" })
+          .or(`and(blocker_id.eq.${row.publisher_id},blocked_id.eq.${viewerId}),and(blocker_id.eq.${viewerId},blocked_id.eq.${row.publisher_id})`),
+        db.from("post_reactions").select("type").eq("user_id", viewerId).eq("post_id", id),
+        db.from("follows").select("follower_id", { head: true, count: "exact" }).eq("follower_id", viewerId).eq("following_id", row.publisher_id),
+      ]);
+      if ((blockedCount ?? 0) > 0) return null;
+      for (const r of (reactions ?? []) as { type: string }[]) {
+        if (r.type === "like") viewerLiked = true;
+        else if (r.type === "save") viewerSaved = true;
+      }
+      isFollowing = (followCount ?? 0) > 0;
+    }
+
+    let hasPoll = false;
+    try {
+      const { count: pollCount } = await db.from("post_polls").select("post_id", { head: true, count: "exact" }).eq("post_id", id);
+      hasPoll = (pollCount ?? 0) > 0;
+    } catch {
+      /* polls not migrated — leave hasPoll false */
+    }
+
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      platform: row.platform,
+      mediaKind: row.media_kind,
+      thumbnailUrl: row.thumbnail_url,
+      sourceUrl: row.source_url,
+      mediaUrl: row.media_url,
+      streamUid: row.stream_uid ?? null,
+      category: row.category,
+      durationSec: row.duration_sec,
+      viewsCount: row.views_count,
+      likesCount: row.likes_count,
+      commentsCount: row.comments_count,
+      sharesCount: row.shares_count,
+      savesCount: row.saves_count,
+      downloadsCount: row.downloads_count,
+      createdAt: row.created_at,
+      publisher: {
+        id: prof.id as string,
+        handle: prof.handle as string,
+        displayName: (prof.display_name as string) || `@${prof.handle as string}`,
+        avatarUrl: (prof.avatar_url as string) ?? null,
+        isVerified: (prof.is_verified as boolean) ?? false,
+        plan: (subs?.plan as BillingPlan) ?? "free",
+      },
+      viewerLiked,
+      viewerSaved,
+      isFollowing,
+      isOwner: viewerId === row.publisher_id,
+      hasPoll,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** A page of the rich home feed. Offset-based so it powers infinite scroll. */
 export async function getHomeFeed(opts: {
   viewerId: string | null;

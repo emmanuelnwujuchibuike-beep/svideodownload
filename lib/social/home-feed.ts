@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { getTrendingSettings } from "./feed";
 import type { MediaKind } from "./posts";
-import { repostCounts, viewerReposts } from "./reposts";
+import { followedReposters, repostCounts, viewerReposts } from "./reposts";
 
 /**
  * Rich, privacy-filtered home feed. Unlike the lean Explore `getFeed`, each item
@@ -56,6 +56,8 @@ export interface FeedItem {
   /** Repost state — optional/best-effort (0/false before the reposts migration). */
   viewerReposted?: boolean;
   repostsCount?: number;
+  /** Followed users who reposted this — the premium repost badge (avatars + "+N"). */
+  repostBadge?: { avatars: (string | null)[]; handles: string[]; count: number };
 }
 
 export interface FeedPage {
@@ -352,12 +354,18 @@ async function loadHomeFeed(
         /* polls not migrated — leave hasPoll false */
       }
 
-      // Repost state + counts (best-effort — 0/false before migration 0025).
+      // Repost state + counts + the followed-user badge (best-effort — before
+      // migration 0025 these are 0/false/empty).
       const ids = items.map((i) => i.id);
-      const [reposted, counts] = await Promise.all([viewerReposts(ids, viewerId), repostCounts(ids)]);
+      const [reposted, counts, badges] = await Promise.all([
+        viewerReposts(ids, viewerId),
+        repostCounts(ids),
+        followedReposters(ids, followingIds),
+      ]);
       for (const it of items) {
         it.viewerReposted = reposted.has(it.id);
         it.repostsCount = counts.get(it.id) ?? 0;
+        it.repostBadge = badges.get(it.id);
       }
     }
     return { items, nextOffset };

@@ -843,7 +843,24 @@ function ReelCard({
             everything else live in the premium overflow sheet. */}
         <RailButton icon={Heart} active={liked} fill={liked} activeClass="text-rose-500" count={likes} label="Like" onClick={() => react("like")} />
         <RailButton icon={MessageCircle} count={item.commentsCount} label="Comment" onClick={openComments} />
-        <RailButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-400" label="Repost" onClick={repost} />
+        <div className="flex flex-col items-center gap-1">
+          {item.repostBadge && item.repostBadge.count > 0 ? (
+            <div className="flex items-center" aria-label={`${item.repostBadge.count} people you follow reposted this`}>
+              <span className="flex -space-x-2">
+                {item.repostBadge.avatars.slice(0, 3).map((a, i) =>
+                  a ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={i} src={a} alt="" className="h-5 w-5 rounded-full object-cover shadow ring-2 ring-white" />
+                  ) : (
+                    <span key={i} className="h-5 w-5 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 shadow ring-2 ring-white" />
+                  ),
+                )}
+              </span>
+              {item.repostBadge.count > 3 ? <span className="ml-1 text-[10px] font-bold text-white drop-shadow">+{item.repostBadge.count - 3}</span> : null}
+            </div>
+          ) : null}
+          <RailButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-400" label="Repost" onClick={repost} />
+        </div>
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
         <RailButton icon={MoreHorizontal} label="More" onClick={() => setMoreOpen(true)} />
       </div>

@@ -410,11 +410,13 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // overflowY only — the `overflow` shorthand also resets overflow-x, undoing
+    // the `overflow-x: clip` on <body> that keeps the app sidebar sticky.
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      document.body.style.overflowY = prev;
     };
   }, [onClose]);
   return (

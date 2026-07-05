@@ -79,13 +79,15 @@ function PlayerInner() {
 
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && closePlayer();
     window.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
+    // overflowY only — the `overflow` shorthand also resets overflow-x, undoing
+    // the `overflow-x: clip` on <body> that keeps the app sidebar sticky.
+    document.body.style.overflowY = "hidden";
     return () => {
       alive = false;
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      document.body.style.overflowY = "";
     };
   }, [rec]);
 

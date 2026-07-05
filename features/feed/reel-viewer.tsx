@@ -148,16 +148,19 @@ export function ReelDeck({
   const ceiling = Math.min(items.length - 1, active + (next1 && readyIds.has(next1.id) ? 3 : 2));
   const visible = items.slice(0, ceiling + 1);
 
-  // Lock the page, jump to the opening reel, wire Escape.
+  // Lock the page, jump to the opening reel, wire Escape. overflowY only — the
+  // `overflow` shorthand also resets overflow-x, undoing the `overflow-x: clip`
+  // on <body> that keeps the app sidebar sticky (it would otherwise scroll away
+  // and leave empty space where it should stay visible).
   useEffect(() => {
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const prevOverflow = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
     const el = scroller.current;
     if (el) el.scrollTop = start * el.clientHeight; // instant, no smooth-scroll flash
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflowY = prevOverflow;
       window.removeEventListener("keydown", onKey);
       if (raf.current) cancelAnimationFrame(raf.current);
     };
@@ -190,9 +193,11 @@ export function ReelDeck({
       transition={{ duration: 0.2 }}
       className={cn(
         "fixed inset-0 overflow-hidden overscroll-none bg-black",
-        // On large screens the /reels page sits BESIDE the app sidebar (which stays
-        // visible + scrollable) instead of covering it.
-        variant === "page" ? "z-30 lg:left-64" : "z-[85]",
+        // On large screens reels sit BESIDE the app sidebar (which stays visible
+        // + scrollable, same as every other page) instead of covering it —
+        // whether opened as the /reels page or in-place from the feed.
+        "lg:left-64",
+        variant === "page" ? "z-30" : "z-[85]",
       )}
       style={{ touchAction: "pan-y" }}
       role="dialog"
@@ -225,10 +230,14 @@ export function ReelDeck({
         {visible.map((item, i) => (
           <section key={item.id} className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black">
             {/* On phones the reel fills the screen; on tablets/desktop it becomes a
-                centered 9:16 column (black to the sides). On lg the column lets its
+                centered column (black to the sides) capped at 75% of the viewport
+                height wide — true 9:16 clips are still bound by the full-height
+                video itself (object-contain, unaffected by this ceiling), but
+                anything less tall (4:5, 1:1) now renders noticeably bigger instead
+                of being squeezed into an exact-9:16 box. On lg the column lets its
                 overflow show so the action rail can sit OUTSIDE the video, in the
                 right gutter (YouTube-Shorts-style). */}
-            <div className="relative h-full w-full overflow-hidden bg-black lg:w-[min(100%,56.25vh)] lg:overflow-visible">
+            <div className="relative h-full w-full overflow-hidden bg-black lg:w-[min(100%,75vh)] lg:overflow-visible">
               <ReelCard
                 item={item}
                 isActive={i === active}
@@ -900,7 +909,13 @@ function ReelCard({
 
       {/* Action rail — auto-hides over the video on mobile; on lg it lives OUTSIDE
           the video in the right gutter and stays put. */}
-      <div className={cn("absolute right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 lg:-right-[4.5rem] lg:!opacity-100", railBottom, ui ? "opacity-100" : "pointer-events-none opacity-0")}>
+      {/* `ui` auto-hides the rail on mobile (fades AND stops intercepting taps);
+          on large screens it stays visible (`lg:!opacity-100`) AND must also stay
+          clickable (`lg:!pointer-events-auto`) — without that second override the
+          rail LOOKED fine but silently went dead once the 4s auto-hide timer fired
+          (e.g. while reading comments), so re-opening Comment needed a fresh reel
+          mount (scroll away and back, or refresh) to get a fresh `ui = true`. */}
+      <div className={cn("absolute right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 lg:-right-[4.5rem] lg:!pointer-events-auto lg:!opacity-100", railBottom, ui ? "opacity-100" : "pointer-events-none opacity-0")}>
         <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="relative mb-1">
           {item.publisher.avatarUrl ? (
             <Image src={item.publisher.avatarUrl} alt="" width={44} height={44} className="h-11 w-11 rounded-full object-cover ring-2 ring-white" />

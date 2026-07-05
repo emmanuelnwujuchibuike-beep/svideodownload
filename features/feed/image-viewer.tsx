@@ -49,13 +49,16 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
   const startY = useRef<number | null>(null);
 
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // overflowY only (not the `overflow` shorthand) — the shorthand also resets
+    // overflow-x, undoing the `overflow-x: clip` on <body> that keeps the app
+    // sidebar sticky (it would otherwise scroll away and leave empty space).
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
     prefetchPostComments(item.id);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflowY = prev;
       window.removeEventListener("keydown", onKey);
     };
   }, [item.id, onClose]);
@@ -178,8 +181,10 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
         ) : null}
       </div>
 
-      {/* Action rail (auto-hides; outside the image on lg) */}
-      <div className={cn("absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-8 lg:-right-[4.5rem] lg:!opacity-100", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
+      {/* Action rail (auto-hides on mobile; stays visible AND clickable on lg —
+          `lg:!pointer-events-auto` alongside `lg:!opacity-100`, so it can never go
+          silently dead the way the reels rail once did). */}
+      <div className={cn("absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-8 lg:-right-[4.5rem] lg:!pointer-events-auto lg:!opacity-100", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
         <RailBtn icon={Heart} active={liked} fill={liked} activeClass="text-rose-500" count={likes} label="Like" onClick={() => react("like")} />
         <RailBtn icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
         <RailBtn icon={Share2} count={item.sharesCount} label="Share" onClick={share} />

@@ -82,14 +82,16 @@ function ViewerInner({
   const [loadingComments, setLoadingComments] = useState(false);
   const fetched = useRef(false);
 
-  // Lock body scroll + close on Escape.
+  // Lock body scroll + close on Escape. overflowY only — the `overflow`
+  // shorthand also resets overflow-x, undoing the `overflow-x: clip` on <body>
+  // that keeps the app sidebar sticky (it would otherwise scroll away).
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflowY = prev;
       window.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
@@ -160,7 +162,9 @@ function ViewerInner({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[80] flex flex-col bg-black/95 backdrop-blur-sm lg:flex-row"
+      // On large screens this sits BESIDE the app sidebar (which stays visible +
+      // scrollable, same as every other page) instead of covering it.
+      className="fixed inset-0 z-[80] flex flex-col bg-black/95 backdrop-blur-sm lg:left-64 lg:flex-row"
       role="dialog"
       aria-modal="true"
       aria-label={item.title}

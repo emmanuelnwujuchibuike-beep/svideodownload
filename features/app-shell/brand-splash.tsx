@@ -19,16 +19,18 @@ export function BrandSplash() {
     // Mark as welcomed immediately so it can't reappear mid-session, and lock
     // scroll while the splash is up.
     document.cookie = "frenz_welcomed=1; path=/; max-age=31536000; SameSite=Lax";
-    document.body.style.overflow = "hidden";
+    // overflowY only — the `overflow` shorthand also resets overflow-x, undoing
+    // the `overflow-x: clip` on <body> that keeps the app sidebar sticky.
+    document.body.style.overflowY = "hidden";
     const t = setTimeout(() => setVisible(false), 1500);
     return () => {
       clearTimeout(t);
-      document.body.style.overflow = "";
+      document.body.style.overflowY = "";
     };
   }, []);
 
   return (
-    <AnimatePresence onExitComplete={() => (document.body.style.overflow = "")}>
+    <AnimatePresence onExitComplete={() => (document.body.style.overflowY = "")}>
       {visible ? (
         <motion.div
           key="frenz-splash"

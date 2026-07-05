@@ -100,12 +100,14 @@ export function ProfileMenu() {
 
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // overflowY only — the `overflow` shorthand also resets overflow-x, undoing
+    // the `overflow-x: clip` on <body> that keeps the app sidebar sticky.
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflowY = prev;
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);

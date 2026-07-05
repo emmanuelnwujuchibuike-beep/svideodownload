@@ -99,8 +99,12 @@ export function ReelsFeed({
 
   return (
     <>
-      {/* For You / Following toggle — floating glass pill */}
-      <div className="fixed left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/35 p-1 ring-1 ring-inset ring-white/15 backdrop-blur-md lg:left-[calc(50%+8rem)] lg:top-[4.75rem]">
+      {/* For You / Following toggle — minimal text, no pill/border, just a thin
+          sliding underline to identify the active tab (small enough to always
+          fit, even on the narrowest phones). Sits near the very top on every
+          size — on lg it's re-centered over the content column (right of the
+          sidebar), not the whole viewport. */}
+      <div className="fixed left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-6 lg:left-[calc(50%+8rem)]">
         {([
           { id: "for_you" as const, label: "For You" },
           { id: "following" as const, label: "Following" },
@@ -112,12 +116,16 @@ export function ReelsFeed({
               type="button"
               onClick={() => switchTab(t.id)}
               aria-pressed={on}
-              className="relative rounded-full px-5 py-1.5 text-sm font-bold transition active:scale-95"
+              className="relative flex flex-col items-center gap-1 px-0.5 py-1 transition active:scale-95"
             >
+              <span className={cn("text-[13px] font-semibold drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)] transition-colors", on ? "text-white" : "text-white/60 hover:text-white/85")}>
+                {t.label}
+              </span>
               {on ? (
-                <motion.span layoutId="reel-tab-pill" transition={{ type: "spring", stiffness: 420, damping: 34 }} className="absolute inset-0 rounded-full bg-white shadow-sm" />
-              ) : null}
-              <span className={cn("relative z-10", on ? "text-black" : "text-white/85 hover:text-white")}>{t.label}</span>
+                <motion.span layoutId="reel-tab-underline" transition={{ type: "spring", stiffness: 420, damping: 34 }} className="h-[3px] w-5 rounded-full bg-white" />
+              ) : (
+                <span className="h-[3px] w-5" aria-hidden />
+              )}
             </button>
           );
         })}

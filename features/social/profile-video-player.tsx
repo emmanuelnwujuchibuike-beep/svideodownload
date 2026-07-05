@@ -62,13 +62,15 @@ function Inner({ posts, startIndex, onClose }: { posts: PostCard[]; startIndex: 
   }, []);
 
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // overflowY only — the `overflow` shorthand also resets overflow-x, undoing
+    // the `overflow-x: clip` on <body> that keeps the app sidebar sticky.
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     scheduleHide();
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflowY = prev;
       window.removeEventListener("keydown", onKey);
       if (hideTimer.current) clearTimeout(hideTimer.current);
       if (video.current) releasePlayback(video.current);

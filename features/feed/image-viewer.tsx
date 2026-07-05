@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Bookmark, Download, Heart, MessageCircle, Share2, X } from "lucide-react";
+import { BadgeCheck, Bookmark, Check, Download, Heart, MessageCircle, Share2, UserPlus, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { RichText } from "@/components/social/rich-text";
 import { Comments } from "@/features/social/comments";
 import { downloadPost } from "@/lib/media/download-post";
+import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
@@ -42,6 +43,7 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
   const [likes, setLikes] = useState(item.likesCount);
+  const following = useFollowState(item.publisher.id, item.isFollowing);
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<CommentsData | null>(null);
   const [burst, setBurst] = useState<{ x: number; y: number; key: number } | null>(null);
@@ -123,97 +125,214 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
     }
   }, [comments, item.id]);
 
+  // On large screens comments live in a persistent side panel (see below), not
+  // the tap-to-open sheet — so load them eagerly. Cheap: `prefetchPostComments`
+  // above already warmed the cache, this just reads it.
+  useEffect(() => {
+    void loadPostComments<CommentsData>(item.id).then((data) => {
+      if (data) setComments(data);
+    });
+  }, [item.id]);
+
+  const toggleFollow = () => void toggleFollowShared(item.publisher.id, !following);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[85] bg-black lg:left-64"
+      // On large screens this sits BESIDE the app sidebar (which stays fixed,
+      // same as every other page) and splits into media + a persistent comments
+      // sidebar — same split-pane pattern as PostViewer.
+      className="fixed inset-0 z-[85] flex bg-black lg:left-64"
       role="dialog"
       aria-modal="true"
       aria-label="Photo"
     >
-      <button type="button" onClick={onClose} aria-label="Close" className="absolute left-4 top-4 z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95">
-        <X className="h-5 w-5" />
-      </button>
+      <div className="relative h-full flex-1">
+        <button type="button" onClick={onClose} aria-label="Close" className="absolute left-4 top-4 z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95">
+          <X className="h-5 w-5" />
+        </button>
 
-      {/* Image — swipe down to dismiss (X/IG style) */}
-      <div
-        className="absolute inset-0 flex items-center justify-center"
-        onPointerDown={(e) => (startY.current = e.clientY)}
-        onPointerUp={(e) => {
-          if (startY.current !== null && e.clientY - startY.current > 90) onClose();
-          else onImgPointerUp(e);
-          startY.current = null;
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt={item.title} className="max-h-full max-w-full select-none object-contain" draggable={false} />
+        {/* Image — swipe down to dismiss (X/IG style) */}
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          onPointerDown={(e) => (startY.current = e.clientY)}
+          onPointerUp={(e) => {
+            if (startY.current !== null && e.clientY - startY.current > 90) onClose();
+            else onImgPointerUp(e);
+            startY.current = null;
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt={item.title} className="max-h-full max-w-full select-none object-contain" draggable={false} />
+        </div>
+
+        {/* Double-tap heart */}
+        <AnimatePresence>
+          {burst ? (
+            <motion.span
+              key={burst.key}
+              initial={{ opacity: 0, scale: 0.4 }}
+              animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.3, 1.1, 1.5] }}
+              transition={{ duration: 0.9, ease: "easeOut", times: [0, 0.2, 0.6, 1] }}
+              onAnimationComplete={() => setBurst(null)}
+              style={{ position: "fixed", left: burst.x, top: burst.y, zIndex: 50 }}
+              className="pointer-events-none -translate-x-1/2 -translate-y-1/2"
+            >
+              <Heart className="h-16 w-16 fill-rose-500 text-rose-500 drop-shadow-[0_2px_12px_rgba(244,63,94,0.6)]" />
+            </motion.span>
+          ) : null}
+        </AnimatePresence>
+
+        {/* Caption + author (auto-hides) — the sidebar repeats this statically on
+            lg, so it's redundant there but harmless (mask lets it fade the same). */}
+        <div className={cn("pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-16 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
+          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="pointer-events-auto inline-flex items-center gap-1.5 font-bold text-white">
+            @{item.publisher.handle}
+          </Link>
+          {item.title ? (
+            <p className="mt-1.5 line-clamp-3 max-w-xl text-sm text-white/90">
+              <RichText text={item.title} linkClassName="font-semibold text-white hover:underline" />
+            </p>
+          ) : null}
+        </div>
+
+        {/* Action rail (auto-hides on mobile; stays visible AND clickable on lg —
+            `lg:!pointer-events-auto` alongside `lg:!opacity-100`, so it can never go
+            silently dead the way the reels rail once did). */}
+        <div className={cn("absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-8 lg:-right-[4.5rem] lg:!pointer-events-auto lg:!opacity-100", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
+          <RailBtn icon={Heart} active={liked} fill={liked} activeClass="text-rose-500" count={likes} label="Like" onClick={() => react("like")} />
+          <RailBtn icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
+          <RailBtn icon={Share2} count={item.sharesCount} label="Share" onClick={share} />
+          <RailBtn icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
+          <RailBtn icon={Download} label="Download" onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: item.title })} />
+        </div>
+
+        {/* Comments sheet — mobile/tablet only; large screens use the persistent
+            sidebar instead. */}
+        <AnimatePresence>
+          {showComments ? (
+            <div className="lg:hidden">
+              <button type="button" aria-label="Close comments" onClick={() => setShowComments(false)} className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]" />
+              <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", stiffness: 380, damping: 36 }} className="fixed inset-x-0 bottom-0 z-50 mx-auto flex h-[68vh] max-w-2xl flex-col rounded-t-3xl border-t border-white/10 bg-card/95 shadow-[0_-8px_40px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
+                <div className="shrink-0 px-5 pt-3">
+                  <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border" />
+                  <h3 className="text-sm font-bold">Comments{item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}</h3>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-1">
+                  {comments ? (
+                    <Comments postId={item.id} comments={comments.comments} loggedIn={comments.loggedIn} canComment={comments.canComment} disabledReason={comments.canComment ? null : "Comments are unavailable."} count={item.commentsCount} variant="sheet" />
+                  ) : (
+                    <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          ) : null}
+        </AnimatePresence>
       </div>
 
-      {/* Double-tap heart */}
-      <AnimatePresence>
-        {burst ? (
-          <motion.span
-            key={burst.key}
-            initial={{ opacity: 0, scale: 0.4 }}
-            animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.3, 1.1, 1.5] }}
-            transition={{ duration: 0.9, ease: "easeOut", times: [0, 0.2, 0.6, 1] }}
-            onAnimationComplete={() => setBurst(null)}
-            style={{ position: "fixed", left: burst.x, top: burst.y, zIndex: 50 }}
-            className="pointer-events-none -translate-x-1/2 -translate-y-1/2"
-          >
-            <Heart className="h-16 w-16 fill-rose-500 text-rose-500 drop-shadow-[0_2px_12px_rgba(244,63,94,0.6)]" />
-          </motion.span>
-        ) : null}
-      </AnimatePresence>
+      {/* Persistent comments sidebar — large screens only. Publisher + caption +
+          quick actions repeated statically (the overlaid versions above still
+          work but auto-hide/aren't discoverable at a glance in a side-panel
+          context), then the comments list — always visible, no tap required. */}
+      <aside className="hidden w-[400px] shrink-0 flex-col overflow-y-auto border-l border-white/10 bg-card p-5 lg:flex">
+        <div className="flex items-center gap-3">
+          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="shrink-0">
+            {item.publisher.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.publisher.avatarUrl} alt="" className="h-11 w-11 rounded-full object-cover ring-1 ring-border" />
+            ) : (
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white">
+                {item.publisher.displayName.charAt(0).toUpperCase()}
+              </span>
+            )}
+          </Link>
+          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="min-w-0 flex-1">
+            <span className="flex items-center gap-1 font-semibold leading-tight">
+              <span className="truncate">{item.publisher.displayName}</span>
+              {item.publisher.isVerified ? <BadgeCheck className="h-4 w-4 shrink-0 text-primary" /> : null}
+            </span>
+            <span className="block truncate text-sm text-muted-foreground">@{item.publisher.handle}</span>
+          </Link>
+          {!item.isOwner ? (
+            <button
+              type="button"
+              onClick={toggleFollow}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                following ? "bg-secondary text-foreground" : "bg-gradient-to-r from-blue-600 to-violet-600 text-white",
+              )}
+            >
+              {following ? <Check className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
+              {following ? "Following" : "Follow"}
+            </button>
+          ) : null}
+        </div>
 
-      {/* Caption + author (auto-hides) */}
-      <div className={cn("pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-16 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
-        <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="pointer-events-auto inline-flex items-center gap-1.5 font-bold text-white">
-          @{item.publisher.handle}
-        </Link>
         {item.title ? (
-          <p className="mt-1.5 line-clamp-3 max-w-xl text-sm text-white/90">
-            <RichText text={item.title} linkClassName="font-semibold text-white hover:underline" />
+          <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-relaxed">
+            <RichText text={item.title} />
           </p>
         ) : null}
-      </div>
 
-      {/* Action rail (auto-hides on mobile; stays visible AND clickable on lg —
-          `lg:!pointer-events-auto` alongside `lg:!opacity-100`, so it can never go
-          silently dead the way the reels rail once did). */}
-      <div className={cn("absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-8 lg:-right-[4.5rem] lg:!pointer-events-auto lg:!opacity-100", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
-        <RailBtn icon={Heart} active={liked} fill={liked} activeClass="text-rose-500" count={likes} label="Like" onClick={() => react("like")} />
-        <RailBtn icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
-        <RailBtn icon={Share2} count={item.sharesCount} label="Share" onClick={share} />
-        <RailBtn icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
-        <RailBtn icon={Download} label="Download" onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: item.title })} />
-      </div>
+        <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
+          <Act icon={Heart} label="Like" active={liked} fill={liked} activeClass="text-rose-500" count={likes} onClick={() => react("like")} />
+          <Act icon={Share2} label="Share" count={item.sharesCount} onClick={share} />
+          <Act icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-primary" onClick={() => react("save")} />
+          <button
+            type="button"
+            onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: item.title })}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary"
+            aria-label="Download to device"
+          >
+            <Download className="h-[18px] w-[18px]" />
+          </button>
+        </div>
 
-      {/* Comments sheet */}
-      <AnimatePresence>
-        {showComments ? (
-          <>
-            <button type="button" aria-label="Close comments" onClick={() => setShowComments(false)} className="absolute inset-0 z-40 bg-black/50 backdrop-blur-[2px]" />
-            <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", stiffness: 380, damping: 36 }} className="absolute inset-x-0 bottom-0 z-50 mx-auto flex h-[68vh] max-w-2xl flex-col rounded-t-3xl border-t border-white/10 bg-card/95 shadow-[0_-8px_40px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
-              <div className="shrink-0 px-5 pt-3">
-                <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border" />
-                <h3 className="text-sm font-bold">Comments{item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}</h3>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-1">
-                {comments ? (
-                  <Comments postId={item.id} comments={comments.comments} loggedIn={comments.loggedIn} canComment={comments.canComment} disabledReason={comments.canComment ? null : "Comments are unavailable."} count={item.commentsCount} variant="sheet" />
-                ) : (
-                  <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
-                )}
-              </div>
-            </motion.div>
-          </>
-        ) : null}
-      </AnimatePresence>
+        <h3 className="mt-4 text-sm font-bold">Comments{item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}</h3>
+        <div className="mt-2 min-h-0 flex-1">
+          {comments ? (
+            <Comments postId={item.id} comments={comments.comments} loggedIn={comments.loggedIn} canComment={comments.canComment} disabledReason={comments.canComment ? null : "Comments are unavailable."} count={item.commentsCount} />
+          ) : (
+            <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+          )}
+        </div>
+      </aside>
     </motion.div>
+  );
+}
+
+function Act({
+  icon: Icon,
+  label,
+  count,
+  active,
+  fill,
+  activeClass,
+  onClick,
+}: {
+  icon: typeof Heart;
+  label: string;
+  count?: number;
+  active?: boolean;
+  fill?: boolean;
+  activeClass?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
+      className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary", active && activeClass)}
+    >
+      <Icon className={cn("h-[18px] w-[18px]", fill && "fill-current")} />
+      {count !== undefined && count > 0 ? <span className="text-xs font-medium tabular-nums">{formatCompactNumber(count)}</span> : null}
+    </button>
   );
 }
 

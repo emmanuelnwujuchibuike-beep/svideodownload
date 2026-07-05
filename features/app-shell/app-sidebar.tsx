@@ -75,7 +75,17 @@ export function AppSidebar({ handle }: { handle: string | null }) {
   const isPremium = ready && !showAds;
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-hidden border-r border-border/60 bg-gradient-to-b from-card/70 to-card/30 px-3 py-4 backdrop-blur-xl lg:flex">
+    <>
+      {/* Reserves the sidebar's width in the flex row — the actual sidebar below
+          is `fixed`, so it's out of normal flow and needs this to keep the
+          content column pushed over by exactly w-64. */}
+      <div className="hidden w-64 shrink-0 lg:block" aria-hidden />
+      {/* `fixed` (not `sticky`) — sticky depends on the scroll geometry of its
+          containing block, which broke under some full-screen overlays (the
+          sidebar could end up scrolled to a mid-content position, leaving blank
+          space below it instead of reaching the bottom of the screen). Fixed is
+          pinned to the viewport unconditionally, so it can never move. */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col overflow-hidden border-r border-border/60 bg-gradient-to-b from-card/70 to-card/30 px-3 py-4 backdrop-blur-xl lg:flex">
       {/* Brand */}
       <Link href="/home" className="mb-6 flex shrink-0 items-center px-2">
         <FrenzWordmark size={34} textClassName="text-lg" />
@@ -177,5 +187,6 @@ export function AppSidebar({ handle }: { handle: string | null }) {
         </div>
       ) : null}
     </aside>
+    </>
   );
 }

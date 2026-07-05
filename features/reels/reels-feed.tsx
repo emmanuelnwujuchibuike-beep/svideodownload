@@ -159,6 +159,9 @@ export function ReelsFeed({
           onEndReached={loadMore}
           onClose={close}
           autoOpenCommentsId={tab === "for_you" ? autoOpenCommentsId : null}
+          // Swipe left reveals the next tab (Following, to the right in the tab
+          // list); swipe right goes back — same instant switch as tapping.
+          onSwipeTab={(dir) => void switchTab(dir === "left" ? "following" : "for_you")}
         />
       )}
     </>

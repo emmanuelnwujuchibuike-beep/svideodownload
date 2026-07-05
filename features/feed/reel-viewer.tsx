@@ -108,6 +108,7 @@ export function ReelDeck({
   onEndReached,
   variant = "modal",
   autoOpenCommentsId,
+  onSwipeTab,
 }: {
   items: FeedItem[];
   startIndex: number;
@@ -118,6 +119,8 @@ export function ReelDeck({
   variant?: "modal" | "page";
   /** Deep-link support: open this reel's comments sheet the moment it mounts. */
   autoOpenCommentsId?: string | null;
+  /** A decisive horizontal swipe on any reel — switches For You/Following. */
+  onSwipeTab?: (dir: "left" | "right") => void;
 }) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const raf = useRef<number | null>(null);
@@ -222,7 +225,7 @@ export function ReelDeck({
         style={locked ? { touchAction: "none" } : { scrollSnapType: "y mandatory", touchAction: "pan-y", overscrollBehaviorX: "none" }}
       >
         {visible.map((item, i) => (
-          <section key={item.id} className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black">
+          <section key={item.id} className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black lg:pr-[400px]">
             {/* On phones the reel fills the screen; on tablets/desktop it becomes a
                 centered column (black to the sides) capped at 75% of the viewport
                 height wide — true 9:16 clips are still bound by the full-height
@@ -246,6 +249,7 @@ export function ReelDeck({
                 onCommentsOpen={setLocked}
                 autoOpenComments={item.id === autoOpenCommentsId}
                 variant={variant}
+                onSwipeTab={onSwipeTab}
                 onReady={markReady}
               />
             </div>
@@ -267,6 +271,7 @@ function ReelCard({
   variant = "modal",
   onReady,
   preload = "auto",
+  onSwipeTab,
 }: {
   item: FeedItem;
   isActive: boolean;
@@ -281,6 +286,8 @@ function ReelCard({
   /** How aggressively to buffer this clip — "auto" for the ones you'll reach next,
    *  "metadata" for the further neighbours (saves mobile battery/data). */
   preload?: "auto" | "metadata";
+  /** A decisive horizontal swipe — switches For You/Following (page variant only). */
+  onSwipeTab?: (dir: "left" | "right") => void;
 }) {
   // Anchor the caption + action rail low. On the /reels route (page) they sit just
   // above the mobile bottom nav and drop to the very bottom on large screens; in
@@ -295,6 +302,7 @@ function ReelCard({
   const holding = useRef(false);
   const moved = useRef(false);
   const startPt = useRef<{ x: number; y: number } | null>(null);
+  const axisLock = useRef<"h" | "v" | null>(null);
 
   const [paused, setPaused] = useState(false);
   const [mutedAuto, setMutedAuto] = useState(false);
@@ -447,11 +455,16 @@ function ReelCard({
     }
   }, [item.id]);
 
-  // Predictively warm this reel's comments the moment it becomes the active one,
-  // so tapping the comment button opens instantly.
+  // Predictively warm this reel's comments the moment it becomes the active
+  // one, so tapping the comment button opens instantly — and actually load them
+  // (cheap, reads the same warm cache) since the large-screen sidebar shows
+  // comments persistently, with no tap required.
   useEffect(() => {
-    if (isActive) prefetchPostComments(item.id);
-  }, [isActive, item.id]);
+    if (isActive) {
+      prefetchPostComments(item.id);
+      void loadComments();
+    }
+  }, [isActive, item.id, loadComments]);
 
   // If the press-and-hold gesture paused playback to open the options sheet,
   // resume once it's dismissed — however it closes (backdrop tap, an action
@@ -701,9 +714,11 @@ function ReelCard({
   //  • double-tap left/right → seek −10s / +10s; double-tap centre → like.
   //  • press-and-HOLD (~0.5s) → pauses AND opens the full options sheet, so one
   //    gesture reaches every action; release resumes UNLESS the sheet took over.
+  //  • horizontal swipe (page variant only) → switch For You/Following instantly.
   const onPointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
+    axisLock.current = null;
     if (!native) return;
     holding.current = false;
     holdTimer.current = setTimeout(() => {
@@ -721,10 +736,14 @@ function ReelCard({
     const dy = Math.abs(e.clientY - startPt.current.y);
     if (dx > 10 || dy > 10) {
       moved.current = true;
+      // Lock the gesture to whichever axis was dominant the moment it crossed
+      // the threshold — avoids a diagonal drag being ambiguous later.
+      axisLock.current = dx > dy ? "h" : "v";
       if (holdTimer.current) clearTimeout(holdTimer.current);
     }
   };
   const onPointerUp = (e: React.PointerEvent) => {
+    const startX = startPt.current?.x;
     startPt.current = null;
     if (native && holdTimer.current) clearTimeout(holdTimer.current);
     if (native && holding.current) {
@@ -738,7 +757,16 @@ function ReelCard({
       }
       return;
     }
-    if (moved.current) return; // a scroll — leave it to the native scroller
+    if (moved.current) {
+      // A decisive horizontal drag (not the native vertical scroll) switches
+      // tabs instantly — a no-op where there's nothing to switch (modal variant,
+      // no tabs). Swiping left reveals the next tab (Following); right goes back.
+      if (axisLock.current === "h" && startX !== undefined && onSwipeTab) {
+        const dx = e.clientX - startX;
+        if (Math.abs(dx) > 64) onSwipeTab(dx < 0 ? "left" : "right");
+      }
+      return; // a scroll — leave vertical movement to the native scroller
+    }
 
     if (mutedAuto) {
       unmute();
@@ -1017,14 +1045,15 @@ function ReelCard({
         ) : null}
       </div>
 
-      {/* Comments sheet — fixed half-height panel. The reel behind it is frozen
-          (the deck is scroll-locked), so scrolling to the bottom of the comments
-          never jumps to the next video. The video is paused; a toggle lets you
-          keep watching while you type. */}
+      {/* Comments sheet — fixed half-height panel, mobile/tablet only (large
+          screens use the persistent sidebar below instead). The reel behind it
+          is frozen (the deck is scroll-locked), so scrolling to the bottom of
+          the comments never jumps to the next video. The video is paused; a
+          toggle lets you keep watching while you type. */}
       {mounted ? createPortal(
       <AnimatePresence>
         {showComments ? (
-          <>
+          <div className="lg:hidden">
             {/* Portaled to <body> + fixed so it sits above the bottom nav. */}
             <button type="button" aria-label="Close comments" onClick={closeComments} className="fixed inset-0 z-[90] bg-black/50 backdrop-blur-[2px]" />
             <motion.div
@@ -1085,11 +1114,96 @@ function ReelCard({
                 ) : null}
               </div>
             </motion.div>
-          </>
+          </div>
         ) : null}
       </AnimatePresence>,
       document.body,
     ) : null}
+
+      {/* Persistent comments sidebar — large screens only, active reel only (so
+          mounted-but-buffering neighbours never stack a duplicate fixed panel).
+          Same split-pane pattern as the image/post viewers: publisher + follow,
+          caption, quick actions, then the always-visible comments list — no tap
+          required. Portaled to <body>, same as the mobile sheet above. */}
+      {mounted && isActive
+        ? createPortal(
+            <aside className="fixed inset-y-0 right-0 z-30 hidden w-[400px] flex-col overflow-y-auto border-l border-white/10 bg-card p-5 lg:flex">
+              <div className="flex items-center gap-3">
+                <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="shrink-0">
+                  {item.publisher.avatarUrl ? (
+                    <Image src={item.publisher.avatarUrl} alt="" width={44} height={44} className="h-11 w-11 rounded-full object-cover ring-1 ring-border" />
+                  ) : (
+                    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white">
+                      {item.publisher.displayName.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </Link>
+                <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1 font-semibold leading-tight">
+                    <span className="truncate">{item.publisher.displayName}</span>
+                    {item.publisher.isVerified ? <BadgeCheck className="h-4 w-4 shrink-0 text-primary" /> : null}
+                  </span>
+                  <span className="block truncate text-sm text-muted-foreground">@{item.publisher.handle}</span>
+                </Link>
+                {!item.isOwner ? (
+                  <button
+                    type="button"
+                    onClick={() => void toggleFollow()}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                      following ? "bg-secondary text-foreground" : "bg-gradient-to-r from-blue-600 to-violet-600 text-white",
+                    )}
+                  >
+                    {following ? <Check className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
+                    {following ? "Following" : "Follow"}
+                  </button>
+                ) : null}
+              </div>
+
+              {title ? (
+                <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-relaxed">
+                  <RichText text={title} />
+                </p>
+              ) : null}
+
+              <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
+                <SidebarAct icon={Heart} label="Like" active={liked} fill={liked} activeClass="text-rose-500" count={likes} onClick={() => react("like")} />
+                <SidebarAct icon={Repeat2} label="Repost" active={repostState.reposted} activeClass="text-emerald-500" count={repostState.count} onClick={repost} />
+                <SidebarAct icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-amber-400" onClick={() => react("save")} />
+              </div>
+
+              <h3 className="mt-4 text-sm font-bold">
+                Comments{item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}
+              </h3>
+              <div className="mt-2 min-h-0 flex-1">
+                {loadingComments ? (
+                  <div className="flex items-center justify-center py-8 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  </div>
+                ) : comments ? (
+                  <>
+                    {item.hasPoll ? (
+                      <div className="mb-4">
+                        <PostPollInline postId={item.id} loggedIn={comments.loggedIn} />
+                      </div>
+                    ) : null}
+                    <Comments
+                      postId={item.id}
+                      comments={comments.comments}
+                      loggedIn={comments.loggedIn}
+                      canComment={comments.canComment}
+                      disabledReason={comments.canComment ? null : "Comments are unavailable."}
+                      count={item.commentsCount}
+                    />
+                  </>
+                ) : (
+                  <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+                )}
+              </div>
+            </aside>,
+            document.body,
+          )
+        : null}
 
       {/* "More" menu — the decluttered overflow: download, edit, follow, mute.
           Portaled to <body> so it sits above the bottom nav. */}
@@ -1243,5 +1357,38 @@ function RailButton({
       </span>
       {count !== undefined && count > 0 ? <span className="text-[11px] font-bold tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">{formatCompactNumber(count)}</span> : null}
     </motion.button>
+  );
+}
+
+/** A light, in-panel action button for the desktop comments sidebar (RailButton's
+ *  floating-glass-pill style doesn't suit a plain card background). */
+function SidebarAct({
+  icon: Icon,
+  label,
+  count,
+  active,
+  fill,
+  activeClass,
+  onClick,
+}: {
+  icon: typeof Heart;
+  label: string;
+  count?: number;
+  active?: boolean;
+  fill?: boolean;
+  activeClass?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
+      className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary", active && activeClass)}
+    >
+      <Icon className={cn("h-[18px] w-[18px]", fill && "fill-current")} />
+      {count !== undefined && count > 0 ? <span className="text-xs font-medium tabular-nums">{formatCompactNumber(count)}</span> : null}
+    </button>
   );
 }

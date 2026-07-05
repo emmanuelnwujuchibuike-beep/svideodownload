@@ -3,6 +3,7 @@
 import { Pause, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { streamIframeUrl } from "@/lib/media/stream";
 import { claimPlayback, recentlyScrolled, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
@@ -77,7 +78,10 @@ export function FeedVideo({
     e.stopPropagation();
     const v = video.current;
     if (!v) return;
-    v.muted = !v.muted;
+    // Unmuting is the ONLY point we take audio focus, and only on this explicit
+    // tap — with a gentle fade-in. Muting restores external audio instantly.
+    if (v.muted) unmuteWithFade(v);
+    else muteInstant(v);
     setMuted(v.muted);
   }, []);
 

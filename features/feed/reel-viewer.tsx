@@ -31,6 +31,7 @@ import { PostPollInline } from "@/features/social/post-poll-inline";
 import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
 import { toast } from "@/features/ui/toast";
+import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { downloadPost } from "@/lib/media/download-post";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
@@ -413,9 +414,8 @@ function ReelCard({
   const unmute = () => {
     const v = video.current;
     if (!v) return;
-    v.muted = false;
+    unmuteWithFade(v); // smooth fade-in on the user's explicit tap
     setMutedAuto(false);
-    void v.play().catch(() => {});
   };
 
   const toggleMute = () => {
@@ -423,7 +423,7 @@ function ReelCard({
     if (!v) return;
     if (mutedAuto) unmute();
     else {
-      v.muted = true;
+      muteInstant(v);
       setMutedAuto(true);
     }
   };
@@ -566,9 +566,9 @@ function ReelCard({
       {item.thumbnailUrl ? (
         <div className="absolute inset-0 bg-black">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.thumbnailUrl} alt="" aria-hidden className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
+          <img src={item.thumbnailUrl} alt="" aria-hidden loading="lazy" decoding="async" className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.thumbnailUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover lg:object-contain" />
+          <img src={item.thumbnailUrl} alt="" aria-hidden loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover lg:object-contain" />
         </div>
       ) : null}
 

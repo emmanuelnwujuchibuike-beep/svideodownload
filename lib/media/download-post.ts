@@ -1,12 +1,15 @@
 "use client";
 
 import { toast } from "@/features/ui/toast";
+import { FrenzsaveError } from "@/lib/sdk";
+import { getApi } from "@/lib/sdk/browser";
 
 /**
- * Download a post's media directly (from the feed, reels, anywhere). The server
- * authorizes it — enforcing the free daily cap and returning the media URL +
- * filename — then we fetch the file and save it, with a graceful fallback to
- * opening it in a new tab if the blob fetch is blocked by CORS.
+ * Download a post's media directly (from the feed, reels, anywhere). Goes through
+ * the shared SDK — the exact same client + endpoint the native/desktop apps use —
+ * which authorizes it (enforcing the free daily cap) and returns the media URL +
+ * filename. We then fetch the file and save it, falling back to opening it in a
+ * new tab if a CORS policy blocks the blob fetch.
  */
 export async function downloadPost(item: { id: string; mediaUrl?: string | null; title?: string }): Promise<void> {
   if (!item.mediaUrl) {
@@ -15,28 +18,7 @@ export async function downloadPost(item: { id: string; mediaUrl?: string | null;
   }
   const tid = toast("Preparing download…", "loading");
   try {
-    const res = await fetch(`/api/posts/${item.id}/download`, { method: "POST" });
-    let data: { url?: string; filename?: string; remaining?: number | null; error?: string; upgrade?: boolean } = {};
-    try {
-      data = await res.json();
-    } catch {
-      /* non-JSON */
-    }
-
-    if (res.status === 401) {
-      toast("Sign in to download.", "error", { id: tid });
-      window.location.href = "/login?next=/home";
-      return;
-    }
-    if (res.status === 402) {
-      toast(data.error ?? "Free download limit reached — go Pro for unlimited.", "error", { id: tid, duration: 6000 });
-      return;
-    }
-    if (!res.ok || !data.url) {
-      toast(data.error ?? "Couldn't download.", "error", { id: tid });
-      return;
-    }
-
+    const data = await getApi().authorizeDownload(item.id);
     const filename = data.filename || "frenz-video.mp4";
     try {
       const fileRes = await fetch(data.url, { mode: "cors" });
@@ -54,10 +36,19 @@ export async function downloadPost(item: { id: string; mediaUrl?: string | null;
       // CORS or network blocked the blob fetch → open it so the user can save it.
       window.open(data.url, "_blank", "noopener");
     }
-
     const left = typeof data.remaining === "number" ? ` · ${data.remaining} free left today` : "";
     toast(`Saved${left}`, "success", { id: tid });
-  } catch {
+  } catch (e) {
+    if (e instanceof FrenzsaveError) {
+      if (e.status === 401) {
+        toast("Sign in to download.", "error", { id: tid });
+        window.location.href = "/login?next=/home";
+        return;
+      }
+      // 402 = free daily limit reached; message carries the upgrade nudge.
+      toast(e.message, "error", { id: tid, duration: e.status === 402 ? 6000 : 4000 });
+      return;
+    }
     toast("Couldn't download.", "error", { id: tid });
   }
 }

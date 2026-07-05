@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { getRequestUser } from "@/lib/auth/request-user";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { consumeDaily } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,14 +30,12 @@ function safeName(title: string | null, id: string, ext: string): string {
  * Enforces the free daily cap, records the download, and returns the media URL +
  * filename for the client to save. Premium/business are unlimited.
  */
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!UUID.test(id)) return NextResponse.json({ error: "Bad id." }, { status: 400 });
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Accepts a bearer token (native) or the cookie session (web).
+  const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ error: "Sign in to download." }, { status: 401 });
 
   const admin = createAdminClient();

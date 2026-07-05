@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
+import { getRequestUser } from "@/lib/auth/request-user";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,14 +16,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * original creator in the caption. Collision-safe hash so the same post can be
  * reposted by different people (but only once each).
  */
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!UUID.test(id)) return NextResponse.json({ error: "Bad id." }, { status: 400 });
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Accepts a bearer token (native) or the cookie session (web).
+  const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ error: "Sign in to repost." }, { status: 401 });
 
   const admin = createAdminClient();

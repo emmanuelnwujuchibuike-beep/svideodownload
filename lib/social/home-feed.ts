@@ -66,6 +66,8 @@ export interface FeedItem {
   /** Natural pixel size of an image post — lets the feed render it with next/image. */
   mediaWidth?: number | null;
   mediaHeight?: number | null;
+  /** Album/carousel items (ordered; present only on multi-media posts). */
+  mediaItems?: { url: string; kind: "image" | "video"; thumbnailUrl: string | null; width: number | null; height: number | null }[];
 }
 
 export interface FeedPage {
@@ -473,6 +475,35 @@ async function loadHomeFeed(
           it.streamReady = s?.ready ?? false;
           it.streamFailed = s?.failed ?? false;
         }
+      }
+
+      // Album items for multi-media posts (carousels / reel albums) — ordered,
+      // best-effort: empty before migration 0032 and for single-media posts.
+      try {
+        const { data: mediaRows } = await db
+          .from("post_media")
+          .select("post_id, idx, media_kind, media_url, thumbnail_url, media_width, media_height")
+          .in("post_id", items.map((i) => i.id))
+          .order("idx", { ascending: true });
+        const byPost = new Map<string, NonNullable<FeedItem["mediaItems"]>>();
+        for (const r of (mediaRows ?? []) as {
+          post_id: string;
+          media_kind: "image" | "video";
+          media_url: string;
+          thumbnail_url: string | null;
+          media_width: number | null;
+          media_height: number | null;
+        }[]) {
+          const arr = byPost.get(r.post_id) ?? [];
+          arr.push({ url: r.media_url, kind: r.media_kind, thumbnailUrl: r.thumbnail_url, width: r.media_width, height: r.media_height });
+          byPost.set(r.post_id, arr);
+        }
+        for (const it of items) {
+          const arr = byPost.get(it.id);
+          if (arr && arr.length > 1) it.mediaItems = arr;
+        }
+      } catch {
+        /* post_media not migrated */
       }
     }
 

@@ -28,6 +28,14 @@ export async function GET(request: Request) {
   return NextResponse.json({ groups }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
+const mediaItem = z.object({
+  url: z.string().url().max(2048),
+  kind: z.enum(["image", "video"]),
+  thumbnailUrl: z.string().url().max(2048).nullable().optional(),
+  width: z.number().int().positive().nullable().optional(),
+  height: z.number().int().positive().nullable().optional(),
+});
+
 const schema = z.object({
   mediaUrl: z.string().url().max(2048),
   mediaKind: z.enum(["image", "video"]),
@@ -37,6 +45,12 @@ const schema = z.object({
   /** Where the upload goes: the Feed, the Reels product, a 24h story, or feed+story.
       Feed and Reels are separate — nothing appears in both unless published twice. */
   destination: z.enum(["post", "reel", "story", "both"]).optional(),
+  /**
+   * Carousel/album: the full ORDERED media list (item 0 = the cover; mediaUrl/
+   * mediaKind must match it). Destination rules: photos → feed; multi-video →
+   * feed or reels (a reel album); MIXED photos+videos → feed only.
+   */
+  media: z.array(mediaItem).min(2).max(20).optional(),
   // Legacy flag from the old story-only composer.
   shareReel: z.boolean().optional(),
 });
@@ -68,7 +82,11 @@ export async function POST(request: Request) {
   const wantStory = destination === "story" || destination === "both";
   const wantPost = destination === "post" || destination === "both" || destination === "reel";
   // Explicit product choice: a Reel lives ONLY in Reels; a post lives ONLY in the feed.
-  const format = destination === "reel" ? "reel" : "feed";
+  // Album rule: a MIXED photos+videos album can never be a Reel — it publishes
+  // to the feed regardless of what the client asked for.
+  const media = parsed.data.media;
+  const mixedAlbum = !!media && media.some((m) => m.kind === "image") && media.some((m) => m.kind === "video");
+  const format = destination === "reel" && !mixedAlbum ? "reel" : "feed";
 
   let storyId: string | null = null;
   if (wantStory) {
@@ -109,6 +127,29 @@ export async function POST(request: Request) {
         ({ data: post } = await admin.from("posts").insert(base).select("id").maybeSingle());
       }
       postId = (post?.id as string) ?? null;
+
+      // Album items (carousel / reel album) — ordered rows in post_media
+      // (migration 0032; silently skipped until it's applied). The post's own
+      // media stays item 0, so nothing breaks for single-media readers.
+      if (postId && media && media.length > 1) {
+        await admin
+          .from("post_media")
+          .insert(
+            media.map((m, idx) => ({
+              post_id: postId,
+              idx,
+              media_kind: m.kind,
+              media_url: m.url,
+              thumbnail_url: m.thumbnailUrl ?? null,
+              media_width: m.width ?? null,
+              media_height: m.height ?? null,
+            })),
+          )
+          .then(
+            (r) => r,
+            () => null,
+          );
+      }
     } else if (!wantStory) {
       return NextResponse.json({ error: "Finish setting up your profile to post." }, { status: 403 });
     }

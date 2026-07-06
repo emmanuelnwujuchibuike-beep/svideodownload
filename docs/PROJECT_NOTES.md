@@ -224,6 +224,15 @@ _Last updated: 2026‑07‑05 (instant tab switching + resume position, caption 
   analytics. Also queued as recorded specs: the **Wow interaction system**
   (signature reaction replacing Like) and **Frenzsave Moments** (premium 24h
   temporary sharing on the stories base).
+- **💙 Wow (slice 1, 2026‑07‑06)** — Like is now **Wow**, Frenzsave's signature
+  interaction. A custom twin electric‑spark mark (never the emoji): quiet
+  outline at rest, electric blue→purple gradient with a soft glow when
+  pressed — on the feed action bar, reels rail, desktop sidebars and both
+  viewers; double‑taps bloom the gradient mark ("Double‑tap to Wow").
+  Notifications and push say "Wow'd your post"; the profile tab is "Wows".
+  The database keeps `type='like'` (presentation‑level rename — zero data
+  risk). Next slices: long‑press reaction picker, spark‑particle press
+  animation, milestones, Most Wow'd leaderboards.
 
 ## Performance, battery & thermal
 

@@ -63,7 +63,7 @@ export function LoginCollage() {
       {/* Center brand mark — springs in last, sits in the clear central gap, and
           doubles as a button back to the landing page. */}
       <motion.div
-        className="absolute left-1/2 top-[56%] z-30 -translate-x-1/2 -translate-y-1/2"
+        className="absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2"
         initial={{ opacity: 0, scale: 0.4 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.05 + TILES.length * 0.09, type: "spring", stiffness: 200, damping: 14 }}

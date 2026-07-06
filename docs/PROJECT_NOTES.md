@@ -235,6 +235,21 @@ _Last updated: 2026‑07‑05 (instant tab switching + resume position, caption 
   **Rule:** any new fixed/sticky top‑anchored element must include the
   safe‑area inset; the app topbar is `4rem + inset` tall, so sticky offsets
   below it must use `calc(4rem + env(safe-area-inset-top))`.
+- **Download experience (2026‑07‑06)** — downloads never navigate to a raw
+  file again (the old link path stranded iOS/installed‑app users on a Quick
+  Look preview). Every download button now streams in the background through
+  the in‑app manager with a floating progress card (percent, size, speed,
+  time left, cancel/retry) while the app stays fully usable. On completion:
+  desktop/Android auto‑save; iOS shows **Save to device**, which opens the
+  share sheet ("Save Video" → Photos) — the one reliable web path, and it
+  requires a real tap. Files also land in the in‑app library for offline
+  rewatching. Remaining (backlog): background‑fetch continuation, resumable
+  ranges, completion push.
+- **Wow icon + floating reactions (2026‑07‑06)** — the Wow mark is now a real
+  astonished face (wide eyes, open mouth; gradient‑filled when pressed) after
+  the spark read as an "AI" icon; and every Wow tap lifts the mark from the
+  tap point — spring pop, randomized drift/rotation, grows and fades (the
+  premium floating‑reaction animation spec, GPU transform/opacity only).
 - **💙 Wow (slice 1, 2026‑07‑06)** — Like is now **Wow**, Frenzsave's signature
   interaction. A custom twin electric‑spark mark (never the emoji): quiet
   outline at rest, electric blue→purple gradient with a soft glow when

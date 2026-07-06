@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Camera,
   CheckCircle2,
+  Clapperboard,
   Clock,
   Copy,
   Images,
@@ -27,7 +28,7 @@ import { cn } from "@/lib/utils";
 
 const MAX_BYTES = 100 * 1024 * 1024;
 
-type Destination = "post" | "story" | "both";
+type Destination = "post" | "reel" | "story" | "both";
 
 export function UploadModal() {
   const open = useUploadOpen();
@@ -78,6 +79,12 @@ function ModalInner() {
     if (editedPreview) URL.revokeObjectURL(editedPreview);
     setEditedPreview(null);
     setKind(isVideo ? "video" : "image");
+    // Feed and Reels are separate products — a video defaults to the Reels
+    // destination; photos default to the feed. Stories stay available to both.
+    setDestination((d) => {
+      if (isVideo) return d === "story" ? "story" : "reel";
+      return d === "reel" ? "post" : d;
+    });
     if (preview) URL.revokeObjectURL(preview);
     setPreview(URL.createObjectURL(f));
   };
@@ -171,11 +178,19 @@ function ModalInner() {
     }
   };
 
-  const DEST: { id: Destination; label: string; icon: typeof Clock; hint: string }[] = [
-    { id: "post", label: "Post", icon: Sparkles, hint: "On your profile & feed" },
-    { id: "story", label: "Story", icon: Clock, hint: "Disappears in 24h" },
-    { id: "both", label: "Both", icon: Layers, hint: "Post + story" },
-  ];
+  // Feed and Reels are separate products: videos publish to Reels, photos to
+  // the feed — each upload lives in exactly one place (plus optional story).
+  const DEST: { id: Destination; label: string; icon: typeof Clock; hint: string }[] =
+    kind === "video"
+      ? [
+          { id: "reel", label: "Reel", icon: Clapperboard, hint: "Full-screen Reels" },
+          { id: "story", label: "Story", icon: Clock, hint: "Disappears in 24h" },
+        ]
+      : [
+          { id: "post", label: "Post", icon: Sparkles, hint: "On your profile & feed" },
+          { id: "story", label: "Story", icon: Clock, hint: "Disappears in 24h" },
+          { id: "both", label: "Both", icon: Layers, hint: "Post + story" },
+        ];
 
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Create">
@@ -213,10 +228,16 @@ function ModalInner() {
                   <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" />
                 </motion.div>
                 <p className="mt-3 text-lg font-bold">
-                  {destination === "story" ? "Shared to your Story" : destination === "both" ? "Posted & shared to Story" : "Posted 🎉"}
+                  {destination === "story" ? "Shared to your Story" : destination === "both" ? "Posted & shared to Story" : destination === "reel" ? "Your Reel is live" : "Posted 🎉"}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {destination === "post" ? "It's live on your profile and the feed." : destination === "both" ? "Live on your profile; story vanishes in 24h." : "Your story disappears in 24 hours."}
+                  {destination === "post"
+                    ? "It's live on your profile and the feed."
+                    : destination === "reel"
+                      ? "It's live in Reels and on your profile."
+                      : destination === "both"
+                        ? "Live on your profile; story vanishes in 24h."
+                        : "Your story disappears in 24 hours."}
                 </p>
                 <div className="mt-5 flex justify-center gap-2">
                   <button type="button" onClick={share} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white">
@@ -354,7 +375,7 @@ function ModalInner() {
                 {/* Destination */}
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Share to</p>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className={cn("grid gap-2", DEST.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
                     {DEST.map((d) => {
                       const active = destination === d.id;
                       return (
@@ -388,7 +409,7 @@ function ModalInner() {
                   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-3.5 text-sm font-bold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 disabled:opacity-50"
                 >
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {busy ? "Publishing…" : destination === "story" ? "Share to Story" : destination === "both" ? "Post + Story" : "Post now"}
+                  {busy ? "Publishing…" : destination === "story" ? "Share to Story" : destination === "both" ? "Post + Story" : destination === "reel" ? "Share Reel" : "Post now"}
                 </button>
               </motion.div>
             )}

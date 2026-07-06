@@ -3,11 +3,45 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getHomeFeed, type HomeFeedSort } from "@/lib/social/home-feed";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const SORTS: HomeFeedSort[] = ["for_you", "following", "recent"];
+
+/**
+ * GET /api/reels?sort=&offset=&limit= — the Reels product's OWN paginated
+ * feed: exclusively `format = 'reel'` posts (never text/photo feed content),
+ * with its own cache keys. Same envelope as /api/home-feed so the deck client
+ * is shared.
+ */
+export async function GET(request: Request) {
+  const sp = new URL(request.url).searchParams;
+  const sortParam = sp.get("sort") as HomeFeedSort | null;
+  const sort: HomeFeedSort = sortParam && SORTS.includes(sortParam) ? sortParam : "for_you";
+  const offset = Math.max(0, Number(sp.get("offset") ?? 0) || 0);
+  const limit = Math.min(24, Math.max(1, Number(sp.get("limit") ?? 12) || 12));
+
+  let viewerId: string | null = null;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    viewerId = user?.id ?? null;
+  } catch {
+    /* anon */
+  }
+
+  const page = await getHomeFeed({ viewerId, sort, offset, limit, format: "reel" });
+  const cacheControl = viewerId
+    ? "private, max-age=15, stale-while-revalidate=60"
+    : "public, s-maxage=20, stale-while-revalidate=90";
+  return NextResponse.json(page, { headers: { "Cache-Control": cacheControl } });
+}
 
 const schema = z.object({
   mediaUrl: z.string().url().max(2048),
@@ -46,22 +80,24 @@ export async function POST(request: Request) {
 
   const src = sourceUrl ?? mediaUrl;
   const hash = createHash("sha256").update(mediaUrl).digest("hex");
-  const { data, error } = await admin
-    .from("posts")
-    .insert({
-      publisher_id: user.id,
-      source_url: src,
-      source_url_hash: hash,
-      platform: "frenz",
-      media_kind: mediaKind,
-      title: title.slice(0, 300),
-      media_url: mediaUrl,
-      thumbnail_url: thumbnailUrl ?? null,
-      visibility: "public",
-      status: "published",
-    })
-    .select("id")
-    .maybeSingle();
+  const base = {
+    publisher_id: user.id,
+    source_url: src,
+    source_url_hash: hash,
+    platform: "frenz",
+    media_kind: mediaKind,
+    title: title.slice(0, 300),
+    media_url: mediaUrl,
+    thumbnail_url: thumbnailUrl ?? null,
+    visibility: "public",
+    status: "published",
+  };
+  // Published through the Reels product → stamped as a reel (column arrives
+  // with migration 0031; fall back to a plain insert until it's applied).
+  let { data, error } = await admin.from("posts").insert({ ...base, format: "reel" }).select("id").maybeSingle();
+  if (error?.code === "42703") {
+    ({ data, error } = await admin.from("posts").insert(base).select("id").maybeSingle());
+  }
 
   if (error) {
     if (error.code === "23505") return NextResponse.json({ error: "You've already published this." }, { status: 409 });

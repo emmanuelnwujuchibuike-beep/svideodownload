@@ -98,7 +98,8 @@ async function StoriesSection({
 }
 
 async function ReelsSection({ viewerId }: { viewerId: string }) {
-  const recent = await getHomeFeed({ viewerId, sort: "recent", limit: 15 });
+  // The home rail previews the Reels product — its own format, not feed posts.
+  const recent = await getHomeFeed({ viewerId, sort: "recent", limit: 15, format: "reel" });
   const reelItems = recent.items.filter((i) => i.mediaKind === "video").slice(0, 8);
   return <TrendingReels initialItems={reelItems} />;
 }

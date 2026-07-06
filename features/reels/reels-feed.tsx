@@ -69,8 +69,9 @@ export function ReelsFeed({
 
   const fetchPage = useCallback(async (sort: Tab, off: number) => {
     try {
-      // Through the shared SDK — same path the native apps use.
-      return await getApi().action<{ items: FeedItem[]; nextOffset: number | null }>("/api/home-feed", {
+      // Reels has its OWN API (format='reel' posts only) — a separate product
+      // from the feed, through the shared SDK like everything else.
+      return await getApi().action<{ items: FeedItem[]; nextOffset: number | null }>("/api/reels", {
         method: "GET",
         query: { sort, offset: off, limit: 24 },
       });

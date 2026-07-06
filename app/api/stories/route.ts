@@ -34,8 +34,9 @@ const schema = z.object({
   caption: z.string().trim().max(300).optional(),
   /** Cover image captured from the first frame of a video upload. */
   thumbnailUrl: z.string().url().max(2048).optional(),
-  /** Where the upload goes: a public post on your profile, a 24h story, or both. */
-  destination: z.enum(["post", "story", "both"]).optional(),
+  /** Where the upload goes: the Feed, the Reels product, a 24h story, or feed+story.
+      Feed and Reels are separate — nothing appears in both unless published twice. */
+  destination: z.enum(["post", "reel", "story", "both"]).optional(),
   // Legacy flag from the old story-only composer.
   shareReel: z.boolean().optional(),
 });
@@ -65,7 +66,9 @@ export async function POST(request: Request) {
   const cover = mediaKind === "image" ? mediaUrl : (thumbnailUrl ?? null);
   const destination = parsed.data.destination ?? (parsed.data.shareReel ? "both" : "post");
   const wantStory = destination === "story" || destination === "both";
-  const wantPost = destination === "post" || destination === "both";
+  const wantPost = destination === "post" || destination === "both" || destination === "reel";
+  // Explicit product choice: a Reel lives ONLY in Reels; a post lives ONLY in the feed.
+  const format = destination === "reel" ? "reel" : "feed";
 
   let storyId: string | null = null;
   if (wantStory) {
@@ -85,24 +88,26 @@ export async function POST(request: Request) {
     const { data: prof } = await admin.from("profiles").select("handle, is_suspended").eq("id", user.id).maybeSingle();
     if (prof?.handle && !prof.is_suspended) {
       const hash = createHash("sha256").update(mediaUrl).digest("hex");
-      const { data: post } = await admin
-        .from("posts")
-        .insert({
-          publisher_id: user.id,
-          source_url: mediaUrl,
-          source_url_hash: hash,
-          platform: "frenz",
-          media_kind: mediaKind,
-          // No caption → store an empty title (the feed/reel simply shows no
-          // caption). Never invent an automatic "My video"/"My photo".
-          title: (caption ?? "").slice(0, 300),
-          media_url: mediaUrl,
-          thumbnail_url: cover,
-          visibility: "public",
-          status: "published",
-        })
-        .select("id")
-        .maybeSingle();
+      const base = {
+        publisher_id: user.id,
+        source_url: mediaUrl,
+        source_url_hash: hash,
+        platform: "frenz",
+        media_kind: mediaKind,
+        // No caption → store an empty title (the feed/reel simply shows no
+        // caption). Never invent an automatic "My video"/"My photo".
+        title: (caption ?? "").slice(0, 300),
+        media_url: mediaUrl,
+        thumbnail_url: cover,
+        visibility: "public",
+        status: "published",
+      };
+      // `format` column arrives with migration 0031 — plain insert until then.
+      const first = await admin.from("posts").insert({ ...base, format }).select("id").maybeSingle();
+      let post = first.data;
+      if (first.error?.code === "42703") {
+        ({ data: post } = await admin.from("posts").insert(base).select("id").maybeSingle());
+      }
       postId = (post?.id as string) ?? null;
     } else if (!wantStory) {
       return NextResponse.json({ error: "Finish setting up your profile to post." }, { status: 403 });

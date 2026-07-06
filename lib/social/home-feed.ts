@@ -102,6 +102,20 @@ const SELECT =
 
 export type HomeFeedSort = "for_you" | "following" | "recent";
 
+/** Feed vs Reels are separate products: each surface queries only its format. */
+export type ContentFormat = "feed" | "reel";
+
+// `posts.format` arrives with migration 0031 — probe once per server instance
+// so both surfaces keep their pre-migration behavior (shared pool) until it's
+// applied, then split automatically.
+let formatColumnKnown: boolean | null = null;
+async function hasFormatColumn(db: ReturnType<typeof createAdminClient>): Promise<boolean> {
+  if (formatColumnKnown !== null) return formatColumnKnown;
+  const { error } = await db.from("posts").select("format").limit(1);
+  formatColumnKnown = !error;
+  return formatColumnKnown;
+}
+
 /**
  * A single feed item by post id, in the exact `FeedItem` shape the reel deck
  * expects — used to deep-link straight into `/reels?start=<id>` (e.g. tapping a
@@ -249,15 +263,18 @@ export async function getHomeFeed(opts: {
   sort?: HomeFeedSort;
   offset?: number;
   limit?: number;
+  /** Which product surface: "feed" (default — excludes reels) or "reel". */
+  format?: ContentFormat;
 }): Promise<FeedPage> {
   const limit = opts.limit ?? 8;
   const offset = opts.offset ?? 0;
   const sort = opts.sort ?? "for_you";
+  const format = opts.format ?? "feed";
   if (!hasSupabase) return { items: [], nextOffset: null };
-  // Cached briefly per (viewer, sort, page) so SSR seeding + client revalidation
-  // stay cheap. Feed freshness within 20s is fine.
-  const key = `homefeed:${opts.viewerId ?? "anon"}:${sort}:${offset}:${limit}`;
-  return getCached(key, 20, () => loadHomeFeed(opts.viewerId, sort, offset, limit));
+  // Cached briefly per (viewer, sort, format, page) so SSR seeding + client
+  // revalidation stay cheap. Feed freshness within 20s is fine.
+  const key = `homefeed:${opts.viewerId ?? "anon"}:${sort}:${format}:${offset}:${limit}`;
+  return getCached(key, 20, () => loadHomeFeed(opts.viewerId, sort, offset, limit, format));
 }
 
 async function loadHomeFeed(
@@ -265,6 +282,7 @@ async function loadHomeFeed(
   sort: HomeFeedSort,
   offset: number,
   limit: number,
+  format: ContentFormat,
 ): Promise<FeedPage> {
   try {
     const db = createAdminClient();
@@ -292,9 +310,17 @@ async function loadHomeFeed(
       .eq("visibility", "public")
       .limit(Math.min(want, 400));
     if (sort === "following") q = q.in("publisher_id", followingIds);
-    // Newest first, always — the feed and reels (which share this query) should
-    // show what was actually posted most recently at the top, not whatever
-    // ranks highest by engagement.
+    // Feed and Reels are separate products: each surface sees only its own
+    // format (no duplicated content). Pre-migration-0031 both fall back to
+    // the shared pool, with reels keeping its videos-only behavior below.
+    const formatSplit = await hasFormatColumn(db);
+    if (formatSplit) {
+      q = format === "reel" ? q.eq("format", "reel") : q.neq("format", "reel");
+    } else if (format === "reel") {
+      q = q.eq("media_kind", "video");
+    }
+    // Newest first, always — both surfaces show what was actually posted most
+    // recently at the top, not whatever ranks highest by engagement.
     q = q.order("created_at", { ascending: false });
 
     const { data } = await q;
@@ -506,7 +532,10 @@ async function surfaceFollowedReposts(
   }
   if (wantIds.length === 0) return [];
 
-  const { data: postRows } = await db.from("posts").select(SELECT).in("id", wantIds);
+  // Surfacing feeds the FEED — reposted reels stay in the Reels product.
+  let repostQ = db.from("posts").select(SELECT).in("id", wantIds);
+  if (await hasFormatColumn(db)) repostQ = repostQ.neq("format", "reel");
+  const { data: postRows } = await repostQ;
   let rows = ((postRows ?? []) as Row[]).filter(
     (r) => r.status === "published" && r.visibility === "public" && r.publisher_id !== viewerId,
   );

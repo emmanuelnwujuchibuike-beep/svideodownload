@@ -1,7 +1,7 @@
 "use client";
 
 import { startDownload } from "@/features/downloads/manager";
-import { toast } from "@/features/ui/toast";
+import { dismissToast, toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
 import { getApi } from "@/lib/sdk/browser";
 
@@ -26,7 +26,8 @@ export async function downloadPost(item: {
   const tid = toast("Preparing download…", "loading");
   try {
     const data = await getApi().authorizeDownload(item.id);
-    toast("Download started", "info", { id: tid, duration: 1500 });
+    // The floating progress card takes over from here — no "started" toast.
+    dismissToast(tid);
     startDownload({
       url: item.mediaUrl,
       directUrl: data.url,

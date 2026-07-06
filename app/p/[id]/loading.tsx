@@ -4,6 +4,9 @@ import { Skeleton, SkeletonAvatar } from "@/features/ui/skeleton";
 export default function PostLoading() {
   return (
     <div className="mx-auto w-full max-w-2xl px-3 pb-16 pt-6 sm:px-4">
+      <span role="status" aria-live="polite" className="sr-only">
+        Loading post…
+      </span>
       <div className="mb-4 flex items-center gap-3" aria-hidden>
         <SkeletonAvatar className="h-11 w-11" />
         <div className="space-y-1.5">

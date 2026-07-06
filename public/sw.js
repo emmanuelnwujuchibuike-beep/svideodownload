@@ -7,7 +7,7 @@
  *  - Everything else (API, realtime, POST) → straight to network (never cached).
  */
 
-const VERSION = "v5";
+const VERSION = "v6";
 const STATIC_CACHE = `frenz-static-${VERSION}`;
 const IMAGE_CACHE = `frenz-img-${VERSION}`;
 const PAGE_CACHE = `frenz-pages-${VERSION}`;
@@ -32,6 +32,12 @@ self.addEventListener("activate", (event) => {
     (async () => {
       const keys = await caches.keys();
       await Promise.all(keys.filter((k) => !KEEP.includes(k)).map((k) => caches.delete(k)));
+      // Navigation preload: the browser starts the navigation request in
+      // parallel with SW boot instead of after it — shaves the worker's cold
+      // start (easily 100ms+ in an installed app) off every page open.
+      if (self.registration.navigationPreload) {
+        await self.registration.navigationPreload.enable().catch(() => {});
+      }
       await self.clients.claim();
     })(),
   );
@@ -48,6 +54,11 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
 
+  // Media streams (reels, feed video, HLS playlists/segments, audio) must
+  // never wait on service-worker logic — bail before any other work so the
+  // browser's native pipeline (incl. range requests) handles them untouched.
+  if (req.destination === "video" || req.destination === "audio") return;
+
   let url;
   try {
     url = new URL(req.url);
@@ -55,6 +66,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
+  if (/\.(m3u8|ts|m4s|mp4|m4a|mp3|webm)$/i.test(url.pathname)) return;
 
   const isStatic =
     url.origin === self.location.origin &&
@@ -96,12 +108,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigations — network-first, fall back to the last cached page, then offline.
+  // Navigations — network-first (using the preloaded response when the
+  // browser already started it), fall back to the last cached page, then offline.
   if (req.mode === "navigate") {
     event.respondWith(
       (async () => {
         try {
-          const res = await fetch(req);
+          const res = (await event.preloadResponse) || (await fetch(req));
           if (res.ok && url.origin === self.location.origin) {
             const cache = await caches.open(PAGE_CACHE);
             cache.put(req, res.clone());

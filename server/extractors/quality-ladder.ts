@@ -36,8 +36,11 @@ export function withQualityLadder(formats: MediaFormat[]): MediaFormat[] {
   if (videos.length >= MAX_VIDEO_TIERS || videos.length === 0) return formats;
 
   // Extractors already sort best-first — the first entry with a direct URL is
-  // what we derive synthesized tiers from.
-  const source = videos.find((f) => !!f.directUrl);
+  // what we derive synthesized tiers from. Prefer a known-H.264 source: the
+  // downscale has to DECODE it, and an H.264 stream decodes on every ffmpeg
+  // build, while e.g. TikTok's HD stream is bytevc1/H.265 (the tier that used
+  // to take every synthesized tier down with it when decoding failed).
+  const source = videos.find((f) => !!f.directUrl && f.vcodec === "h264") ?? videos.find((f) => !!f.directUrl);
   if (!source) return formats;
 
   const sourceHeight = heightOf(source);

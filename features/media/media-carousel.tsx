@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
+import { FadeImage } from "@/features/ui/fade-image";
 import { cn } from "@/lib/utils";
 
 export interface CarouselMedia {
@@ -61,7 +61,7 @@ export function MediaCarousel({ items, onExpand, className }: { items: CarouselM
               <CarouselVideo src={m.url} poster={m.thumbnailUrl} onExpand={onExpand} />
             ) : (
               <button type="button" onClick={onExpand} aria-label="Open photo" className="absolute inset-0">
-                <Image src={m.url} alt="" fill sizes="(max-width: 768px) 100vw, 640px" className="object-contain" loading={i < 2 ? "eager" : "lazy"} />
+                <FadeImage src={m.url} alt="" fill sizes="(max-width: 768px) 100vw, 640px" className="object-contain" loading={i < 2 ? "eager" : "lazy"} />
               </button>
             )}
           </div>

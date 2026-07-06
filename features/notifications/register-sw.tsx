@@ -15,7 +15,42 @@ import { useEffect } from "react";
  * bug) current: browsers only auto-check `sw.js` occasionally, so we actively
  * check on focus / tab-visible / a slow interval, push any waiting worker to
  * activate right away, and reload once when it takes control.
+ *
+ * The sw.js byte-diff alone is NOT enough for installed PWAs: most deploys
+ * don't touch sw.js, so a home-screen app resumed from memory kept running the
+ * old bundle forever (new sections like Trending Reels never appeared until
+ * the user deleted and re-added the app). The build-stamp check below compares
+ * this bundle's baked NEXT_PUBLIC_APP_BUILD against /api/app-version on
+ * resume/focus and reloads once per new deploy — the moment the user returns.
  */
+const BUILD = process.env.NEXT_PUBLIC_APP_BUILD ?? "";
+const RELOADED_KEY = "frenz-reloaded-for";
+
+let versionCheckInFlight = false;
+let lastVersionCheck = 0;
+
+async function reloadIfNewDeploy() {
+  // Throttle: resume + focus often fire together; one probe per 30s is plenty.
+  if (!BUILD || versionCheckInFlight || Date.now() - lastVersionCheck < 30_000) return;
+  versionCheckInFlight = true;
+  try {
+    const res = await fetch("/api/app-version", { cache: "no-store" });
+    if (!res.ok) return;
+    const { build } = (await res.json()) as { build?: string };
+    lastVersionCheck = Date.now();
+    // Reload once per new build (the sessionStorage guard breaks reload loops
+    // if a CDN ever serves a mixed old/new deployment for a moment).
+    if (build && build !== BUILD && sessionStorage.getItem(RELOADED_KEY) !== build) {
+      sessionStorage.setItem(RELOADED_KEY, build);
+      window.location.reload();
+    }
+  } catch {
+    /* offline — try again on the next resume */
+  } finally {
+    versionCheckInFlight = false;
+  }
+}
+
 export function RegisterServiceWorker() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -57,20 +92,26 @@ export function RegisterServiceWorker() {
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
 
     // Actively re-check for a new deploy — the piece that fixes an always-open
-    // laptop tab that never navigates.
-    const check = () => reg?.update().catch(() => {});
+    // laptop tab that never navigates, and a resumed home-screen app.
+    const check = () => {
+      reg?.update().catch(() => {});
+      void reloadIfNewDeploy();
+    };
     const onVisible = () => {
       if (document.visibilityState === "visible") check();
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", check);
     const interval = window.setInterval(check, 60_000);
+    // First check shortly after startup (off the critical path).
+    const initial = window.setTimeout(() => void reloadIfNewDeploy(), 4_000);
 
     return () => {
       navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", check);
       window.clearInterval(interval);
+      window.clearTimeout(initial);
     };
   }, []);
   return null;

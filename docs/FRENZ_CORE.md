@@ -90,6 +90,39 @@ brand — brand name memo in project memory.)
 Lazy loading · edge CDN · Redis caching · streaming · background processing · predictive/prefetch
 loading · offline support · battery optimization · 60fps animations. Roadmap: [PERFORMANCE.md](PERFORMANCE.md).
 
+## Loading Architecture (MANDATORY — every page, every future feature)
+The app must feel already-loaded: no blank screens, no full-screen spinners, no layout shift, never
+blocked input. Every route renders in layers — **shell → skeleton → critical data → media →
+background** — and every new feature inherits this engine instead of inventing its own.
+
+1. **Instant shell.** The `(app)` layout (topbar/sidebar/bottom nav) is persistent and never
+   re-renders on navigation. Route content streams behind `<Suspense>`; page-level work never
+   blocks the shell.
+2. **Intelligent skeletons.** Every route has a `loading.tsx` that mirrors the final layout using
+   the shared primitives in `features/ui/skeleton.tsx` (`Skeleton`, `SkeletonAvatar`,
+   `SkeletonText`, `SkeletonRow`) wrapped in `SkeletonSection` (announces "Loading…" to screen
+   readers). Section-level fetches use matching local skeleton fallbacks. Shimmer, exact
+   dimensions, zero jump on swap.
+3. **Critical data first.** Server components stream the identity/text layer first; counts, media
+   and rails follow in their own Suspense boundaries. Client revisits are instant via the Router
+   Cache (`staleTimes` in next.config) + the SWR data layer (`features/data`).
+4. **Media loads progressively.** Images: `next/image` (AVIF/WebP, sized) behind
+   `features/ui/fade-image.tsx` (`FadeImage` — decoded fade-in, no pop) over a shimmer/blur
+   backdrop. Videos: poster first, `preload="metadata"`, IntersectionObserver autoplay
+   only-in-view, unload off-screen (see reels/feed players). Never crop; never block paint.
+5. **Background layer.** Anything not needed for the current viewport defers through the loading
+   engine (`lib/loading/priority.ts`): `afterInteractive()` for idle-time work,
+   `whenVisible(el, cb)` / `features/ui/lazy-mount.tsx` (`LazyMount`) for below-the-fold sections.
+   No polling, no busy-waiting — battery-neutral by construction.
+6. **Freshness without staleness.** The service worker (`public/sw.js`) is cache-first ONLY for
+   immutable assets, network-first for navigations (with navigation preload), never touches
+   media/API. Deploys reach every open tab and installed PWA via the build-stamp check
+   (`/api/app-version` + `RegisterServiceWorker`), which reloads once on resume.
+
+Rules: no new spinners covering content; no fetch waterfalls where a Suspense boundary can stream;
+every `loading.tsx` uses the shared primitives; every below-fold rail goes through
+`LazyMount`/`whenVisible`; reduced motion is respected (shimmer + fades are opacity-only).
+
 ## Security (Zero Trust)
 RBAC + ABAC · E2E encryption where applicable · encrypted storage & backups · audit logs · threat
 & fraud detection · device monitoring. Secrets live only in platform env vars (never committed).

@@ -803,6 +803,10 @@ function transcodeFileToH264(src: string, out: string): Promise<void> {
     const args = [
       "-threads", threads,
       "-i", src,
+      // Require a real video stream — an audio-only input must fail here, not
+      // ship as an audio-only "video" (audio stays optional).
+      "-map", "0:v:0",
+      "-map", "0:a:0?",
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
       "-threads", threads,
       "-x264-params", `threads=${threads}:lookahead-threads=1`,

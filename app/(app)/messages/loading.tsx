@@ -4,6 +4,9 @@ import { Skeleton, SkeletonAvatar } from "@/features/ui/skeleton";
 export default function MessagesLoading() {
   return (
     <div className="flex-1 overflow-hidden px-3 pt-4 lg:px-6">
+      <span role="status" aria-live="polite" className="sr-only">
+        Loading messages…
+      </span>
       <Skeleton className="mb-4 h-8 w-36 lg:hidden" />
       <div className="space-y-1 lg:hidden" aria-hidden>
         {Array.from({ length: 8 }).map((_, i) => (

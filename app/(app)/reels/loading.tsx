@@ -5,7 +5,10 @@ import { Skeleton } from "@/features/ui/skeleton";
  *  with the shimmering brand F. No spinner. */
 export default function ReelsLoading() {
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black" aria-hidden>
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black">
+      <span role="status" aria-live="polite" className="sr-only">
+        Loading reels…
+      </span>
       {/* Reel chrome skeleton */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute bottom-24 right-3 flex flex-col items-center gap-5 sm:bottom-8">

@@ -85,6 +85,24 @@ function buildUrl(t: Pick<DownloadTask, "url" | "formatId" | "kind" | "title">):
   return `/api/download?${sp.toString()}`;
 }
 
+/**
+ * The blob's MIME type is what iOS's share sheet keys "Save Video"/"Save
+ * Image" off — a missing or generic type turns the download into a nameless
+ * "file" with no save option. When the source doesn't declare a real type,
+ * derive it from what the user asked for.
+ */
+function normalizeMediaType(raw: string | null, kind: MediaKind): string {
+  const t = (raw ?? "").split(";")[0]!.trim().toLowerCase();
+  if (t && t !== "application/octet-stream" && t !== "binary/octet-stream") return t;
+  return kind === "audio" ? "audio/mpeg" : kind === "image" ? "image/jpeg" : "video/mp4";
+}
+
+function extFor(type: string): string {
+  if (type.includes("audio")) return type.includes("mp4") || type.includes("m4a") ? "m4a" : "mp3";
+  if (type.includes("image")) return type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg";
+  return "mp4";
+}
+
 async function run(id: string) {
   const task = tasks.find((t) => t.id === id);
   if (!task) return;
@@ -98,7 +116,7 @@ async function run(id: string) {
 
     const total = Number(res.headers.get("content-length")) || 0;
     patch(id, { totalBytes: total });
-    const contentType = res.headers.get("content-type") || "application/octet-stream";
+    const contentType = normalizeMediaType(res.headers.get("content-type"), task.kind);
 
     const reader = res.body.getReader();
     const chunks: Uint8Array[] = [];
@@ -123,8 +141,7 @@ async function run(id: string) {
     }
 
     const blob = new Blob(chunks as BlobPart[], { type: contentType });
-    const ext = contentType.includes("audio") ? "mp3" : contentType.includes("image") ? "jpg" : "mp4";
-    const filename = `${task.title || "download"}.${ext}`;
+    const filename = `${task.title || "download"}.${extFor(contentType)}`;
 
     // 1) Save into the on-device library so it can be re-watched in the browser
     //    (and published) without re-fetching or visiting the source platform.
@@ -186,15 +203,12 @@ export function startDownload(input: {
   platformName: string;
   qualityLabel: string;
   directUrl?: string;
-  /** Batch enqueues pass true — the caller shows ONE summary toast instead. */
-  silent?: boolean;
 }): string {
-  const { silent, ...rest } = input;
   const id = crypto.randomUUID();
   tasks = [
     {
       id,
-      ...rest,
+      ...input,
       status: "queued",
       receivedBytes: 0,
       totalBytes: 0,
@@ -205,7 +219,7 @@ export function startDownload(input: {
     ...tasks,
   ];
   emit();
-  if (!silent) toast("Download started…", "info");
+  // No "started" toast — the floating progress card IS the notification.
   void run(id);
   return id;
 }

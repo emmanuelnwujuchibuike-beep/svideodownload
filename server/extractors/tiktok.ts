@@ -32,7 +32,22 @@ interface TikTokBitrate {
   Bitrate?: number;
   QualityType?: number;
   GearName?: string;
+  CodecType?: string;
   PlayAddr?: { Width?: number; Height?: number; UrlList?: string[] };
+}
+
+/**
+ * TikTok's real codec per bitrate tier. Its high-quality gears are usually
+ * bytevc1 (TikTok's H.265 flavor) — files that iOS saves as a generic "file"
+ * and other players render as audio with no picture. Knowing the truth here
+ * lets us (a) prefer an H.264 variant at the same height and (b) tell the
+ * download service which streams need a transcode vs. play everywhere as-is.
+ */
+function codecOf(br: TikTokBitrate): "h264" | "hevc" | "av1" {
+  const s = `${br.CodecType ?? ""} ${br.GearName ?? ""}`.toLowerCase();
+  if (/bytevc2|av01|av1/.test(s)) return "av1";
+  if (/bytevc1|h265|hevc|hvc1/.test(s)) return "hevc";
+  return "h264";
 }
 
 interface TikTokItem {
@@ -163,7 +178,6 @@ function buildFormats(item: TikTokItem): MediaFormat[] {
   };
 
   const formats: MediaFormat[] = [];
-  const seen = new Set<string>();
 
   // WATERMARK-FREE GUARANTEE: we only ever read `bitrateInfo.PlayAddr` and
   // `video.playAddr` — TikTok's clean playback sources. We deliberately never
@@ -172,25 +186,35 @@ function buildFormats(item: TikTokItem): MediaFormat[] {
     .slice()
     .sort((a, b) => (b.Bitrate ?? 0) - (a.Bitrate ?? 0));
 
+  // ONE entry per height. TikTok exposes most heights in several codecs; an
+  // H.264 variant wins over a higher-bitrate bytevc1/AV1 one because it plays
+  // everywhere without a server transcode (the transcode is the fragile step
+  // that used to turn "high quality" into an audio-only or unplayable file).
+  const byHeight = new Map<number, { url: string; codec: string; tbr: number | null }>();
   for (const br of bitrates) {
     const url = br.PlayAddr?.UrlList?.find((u) => u.startsWith("http"));
     if (!url) continue;
-    const height = br.PlayAddr?.Height || video.height || null;
-    const key = `${height}-${br.GearName ?? br.Bitrate}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const height = br.PlayAddr?.Height || video.height || 0;
+    const codec = codecOf(br);
+    const cur = byHeight.get(height);
+    if (!cur || (codec === "h264" && cur.codec !== "h264")) {
+      byHeight.set(height, { url, codec, tbr: br.Bitrate ? Math.round(br.Bitrate / 1000) : null });
+    }
+  }
+
+  for (const [height, tier] of [...byHeight.entries()].sort((a, b) => b[0] - a[0])) {
     formats.push({
       formatId: `tt-${formats.length}`,
       kind: "video",
-      label: height ? `${height}p` : br.GearName || "HD",
+      label: height ? `${height}p` : "HD",
       ext: "mp4",
       resolution: height ? `${height}p` : null,
       fps: null,
       filesize: null,
-      tbr: br.Bitrate ? Math.round(br.Bitrate / 1000) : null,
-      vcodec: "h264",
+      tbr: tier.tbr,
+      vcodec: tier.codec,
       acodec: "aac",
-      directUrl: url,
+      directUrl: tier.url,
       httpHeaders: headers,
     });
   }
@@ -250,6 +274,8 @@ interface TikWmData {
   duration?: number;
   play?: string;
   hdplay?: string;
+  size?: number;
+  hd_size?: number;
   music?: string;
   images?: string[];
   author?: { nickname?: string; unique_id?: string };
@@ -292,8 +318,12 @@ async function tikwmExtract(
         }),
       );
     } else {
-      const v = d.hdplay || d.play;
-      if (v)
+      // Keep BOTH streams. TikWM's `hdplay` is very often bytevc1/H.265 (needs
+      // a server transcode to play everywhere), while `play` is plain
+      // H.264+AAC — the guaranteed-playable variant the download service falls
+      // back to if the HD transcode ever fails. vcodec here is a hint only;
+      // the download service still probes the real stream before trusting it.
+      if (d.hdplay)
         formats.push({
           formatId: "tt-0",
           kind: "video",
@@ -301,11 +331,26 @@ async function tikwmExtract(
           ext: "mp4",
           resolution: null,
           fps: null,
-          filesize: null,
+          filesize: typeof d.hd_size === "number" && d.hd_size > 0 ? d.hd_size : null,
+          tbr: null,
+          vcodec: null,
+          acodec: "aac",
+          directUrl: abs(d.hdplay),
+          httpHeaders: headers,
+        });
+      if (d.play && d.play !== d.hdplay)
+        formats.push({
+          formatId: d.hdplay ? "tt-sd" : "tt-0",
+          kind: "video",
+          label: d.hdplay ? "Standard · No watermark" : "HD · No watermark",
+          ext: "mp4",
+          resolution: null,
+          fps: null,
+          filesize: typeof d.size === "number" && d.size > 0 ? d.size : null,
           tbr: null,
           vcodec: "h264",
           acodec: "aac",
-          directUrl: abs(v),
+          directUrl: abs(d.play),
           httpHeaders: headers,
         });
     }

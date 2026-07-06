@@ -157,6 +157,11 @@ async function transcodeToH264(format: MediaFormat): Promise<DownloadResult> {
         "-threads", threads,
         "-i",
         format.directUrl!,
+        // A VIDEO stream is mandatory — without this, an audio-only source
+        // "succeeds" and ships an audio-only mp4 the user saved as a video.
+        // Requiring 0:v:0 makes that impossible; audio stays optional.
+        "-map", "0:v:0",
+        "-map", "0:a:0?",
         ...videoArgs,
         "-c:a",
         "aac",
@@ -216,6 +221,9 @@ async function downscaleTo(format: MediaFormat, maxHeight: number): Promise<Down
         "-threads", threads,
         "-i",
         format.directUrl!,
+        // Video stream required (see transcodeToH264) — audio-only can't pass.
+        "-map", "0:v:0",
+        "-map", "0:a:0?",
         // Never scale UP — only clamps a source that's already taller than
         // maxHeight. NOTE: no shell is involved (spawn takes argv directly),
         // so this is ffmpeg's OWN filtergraph syntax, not shell quoting —
@@ -311,11 +319,31 @@ export async function resolveDownload(
       // NEVER fall back to the raw, unvalidated stream here — that's exactly
       // what would silently reintroduce the audio-only bug this check exists
       // to catch. Try yt-dlp's own independent extraction as a second
-      // opinion; if that also fails, surface a clear error instead of a
+      // opinion; if that also fails, try the platform's OTHER direct stream
+      // (TikTok's TikWM fallback exposes an HD bytevc1/H.265 stream AND a
+      // plain H.264 one — when the HD transcode fails and TikTok blocks
+      // yt-dlp, the H.264 stream still yields a real, playable video). Only
+      // when every validated path fails do we surface an error instead of a
       // "successful" download that's secretly broken.
       try {
         return { ...(await prepareDownload(url, formatId, kind)), title };
       } catch {
+        const rescue =
+          meta.formats.find(
+            (f) => f.kind === "video" && !!f.directUrl && f.directUrl !== format!.directUrl && f.vcodec === "h264",
+          ) ??
+          meta.formats.find(
+            (f) => f.kind === "video" && !!f.directUrl && f.directUrl !== format!.directUrl,
+          );
+        if (rescue) {
+          try {
+            // transcodeToH264 probes first: genuine H.264 is remuxed (fast),
+            // anything else is re-encoded — never proxied unvalidated.
+            return { ...(await transcodeToH264(rescue)), title };
+          } catch {
+            /* fall through to the original error */
+          }
+        }
         throw e instanceof YtDlpError ? e : new YtDlpError("could not produce a playable video", "DOWNLOAD_FAILED");
       }
     }

@@ -1,4 +1,4 @@
-import { Skeleton } from "@/features/ui/skeleton";
+import { Skeleton, SkeletonSection } from "@/features/ui/skeleton";
 
 /**
  * Content-only skeleton for /home. The shell (sidebar/topbar) is persistent in the
@@ -10,7 +10,7 @@ export default function HomeLoading() {
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-1 gap-4 px-3 sm:px-4">
       <main className="min-w-0 flex-1 pb-24 pt-4 lg:pb-6">
-        <div className="space-y-6">
+        <SkeletonSection label="Loading home" className="space-y-6">
           {/* Greeting */}
           <div className="space-y-2">
             <Skeleton className="h-7 w-48" />
@@ -36,7 +36,7 @@ export default function HomeLoading() {
               ))}
             </div>
           </div>
-        </div>
+        </SkeletonSection>
       </main>
       {/* Right rail placeholder */}
       <div className="hidden w-80 shrink-0 py-4 xl:block">

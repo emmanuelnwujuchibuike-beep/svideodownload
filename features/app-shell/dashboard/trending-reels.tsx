@@ -1,9 +1,10 @@
 "use client";
 
 import { BadgeCheck, Flame, Play } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+
+import { FadeImage } from "@/features/ui/fade-image";
 
 import { useQuery } from "@/features/data";
 import { ReelsFeed } from "@/features/reels/reels-feed";
@@ -66,7 +67,7 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
                 {item.mediaUrl ? (
                   <RailVideo src={item.mediaUrl} poster={item.thumbnailUrl} />
                 ) : item.thumbnailUrl ? (
-                  <Image src={item.thumbnailUrl} alt="" fill sizes="144px" className="object-cover transition duration-300 group-hover:scale-105" />
+                  <FadeImage src={item.thumbnailUrl} alt="" fill sizes="144px" className="object-cover transition duration-300 group-hover:scale-105" />
                 ) : (
                   <span className={`absolute inset-0 bg-gradient-to-br ${FALLBACK[i % FALLBACK.length]}`} />
                 )}

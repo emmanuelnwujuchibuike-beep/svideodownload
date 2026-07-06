@@ -1,8 +1,16 @@
 import type { NextConfig } from "next";
 
+// A per-deploy build stamp, baked into BOTH the client bundle and the server at
+// build time. The client compares its own stamp against /api/app-version and
+// reloads itself when they differ — this is what keeps an installed PWA (whose
+// resumed page can outlive many deploys without ever re-navigating) current
+// without the user deleting and re-adding it to their home screen.
+const appBuild = (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 12) || `dev-${Date.now()}`;
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  env: { NEXT_PUBLIC_APP_BUILD: appBuild },
   // Emit a self-contained server bundle for the Docker runtime image.
   output: "standalone",
   // Keep barrel-heavy libraries from pulling their entire surface into a route

@@ -100,10 +100,9 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         platform: metadata.platform,
         platformName: metadata.platformName,
         qualityLabel: "Image",
-        silent: true,
       });
     });
-    toast(`${items.length} download${items.length > 1 ? "s" : ""} started`, "success");
+    // No "started" toast — the floating card shows "Downloading N items…".
     setSelected(new Set());
   };
 

@@ -4,6 +4,9 @@ import { Skeleton, SkeletonAvatar } from "@/features/ui/skeleton";
 export default function ConversationLoading() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <span role="status" aria-live="polite" className="sr-only">
+        Loading conversation…
+      </span>
       {/* Thread header */}
       <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
         <SkeletonAvatar className="h-10 w-10" />

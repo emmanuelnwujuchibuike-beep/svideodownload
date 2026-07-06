@@ -7,9 +7,11 @@ import { Skeleton } from "@/features/ui/skeleton";
  */
 export default function ProfileLoading() {
   return (
-    <main className="pb-24 pt-14 sm:pt-16" aria-hidden>
-      {/* Premium branded loader — only shows on a longer delay */}
-      <div className="mx-auto max-w-4xl sm:px-4">
+    <main className="pb-24 pt-14 sm:pt-16">
+      <span role="status" aria-live="polite" className="sr-only">
+        Loading profile…
+      </span>
+      <div className="mx-auto max-w-4xl sm:px-4" aria-hidden>
         {/* Banner */}
         <Skeleton className="h-40 w-full rounded-none sm:h-56 sm:rounded-3xl md:h-64" />
 

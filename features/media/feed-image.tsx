@@ -1,10 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import Image from "next/image";
 import { useRef, useState } from "react";
 
 import { WowSolid } from "@/components/brand/wow-icon";
+import { FadeImage } from "@/features/ui/fade-image";
 import { cn } from "@/lib/utils";
 
 /**
@@ -76,7 +76,7 @@ export function FeedImage({
       {/* Foreground: next/image (AVIF/WebP + right-sized) when the natural size is
           known; otherwise a plain lazy <img> at natural aspect (older posts). */}
       {hasDims ? (
-        <Image
+        <FadeImage
           src={src}
           alt={alt}
           width={width}

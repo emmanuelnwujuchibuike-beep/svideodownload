@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Download, Share, SquarePlus, X } from "lucide-react";
+import { ChevronDown, Copy, Download, Share, SquarePlus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
@@ -57,6 +57,19 @@ function isIosInApp(): boolean {
   return isIos() && IOS_IN_APP_UA.test(navigator.userAgent);
 }
 
+// Every iOS browser is WebKit under Apple's rules and reaches "Add to Home
+// Screen" through the same OS share sheet — Safari, Chrome, Firefox, Edge
+// all need the identical manual step, none can skip it. We only use this to
+// name the browser correctly in the instructions, not to change the flow.
+function iosBrowserLabel(): string {
+  const ua = navigator.userAgent;
+  if (/CriOS/i.test(ua)) return "Chrome";
+  if (/FxiOS/i.test(ua)) return "Firefox";
+  if (/EdgiOS/i.test(ua)) return "Edge";
+  if (/OPiOS/i.test(ua)) return "Opera";
+  return "Safari";
+}
+
 function isIosNeedingInstall(): boolean {
   // Any touch-iOS device that isn't already installed still needs the manual
   // Add-to-Home-Screen path — that's the *only* way iPhones get Web Push
@@ -77,6 +90,7 @@ export function IosInstallPrompt() {
   const [mode, setMode] = useState<"hidden" | "ios" | "ios-inapp" | "android">("hidden");
   const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(null);
   const [copied, setCopied] = useState(false);
+  const [browserName, setBrowserName] = useState("Safari");
 
   useEffect(() => {
     if (typeof window === "undefined" || isStandalone() || dismissedThisSession()) return;
@@ -93,6 +107,7 @@ export function IosInstallPrompt() {
     let t: ReturnType<typeof setTimeout> | null = null;
     if (isIosNeedingInstall()) {
       const next = isIosInApp() ? "ios-inapp" : "ios";
+      setBrowserName(iosBrowserLabel());
       t = setTimeout(() => setMode((m) => (m === "hidden" ? next : m)), 2500);
     }
     return () => {
@@ -171,7 +186,7 @@ export function IosInstallPrompt() {
                     ? "Add Frenz to your home screen for instant push notifications, faster launches and a full-screen app feel."
                     : mode === "ios-inapp"
                       ? "This link opened inside an app that can't install web apps. Copy the link below, open it in Safari, then add it to your Home Screen there to get push notifications."
-                      : "These icons aren't buttons on this page — tap the Share icon in your browser's own toolbar (not here), then Add to Home Screen, to get push notifications even when the browser is closed."}
+                      : `Nothing below is a button on this page — Apple requires every website to be added from ${browserName}'s own menu before it can send notifications while your phone's screen is off or the browser is closed. No site can skip this step.`}
                 </p>
                 {mode === "android" ? (
                   <button
@@ -190,15 +205,22 @@ export function IosInstallPrompt() {
                     <Copy className="h-4 w-4" /> {copied ? "Link copied" : "Copy link"}
                   </button>
                 ) : (
-                  <p className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs font-medium">
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-secondary px-2 py-1">
-                      Tap <Share className="h-3.5 w-3.5 text-blue-500" /> Share
-                    </span>
-                    <span className="text-muted-foreground">then</span>
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-secondary px-2 py-1">
-                      <SquarePlus className="h-3.5 w-3.5 text-violet-500" /> Add to Home Screen
-                    </span>
-                  </p>
+                  <div className="mt-2.5">
+                    <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-bold">1</span>
+                      <span className="inline-flex items-center gap-1 text-foreground">
+                        Tap <Share className="h-3.5 w-3.5 text-blue-500" /> Share in {browserName}
+                      </span>
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-bold">2</span>
+                      <span className="inline-flex items-center gap-1 text-foreground">
+                        <SquarePlus className="h-3.5 w-3.5 text-violet-500" /> Add to Home Screen
+                      </span>
+                    </p>
+                    <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 animate-bounce" aria-hidden />
+                      That Share icon is in {browserName}&apos;s own toolbar around your screen&apos;s edge, not here.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

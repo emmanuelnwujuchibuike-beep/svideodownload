@@ -7,7 +7,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
-import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
+import { isTopbarLocked, setTopbarHidden, useTopbarLocked } from "@/features/app-shell/topbar-visibility";
 import { openUpload } from "@/features/create/upload-store";
 import { UserMenu } from "@/features/auth/user-menu";
 import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
@@ -35,7 +35,8 @@ export function AppTopbar() {
   // visible on large screens via the `lg:` override on the header below).
   // Direction-based (not position-based) so it reacts instantly to intent,
   // with a small dead zone near the top so it never hides before there's
-  // anywhere meaningful to scroll.
+  // anywhere meaningful to scroll. Pages that lock the topbar (the feed, so
+  // its sticky tab bar never slides) keep it pinned visible.
   useEffect(() => {
     let lastY = window.scrollY;
     let ticking = false;
@@ -45,7 +46,7 @@ export function AppTopbar() {
       requestAnimationFrame(() => {
         const y = window.scrollY;
         const delta = y - lastY;
-        if (y < 72) setHidden(false);
+        if (isTopbarLocked() || y < 72) setHidden(false);
         else if (delta > 4) setHidden(true);
         else if (delta < -4) setHidden(false);
         lastY = y;
@@ -55,6 +56,12 @@ export function AppTopbar() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // If a page engages the lock while the bar is already hidden, surface it.
+  const locked = useTopbarLocked();
+  useEffect(() => {
+    if (locked) setHidden(false);
+  }, [locked]);
 
   // Broadcast so far-away sticky elements (the feed's segmented control) can
   // shift up and fill the gap instead of leaving blank space above them.

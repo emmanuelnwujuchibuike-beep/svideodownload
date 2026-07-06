@@ -234,11 +234,10 @@ function FeedPostCardImpl({
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
       // Warm this post's comments on hover so opening the sheet is instant.
       onPointerEnter={() => prefetchPostComments(item.id)}
-      className="group relative cv-auto overflow-hidden rounded-[26px] border border-border/60 bg-card shadow-soft ring-1 ring-inset ring-white/[0.04] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-elevated hover:ring-primary/25"
+      // Mature, professional card: quiet hairline border + soft depth, no
+      // decorative color bars — the content is the color (owner spec).
+      className="group relative cv-auto overflow-hidden rounded-3xl border border-border/70 bg-card shadow-soft ring-1 ring-inset ring-white/[0.04] transition-shadow duration-300 hover:shadow-elevated"
     >
-      {/* Always-on premium accent bar — visible on every device (no hover needed) */}
-      <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[3px] bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500" />
-
       {/* Repost discovery — lightweight "@x reposted" attribution when someone you
           follow reposted this, plus their recommendation caption when they wrote
           one. Never distracts from the content below. */}
@@ -395,6 +394,9 @@ function FeedPostCardImpl({
             poster={item.thumbnailUrl}
             postId={item.id}
             onExpand={() => onOpen(item)}
+            onDoubleTapLike={() => {
+              if (!liked) void react("like");
+            }}
             // FeedVideo renders the clip at its TRUE aspect ratio (measured from
             // the video) — tall clips expand, short/wide ones show as they are.
             className="w-full"

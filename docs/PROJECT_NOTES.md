@@ -9,9 +9,36 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑05 (instant tab switching + resume position, caption "see more"/post date, decluttered large‑screen viewers)._
+_Last updated: 2026‑07‑06 (fullscreen video, loading engine in Core, PWA auto‑update, TikTok HQ download fix, feed nav simplification)._
 
 ---
+
+## 2026‑07‑06 highlights
+
+- **Fullscreen video (slice 1):** every `FeedVideo` gets a fullscreen button. The
+  video's own box is promoted to a fixed edge‑to‑edge layer (same element — instant,
+  no flicker, position preserved); native Fullscreen API is engaged where it exists.
+  Code‑split chrome (`features/media/fullscreen-video.tsx`): auto‑fading controls,
+  seek bar + times, speed cycle, PiP (with iOS fallback), double‑tap center = Wow,
+  double‑tap sides = ±10s, keyboard parity, safe‑area padding everywhere.
+- **Global Loading Engine saved to Frenz Core** (`docs/FRENZ_CORE.md` → Loading
+  Architecture is now MANDATORY for all features): `lib/loading/priority.ts`
+  (`afterInteractive`/`whenVisible`), `LazyMount`, `FadeImage` (decoded fade‑in),
+  every route's `loading.tsx` announces to screen readers.
+- **Installed PWA auto‑update:** per‑deploy build stamp + `/api/app-version`; the
+  app reloads itself once when a new deploy lands (fixes "old UI until delete and
+  re‑add to home screen"). SW v6 adds navigation preload + media bypass (faster
+  page opens and reel loads in the installed app).
+- **Downloads:** TikTok tiers are codec‑aware (bytevc1/H.265 vs H.264) with an
+  H.264 rescue path — high quality always downloads as a playable VIDEO; ffmpeg
+  outputs now require a video stream (audio‑only "videos" impossible); client blobs
+  get real MIME types (iOS share sheet always offers Save Video); the redundant
+  "Download started" toast is gone (the floating progress card is the notification).
+- **Feed (owner directives):** Smart Filters chip row (Photos/Videos/…) REMOVED;
+  the sticky For You/Following bar no longer moves while scrolling (topbar is
+  locked visible on the feed); the purple gradient stripe on post cards removed
+  (mature, professional cards); album carousels slide sideways only and never
+  trigger the tab swipe.
 
 ## Brand & Design
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { Pause, Volume2, VolumeX } from "lucide-react";
+import { Maximize2, Pause, Volume2, VolumeX } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
@@ -8,6 +9,12 @@ import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
 import { claimPlayback, recentlyScrolled, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
+
+// Fullscreen chrome loads only on first use — never in the feed bundle.
+const FullscreenVideoLayer = dynamic(
+  () => import("@/features/media/fullscreen-video").then((m) => m.FullscreenVideoLayer),
+  { ssr: false },
+);
 
 // A tap only counts if the pointer barely moved AND the page isn't mid-scroll.
 const TAP_MOVE_TOLERANCE = 18;
@@ -29,6 +36,7 @@ export function FeedVideo({
   className,
   postId,
   onExpand,
+  onDoubleTapLike,
 }: {
   src?: string | null;
   streamUid?: string | null;
@@ -39,6 +47,8 @@ export function FeedVideo({
   /** Post id — lets an actual watch record a (deduped) view. */
   postId?: string;
   onExpand?: () => void;
+  /** Wow handler for the fullscreen double-tap-center gesture. */
+  onDoubleTapLike?: () => void;
 }) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
@@ -60,6 +70,49 @@ export function FeedVideo({
   const [ratio, setRatio] = useState<number | null>(null);
   const inViewRef = useRef(false);
   const readyRef = useRef(false);
+
+  // ── Fullscreen (owner spec: native-app quality) ────────────────────────────
+  // The SAME box (and <video>) is promoted to a fixed, edge-to-edge layer, so
+  // entering/exiting is a single style change: instant, no reload, no flicker,
+  // playback position preserved by construction. Where the native Fullscreen
+  // API exists (Android/desktop) we also engage it for true edge-to-edge;
+  // iOS Safari/PWA uses the overlay alone (its API can't host custom chrome).
+  const [fs, setFs] = useState(false);
+  const fsRef = useRef(false);
+  const fsBox = useRef<HTMLDivElement | null>(null);
+
+  const enterFs = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    fsRef.current = true;
+    setFs(true);
+    // Lock body scroll — overflowY specifically (the shorthand breaks sticky
+    // layouts elsewhere; see shell notes).
+    document.body.style.overflowY = "hidden";
+    const box = fsBox.current as (HTMLDivElement & { requestFullscreen?: () => Promise<void> }) | null;
+    if (box && typeof box.requestFullscreen === "function") box.requestFullscreen().catch(() => {});
+  }, []);
+  const exitFs = useCallback(() => {
+    fsRef.current = false;
+    setFs(false);
+    document.body.style.overflowY = "";
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }, []);
+  // Native fullscreen dismissed by the browser (Esc / system gesture) → fold
+  // the overlay too so the two never disagree.
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement && fsRef.current) {
+        fsRef.current = false;
+        setFs(false);
+        document.body.style.overflowY = "";
+      }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      if (fsRef.current) document.body.style.overflowY = "";
+    };
+  }, []);
 
   // Adaptive playback: a Cloudflare Stream video plays HLS/ABR through our own
   // <video>; anything else plays the plain MP4. Fall back to the Stream iframe only
@@ -121,8 +174,8 @@ export function FeedVideo({
     [],
   );
 
-  const toggleMute = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleMute = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const v = video.current;
     if (!v) return;
     // Unmuting is the ONLY point we take audio focus, and only on this explicit
@@ -227,67 +280,102 @@ export function FeedVideo({
         className,
       )}
     >
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <video
-        ref={video}
-        // Source (HLS or MP4, seeked to a first frame when there's no poster) is
-        // attached imperatively by useAdaptiveSource when near the viewport.
-        poster={poster ?? undefined}
-        loop
-        muted
-        playsInline
-        preload="metadata"
-        className="h-full w-full touch-pan-y object-contain lg:h-auto lg:max-h-[82vh] lg:w-auto"
-        onLoadedMetadata={() => {
-          const v = video.current;
-          if (!v || !v.videoWidth || !v.videoHeight) return;
-          // Exact ratio, clamped: tallest a card goes is full 9:16, widest 16:9.
-          setRatio(Math.min(16 / 9, Math.max(9 / 16, v.videoWidth / v.videoHeight)));
-        }}
-        onPlay={() => {
-          video.current && claimPlayback(video.current);
-        }}
-        onPlaying={() => {
-          setCovered(false);
-          if (postId) recordView(postId);
-        }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endHold}
-        onPointerLeave={onPointerLeaveCancel}
-        onPointerCancel={onPointerLeaveCancel}
-      />
-
-      {/* Cover — shows the poster until the first frame actually plays, so a
-          not-yet-decoded clip never flashes a blank black screen. */}
-      {covered && poster ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full object-contain" />
-      ) : null}
-
-      {/* Paused-while-holding indicator */}
-      {showPause ? (
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
-            <Pause className="h-7 w-7 fill-white" />
-          </span>
-        </span>
-      ) : null}
-
-      {/* Mute toggle */}
-      <button
-        type="button"
-        onClick={toggleMute}
-        aria-label={muted ? "Unmute" : "Mute"}
-        className="absolute right-2.5 top-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+      {/* The promotable box: in-flow normally ("contents" — zero layout cost),
+          a fixed edge-to-edge layer in fullscreen. Same element, same <video>,
+          so the transition is instant with playback position intact. The outer
+          wrapper keeps its size, so the feed never reflows underneath. */}
+      <div
+        ref={fsBox}
+        className={fs ? "fixed inset-0 z-[140] flex items-center justify-center bg-black" : "contents"}
       >
-        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-      </button>
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <video
+          ref={video}
+          // Source (HLS or MP4, seeked to a first frame when there's no poster) is
+          // attached imperatively by useAdaptiveSource when near the viewport.
+          poster={poster ?? undefined}
+          loop
+          muted
+          playsInline
+          preload="metadata"
+          className={cn(
+            "h-full w-full object-contain",
+            fs ? "touch-none" : "touch-pan-y lg:h-auto lg:max-h-[82vh] lg:w-auto",
+          )}
+          onLoadedMetadata={() => {
+            const v = video.current;
+            if (!v || !v.videoWidth || !v.videoHeight) return;
+            // Exact ratio, clamped: tallest a card goes is full 9:16, widest 16:9.
+            setRatio(Math.min(16 / 9, Math.max(9 / 16, v.videoWidth / v.videoHeight)));
+          }}
+          onPlay={() => {
+            video.current && claimPlayback(video.current);
+          }}
+          onPlaying={() => {
+            setCovered(false);
+            if (postId) recordView(postId);
+          }}
+          onPointerDown={fs ? undefined : onPointerDown}
+          onPointerMove={fs ? undefined : onPointerMove}
+          onPointerUp={fs ? undefined : endHold}
+          onPointerLeave={fs ? undefined : onPointerLeaveCancel}
+          onPointerCancel={fs ? undefined : onPointerLeaveCancel}
+        />
 
-      {/* Hint */}
-      <span className="pointer-events-none absolute bottom-2 left-2.5 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 opacity-0 backdrop-blur transition-opacity duration-200 group-hover:opacity-100">
-        Tap to watch · hold to pause
-      </span>
+        {/* Cover — shows the poster until the first frame actually plays, so a
+            not-yet-decoded clip never flashes a blank black screen. */}
+        {covered && poster ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full object-contain" />
+        ) : null}
+
+        {/* Paused-while-holding indicator */}
+        {showPause && !fs ? (
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
+              <Pause className="h-7 w-7 fill-white" />
+            </span>
+          </span>
+        ) : null}
+
+        {/* Inline chrome — hidden in fullscreen (the layer has its own) */}
+        {!fs ? (
+          <>
+            {/* Mute toggle */}
+            <button
+              type="button"
+              onClick={toggleMute}
+              aria-label={muted ? "Unmute" : "Mute"}
+              className="absolute right-2.5 top-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+            >
+              {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </button>
+
+            {/* Fullscreen */}
+            <button
+              type="button"
+              onClick={enterFs}
+              aria-label="Fullscreen"
+              className="absolute bottom-2.5 right-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+
+            {/* Hint */}
+            <span className="pointer-events-none absolute bottom-2 left-2.5 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 opacity-0 backdrop-blur transition-opacity duration-200 group-hover:opacity-100">
+              Tap to watch · hold to pause
+            </span>
+          </>
+        ) : (
+          <FullscreenVideoLayer
+            videoRef={video}
+            muted={muted}
+            onToggleMute={toggleMute}
+            onExit={exitFs}
+            onDoubleTapLike={onDoubleTapLike}
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -18,8 +18,13 @@ export interface CarouselMedia {
  * free, zero JS on the hot path), one full-width slide per item, page counter
  * chip + dots per the design. Media is never cropped: slides letterbox over a
  * blurred backdrop. Videos autoplay muted only while the slide is on screen;
- * off-screen media lazy-loads. Vertical scrolling stays native (`touch-pan`
- * untouched) — only a deliberate horizontal swipe moves the carousel.
+ * off-screen media lazy-loads.
+ *
+ * Gesture contract (owner spec): the carousel slides SIDEWAYS ONLY —
+ * `touch-action: pan-x` means a drag starting on it never scrolls the page
+ * vertically or wobbles diagonally. `data-hscroll` tells ancestor swipe
+ * readers (the feed's For You/Following tab switcher) to ignore gestures
+ * that begin here, so swiping between slides never switches feed tabs.
  */
 export function MediaCarousel({ items, onExpand, className }: { items: CarouselMedia[]; onExpand?: () => void; className?: string }) {
   const scroller = useRef<HTMLDivElement | null>(null);
@@ -41,7 +46,9 @@ export function MediaCarousel({ items, onExpand, className }: { items: CarouselM
       <div
         ref={scroller}
         onScroll={onScroll}
+        data-hscroll
         className="flex aspect-[4/5] snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ touchAction: "pan-x" }}
       >
         {items.map((m, i) => (
           <div key={i} className="relative h-full w-full shrink-0 snap-center">

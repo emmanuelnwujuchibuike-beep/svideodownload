@@ -1,28 +1,15 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  AlertCircle,
-  ArrowUp,
-  ChevronUp,
-  Clock,
-  Flame,
-  Image as ImageIcon,
-  LayoutGrid,
-  MessageSquare,
-  Sparkles,
-  Video,
-  X,
-} from "lucide-react";
+import { AlertCircle, ArrowUp, Clock, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType } from "react";
 
 import dynamic from "next/dynamic";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
-import { useTopbarHidden } from "@/features/app-shell/topbar-visibility";
+import { lockTopbarVisible } from "@/features/app-shell/topbar-visibility";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { SparkCard } from "@/features/feed/spark-card";
@@ -55,7 +42,6 @@ import { getApi } from "@/lib/sdk/browser";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-type Icon = ComponentType<{ className?: string }>;
 
 const SEGMENTS: { key: HomeFeedSort; label: string }[] = [
   { key: "for_you", label: "For You" },
@@ -63,41 +49,13 @@ const SEGMENTS: { key: HomeFeedSort; label: string }[] = [
   { key: "recent", label: "Reels" },
 ];
 
-/** Smart Filters reshape the loaded stream — kind filters + honest reorders. */
-const FILTERS = [
-  { id: "all", label: "All", icon: LayoutGrid },
-  { id: "video", label: "Videos", icon: Video },
-  { id: "photo", label: "Photos", icon: ImageIcon },
-  { id: "popular", label: "Popular", icon: Flame },
-  { id: "discussed", label: "Discussed", icon: MessageSquare },
-] as const satisfies readonly { id: string; label: string; icon: Icon }[];
-type FilterId = (typeof FILTERS)[number]["id"];
-
 const PAGE = 8;
 const SEEN_KEY = "frenz:feed-seen-at";
-const NAV_OPEN_KEY = "frenz:feed-nav-open";
 const PULL_THRESHOLD = 72;
 const SWIPE_THRESHOLD = 64;
 /** Inline, swipeable tabs — "Reels" isn't inline content (it opens the deck
  *  overlay), so it's handled as the swipe destination past the last one. */
 const SWIPE_ORDER: HomeFeedSort[] = ["for_you", "following"];
-
-function applyFilter(items: FeedItem[], f: FilterId): FeedItem[] {
-  switch (f) {
-    case "video":
-      return items.filter((i) => i.mediaKind === "video");
-    case "photo":
-      return items.filter((i) => i.mediaKind === "image");
-    case "popular":
-      return [...items].sort(
-        (a, b) => b.likesCount + b.sharesCount * 3 - (a.likesCount + a.sharesCount * 3),
-      );
-    case "discussed":
-      return [...items].sort((a, b) => b.commentsCount - a.commentsCount);
-    default:
-      return items;
-  }
-}
 
 export function SmartFeed({
   initialItems,
@@ -109,7 +67,6 @@ export function SmartFeed({
   friendCount?: number;
 }) {
   const [sort, setSort] = useState<HomeFeedSort>("for_you");
-  const [filter, setFilter] = useState<FilterId>("all");
   const [items, setItems] = useState<FeedItem[]>(initialItems);
   const [nextOffset, setNextOffset] = useState<number | null>(initialNextOffset);
   const [loading, setLoading] = useState(false);
@@ -119,38 +76,16 @@ export function SmartFeed({
   const [away, setAway] = useState<AwaySummary | null>(null);
   const [viewer, setViewer] = useState<{ item: FeedItem; comments: boolean } | null>(null);
   const [image, setImage] = useState<FeedItem | null>(null);
-  // When the top nav auto-hides on scroll (mobile), the segmented control
-  // shifts up to fill the gap it leaves instead of floating below blank space.
-  const topbarHidden = useTopbarHidden();
+  // Lock the topbar visible while the feed is on screen: with it static, this
+  // sticky tab bar sticks at ONE position — fixed once it touches the top,
+  // never sliding around with scroll direction (owner spec).
+  useEffect(() => lockTopbarVisible(), []);
   const [reel, setReel] = useState<{ startId: string; commentsId: string | null } | null>(null);
   // Once an overlay has been opened we keep it mounted (it hides itself when its
   // item is null) so its close animation plays; before first use its chunk is
   // never loaded.
   const [viewerReady, setViewerReady] = useState(false);
   const [imageReady, setImageReady] = useState(false);
-  // The nav (segmented control + filter chips) can be tucked away via the tiny
-  // handle at its bottom edge — remembered across visits like the quality
-  // preference elsewhere in the app.
-  const [navOpen, setNavOpen] = useState(true);
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem(NAV_OPEN_KEY);
-      if (v === "0") setNavOpen(false);
-    } catch {
-      /* storage unavailable — default open */
-    }
-  }, []);
-  const toggleNavOpen = useCallback(() => {
-    setNavOpen((v) => {
-      const next = !v;
-      try {
-        localStorage.setItem(NAV_OPEN_KEY, next ? "1" : "0");
-      } catch {
-        /* private mode — just won't persist */
-      }
-      return next;
-    });
-  }, []);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
@@ -456,7 +391,10 @@ export function SmartFeed({
     const y = t?.clientY;
     if (y !== undefined && window.scrollY <= 0 && !refreshing) pullStart.current = y;
     else pullStart.current = null;
-    swipeStart.current = t ? { x: t.clientX, y: t.clientY } : null;
+    // Gestures that begin inside a horizontal scroller (album carousel, photo
+    // rails) belong to that scroller — never read them as a tab swipe.
+    const insideHScroll = !!(e.target as Element | null)?.closest?.("[data-hscroll]");
+    swipeStart.current = t && !insideHScroll ? { x: t.clientX, y: t.clientY } : null;
     swipeAxis.current = null;
   };
   const onTouchMove = (e: React.TouchEvent) => {
@@ -500,10 +438,10 @@ export function SmartFeed({
 
   const pullProgress = Math.min(1, pull / PULL_THRESHOLD);
 
-  /* ── Build the smart stream from the filtered, loaded items ───────────── */
+  /* ── Build the smart stream from the loaded items ─────────────────────── */
   const stream = useMemo(
-    () => buildSmartStream(applyFilter(items, filter), { deck, sparkEvery: 6, balance: false }),
-    [items, filter, deck],
+    () => buildSmartStream(items, { deck, sparkEvery: 6, balance: false }),
+    [items, deck],
   );
 
   return (
@@ -589,24 +527,19 @@ export function SmartFeed({
         ) : null}
       </AnimatePresence>
 
-      {/* Controls — a sticky, world-class nav bar. A hairline-bordered glass rail
-          holds the hero segmented control (smooth spring-slid indicator) and a
-          quiet row of filter chips (edge-faded on mobile; on large screens they
-          spread edge-to-edge since there's room). Collapsible via the tiny handle
-          at its bottom edge — remembered across visits. Animations are
-          transform/opacity/height only (GPU) — premium motion, no jank.
+      {/* Controls — a sticky, world-class nav bar: ONLY the hero segmented
+          control (owner spec removed the Photos/Videos/Discussed filter row).
+          It sticks below the (locked-visible) topbar and never translates.
           `backdrop-blur-lg` (not the heavier `-2xl`) — a deliberate perf trim from
           the earlier nav pass; the inset highlight below gives the same premium
           glass feel without the extra GPU cost. */}
       <div
         className={cn(
-          "sticky top-[calc(4rem+env(safe-area-inset-top))] z-20 -mx-3 mb-4 rounded-b-2xl border-b border-border/50 bg-background/90 px-3 pb-2.5 pt-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_28px_-18px_rgba(0,0,0,0.3)] backdrop-blur-lg transition-transform duration-300 will-change-transform sm:-mx-4 sm:px-4",
-          topbarHidden ? "-translate-y-16 lg:translate-y-0" : "translate-y-0",
+          "sticky top-[calc(4rem+env(safe-area-inset-top))] z-20 -mx-3 mb-4 rounded-b-2xl border-b border-border/50 bg-background/90 px-3 pb-2.5 pt-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_28px_-18px_rgba(0,0,0,0.3)] backdrop-blur-lg sm:-mx-4 sm:px-4",
         )}
       >
         {/* Hero segmented control — minimal text + a thin sliding underline (same
-            identity language as the Reels tabs), no pill/border. Always visible,
-            even with the filter chips tucked away below. */}
+            identity language as the Reels tabs), no pill/border. */}
         <div className="flex items-center justify-center gap-8">
           {SEGMENTS.map((t) => {
             const on = sort === t.key;
@@ -636,61 +569,6 @@ export function SmartFeed({
           })}
         </div>
 
-        {/* Quiet filter chips — collapsible via the tiny handle below; the
-            segmented control above always stays put. Ghost by default,
-            brand-gradient glow when active. Edge-faded horizontal scroll on
-            mobile (right-only — never clips the usually-active first chip); on
-            large screens there's always room for all five, so they justify
-            edge-to-edge instead. */}
-        <motion.div
-          initial={false}
-          animate={{ height: navOpen ? "auto" : 0, opacity: navOpen ? 1 : 0 }}
-          transition={{ type: "spring", stiffness: 340, damping: 34 }}
-          className="overflow-hidden"
-        >
-          <div className="-mx-1 mt-2.5 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [-webkit-mask-image:linear-gradient(90deg,#000_0,#000_90%,transparent)] [mask-image:linear-gradient(90deg,#000_0,#000_90%,transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:justify-between lg:overflow-visible lg:[-webkit-mask-image:none] lg:[mask-image:none]">
-            {FILTERS.map((f) => {
-              const on = filter === f.id;
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setFilter(f.id)}
-                  aria-pressed={on}
-                  className={cn(
-                    "relative flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition active:scale-95",
-                    on ? "text-white" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {on ? (
-                    <motion.span
-                      layoutId="filter-pill"
-                      transition={{ type: "spring", stiffness: 480, damping: 40 }}
-                      className="bg-brand brand-glow absolute inset-0 rounded-full"
-                    />
-                  ) : null}
-                  <f.icon className={cn("relative z-10 h-3.5 w-3.5", on ? "opacity-100" : "opacity-70")} strokeWidth={2.1} />
-                  <span className="relative z-10">{f.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </motion.div>
-
-        {/* Tiny collapse/expand handle — a small tab at the very bottom edge of
-            the nav, on every screen size. Only tucks away the filter chips —
-            the For You / Following / Reels tabs above always stay visible. */}
-        <button
-          type="button"
-          onClick={toggleNavOpen}
-          aria-label={navOpen ? "Hide filters" : "Show filters"}
-          aria-expanded={navOpen}
-          className="absolute -bottom-2.5 left-1/2 z-10 flex h-5 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-border/60 bg-background shadow-sm transition hover:bg-secondary active:scale-90"
-        >
-          <motion.span animate={{ rotate: navOpen ? 0 : 180 }} transition={{ type: "spring", stiffness: 380, damping: 30 }} className="flex">
-            <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-          </motion.span>
-        </button>
       </div>
 
       {/* Switching tabs (tap OR swipe) slides + crossfades the whole pane —
@@ -710,7 +588,7 @@ export function SmartFeed({
             {switching ? (
               <FeedSkeleton count={3} />
             ) : stream.length === 0 && !error ? (
-              <ZeroEmptyFeed sort={sort} filter={filter} deck={deck} />
+              <ZeroEmptyFeed sort={sort} deck={deck} />
             ) : (
               <div className="space-y-4">
                 <AnimatePresence initial={false}>
@@ -788,19 +666,13 @@ export function SmartFeed({
  */
 function ZeroEmptyFeed({
   sort,
-  filter,
   deck,
 }: {
   sort: HomeFeedSort;
-  filter: FilterId;
   deck: ReturnType<typeof buildSparkDeck>;
 }) {
   const heading =
-    filter !== "all"
-      ? `No ${filter === "video" ? "videos" : filter === "photo" ? "photos" : "matches"} here yet`
-      : sort === "following"
-        ? "Follow creators to fill this feed"
-        : "Your feed is warming up";
+    sort === "following" ? "Follow creators to fill this feed" : "Your feed is warming up";
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-dashed border-border/70 p-8 text-center">

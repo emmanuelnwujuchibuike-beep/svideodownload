@@ -1,14 +1,18 @@
 "use client";
 
-import { AlertCircle, Download, Globe2, Loader2, Share2, X } from "lucide-react";
+import { AlertCircle, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MoreVertical, Share2, Trash2, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { closePlayer, usePlayer } from "@/features/downloads/player-store";
+import { removeDownload, toggleFavorite } from "@/features/history/store";
 import { toast } from "@/features/ui/toast";
 import { downloadUrl, saveBlob } from "@/lib/client-download";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
 export function DownloadPlayer() {
   const rec = usePlayer();
@@ -18,12 +22,15 @@ export function DownloadPlayer() {
 
 function PlayerInner() {
   const rec = usePlayer()!;
+  const router = useRouter();
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [cachePct, setCachePct] = useState<number | null>(null);
   const [error, setError] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [postId, setPostId] = useState<string | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [favorited, setFavorited] = useState(rec.favorite);
   const blobRef = useRef<Blob | null>(null);
 
   useEffect(() => {
@@ -150,10 +157,49 @@ function PlayerInner() {
     }
   };
 
+  // ── Overflow (•••) actions ────────────────────────────────────────────────
+  const copyLink = async () => {
+    setMoreOpen(false);
+    try {
+      await navigator.clipboard.writeText(rec.url);
+      toast("Source link copied.", "success", { duration: 2000 });
+    } catch {
+      toast("Couldn't copy the link.", "error");
+    }
+  };
+  const openOriginal = () => {
+    setMoreOpen(false);
+    window.open(rec.url, "_blank", "noopener");
+  };
+  // Re-opens the downloader on this same source with the full quality picker,
+  // so a video that won't play at this quality can be re-downloaded at another.
+  const chooseAnotherQuality = () => {
+    setMoreOpen(false);
+    closePlayer();
+    router.push(`/downloads?u=${encodeURIComponent(rec.url)}`);
+  };
+  const toggleFav = () => {
+    setMoreOpen(false);
+    const next = !favorited;
+    setFavorited(next);
+    toggleFavorite(rec.id);
+  };
+  const removeFromHistory = () => {
+    setMoreOpen(false);
+    removeDownload(rec.id);
+    closePlayer();
+    toast("Removed from downloads.", "info", { duration: 2000 });
+  };
+
   return (
     <div className="fixed inset-0 z-[92] flex flex-col bg-black/95 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={rec.title}>
-      <button type="button" onClick={closePlayer} aria-label="Close" className="fixed right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:bg-white/20">
+      {/* Close top-left / options top-right — same convention every other
+          full-screen media viewer in the app uses (reels, image viewer). */}
+      <button type="button" onClick={closePlayer} aria-label="Close" className="fixed left-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:bg-white/20">
         <X className="h-5 w-5" />
+      </button>
+      <button type="button" onClick={() => setMoreOpen(true)} aria-label="More options" className="fixed right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:bg-white/20">
+        <MoreVertical className="h-5 w-5" />
       </button>
 
       <div className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-6">
@@ -208,6 +254,81 @@ function PlayerInner() {
           </button>
         </div>
       ) : null}
+
+      {/* Options (•••) menu — secondary actions that don't need a permanent
+          button in the action bar above. */}
+      <AnimatePresence>
+        {moreOpen ? (
+          <div className="fixed inset-0 z-[95] flex items-end justify-center">
+            <motion.button
+              type="button"
+              aria-label="Close"
+              onClick={() => setMoreOpen(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+            />
+            <motion.div
+              role="menu"
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 24, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 420, damping: 38 }}
+              className="relative m-2 w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur-2xl"
+            >
+              <div className="mx-auto mt-2.5 mb-1 h-1 w-9 rounded-full bg-border" />
+              <div className="p-1.5">
+                <div className="mb-1.5 overflow-hidden rounded-2xl bg-secondary/30">
+                  <MoreItem icon={Heart} label={favorited ? "Unfavorite" : "Favorite"} active={favorited} onClick={toggleFav} />
+                  {rec.kind === "video" ? (
+                    <MoreItem icon={Download} label="Choose a different quality" onClick={chooseAnotherQuality} />
+                  ) : null}
+                  <MoreItem icon={Link2} label="Copy source link" onClick={copyLink} />
+                  <MoreItem icon={ExternalLink} label="Open original post" onClick={openOriginal} />
+                </div>
+                <div className="overflow-hidden rounded-2xl bg-secondary/30">
+                  <MoreItem icon={Trash2} label="Remove from downloads" onClick={removeFromHistory} danger />
+                </div>
+              </div>
+              <div className="p-1.5 pt-0">
+                <button type="button" onClick={() => setMoreOpen(false)} className="w-full rounded-2xl bg-secondary/70 py-3 text-sm font-semibold text-foreground transition hover:bg-secondary active:scale-[0.99]">
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        ) : null}
+      </AnimatePresence>
     </div>
+  );
+}
+
+function MoreItem({
+  icon: Icon,
+  label,
+  onClick,
+  active,
+  danger,
+}: {
+  icon: typeof Heart;
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      role="menuitem"
+      className={cn(
+        "flex w-full items-center gap-3.5 px-4 py-3 text-left text-[15px] font-medium transition first:rounded-t-2xl last:rounded-b-2xl active:scale-[0.99]",
+        danger ? "text-red-500 hover:bg-red-500/10" : "text-foreground hover:bg-secondary/70",
+      )}
+    >
+      <Icon className={cn("h-5 w-5 shrink-0 opacity-90", active && "fill-rose-500 text-rose-500")} strokeWidth={1.9} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+    </button>
   );
 }

@@ -224,6 +224,17 @@ _Last updated: 2026‑07‑05 (instant tab switching + resume position, caption 
   analytics. Also queued as recorded specs: the **Wow interaction system**
   (signature reaction replacing Like) and **Frenzsave Moments** (premium 24h
   temporary sharing on the stories base).
+- **True‑aspect video + edge‑to‑edge (2026‑07‑06)** — video frames are never
+  cropped anywhere: the reel player uses object‑contain on every screen (tall
+  clips fill the full height; landscape/square clips show complete over the
+  blurred backdrop), and feed cards measure each clip's real aspect ratio and
+  size themselves to it (clamped between 9:16 and 16:9). The installed app is
+  now truly edge‑to‑edge (`viewport-fit=cover` + black‑translucent status
+  bar): reels and photos draw under the clock/battery like TikTok, and every
+  top‑anchored bar/control pads itself clear via `env(safe-area-inset-top)`.
+  **Rule:** any new fixed/sticky top‑anchored element must include the
+  safe‑area inset; the app topbar is `4rem + inset` tall, so sticky offsets
+  below it must use `calc(4rem + env(safe-area-inset-top))`.
 - **💙 Wow (slice 1, 2026‑07‑06)** — Like is now **Wow**, Frenzsave's signature
   interaction. A custom twin electric‑spark mark (never the emoji): quiet
   outline at rest, electric blue→purple gradient with a soft glow when

@@ -115,7 +115,16 @@ _Last updated: 2026‑07‑05 (instant tab switching + resume position, caption 
 - **Profiles** — Identity Ring w/ presence, living glow, live stats, Posts/Videos/
   Photos tabs, share, completion meter.
 - **Creation Studio** — block‑based Story Studio (heading/text/quote/image/video/
-  divider), drafts + recovery, morph publish animation.
+  divider), drafts + recovery, morph publish animation. **Photo editor
+  (2026‑07‑06):** picking an image in Create offers Edit — a non‑destructive
+  editor (the edit is a parameter object over the original; nothing bakes until
+  Apply, "Edit again" resumes the same sliders). Live GPU preview (CSS filter +
+  blend overlays), press‑and‑hold to compare with the original, rotate/flip/
+  reset, six adjustment sliders (brightness/contrast/saturation/warmth/fade/
+  vignette) and 14 Frenzsave signature filter families with an intensity
+  slider. Apply runs one typed‑array pixel pass (Safari‑safe — no canvas
+  ctx.filter) and caps output at 2560px. Next studio slices: video trim +
+  cover via the ffmpeg worker, crop, caption studio.
 - **Downloader** — the SEO/download product; direct download of posts (free tier
   capped at 5/day, premium unlimited).
 - **Repost & Share (Phase 1 + 2)** — reels action stack is Like · Comment ·

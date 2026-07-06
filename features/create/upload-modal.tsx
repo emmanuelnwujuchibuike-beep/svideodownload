@@ -17,6 +17,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
+import { NEUTRAL_EDIT, PhotoEditor, type PhotoEdit } from "@/features/create/photo-editor";
 import { openStudio } from "@/features/create/studio/studio-store";
 import { closeUpload, useUploadIntent, useUploadOpen } from "@/features/create/upload-store";
 import { captureVideoPoster } from "@/lib/media/video-poster";
@@ -49,9 +50,17 @@ function ModalInner() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [doneUrl, setDoneUrl] = useState<string | null>(null);
+  // Studio photo editing is NON-DESTRUCTIVE: the original file + a parameter
+  // object are kept, the edited pixels are baked only on Apply — so reopening
+  // the editor resumes the exact same sliders over the original.
+  const [original, setOriginal] = useState<File | null>(null);
+  const [edit, setEdit] = useState<PhotoEdit>(NEUTRAL_EDIT);
+  const [editing, setEditing] = useState(false);
+  const [editedPreview, setEditedPreview] = useState<string | null>(null);
 
   const close = () => {
     if (preview) URL.revokeObjectURL(preview);
+    if (editedPreview) URL.revokeObjectURL(editedPreview);
     closeUpload();
   };
 
@@ -63,6 +72,11 @@ function ModalInner() {
     if (f.size > MAX_BYTES) return setErr("File must be under 100 MB.");
     setErr(null);
     setFile(f);
+    setOriginal(f);
+    setEdit(NEUTRAL_EDIT);
+    setEditing(false);
+    if (editedPreview) URL.revokeObjectURL(editedPreview);
+    setEditedPreview(null);
     setKind(isVideo ? "video" : "image");
     if (preview) URL.revokeObjectURL(preview);
     setPreview(URL.createObjectURL(f));
@@ -290,6 +304,22 @@ function ModalInner() {
                 {err ? <p className="mt-3 text-center text-sm text-rose-400">{err}</p> : null}
                 <p className="mt-3 text-center text-[11px] text-muted-foreground">Photos & videos · up to 100 MB</p>
               </motion.div>
+            ) : editing && original && preview ? (
+              /* ── Studio photo editor (non-destructive) ─────────────────── */
+              <PhotoEditor
+                src={preview}
+                original={original}
+                initial={edit}
+                onCancel={() => setEditing(false)}
+                onApply={({ blob, edit: nextEdit }) => {
+                  const edited = new File([blob], original.name.replace(/\.\w+$/, "") + "-edited.jpg", { type: "image/jpeg" });
+                  setFile(edited);
+                  setEdit(nextEdit);
+                  if (editedPreview) URL.revokeObjectURL(editedPreview);
+                  setEditedPreview(URL.createObjectURL(edited));
+                  setEditing(false);
+                }}
+              />
             ) : (
               /* ── Compose ───────────────────────────────────────────────── */
               <motion.div key="compose" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 pt-1">
@@ -299,11 +329,18 @@ function ModalInner() {
                     <video src={preview} className="max-h-80 w-full object-contain" autoPlay muted loop playsInline controls />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={preview} alt="" className="max-h-80 w-full object-contain" />
+                    <img src={editedPreview ?? preview ?? undefined} alt="" className="max-h-80 w-full object-contain" />
                   )}
-                  <button type="button" onClick={() => galleryRef.current?.click()} className="absolute right-2.5 top-2.5 rounded-lg bg-black/55 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition hover:bg-black/70">
-                    Change
-                  </button>
+                  <div className="absolute right-2.5 top-2.5 flex gap-1.5">
+                    {kind === "image" ? (
+                      <button type="button" onClick={() => setEditing(true)} className="rounded-lg bg-black/55 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition hover:bg-black/70">
+                        {editedPreview ? "Edit again" : "Edit"}
+                      </button>
+                    ) : null}
+                    <button type="button" onClick={() => galleryRef.current?.click()} className="rounded-lg bg-black/55 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition hover:bg-black/70">
+                      Change
+                    </button>
+                  </div>
                 </div>
 
                 <input

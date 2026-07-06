@@ -13,6 +13,7 @@ const UploadModal = dynamic(() => import("@/features/create/upload-modal").then(
 const StoryStudio = dynamic(() => import("@/features/create/studio/story-studio").then((m) => m.StoryStudio), { ssr: false });
 const DownloadPlayer = dynamic(() => import("@/features/downloads/download-player").then((m) => m.DownloadPlayer), { ssr: false });
 const IosInstallPrompt = dynamic(() => import("@/features/notifications/ios-install-prompt").then((m) => m.IosInstallPrompt), { ssr: false });
+const PushNudge = dynamic(() => import("@/features/notifications/push-nudge").then((m) => m.PushNudge), { ssr: false });
 
 export function AppOverlays() {
   return (
@@ -21,6 +22,7 @@ export function AppOverlays() {
       <StoryStudio />
       <DownloadPlayer />
       <IosInstallPrompt />
+      <PushNudge />
     </>
   );
 }

@@ -68,6 +68,41 @@ export async function enablePush(): Promise<PushState> {
   return res.ok ? "subscribed" : "unsubscribed";
 }
 
+/**
+ * Silently repair this device's subscription when permission is already
+ * granted: re-subscribes if the browser dropped it and re-POSTs so the server
+ * row is re-homed to the current account (or restored after being pruned by a
+ * failed send). Safe to call on every app launch — throttled per session.
+ */
+export async function syncPush(): Promise<void> {
+  if (!pushSupported() || Notification.permission !== "granted") return;
+  const KEY = "frenz:push-synced";
+  try {
+    if (sessionStorage.getItem(KEY) === "1") return;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    await navigator.serviceWorker.ready;
+    const sub =
+      (await reg.pushManager.getSubscription()) ??
+      (await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!) as BufferSource,
+      }));
+    const json = sub.toJSON();
+    const res = await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+    });
+    if (res.ok) sessionStorage.setItem(KEY, "1");
+  } catch {
+    /* best-effort — the enable button remains the explicit path */
+  }
+}
+
 /** Unsubscribe this browser and remove it server-side. */
 export async function disablePush(): Promise<PushState> {
   if (!pushSupported()) return "unsupported";

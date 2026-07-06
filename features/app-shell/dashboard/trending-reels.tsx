@@ -3,7 +3,7 @@
 import { BadgeCheck, Flame, Play } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useQuery } from "@/features/data";
 import { ReelsFeed } from "@/features/reels/reels-feed";
@@ -13,16 +13,22 @@ import { formatCompactNumber } from "@/lib/utils";
 
 const FALLBACK = ["from-rose-500 to-fuchsia-600", "from-sky-500 to-blue-600", "from-violet-500 to-purple-600", "from-amber-500 to-orange-600", "from-emerald-500 to-teal-600"];
 
-/** Trending Reels rail — real recent video posts; tap to play inline. */
+/** Trending Reels rail — real recent reels, autoplaying in view; tap to open. */
 export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
   const { data, isLoading } = useQuery<FeedItem[]>(
     "home-feed:reels",
     async () => {
       try {
-        const d = await getApi().action<{ items: FeedItem[] }>("/api/home-feed", { method: "GET", query: { sort: "recent", limit: 15 } });
-        return (d.items ?? []).filter((i) => i.mediaKind === "video").slice(0, 8);
+        // The Reels product's OWN feed — since the feed/reels split,
+        // /api/home-feed excludes reels, so revalidating against it emptied
+        // this rail (the "shows then disappears" bug). If a revalidation
+        // errors or comes back empty, keep whatever we're already showing
+        // instead of vanishing the section.
+        const d = await getApi().action<{ items: FeedItem[] }>("/api/reels", { method: "GET", query: { sort: "recent", limit: 15 } });
+        const fresh = (d.items ?? []).filter((i) => i.mediaKind === "video").slice(0, 8);
+        return fresh.length > 0 ? fresh : (initialItems ?? []);
       } catch {
-        return [];
+        return initialItems ?? [];
       }
     },
     { initialData: initialItems },
@@ -57,11 +63,10 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
                 onClick={() => setStartId(item.id)}
                 className="group relative aspect-[9/14] w-36 shrink-0 overflow-hidden rounded-2xl text-left shadow-soft ring-1 ring-border/60 transition hover:-translate-y-1 hover:shadow-card"
               >
-                {item.thumbnailUrl ? (
+                {item.mediaUrl ? (
+                  <RailVideo src={item.mediaUrl} poster={item.thumbnailUrl} />
+                ) : item.thumbnailUrl ? (
                   <Image src={item.thumbnailUrl} alt="" fill sizes="144px" className="object-cover transition duration-300 group-hover:scale-105" />
-                ) : item.mediaUrl ? (
-                  // eslint-disable-next-line jsx-a11y/media-has-caption
-                  <video src={`${item.mediaUrl}#t=0.5`} muted playsInline preload="metadata" className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105" />
                 ) : (
                   <span className={`absolute inset-0 bg-gradient-to-br ${FALLBACK[i % FALLBACK.length]}`} />
                 )}
@@ -85,5 +90,44 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
         <ReelsFeed initialItems={items} initialOffset={null} startId={startId} onClose={() => setStartId(null)} />
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Autoplaying rail tile: muted, looping, and only plays while actually on
+ * screen (IntersectionObserver pauses off-screen tiles — battery/data). The
+ * poster paints instantly; playback starts as soon as the tile is visible.
+ */
+function RailVideo({ src, poster }: { src: string; poster?: string | null }) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry) return;
+        if (entry.isIntersecting) v.play().catch(() => {});
+        else v.pause();
+      },
+      { threshold: 0.35 },
+    );
+    obs.observe(v);
+    return () => {
+      obs.disconnect();
+      v.pause();
+    };
+  }, []);
+  return (
+    // eslint-disable-next-line jsx-a11y/media-has-caption
+    <video
+      ref={ref}
+      src={src}
+      poster={poster ?? undefined}
+      muted
+      loop
+      playsInline
+      preload="metadata"
+      className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
+    />
   );
 }

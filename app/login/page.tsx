@@ -1,4 +1,6 @@
+import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AuthPanel } from "@/features/auth/auth-panel";
@@ -36,6 +38,14 @@ export default async function LoginPage({
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-violet-500/[0.07] via-transparent to-transparent" />
       <div aria-hidden className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-violet-500/15 blur-3xl" />
       <div aria-hidden className="pointer-events-none absolute -right-24 top-24 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
+
+      <Link
+        href="/"
+        aria-label="Back to Frenz"
+        className="fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-20 flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-card/80 text-foreground shadow-md backdrop-blur-md transition hover:bg-secondary active:scale-95"
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </Link>
 
       {/* Collage — fills the space above the auth block */}
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-4 pt-4">

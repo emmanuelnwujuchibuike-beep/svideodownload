@@ -64,6 +64,12 @@ export const viewport: Viewport = {
   // across the whole app, including the admin pages.
   maximumScale: 1,
   userScalable: false,
+  // Edge-to-edge in the installed app: with statusBarStyle black-translucent
+  // this lets reels/photos draw UNDER the clock/battery/notch (TikTok-style
+  // full bleed). It's also what makes env(safe-area-inset-*) return real
+  // values — without it iOS letterboxes below the status bar and every
+  // safe-area padding in the app evaluates to zero.
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#080b14" },
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },

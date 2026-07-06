@@ -222,7 +222,7 @@ export function ReelDeck({
         type="button"
         onClick={onClose}
         aria-label="Close reels"
-        className="absolute left-4 top-4 z-[80] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
+        className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] z-[80] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
       >
         <X className="h-5 w-5" />
       </button>
@@ -827,13 +827,15 @@ function ReelCard({
 
   return (
     <>
-      {/* Cover — always painted underneath so a snapped-in reel never flashes black */}
+      {/* Cover — always painted underneath so a snapped-in reel never flashes black.
+          The clip shows at its TRUE aspect (object-contain — nothing ever cropped);
+          the blurred backdrop fills whatever the letterbox leaves. */}
       {item.thumbnailUrl ? (
         <div className="absolute inset-0 bg-black">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.thumbnailUrl} alt="" aria-hidden loading="lazy" decoding="async" className="h-full w-full scale-110 object-cover opacity-40 blur-2xl lg:hidden" />
+          <img src={item.thumbnailUrl} alt="" aria-hidden loading="lazy" decoding="async" className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.thumbnailUrl} alt="" aria-hidden loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover lg:object-contain" />
+          <img src={item.thumbnailUrl} alt="" aria-hidden loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-contain" />
         </div>
       ) : null}
 
@@ -845,7 +847,7 @@ function ReelCard({
         const scrubbable = native && dur > 0;
         const displayPct = scrubbing ? scrubPct * 100 : progress;
         return (
-          <div className={cn("absolute inset-x-0 top-0 z-40 transition-opacity duration-200", ui || scrubbing ? "opacity-100" : "opacity-0")}>
+          <div className={cn("absolute inset-x-0 top-[env(safe-area-inset-top)] z-40 transition-opacity duration-200", ui || scrubbing ? "opacity-100" : "opacity-0")}>
             <div
               ref={seekBar}
               onPointerDown={scrubbable ? scrubStart : undefined}
@@ -893,7 +895,7 @@ function ReelCard({
         type="button"
         onClick={() => setMoreOpen(true)}
         aria-label="More options"
-        className="absolute right-4 top-4 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95 lg:-right-[4.5rem]"
+        className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95 lg:-right-[4.5rem]"
       >
         <MoreVertical className="h-5 w-5" />
       </button>
@@ -929,7 +931,10 @@ function ReelCard({
               loop
               playsInline
               preload={preload}
-              className="relative z-10 h-full w-full object-cover lg:h-auto lg:max-h-full lg:w-auto lg:max-w-full lg:object-contain"
+              // TRUE aspect on every screen: tall clips fill the full height,
+              // shorter/wider clips show exactly as they are over the blurred
+              // backdrop — no part of the frame is ever cropped away.
+              className="relative z-10 h-full w-full object-contain lg:h-auto lg:max-h-full lg:w-auto lg:max-w-full"
               onPlay={() => {
                 video.current && claimPlayback(video.current);
                 setBuffering(false);

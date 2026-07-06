@@ -72,7 +72,11 @@ export function AppTopbar() {
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-border/20 bg-background/60 px-4 backdrop-blur-xl transition-transform duration-300 will-change-transform",
+        // pt safe-area: with viewport-fit=cover the installed app draws under
+        // the status bar — the bar pads itself clear of the clock/battery
+        // (zero in a normal browser tab, so nothing changes there).
+        "sticky top-0 z-30 flex items-center gap-2 border-b border-border/20 bg-background/60 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl transition-transform duration-300 will-change-transform",
+        "h-[calc(4rem+env(safe-area-inset-top))]",
         hidden ? "-translate-y-full lg:translate-y-0" : "translate-y-0",
       )}
     >

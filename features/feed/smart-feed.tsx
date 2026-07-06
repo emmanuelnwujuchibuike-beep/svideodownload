@@ -546,7 +546,7 @@ export function SmartFeed({
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="pointer-events-none sticky top-[4.5rem] z-20 flex justify-center"
+            className="pointer-events-none sticky top-[calc(4.5rem+env(safe-area-inset-top))] z-20 flex justify-center"
           >
             <button
               type="button"
@@ -600,7 +600,7 @@ export function SmartFeed({
           glass feel without the extra GPU cost. */}
       <div
         className={cn(
-          "sticky top-16 z-20 -mx-3 mb-4 rounded-b-2xl border-b border-border/50 bg-background/90 px-3 pb-2.5 pt-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_28px_-18px_rgba(0,0,0,0.3)] backdrop-blur-lg transition-transform duration-300 will-change-transform sm:-mx-4 sm:px-4",
+          "sticky top-[calc(4rem+env(safe-area-inset-top))] z-20 -mx-3 mb-4 rounded-b-2xl border-b border-border/50 bg-background/90 px-3 pb-2.5 pt-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_28px_-18px_rgba(0,0,0,0.3)] backdrop-blur-lg transition-transform duration-300 will-change-transform sm:-mx-4 sm:px-4",
           topbarHidden ? "-translate-y-16 lg:translate-y-0" : "translate-y-0",
         )}
       >

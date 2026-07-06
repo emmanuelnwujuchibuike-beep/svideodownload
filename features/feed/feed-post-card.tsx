@@ -388,7 +388,9 @@ function FeedPostCardImpl({
             poster={item.thumbnailUrl}
             postId={item.id}
             onExpand={() => onOpen(item)}
-            className="aspect-[3/4] w-full"
+            // FeedVideo renders the clip at its TRUE aspect ratio (measured from
+            // the video) — tall clips expand, short/wide ones show as they are.
+            className="w-full"
           />
         </div>
       ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (

@@ -246,7 +246,7 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
           its own. Absolute children position relative to this padding box, so
           the image/caption also recenter within the narrower space. */}
       <div className="relative h-full flex-1 lg:pr-24">
-        <button type="button" onClick={onClose} aria-label="Close" className="absolute left-4 top-4 z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95">
+        <button type="button" onClick={onClose} aria-label="Close" className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95">
           <X className="h-5 w-5" />
         </button>
 
@@ -256,7 +256,7 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
           type="button"
           onClick={() => setMoreOpen(true)}
           aria-label="More options"
-          className="absolute right-4 top-4 z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
+          className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
         >
           <MoreVertical className="h-5 w-5" />
         </button>

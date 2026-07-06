@@ -152,7 +152,7 @@ export function ReelsFeed({
           the app sidebar (16rem) on the left AND the persistent comments panel
           (400px) reserved on the right, so it never compresses against the
           top-right options (•••) button. */}
-      <div className="fixed left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-6 lg:left-[calc(50%-4.5rem)]">
+      <div className="fixed left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-40 flex -translate-x-1/2 items-center gap-6 lg:left-[calc(50%-4.5rem)]">
         {([
           { id: "for_you" as const, label: "For You" },
           { id: "following" as const, label: "Following" },

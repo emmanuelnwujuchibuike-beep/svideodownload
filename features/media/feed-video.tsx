@@ -53,6 +53,11 @@ export function FeedVideo({
   const [showPause, setShowPause] = useState(false);
   const [covered, setCovered] = useState(true);
   const [shouldLoad, setShouldLoad] = useState(false);
+  // The card shows the video at its TRUE aspect ratio — nothing is ever
+  // cropped. Tall clips expand toward full 9:16; short/wide clips render as
+  // they are (letterboxed only past the clamps). Measured from the video
+  // itself on loadedmetadata; 3:4 reserves space until then.
+  const [ratio, setRatio] = useState<number | null>(null);
   const inViewRef = useRef(false);
   const readyRef = useRef(false);
 
@@ -213,11 +218,12 @@ export function FeedVideo({
   return (
     <div
       ref={wrap}
+      style={{ aspectRatio: ratio ?? 3 / 4 }}
       className={cn(
         "group relative overflow-hidden bg-black",
         // On laptops/desktops the whole video fits the screen height (never taller
         // than 82vh) so you never scroll to see a full clip; phones stay immersive.
-        "lg:flex lg:aspect-auto lg:max-h-[82vh] lg:items-center lg:justify-center",
+        "lg:flex lg:!aspect-auto lg:max-h-[82vh] lg:items-center lg:justify-center",
         className,
       )}
     >
@@ -231,7 +237,13 @@ export function FeedVideo({
         muted
         playsInline
         preload="metadata"
-        className="h-full w-full touch-pan-y object-cover lg:h-auto lg:max-h-[82vh] lg:w-auto lg:object-contain"
+        className="h-full w-full touch-pan-y object-contain lg:h-auto lg:max-h-[82vh] lg:w-auto"
+        onLoadedMetadata={() => {
+          const v = video.current;
+          if (!v || !v.videoWidth || !v.videoHeight) return;
+          // Exact ratio, clamped: tallest a card goes is full 9:16, widest 16:9.
+          setRatio(Math.min(16 / 9, Math.max(9 / 16, v.videoWidth / v.videoHeight)));
+        }}
         onPlay={() => {
           video.current && claimPlayback(video.current);
         }}
@@ -250,7 +262,7 @@ export function FeedVideo({
           not-yet-decoded clip never flashes a blank black screen. */}
       {covered && poster ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full object-cover lg:object-contain" />
+        <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full object-contain" />
       ) : null}
 
       {/* Paused-while-holding indicator */}

@@ -241,10 +241,20 @@ _Last updated: 2026‑07‑05 (instant tab switching + resume position, caption 
   "Download N Items" with total size, parallel background streaming with one
   summary card, a Fast/Private/No‑Watermark/No‑Sign‑up feature strip, and a
   crown upsell for free users (batch itself is Pro+; singles stay free).
-  Queued next from that spec: worker‑side ZIP packaging, batch reposting, and
-  the full multi‑media post/carousel system (post_media model; multi‑video →
-  Feed/Reels/both, photos → Feed, mixed albums → Feed only; carousels in feed;
-  horizontal‑inside‑vertical reel albums).
+  Queued next from that spec: worker‑side ZIP packaging and batch reposting.
+- **Multi‑media posts / carousels (2026‑07‑06)** — creators can now publish
+  albums: pick several photos/videos at once (drag‑drop or gallery
+  multi‑select, up to 20), reorder with the cover always first, remove/add
+  tiles, and edit each photo non‑destructively; destinations adapt (photo
+  albums → Feed; video albums → one Reel or a Feed album; **mixed albums →
+  Feed only**, enforced server‑side too). Publishing uploads each item with
+  live "Uploading i of n" progress and creates one post whose ordered items
+  live in `post_media` (**migration `0032` must be applied**). Feed cards
+  render albums as a native scroll‑snap carousel — full‑width slides,
+  1/n counter, animated dots, letterboxed over a blurred backdrop (never
+  cropped), slide videos autoplaying only while visible. Still open: reel
+  albums (horizontal swipe inside a reel), album rendering in the post
+  viewers, profile‑grid album badges.
 - **Download experience (2026‑07‑06)** — downloads never navigate to a raw
   file again (the old link path stranded iOS/installed‑app users on a Quick
   Look preview). Every download button now streams in the background through

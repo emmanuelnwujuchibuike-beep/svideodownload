@@ -147,9 +147,28 @@ _Last updated: 2026‑07‑05 (instant tab switching + resume position, caption 
   discovery header quotes the newest followed reposter's caption and collapses
   to "Recommended by people you follow" past three reposters. The visible action
   bar is now Like · Comment · Repost · Save on feed cards too — Share, Copy link
-  and Download live in the ••• overflow. Still open from the expanded spec:
-  long‑press repost options, quote reposts, per‑repost discussions, a reposters
-  bottom sheet, creator repost analytics.
+  and Download live in the ••• overflow. **Long‑press & discovery (same day):**
+  holding the Repost button (feed, reels rail, desktop sidebar) opens an
+  advanced options sheet — Quick Repost / Repost‑with‑caption before; Edit
+  caption (inside the live 15‑minute window), Pin/Unpin, Copy link, Remove
+  after. Tapping the reels avatar cluster or the feed "reposted" line opens a
+  "Reposted by" sheet (followed users first, captions, quick Follow) via
+  `GET /api/posts/:id/reposters`. Still open from the expanded spec: quote
+  reposts, per‑repost discussions, creator repost analytics.
+- **Auth (passwordless Email OTP)** — sign‑in/sign‑up is one flow: email → a
+  6‑digit code delivered in a premium branded Resend email (the code itself
+  comes from Supabase Auth, so sessions stay stock) → straight into /home. The
+  code screen auto‑focuses, auto‑advances, accepts paste + iOS autofill,
+  verifies automatically on the 6th digit, shakes on a wrong code, and offers a
+  30‑second resend countdown + change‑email. Common email typos get a "Did you
+  mean?" fix. Google OAuth stays; passwords are gone from the UI (existing
+  password accounts sign in via the code — same email, same user). Requests are
+  rate‑limited per IP and per email and never reveal whether an account exists.
+  **Owner actions:** set `RESEND_API_KEY` (+ optional `RESEND_FROM`,
+  `OTP_EXPIRY_MINUTES`) on Vercel and verify the sender domain in Resend; for a
+  5‑minute expiry set Supabase Auth's Email OTP expiration to 300s. Still open:
+  the spec's required‑onboarding steps (username availability, DOB, country),
+  active‑sessions view, trusted devices.
 
 ## Performance, battery & thermal
 

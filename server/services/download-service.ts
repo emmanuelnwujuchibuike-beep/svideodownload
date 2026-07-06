@@ -281,17 +281,10 @@ export async function resolveDownload(
   // A synthesized lower-quality tier (see quality-ladder.ts) always goes
   // through ffmpeg to actually produce a smaller file — which also validates
   // the source: a source with no real video track fails loudly here instead
-  // of silently shipping an audio-only "video" the way a raw proxy would.
+  // of silently shipping an audio-only "video" the way a raw proxy would. No
+  // fallback to the raw stream — that would defeat the entire point.
   if (hasDirect && format!.transcodeMaxHeight) {
-    try {
-      return { ...(await downscaleTo(format!, format!.transcodeMaxHeight)), title };
-    } catch {
-      try {
-        return { ...(await proxyDownload(format!)), title };
-      } catch {
-        throw new YtDlpError("could not produce this quality", "DOWNLOAD_FAILED");
-      }
-    }
+    return { ...(await downscaleTo(format!, format!.transcodeMaxHeight)), title };
   }
 
   // Platforms whose direct-URL video streams aren't reliably H.264 — the only
@@ -302,20 +295,35 @@ export async function resolveDownload(
   // tier is sometimes a proprietary codec that plays as audio-only with no
   // picture. Other direct-URL platforms (X/Pinterest/Vimeo/Snapchat) have
   // always been observed serving plain H.264 and keep the faster raw-proxy path.
-  const needsCodecCheck = ["facebook", "instagram", "threads", "tiktok"].includes(meta.platform);
+  const needsCodecCheck = kind === "video" && ["facebook", "instagram", "threads", "tiktok"].includes(meta.platform);
+
+  if (hasDirect && needsCodecCheck) {
+    try {
+      return { ...(await transcodeToH264(format!)), title };
+    } catch (e) {
+      // NEVER fall back to the raw, unvalidated stream here — that's exactly
+      // what would silently reintroduce the audio-only bug this check exists
+      // to catch. Try yt-dlp's own independent extraction as a second
+      // opinion; if that also fails, surface a clear error instead of a
+      // "successful" download that's secretly broken.
+      try {
+        return { ...(await prepareDownload(url, formatId, kind)), title };
+      } catch {
+        throw e instanceof YtDlpError ? e : new YtDlpError("could not produce a playable video", "DOWNLOAD_FAILED");
+      }
+    }
+  }
 
   if (hasDirect) {
     try {
-      if (kind === "video" && needsCodecCheck) {
-        return { ...(await transcodeToH264(format!)), title };
-      }
       return { ...(await proxyDownload(format!)), title };
     } catch {
       // Direct URL expired/blocked — fall through to yt-dlp.
     }
   }
 
-  // yt-dlp pipeline (no direct URL, or it failed). produceTo guarantees H.264.
+  // yt-dlp pipeline (no direct URL, or the direct proxy above failed).
+  // produceTo guarantees H.264.
   try {
     return { ...(await prepareDownload(url, formatId, kind)), title };
   } catch (err) {

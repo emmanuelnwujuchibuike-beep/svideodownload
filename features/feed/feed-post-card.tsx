@@ -30,6 +30,7 @@ import { RichText } from "@/components/social/rich-text";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
+import { MediaCarousel } from "@/features/media/media-carousel";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 
@@ -378,7 +379,12 @@ function FeedPostCardImpl({
       {/* Media — taller/bigger than a typical compact card (closer to X/
           Instagram's large feed previews) so video/photo posts read as the
           hero of the card, not a thumbnail. */}
-      {item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
+      {item.mediaItems && item.mediaItems.length > 1 ? (
+        /* Album / carousel — swipeable slides with counter + dots */
+        <div className="mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">
+          <MediaCarousel items={item.mediaItems} onExpand={() => onOpen(item)} />
+        </div>
+      ) : item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
         // Big, immersive inline preview: autoplays muted in view, tap → fullscreen
         // reel, press-hold → pause.
         <div className="mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">

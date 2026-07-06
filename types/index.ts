@@ -55,6 +55,15 @@ export interface MediaFormat {
   directUrl?: string | null;
   /** Headers required to fetch `directUrl` (e.g. Referer / User-Agent). */
   httpHeaders?: Record<string, string> | null;
+  /**
+   * Set ONLY on a synthesized lower-quality tier (see quality-ladder.ts): at
+   * download time, `directUrl` is downscaled/re-encoded to this max height via
+   * ffmpeg instead of proxied verbatim — so it's always a real, smaller,
+   * validated file rather than a copy of whatever the source actually serves.
+   */
+  transcodeMaxHeight?: number | null;
+  /** Short UI hint shown under this format (e.g. "Needs a strong connection"). */
+  qualityNote?: string | null;
 }
 
 export type ExtractorName =

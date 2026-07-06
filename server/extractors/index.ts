@@ -11,6 +11,7 @@ import type { VideoMetadata } from "@/types";
 import { apifyEnabled, apifyExtract, isApifyPlatform } from "./apify-instagram";
 import { facebookExtractor } from "./facebook";
 import { pinterestExtractor } from "./pinterest";
+import { withQualityLadder } from "./quality-ladder";
 import { snapchatExtractor } from "./snapchat";
 import { threadsExtractor } from "./threads";
 import { tiktokExtractor } from "./tiktok";
@@ -112,8 +113,12 @@ export async function getMetadata(url: string): Promise<VideoMetadata> {
   if (cached) return cached;
 
   const meta = await extractFresh(url);
-  await cacheSet(key, meta, METADATA_TTL_SECONDS);
-  return meta;
+  // When the source exposes too few (often just one) video quality options,
+  // offer extra lower tiers so there's always a real, working choice — see
+  // quality-ladder.ts.
+  const withLadder: VideoMetadata = { ...meta, formats: withQualityLadder(meta.formats) };
+  await cacheSet(key, withLadder, METADATA_TTL_SECONDS);
+  return withLadder;
 }
 
 /** Reads cached metadata without triggering extraction (used at download time). */

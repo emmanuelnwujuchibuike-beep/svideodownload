@@ -832,14 +832,16 @@ function transcodeFileToH264(src: string, out: string): Promise<void> {
 }
 
 /**
- * Guarantees an iOS-playable H.264 mp4: VP9/AV1 video (common on Instagram &
- * Facebook) plays as audio-only on iOS/Safari, so anything that isn't already
- * H.264/HEVC is transcoded. H.264 files pass through untouched (no re-encode).
+ * Guarantees a universally-playable H.264 mp4: VP9/AV1/HEVC video (common on
+ * Instagram & Facebook, and occasionally selected here for other platforms)
+ * plays as audio-only with no picture on iOS/Safari (VP9/AV1) or on Chrome/
+ * Android/Windows (HEVC), so anything that isn't already genuine H.264 is
+ * transcoded. H.264 files pass through untouched (no re-encode).
  */
 async function ensureH264(filePath: string, dir: string): Promise<string> {
   if (!filePath.endsWith(".mp4")) return filePath; // audio/other — leave as-is
   const codec = (await videoCodec(filePath))?.toLowerCase();
-  if (!codec || codec === "h264" || codec === "hevc") return filePath;
+  if (!codec || codec === "h264") return filePath;
   const out = join(dir, "h264.mp4");
   try {
     await withDownloadSlot(() => transcodeFileToH264(filePath, out));

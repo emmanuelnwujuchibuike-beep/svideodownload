@@ -70,6 +70,15 @@ async function proxyDownload(format: MediaFormat): Promise<DownloadResult> {
     throw new YtDlpError(`proxy responded ${res.status}`, "DOWNLOAD_FAILED");
   }
 
+  // Defensive, zero-cost check: a "video" request whose source unexpectedly
+  // serves an audio container must never be silently accepted as a working
+  // download — better to throw here (the caller falls back to yt-dlp) than
+  // save a file that plays with no picture.
+  const contentType = res.headers.get("content-type") || "";
+  if (format.kind === "video" && /^audio\//i.test(contentType)) {
+    throw new YtDlpError("source served audio-only content for a video request", "DOWNLOAD_FAILED");
+  }
+
   return {
     stream: res.body as ReadableStream<Uint8Array>,
     ext: format.ext,
@@ -123,8 +132,13 @@ async function transcodeToH264(format: MediaFormat): Promise<DownloadResult> {
     .slice(0, 40);
 
   const codec = (await probeUrlCodec(format))?.toLowerCase();
-  // H.264/HEVC → just remux into mp4 (fast). VP9/AV1/unknown → re-encode.
-  const copy = codec === "h264" || codec === "hevc";
+  // Only a genuine H.264 stream is guaranteed to decode as VIDEO in every
+  // browser — remux it as-is (fast, no quality loss). HEVC decodes fine on
+  // iOS/Safari but not reliably on Chrome/Android/Windows, and TikTok's own
+  // proprietary codec (bytevc1) never does; both previously being treated as
+  // "safe to copy" here let them pass straight through, which plays as
+  // audio-only with no picture on those devices. Everything else is re-encoded.
+  const copy = codec === "h264";
   // Cap x264 threads — it otherwise spawns one per host core and OOM-kills the
   // memory-limited worker container mid-encode (see ytdlp-service transcode).
   const threads = process.env.FFMPEG_THREADS || "2";
@@ -178,6 +192,61 @@ async function transcodeToH264(format: MediaFormat): Promise<DownloadResult> {
   );
 }
 
+/**
+ * Downscales+re-encodes a direct-URL source to `maxHeight` — used for the
+ * synthesized lower-quality tiers (see quality-ladder.ts), so "smaller file"
+ * is always a real, working, smaller video. This doubles as validation: a
+ * source that lacks a real, decodable video track fails loudly here (a
+ * catchable error resolveDownload falls back from) instead of silently
+ * producing an audio-only file, unlike a raw proxy passthrough.
+ */
+async function downscaleTo(format: MediaFormat, maxHeight: number): Promise<DownloadResult> {
+  const key = createHash("sha256")
+    .update(`vh${maxHeight}|${format.directUrl}`)
+    .digest("hex")
+    .slice(0, 40);
+
+  // Cap x264 threads — see transcodeToH264 above.
+  const threads = process.env.FFMPEG_THREADS || "2";
+
+  return getOrProduce(key, "mp4", "video/mp4", (finalPath) =>
+    new Promise<void>((resolve, reject) => {
+      const args = [
+        ...headerArgFor(format),
+        "-threads", threads,
+        "-i",
+        format.directUrl!,
+        // Never scale UP — only clamps a source that's already taller than maxHeight.
+        "-vf", `scale=-2:'min(${maxHeight},ih)'`,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
+        "-threads", threads,
+        "-x264-params", `threads=${threads}:lookahead-threads=1`,
+        "-c:a", "aac", "-b:a", "96k",
+        "-movflags", "+faststart",
+        "-y",
+        finalPath,
+      ];
+      let child;
+      try {
+        child = spawn(FFMPEG, args, { windowsHide: true });
+      } catch {
+        reject(new YtDlpError("ffmpeg not found", "DOWNLOAD_FAILED"));
+        return;
+      }
+      let err = "";
+      child.stderr.on("data", (c: Buffer) => {
+        if (err.length < 2000) err += c.toString();
+      });
+      child.on("error", (e: Error) => reject(new YtDlpError(e.message, "DOWNLOAD_FAILED")));
+      child.on("close", (code) =>
+        code === 0
+          ? resolve()
+          : reject(new YtDlpError(`downscale failed: ${err.slice(-300)}`, "DOWNLOAD_FAILED")),
+      );
+    }),
+  );
+}
+
 function findFormat(
   meta: VideoMetadata,
   formatId: string,
@@ -209,15 +278,35 @@ export async function resolveDownload(
   const format = findFormat(meta, formatId, kind);
   const hasDirect = !!format?.directUrl && format.kind === kind;
 
-  // Meta platforms (Facebook/Instagram/Threads) serve VP9, which is audio-only
-  // on iOS — their VIDEO direct URLs go through ffmpeg (remux if already H.264,
-  // transcode if VP9). Other platforms (TikTok/X/Pinterest/Vimeo) are H.264, so
-  // they stream straight through — fastest path, no ffmpeg.
-  const metaPlatform = ["facebook", "instagram", "threads"].includes(meta.platform);
+  // A synthesized lower-quality tier (see quality-ladder.ts) always goes
+  // through ffmpeg to actually produce a smaller file — which also validates
+  // the source: a source with no real video track fails loudly here instead
+  // of silently shipping an audio-only "video" the way a raw proxy would.
+  if (hasDirect && format!.transcodeMaxHeight) {
+    try {
+      return { ...(await downscaleTo(format!, format!.transcodeMaxHeight)), title };
+    } catch {
+      try {
+        return { ...(await proxyDownload(format!)), title };
+      } catch {
+        throw new YtDlpError("could not produce this quality", "DOWNLOAD_FAILED");
+      }
+    }
+  }
+
+  // Platforms whose direct-URL video streams aren't reliably H.264 — the only
+  // codec guaranteed to decode as VIDEO in every browser — are always probed
+  // and normalized via ffmpeg instead of proxied raw. Facebook/Instagram/
+  // Threads commonly serve VP9; TikTok's own bitrate tiers don't expose a
+  // trustworthy codec field (see buildFormats) and its "highest quality"/HD
+  // tier is sometimes a proprietary codec that plays as audio-only with no
+  // picture. Other direct-URL platforms (X/Pinterest/Vimeo/Snapchat) have
+  // always been observed serving plain H.264 and keep the faster raw-proxy path.
+  const needsCodecCheck = ["facebook", "instagram", "threads", "tiktok"].includes(meta.platform);
 
   if (hasDirect) {
     try {
-      if (kind === "video" && metaPlatform) {
+      if (kind === "video" && needsCodecCheck) {
         return { ...(await transcodeToH264(format!)), title };
       }
       return { ...(await proxyDownload(format!)), title };

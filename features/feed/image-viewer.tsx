@@ -1,13 +1,39 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { BadgeCheck, Bookmark, Calendar, Check, ChevronDown, Download, Heart, MessageCircle, Share2, UserPlus, X } from "lucide-react";
+import {
+  BadgeCheck,
+  Ban,
+  BellOff,
+  Bookmark,
+  Calendar,
+  Check,
+  ChevronDown,
+  Download,
+  ExternalLink,
+  EyeOff,
+  Flag,
+  FolderPlus,
+  Heart,
+  Info,
+  Link2,
+  MessageCircle,
+  MoreVertical,
+  Pencil,
+  Share2,
+  UserPlus,
+  UserX,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { RichText } from "@/components/social/rich-text";
+import { CollectionPicker } from "@/features/social/collection-picker";
 import { Comments } from "@/features/social/comments";
+import { PostEditSheet } from "@/features/social/post-edit-sheet";
+import { toast } from "@/features/ui/toast";
 import { downloadPost } from "@/lib/media/download-post";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
@@ -50,6 +76,12 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
   // — currently the date posted — instead of opening the comments sheet.
   const [infoOpen, setInfoOpen] = useState(false);
   const [burst, setBurst] = useState<{ x: number; y: number; key: number } | null>(null);
+  const [title, setTitle] = useState(item.title);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerReady, setPickerReady] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editReady, setEditReady] = useState(false);
   const lastTap = useRef(0);
   const startY = useRef<number | null>(null);
 
@@ -112,12 +144,65 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
   const share = async () => {
     const url = `${window.location.origin}/p/${item.id}`;
     try {
-      if (navigator.share) await navigator.share({ title: item.title, url });
+      if (navigator.share) await navigator.share({ title, url });
       else await navigator.clipboard.writeText(url);
     } catch {
       /* cancelled */
     }
     fetch(`/api/posts/${item.id}/event`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "share" }) }).catch(() => {});
+  };
+
+  // ── Overflow (•••) actions — same set reels/the app already offer. ──────────
+  const postUrl = () => `${window.location.origin}/p/${item.id}`;
+  const copyLink = async () => {
+    setMoreOpen(false);
+    try {
+      await navigator.clipboard.writeText(postUrl());
+      toast("Link copied.", "success");
+    } catch {
+      toast("Couldn't copy the link.", "error");
+    }
+  };
+  const openInBrowser = () => {
+    setMoreOpen(false);
+    window.open(postUrl(), "_blank", "noopener");
+  };
+  const viewDetails = () => {
+    setMoreOpen(false);
+    window.location.assign(`/p/${item.id}`);
+  };
+  const reportPost = async () => {
+    setMoreOpen(false);
+    try {
+      await fetch("/api/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetType: "post", targetId: item.id, reason: "inappropriate" }),
+      });
+      toast("Reported. Thanks for keeping Frenz safe.", "success");
+    } catch {
+      toast("Couldn't send the report.", "error");
+    }
+  };
+  const blockUser = async () => {
+    setMoreOpen(false);
+    try {
+      const r = await fetch(`/api/block/${item.publisher.id}`, { method: "POST" });
+      if (!r.ok) throw new Error();
+      toast(`Blocked @${item.publisher.handle}.`, "success");
+      onClose();
+    } catch {
+      toast("Couldn't block.", "error");
+    }
+  };
+  const hidePost = () => {
+    setMoreOpen(false);
+    toast("We'll show less like this.", "info");
+    onClose();
+  };
+  const comingSoon = (what: string) => {
+    setMoreOpen(false);
+    toast(`${what} — coming soon.`, "info");
   };
 
   const openComments = useCallback(async () => {
@@ -164,6 +249,17 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
           <X className="h-5 w-5" />
         </button>
 
+        {/* Options — top-right, mirroring the close (X) button at top-left,
+            same as reels. Always visible (not gated by `ui`). */}
+        <button
+          type="button"
+          onClick={() => setMoreOpen(true)}
+          aria-label="More options"
+          className="absolute right-4 top-4 z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
+        >
+          <MoreVertical className="h-5 w-5" />
+        </button>
+
         {/* Image — swipe down to dismiss (X/IG style) */}
         <div
           className="absolute inset-0 flex items-center justify-center"
@@ -175,7 +271,7 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt={item.title} className="max-h-full max-w-full select-none object-contain" draggable={false} />
+          <img src={src} alt={title} className="max-h-full max-w-full select-none object-contain" draggable={false} />
         </div>
 
         {/* Double-tap heart */}
@@ -201,9 +297,9 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
           <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="pointer-events-auto inline-flex items-center gap-1.5 font-bold text-white">
             @{item.publisher.handle}
           </Link>
-          {item.title ? (
+          {title ? (
             <p className={cn("mt-1.5 max-w-xl text-sm text-white/90", !infoOpen && "line-clamp-3")}>
-              <RichText text={item.title} linkClassName="font-semibold text-white hover:underline" />
+              <RichText text={title} linkClassName="font-semibold text-white hover:underline" />
             </p>
           ) : null}
           {/* Tapping below the caption reveals the full text + post info (date
@@ -234,7 +330,7 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
           <RailBtn icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
           <RailBtn icon={Share2} count={item.sharesCount} label="Share" onClick={share} />
           <RailBtn icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
-          <RailBtn icon={Download} label="Download" onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: item.title })} />
+          <RailBtn icon={Download} label="Download" onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title })} />
         </div>
 
         {/* Comments sheet — mobile/tablet only; large screens use the persistent
@@ -299,9 +395,9 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
           ) : null}
         </div>
 
-        {item.title ? (
+        {title ? (
           <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-relaxed">
-            <RichText text={item.title} />
+            <RichText text={title} />
           </p>
         ) : null}
         <p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
@@ -314,7 +410,7 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
           <Act icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-primary" onClick={() => react("save")} />
           <button
             type="button"
-            onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: item.title })}
+            onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title })}
             className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary"
             aria-label="Download to device"
           >
@@ -331,7 +427,110 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
           )}
         </div>
       </aside>
+
+      {/* "More" menu — same overflow the reel viewer offers, adapted for a
+          single photo (no quality/mute-audio items). */}
+      <AnimatePresence>
+        {moreOpen ? (
+          <div className="fixed inset-0 z-[95] flex items-end justify-center">
+            <motion.button
+              type="button"
+              aria-label="Close"
+              onClick={() => setMoreOpen(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+            />
+            <motion.div
+              role="menu"
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 24, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 420, damping: 38 }}
+              className="relative m-2 w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur-2xl"
+            >
+              <div className="mx-auto mt-2.5 mb-1 h-1 w-9 rounded-full bg-border" />
+              <div className="max-h-[70vh] overflow-y-auto p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <MoreGroup>
+                  <MoreItem icon={Share2} label="Share" onClick={share} />
+                  <MoreItem icon={Link2} label="Copy link" onClick={copyLink} />
+                  <MoreItem icon={ExternalLink} label="Open in browser" onClick={openInBrowser} />
+                  <MoreItem icon={Info} label="View post details" onClick={viewDetails} />
+                </MoreGroup>
+
+                <MoreGroup>
+                  <MoreItem icon={FolderPlus} label="Add to collection" onClick={() => { setMoreOpen(false); setPickerReady(true); setPickerOpen(true); }} />
+                  <MoreItem icon={Download} label="Download" onClick={() => { setMoreOpen(false); void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title }); }} />
+                  {item.isOwner ? (
+                    <MoreItem icon={Pencil} label="Edit post" onClick={() => { setMoreOpen(false); setEditReady(true); setEditOpen(true); }} />
+                  ) : (
+                    <>
+                      <MoreItem icon={following ? Check : UserPlus} label={following ? "Following creator" : "Follow creator"} onClick={() => { setMoreOpen(false); toggleFollow(); }} />
+                      <MoreItem icon={BellOff} label="Mute creator" onClick={() => comingSoon("Mute creator")} />
+                    </>
+                  )}
+                </MoreGroup>
+
+                {!item.isOwner ? (
+                  <MoreGroup>
+                    <MoreItem icon={EyeOff} label="Hide this post" onClick={hidePost} />
+                    <MoreItem icon={Ban} label="Not interested" onClick={hidePost} />
+                  </MoreGroup>
+                ) : null}
+
+                {!item.isOwner ? (
+                  <MoreGroup>
+                    <MoreItem icon={Flag} label="Report post" onClick={reportPost} danger />
+                    <MoreItem icon={UserX} label={`Block @${item.publisher.handle}`} onClick={blockUser} danger />
+                  </MoreGroup>
+                ) : null}
+              </div>
+
+              <div className="p-1.5 pt-0">
+                <button type="button" onClick={() => setMoreOpen(false)} className="w-full rounded-2xl bg-secondary/70 py-3 text-sm font-semibold text-foreground transition hover:bg-secondary active:scale-[0.99]">
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        ) : null}
+      </AnimatePresence>
+
+      {pickerReady ? <CollectionPicker postId={item.id} open={pickerOpen} onClose={() => setPickerOpen(false)} /> : null}
+
+      {item.isOwner && editReady ? (
+        <PostEditSheet
+          item={{ id: item.id, title: title ?? "" }}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSaved={(p) => setTitle(p.title)}
+          onDeleted={onClose}
+        />
+      ) : null}
     </motion.div>
+  );
+}
+
+/** A visually grouped block of overflow rows, separated by a subtle divider. */
+function MoreGroup({ children }: { children: React.ReactNode }) {
+  return <div className="mb-1.5 overflow-hidden rounded-2xl bg-secondary/30 last:mb-0">{children}</div>;
+}
+
+function MoreItem({ icon: Icon, label, onClick, danger }: { icon: typeof Heart; label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      role="menuitem"
+      className={cn(
+        "flex w-full items-center gap-3.5 px-4 py-3 text-left text-[15px] font-medium transition first:rounded-t-2xl last:rounded-b-2xl active:scale-[0.99]",
+        danger ? "text-red-500 hover:bg-red-500/10" : "text-foreground hover:bg-secondary/70",
+      )}
+    >
+      <Icon className="h-5 w-5 shrink-0 opacity-90" strokeWidth={1.9} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+    </button>
   );
 }
 

@@ -285,6 +285,8 @@ export interface PostCard {
   likesCount: number;
   commentsCount: number;
   createdAt: string;
+  /** Present only on the profile Reposts tab — the reposter's own layer. */
+  repost?: { caption: string | null; pinned: boolean; edited: boolean };
 }
 
 function toCard(p: PostRow): PostCard {
@@ -414,20 +416,43 @@ export async function listUserReposts(userId: string, limit = 24): Promise<PostC
   if (!hasSupabase) return [];
   try {
     const db = createAdminClient();
-    const { data: rows } = await db
+    type RepostRow = { post_id: string; caption?: string | null; pinned_at?: string | null; edited_at?: string | null };
+    // Pinned reposts lead the tab. Caption/pin columns arrive with migration
+    // 0030 — fall back to the plain shape until it's applied.
+    let rows: RepostRow[];
+    const rich = await db
       .from("reposts")
-      .select("post_id, created_at")
+      .select("post_id, caption, pinned_at, edited_at")
       .eq("user_id", userId)
+      .order("pinned_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(limit * 2);
-    const ids = ((rows ?? []) as { post_id: string }[]).map((r) => r.post_id);
+    if (rich.error) {
+      const { data } = await db
+        .from("reposts")
+        .select("post_id, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(limit * 2);
+      rows = ((data ?? []) as { post_id: string }[]).map((r) => ({ post_id: r.post_id }));
+    } else {
+      rows = (rich.data ?? []) as unknown as RepostRow[];
+    }
+    const ids = rows.map((r) => r.post_id);
     if (ids.length === 0) return [];
+    const metaById = new Map(rows.map((r) => [r.post_id, r]));
 
     const { data } = await db.from("posts").select(POST_SELECT).in("id", ids).eq("status", "published");
     const posts = ((data as PostRow[]) ?? []).filter((p) => p.visibility === "public");
     const order = new Map(ids.map((id, i) => [id, i]));
     posts.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-    return posts.slice(0, limit).map(toCard);
+    return posts.slice(0, limit).map((p) => {
+      const meta = metaById.get(p.id);
+      return {
+        ...toCard(p),
+        repost: { caption: meta?.caption ?? null, pinned: !!meta?.pinned_at, edited: !!meta?.edited_at },
+      };
+    });
   } catch {
     return [];
   }

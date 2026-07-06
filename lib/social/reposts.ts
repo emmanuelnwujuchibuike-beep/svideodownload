@@ -32,31 +32,40 @@ export interface RepostBadge {
   handles: string[];
   /** Total number of followed users who reposted it (may exceed 3). */
   count: number;
+  /** The newest followed reposter's recommendation caption, when they wrote one. */
+  caption?: string | null;
 }
+
+type ReposterRow = { post_id: string; user_id: string; caption?: string | null };
 
 /**
  * For each post, the people the viewer FOLLOWS who reposted it — powers the
- * premium repost badge (overlapping avatars + "+N"). Best-effort.
+ * premium repost badge (overlapping avatars + "+N") and, when the newest of
+ * them wrote a recommendation caption, surfaces it in the feed. Best-effort.
  */
 export async function followedReposters(postIds: string[], followingIds: string[]): Promise<Map<string, RepostBadge>> {
   const out = new Map<string, RepostBadge>();
   if (!hasSupabase || postIds.length === 0 || followingIds.length === 0) return out;
   try {
     const db = createAdminClient();
-    const { data } = await db
-      .from("reposts")
-      .select("post_id, user_id")
-      .in("post_id", postIds)
-      .in("user_id", followingIds)
-      .order("created_at", { ascending: false });
-    const rows = (data ?? []) as { post_id: string; user_id: string }[];
+    const fetchRows = (cols: string) =>
+      db.from("reposts").select(cols).in("post_id", postIds).in("user_id", followingIds).order("created_at", { ascending: false });
+    // `caption` arrives with migration 0030 — fall back cleanly until it's applied.
+    let rows: ReposterRow[];
+    const withCaption = await fetchRows("post_id, user_id, caption");
+    if (withCaption.error) {
+      const { data } = await fetchRows("post_id, user_id");
+      rows = (data ?? []) as unknown as ReposterRow[];
+    } else {
+      rows = (withCaption.data ?? []) as unknown as ReposterRow[];
+    }
     if (rows.length === 0) return out;
 
     const userIds = [...new Set(rows.map((r) => r.user_id))];
     const { data: profs } = await db.from("profiles").select("id, handle, avatar_url").in("id", userIds);
     const profById = new Map(((profs ?? []) as { id: string; handle: string; avatar_url: string | null }[]).map((p) => [p.id, p]));
 
-    const byPost = new Map<string, { post_id: string; user_id: string }[]>();
+    const byPost = new Map<string, ReposterRow[]>();
     for (const r of rows) {
       const arr = byPost.get(r.post_id) ?? [];
       arr.push(r);
@@ -64,7 +73,12 @@ export async function followedReposters(postIds: string[], followingIds: string[
     }
     for (const [postId, list] of byPost) {
       const top = list.slice(0, 3).map((r) => profById.get(r.user_id)).filter(Boolean) as { handle: string; avatar_url: string | null }[];
-      out.set(postId, { avatars: top.map((p) => p.avatar_url), handles: top.map((p) => p.handle), count: list.length });
+      out.set(postId, {
+        avatars: top.map((p) => p.avatar_url),
+        handles: top.map((p) => p.handle),
+        count: list.length,
+        caption: list.find((r) => !!r.caption)?.caption ?? null,
+      });
     }
   } catch {
     /* reposts not migrated */

@@ -7,10 +7,15 @@ import { useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
 
 export type ToastType = "info" | "success" | "error" | "loading";
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
 export interface Toast {
   id: string;
   message: string;
   type: ToastType;
+  action?: ToastAction;
 }
 
 let toasts: Toast[] = [];
@@ -21,10 +26,14 @@ const emit = () => {
 };
 
 /** Show a toast. Returns its id so a "loading" toast can be resolved later. */
-export function toast(message: string, type: ToastType = "info", opts?: { id?: string; duration?: number }): string {
+export function toast(
+  message: string,
+  type: ToastType = "info",
+  opts?: { id?: string; duration?: number; action?: ToastAction },
+): string {
   const id = opts?.id ?? crypto.randomUUID();
   const existing = toasts.findIndex((t) => t.id === id);
-  const next: Toast = { id, message, type };
+  const next: Toast = { id, message, type, action: opts?.action };
   if (existing >= 0) toasts[existing] = next;
   else toasts = [...toasts, next];
   emit();
@@ -71,6 +80,18 @@ export function Toaster() {
             >
               <Icon className={cn("h-5 w-5 shrink-0", TINT[t.type], t.type === "loading" && "animate-spin")} />
               <span className="min-w-0 flex-1 font-medium text-foreground">{t.message}</span>
+              {t.action ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    dismissToast(t.id);
+                    t.action!.onClick();
+                  }}
+                  className="shrink-0 rounded-lg px-2 py-1 text-sm font-semibold text-primary transition hover:bg-secondary"
+                >
+                  {t.action.label}
+                </button>
+              ) : null}
               <button type="button" onClick={() => dismissToast(t.id)} aria-label="Dismiss" className="shrink-0 text-muted-foreground transition hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>

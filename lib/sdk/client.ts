@@ -121,9 +121,9 @@ export class FrenzsaveClient {
   follow(userId: string, on = true): Promise<{ ok: true; following: boolean }> {
     return this.action(`/api/follow/${userId}`, { method: on ? "POST" : "DELETE" });
   }
-  /** Repost a public post to your own profile. */
-  repost(postId: string): Promise<{ ok: true; id: string | null }> {
-    return this.action(`/api/posts/${postId}/repost`, { method: "POST" });
+  /** Repost a public post to your own profile, optionally with a recommendation caption. */
+  repost(postId: string, caption?: string | null): Promise<{ ok: true; id: string | null }> {
+    return this.action(`/api/posts/${postId}/repost`, { method: "POST", ...(caption ? { body: { caption } } : {}) });
   }
   /** Authorize a direct download (enforces the free daily cap server-side). */
   authorizeDownload(postId: string): Promise<{ url: string; filename: string; remaining: number | null }> {

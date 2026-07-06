@@ -37,13 +37,19 @@ export function useRepostState(postId: string, initialReposted: boolean, initial
 }
 
 /** Optimistically toggle a repost everywhere, then persist; rolls back on failure. */
-export async function toggleRepost(postId: string, next: boolean, currentCount: number): Promise<RepostState> {
+export async function toggleRepost(
+  postId: string,
+  next: boolean,
+  currentCount: number,
+  caption?: string | null,
+): Promise<RepostState> {
   const prev = state.get(postId) ?? { reposted: !next, count: currentCount };
   state.set(postId, { reposted: next, count: Math.max(0, prev.count + (next ? 1 : -1)) });
   emit();
   try {
     const res = await getApi().action<{ reposted: boolean; count: number }>(`/api/posts/${postId}/repost`, {
       method: next ? "POST" : "DELETE",
+      ...(next && caption ? { body: { caption } } : {}),
     });
     const settled = { reposted: res.reposted, count: res.count };
     state.set(postId, settled);
@@ -54,4 +60,14 @@ export async function toggleRepost(postId: string, next: boolean, currentCount: 
     emit();
     throw e;
   }
+}
+
+/** Edit this repost's caption (15-minute server-enforced window). */
+export async function editRepostCaption(postId: string, caption: string | null): Promise<void> {
+  await getApi().action(`/api/posts/${postId}/repost`, { method: "PATCH", body: { caption } });
+}
+
+/** Pin or unpin this repost on the profile Reposts tab. */
+export async function setRepostPinned(postId: string, pinned: boolean): Promise<void> {
+  await getApi().action(`/api/posts/${postId}/repost`, { method: "PATCH", body: { pinned } });
 }

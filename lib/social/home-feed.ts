@@ -60,8 +60,9 @@ export interface FeedItem {
   /** Repost state — optional/best-effort (0/false before the reposts migration). */
   viewerReposted?: boolean;
   repostsCount?: number;
-  /** Followed users who reposted this — the premium repost badge (avatars + "+N"). */
-  repostBadge?: { avatars: (string | null)[]; handles: string[]; count: number };
+  /** Followed users who reposted this — the premium repost badge (avatars + "+N"),
+      plus the newest reposter's recommendation caption when they wrote one. */
+  repostBadge?: { avatars: (string | null)[]; handles: string[]; count: number; caption?: string | null };
   /** Natural pixel size of an image post — lets the feed render it with next/image. */
   mediaWidth?: number | null;
   mediaHeight?: number | null;

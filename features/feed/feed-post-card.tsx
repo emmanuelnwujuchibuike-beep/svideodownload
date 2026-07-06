@@ -11,6 +11,7 @@ import {
   Flag,
   FolderPlus,
   Heart,
+  Link as LinkIcon,
   MessageCircle,
   MoreHorizontal,
   Music,
@@ -34,10 +35,12 @@ import Image from "next/image";
 import { RepostBurst } from "@/features/social/repost-burst";
 import { toast } from "@/features/ui/toast";
 
-// These sheets appear only on interaction (edit / save-to-collection) and this
-// card renders many times per feed — code-split so they never weigh down the feed.
+// These sheets appear only on interaction (edit / save-to-collection / repost)
+// and this card renders many times per feed — code-split so they never weigh
+// down the feed.
 const CollectionPicker = dynamic(() => import("@/features/social/collection-picker").then((m) => m.CollectionPicker), { ssr: false });
 const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").then((m) => m.PostEditSheet), { ssr: false });
+const RepostComposer = dynamic(() => import("@/features/social/repost-composer").then((m) => m.RepostComposer), { ssr: false });
 import { downloadPost } from "@/lib/media/download-post";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
 import { FrenzsaveError } from "@/lib/sdk";
@@ -83,17 +86,18 @@ function FeedPostCardImpl({
   const following = useFollowState(item.publisher.id, item.isFollowing);
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
   const [likes, setLikes] = useState(item.likesCount);
-  const [shares, setShares] = useState(item.sharesCount);
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [editOpen, setEditOpen] = useState(false);
   const [repostBurst, setRepostBurst] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
   // Gate the code-split sheets: mount only after first open (keeps their chunks
   // out of the feed until actually needed, then stays mounted for exit animations).
   const [editReady, setEditReady] = useState(false);
   const [pickerReady, setPickerReady] = useState(false);
+  const [composerReady, setComposerReady] = useState(false);
 
   const react = async (type: "like" | "save") => {
     const isLike = type === "like";
@@ -120,11 +124,13 @@ function FeedPostCardImpl({
   };
 
   const share = async () => {
-    setShares((n) => n + 1);
     const url = `${window.location.origin}/p/${item.id}`;
     try {
       if (navigator.share) await navigator.share({ title: item.title, url });
-      else await navigator.clipboard.writeText(url);
+      else {
+        await navigator.clipboard.writeText(url);
+        toast("Link copied.", "success");
+      }
     } catch {
       /* user cancelled */
     }
@@ -133,6 +139,16 @@ function FeedPostCardImpl({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "share" }),
     }).catch(() => {});
+  };
+
+  const copyLink = async () => {
+    setMenuOpen(false);
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/p/${item.id}`);
+      toast("Link copied.", "success");
+    } catch {
+      toast("Couldn't copy the link.", "error");
+    }
   };
 
   const toggleFollow = async () => {
@@ -146,23 +162,29 @@ function FeedPostCardImpl({
     }
   };
 
+  // Repost is a recommendation, never a one-tap accident: opens the composer
+  // (quick "Post Now" or an optional caption). Tapping again undoes it.
   const repost = async () => {
     setMenuOpen(false);
-    const next = !repostState.reposted;
-    if (next) {
-      setRepostBurst(Date.now()); // OS-style bubble pops on repost (not on undo)
-      try {
-        navigator.vibrate?.(10);
-      } catch {
-        /* no haptics */
-      }
+    if (!repostState.reposted) {
+      setComposerReady(true);
+      setComposerOpen(true);
+      return;
     }
     try {
-      await toggleRepost(item.id, next, repostState.count);
-      toast(next ? "Reposted to your profile." : "Removed repost.", "success");
+      await toggleRepost(item.id, false, repostState.count);
+      toast("Removed repost.", "success");
     } catch (e) {
-      setRepostBurst(null);
       toast(e instanceof FrenzsaveError ? e.message : "Couldn't repost.", "error");
+    }
+  };
+
+  const onReposted = () => {
+    setRepostBurst(Date.now()); // OS-style bubble pops on repost (not on undo)
+    try {
+      navigator.vibrate?.(10);
+    } catch {
+      /* no haptics */
     }
   };
 
@@ -194,18 +216,27 @@ function FeedPostCardImpl({
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[3px] bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500" />
 
       {/* Repost discovery — lightweight "@x reposted" attribution when someone you
-          follow reposted this. Never distracts from the content below. */}
+          follow reposted this, plus their recommendation caption when they wrote
+          one. Never distracts from the content below. */}
       {item.repostBadge && item.repostBadge.count > 0 ? (
-        <Link href={`/u/${item.repostBadge.handles[0]}`} className="flex items-center gap-2 px-4 pt-3 text-xs font-medium text-muted-foreground transition hover:text-foreground">
-          <Repeat2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-          {item.repostBadge.avatars[0] ? (
-            <Image src={item.repostBadge.avatars[0]} alt="" width={16} height={16} className="h-4 w-4 rounded-full object-cover ring-1 ring-border" />
+        <div className="px-4 pt-3">
+          <Link href={`/u/${item.repostBadge.handles[0]}`} className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+            <Repeat2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+            {item.repostBadge.avatars[0] ? (
+              <Image src={item.repostBadge.avatars[0]} alt="" width={16} height={16} className="h-4 w-4 rounded-full object-cover ring-1 ring-border" />
+            ) : null}
+            <span className="truncate">
+              {item.repostBadge.count > 3
+                ? "Recommended by people you follow"
+                : `@${item.repostBadge.handles[0]}${item.repostBadge.count > 1 ? ` and ${item.repostBadge.count - 1} other${item.repostBadge.count > 2 ? "s" : ""}` : ""} reposted`}
+            </span>
+          </Link>
+          {item.repostBadge.caption ? (
+            <p className="mt-1.5 border-l-2 border-emerald-500/40 pl-2.5 text-[13px] leading-relaxed text-foreground/90">
+              <RichText text={item.repostBadge.caption} />
+            </p>
           ) : null}
-          <span className="truncate">
-            @{item.repostBadge.handles[0]}
-            {item.repostBadge.count > 1 ? ` and ${item.repostBadge.count - 1} other${item.repostBadge.count > 2 ? "s" : ""}` : ""} reposted
-          </span>
-        </Link>
+        </div>
       ) : null}
 
       {/* Header */}
@@ -263,6 +294,9 @@ function FeedPostCardImpl({
                   exit={{ opacity: 0, scale: 0.95 }}
                   className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-xl border border-border/70 bg-card py-1 shadow-elevated"
                 >
+                  <MenuItem icon={Share2} label="Share" onClick={() => { setMenuOpen(false); void share(); }} />
+                  <MenuItem icon={LinkIcon} label="Copy link" onClick={copyLink} />
+                  <MenuItem icon={Download} label="Download" onClick={() => { setMenuOpen(false); void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title }); }} />
                   {item.isOwner ? (
                     <MenuItem icon={Pencil} label="Edit post" onClick={() => { setMenuOpen(false); setEditReady(true); setEditOpen(true); }} />
                   ) : null}
@@ -386,7 +420,9 @@ function FeedPostCardImpl({
         </button>
       )}
 
-      {/* Actions — premium tinted engagement bar (always visible, mobile-first) */}
+      {/* Actions — intentionally just Like / Comment / Repost / Save; everything
+          else (Share, Download, …) lives in the ••• overflow so content stays
+          the focus. */}
       <div className="mx-3 mb-3 mt-1 flex items-center justify-between rounded-2xl bg-secondary/40 px-1 py-1 ring-1 ring-inset ring-border/40">
         <div className="flex items-center">
           <ActionButton active={liked} onClick={() => react("like")} icon={Heart} fill={liked} count={likes} activeClass="text-rose-500" label="Like" />
@@ -397,12 +433,8 @@ function FeedPostCardImpl({
               <ActionButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-500" onClick={repost} label="Repost" />
             </span>
           ) : null}
-          <ActionButton icon={Share2} count={shares} onClick={share} label="Share" />
         </div>
-        <div className="flex items-center">
-          <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-amber-500" label="Bookmark" />
-          <ActionButton icon={Download} onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title })} label="Download" />
-        </div>
+        <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-amber-500" label="Save" />
       </div>
 
       {item.isOwner && editReady ? (
@@ -416,6 +448,16 @@ function FeedPostCardImpl({
       ) : null}
 
       {pickerReady ? <CollectionPicker postId={item.id} open={pickerOpen} onClose={() => setPickerOpen(false)} /> : null}
+
+      {composerReady ? (
+        <RepostComposer
+          post={{ id: item.id, title: title ?? "", thumbnailUrl: item.thumbnailUrl, publisher: item.publisher }}
+          currentCount={repostState.count}
+          open={composerOpen}
+          onClose={() => setComposerOpen(false)}
+          onReposted={onReposted}
+        />
+      ) : null}
     </motion.article>
   );
 }

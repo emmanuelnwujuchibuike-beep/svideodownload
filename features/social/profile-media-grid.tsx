@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, Images, MessageCircle, Play } from "lucide-react";
+import { Heart, Images, MessageCircle, Pin, Play, Repeat2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -133,6 +133,20 @@ export function ProfileMediaGrid({
 function ListMeta({ post }: { post: PostCard }) {
   return (
     <>
+      {post.repost ? (
+        <div className="mb-1.5">
+          <span className="inline-flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
+            <Repeat2 className="h-3.5 w-3.5 text-emerald-500" /> Reposted
+            {post.repost.pinned ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-1.5 py-0.5"><Pin className="h-3 w-3" /> Pinned</span>
+            ) : null}
+            {post.repost.edited ? <span className="text-muted-foreground/70">Edited</span> : null}
+          </span>
+          {post.repost.caption ? (
+            <p className="mt-1 border-l-2 border-emerald-500/40 pl-2.5 text-[13px] leading-relaxed text-foreground/90">{post.repost.caption}</p>
+          ) : null}
+        </div>
+      ) : null}
       {post.title ? <p className="line-clamp-2 text-sm font-semibold leading-snug">{post.title}</p> : null}
       <div className={cn("flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] font-medium text-muted-foreground", post.title && "mt-1.5")}>
         <span className="inline-flex items-center gap-1"><Play className="h-3.5 w-3.5 fill-current" /> {formatCompactNumber(post.viewsCount)}</span>
@@ -155,6 +169,13 @@ function Tile({ post }: { post: PostCard }) {
       <span className="absolute right-2 top-2 text-white/95 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
         {isVideo ? <Play className="h-[18px] w-[18px] fill-white/95" /> : isImage ? <Images className="h-[18px] w-[18px]" /> : null}
       </span>
+
+      {/* Pinned repost badge (top-left, Reposts tab only) */}
+      {post.repost?.pinned ? (
+        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur">
+          <Pin className="h-3 w-3" /> Pinned
+        </span>
+      ) : null}
 
       {/* Always-on bottom scrim + view count (TikTok style) */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />

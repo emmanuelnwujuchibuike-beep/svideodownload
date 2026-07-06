@@ -42,6 +42,7 @@ import { SmartVideo } from "@/features/media/smart-video";
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { Comments } from "@/features/social/comments";
 import { CollectionPicker } from "@/features/social/collection-picker";
+import { RepostComposer } from "@/features/social/repost-composer";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { RepostBurst } from "@/features/social/repost-burst";
 import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
@@ -349,6 +350,7 @@ function ReelCard({
   const [editOpen, setEditOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
   const [repostBurst, setRepostBurst] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -588,22 +590,27 @@ function ReelCard({
     }
   };
 
+  // Repost is a recommendation, never a one-tap accident: opens the composer
+  // (quick "Post Now" or an optional caption). Tapping again undoes it.
   const repost = async () => {
-    const next = !repostState.reposted;
-    if (next) {
-      setRepostBurst(Date.now()); // OS-style bubble pops on repost (not on undo)
-      try {
-        navigator.vibrate?.(10);
-      } catch {
-        /* no haptics */
-      }
+    if (!repostState.reposted) {
+      setComposerOpen(true);
+      return;
     }
     try {
-      await toggleRepost(item.id, next, repostState.count);
-      toast(next ? "Reposted to your profile." : "Removed repost.", "success");
+      await toggleRepost(item.id, false, repostState.count);
+      toast("Removed repost.", "success");
     } catch (e) {
-      setRepostBurst(null);
       toast(e instanceof FrenzsaveError ? e.message : "Couldn't repost.", "error");
+    }
+  };
+
+  const onReposted = () => {
+    setRepostBurst(Date.now()); // OS-style bubble pops on repost (not on undo)
+    try {
+      navigator.vibrate?.(10);
+    } catch {
+      /* no haptics */
     }
   };
 
@@ -1316,6 +1323,15 @@ function ReelCard({
 
       {/* Save-to-collection picker */}
       <CollectionPicker postId={item.id} open={pickerOpen} onClose={() => setPickerOpen(false)} />
+
+      {/* Repost composer — optional recommendation caption or instant Post Now */}
+      <RepostComposer
+        post={{ id: item.id, title: title ?? "", thumbnailUrl: item.thumbnailUrl, publisher: item.publisher }}
+        currentCount={repostState.count}
+        open={composerOpen}
+        onClose={() => setComposerOpen(false)}
+        onReposted={onReposted}
+      />
 
       {/* Inline editor — a creator edits caption/visibility (or deletes) without
           leaving the reel. */}

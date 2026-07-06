@@ -235,6 +235,16 @@ _Last updated: 2026‑07‑05 (instant tab switching + resume position, caption 
   **Rule:** any new fixed/sticky top‑anchored element must include the
   safe‑area inset; the app topbar is `4rem + inset` tall, so sticky offsets
   below it must use `calc(4rem + env(safe-area-inset-top))`.
+- **Batch Download (Pro & Above, 2026‑07‑06)** — multi‑photo fetches (TikTok
+  albums) show the premium batch panel from the owner's mock: numbered
+  selection grid with animated gradient checkmarks, Select All, live counter,
+  "Download N Items" with total size, parallel background streaming with one
+  summary card, a Fast/Private/No‑Watermark/No‑Sign‑up feature strip, and a
+  crown upsell for free users (batch itself is Pro+; singles stay free).
+  Queued next from that spec: worker‑side ZIP packaging, batch reposting, and
+  the full multi‑media post/carousel system (post_media model; multi‑video →
+  Feed/Reels/both, photos → Feed, mixed albums → Feed only; carousels in feed;
+  horizontal‑inside‑vertical reel albums).
 - **Download experience (2026‑07‑06)** — downloads never navigate to a raw
   file again (the old link path stranded iOS/installed‑app users on a Quick
   Look preview). Every download button now streams in the background through

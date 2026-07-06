@@ -41,6 +41,7 @@ import { RichText } from "@/components/social/rich-text";
 import { SmartVideo } from "@/features/media/smart-video";
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { Comments } from "@/features/social/comments";
+import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { RepostComposer } from "@/features/social/repost-composer";
 import { RepostOptionsSheet } from "@/features/social/repost-options";
@@ -991,7 +992,7 @@ function ReelCard({
               onAnimationComplete={() => setBursts((x) => x.filter((i) => i.id !== b.id))}
               className="block"
             >
-              <Heart className="h-16 w-16 fill-rose-500 text-rose-500 drop-shadow-[0_2px_12px_rgba(244,63,94,0.6)]" />
+              <WowSolid className="h-16 w-16" />
             </motion.span>
           </span>
         ))}
@@ -1042,7 +1043,7 @@ function ReelCard({
 
         {/* Refined action stack: Like · Comment · Repost · Save · More. Share and
             everything else live in the premium overflow sheet. */}
-        <RailButton icon={Heart} active={liked} fill={liked} activeClass="text-rose-500" count={likes} label="Like" onClick={() => react("like")} />
+        <RailButton icon={liked ? WowSolid : WowOutline} active={liked} activeClass="text-violet-300" count={likes} label="Wow" onClick={() => react("like")} />
         <RailButton icon={MessageCircle} count={item.commentsCount} label="Comment" onClick={openComments} />
         <div className="relative flex flex-col items-center gap-1">
           <RepostBurst triggerKey={repostBurst} />
@@ -1228,7 +1229,7 @@ function ReelCard({
               </p>
 
               <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
-                <SidebarAct icon={Heart} label="Like" active={liked} fill={liked} activeClass="text-rose-500" count={likes} onClick={() => react("like")} />
+                <SidebarAct icon={liked ? WowSolid : WowOutline} label="Wow" active={liked} activeClass="text-violet-500" count={likes} onClick={() => react("like")} />
                 <SidebarAct icon={Repeat2} label="Repost" active={repostState.reposted} activeClass="text-emerald-500" count={repostState.count} onClick={repost} press={repostPress} />
                 <SidebarAct icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-amber-400" onClick={() => react("save")} />
               </div>

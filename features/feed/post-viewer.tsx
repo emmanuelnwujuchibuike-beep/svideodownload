@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { SmartVideo } from "@/features/media/smart-video";
 import { Comments } from "@/features/social/comments";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
@@ -294,7 +295,7 @@ function ViewerInner({
 
         {/* Actions */}
         <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
-          <Act icon={Heart} label="Like" active={liked} fill={liked} activeClass="text-rose-500" count={likes} onClick={() => react("like")} />
+          <Act icon={liked ? WowSolid : WowOutline} label="Wow" active={liked} activeClass="text-violet-500" count={likes} onClick={() => react("like")} />
           <Act icon={MessageCircle} label="Comments" count={item.commentsCount} onClick={() => setShowComments(true)} />
           <Act icon={Share2} label="Share" count={item.sharesCount} onClick={share} />
           <Act icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-primary" onClick={() => react("save")} />

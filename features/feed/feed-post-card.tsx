@@ -25,6 +25,7 @@ import {
 import Link from "next/link";
 import { memo, useState } from "react";
 
+import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { RichText } from "@/components/social/rich-text";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { FeedImage } from "@/features/media/feed-image";
@@ -453,7 +454,7 @@ function FeedPostCardImpl({
           the focus. */}
       <div className="mx-3 mb-3 mt-1 flex items-center justify-between rounded-2xl bg-secondary/40 px-1 py-1 ring-1 ring-inset ring-border/40">
         <div className="flex items-center">
-          <ActionButton active={liked} onClick={() => react("like")} icon={Heart} fill={liked} count={likes} activeClass="text-rose-500" label="Like" />
+          <ActionButton active={liked} onClick={() => react("like")} icon={liked ? WowSolid : WowOutline} count={likes} activeClass="text-violet-500" label="Wow" />
           <ActionButton icon={MessageCircle} count={item.commentsCount} onClick={() => onOpen(item, true)} label="Comment" />
           {!item.isOwner ? (
             <span className="relative inline-flex">

@@ -1,9 +1,10 @@
 "use client";
 
-import { Activity, Bookmark, Eye, Heart, Loader2, MessageSquare, Repeat2, Search, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { Activity, Bookmark, Eye, Loader2, MessageSquare, Repeat2, Search, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { WowOutline } from "@/components/brand/wow-icon";
 import type { PrivacySettings } from "@/lib/social/profile";
 import { cn } from "@/lib/utils";
 
@@ -62,7 +63,7 @@ export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
         <SegRow icon={Users} title="Followers list" desc="Who can see who follows you" value={state.followers_visibility} choices={VIS} onChange={(v) => set("followers_visibility", v as PrivacySettings["followers_visibility"])} />
         {/* Per-tab visibility — a hidden tab never appears on your profile. */}
         <SegRow icon={Repeat2} title="Reposts tab" desc="Who can see the posts you repost" value={state.reposts_visibility} choices={VIS} onChange={(v) => set("reposts_visibility", v as PrivacySettings["reposts_visibility"])} />
-        <SegRow icon={Heart} title="Liked tab" desc="Who can see the posts you like" value={state.likes_visibility} choices={VIS} onChange={(v) => set("likes_visibility", v as PrivacySettings["likes_visibility"])} />
+        <SegRow icon={WowOutline} title="Wows tab" desc="Who can see the posts you Wow" value={state.likes_visibility} choices={VIS} onChange={(v) => set("likes_visibility", v as PrivacySettings["likes_visibility"])} />
         <SegRow icon={Bookmark} title="Saved tab" desc="Who can see the posts you save" value={state.saves_visibility} choices={VIS} onChange={(v) => set("saves_visibility", v as PrivacySettings["saves_visibility"])} />
         <SegRow icon={MessageSquare} title="Comments" desc="Who can comment on your posts" value={state.comments_policy} choices={POLICY} onChange={(v) => set("comments_policy", v as PrivacySettings["comments_policy"])} />
         <SegRow icon={MessageSquare} title="Messages" desc="Who can send you direct messages" value={state.messages_policy} choices={POLICY} onChange={(v) => set("messages_policy", v as PrivacySettings["messages_policy"])} />

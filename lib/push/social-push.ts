@@ -12,7 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 type SocialPushType = "like" | "save" | "comment" | "follow" | "repost";
 
 const VERB: Record<SocialPushType, string> = {
-  like: "liked your post",
+  like: "Wow'd your post",
   save: "saved your post",
   comment: "commented on your post",
   follow: "started following you",

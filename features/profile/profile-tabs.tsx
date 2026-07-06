@@ -1,8 +1,10 @@
 "use client";
 
-import { Bookmark, Clapperboard, Download, FolderHeart, Grid3x3, Heart, LayoutGrid, Repeat2, Rows3 } from "lucide-react";
+import { Bookmark, Clapperboard, Download, FolderHeart, Grid3x3, LayoutGrid, Repeat2, Rows3 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { type ComponentType, useMemo, useState } from "react";
+
+import { WowOutline } from "@/components/brand/wow-icon";
 
 import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
 import type { PostCard } from "@/lib/social/posts";
@@ -24,7 +26,7 @@ const TAB_LABEL: Record<ProfileTab, string> = {
   reels: "Reels",
   downloads: "Downloads",
   reposted: "Reposts",
-  liked: "Liked",
+  liked: "Wows",
   saved: "Saved",
   collections: "Collections",
 };
@@ -34,7 +36,7 @@ const TAB_ICON: Record<ProfileTab, IconType> = {
   reels: Clapperboard,
   downloads: Download,
   reposted: Repeat2,
-  liked: Heart,
+  liked: WowOutline,
   saved: Bookmark,
   collections: FolderHeart,
 };
@@ -101,7 +103,7 @@ export function ProfileTabs({
       ? "Videos you download will appear here — even ones you grabbed before signing up."
       : "No published downloads yet.",
     reposted: isOwner ? "Posts you repost will show up here." : "No reposts yet.",
-    liked: "Posts you like will show up here.",
+    liked: "Posts you Wow will show up here.",
     saved: "Posts you save will show up here.",
     collections: isOwner ? "Save posts into collections to organize them." : "No collections yet.",
   };

@@ -29,6 +29,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { RichText } from "@/components/social/rich-text";
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { Comments } from "@/features/social/comments";
@@ -286,7 +287,7 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
               style={{ position: "fixed", left: burst.x, top: burst.y, zIndex: 50 }}
               className="pointer-events-none -translate-x-1/2 -translate-y-1/2"
             >
-              <Heart className="h-16 w-16 fill-rose-500 text-rose-500 drop-shadow-[0_2px_12px_rgba(244,63,94,0.6)]" />
+              <WowSolid className="h-16 w-16" />
             </motion.span>
           ) : null}
         </AnimatePresence>
@@ -326,7 +327,7 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
             offset needed) lands cleanly between the image and the comments
             sidebar instead of overlapping it. */}
         <div className={cn("absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-8 lg:!pointer-events-auto lg:!opacity-100", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
-          <RailBtn icon={Heart} active={liked} fill={liked} activeClass="text-rose-500" count={likes} label="Like" onClick={() => react("like")} />
+          <RailBtn icon={liked ? WowSolid : WowOutline} active={liked} activeClass="text-violet-300" count={likes} label="Wow" onClick={() => react("like")} />
           <RailBtn icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
           <RailBtn icon={Share2} count={item.sharesCount} label="Share" onClick={share} />
           <RailBtn icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
@@ -405,7 +406,7 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
         </p>
 
         <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
-          <Act icon={Heart} label="Like" active={liked} fill={liked} activeClass="text-rose-500" count={likes} onClick={() => react("like")} />
+          <Act icon={liked ? WowSolid : WowOutline} label="Wow" active={liked} activeClass="text-violet-500" count={likes} onClick={() => react("like")} />
           <Act icon={Share2} label="Share" count={item.sharesCount} onClick={share} />
           <Act icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-primary" onClick={() => react("save")} />
           <button

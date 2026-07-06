@@ -1,10 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Heart } from "lucide-react";
 import Image from "next/image";
 import { useRef, useState } from "react";
 
+import { WowSolid } from "@/components/brand/wow-icon";
 import { cn } from "@/lib/utils";
 
 /**
@@ -89,7 +89,7 @@ export function FeedImage({
         <img src={src} alt={alt} loading="lazy" className="relative max-h-[80vh] w-auto max-w-full object-contain" />
       )}
 
-      {/* Double-tap heart burst */}
+      {/* Double-tap Wow burst */}
       <AnimatePresence>
         {burst > 0 ? (
           <motion.span
@@ -97,16 +97,16 @@ export function FeedImage({
             initial={{ opacity: 0, scale: 0.4 }}
             animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.15, 1, 1.2] }}
             transition={{ duration: 0.8, times: [0, 0.2, 0.7, 1] }}
-            className="pointer-events-none absolute text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
+            className="pointer-events-none absolute drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
           >
-            <Heart className="h-24 w-24 fill-white" />
+            <WowSolid className="h-24 w-24" />
           </motion.span>
         ) : null}
       </AnimatePresence>
 
-      {/* Like hint */}
+      {/* Wow hint */}
       <span className={cn("pointer-events-none absolute bottom-2 left-2.5 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur", liked && "hidden")}>
-        Double-tap to like
+        Double-tap to Wow
       </span>
     </div>
   );

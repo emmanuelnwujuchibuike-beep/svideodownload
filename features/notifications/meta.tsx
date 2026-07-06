@@ -23,6 +23,8 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { WowSolid } from "@/components/brand/wow-icon";
+
 import type { NotificationCategory, NotificationType } from "@/lib/social/notifications";
 
 type LucideIcon = typeof Bell;
@@ -32,7 +34,8 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   friend_request: UserPlus,
   friend_accepted: PartyPopper,
   friend_reminder: MessageCircle,
-  like: Heart,
+  // Wow is Frenz's signature interaction — its notifications carry the mark.
+  like: WowSolid,
   love: Heart,
   comment: MessageCircle,
   reply: Reply,
@@ -101,7 +104,7 @@ export function verbFor(type: NotificationType): string {
     case "friend_reminder":
       return "is ready to chat — say hi 👋";
     case "like":
-      return "liked your post";
+      return "Wow'd your post";
     case "love":
       return "loved your post";
     case "comment":

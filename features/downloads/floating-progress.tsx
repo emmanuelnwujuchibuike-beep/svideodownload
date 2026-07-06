@@ -61,6 +61,7 @@ export function FloatingDownloadProgress() {
   }, []);
 
   // Auto-dismiss completed cards that need no further action.
+  const activeCount = tasks.filter((t) => t.status === "downloading" || t.status === "queued").length;
   const active = tasks.find((t) => t.status === "downloading" || t.status === "queued");
   const finished = tasks.find((t) => t.status === "completed" || t.status === "failed");
   const task = active ?? finished;
@@ -116,7 +117,9 @@ export function FloatingDownloadProgress() {
                     : "Download complete"
                   : task.status === "failed"
                     ? "Download failed"
-                    : "Downloading…"}
+                    : activeCount > 1
+                      ? `Downloading ${activeCount} items…`
+                      : "Downloading…"}
               </p>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{task.title || "Your file"}</p>
 

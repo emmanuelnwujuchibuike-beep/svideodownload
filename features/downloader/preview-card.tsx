@@ -2,8 +2,11 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Ban,
   BadgeCheck,
+  Check,
   CheckCircle2,
+  Crown,
   Download,
   Eye,
   Heart,
@@ -11,12 +14,18 @@ import {
   Loader2,
   Music,
   Play,
+  ShieldCheck,
+  UserX,
   Video,
+  Zap,
 } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import Link from "next/link";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
+import { startDownload as enqueueDownload } from "@/features/downloads/manager";
 import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
 import { useShowAds } from "@/features/monetization/use-show-ads";
+import { toast } from "@/features/ui/toast";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes, formatCompactNumber, formatDuration } from "@/lib/utils";
@@ -56,6 +65,46 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const onTabChange = (next: MediaKind) => {
     setTab(next);
     setActiveId(listFor(next)[0]?.formatId ?? "best");
+  };
+
+  // ── Batch download (Pro & Above) — multi-photo posts ────────────────────
+  // Premium selection grid per the design: numbered tiles, animated checkmarks,
+  // Select All, live counter + total size, one button downloads everything in
+  // the background (each item streams through the download manager).
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  useEffect(() => setSelected(new Set()), [metadata.id]);
+  const isBatchable = imageFormats.length > 1;
+  const toggleSelect = (formatId: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(formatId)) next.delete(formatId);
+      else next.add(formatId);
+      return next;
+    });
+  const allSelected = isBatchable && selected.size === imageFormats.length;
+  const batchBytes = imageFormats.reduce((n, f) => (selected.has(f.formatId) ? n + (f.filesize ?? 0) : n), 0);
+
+  const batchDownload = () => {
+    if (showAds) {
+      toast("Batch download is a Pro & Above feature — see plans below.", "info", { duration: 5000 });
+      return;
+    }
+    const items = imageFormats.filter((f) => selected.has(f.formatId));
+    items.forEach((f, i) => {
+      enqueueDownload({
+        url: metadata.sourceUrl,
+        formatId: f.formatId,
+        kind: "image",
+        title: `${metadata.title || "photo"} · ${i + 1} of ${items.length}`,
+        thumbnail: f.directUrl ?? metadata.thumbnail,
+        platform: metadata.platform,
+        platformName: metadata.platformName,
+        qualityLabel: "Image",
+        silent: true,
+      });
+    });
+    toast(`${items.length} download${items.length > 1 ? "s" : ""} started`, "success");
+    setSelected(new Set());
   };
 
   const activeFormat = formats.find((f) => f.formatId === activeId);
@@ -262,30 +311,111 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
           </div>
         </div>
 
-        <div className="mt-4 grid max-h-44 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
-          {formats.map((f, i) => (
-            <FormatRow
-              key={f.formatId}
-              format={f}
-              index={i}
-              kind={tab}
-              active={f.formatId === activeId}
-              onSelect={() => setActiveId(f.formatId)}
-            />
-          ))}
-        </div>
+        {isImageTab && isBatchable ? (
+          <div className="mt-4">
+            {/* Select items header — count + Select All (Pro & Above batch) */}
+            <div className="mb-2.5 flex items-center justify-between">
+              <p className="text-sm font-semibold">
+                Select items{" "}
+                <span className="font-normal text-muted-foreground">
+                  ({selected.size}/{imageFormats.length})
+                </span>
+                <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                  <Crown className="h-3 w-3" /> Pro
+                </span>
+              </p>
+              <button
+                type="button"
+                onClick={() => setSelected(allSelected ? new Set() : new Set(imageFormats.map((f) => f.formatId)))}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-violet-500 transition hover:text-violet-400"
+              >
+                {allSelected ? "Deselect All" : "Select All"}
+                <span
+                  className={cn(
+                    "flex h-5 w-5 items-center justify-center rounded-full border transition",
+                    allSelected ? "border-transparent bg-gradient-to-br from-blue-600 to-violet-600 text-white" : "border-border text-transparent",
+                  )}
+                >
+                  <Check className="h-3 w-3" strokeWidth={3} />
+                </span>
+              </button>
+            </div>
+
+            {/* Numbered selection grid — tap toggles; also previews the photo */}
+            <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto pr-1">
+              {imageFormats.map((f, i) => {
+                const on = selected.has(f.formatId);
+                return (
+                  <button
+                    key={f.formatId}
+                    type="button"
+                    onClick={() => {
+                      setActiveId(f.formatId);
+                      toggleSelect(f.formatId);
+                    }}
+                    aria-pressed={on}
+                    aria-label={`Photo ${i + 1}${on ? " selected" : ""}`}
+                    className={cn(
+                      "group/tile relative aspect-square overflow-hidden rounded-2xl ring-2 transition-all active:scale-[0.97]",
+                      on ? "ring-violet-500 shadow-lg shadow-violet-500/20" : "ring-border/60 hover:ring-foreground/25",
+                    )}
+                  >
+                    {f.directUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={f.directUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
+                        <ImageIcon className="h-5 w-5" />
+                      </span>
+                    )}
+                    {/* number badge */}
+                    <span className="absolute left-1.5 top-1.5 flex h-5 min-w-5 items-center justify-center rounded-md bg-black/60 px-1 text-[10px] font-bold text-white backdrop-blur">
+                      {i + 1}
+                    </span>
+                    {/* animated check */}
+                    <motion.span
+                      initial={false}
+                      animate={on ? { scale: 1, opacity: 1 } : { scale: 0.5, opacity: 0 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 26 }}
+                      className="absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-md"
+                    >
+                      <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                    </motion.span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 grid max-h-44 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
+            {formats.map((f, i) => (
+              <FormatRow
+                key={f.formatId}
+                format={f}
+                index={i}
+                kind={tab}
+                active={f.formatId === activeId}
+                onSelect={() => setActiveId(f.formatId)}
+              />
+            ))}
+          </div>
+        )}
 
         <button
           type="button"
           disabled={phase !== "idle"}
-          onClick={() => startDownload(activeId, tab)}
+          onClick={() =>
+            isImageTab && isBatchable && selected.size > 0 ? batchDownload() : startDownload(activeId, tab)
+          }
           className={cn(
             "group relative mt-5 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-4 text-base font-semibold shadow-lg transition-all active:scale-[0.99] disabled:active:scale-100",
             phase === "done"
               ? "bg-emerald-600 text-white shadow-emerald-600/25"
-              : needsReward(activeId, tab)
-                ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-amber-500/30 hover:shadow-amber-500/50 hover:shadow-xl disabled:opacity-70"
-                : "bg-primary text-primary-foreground shadow-primary/25 hover:shadow-glow-blue disabled:opacity-70",
+              : isImageTab && isBatchable && selected.size > 0
+                ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-violet-500/30 hover:shadow-violet-500/50 hover:shadow-xl disabled:opacity-70"
+                : needsReward(activeId, tab)
+                  ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-amber-500/30 hover:shadow-amber-500/50 hover:shadow-xl disabled:opacity-70"
+                  : "bg-primary text-primary-foreground shadow-primary/25 hover:shadow-glow-blue disabled:opacity-70",
           )}
         >
           {/* shimmer sweep */}
@@ -297,6 +427,11 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
           ) : phase === "done" ? (
             <>
               <CheckCircle2 className="h-5 w-5" /> Download started — check your files
+            </>
+          ) : isImageTab && isBatchable && selected.size > 0 ? (
+            <>
+              <Download className="h-5 w-5 transition-transform group-hover:translate-y-0.5" />
+              Download {selected.size} Item{selected.size > 1 ? "s" : ""}
             </>
           ) : (
             <>
@@ -311,8 +446,46 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         <p className="mt-3 text-center text-xs text-muted-foreground">
           {phase === "done"
             ? "Saving to your device — check your browser downloads or Files app."
-            : "Fast, private & free — no app, no sign-up."}
+            : isImageTab && isBatchable && selected.size > 0 && batchBytes > 0
+              ? `Total size: ~${formatBytes(batchBytes)}`
+              : "Fast, private & free — no app, no sign-up."}
         </p>
+
+        {/* Feature strip — what every download gets */}
+        <div className="mt-4 grid grid-cols-4 divide-x divide-border/60 rounded-2xl border border-border/60 bg-card/60 py-3 text-center">
+          {(
+            [
+              { icon: Zap, label: "Fast Download" },
+              { icon: ShieldCheck, label: "Private & Secure" },
+              { icon: Ban, label: "No Watermark" },
+              { icon: UserX, label: "No Sign-up" },
+            ] as const
+          ).map(({ icon: Icon, label }) => (
+            <div key={label} className="flex flex-col items-center gap-1 px-1">
+              <Icon className="h-4 w-4 text-muted-foreground" strokeWidth={1.9} />
+              <span className="text-[10px] font-medium leading-tight text-muted-foreground">{label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Pro & Above — batch is a premium capability */}
+        {isImageTab && isBatchable && showAds ? (
+          <div className="mt-3 flex items-center gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-3.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/25">
+              <Crown className="h-[18px] w-[18px]" />
+            </span>
+            <p className="min-w-0 flex-1 text-xs leading-relaxed text-muted-foreground">
+              <span className="font-semibold text-foreground">Pro &amp; Above</span> — unlimited batch downloads, high
+              quality, no ads and more.
+            </p>
+            <Link
+              href="/pricing"
+              className="shrink-0 rounded-xl bg-secondary px-3 py-2 text-xs font-semibold transition hover:bg-secondary/70"
+            >
+              Learn More
+            </Link>
+          </div>
+        ) : null}
       </div>
     </motion.div>
 

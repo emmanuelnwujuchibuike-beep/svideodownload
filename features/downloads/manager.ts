@@ -186,12 +186,15 @@ export function startDownload(input: {
   platformName: string;
   qualityLabel: string;
   directUrl?: string;
+  /** Batch enqueues pass true — the caller shows ONE summary toast instead. */
+  silent?: boolean;
 }): string {
+  const { silent, ...rest } = input;
   const id = crypto.randomUUID();
   tasks = [
     {
       id,
-      ...input,
+      ...rest,
       status: "queued",
       receivedBytes: 0,
       totalBytes: 0,
@@ -202,7 +205,7 @@ export function startDownload(input: {
     ...tasks,
   ];
   emit();
-  toast("Download started…", "info");
+  if (!silent) toast("Download started…", "info");
   void run(id);
   return id;
 }

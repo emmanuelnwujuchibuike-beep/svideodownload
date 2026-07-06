@@ -209,6 +209,21 @@ _Last updated: 2026‑07‑05 (instant tab switching + resume position, caption 
   UI). Deliberate deviations kept: preload depth stays at next‑1 (five would
   burn data/battery), and reels stay muted‑by‑default (owner directive: never
   steal audio focus).
+- **Feed / Reels separation (2026‑07‑06)** — Feed and Reels are now separate
+  products: every post carries an explicit `format` ('feed' | 'reel'), each
+  surface queries only its own format, Reels has its own API
+  (`GET /api/reels`) and cache keys, and uploads choose explicitly (videos →
+  Reel or Story; photos → Post / Story / Both). Existing videos were
+  backfilled as reels — the feed becomes text/photos (+ future long‑form
+  'feed' videos). Architectural note: a `format` column on `posts` rather
+  than separate tables, because the whole social graph (reactions, comments,
+  reposts, collections) references posts — product separation lives at the
+  query/API layer. **Migration `0031_content_format.sql` must be applied in
+  Supabase.** Queued next from the spec: a dedicated reels recommendation
+  algorithm (watch‑time signals), feed carousels/articles, per‑product
+  analytics. Also queued as recorded specs: the **Wow interaction system**
+  (signature reaction replacing Like) and **Frenzsave Moments** (premium 24h
+  temporary sharing on the stories base).
 
 ## Performance, battery & thermal
 

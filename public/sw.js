@@ -7,7 +7,7 @@
  *  - Everything else (API, realtime, POST) → straight to network (never cached).
  */
 
-const VERSION = "v4";
+const VERSION = "v5";
 const STATIC_CACHE = `frenz-static-${VERSION}`;
 const IMAGE_CACHE = `frenz-img-${VERSION}`;
 const PAGE_CACHE = `frenz-pages-${VERSION}`;
@@ -140,11 +140,19 @@ self.addEventListener("push", (event) => {
     vibrate: [60, 30, 60],
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(title, options),
+      // Flag the app icon while the app is closed — the page replaces this
+      // with the exact unread count the moment it next opens.
+      "setAppBadge" in self.navigator ? self.navigator.setAppBadge().catch(() => {}) : Promise.resolve(),
+    ]),
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  if ("clearAppBadge" in self.navigator) self.navigator.clearAppBadge().catch(() => {});
   const url = (event.notification.data && event.notification.data.url) || "/home";
 
   event.waitUntil(

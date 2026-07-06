@@ -371,6 +371,59 @@ export function SmartFeed({
     };
   }, []);
 
+  /* ── Alive on return: auto-refresh on app-visible / reconnect ─────────── */
+  // Realtime lights the "new posts" pill while the tab is CONNECTED — this
+  // covers the gap it can't see: posts made while the app was backgrounded
+  // (installed-PWA switch-away) or the device was offline. Returning after
+  // ≥2 min: at the top of the feed we refresh in place (feels instantly
+  // alive); mid-scroll we never yank content — we quietly diff page 0 and
+  // light the same pill instead.
+  const lastHiddenAt = useRef<number | null>(null);
+  useEffect(() => {
+    const STALE_MS = 2 * 60_000;
+
+    const checkQuietly = async () => {
+      try {
+        const data = await getApi().action<{ items: FeedItem[] }>("/api/home-feed", {
+          method: "GET",
+          query: { sort: sortRef.current, offset: 0, limit: PAGE },
+        });
+        const seen = cacheRef.current?.[sortRef.current]?.seen;
+        const fresh = data.items.filter((i) => !seen?.has(i.id)).length;
+        if (fresh > 0) setFreshCount((n) => Math.max(n, fresh));
+      } catch {
+        /* offline blip — the next return will retry */
+      }
+    };
+
+    const revive = (idleFor: number) => {
+      if (idleFor < STALE_MS) return;
+      if (window.scrollY <= 8) {
+        setFreshCount(0);
+        void fetchPage(sortRef.current, 0, true);
+      } else {
+        void checkQuietly();
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        lastHiddenAt.current = Date.now();
+      } else if (lastHiddenAt.current !== null) {
+        revive(Date.now() - lastHiddenAt.current);
+        lastHiddenAt.current = null;
+      }
+    };
+    const onOnline = () => revive(Number.MAX_SAFE_INTEGER);
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", onOnline);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [fetchPage]);
+
   /* ── Infinite scroll ─────────────────────────────────────────────────── */
   useEffect(() => {
     const el = sentinel.current;

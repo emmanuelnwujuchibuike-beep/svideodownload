@@ -23,6 +23,22 @@ export function NotificationBell() {
   const unread = data?.unread ?? 0;
   const [open, setOpen] = useState(false);
 
+  // App-icon badge (installed PWA): mirror the unread count on the home-screen
+  // icon and clear it the moment everything is read. Badging API — silently a
+  // no-op where unsupported; on iOS it works for home-screen installs (16.4+).
+  useEffect(() => {
+    try {
+      const nav = navigator as Navigator & {
+        setAppBadge?: (count?: number) => Promise<void>;
+        clearAppBadge?: () => Promise<void>;
+      };
+      if (unread > 0) void nav.setAppBadge?.(unread).catch(() => {});
+      else void nav.clearAppBadge?.().catch(() => {});
+    } catch {
+      /* unsupported */
+    }
+  }, [unread]);
+
   // Realtime subscription scoped to the current user.
   useEffect(() => {
     const supabase = createClient();

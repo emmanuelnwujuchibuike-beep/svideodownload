@@ -2,7 +2,8 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Copy, Download, Share, SquarePlus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 
@@ -25,6 +26,11 @@ import { FrenzLogo } from "@/components/brand/frenz-logo";
  */
 
 const DISMISS_KEY = "frenz:ios-install-dismissed-session";
+const VIEWS_KEY = "frenz:install-engagement-views";
+// Only interrupt people who are actually using the app: at least a 2nd page
+// view this session, or one meaningful scroll on the current page.
+const MIN_VIEWS = 2;
+const SCROLL_PX = 600;
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -92,28 +98,77 @@ export function IosInstallPrompt() {
   const [copied, setCopied] = useState(false);
   const [browserName, setBrowserName] = useState("Safari");
 
+  // Engagement gate: never interrupt someone who just landed. This component
+  // lives in the persistent shell (it does NOT remount per navigation), so
+  // page views are counted from pathname changes; a real scroll also counts.
+  // The banner only appears once either signal says they're actually using
+  // the app.
+  const pathname = usePathname();
+  const engagedRef = useRef(false);
+  const pendingEvtRef = useRef<BeforeInstallPromptEvent | null>(null);
+  const pendingIosRef = useRef<"ios" | "ios-inapp" | null>(null);
+  const settledRef = useRef(false);
+
+  const reveal = () => {
+    if (settledRef.current || !engagedRef.current) return;
+    if (pendingEvtRef.current) {
+      settledRef.current = true;
+      setInstallEvt(pendingEvtRef.current);
+      setMode("android");
+    } else if (pendingIosRef.current) {
+      settledRef.current = true;
+      const next = pendingIosRef.current;
+      setMode((m) => (m === "hidden" ? next : m));
+    }
+  };
+
   useEffect(() => {
     if (typeof window === "undefined" || isStandalone() || dismissedThisSession()) return;
+    let views = 1;
+    try {
+      views = Number(sessionStorage.getItem(VIEWS_KEY) ?? 0) + 1;
+      sessionStorage.setItem(VIEWS_KEY, String(views));
+    } catch {
+      /* ignore */
+    }
+    if (views >= MIN_VIEWS) engagedRef.current = true;
+    reveal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isStandalone() || dismissedThisSession()) return;
+
+    const onScroll = () => {
+      if (window.scrollY >= SCROLL_PX) {
+        engagedRef.current = true;
+        window.removeEventListener("scroll", onScroll);
+        reveal();
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
 
     // Android/desktop: the browser tells us installation is available.
     const onPrompt = (e: Event) => {
       e.preventDefault();
-      setInstallEvt(e as BeforeInstallPromptEvent);
-      setMode("android");
+      pendingEvtRef.current = e as BeforeInstallPromptEvent;
+      reveal();
     };
     window.addEventListener("beforeinstallprompt", onPrompt);
 
     // iOS: no event ever fires — detect and instruct.
     let t: ReturnType<typeof setTimeout> | null = null;
     if (isIosNeedingInstall()) {
-      const next = isIosInApp() ? "ios-inapp" : "ios";
+      pendingIosRef.current = isIosInApp() ? "ios-inapp" : "ios";
       setBrowserName(iosBrowserLabel());
-      t = setTimeout(() => setMode((m) => (m === "hidden" ? next : m)), 2500);
+      t = setTimeout(reveal, 2500);
     }
     return () => {
       window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("scroll", onScroll);
       if (t) clearTimeout(t);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const dismiss = () => {

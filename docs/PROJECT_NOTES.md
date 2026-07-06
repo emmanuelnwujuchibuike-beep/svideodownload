@@ -164,11 +164,24 @@ _Last updated: 2026‑07‑05 (instant tab switching + resume position, caption 
   mean?" fix. Google OAuth stays; passwords are gone from the UI (existing
   password accounts sign in via the code — same email, same user). Requests are
   rate‑limited per IP and per email and never reveal whether an account exists.
-  **Owner actions:** set `RESEND_API_KEY` (+ optional `RESEND_FROM`,
-  `OTP_EXPIRY_MINUTES`) on Vercel and verify the sender domain in Resend; for a
-  5‑minute expiry set Supabase Auth's Email OTP expiration to 300s. Still open:
-  the spec's required‑onboarding steps (username availability, DOB, country),
-  active‑sessions view, trusted devices.
+  Email setup (RESEND_FROM, domain verification, optional Supabase SMTP +
+  template) is documented in **docs/EMAIL_SETUP.md**. **OTP length gotcha:**
+  Supabase projects issue 6–10‑digit codes (dashboard setting; this project
+  uses 8) — the API returns the real `codeLength` and the input boxes adapt, so
+  never hardcode the length. Still open: the spec's required‑onboarding steps
+  (username availability, DOB, country), active‑sessions view, trusted devices.
+- **PWA native slice 1** — the install prompt waits for real engagement (2nd
+  page view or a 600px scroll) instead of interrupting on landing; returning to
+  the app after 2+ minutes (or reconnecting) auto‑refreshes the feed in place
+  at the top, or lights the "new posts" pill mid‑scroll; the app icon carries a
+  live unread badge (Badging API — bell count, background‑push flag, cleared on
+  read/tap; service worker bumped to v5). Still open: iOS splash screens,
+  offline action queue, navigation‑state restore.
+- **Loading engine slice 1** — shared skeleton system grew `SkeletonSection`
+  (screen readers now hear "Loading…" — wrap every loading.tsx body in one) and
+  `SkeletonRow`; route audit added layout‑matched skeletons for
+  /friends/discover, followers, following and /welcome. Remaining
+  page‑without‑skeleton routes are static marketing pages by design.
 
 ## Performance, battery & thermal
 

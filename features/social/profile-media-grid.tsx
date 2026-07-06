@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, Images, MessageCircle, Pin, Play, Repeat2 } from "lucide-react";
+import { Heart, Images, Layers, MessageCircle, Pin, Play, Repeat2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -165,9 +165,18 @@ function Tile({ post }: { post: PostCard }) {
     <>
       <PostCover post={post} className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.05]" />
 
-      {/* Type badge (top-right) */}
-      <span className="absolute right-2 top-2 text-white/95 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
-        {isVideo ? <Play className="h-[18px] w-[18px] fill-white/95" /> : isImage ? <Images className="h-[18px] w-[18px]" /> : null}
+      {/* Type badge (top-right) — albums show the stacked-layers glyph + count */}
+      <span className="absolute right-2 top-2 inline-flex items-center gap-1 text-white/95 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
+        {post.albumCount && post.albumCount > 1 ? (
+          <>
+            <Layers className="h-[18px] w-[18px]" />
+            <span className="text-[11px] font-bold">{post.albumCount}</span>
+          </>
+        ) : isVideo ? (
+          <Play className="h-[18px] w-[18px] fill-white/95" />
+        ) : isImage ? (
+          <Images className="h-[18px] w-[18px]" />
+        ) : null}
       </span>
 
       {/* Pinned repost badge (top-left, Reposts tab only) */}

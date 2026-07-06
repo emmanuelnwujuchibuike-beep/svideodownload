@@ -224,6 +224,41 @@ async function canSeePost(
 
 /** A single post with privacy applied + publisher card. Null = hidden/not found.
  *  `viewerIsAdmin` bypasses visibility so admins can review reported content. */
+/** One ordered album item (mirrors FeedItem["mediaItems"] entries). */
+export interface PostMediaItem {
+  url: string;
+  kind: "image" | "video";
+  thumbnailUrl: string | null;
+  width: number | null;
+  height: number | null;
+}
+
+/**
+ * Ordered album items for a multi-media post. Returns [] for single-media
+ * posts AND before migration 0032 exists (42P01-tolerant) — callers treat
+ * "fewer than 2" as "not an album" and render the classic single hero.
+ */
+export async function getPostMediaItems(postId: string): Promise<PostMediaItem[]> {
+  if (!hasSupabase) return [];
+  try {
+    const { data, error } = await createAdminClient()
+      .from("post_media")
+      .select("idx, media_kind, media_url, thumbnail_url, media_width, media_height")
+      .eq("post_id", postId)
+      .order("idx", { ascending: true });
+    if (error || !data) return [];
+    return (data as { media_kind: string; media_url: string; thumbnail_url: string | null; media_width: number | null; media_height: number | null }[]).map((r) => ({
+      url: r.media_url,
+      kind: r.media_kind === "video" ? ("video" as const) : ("image" as const),
+      thumbnailUrl: r.thumbnail_url,
+      width: r.media_width,
+      height: r.media_height,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getPost(
   id: string,
   viewerId: string | null,
@@ -285,6 +320,8 @@ export interface PostCard {
   likesCount: number;
   commentsCount: number;
   createdAt: string;
+  /** Number of album items (>1 means multi-media post — grids show a badge). */
+  albumCount?: number;
   /** Present only on the profile Reposts tab — the reposter's own layer. */
   repost?: { caption: string | null; pinned: boolean; edited: boolean };
 }
@@ -352,7 +389,28 @@ async function loadUserPosts(publisherId: string, viewerId: string | null, limit
       (p) => p.visibility === "public" || (p.visibility === "followers" && follows),
     );
   }
-  return rows.map(toCard);
+  const cards = rows.map(toCard);
+  // Album badge data — one query for the whole page of posts; best-effort
+  // (pre-migration-0032 the table doesn't exist and grids simply show no badge).
+  try {
+    const ids = cards.map((c) => c.id);
+    if (ids.length > 0) {
+      const { data: media } = await db.from("post_media").select("post_id").in("post_id", ids);
+      if (media) {
+        const counts = new Map<string, number>();
+        for (const m of media as { post_id: string }[]) {
+          counts.set(m.post_id, (counts.get(m.post_id) ?? 0) + 1);
+        }
+        for (const c of cards) {
+          const n = counts.get(c.id) ?? 0;
+          if (n > 1) c.albumCount = n;
+        }
+      }
+    }
+  } catch {
+    /* table missing — no badges */
+  }
+  return cards;
 }
 
 /** The user's saved posts (still-published, visible to them), newest save first. */

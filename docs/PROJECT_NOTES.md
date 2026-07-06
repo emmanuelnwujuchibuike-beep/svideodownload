@@ -39,6 +39,13 @@ _Last updated: 2026‑07‑06 (fullscreen video, loading engine in Core, PWA aut
   locked visible on the feed); the purple gradient stripe on post cards removed
   (mature, professional cards); album carousels slide sideways only and never
   trigger the tab swipe.
+- **Audit pass (same day):** albums now render as full carousels on the post page
+  (`getPostMediaItems`, 42P01‑tolerant) and in the PostViewer overlay — tapping a
+  photo zooms that slide, tapping a video opens the reel viewer; profile grids show
+  a Layers+count album badge (one batched query inside the existing 30s cache);
+  removed the post page's overlapping "Full screen" pill; verified z‑layering
+  (fullscreen 140 > viewers 110–120 > toasts 100), SW media bypass, no reload
+  loops in the build‑stamp check, and clean tsc/lint/production build.
 
 ## Brand & Design
 

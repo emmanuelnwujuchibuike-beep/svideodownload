@@ -19,6 +19,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
+import { MediaCarousel } from "@/features/media/media-carousel";
 import { SmartVideo } from "@/features/media/smart-video";
 import { floatReaction } from "@/features/ui/reaction-float";
 import { Comments } from "@/features/social/comments";
@@ -187,7 +188,12 @@ function ViewerInner({
         animate={{ scale: 1 }}
         className="flex min-h-0 flex-1 items-center justify-center p-0 lg:p-6"
       >
-        {item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
+        {item.mediaItems && item.mediaItems.length > 1 ? (
+          /* Album — the full swipeable carousel, never just the cover. */
+          <div className="w-full max-w-2xl overflow-hidden bg-black lg:rounded-2xl">
+            <MediaCarousel items={item.mediaItems} />
+          </div>
+        ) : item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
           <div className="flex max-h-full w-full max-w-5xl items-center justify-center bg-black lg:rounded-2xl">
             <SmartVideo
               streamUid={item.streamUid}

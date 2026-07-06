@@ -1,10 +1,11 @@
 "use client";
 
-import { Maximize2, Play } from "lucide-react";
+import { Play } from "lucide-react";
 import { useState } from "react";
 
 import { FeedVideo } from "@/features/media/feed-video";
 import { ReelViewer } from "@/features/feed/reel-viewer";
+import { MediaCarousel } from "@/features/media/media-carousel";
 import { SmartVideo } from "@/features/media/smart-video";
 import type { FeedItem } from "@/lib/social/home-feed";
 
@@ -17,9 +18,34 @@ import type { FeedItem } from "@/lib/social/home-feed";
 export function PostMedia({ item }: { item: FeedItem }) {
   const [reel, setReel] = useState(false);
   const [zoom, setZoom] = useState(false);
+  const [zoomSrc, setZoomSrc] = useState<string | null>(null);
 
   const isVideo = item.mediaKind === "video" && (item.mediaUrl || item.streamUid);
   const isImage = item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl);
+
+  // Album post → the full swipeable carousel (counter, dots, in-view video
+  // autoplay), never just the cover. Tapping a photo zooms THAT photo; tapping
+  // a video opens the reel-quality viewer.
+  if (item.mediaItems && item.mediaItems.length > 1) {
+    return (
+      <>
+        <div className="overflow-hidden rounded-3xl border border-border/60 bg-black shadow-card">
+          <MediaCarousel
+            items={item.mediaItems}
+            onExpandItem={(_, m) => {
+              if (m.kind === "video") setReel(true);
+              else {
+                setZoomSrc(m.url);
+                setZoom(true);
+              }
+            }}
+          />
+        </div>
+        {zoom && zoomSrc ? <ImageZoom src={zoomSrc} onClose={() => setZoom(false)} /> : null}
+        <ReelViewer items={reel ? [item] : null} startIndex={0} onClose={() => setReel(false)} />
+      </>
+    );
+  }
 
   if (isVideo) {
     return (
@@ -39,15 +65,9 @@ export function PostMedia({ item }: { item: FeedItem }) {
               <SmartVideo streamUid={item.streamUid} poster={item.thumbnailUrl} controls className="h-full w-full" />
             </div>
           )}
-          {/* Fullscreen affordance */}
-          <button
-            type="button"
-            onClick={() => setReel(true)}
-            aria-label="Watch full screen"
-            className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-md transition hover:bg-black/70"
-          >
-            <Maximize2 className="h-3.5 w-3.5" /> Full screen
-          </button>
+          {/* No extra "Full screen" pill: FeedVideo now carries the real
+              fullscreen control, and a tap already opens the reel viewer —
+              two overlapping bottom-right affordances read as a glitch. */}
         </div>
         <ReelViewer items={reel ? [item] : null} startIndex={0} onClose={() => setReel(false)} />
       </>

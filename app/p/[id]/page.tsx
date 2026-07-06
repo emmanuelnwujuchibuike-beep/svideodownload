@@ -26,7 +26,7 @@ import { getPoll } from "@/lib/social/polls";
 import { PostPoll, PollCreator } from "@/features/social/post-poll";
 import { PostMedia } from "@/features/social/post-media";
 import type { FeedItem } from "@/lib/social/home-feed";
-import { getPost, recordPostView, relatedPosts } from "@/lib/social/posts";
+import { getPost, getPostMediaItems, recordPostView, relatedPosts } from "@/lib/social/posts";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
 
@@ -91,13 +91,14 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     void recordPostView(post.id, me, ipHash);
   }
 
-  const [plan, related, reactions, comments, gate, poll] = await Promise.all([
+  const [plan, related, reactions, comments, gate, poll, albumMedia] = await Promise.all([
     getUserPlan(post.publisher_id),
     relatedPosts(post),
     getViewerReactions(post.id, me),
     listComments(post.id, post.publisher_id, me),
     me ? canComment(post.id, me) : Promise.resolve(null),
     getPoll(post.id, me),
+    getPostMediaItems(post.id),
   ]);
   const commentDisabled =
     gate && !gate.ok ? (COMMENT_GATE_MSG[gate.reason] ?? "Comments are unavailable.") : null;
@@ -135,6 +136,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     isFollowing: post.publisher.isFollowing,
     isOwner: post.isOwner,
     hasPoll: false, // the post page renders the poll separately, above comments
+    // Albums: the ordered items so the hero renders the full carousel — not
+    // just the cover (pre-migration-0032 this is [] and nothing changes).
+    ...(albumMedia.length > 1 ? { mediaItems: albumMedia } : {}),
   };
 
   const ld = {

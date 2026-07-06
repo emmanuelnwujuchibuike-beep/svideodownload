@@ -26,7 +26,18 @@ export interface CarouselMedia {
  * readers (the feed's For You/Following tab switcher) to ignore gestures
  * that begin here, so swiping between slides never switches feed tabs.
  */
-export function MediaCarousel({ items, onExpand, className }: { items: CarouselMedia[]; onExpand?: () => void; className?: string }) {
+export function MediaCarousel({
+  items,
+  onExpand,
+  onExpandItem,
+  className,
+}: {
+  items: CarouselMedia[];
+  onExpand?: () => void;
+  /** Preferred over onExpand when set — receives the tapped slide. */
+  onExpandItem?: (index: number, item: CarouselMedia) => void;
+  className?: string;
+}) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [index, setIndex] = useState(0);
   const raf = useRef(0);
@@ -65,9 +76,14 @@ export function MediaCarousel({ items, onExpand, className }: { items: CarouselM
               />
             ) : null}
             {m.kind === "video" ? (
-              <CarouselVideo src={m.url} poster={m.thumbnailUrl} onExpand={onExpand} />
+              <CarouselVideo src={m.url} poster={m.thumbnailUrl} onExpand={onExpandItem ? () => onExpandItem(i, m) : onExpand} />
             ) : (
-              <button type="button" onClick={onExpand} aria-label="Open photo" className="absolute inset-0">
+              <button
+                type="button"
+                onClick={onExpandItem ? () => onExpandItem(i, m) : onExpand}
+                aria-label="Open photo"
+                className="absolute inset-0"
+              >
                 <FadeImage src={m.url} alt="" fill sizes="(max-width: 768px) 100vw, 640px" className="object-contain" loading={i < 2 ? "eager" : "lazy"} />
               </button>
             )}

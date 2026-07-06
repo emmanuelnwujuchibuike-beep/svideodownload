@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, Check, Loader2, Mail, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, KeyRound, Loader2, Mail, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
@@ -62,6 +62,12 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
   // Supabase projects can issue 6–10 digit codes — the server tells us the
   // real length so the boxes always match the email.
   const [codeLength, setCodeLength] = useState(6);
+  // Optional password path: sign in with a saved password, or reset it —
+  // "Forgot password?" proves ownership with a code, then lands on Account →
+  // Password to set the new one.
+  const [usePw, setUsePw] = useState(false);
+  const [pw, setPw] = useState("");
+  const [resetting, setResetting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const callbackUrl = () => `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
@@ -125,8 +131,41 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
     const target = email.trim().toLowerCase();
     if (!target) return;
     setSuggestion(null);
+    if (usePw) {
+      // Password path — for accounts that saved one in Account → Password.
+      setBusy(true);
+      setError(null);
+      try {
+        const { error } = await createClient().auth.signInWithPassword({ email: target, password: pw });
+        if (error) {
+          setError("Incorrect email or password — or use a sign-in code instead.");
+          return;
+        }
+        window.location.assign(next);
+      } catch {
+        setError("Sign-in is unavailable right now — try a code instead.");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (await sendCode(target)) {
       setEmail(target);
+      setView("code");
+      startCountdown();
+    }
+  };
+
+  // Forgot password: prove ownership with a code, then choose a new password.
+  const forgotPassword = async () => {
+    const target = email.trim().toLowerCase();
+    if (!target) {
+      setError("Enter your email first.");
+      return;
+    }
+    if (await sendCode(target)) {
+      setEmail(target);
+      setResetting(true);
       setView("code");
       startCountdown();
     }
@@ -145,7 +184,9 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
         return;
       }
       setVerified(true);
-      window.location.assign(next);
+      // A reset lands on Account → Password (verified session) to set the new
+      // one; a normal sign-in goes straight in.
+      window.location.assign(resetting ? "/account?setPassword=1#password" : next);
     } catch {
       setError("Verification failed — check your connection and try again.");
       setShakeKey((k) => k + 1);
@@ -231,9 +272,11 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
 
-          <h2 className="text-lg font-extrabold tracking-tight">What&apos;s your email?</h2>
+          <h2 className="text-lg font-extrabold tracking-tight">{usePw ? "Welcome back" : "What's your email?"}</h2>
           <p className="mb-4 mt-0.5 text-sm text-muted-foreground">
-            We&apos;ll email you a secure 6-digit code — no password to remember. New here? The same code creates your account.
+            {usePw
+              ? "Sign in with the password you saved."
+              : "We'll email you a secure sign-in code — no password to remember. New here? The same code creates your account."}
           </p>
 
           <form onSubmit={submitEmail} className="space-y-3">
@@ -267,16 +310,49 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
               </button>
             ) : null}
 
+            {usePw ? (
+              <Field icon={<KeyRound className="h-[18px] w-[18px]" />}>
+                <input
+                  type="password"
+                  required
+                  value={pw}
+                  onChange={(e) => setPw(e.target.value)}
+                  placeholder="Password"
+                  aria-label="Password"
+                  autoComplete="current-password"
+                  className={INPUT}
+                />
+              </Field>
+            ) : null}
+
             <button
               type="submit"
-              disabled={busy || !email.trim()}
+              disabled={busy || !email.trim() || (usePw && !pw)}
               className="group relative inline-flex h-[52px] w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-[15px] font-bold text-white shadow-lg shadow-violet-600/25 transition hover:shadow-xl active:scale-[0.99] disabled:opacity-60"
             >
               <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Continue
+              {usePw ? "Sign in" : "Continue"}
             </button>
           </form>
+
+          <div className="mt-3 flex items-center justify-center gap-4 text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => {
+                setUsePw((v) => !v);
+                setError(null);
+              }}
+              className="text-muted-foreground transition hover:text-foreground"
+            >
+              {usePw ? "Use a sign-in code instead" : "Sign in with a password"}
+            </button>
+            {usePw ? (
+              <button type="button" onClick={forgotPassword} disabled={busy} className="text-violet-500 hover:underline disabled:opacity-60">
+                Forgot password?
+              </button>
+            ) : null}
+          </div>
 
           {error ? <p className="mt-3 text-center text-sm text-red-400">{error}</p> : null}
         </motion.div>
@@ -292,6 +368,7 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
             type="button"
             onClick={() => {
               setView("email");
+              setResetting(false);
               setError(null);
             }}
             className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
@@ -299,9 +376,10 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
             <ArrowLeft className="h-4 w-4" /> Change email
           </button>
 
-          <h2 className="text-lg font-extrabold tracking-tight">Verification code</h2>
+          <h2 className="text-lg font-extrabold tracking-tight">{resetting ? "Reset your password" : "Verification code"}</h2>
           <p className="mb-5 mt-0.5 text-sm text-muted-foreground">
             We&apos;ve sent a secure verification code to <span className="font-semibold text-foreground">{email}</span>.
+            {resetting ? " Verify it and you'll choose a new password right after." : ""}
           </p>
 
           <OtpInput length={codeLength} onComplete={verify} disabled={verifying || verified} shake={shakeKey} />

@@ -9,6 +9,7 @@ import { ApiKeys } from "@/features/api/api-keys";
 import { ManageBillingButton } from "@/features/monetization/manage-billing-button";
 import { UserList } from "@/components/social/user-list";
 import { ProfileEditor } from "@/features/social/profile-editor";
+import { PasswordEditor } from "@/features/account/password-editor";
 import { PrivacyEditor } from "@/features/social/privacy-editor";
 import { isAdmin } from "@/lib/admin";
 import { getPlanLimits } from "@/lib/monetization/plan";
@@ -167,6 +168,9 @@ export default async function AccountPage() {
             {/* Public profile + privacy */}
             {ownProfile ? <ProfileEditor profile={ownProfile} /> : null}
             <PrivacyEditor settings={privacy} />
+
+            {/* Optional password (second way in + what "Forgot password?" resets) */}
+            <PasswordEditor />
 
             {/* Blocked accounts (only shown when there are any) */}
             {blocked.length > 0 ? (

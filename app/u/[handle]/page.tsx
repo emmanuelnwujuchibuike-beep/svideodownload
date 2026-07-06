@@ -8,6 +8,7 @@ import { Suspense } from "react";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteHeader } from "@/components/layout/site-header";
+import { jsonLd } from "@/lib/seo/json-ld";
 import { ProfileTabs } from "@/features/profile/profile-tabs";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
@@ -136,7 +137,7 @@ export default async function ProfilePage({
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
       {/* Mobile top bar — desktop uses the app shell's sidebar + top bar */}
       <SiteHeader social desktopHidden />
       {/* Add friends — single top-level icon (mobile only; desktop uses the top bar) */}

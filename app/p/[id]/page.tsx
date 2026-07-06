@@ -8,6 +8,7 @@ import { notFound } from "next/navigation";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { isAdmin } from "@/lib/admin";
+import { jsonLd } from "@/lib/seo/json-ld";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RichText } from "@/components/social/rich-text";
 import { PostEditButton } from "@/features/social/post-edit-button";
@@ -152,7 +153,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
       <SiteHeader social />
       <main className="container max-w-3xl pb-24 pt-28 sm:pt-32">
         {post.status !== "published" ? (

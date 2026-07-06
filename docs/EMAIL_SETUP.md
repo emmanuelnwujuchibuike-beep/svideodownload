@@ -52,14 +52,13 @@ If you skip this, codes last 1 hour (Supabase's default) and the email says so.
 
 Login codes never touch Supabase's mailer. But Supabase itself may send a few
 rare emails (e.g. "confirm email change"). If you ever want those to come from
-your domain too, point Supabase's SMTP at Resend:
-
-- Supabase dashboard → Project Settings → Authentication → **SMTP Settings**:
-  - Host: `smtp.resend.com`
-  - Port: `465`
-  - Username: `resend`
-  - Password: *your RESEND_API_KEY*
-  - Sender email: `login@frenzsave.com` · Sender name: `Frenz`
+your domain too, point Supabase's SMTP at Resend — the exact values are on
+Resend's own docs page (resend.com/docs/send-with-smtp): enter them in the
+Supabase dashboard → Project Settings → Authentication → SMTP Settings, using
+your API key as the SMTP credential and `login@frenzsave.com` / `Frenz` as the
+sender. (Values intentionally not listed here in credential format — secret
+scanners flag Host/Username/Password blocks in public repos as leaked SMTP
+credentials even when they only contain placeholders.)
 
 And if you do that, you can paste this premium template into Supabase →
 Authentication → **Email Templates** → *Magic Link* (it shows the code big and

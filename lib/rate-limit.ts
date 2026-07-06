@@ -83,6 +83,9 @@ function buildLimiter(tokens: number): Limiter {
 export const metadataLimiter: Limiter = buildLimiter(METADATA_TOKENS);
 export const downloadLimiter: Limiter = buildLimiter(DOWNLOAD_TOKENS);
 export const assistantLimiter: Limiter = buildLimiter(ASSISTANT_TOKENS);
+// Sign-in codes: strict — every request sends a real email, and brute-force
+// resistance matters more than convenience here.
+export const otpLimiter: Limiter = buildLimiter(Number(process.env.RATE_LIMIT_OTP_PER_MIN || 4));
 // Tracking pixels fire often but must resist fake-click floods.
 export const trackLimiter: Limiter = buildLimiter(
   Number(process.env.RATE_LIMIT_TRACK_PER_MIN || 120),

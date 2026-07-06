@@ -43,6 +43,9 @@ import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { Comments } from "@/features/social/comments";
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { RepostComposer } from "@/features/social/repost-composer";
+import { RepostOptionsSheet } from "@/features/social/repost-options";
+import { RepostersSheet } from "@/features/social/reposters-sheet";
+import { useLongPress } from "@/lib/hooks/use-long-press";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { RepostBurst } from "@/features/social/repost-burst";
 import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
@@ -351,7 +354,13 @@ function ReelCard({
   const [moreOpen, setMoreOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [composerMode, setComposerMode] = useState<"create" | "edit">("create");
+  const [composerCaption, setComposerCaption] = useState<string | null>(null);
+  const [repostOptionsOpen, setRepostOptionsOpen] = useState(false);
+  const [repostersOpen, setRepostersOpen] = useState(false);
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
+  // Holding the Repost button opens the advanced options sheet.
+  const repostPress = useLongPress(() => setRepostOptionsOpen(true));
   const [repostBurst, setRepostBurst] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const [srcReady, setSrcReady] = useState(false);
@@ -594,7 +603,7 @@ function ReelCard({
   // (quick "Post Now" or an optional caption). Tapping again undoes it.
   const repost = async () => {
     if (!repostState.reposted) {
-      setComposerOpen(true);
+      openComposer("create", null);
       return;
     }
     try {
@@ -603,6 +612,12 @@ function ReelCard({
     } catch (e) {
       toast(e instanceof FrenzsaveError ? e.message : "Couldn't repost.", "error");
     }
+  };
+
+  const openComposer = (mode: "create" | "edit", caption: string | null) => {
+    setComposerMode(mode);
+    setComposerCaption(caption);
+    setComposerOpen(true);
   };
 
   const onReposted = () => {
@@ -1032,7 +1047,12 @@ function ReelCard({
         <div className="relative flex flex-col items-center gap-1">
           <RepostBurst triggerKey={repostBurst} />
           {item.repostBadge && item.repostBadge.count > 0 ? (
-            <div className="flex items-center" aria-label={`${item.repostBadge.count} people you follow reposted this`}>
+            <button
+              type="button"
+              onClick={() => setRepostersOpen(true)}
+              className="flex items-center transition active:scale-95"
+              aria-label={`${item.repostBadge.count} people you follow reposted this — see who`}
+            >
               <span className="flex -space-x-2">
                 {item.repostBadge.avatars.slice(0, 3).map((a, i) =>
                   a ? (
@@ -1043,9 +1063,9 @@ function ReelCard({
                 )}
               </span>
               {item.repostBadge.count > 3 ? <span className="ml-1 text-[10px] font-bold text-white drop-shadow">+{item.repostBadge.count - 3}</span> : null}
-            </div>
+            </button>
           ) : null}
-          <RailButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-400" label="Repost" onClick={repost} />
+          <RailButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-400" label="Repost" onClick={repost} press={repostPress} />
         </div>
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
       </div>
@@ -1209,7 +1229,7 @@ function ReelCard({
 
               <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
                 <SidebarAct icon={Heart} label="Like" active={liked} fill={liked} activeClass="text-rose-500" count={likes} onClick={() => react("like")} />
-                <SidebarAct icon={Repeat2} label="Repost" active={repostState.reposted} activeClass="text-emerald-500" count={repostState.count} onClick={repost} />
+                <SidebarAct icon={Repeat2} label="Repost" active={repostState.reposted} activeClass="text-emerald-500" count={repostState.count} onClick={repost} press={repostPress} />
                 <SidebarAct icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-amber-400" onClick={() => react("save")} />
               </div>
 
@@ -1331,7 +1351,23 @@ function ReelCard({
         open={composerOpen}
         onClose={() => setComposerOpen(false)}
         onReposted={onReposted}
+        mode={composerMode}
+        initialCaption={composerCaption}
       />
+
+      {/* Advanced repost options — opened by holding the Repost button */}
+      <RepostOptionsSheet
+        postId={item.id}
+        currentCount={repostState.count}
+        open={repostOptionsOpen}
+        onClose={() => setRepostOptionsOpen(false)}
+        onReposted={onReposted}
+        onCompose={() => openComposer("create", null)}
+        onEditCaption={(caption) => openComposer("edit", caption)}
+      />
+
+      {/* Who reposted — behind the avatar cluster */}
+      <RepostersSheet postId={item.id} open={repostersOpen} onClose={() => setRepostersOpen(false)} />
 
       {/* Inline editor — a creator edits caption/visibility (or deletes) without
           leaving the reel. */}
@@ -1378,6 +1414,7 @@ function RailButton({
   activeClass,
   label,
   onClick,
+  press,
 }: {
   icon: typeof Heart;
   count?: number;
@@ -1386,6 +1423,8 @@ function RailButton({
   activeClass?: string;
   label: string;
   onClick: () => void;
+  /** Long-press handlers (from useLongPress) for buttons with a hold action. */
+  press?: ReturnType<typeof useLongPress>;
 }) {
   return (
     <motion.button
@@ -1396,6 +1435,7 @@ function RailButton({
       whileTap={{ scale: 0.86 }}
       transition={{ type: "spring", stiffness: 520, damping: 22 }}
       className="flex flex-col items-center gap-1 text-white"
+      {...press}
     >
       <span
         className={cn(
@@ -1420,6 +1460,7 @@ function SidebarAct({
   fill,
   activeClass,
   onClick,
+  press,
 }: {
   icon: typeof Heart;
   label: string;
@@ -1428,6 +1469,8 @@ function SidebarAct({
   fill?: boolean;
   activeClass?: string;
   onClick: () => void;
+  /** Long-press handlers (from useLongPress) for buttons with a hold action. */
+  press?: ReturnType<typeof useLongPress>;
 }) {
   return (
     <button
@@ -1436,6 +1479,7 @@ function SidebarAct({
       aria-label={label}
       aria-pressed={active}
       className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary", active && activeClass)}
+      {...press}
     >
       <Icon className={cn("h-[18px] w-[18px]", fill && "fill-current")} />
       {count !== undefined && count > 0 ? <span className="text-xs font-medium tabular-nums">{formatCompactNumber(count)}</span> : null}

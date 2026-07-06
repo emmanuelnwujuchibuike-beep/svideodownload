@@ -260,6 +260,18 @@
     will-change: transform, opacity;
   }
 
+  /* Wrong-code shake for the OTP boxes (GPU-friendly, respects reduced motion). */
+  @keyframes otp-shake {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    20% { transform: translate3d(-6px, 0, 0); }
+    40% { transform: translate3d(6px, 0, 0); }
+    60% { transform: translate3d(-4px, 0, 0); }
+    80% { transform: translate3d(4px, 0, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-\[otp-shake_0\.4s_ease-in-out\] { animation: none; }
+  }
+
   /* Virtualization-lite: let the browser skip layout/paint for off-screen items
      (native, GPU-cheap — no windowing lib). contain-intrinsic-size reserves an
      approximate height so scroll position stays stable before an item renders. */

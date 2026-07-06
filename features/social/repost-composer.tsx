@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 
 import { toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
-import { toggleRepost } from "@/lib/social/repost-store";
+import { editRepostCaption, toggleRepost } from "@/lib/social/repost-store";
 import { cn } from "@/lib/utils";
 
 const CAPTION_MAX = 300;
@@ -36,6 +36,8 @@ export function RepostComposer({
   open,
   onClose,
   onReposted,
+  mode = "create",
+  initialCaption = null,
 }: {
   post: RepostComposerPost;
   currentCount: number;
@@ -43,36 +45,45 @@ export function RepostComposer({
   onClose: () => void;
   /** Fires on success (after the optimistic store update) — e.g. the burst animation. */
   onReposted?: () => void;
+  /** "edit" reuses the sheet to change an existing repost's caption (15-min window). */
+  mode?: "create" | "edit";
+  initialCaption?: string | null;
 }) {
   const [mounted, setMounted] = useState(false);
   const [caption, setCaption] = useState("");
   const [posting, setPosting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const editing = mode === "edit";
 
   useEffect(() => setMounted(true), []);
 
-  // Restore the draft when opening; focus the caption (spec: auto-focus).
+  // Restore the draft (create) or the live caption (edit) when opening; focus
+  // the caption (spec: auto-focus).
   useEffect(() => {
     if (!open) return;
-    try {
-      setCaption(localStorage.getItem(draftKey(post.id)) ?? "");
-    } catch {
-      setCaption("");
+    if (editing) {
+      setCaption(initialCaption ?? "");
+    } else {
+      try {
+        setCaption(localStorage.getItem(draftKey(post.id)) ?? "");
+      } catch {
+        setCaption("");
+      }
     }
     const t = setTimeout(() => textareaRef.current?.focus(), 220); // after the spring settles
     return () => clearTimeout(t);
-  }, [open, post.id]);
+  }, [open, post.id, editing, initialCaption]);
 
-  // Draft auto-save (and cleanup when emptied).
+  // Draft auto-save (and cleanup when emptied) — create mode only.
   useEffect(() => {
-    if (!open) return;
+    if (!open || editing) return;
     try {
       if (caption.trim()) localStorage.setItem(draftKey(post.id), caption);
       else localStorage.removeItem(draftKey(post.id));
     } catch {
       /* ignore */
     }
-  }, [caption, open, post.id]);
+  }, [caption, open, post.id, editing]);
 
   useEffect(() => {
     if (!open) return;
@@ -88,6 +99,12 @@ export function RepostComposer({
     setPosting(true);
     const text = caption.trim().slice(0, CAPTION_MAX) || null;
     try {
+      if (editing) {
+        await editRepostCaption(post.id, text);
+        onClose();
+        toast("Caption updated.", "success");
+        return;
+      }
       await toggleRepost(post.id, true, currentCount, text);
       try {
         localStorage.removeItem(draftKey(post.id));
@@ -106,7 +123,7 @@ export function RepostComposer({
         },
       });
     } catch (e) {
-      toast(e instanceof FrenzsaveError ? e.message : "Couldn't repost.", "error");
+      toast(e instanceof FrenzsaveError ? e.message : (editing ? "Couldn't update the caption." : "Couldn't repost."), "error");
     } finally {
       setPosting(false);
     }
@@ -138,7 +155,7 @@ export function RepostComposer({
             <div className="mx-auto mb-2 mt-2.5 h-1 w-9 rounded-full bg-border" />
             <div className="flex items-center justify-between px-5 pb-2">
               <h3 className="flex items-center gap-1.5 text-sm font-bold">
-                <Repeat2 className="h-4 w-4 text-emerald-500" /> Repost
+                <Repeat2 className="h-4 w-4 text-emerald-500" /> {editing ? "Edit caption" : "Repost"}
               </h3>
               <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
                 <X className="h-5 w-5" />
@@ -197,7 +214,7 @@ export function RepostComposer({
                   disabled={posting}
                   className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 active:scale-[0.99] disabled:opacity-60"
                 >
-                  {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Repeat2 className="h-4 w-4" />} Post Now
+                  {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Repeat2 className="h-4 w-4" />} {editing ? "Save" : "Post Now"}
                 </button>
                 <button
                   type="button"

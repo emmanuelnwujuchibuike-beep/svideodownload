@@ -5,6 +5,7 @@ import { Bell, BellRing, Check, Loader2, Settings, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
+import { useUser } from "@/features/auth/use-user";
 import { enablePush, pushSupported, syncPush } from "@/features/notifications/push";
 
 /**
@@ -50,9 +51,12 @@ export function PushNudge() {
   const [phase, setPhase] = useState<Phase>("hidden");
   const [busy, setBusy] = useState(false);
   const [testState, setTestState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
+  // Subscribing is an authed action (the /u shell also renders for anonymous
+  // visitors) — never nudge someone who couldn't complete it.
+  const { user, loading } = useUser();
 
   useEffect(() => {
-    if (typeof window === "undefined" || !pushSupported()) return;
+    if (typeof window === "undefined" || !pushSupported() || loading || !user) return;
 
     // Permission already granted → no UI needed, just keep the server row alive.
     if (Notification.permission === "granted") {
@@ -80,7 +84,7 @@ export function PushNudge() {
       window.removeEventListener("beforeinstallprompt", onInstallPrompt);
       clearTimeout(t);
     };
-  }, []);
+  }, [user, loading]);
 
   const dismiss = () => {
     setPhase("hidden");

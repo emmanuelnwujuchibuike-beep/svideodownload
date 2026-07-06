@@ -41,6 +41,9 @@ import { toast } from "@/features/ui/toast";
 const CollectionPicker = dynamic(() => import("@/features/social/collection-picker").then((m) => m.CollectionPicker), { ssr: false });
 const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").then((m) => m.PostEditSheet), { ssr: false });
 const RepostComposer = dynamic(() => import("@/features/social/repost-composer").then((m) => m.RepostComposer), { ssr: false });
+const RepostOptionsSheet = dynamic(() => import("@/features/social/repost-options").then((m) => m.RepostOptionsSheet), { ssr: false });
+const RepostersSheet = dynamic(() => import("@/features/social/reposters-sheet").then((m) => m.RepostersSheet), { ssr: false });
+import { useLongPress } from "@/lib/hooks/use-long-press";
 import { downloadPost } from "@/lib/media/download-post";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
 import { FrenzsaveError } from "@/lib/sdk";
@@ -93,11 +96,23 @@ function FeedPostCardImpl({
   const [repostBurst, setRepostBurst] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [composerMode, setComposerMode] = useState<"create" | "edit">("create");
+  const [composerCaption, setComposerCaption] = useState<string | null>(null);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [repostersOpen, setRepostersOpen] = useState(false);
   // Gate the code-split sheets: mount only after first open (keeps their chunks
   // out of the feed until actually needed, then stays mounted for exit animations).
   const [editReady, setEditReady] = useState(false);
   const [pickerReady, setPickerReady] = useState(false);
   const [composerReady, setComposerReady] = useState(false);
+  const [optionsReady, setOptionsReady] = useState(false);
+  const [repostersReady, setRepostersReady] = useState(false);
+
+  // Holding the Repost button opens the advanced options sheet.
+  const repostPress = useLongPress(() => {
+    setOptionsReady(true);
+    setOptionsOpen(true);
+  });
 
   const react = async (type: "like" | "save") => {
     const isLike = type === "like";
@@ -167,8 +182,7 @@ function FeedPostCardImpl({
   const repost = async () => {
     setMenuOpen(false);
     if (!repostState.reposted) {
-      setComposerReady(true);
-      setComposerOpen(true);
+      openComposer("create", null);
       return;
     }
     try {
@@ -177,6 +191,13 @@ function FeedPostCardImpl({
     } catch (e) {
       toast(e instanceof FrenzsaveError ? e.message : "Couldn't repost.", "error");
     }
+  };
+
+  const openComposer = (mode: "create" | "edit", caption: string | null) => {
+    setComposerMode(mode);
+    setComposerCaption(caption);
+    setComposerReady(true);
+    setComposerOpen(true);
   };
 
   const onReposted = () => {
@@ -220,7 +241,14 @@ function FeedPostCardImpl({
           one. Never distracts from the content below. */}
       {item.repostBadge && item.repostBadge.count > 0 ? (
         <div className="px-4 pt-3">
-          <Link href={`/u/${item.repostBadge.handles[0]}`} className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+          <button
+            type="button"
+            onClick={() => {
+              setRepostersReady(true);
+              setRepostersOpen(true);
+            }}
+            className="flex w-full items-center gap-2 text-left text-xs font-medium text-muted-foreground transition hover:text-foreground"
+          >
             <Repeat2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
             {item.repostBadge.avatars[0] ? (
               <Image src={item.repostBadge.avatars[0]} alt="" width={16} height={16} className="h-4 w-4 rounded-full object-cover ring-1 ring-border" />
@@ -230,7 +258,7 @@ function FeedPostCardImpl({
                 ? "Recommended by people you follow"
                 : `@${item.repostBadge.handles[0]}${item.repostBadge.count > 1 ? ` and ${item.repostBadge.count - 1} other${item.repostBadge.count > 2 ? "s" : ""}` : ""} reposted`}
             </span>
-          </Link>
+          </button>
           {item.repostBadge.caption ? (
             <p className="mt-1.5 border-l-2 border-emerald-500/40 pl-2.5 text-[13px] leading-relaxed text-foreground/90">
               <RichText text={item.repostBadge.caption} />
@@ -430,7 +458,7 @@ function FeedPostCardImpl({
           {!item.isOwner ? (
             <span className="relative inline-flex">
               <RepostBurst triggerKey={repostBurst} />
-              <ActionButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-500" onClick={repost} label="Repost" />
+              <ActionButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-500" onClick={repost} label="Repost" press={repostPress} />
             </span>
           ) : null}
         </div>
@@ -456,8 +484,24 @@ function FeedPostCardImpl({
           open={composerOpen}
           onClose={() => setComposerOpen(false)}
           onReposted={onReposted}
+          mode={composerMode}
+          initialCaption={composerCaption}
         />
       ) : null}
+
+      {optionsReady ? (
+        <RepostOptionsSheet
+          postId={item.id}
+          currentCount={repostState.count}
+          open={optionsOpen}
+          onClose={() => setOptionsOpen(false)}
+          onReposted={onReposted}
+          onCompose={() => openComposer("create", null)}
+          onEditCaption={(caption) => openComposer("edit", caption)}
+        />
+      ) : null}
+
+      {repostersReady ? <RepostersSheet postId={item.id} open={repostersOpen} onClose={() => setRepostersOpen(false)} /> : null}
     </motion.article>
   );
 }
@@ -488,6 +532,7 @@ function ActionButton({
   onClick,
   href,
   label,
+  press,
 }: {
   icon: typeof Heart;
   count?: number;
@@ -497,6 +542,8 @@ function ActionButton({
   onClick?: () => void;
   href?: string;
   label: string;
+  /** Long-press handlers (from useLongPress) for buttons with a hold action. */
+  press?: ReturnType<typeof useLongPress>;
 }) {
   const inner = (
     <>
@@ -524,7 +571,7 @@ function ActionButton({
     );
   }
   return (
-    <button type="button" onClick={onClick} aria-label={label} aria-pressed={active} className={cls}>
+    <button type="button" onClick={onClick} aria-label={label} aria-pressed={active} className={cls} {...press}>
       {inner}
     </button>
   );

@@ -92,6 +92,42 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
 
+/** GET — the viewer's own repost of this post (caption / pin / edit window), for the options sheet. */
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  if (!UUID.test(id)) return NextResponse.json({ error: "Bad id." }, { status: 400 });
+
+  const user = await getRequestUser(request);
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const db = createAdminClient();
+  const rich = await db
+    .from("reposts")
+    .select("caption, pinned_at, edited_at, created_at")
+    .eq("user_id", user.id)
+    .eq("post_id", id)
+    .maybeSingle();
+  if (!rich.error) {
+    if (!rich.data) return NextResponse.json({ reposted: false });
+    const createdAt = new Date(rich.data.created_at as string).getTime();
+    return NextResponse.json({
+      reposted: true,
+      caption: (rich.data.caption as string | null) ?? null,
+      pinned: !!rich.data.pinned_at,
+      edited: !!rich.data.edited_at,
+      editableForMs: Math.max(0, EDIT_WINDOW_MS - (Date.now() - createdAt)),
+    });
+  }
+  // Caption columns (migration 0030) not applied yet — report the plain state.
+  const { data } = await db
+    .from("reposts")
+    .select("created_at")
+    .eq("user_id", user.id)
+    .eq("post_id", id)
+    .maybeSingle();
+  return NextResponse.json({ reposted: !!data, caption: null, pinned: false, edited: false, editableForMs: 0 });
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!UUID.test(id)) return NextResponse.json({ error: "Bad id." }, { status: 400 });

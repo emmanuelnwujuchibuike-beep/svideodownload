@@ -61,9 +61,12 @@ export function LoginCollage() {
       ))}
 
       {/* Center brand mark — springs in last, sits in the clear central gap, and
-          doubles as a button back to the landing page. */}
+          doubles as a button back to the landing page. The tile grid isn't
+          symmetric: the hero tile (2.png) ends at 50% down, and the tiles
+          below it (5.png/6.png) start at 64–66%, so the real open gap between
+          them is centered at ~57% down, not the box's literal 50/50 center. */}
       <motion.div
-        className="absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2"
+        className="absolute left-1/2 top-[57%] z-30 -translate-x-1/2 -translate-y-1/2"
         initial={{ opacity: 0, scale: 0.4 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.05 + TILES.length * 0.09, type: "spring", stiffness: 200, damping: 14 }}

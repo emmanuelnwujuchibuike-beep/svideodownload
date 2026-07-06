@@ -138,7 +138,11 @@ export async function getOrProduce(
 
   // Synchronous get/set (no await between) keeps coalescing race-free.
   // Files smaller than this are treated as corrupt/partial (never cached/served).
-  const MIN_BYTES = 1024;
+  // A broken ffmpeg invocation (bad filter syntax, failed probe, etc.) can
+  // still emit a minimal-but-nonzero MP4 container before erroring out — well
+  // under 10KB in practice — so the floor needs to be well above "nonzero",
+  // not just above it.
+  const MIN_BYTES = 10_240;
 
   let work = inflight.get(key);
   if (!work) {

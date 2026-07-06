@@ -216,8 +216,15 @@ async function downscaleTo(format: MediaFormat, maxHeight: number): Promise<Down
         "-threads", threads,
         "-i",
         format.directUrl!,
-        // Never scale UP — only clamps a source that's already taller than maxHeight.
-        "-vf", `scale=-2:'min(${maxHeight},ih)'`,
+        // Never scale UP — only clamps a source that's already taller than
+        // maxHeight. NOTE: no shell is involved (spawn takes argv directly),
+        // so this is ffmpeg's OWN filtergraph syntax, not shell quoting —
+        // quotes here would be passed through literally as part of the value
+        // (which is what silently broke this before: ffmpeg failed to parse
+        // the filter and produced a near-empty file rather than a real
+        // video). ffmpeg needs the comma inside min(...) escaped with a
+        // backslash because a bare comma chains to a NEW filter.
+        "-vf", `scale=-2:min(${maxHeight}\\,ih)`,
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
         "-threads", threads,
         "-x264-params", `threads=${threads}:lookahead-threads=1`,

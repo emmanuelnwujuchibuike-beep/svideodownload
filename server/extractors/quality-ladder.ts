@@ -3,8 +3,15 @@ import type { MediaFormat } from "@/types";
 /** How many video quality options we ever want to surface, native + synthesized. */
 const MAX_VIDEO_TIERS = 4;
 
-/** Standard lower tiers we synthesize downward from when a source is thin. */
-const LADDER_TIERS = [480, 360, 240] as const;
+/**
+ * Lower tiers we synthesize downward from when a source is thin, ordered
+ * highest-first. Proportionate to a genuinely HD/vertical-HD source (e.g. a
+ * 1080x1920 clip) rather than a fixed low floor — 480/360/240 reads as "too
+ * low" under a 1920-tall original. Filtered to strictly-below-source at
+ * selection time, so a 1080p source still correctly falls through to 720
+ * and below instead of offering 1200/1080 above itself.
+ */
+const LADDER_TIERS = [1200, 1080, 720, 480, 360, 240] as const;
 
 function heightOf(f: MediaFormat): number | null {
   const m = /^(\d+)p$/.exec(f.resolution ?? "");
@@ -59,10 +66,6 @@ export function withQualityLadder(formats: MediaFormat[]): MediaFormat[] {
   }
   if (synthesized.length === 0) return formats;
 
-  // Flag the source tier as the un-verified original now that safer,
-  // guaranteed-working alternatives exist alongside it.
-  const flaggedSource: MediaFormat = { ...source, qualityNote: "Best available — needs a strong connection" };
-  const videosOut = videos.map((f) => (f === source ? flaggedSource : f));
   const nonVideo = formats.filter((f) => f.kind !== "video");
-  return [...videosOut, ...synthesized, ...nonVideo];
+  return [...videos, ...synthesized, ...nonVideo];
 }

@@ -62,8 +62,6 @@ export interface MediaFormat {
    * validated file rather than a copy of whatever the source actually serves.
    */
   transcodeMaxHeight?: number | null;
-  /** Short UI hint shown under this format (e.g. "Needs a strong connection"). */
-  qualityNote?: string | null;
 }
 
 export type ExtractorName =

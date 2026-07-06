@@ -395,11 +395,6 @@ function FormatRow({
         <span>{format.ext}</span>
         {size && size !== "—" ? <span className="normal-case">· {size}</span> : null}
       </span>
-      {format.qualityNote ? (
-        <span className="normal-case text-[10px] font-medium leading-tight text-amber-600 dark:text-amber-400">
-          {format.qualityNote}
-        </span>
-      ) : null}
     </button>
   );
 }

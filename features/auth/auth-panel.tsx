@@ -59,6 +59,9 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [shakeKey, setShakeKey] = useState(0);
   const [countdown, setCountdown] = useState(0);
+  // Supabase projects can issue 6–10 digit codes — the server tells us the
+  // real length so the boxes always match the email.
+  const [codeLength, setCodeLength] = useState(6);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const callbackUrl = () => `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
@@ -102,11 +105,12 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: target }),
       });
-      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      const d = (await res.json().catch(() => ({}))) as { error?: string; codeLength?: number };
       if (!res.ok) {
         setError(d.error || "Couldn't send the code. Try again.");
         return false;
       }
+      if (d.codeLength && d.codeLength >= 4 && d.codeLength <= 10) setCodeLength(d.codeLength);
       return true;
     } catch {
       setError("You appear to be offline — check your connection and try again.");
@@ -300,7 +304,7 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
             We&apos;ve sent a secure verification code to <span className="font-semibold text-foreground">{email}</span>.
           </p>
 
-          <OtpInput onComplete={verify} disabled={verifying || verified} shake={shakeKey} />
+          <OtpInput length={codeLength} onComplete={verify} disabled={verifying || verified} shake={shakeKey} />
 
           <div className="mt-4 flex min-h-6 items-center justify-center gap-1.5 text-sm" aria-live="polite">
             {verified ? (

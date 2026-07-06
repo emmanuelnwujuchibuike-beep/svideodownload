@@ -38,13 +38,7 @@ async function send(to: string, subject: string, html: string, text: string): Pr
  */
 export function sendOtpEmail(to: string, code: string): Promise<boolean> {
   const expiry = EXPIRY_MINUTES >= 60 ? `${Math.round(EXPIRY_MINUTES / 60)} hour${EXPIRY_MINUTES >= 120 ? "s" : ""}` : `${EXPIRY_MINUTES} minutes`;
-  const digits = code
-    .split("")
-    .map(
-      (d) =>
-        `<td style="width:44px;height:56px;text-align:center;vertical-align:middle;background:#f4f4f7;border:1px solid #e4e4ec;border-radius:12px;font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:26px;font-weight:700;color:#17171c;">${d}</td><td style="width:8px;"></td>`,
-    )
-    .join("");
+  const year = new Date().getFullYear();
 
   const html = `<!doctype html>
 <html lang="en">
@@ -62,7 +56,7 @@ export function sendOtpEmail(to: string, code: string): Promise<boolean> {
           <p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#6b6b76;">Enter this code on the Frenz sign-in screen to continue. It expires in ${expiry}.</p>
         </td></tr>
         <tr><td style="padding:24px 36px 0;">
-          <table role="presentation" cellpadding="0" cellspacing="0"><tr>${digits}</tr></table>
+          <p style="margin:0;background:#f4f4f7;border:1px solid #e4e4ec;border-radius:14px;padding:18px 0;text-align:center;font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:30px;font-weight:700;letter-spacing:0.3em;text-indent:0.3em;color:#17171c;">${code}</p>
         </td></tr>
         <tr><td style="padding:24px 36px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
           <p style="margin:0;font-size:13px;line-height:1.6;color:#8a8a94;">If you didn't request this code, you can safely ignore this email — no one can sign in without it. Never share this code with anyone; Frenz will never ask you for it.</p>
@@ -72,6 +66,11 @@ export function sendOtpEmail(to: string, code: string): Promise<boolean> {
             Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color:#6C4DFF;text-decoration:none;">${SUPPORT_EMAIL}</a><br>
             Frenz · Download. Discover. Meet.
           </p>
+          <p style="margin:10px 0 0;font-size:11px;line-height:1.6;color:#b6b6c0;">
+            You're receiving this email because a sign-in code was requested for ${to} on Frenz.
+            This is an automated security message — replies aren't monitored.<br>
+            &copy; ${year} Frenz. All rights reserved.
+          </p>
         </td></tr>
       </table>
     </td></tr>
@@ -79,7 +78,7 @@ export function sendOtpEmail(to: string, code: string): Promise<boolean> {
 </body>
 </html>`;
 
-  const text = `Your Frenz sign-in code: ${code}\n\nEnter this code on the Frenz sign-in screen to continue. It expires in ${expiry}.\n\nIf you didn't request this code, you can safely ignore this email. Never share this code with anyone.\n\nNeed help? ${SUPPORT_EMAIL}`;
+  const text = `Your Frenz sign-in code: ${code}\n\nEnter this code on the Frenz sign-in screen to continue. It expires in ${expiry}.\n\nIf you didn't request this code, you can safely ignore this email. Never share this code with anyone.\n\nNeed help? ${SUPPORT_EMAIL}\n\nYou're receiving this email because a sign-in code was requested for ${to} on Frenz.\n(c) ${year} Frenz. All rights reserved.`;
 
   return send(to, `${code} is your Frenz sign-in code`, html, text);
 }

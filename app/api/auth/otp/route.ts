@@ -63,5 +63,8 @@ export async function POST(request: Request) {
   const sent = await sendOtpEmail(email, code);
   if (!sent) return NextResponse.json({ error: "Couldn't send the email. Try again." }, { status: 502 });
 
-  return NextResponse.json({ ok: true });
+  // Supabase's OTP length is a dashboard setting (6–10 digits) — tell the
+  // client how many boxes to render so auto-verify always fires on the real
+  // last digit, whatever the project is configured to.
+  return NextResponse.json({ ok: true, codeLength: code.length });
 }

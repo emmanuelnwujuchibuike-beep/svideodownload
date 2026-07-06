@@ -30,6 +30,12 @@ export function OtpInput({
     refs.current[0]?.focus();
   }, []);
 
+  // The server reports the project's real code length (Supabase allows 6–10)
+  // after the email sends — re-shape the boxes if it differs.
+  useEffect(() => {
+    setValues((prev) => (prev.length === length ? prev : Array.from({ length }, () => "")));
+  }, [length]);
+
   // Error → clear and refocus.
   useEffect(() => {
     if (shake !== undefined && shake !== lastShake.current) {
@@ -83,9 +89,11 @@ export function OtpInput({
     refs.current[Math.min(digits.length, length - 1)]?.focus();
   };
 
+  const compact = length > 6; // 8–10 digit codes need narrower boxes to fit small screens
+
   return (
     <div
-      className={cn("flex justify-center gap-2", shake !== undefined && shake > 0 && "animate-[otp-shake_0.4s_ease-in-out]")}
+      className={cn("flex justify-center", compact ? "gap-1.5" : "gap-2", shake !== undefined && shake > 0 && "animate-[otp-shake_0.4s_ease-in-out]")}
       // Re-mount the animation on every new shake key.
       key={shake}
       onPaste={handlePaste}
@@ -108,7 +116,8 @@ export function OtpInput({
           onFocus={(e) => e.target.select()}
           aria-label={`Digit ${i + 1} of ${length}`}
           className={cn(
-            "h-14 w-11 rounded-2xl border bg-secondary/40 text-center text-xl font-bold tabular-nums outline-none transition-all",
+            "rounded-2xl border bg-secondary/40 text-center font-bold tabular-nums outline-none transition-all",
+            compact ? "h-12 w-8 text-lg sm:w-9" : "h-14 w-11 text-xl",
             v ? "border-violet-500/50 bg-background shadow-[0_0_0_4px_rgba(139,92,246,0.10)]" : "border-border/60",
             "focus:border-violet-500/60 focus:bg-background focus:shadow-[0_0_0_4px_rgba(139,92,246,0.14)]",
             "disabled:opacity-50",

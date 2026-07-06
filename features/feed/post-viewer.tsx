@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { SmartVideo } from "@/features/media/smart-video";
+import { floatReaction } from "@/features/ui/reaction-float";
 import { Comments } from "@/features/social/comments";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
 import { useEntitlements } from "@/features/auth/use-entitlements";
@@ -295,7 +296,17 @@ function ViewerInner({
 
         {/* Actions */}
         <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
-          <Act icon={liked ? WowSolid : WowOutline} label="Wow" active={liked} activeClass="text-violet-500" count={likes} onClick={() => react("like")} />
+          <Act
+            icon={liked ? WowSolid : WowOutline}
+            label="Wow"
+            active={liked}
+            activeClass="text-violet-500"
+            count={likes}
+            onClick={(e) => {
+              if (!liked) floatReaction(e.clientX, e.clientY);
+              void react("like");
+            }}
+          />
           <Act icon={MessageCircle} label="Comments" count={item.commentsCount} onClick={() => setShowComments(true)} />
           <Act icon={Share2} label="Share" count={item.sharesCount} onClick={share} />
           <Act icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-primary" onClick={() => react("save")} />
@@ -384,7 +395,7 @@ function Act({
   active?: boolean;
   fill?: boolean;
   activeClass?: string;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
 }) {
   return (
     <button

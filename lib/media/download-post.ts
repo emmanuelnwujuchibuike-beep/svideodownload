@@ -1,5 +1,6 @@
 "use client";
 
+import { startDownload } from "@/features/downloads/manager";
 import { toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
 import { getApi } from "@/lib/sdk/browser";
@@ -7,11 +8,17 @@ import { getApi } from "@/lib/sdk/browser";
 /**
  * Download a post's media directly (from the feed, reels, anywhere). Goes through
  * the shared SDK — the exact same client + endpoint the native/desktop apps use —
- * which authorizes it (enforcing the free daily cap) and returns the media URL +
- * filename. We then fetch the file and save it, falling back to opening it in a
- * new tab if a CORS policy blocks the blob fetch.
+ * which authorizes it (enforcing the free daily cap) and returns the media URL.
+ * The transfer itself runs in the background download manager: live progress in
+ * the floating card, the user never leaves the page, and on iOS the finished
+ * file is handed over via the share sheet's Save (never a raw-file navigation).
  */
-export async function downloadPost(item: { id: string; mediaUrl?: string | null; title?: string }): Promise<void> {
+export async function downloadPost(item: {
+  id: string;
+  mediaUrl?: string | null;
+  title?: string;
+  thumbnailUrl?: string | null;
+}): Promise<void> {
   if (!item.mediaUrl) {
     toast("Nothing to download here.", "error");
     return;
@@ -19,25 +26,18 @@ export async function downloadPost(item: { id: string; mediaUrl?: string | null;
   const tid = toast("Preparing download…", "loading");
   try {
     const data = await getApi().authorizeDownload(item.id);
-    const filename = data.filename || "frenz-video.mp4";
-    try {
-      const fileRes = await fetch(data.url, { mode: "cors" });
-      if (!fileRes.ok) throw new Error();
-      const blob = await fileRes.blob();
-      const objUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
-    } catch {
-      // CORS or network blocked the blob fetch → open it so the user can save it.
-      window.open(data.url, "_blank", "noopener");
-    }
-    const left = typeof data.remaining === "number" ? ` · ${data.remaining} free left today` : "";
-    toast(`Saved${left}`, "success", { id: tid });
+    toast("Download started", "info", { id: tid, duration: 1500 });
+    startDownload({
+      url: item.mediaUrl,
+      directUrl: data.url,
+      formatId: "post",
+      kind: "video",
+      title: (data.filename || item.title || "frenz-video").replace(/\.\w+$/, ""),
+      thumbnail: item.thumbnailUrl ?? null,
+      platform: "generic",
+      platformName: "Frenz",
+      qualityLabel: "Original",
+    });
   } catch (e) {
     if (e instanceof FrenzsaveError) {
       if (e.status === 401) {

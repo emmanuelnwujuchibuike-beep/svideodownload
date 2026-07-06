@@ -14,6 +14,7 @@ const StoryStudio = dynamic(() => import("@/features/create/studio/story-studio"
 const DownloadPlayer = dynamic(() => import("@/features/downloads/download-player").then((m) => m.DownloadPlayer), { ssr: false });
 const IosInstallPrompt = dynamic(() => import("@/features/notifications/ios-install-prompt").then((m) => m.IosInstallPrompt), { ssr: false });
 const PushNudge = dynamic(() => import("@/features/notifications/push-nudge").then((m) => m.PushNudge), { ssr: false });
+const FloatingDownloadProgress = dynamic(() => import("@/features/downloads/floating-progress").then((m) => m.FloatingDownloadProgress), { ssr: false });
 
 export function AppOverlays() {
   return (
@@ -23,6 +24,7 @@ export function AppOverlays() {
       <DownloadPlayer />
       <IosInstallPrompt />
       <PushNudge />
+      <FloatingDownloadProgress />
     </>
   );
 }

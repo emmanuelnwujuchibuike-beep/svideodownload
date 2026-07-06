@@ -31,6 +31,7 @@ import { createPortal } from "react-dom";
 
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { RichText } from "@/components/social/rich-text";
+import { floatReaction } from "@/features/ui/reaction-float";
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { Comments } from "@/features/social/comments";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
@@ -327,7 +328,17 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
             offset needed) lands cleanly between the image and the comments
             sidebar instead of overlapping it. */}
         <div className={cn("absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-8 lg:!pointer-events-auto lg:!opacity-100", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
-          <RailBtn icon={liked ? WowSolid : WowOutline} active={liked} activeClass="text-violet-300" count={likes} label="Wow" onClick={() => react("like")} />
+          <RailBtn
+            icon={liked ? WowSolid : WowOutline}
+            active={liked}
+            activeClass="text-violet-300"
+            count={likes}
+            label="Wow"
+            onClick={(e) => {
+              if (!liked) floatReaction(e.clientX, e.clientY);
+              void react("like");
+            }}
+          />
           <RailBtn icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
           <RailBtn icon={Share2} count={item.sharesCount} label="Share" onClick={share} />
           <RailBtn icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
@@ -406,7 +417,17 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
         </p>
 
         <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
-          <Act icon={liked ? WowSolid : WowOutline} label="Wow" active={liked} activeClass="text-violet-500" count={likes} onClick={() => react("like")} />
+          <Act
+            icon={liked ? WowSolid : WowOutline}
+            label="Wow"
+            active={liked}
+            activeClass="text-violet-500"
+            count={likes}
+            onClick={(e) => {
+              if (!liked) floatReaction(e.clientX, e.clientY);
+              void react("like");
+            }}
+          />
           <Act icon={Share2} label="Share" count={item.sharesCount} onClick={share} />
           <Act icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-primary" onClick={() => react("save")} />
           <button
@@ -550,7 +571,7 @@ function Act({
   active?: boolean;
   fill?: boolean;
   activeClass?: string;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
 }) {
   return (
     <button
@@ -566,7 +587,7 @@ function Act({
   );
 }
 
-function RailBtn({ icon: Icon, count, active, fill, activeClass, label, onClick }: { icon: typeof Heart; count?: number; active?: boolean; fill?: boolean; activeClass?: string; label: string; onClick: () => void }) {
+function RailBtn({ icon: Icon, count, active, fill, activeClass, label, onClick }: { icon: typeof Heart; count?: number; active?: boolean; fill?: boolean; activeClass?: string; label: string; onClick: (e: React.MouseEvent) => void }) {
   return (
     <motion.button type="button" onClick={onClick} aria-label={label} aria-pressed={active} whileTap={{ scale: 0.86 }} transition={{ type: "spring", stiffness: 520, damping: 22 }} className="flex flex-col items-center gap-1 text-white">
       <span className={cn("flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors", active && "bg-white/15 ring-white/25")}>

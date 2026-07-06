@@ -17,7 +17,7 @@ import { type ComponentType, type ReactNode, useMemo, useState } from "react";
 
 import type { MediaKind } from "@/types";
 
-import { downloadToDisk } from "@/lib/client-download";
+import { startDownload } from "@/features/downloads/manager";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
@@ -222,11 +222,17 @@ function HistoryCard({
 
   const reDownload = () => {
     setRedownloading(true);
-    downloadToDisk({
+    // Background stream with the floating progress card — never a raw-file
+    // navigation (the old path stranded iOS on a Quick Look preview).
+    startDownload({
       url: item.url,
       formatId: item.formatId,
       kind: item.kind,
       title: item.title,
+      thumbnail: item.thumbnail,
+      platform: item.platform,
+      platformName: item.platformName,
+      qualityLabel: item.qualityLabel,
     });
     setTimeout(() => setRedownloading(false), 1200);
   };

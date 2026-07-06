@@ -42,6 +42,7 @@ import { SmartVideo } from "@/features/media/smart-video";
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { Comments } from "@/features/social/comments";
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
+import { floatReaction } from "@/features/ui/reaction-float";
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { RepostComposer } from "@/features/social/repost-composer";
 import { RepostOptionsSheet } from "@/features/social/repost-options";
@@ -1048,7 +1049,17 @@ function ReelCard({
 
         {/* Refined action stack: Like · Comment · Repost · Save · More. Share and
             everything else live in the premium overflow sheet. */}
-        <RailButton icon={liked ? WowSolid : WowOutline} active={liked} activeClass="text-violet-300" count={likes} label="Wow" onClick={() => react("like")} />
+        <RailButton
+          icon={liked ? WowSolid : WowOutline}
+          active={liked}
+          activeClass="text-violet-300"
+          count={likes}
+          label="Wow"
+          onClick={(e) => {
+            if (!liked) floatReaction(e.clientX, e.clientY);
+            void react("like");
+          }}
+        />
         <RailButton icon={MessageCircle} count={item.commentsCount} label="Comment" onClick={openComments} />
         <div className="relative flex flex-col items-center gap-1">
           <RepostBurst triggerKey={repostBurst} />
@@ -1234,7 +1245,17 @@ function ReelCard({
               </p>
 
               <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
-                <SidebarAct icon={liked ? WowSolid : WowOutline} label="Wow" active={liked} activeClass="text-violet-500" count={likes} onClick={() => react("like")} />
+                <SidebarAct
+                  icon={liked ? WowSolid : WowOutline}
+                  label="Wow"
+                  active={liked}
+                  activeClass="text-violet-500"
+                  count={likes}
+                  onClick={(e) => {
+                    if (!liked) floatReaction(e.clientX, e.clientY);
+                    void react("like");
+                  }}
+                />
                 <SidebarAct icon={Repeat2} label="Repost" active={repostState.reposted} activeClass="text-emerald-500" count={repostState.count} onClick={repost} press={repostPress} />
                 <SidebarAct icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-amber-400" onClick={() => react("save")} />
               </div>
@@ -1428,7 +1449,7 @@ function RailButton({
   fill?: boolean;
   activeClass?: string;
   label: string;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
   /** Long-press handlers (from useLongPress) for buttons with a hold action. */
   press?: ReturnType<typeof useLongPress>;
 }) {
@@ -1474,7 +1495,7 @@ function SidebarAct({
   active?: boolean;
   fill?: boolean;
   activeClass?: string;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
   /** Long-press handlers (from useLongPress) for buttons with a hold action. */
   press?: ReturnType<typeof useLongPress>;
 }) {

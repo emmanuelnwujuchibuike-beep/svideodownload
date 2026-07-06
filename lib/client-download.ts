@@ -53,3 +53,35 @@ export function saveBlob(blob: Blob, filename: string): void {
     URL.revokeObjectURL(url);
   }, 1000);
 }
+
+/** iOS (incl. iPadOS-as-Mac) — where in-app anchor saves are unreliable. */
+export function isIosDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return (
+    /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+/**
+ * Hand a finished file to the DEVICE the premium way per platform. On iOS the
+ * share sheet is the real path to "Save Video"/Photos/Files — but it requires
+ * a user gesture, so call this from a button tap (the download-complete card),
+ * never from an async completion. Falls back to the anchor save.
+ */
+export async function saveToDevice(blob: Blob, filename: string): Promise<void> {
+  const safe = filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "download";
+  if (isIosDevice() && typeof navigator.share === "function") {
+    try {
+      const file = new File([blob], safe, { type: blob.type || "application/octet-stream" });
+      if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+    } catch (e) {
+      // User closed the sheet — done. Anything else → anchor fallback below.
+      if (e instanceof Error && e.name === "AbortError") return;
+    }
+  }
+  saveBlob(blob, safe);
+}

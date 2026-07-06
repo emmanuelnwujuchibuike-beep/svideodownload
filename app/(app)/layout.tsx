@@ -7,6 +7,7 @@ import { FloatingMessages } from "@/features/app-shell/floating-messages";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { PresenceTracker } from "@/features/friends/use-presence";
 import { NotificationLiveToast } from "@/features/notifications/live-toast";
+import { ReactionFloatLayer } from "@/features/ui/reaction-float";
 import { Toaster } from "@/features/ui/toast";
 import { getHomeProfile } from "@/lib/social/home";
 import { createClient } from "@/lib/supabase/server";
@@ -45,6 +46,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <MobileNav />
       <FloatingMessages />
       <Toaster />
+      {/* Floating-reaction layer — Wow taps rise from the tap point. */}
+      <ReactionFloatLayer />
       {/* Live in-app drop-down notification. */}
       <NotificationLiveToast />
       {/* Heavy, hidden-until-triggered overlays — code-split out of the initial

@@ -44,6 +44,7 @@ const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").
 const RepostComposer = dynamic(() => import("@/features/social/repost-composer").then((m) => m.RepostComposer), { ssr: false });
 const RepostOptionsSheet = dynamic(() => import("@/features/social/repost-options").then((m) => m.RepostOptionsSheet), { ssr: false });
 const RepostersSheet = dynamic(() => import("@/features/social/reposters-sheet").then((m) => m.RepostersSheet), { ssr: false });
+import { floatReaction } from "@/features/ui/reaction-float";
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { downloadPost } from "@/lib/media/download-post";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
@@ -456,7 +457,17 @@ function FeedPostCardImpl({
           the focus. */}
       <div className="mx-3 mb-3 mt-1 flex items-center justify-between rounded-2xl bg-secondary/40 px-1 py-1 ring-1 ring-inset ring-border/40">
         <div className="flex items-center">
-          <ActionButton active={liked} onClick={() => react("like")} icon={liked ? WowSolid : WowOutline} count={likes} activeClass="text-violet-500" label="Wow" />
+          <ActionButton
+            active={liked}
+            onClick={(e) => {
+              if (!liked) floatReaction(e.clientX, e.clientY);
+              void react("like");
+            }}
+            icon={liked ? WowSolid : WowOutline}
+            count={likes}
+            activeClass="text-violet-500"
+            label="Wow"
+          />
           <ActionButton icon={MessageCircle} count={item.commentsCount} onClick={() => onOpen(item, true)} label="Comment" />
           {!item.isOwner ? (
             <span className="relative inline-flex">
@@ -542,7 +553,7 @@ function ActionButton({
   active?: boolean;
   fill?: boolean;
   activeClass?: string;
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent) => void;
   href?: string;
   label: string;
   /** Long-press handlers (from useLongPress) for buttons with a hold action. */

@@ -3,7 +3,7 @@
 import { addDownload } from "@/features/history/store";
 import { mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { toast } from "@/features/ui/toast";
-import { saveBlob } from "@/lib/client-download";
+import { isIosDevice, saveBlob, saveToDevice } from "@/lib/client-download";
 import type { MediaKind, PlatformId } from "@/types";
 
 /**
@@ -36,11 +36,26 @@ export interface DownloadTask {
   speed: number;
   error: string | null;
   createdAt: number;
+  /** Fetch this exact URL instead of the /api/download pipeline (post media). */
+  directUrl?: string;
+  /** On iOS the finished file waits for a tap (share sheet needs a gesture). */
+  awaitingSave?: boolean;
 }
 
 let tasks: DownloadTask[] = [];
 const controllers = new Map<string, AbortController>();
 const listeners = new Set<() => void>();
+// Finished files kept briefly so the completion card's "Save to device" button
+// (iOS — the share sheet requires a user gesture) can hand them over. Capped.
+const finishedBlobs = new Map<string, { blob: Blob; filename: string }>();
+function retainBlob(id: string, blob: Blob, filename: string) {
+  finishedBlobs.set(id, { blob, filename });
+  while (finishedBlobs.size > 3) {
+    const oldest = finishedBlobs.keys().next().value;
+    if (oldest === undefined) break;
+    finishedBlobs.delete(oldest);
+  }
+}
 
 function emit() {
   tasks = [...tasks];
@@ -78,7 +93,7 @@ async function run(id: string) {
   patch(id, { status: "downloading", error: null, receivedBytes: 0, speed: 0 });
 
   try {
-    const res = await fetch(buildUrl(task), { signal: controller.signal });
+    const res = await fetch(task.directUrl ?? buildUrl(task), { signal: controller.signal });
     if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 
     const total = Number(res.headers.get("content-length")) || 0;
@@ -109,14 +124,19 @@ async function run(id: string) {
 
     const blob = new Blob(chunks as BlobPart[], { type: contentType });
     const ext = contentType.includes("audio") ? "mp3" : contentType.includes("image") ? "jpg" : "mp4";
+    const filename = `${task.title || "download"}.${ext}`;
 
     // 1) Save into the on-device library so it can be re-watched in the browser
     //    (and published) without re-fetching or visiting the source platform.
     await saveMedia(mediaKey(task.url, task.formatId, task.kind), blob).catch(() => {});
-    // 2) Hand the file to the browser so the user can save it to their phone.
-    saveBlob(blob, `${task.title || "download"}.${ext}`);
+    // 2) Hand the file to the device. On iOS the share sheet ("Save Video")
+    //    needs a real tap, so the completion card offers a Save button instead
+    //    of navigating anywhere — the user never leaves the app.
+    const ios = isIosDevice();
+    retainBlob(id, blob, filename);
+    if (!ios) saveBlob(blob, filename);
 
-    patch(id, { status: "completed", receivedBytes: received, totalBytes: total || received, speed: 0 });
+    patch(id, { status: "completed", receivedBytes: received, totalBytes: total || received, speed: 0, awaitingSave: ios });
     addDownload({
       url: task.url,
       platform: task.platform,
@@ -128,7 +148,7 @@ async function run(id: string) {
       qualityLabel: task.qualityLabel,
       size: received, // exact downloaded bytes
     });
-    toast("Download complete — saved to your device & library", "success");
+    if (!ios) toast("Download complete — saved to your device & library", "success");
   } catch (err) {
     if (controller.signal.aborted) return; // paused/canceled handled elsewhere
     patch(id, { status: "failed", error: err instanceof Error ? err.message : "Download failed" });
@@ -136,6 +156,24 @@ async function run(id: string) {
   } finally {
     controllers.delete(id);
   }
+}
+
+/** Hand a finished task's file to the device (call from a TAP — iOS share sheet). */
+export async function saveTaskToDevice(id: string): Promise<void> {
+  const kept = finishedBlobs.get(id);
+  if (!kept) {
+    toast("File expired — download it again.", "error");
+    return;
+  }
+  await saveToDevice(kept.blob, kept.filename);
+  patch(id, { awaitingSave: false });
+}
+
+/** Remove a completed/failed task from the list (the card's dismiss). */
+export function dismissTask(id: string) {
+  finishedBlobs.delete(id);
+  tasks = tasks.filter((t) => t.id !== id);
+  emit();
 }
 
 export function startDownload(input: {
@@ -147,6 +185,7 @@ export function startDownload(input: {
   platform: PlatformId;
   platformName: string;
   qualityLabel: string;
+  directUrl?: string;
 }): string {
   const id = crypto.randomUUID();
   tasks = [
@@ -182,6 +221,7 @@ export function retryDownload(id: string) {
 export function cancelDownload(id: string) {
   controllers.get(id)?.abort();
   controllers.delete(id);
+  finishedBlobs.delete(id);
   tasks = tasks.filter((t) => t.id !== id);
   emit();
 }
@@ -189,6 +229,9 @@ export function pauseAll() {
   for (const t of tasks) if (t.status === "downloading") pauseDownload(t.id);
 }
 export function clearFinished() {
+  for (const t of tasks) {
+    if (t.status === "completed" || t.status === "failed" || t.status === "canceled") finishedBlobs.delete(t.id);
+  }
   tasks = tasks.filter((t) => t.status === "downloading" || t.status === "paused" || t.status === "queued");
   emit();
 }

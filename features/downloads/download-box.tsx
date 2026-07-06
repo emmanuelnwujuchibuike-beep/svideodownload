@@ -3,11 +3,10 @@
 import { ClipboardPaste, Loader2, Search, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 
-import { addDownload } from "@/features/history/store";
 import { useDownloader } from "@/features/downloader/use-downloader";
 import { PreviewCard } from "@/features/downloader/preview-card";
-import { toast } from "@/features/ui/toast";
-import { downloadToDisk } from "@/lib/client-download";
+import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
+import { startDownload } from "@/features/downloads/manager";
 import { BRAND_ICONS, FLAGSHIP_IDS } from "@/lib/platform-icons";
 import { detectPlatform, PLATFORMS } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
@@ -63,20 +62,21 @@ export function DownloadBox() {
   const onDownload = (formatId: string, kind: MediaKind) => {
     if (!metadata) return;
     const fmt = metadata.formats.find((f) => f.formatId === formatId);
-    // Fast, reliable native browser download (streams straight to disk; iOS-safe).
-    downloadToDisk({ url: metadata.sourceUrl, formatId, kind, title: metadata.title });
-    addDownload({
+    // In-app background download: streamed with live progress in the floating
+    // card, the page stays fully usable, and the user NEVER lands on a raw
+    // file/Quick Look page (the old link-navigation stranded iOS there). The
+    // manager saves to the on-device library, records history, and hands the
+    // file to the device (share-sheet Save on iOS, direct save elsewhere).
+    startDownload({
       url: metadata.sourceUrl,
-      platform: metadata.platform,
-      platformName: metadata.platformName,
-      title: metadata.title,
-      thumbnail: metadata.thumbnail,
       formatId,
       kind,
+      title: metadata.title,
+      thumbnail: metadata.thumbnail,
+      platform: metadata.platform,
+      platformName: metadata.platformName,
       qualityLabel: fmt?.label ?? (kind === "audio" ? "Audio" : kind === "image" ? "Image" : "Video"),
-      size: fmt?.filesize ?? null,
     });
-    toast("Download started in your browser", "info");
     setJustQueued(true);
     setTimeout(() => setJustQueued(false), 2400);
   };
@@ -151,6 +151,10 @@ export function DownloadBox() {
           <PreviewCard metadata={metadata} phase="idle" onDownload={onDownload} />
         </div>
       ) : null}
+
+      {/* Live progress / completion card (singleton — no-op if the app shell
+          already mounted one). */}
+      <FloatingDownloadProgress />
     </div>
   );
 }

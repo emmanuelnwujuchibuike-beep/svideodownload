@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
   ArrowUp,
-  Clapperboard,
   ChevronUp,
   Clock,
   Flame,
@@ -12,7 +11,6 @@ import {
   LayoutGrid,
   MessageSquare,
   Sparkles,
-  Users,
   Video,
   X,
 } from "lucide-react";
@@ -59,10 +57,10 @@ import { cn } from "@/lib/utils";
 
 type Icon = ComponentType<{ className?: string }>;
 
-const SEGMENTS: { key: HomeFeedSort; label: string; icon: Icon }[] = [
-  { key: "for_you", label: "For You", icon: Sparkles },
-  { key: "following", label: "Following", icon: Users },
-  { key: "recent", label: "Reels", icon: Clapperboard },
+const SEGMENTS: { key: HomeFeedSort; label: string }[] = [
+  { key: "for_you", label: "For You" },
+  { key: "following", label: "Following" },
+  { key: "recent", label: "Reels" },
 ];
 
 /** Smart Filters reshape the loaded stream — kind filters + honest reorders. */
@@ -147,8 +145,19 @@ export function SmartFeed({
     });
   }, []);
   const sentinel = useRef<HTMLDivElement | null>(null);
-  const seen = useRef(new Set(initialItems.map((i) => i.id)));
   const router = useRouter();
+
+  // Per-tab cache (For You / Following) so switching is instant and never
+  // reloads/flashes a skeleton once a tab has been visited — each entry keeps
+  // its own items/pagination cursor/dedup set, restored verbatim on return.
+  const sortRef = useRef(sort);
+  sortRef.current = sort;
+  const cacheRef = useRef<Partial<Record<HomeFeedSort, { items: FeedItem[]; nextOffset: number | null; seen: Set<string> }>> | null>(null);
+  if (!cacheRef.current) {
+    cacheRef.current = {
+      for_you: { items: balanceByKind(initialItems), nextOffset: initialNextOffset, seen: new Set(initialItems.map((i) => i.id)) },
+    };
+  }
 
   const deck = useMemo(() => buildSparkDeck({ friendCount }), [friendCount]);
   // Every loaded video, in feed order — the reel playlist. Kept live so the open
@@ -189,9 +198,14 @@ export function SmartFeed({
 
   const fetchPage = useCallback(
     async (s: HomeFeedSort, offset: number, replace: boolean) => {
-      if (replace) setSwitching(true);
-      else setLoading(true);
-      setError(false);
+      const isActiveTab = () => s === sortRef.current;
+      // Only the tab actually on screen shows loading UI — a background
+      // prefetch of the other tab (below) must stay invisible.
+      if (isActiveTab()) {
+        if (replace) setSwitching(true);
+        else setLoading(true);
+        setError(false);
+      }
       try {
         // Through the shared SDK — same client/path (auth, dedupe, retry, timeout)
         // the native apps use.
@@ -199,32 +213,59 @@ export function SmartFeed({
           method: "GET",
           query: { sort: s, offset, limit: PAGE },
         });
+        const entry = cacheRef.current![s] ?? { items: [], nextOffset: null, seen: new Set<string>() };
         if (replace) {
-          seen.current = new Set(data.items.map((i) => i.id));
-          setItems(balanceByKind(data.items));
+          entry.seen = new Set(data.items.map((i) => i.id));
+          entry.items = balanceByKind(data.items);
         } else {
-          const fresh = data.items.filter((i) => !seen.current.has(i.id));
-          fresh.forEach((i) => seen.current.add(i.id));
+          const fresh = data.items.filter((i) => !entry.seen.has(i.id));
+          fresh.forEach((i) => entry.seen.add(i.id));
           // Balance each page on arrival so the existing feed never reshuffles.
-          setItems((prev) => [...prev, ...balanceByKind(fresh)]);
+          entry.items = [...entry.items, ...balanceByKind(fresh)];
         }
-        setNextOffset(data.nextOffset);
+        entry.nextOffset = data.nextOffset;
+        cacheRef.current![s] = entry;
+        if (isActiveTab()) {
+          setItems(entry.items);
+          setNextOffset(entry.nextOffset);
+        }
       } catch {
-        setError(true);
+        if (isActiveTab()) setError(true);
       } finally {
-        setLoading(false);
-        setSwitching(false);
+        if (isActiveTab()) {
+          setLoading(false);
+          setSwitching(false);
+        }
       }
     },
     [],
   );
 
+  // Silently warm the Following tab's data once the feed has settled, so the
+  // FIRST tap on "Following" is also instant instead of showing a skeleton
+  // (fetchPage no-ops on the visible UI here since Following isn't active yet).
+  useEffect(() => {
+    if (typeof window === "undefined" || cacheRef.current?.following) return;
+    const ric = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(() => cb({} as IdleDeadline), 1500));
+    const cic = window.cancelIdleCallback ?? window.clearTimeout;
+    const id = ric(() => void fetchPage("following", 0, true));
+    return () => cic(id);
+  }, [fetchPage]);
+
   const changeSegment = (s: HomeFeedSort) => {
     if (s === sort) return;
     setSort(s);
-    setItems([]);
-    setNextOffset(null);
-    void fetchPage(s, 0, true);
+    // Instant, no reload/skeleton flash, no jump — a visited tab's items are
+    // shown verbatim from cache; only a never-visited tab fetches (rare, since
+    // the idle prefetch above warms it ahead of time).
+    const cached = cacheRef.current![s];
+    if (cached) {
+      setItems(cached.items);
+      setNextOffset(cached.nextOffset);
+      setError(false);
+    } else {
+      void fetchPage(s, 0, true);
+    }
   };
 
   // The third tab is "Reels" on every device — it opens the full reels
@@ -272,7 +313,8 @@ export function SmartFeed({
         { event: "INSERT", schema: "public", table: "posts" },
         (payload) => {
           const row = payload.new as { status?: string; visibility?: string; id?: string };
-          if (row.status === "published" && row.visibility === "public" && row.id && !seen.current.has(row.id)) {
+          const activeSeen = cacheRef.current?.[sortRef.current]?.seen;
+          if (row.status === "published" && row.visibility === "public" && row.id && !activeSeen?.has(row.id)) {
             setFreshCount((n) => n + 1);
           }
         },
@@ -431,48 +473,50 @@ export function SmartFeed({
           the earlier nav pass; the inset highlight below gives the same premium
           glass feel without the extra GPU cost. */}
       <div className="sticky top-16 z-20 -mx-3 mb-4 rounded-b-2xl border-b border-border/50 bg-background/90 px-3 pb-2.5 pt-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_28px_-18px_rgba(0,0,0,0.3)] backdrop-blur-lg sm:-mx-4 sm:px-4">
+        {/* Hero segmented control — minimal text + a thin sliding underline (same
+            identity language as the Reels tabs), no pill/border. Always visible,
+            even with the filter chips tucked away below. */}
+        <div className="flex items-center justify-center gap-8">
+          {SEGMENTS.map((t) => {
+            const on = sort === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => onSegment(t.key)}
+                // Belt-and-suspenders on top of the idle-time warm-up above:
+                // pointerdown fires before click on both mouse and touch, so if
+                // the idle callback hasn't run yet on a busy device this still
+                // buys the chunk fetch a head start before the tap completes.
+                onPointerDown={t.key === "recent" ? preloadReelsFeed : undefined}
+                aria-pressed={on}
+                className="relative flex flex-col items-center gap-1.5 px-0.5 py-1.5 transition active:scale-95"
+              >
+                <span className={cn("text-[13px] font-semibold tracking-tight transition-colors", on ? "text-foreground" : "text-muted-foreground hover:text-foreground/80")}>
+                  {t.label}
+                </span>
+                {on ? (
+                  <motion.span layoutId="seg-underline" transition={{ type: "spring", stiffness: 420, damping: 34 }} className="h-[3px] w-5 rounded-full bg-brand" />
+                ) : (
+                  <span className="h-[3px] w-5" aria-hidden />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Quiet filter chips — collapsible via the tiny handle below; the
+            segmented control above always stays put. Ghost by default,
+            brand-gradient glow when active. Edge-faded horizontal scroll on
+            mobile (right-only — never clips the usually-active first chip); on
+            large screens there's always room for all five, so they justify
+            edge-to-edge instead. */}
         <motion.div
           initial={false}
           animate={{ height: navOpen ? "auto" : 0, opacity: navOpen ? 1 : 0 }}
           transition={{ type: "spring", stiffness: 340, damping: 34 }}
           className="overflow-hidden"
         >
-          {/* Hero segmented control */}
-          <div className="relative flex items-center gap-0.5 rounded-full bg-secondary/40 p-1 ring-1 ring-inset ring-border/40">
-            {SEGMENTS.map((t) => {
-              const on = sort === t.key;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => onSegment(t.key)}
-                  // Belt-and-suspenders on top of the idle-time warm-up above:
-                  // pointerdown fires before click on both mouse and touch, so if
-                  // the idle callback hasn't run yet on a busy device this still
-                  // buys the chunk fetch a head start before the tap completes.
-                  onPointerDown={t.key === "recent" ? preloadReelsFeed : undefined}
-                  aria-pressed={on}
-                  className="relative flex-1 rounded-full px-3 py-2 text-[13px] font-semibold tracking-tight transition-colors duration-200 active:scale-[0.98]"
-                >
-                  {on ? (
-                    <motion.span
-                      layoutId="seg-pill"
-                      transition={{ type: "spring", stiffness: 480, damping: 40 }}
-                      className="absolute inset-0 rounded-full bg-background shadow-[0_1px_4px_rgba(0,0,0,0.14)] ring-1 ring-inset ring-border/60"
-                    />
-                  ) : null}
-                  <span className={cn("relative z-10", on ? "text-foreground" : "text-muted-foreground hover:text-foreground/80")}>
-                    {t.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Quiet filter chips — ghost by default, brand-gradient glow when
-              active. Edge-faded horizontal scroll on mobile (right-only — never
-              clips the usually-active first chip); on large screens there's
-              always room for all five, so they justify edge-to-edge instead. */}
           <div className="-mx-1 mt-2.5 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [-webkit-mask-image:linear-gradient(90deg,#000_0,#000_90%,transparent)] [mask-image:linear-gradient(90deg,#000_0,#000_90%,transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:justify-between lg:overflow-visible lg:[-webkit-mask-image:none] lg:[mask-image:none]">
             {FILTERS.map((f) => {
               const on = filter === f.id;
@@ -503,7 +547,8 @@ export function SmartFeed({
         </motion.div>
 
         {/* Tiny collapse/expand handle — a small tab at the very bottom edge of
-            the nav, on every screen size. */}
+            the nav, on every screen size. Only tucks away the filter chips —
+            the For You / Following / Reels tabs above always stay visible. */}
         <button
           type="button"
           onClick={toggleNavOpen}

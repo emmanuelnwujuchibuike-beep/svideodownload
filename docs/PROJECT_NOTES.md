@@ -9,7 +9,7 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑05 (fixed sidebar, comments side panels, swipe reel tabs)._
+_Last updated: 2026‑07‑05 (instant tab switching + resume position, caption "see more"/post date, decluttered large‑screen viewers)._
 
 ---
 
@@ -65,25 +65,43 @@ _Last updated: 2026‑07‑05 (fixed sidebar, comments side panels, swipe reel t
   redirects logged‑in users here.
 - **Smart Home Feed** — smart‑feed engine (reasons, content balance, spark cards,
   "while you were away"), premium `SmartFeed` on `/home` with pull‑to‑refresh,
-  filters, zero‑empty fallback. Called **Smart**, never "AI". The nav (segmented
-  control + filter chips) is collapsible via a tiny handle on its bottom edge, on
-  every screen size (remembered across visits); filter chips justify‑between and
+  filters, zero‑empty fallback. Called **Smart**, never "AI". The hero segmented
+  control (For You / Following / Reels — minimal text + sliding underline, no
+  pill/border, same identity language as the Reels tabs) always stays visible;
+  only the filter‑chip row below it collapses via the tiny bottom‑edge handle, on
+  every screen size (remembered across visits). Filter chips justify‑between and
   drop their edge fade on large screens, and the active chip uses the brand
-  gradient + glow.
+  gradient + glow. **For You/Following switching is instant and never reloads**
+  — each tab keeps its own cached items/pagination cursor (Following is silently
+  prefetched in the background so even the first switch never shows a skeleton),
+  and switching never jumps the page back to the top.
 - **Reels** — full‑screen deck (For You / Following tabs, scrubber, double‑tap
   like, decluttered rail, Repost, inline edit, direct download). Muted‑by‑default
   independent audio. Every reel **loops continuously** while in view — advancing
   only ever happens by scrolling, never automatically. The options (•••) button
-  sits top‑right (mirroring the close X at top‑left, always visible); elapsed/
-  total time sits top‑center below the tabs (auto‑hides with the rest of the UI).
-  Press‑and‑hold pauses **and** opens the options sheet — one gesture reaches
-  every action. A decisive **horizontal swipe switches For You/Following**
-  instantly, same as tapping the tab.
+  sits top‑right (mirroring the close X at top‑left, always visible) and escapes
+  into the same right gutter the action rail uses on large screens instead of
+  sitting on top of the video; elapsed/total time sits top‑center below the tabs
+  (auto‑hides with the rest of the UI). Press‑and‑hold pauses **and** opens the
+  options sheet — one gesture reaches every action. A decisive **horizontal
+  swipe switches For You/Following** instantly, same as tapping the tab — and
+  like the feed, **each tab is cached and Following is prefetched in the
+  background**, so switching is instant and resumes on the exact reel you left,
+  never back at the first one. The For You/Following tab bar is centered over
+  the true video‑viewing area (accounting for both the app sidebar on the left
+  and the persistent comments panel reserved on the right) so it never compresses
+  against the top‑right options button.
 - **Comments side panels** — on large screens, opening an image or video from the
   feed shows a persistent right‑side comments panel (publisher+follow, caption,
   quick actions, always‑visible comments — no tap needed) instead of empty space
   beside the media; same split‑pane pattern as PostViewer. Mobile/tablet keep the
-  tap‑to‑open bottom sheet.
+  tap‑to‑open bottom sheet. The image viewer reserves a real gutter
+  (`lg:pr-24` on the media container) on large screens so its action rail can
+  never overlap the comments panel — mirrors the reel deck's column/gutter split.
+- **Caption "see more" + post info** — in the reel and image viewers, a small
+  control below the caption expands it to the full (unclamped) text and reveals
+  the exact date posted, in both the auto‑hiding overlay caption and the
+  persistent large‑screen sidebar.
 - **Notifications** — premium realtime Notification Center, Web Push, iOS install
   path, social push, live toast.
 - **Friends (Frenz Connect)** — requests with notes, friendships, `/friends` hub,

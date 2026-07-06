@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Clapperboard } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BrandLoader } from "@/features/app-shell/brand-loader";
 import { ReelDeck } from "@/features/feed/reel-viewer";
@@ -53,6 +53,20 @@ export function ReelsFeed({
   const seen = useRef<Set<string>>(new Set(initialItems.map((i) => i.id)));
   const loading = useRef(false);
 
+  // Per-tab cache so switching is instant and never reloads/flashes a loader
+  // once a tab has been visited — snapshotted the moment you swipe away, and
+  // restored verbatim (items, pagination cursor, dedup set) on return.
+  const cacheRef = useRef<Record<Tab, { items: FeedItem[]; offset: number | null; seen: Set<string> } | null> | null>(null);
+  if (!cacheRef.current) {
+    cacheRef.current = { for_you: { items: initialItems, offset: initialOffset, seen: seen.current }, following: null };
+  }
+  // Remembers the last reel index viewed per tab, so returning to a tab lands
+  // on the same reel instead of jumping back to the first one ("the top").
+  const lastIndexRef = useRef<Record<Tab, number>>({ for_you: 0, following: 0 });
+  // True once For You has reported an active index at least once — after that,
+  // a return visit resumes from `lastIndexRef` instead of re-seeking `startId`.
+  const forYouSeeded = useRef(false);
+
   const fetchPage = useCallback(async (sort: Tab, off: number) => {
     try {
       // Through the shared SDK — same path the native apps use.
@@ -82,7 +96,19 @@ export function ReelsFeed({
   const switchTab = useCallback(
     async (next: Tab) => {
       if (next === tab || switching) return;
+      // Snapshot exactly where we're leaving so returning here is instant and
+      // resumes on the same reel.
+      cacheRef.current![tab] = { items, offset, seen: seen.current };
       setTab(next);
+      const cached = cacheRef.current![next];
+      if (cached) {
+        // Already loaded (or silently prefetched below) — instant, no
+        // spinner, no reload, no jump to the first reel.
+        seen.current = cached.seen;
+        setItems(cached.items);
+        setOffset(cached.offset);
+        return;
+      }
       setSwitching(true);
       seen.current = new Set();
       setItems([]);
@@ -94,17 +120,38 @@ export function ReelsFeed({
       setOffset(d.nextOffset);
       setSwitching(false);
     },
-    [tab, switching, fetchPage],
+    [tab, switching, items, offset, fetchPage],
   );
+
+  // Silently warm the Following tab in the background the moment the deck
+  // mounts, so even the FIRST swipe/tap to it is instant instead of showing
+  // the full-screen loader.
+  useEffect(() => {
+    if (cacheRef.current!.following) return;
+    let cancelled = false;
+    void (async () => {
+      const d = await fetchPage("following", 0);
+      if (cancelled) return;
+      const freshSeen = new Set<string>();
+      const fresh = (d.items ?? []).filter((i) => i.mediaKind === "video" && !freshSeen.has(i.id));
+      fresh.forEach((i) => freshSeen.add(i.id));
+      cacheRef.current!.following = { items: fresh, offset: d.nextOffset, seen: freshSeen };
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchPage]);
 
   return (
     <>
       {/* For You / Following toggle — minimal text, no pill/border, just a thin
           sliding underline to identify the active tab (small enough to always
           fit, even on the narrowest phones). Sits near the very top on every
-          size — on lg it's re-centered over the content column (right of the
-          sidebar), not the whole viewport. */}
-      <div className="fixed left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-6 lg:left-[calc(50%+8rem)]">
+          size — on lg it's re-centered over the actual video-viewing area:
+          the app sidebar (16rem) on the left AND the persistent comments panel
+          (400px) reserved on the right, so it never compresses against the
+          top-right options (•••) button. */}
+      <div className="fixed left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-6 lg:left-[calc(50%-4.5rem)]">
         {([
           { id: "for_you" as const, label: "For You" },
           { id: "following" as const, label: "Following" },
@@ -154,7 +201,15 @@ export function ReelsFeed({
         <ReelDeck
           key={tab}
           items={items}
-          startIndex={tab === "for_you" && startId ? Math.max(0, items.findIndex((i) => i.id === startId)) : 0}
+          // First time For You mounts, seed on the tapped clip (deep link from
+          // the feed); every other mount (a return visit after switching away)
+          // resumes on whichever reel was last active in this tab, instead of
+          // jumping back to the first one.
+          startIndex={
+            tab === "for_you" && startId && !forYouSeeded.current
+              ? Math.max(0, items.findIndex((i) => i.id === startId))
+              : (lastIndexRef.current[tab] ?? 0)
+          }
           variant="page"
           onEndReached={loadMore}
           onClose={close}
@@ -162,6 +217,10 @@ export function ReelsFeed({
           // Swipe left reveals the next tab (Following, to the right in the tab
           // list); swipe right goes back — same instant switch as tapping.
           onSwipeTab={(dir) => void switchTab(dir === "left" ? "following" : "for_you")}
+          onActiveIndexChange={(i) => {
+            lastIndexRef.current[tab] = i;
+            if (tab === "for_you") forYouSeeded.current = true;
+          }}
         />
       )}
     </>

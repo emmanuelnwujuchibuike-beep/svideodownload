@@ -6,7 +6,9 @@ import {
   Ban,
   BellOff,
   Bookmark,
+  Calendar,
   Check,
+  ChevronDown,
   Download,
   ExternalLink,
   EyeOff,
@@ -55,7 +57,7 @@ import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social
 import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
-import { cn, formatCompactNumber } from "@/lib/utils";
+import { cn, formatCompactNumber, formatPostedOn } from "@/lib/utils";
 
 interface CommentsData {
   comments: CommentNode[];
@@ -109,6 +111,7 @@ export function ReelDeck({
   variant = "modal",
   autoOpenCommentsId,
   onSwipeTab,
+  onActiveIndexChange,
 }: {
   items: FeedItem[];
   startIndex: number;
@@ -121,6 +124,9 @@ export function ReelDeck({
   autoOpenCommentsId?: string | null;
   /** A decisive horizontal swipe on any reel — switches For You/Following. */
   onSwipeTab?: (dir: "left" | "right") => void;
+  /** Reports the active index as it changes — lets a parent remember scroll
+   *  position per tab so returning to it resumes exactly where you left off. */
+  onActiveIndexChange?: (index: number) => void;
 }) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const raf = useRef<number | null>(null);
@@ -129,6 +135,10 @@ export function ReelDeck({
   // While a comments sheet is open the deck must NOT snap-scroll to the next
   // reel — the sheet stays put and the reel behind it is frozen.
   const [locked, setLocked] = useState(false);
+
+  useEffect(() => {
+    onActiveIndexChange?.(active);
+  }, [active, onActiveIndexChange]);
 
   // Buffer-gated scrolling: reels are marked "ready" when their first frames are
   // buffered (or after a short fallback). We only render up to `ceiling` — the
@@ -331,6 +341,9 @@ function ReelCard({
   const [showComments, setShowComments] = useState(false);
   const [sheetVideoPaused, setSheetVideoPaused] = useState(false);
   const [comments, setComments] = useState<CommentsData | null>(null);
+  // Tapping below the caption reveals the full (unclamped) text plus post info
+  // — currently the date posted — instead of navigating away.
+  const [infoOpen, setInfoOpen] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [editOpen, setEditOpen] = useState(false);
@@ -849,12 +862,15 @@ function ReelCard({
 
       {/* Options — top-right, mirroring the close (X) button at top-left. Also
           opens on press-and-hold (see onPointerDown below) — one gesture reaches
-          every action, not just the small corner button. */}
+          every action, not just the small corner button. On large screens it
+          escapes past the video column's edge into the same right gutter the
+          action rail already uses (`lg:overflow-visible` on the column ancestor)
+          instead of sitting cramped on top of the video itself. */}
       <button
         type="button"
         onClick={() => setMoreOpen(true)}
         aria-label="More options"
-        className="absolute right-4 top-4 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
+        className="absolute right-4 top-4 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95 lg:-right-[4.5rem]"
       >
         <MoreVertical className="h-5 w-5" />
       </button>
@@ -1034,8 +1050,23 @@ function ReelCard({
           {item.publisher.isVerified ? <BadgeCheck className="h-4 w-4" /> : null}
         </Link>
         {title ? (
-          <p className="mt-1.5 line-clamp-2 max-w-md text-sm text-white/90">
+          <p className={cn("mt-1.5 max-w-md text-sm text-white/90", !infoOpen && "line-clamp-2")}>
             <RichText text={title} linkClassName="font-semibold text-white hover:underline" />
+          </p>
+        ) : null}
+        {/* Tapping below the caption reveals the full text + post info (date
+            posted) instead of leaving the reel. */}
+        <button
+          type="button"
+          onClick={() => setInfoOpen((v) => !v)}
+          className="mt-1 flex items-center gap-1 text-xs font-semibold text-white/60 transition hover:text-white/90"
+        >
+          {infoOpen ? "Show less" : "More"}
+          <ChevronDown className={cn("h-3 w-3 transition-transform", infoOpen && "rotate-180")} />
+        </button>
+        {infoOpen ? (
+          <p className="mt-1 flex items-center gap-1 text-[11px] text-white/50">
+            <Calendar className="h-3 w-3" /> Posted {formatPostedOn(item.createdAt)}
           </p>
         ) : null}
         {item.hasPoll ? (
@@ -1165,6 +1196,9 @@ function ReelCard({
                   <RichText text={title} />
                 </p>
               ) : null}
+              <p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+                <Calendar className="h-3 w-3" /> Posted {formatPostedOn(item.createdAt)}
+              </p>
 
               <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
                 <SidebarAct icon={Heart} label="Like" active={liked} fill={liked} activeClass="text-rose-500" count={likes} onClick={() => react("like")} />

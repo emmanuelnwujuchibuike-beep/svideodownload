@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { BadgeCheck, Bookmark, Check, Download, Heart, MessageCircle, Share2, UserPlus, X } from "lucide-react";
+import { BadgeCheck, Bookmark, Calendar, Check, ChevronDown, Download, Heart, MessageCircle, Share2, UserPlus, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -13,7 +13,7 @@ import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
-import { cn, formatCompactNumber } from "@/lib/utils";
+import { cn, formatCompactNumber, formatPostedOn } from "@/lib/utils";
 
 interface CommentsData {
   comments: CommentNode[];
@@ -46,6 +46,9 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
   const following = useFollowState(item.publisher.id, item.isFollowing);
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<CommentsData | null>(null);
+  // Tapping below the caption reveals the full (unclamped) text plus post info
+  // — currently the date posted — instead of opening the comments sheet.
+  const [infoOpen, setInfoOpen] = useState(false);
   const [burst, setBurst] = useState<{ x: number; y: number; key: number } | null>(null);
   const lastTap = useRef(0);
   const startY = useRef<number | null>(null);
@@ -150,7 +153,13 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
       aria-modal="true"
       aria-label="Photo"
     >
-      <div className="relative h-full flex-1">
+      {/* `lg:pr-24` reserves a real gutter on large screens so the action rail
+          (below) never overlaps the comments sidebar — mirrors the reel
+          viewer's column-vs-gutter split, just via padding since a single
+          image (unlike the reel's height-capped column) has no natural gap of
+          its own. Absolute children position relative to this padding box, so
+          the image/caption also recenter within the narrower space. */}
+      <div className="relative h-full flex-1 lg:pr-24">
         <button type="button" onClick={onClose} aria-label="Close" className="absolute left-4 top-4 z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95">
           <X className="h-5 w-5" />
         </button>
@@ -193,16 +202,34 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
             @{item.publisher.handle}
           </Link>
           {item.title ? (
-            <p className="mt-1.5 line-clamp-3 max-w-xl text-sm text-white/90">
+            <p className={cn("mt-1.5 max-w-xl text-sm text-white/90", !infoOpen && "line-clamp-3")}>
               <RichText text={item.title} linkClassName="font-semibold text-white hover:underline" />
+            </p>
+          ) : null}
+          {/* Tapping below the caption reveals the full text + post info (date
+              posted) instead of just fading in place. */}
+          <button
+            type="button"
+            onClick={() => setInfoOpen((v) => !v)}
+            className="pointer-events-auto mt-1 flex items-center gap-1 text-xs font-semibold text-white/60 transition hover:text-white/90"
+          >
+            {infoOpen ? "Show less" : "More"}
+            <ChevronDown className={cn("h-3 w-3 transition-transform", infoOpen && "rotate-180")} />
+          </button>
+          {infoOpen ? (
+            <p className="mt-1 flex items-center gap-1 text-[11px] text-white/50">
+              <Calendar className="h-3 w-3" /> Posted {formatPostedOn(item.createdAt)}
             </p>
           ) : null}
         </div>
 
         {/* Action rail (auto-hides on mobile; stays visible AND clickable on lg —
             `lg:!pointer-events-auto` alongside `lg:!opacity-100`, so it can never go
-            silently dead the way the reels rail once did). */}
-        <div className={cn("absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-8 lg:-right-[4.5rem] lg:!pointer-events-auto lg:!opacity-100", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
+            silently dead the way the reels rail once did). The `lg:pr-24` on the
+            parent already reserves its gutter, so a plain `right-3` (no escape
+            offset needed) lands cleanly between the image and the comments
+            sidebar instead of overlapping it. */}
+        <div className={cn("absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-8 lg:!pointer-events-auto lg:!opacity-100", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
           <RailBtn icon={Heart} active={liked} fill={liked} activeClass="text-rose-500" count={likes} label="Like" onClick={() => react("like")} />
           <RailBtn icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
           <RailBtn icon={Share2} count={item.sharesCount} label="Share" onClick={share} />
@@ -277,6 +304,9 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
             <RichText text={item.title} />
           </p>
         ) : null}
+        <p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+          <Calendar className="h-3 w-3" /> Posted {formatPostedOn(item.createdAt)}
+        </p>
 
         <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
           <Act icon={Heart} label="Like" active={liked} fill={liked} activeClass="text-rose-500" count={likes} onClick={() => react("like")} />

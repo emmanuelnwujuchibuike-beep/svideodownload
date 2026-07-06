@@ -32,6 +32,17 @@ export function formatCompactNumber(value: number | null): string {
   return new Intl.NumberFormat("en", { notation: "compact" }).format(value);
 }
 
+/** Full "posted on" date/time — for the expanded caption/post-info reveal. */
+export function formatPostedOn(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 /** Builds a safe, human-readable filename from a video title. */
 export function slugifyFilename(title: string, ext: string): string {
   const base = title

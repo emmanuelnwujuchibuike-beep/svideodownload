@@ -103,7 +103,13 @@ _Last updated: 2026‑07‑05 (instant tab switching + resume position, caption 
   the exact date posted, in both the auto‑hiding overlay caption and the
   persistent large‑screen sidebar.
 - **Notifications** — premium realtime Notification Center, Web Push, iOS install
-  path, social push, live toast.
+  path, social push, live toast. **Push enable flow (2026‑07‑06):** the missing
+  last mile was that nothing inside the installed iOS app requested notification
+  permission (Apple only delivers Web Push to home‑screen installs after a
+  user‑gesture grant *inside* the app). `PushNudge` now shows an "Enable
+  notifications" banner in‑app until push is truly on (session snooze; permanent
+  stop once subscribed), `syncPush()` silently repairs subscriptions on launch,
+  and `POST /api/push/test` sends a verifiable test notification.
 - **Friends (Frenz Connect)** — requests with notes, friendships, `/friends` hub,
   full‑page `/friends/discover` (search + suggestions).
 - **Profiles** — Identity Ring w/ presence, living glow, live stats, Posts/Videos/
@@ -131,7 +137,19 @@ _Last updated: 2026‑07‑05 (instant tab switching + resume position, caption 
   posts ("Save to collection") with a picker sheet and a profile Collections tab,
   in **migration `0027_collections.sql` (must be applied in Supabase)**. Repost
   conversations stay unified on the original post by design (a repost is a
-  pointer). The repost feature set is now complete.
+  pointer). **Recommendation captions (2026‑07‑06):** tapping Repost opens a
+  premium composer (original‑creator preview, optional "Why are you recommending
+  this?" caption, 300‑char counter, per‑post draft auto‑save, instant Post Now,
+  Undo toast); captions belong to the reposter and never touch the original. The
+  caption can be edited within 15 minutes (shows "Edited") and reposts can be
+  pinned to lead the profile Reposts tab — **migration
+  `0030_repost_captions.sql` (must be applied in Supabase)**. The feed's
+  discovery header quotes the newest followed reposter's caption and collapses
+  to "Recommended by people you follow" past three reposters. The visible action
+  bar is now Like · Comment · Repost · Save on feed cards too — Share, Copy link
+  and Download live in the ••• overflow. Still open from the expanded spec:
+  long‑press repost options, quote reposts, per‑repost discussions, a reposters
+  bottom sheet, creator repost analytics.
 
 ## Performance, battery & thermal
 

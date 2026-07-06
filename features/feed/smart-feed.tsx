@@ -22,6 +22,7 @@ import type { ComponentType } from "react";
 import dynamic from "next/dynamic";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
+import { useTopbarHidden } from "@/features/app-shell/topbar-visibility";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { SparkCard } from "@/features/feed/spark-card";
@@ -46,7 +47,6 @@ const PostViewer = dynamic(() => import("@/features/feed/post-viewer").then((m) 
 const ImageViewer = dynamic(() => import("@/features/feed/image-viewer").then((m) => m.ImageViewer), { ssr: false });
 import {
   type AwaySummary,
-  balanceByKind,
   buildSmartStream,
   buildSparkDeck,
   summarizeAway,
@@ -77,6 +77,10 @@ const PAGE = 8;
 const SEEN_KEY = "frenz:feed-seen-at";
 const NAV_OPEN_KEY = "frenz:feed-nav-open";
 const PULL_THRESHOLD = 72;
+const SWIPE_THRESHOLD = 64;
+/** Inline, swipeable tabs — "Reels" isn't inline content (it opens the deck
+ *  overlay), so it's handled as the swipe destination past the last one. */
+const SWIPE_ORDER: HomeFeedSort[] = ["for_you", "following"];
 
 function applyFilter(items: FeedItem[], f: FilterId): FeedItem[] {
   switch (f) {
@@ -106,7 +110,7 @@ export function SmartFeed({
 }) {
   const [sort, setSort] = useState<HomeFeedSort>("for_you");
   const [filter, setFilter] = useState<FilterId>("all");
-  const [items, setItems] = useState<FeedItem[]>(() => balanceByKind(initialItems));
+  const [items, setItems] = useState<FeedItem[]>(initialItems);
   const [nextOffset, setNextOffset] = useState<number | null>(initialNextOffset);
   const [loading, setLoading] = useState(false);
   const [switching, setSwitching] = useState(false);
@@ -115,6 +119,9 @@ export function SmartFeed({
   const [away, setAway] = useState<AwaySummary | null>(null);
   const [viewer, setViewer] = useState<{ item: FeedItem; comments: boolean } | null>(null);
   const [image, setImage] = useState<FeedItem | null>(null);
+  // When the top nav auto-hides on scroll (mobile), the segmented control
+  // shifts up to fill the gap it leaves instead of floating below blank space.
+  const topbarHidden = useTopbarHidden();
   const [reel, setReel] = useState<{ startId: string; commentsId: string | null } | null>(null);
   // Once an overlay has been opened we keep it mounted (it hides itself when its
   // item is null) so its close animation plays; before first use its chunk is
@@ -155,9 +162,15 @@ export function SmartFeed({
   const cacheRef = useRef<Partial<Record<HomeFeedSort, { items: FeedItem[]; nextOffset: number | null; seen: Set<string> }>> | null>(null);
   if (!cacheRef.current) {
     cacheRef.current = {
-      for_you: { items: balanceByKind(initialItems), nextOffset: initialNextOffset, seen: new Set(initialItems.map((i) => i.id)) },
+      for_you: { items: initialItems, nextOffset: initialNextOffset, seen: new Set(initialItems.map((i) => i.id)) },
     };
   }
+  // Scroll position per tab, so switching back "continues from where it
+  // stopped" instead of resetting to the top. `direction` drives which way
+  // the slide/fade transition below plays (1 = forward/left, -1 = back/right).
+  const scrollPosRef = useRef<Partial<Record<HomeFeedSort, number>>>({});
+  const restoreScrollFor = useRef<HomeFeedSort | null>(null);
+  const [direction, setDirection] = useState(0);
 
   const deck = useMemo(() => buildSparkDeck({ friendCount }), [friendCount]);
   // Every loaded video, in feed order — the reel playlist. Kept live so the open
@@ -216,12 +229,11 @@ export function SmartFeed({
         const entry = cacheRef.current![s] ?? { items: [], nextOffset: null, seen: new Set<string>() };
         if (replace) {
           entry.seen = new Set(data.items.map((i) => i.id));
-          entry.items = balanceByKind(data.items);
+          entry.items = data.items;
         } else {
           const fresh = data.items.filter((i) => !entry.seen.has(i.id));
           fresh.forEach((i) => entry.seen.add(i.id));
-          // Balance each page on arrival so the existing feed never reshuffles.
-          entry.items = [...entry.items, ...balanceByKind(fresh)];
+          entry.items = [...entry.items, ...fresh];
         }
         entry.nextOffset = data.nextOffset;
         cacheRef.current![s] = entry;
@@ -254,6 +266,11 @@ export function SmartFeed({
 
   const changeSegment = (s: HomeFeedSort) => {
     if (s === sort) return;
+    // Remember exactly where we're leaving so returning here resumes at the
+    // same scroll position instead of jumping to the top.
+    scrollPosRef.current[sort] = window.scrollY;
+    restoreScrollFor.current = s;
+    setDirection(SWIPE_ORDER.indexOf(s) > SWIPE_ORDER.indexOf(sort) ? 1 : -1);
     setSort(s);
     // Instant, no reload/skeleton flash, no jump — a visited tab's items are
     // shown verbatim from cache; only a never-visited tab fetches (rare, since
@@ -281,6 +298,35 @@ export function SmartFeed({
     }
     changeSegment(key);
   };
+
+  // Restores the scroll position saved for a tab, once its content has
+  // actually rendered (so the page is tall enough to scroll to it). Guarded so
+  // it only fires once per real switch, not on every subsequent items change
+  // (e.g. infinite-scroll loading more of the CURRENT tab).
+  useEffect(() => {
+    if (restoreScrollFor.current !== sort) return;
+    restoreScrollFor.current = null;
+    const y = scrollPosRef.current[sort] ?? 0;
+    requestAnimationFrame(() => window.scrollTo({ top: y, behavior: "auto" }));
+  }, [sort, items]);
+
+  // A decisive horizontal swipe on the feed switches tabs instantly, the same
+  // as tapping — swiping past "Following" opens Reels (same action as tapping
+  // its tab). Disambiguated from vertical scroll/pull-to-refresh via the same
+  // axis-lock the reel viewer uses.
+  const swipeTo = useCallback(
+    (dir: "left" | "right") => {
+      const idx = SWIPE_ORDER.indexOf(sort);
+      if (dir === "left") {
+        if (idx < SWIPE_ORDER.length - 1) changeSegment(SWIPE_ORDER[idx + 1]!);
+        else onSegment("recent");
+      } else if (idx > 0) {
+        changeSegment(SWIPE_ORDER[idx - 1]!);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sort],
+  );
 
   const remove = useCallback((id: string) => setItems((prev) => prev.filter((i) => i.id !== id)), []);
 
@@ -346,19 +392,43 @@ export function SmartFeed({
   const [refreshing, setRefreshing] = useState(false);
   const pullStart = useRef<number | null>(null);
 
+  // Horizontal swipe-to-switch-tabs shares the same touch handlers as
+  // pull-to-refresh — axis-locked (as reels does) so a mostly-vertical drag
+  // never gets misread as a swipe, and vice versa.
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeAxis = useRef<"h" | "v" | null>(null);
+
   const onTouchStart = (e: React.TouchEvent) => {
-    const y = e.touches[0]?.clientY;
+    const t = e.touches[0];
+    const y = t?.clientY;
     if (y !== undefined && window.scrollY <= 0 && !refreshing) pullStart.current = y;
     else pullStart.current = null;
+    swipeStart.current = t ? { x: t.clientX, y: t.clientY } : null;
+    swipeAxis.current = null;
   };
   const onTouchMove = (e: React.TouchEvent) => {
-    const y = e.touches[0]?.clientY;
-    if (pullStart.current === null || y === undefined) return;
-    const delta = y - pullStart.current;
-    if (delta > 0 && window.scrollY <= 0) setPull(Math.min(110, delta * 0.5));
-    else if (pull !== 0) setPull(0);
+    const t = e.touches[0];
+    const y = t?.clientY;
+    if (pullStart.current !== null && y !== undefined) {
+      const delta = y - pullStart.current;
+      if (delta > 0 && window.scrollY <= 0) setPull(Math.min(110, delta * 0.5));
+      else if (pull !== 0) setPull(0);
+    }
+    if (swipeStart.current && swipeAxis.current === null && t) {
+      const dx = Math.abs(t.clientX - swipeStart.current.x);
+      const dy = Math.abs(t.clientY - swipeStart.current.y);
+      if (dx > 10 || dy > 10) swipeAxis.current = dx > dy ? "h" : "v";
+    }
   };
-  const onTouchEnd = async () => {
+  const onTouchEnd = async (e: React.TouchEvent) => {
+    if (swipeAxis.current === "h" && swipeStart.current) {
+      const endX = e.changedTouches[0]?.clientX ?? swipeStart.current.x;
+      const dx = endX - swipeStart.current.x;
+      if (Math.abs(dx) > SWIPE_THRESHOLD) swipeTo(dx < 0 ? "left" : "right");
+    }
+    swipeStart.current = null;
+    swipeAxis.current = null;
+
     if (pullStart.current === null) return;
     pullStart.current = null;
     if (pull >= PULL_THRESHOLD) {
@@ -389,6 +459,9 @@ export function SmartFeed({
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
+      // Vertical scroll/pull-to-refresh stays entirely native; horizontal
+      // swipes are read in JS only (never blocked), same as the reel viewer.
+      style={{ touchAction: "pan-y" }}
     >
       {/* Premium pull-to-refresh indicator */}
       <div
@@ -472,7 +545,12 @@ export function SmartFeed({
           `backdrop-blur-lg` (not the heavier `-2xl`) — a deliberate perf trim from
           the earlier nav pass; the inset highlight below gives the same premium
           glass feel without the extra GPU cost. */}
-      <div className="sticky top-16 z-20 -mx-3 mb-4 rounded-b-2xl border-b border-border/50 bg-background/90 px-3 pb-2.5 pt-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_28px_-18px_rgba(0,0,0,0.3)] backdrop-blur-lg sm:-mx-4 sm:px-4">
+      <div
+        className={cn(
+          "sticky top-16 z-20 -mx-3 mb-4 rounded-b-2xl border-b border-border/50 bg-background/90 px-3 pb-2.5 pt-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_28px_-18px_rgba(0,0,0,0.3)] backdrop-blur-lg transition-transform duration-300 will-change-transform sm:-mx-4 sm:px-4",
+          topbarHidden ? "-translate-y-16 lg:translate-y-0" : "translate-y-0",
+        )}
+      >
         {/* Hero segmented control — minimal text + a thin sliding underline (same
             identity language as the Reels tabs), no pill/border. Always visible,
             even with the filter chips tucked away below. */}
@@ -562,23 +640,40 @@ export function SmartFeed({
         </button>
       </div>
 
-      {switching ? (
-        <FeedSkeleton count={3} />
-      ) : stream.length === 0 && !error ? (
-        <ZeroEmptyFeed sort={sort} filter={filter} deck={deck} />
-      ) : (
-        <div className="space-y-4">
-          <AnimatePresence initial={false}>
-            {stream.map((slot) =>
-              slot.type === "post" ? (
-                <FeedPostCard key={slot.item.id} item={slot.item} reason={slot.reason} onRemove={remove} onOpen={openViewer} />
-              ) : (
-                <SparkCard key={slot.card.id} card={slot.card} />
-              ),
+      {/* Switching tabs (tap OR swipe) slides + crossfades the whole pane —
+          `popLayout` takes the outgoing pane out of flow so it doesn't add
+          height while both briefly overlap. Purely transform/opacity (GPU),
+          and never delays the new content — it's already cached, so it
+          appears instantly while the transition plays. */}
+      <div className="relative">
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div
+            key={sort}
+            initial={{ opacity: 0, x: direction >= 0 ? 24 : -24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: direction >= 0 ? -24 : 24 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {switching ? (
+              <FeedSkeleton count={3} />
+            ) : stream.length === 0 && !error ? (
+              <ZeroEmptyFeed sort={sort} filter={filter} deck={deck} />
+            ) : (
+              <div className="space-y-4">
+                <AnimatePresence initial={false}>
+                  {stream.map((slot) =>
+                    slot.type === "post" ? (
+                      <FeedPostCard key={slot.item.id} item={slot.item} reason={slot.reason} onRemove={remove} onOpen={openViewer} />
+                    ) : (
+                      <SparkCard key={slot.card.id} card={slot.card} />
+                    ),
+                  )}
+                </AnimatePresence>
+              </div>
             )}
-          </AnimatePresence>
-        </div>
-      )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
 
       {/* Loader / sentinel */}
       {error ? (

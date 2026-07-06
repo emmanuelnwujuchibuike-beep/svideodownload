@@ -209,18 +209,18 @@ function FeedPostCardImpl({
       ) : null}
 
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 pb-3">
+      <div className="flex items-center gap-3 p-4 pb-3 sm:p-5 sm:pb-3">
         <Link href={`/u/${item.publisher.handle}`} className="shrink-0 rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] transition-transform duration-300 group-hover:scale-105">
           {item.publisher.avatarUrl ? (
-            <Image src={item.publisher.avatarUrl} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover ring-2 ring-card" />
+            <Image src={item.publisher.avatarUrl} alt="" width={44} height={44} className="h-11 w-11 rounded-full object-cover ring-2 ring-card" />
           ) : (
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white ring-2 ring-card">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white ring-2 ring-card">
               {item.publisher.displayName.charAt(0).toUpperCase()}
             </span>
           )}
         </Link>
         <div className="min-w-0 flex-1">
-          <Link href={`/u/${item.publisher.handle}`} className="flex items-center gap-1 text-sm font-semibold leading-tight hover:underline">
+          <Link href={`/u/${item.publisher.handle}`} className="flex items-center gap-1 text-[15px] font-semibold leading-tight hover:underline">
             <span className="truncate">{item.publisher.displayName}</span>
             {item.publisher.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
           </Link>
@@ -292,8 +292,8 @@ function FeedPostCardImpl({
 
       {/* Caption */}
       {title ? (
-        <div className="px-4 pb-3">
-          <p className="text-sm leading-relaxed">
+        <div className="px-4 pb-3 sm:px-5">
+          <p className="text-[15px] leading-relaxed">
             <RichText text={title} />
           </p>
           {item.category ? (
@@ -311,11 +311,13 @@ function FeedPostCardImpl({
         </div>
       ) : null}
 
-      {/* Media */}
+      {/* Media — taller/bigger than a typical compact card (closer to X/
+          Instagram's large feed previews) so video/photo posts read as the
+          hero of the card, not a thumbnail. */}
       {item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
         // Big, immersive inline preview: autoplays muted in view, tap → fullscreen
         // reel, press-hold → pause.
-        <div className="mx-4 mb-3 overflow-hidden rounded-2xl">
+        <div className="mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">
           <FeedVideo
             src={item.mediaUrl}
             streamUid={item.streamUid}
@@ -323,12 +325,12 @@ function FeedPostCardImpl({
             poster={item.thumbnailUrl}
             postId={item.id}
             onExpand={() => onOpen(item)}
-            className="aspect-[4/5] w-full"
+            className="aspect-[3/4] w-full"
           />
         </div>
       ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
         // Image posts behave like videos: full-size, double-tap to like, tap to open.
-        <div className="mx-4 mb-3 overflow-hidden rounded-2xl">
+        <div className="mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">
           <FeedImage
             src={item.mediaUrl || item.thumbnailUrl!}
             alt={item.title}
@@ -339,7 +341,7 @@ function FeedPostCardImpl({
               if (!liked) void react("like");
             }}
             onExpand={() => onOpen(item)}
-            className="max-h-[80vh] w-full"
+            className="max-h-[85vh] w-full"
           />
         </div>
       ) : item.mediaKind === "audio" ? (

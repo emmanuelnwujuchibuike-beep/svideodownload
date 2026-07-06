@@ -7,13 +7,16 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
+import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
 import { openUpload } from "@/features/create/upload-store";
 import { UserMenu } from "@/features/auth/user-menu";
 import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
+import { cn } from "@/lib/utils";
 
 export function AppTopbar() {
   const router = useRouter();
   const [q, setQ] = useState("");
+  const [hidden, setHidden] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // ⌘K / Ctrl+K focuses search.
@@ -28,6 +31,38 @@ export function AppTopbar() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Auto-hide on scroll-down, reveal on scroll-up (mobile only — forced back
+  // visible on large screens via the `lg:` override on the header below).
+  // Direction-based (not position-based) so it reacts instantly to intent,
+  // with a small dead zone near the top so it never hides before there's
+  // anywhere meaningful to scroll.
+  useEffect(() => {
+    let lastY = window.scrollY;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        const delta = y - lastY;
+        if (y < 72) setHidden(false);
+        else if (delta > 4) setHidden(true);
+        else if (delta < -4) setHidden(false);
+        lastY = y;
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Broadcast so far-away sticky elements (the feed's segmented control) can
+  // shift up and fill the gap instead of leaving blank space above them.
+  useEffect(() => {
+    setTopbarHidden(hidden);
+  }, [hidden]);
+  useEffect(() => () => setTopbarHidden(false), []);
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const term = q.trim();
@@ -35,7 +70,12 @@ export function AppTopbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-border/20 bg-background/60 px-4 backdrop-blur-xl">
+    <header
+      className={cn(
+        "sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-border/20 bg-background/60 px-4 backdrop-blur-xl transition-transform duration-300 will-change-transform",
+        hidden ? "-translate-y-full lg:translate-y-0" : "translate-y-0",
+      )}
+    >
       {/* Far-left: search + add friends — kept apart from the action cluster so
           the right side never gets crowded. */}
       <div className="flex shrink-0 items-center gap-2">

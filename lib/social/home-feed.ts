@@ -291,9 +291,10 @@ async function loadHomeFeed(
       .eq("visibility", "public")
       .limit(Math.min(want, 400));
     if (sort === "following") q = q.in("publisher_id", followingIds);
-    q = sort === "recent"
-      ? q.order("created_at", { ascending: false })
-      : q.order("hot_score", { ascending: false }).order("created_at", { ascending: false });
+    // Newest first, always — the feed and reels (which share this query) should
+    // show what was actually posted most recently at the top, not whatever
+    // ranks highest by engagement.
+    q = q.order("created_at", { ascending: false });
 
     const { data } = await q;
     const rows = (data as Row[]) ?? [];

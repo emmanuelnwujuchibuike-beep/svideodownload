@@ -182,6 +182,24 @@ _Last updated: 2026‑07‑05 (instant tab switching + resume position, caption 
   `SkeletonRow`; route audit added layout‑matched skeletons for
   /friends/discover, followers, following and /welcome. Remaining
   page‑without‑skeleton routes are static marketing pages by design.
+- **Security hardening (2026‑07‑06)** — full posture in **docs/SECURITY.md**.
+  Highlights: git history scanned, no credentials ever committed (the "SMTP
+  credentials" scanner alert was a placeholder block in EMAIL_SETUP.md, now
+  rewritten); real XSS fix — JSON‑LD on post/profile pages now escapes user
+  content via `lib/seo/json-ld.ts` (rule: never raw JSON.stringify into a
+  script tag); SQL injection unreachable by construction (PostgREST
+  parameterization + RLS + server‑only service role); security headers,
+  rate limits and CSRF properties documented. Next: CSP report‑only rollout.
+- **Optional passwords** — Account → Password (set/change with confirm);
+  login gained "Sign in with a password" and "Forgot password?" which verifies
+  ownership with the usual email code and lands on Account → Password to set
+  the new one. Codes remain the primary sign‑in.
+- **Reels immersion spec (verified 2026‑07‑06)** — the shipped player already
+  conforms (100dvh snap deck, safe‑area insets, tap/double‑tap/hold gestures,
+  adaptive HLS with battery/network caps, predictive preload, floating glass
+  UI). Deliberate deviations kept: preload depth stays at next‑1 (five would
+  burn data/battery), and reels stay muted‑by‑default (owner directive: never
+  steal audio focus).
 
 ## Performance, battery & thermal
 

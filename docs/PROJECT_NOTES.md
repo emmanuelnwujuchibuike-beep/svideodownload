@@ -13,6 +13,24 @@ _Last updated: 2026‑07‑06 (fullscreen video, loading engine in Core, PWA aut
 
 ---
 
+## 2026‑07‑06 highlights (batch 3)
+
+- **Chat is truly instant now:** the live stream (`postgres_changes`) has no
+  replay, so messages sent while a phone was backgrounded were silently lost
+  until a manual refresh. The room now catch‑up‑resyncs (merge, not replace) on
+  app resume, reconnect and channel re‑subscribe; failed sends clean up their
+  ghost bubble; the inbox refreshes its unread state on resume too.
+- **Shared posts render as rich cards in chats** (creator, cover, caption, tap to
+  open), privacy‑gated server‑side — a link to a post you can't see shows a quiet
+  "unavailable" chip, never content.
+- **Push notifications send with `Urgency: high`** (+ APNs‑safe collapse topic) —
+  Apple holds normal‑urgency pushes on idle/locked iPhones, which was the
+  delayed‑notification symptom. Remaining variance is iOS power management.
+- **Auto‑refresh audit:** the client data layer already revalidates every mounted
+  query on focus/online/visible; with the feed's revive logic and today's
+  message/inbox resync, no surface needs a manual refresh. (Comments realtime in
+  open viewers remains queued.)
+
 ## 2026‑07‑06 highlights (batch 2)
 
 - **Seamless For You/Following switching (feed + reels):** tabs slide past each

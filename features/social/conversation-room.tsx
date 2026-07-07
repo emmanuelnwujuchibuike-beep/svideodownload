@@ -5,6 +5,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 
 import { revalidate } from "@/features/data";
 import { INBOX_KEY, loadInbox } from "@/features/social/inbox";
+import { extractSharedPost, MessagePostEmbed } from "@/features/social/message-post-embed";
 import type { MessageItem } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -68,9 +69,58 @@ export function ConversationRoom({
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length]);
 
+  // Catch-up resync: `postgres_changes` has NO replay — messages sent while the
+  // socket was suspended (backgrounded phone, tunnel, sleep) are lost from the
+  // live stream. Refetch + MERGE (never replace — optimistic bubbles awaiting
+  // their echo must survive) whenever the app resumes, comes back online, or
+  // the channel re-subscribes after a drop. This is the piece that makes chat
+  // feel WhatsApp-instant in practice, not just on a perfect connection.
+  const resyncing = useRef(false);
+  const resync = useCallback(async () => {
+    if (resyncing.current) return;
+    resyncing.current = true;
+    try {
+      const res = await fetch(`/api/messages/${conversationId}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const d = (await res.json()) as { messages: MessageItem[] };
+      if (!d.messages) return;
+      setMessages((prev) => {
+        const byId = new Map(prev.map((m) => [m.id, m]));
+        let changed = false;
+        for (const m of d.messages) {
+          const cur = byId.get(m.id);
+          if (!cur) {
+            seen.current.add(m.id);
+            changed = true;
+          } else if (cur.readAt !== m.readAt || cur.deliveredAt !== m.deliveredAt) {
+            changed = true;
+          }
+          byId.set(m.id, m);
+        }
+        if (!changed) return prev;
+        // Server order for confirmed messages; optimistic bubbles awaiting
+        // their echo stay last — unless the server confirms they landed, or
+        // they're old enough (20s) to be a genuinely failed send (ghost).
+        const optimistic = prev.filter(
+          (m) =>
+            m.id.startsWith("optimistic-") &&
+            !d.messages.some((s) => s.mine && s.body === m.body) &&
+            Date.now() - new Date(m.createdAt).getTime() < 20_000,
+        );
+        return [...d.messages, ...optimistic];
+      });
+      void revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
+    } catch {
+      /* offline — the next resume/reconnect retries */
+    } finally {
+      resyncing.current = false;
+    }
+  }, [conversationId]);
+
   // Live: new messages (INSERT) + receipt changes (UPDATE) for this conversation.
   useEffect(() => {
     const supabase = createClient();
+    let everSubscribed = false;
     const channel = supabase
       .channel(`conversation:${conversationId}`)
       .on(
@@ -99,9 +149,27 @@ export function ConversationRoom({
           );
         },
       )
-      .subscribe();
-    return () => void channel.unsubscribe();
-  }, [conversationId, viewerId, append]);
+      .subscribe((status) => {
+        // A RE-subscribe means the socket dropped at some point — catch up on
+        // whatever the live stream missed while it was down.
+        if (status === "SUBSCRIBED") {
+          if (everSubscribed) void resync();
+          everSubscribed = true;
+        }
+      });
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void resync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onVisible);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onVisible);
+      void channel.unsubscribe();
+    };
+  }, [conversationId, viewerId, append, resync]);
 
   const submit = async (e?: FormEvent) => {
     e?.preventDefault();
@@ -116,13 +184,20 @@ export function ConversationRoom({
     ]);
     setBody("");
     try {
-      await fetch("/api/messages", {
+      const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversationId, body: text }),
       });
+      if (!res.ok) {
+        // Confirmed failure — remove the ghost bubble and give the text back.
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        setBody(text);
+      }
     } catch {
-      /* the realtime insert (if it landed) will still reconcile */
+      // Network dropped mid-send: the message may or may not have landed —
+      // resync decides (reconciles the echo or drops the ghost).
+      void resync();
     } finally {
       setBusy(false);
     }
@@ -143,17 +218,28 @@ export function ConversationRoom({
           messages.map((m) => {
             const showReceipt = m.mine && m.id === lastMineId && !m.id.startsWith("optimistic-");
             const r = showReceipt ? receiptLabel(m) : null;
+            // A shared post link renders as a rich preview card (creator,
+            // cover, caption) with any note above it — never a raw URL.
+            const shared = extractSharedPost(m.body);
             return (
               <div key={m.id} className={cn("flex flex-col", m.mine ? "items-end" : "items-start")}>
                 <div
                   className={cn(
-                    "max-w-[80%] whitespace-pre-wrap break-words rounded-3xl px-4 py-2.5 text-sm leading-relaxed",
+                    "max-w-[80%] whitespace-pre-wrap break-words rounded-3xl text-sm leading-relaxed",
+                    shared ? "p-1.5" : "px-4 py-2.5",
                     m.mine
                       ? "rounded-br-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/20"
                       : "rounded-bl-lg border border-border/60 bg-card text-foreground shadow-sm",
                   )}
                 >
-                  {m.body}
+                  {shared ? (
+                    <>
+                      {shared.text ? <span className="block px-2.5 pb-1.5 pt-1">{shared.text}</span> : null}
+                      <MessagePostEmbed postId={shared.postId} mine={m.mine} />
+                    </>
+                  ) : (
+                    m.body
+                  )}
                 </div>
                 {r ? (
                   <span

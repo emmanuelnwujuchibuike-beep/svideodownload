@@ -63,13 +63,27 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     const body = JSON.stringify(payload);
     const dead: string[] = [];
 
+    // Latency: every push here is user-facing (a message, a Wow, a follow), so
+    // send with Urgency: high — without it, push services treat delivery as
+    // batchable and Apple in particular holds "normal" pushes on idle/locked
+    // iPhones for minutes (the exact delayed-notification symptom on installed
+    // PWAs). `topic` (from our collapse tag, sanitized to APNs' 32-char
+    // base64url limit) lets a newer push REPLACE an older queued one instead
+    // of stacking duplicates when the device reconnects. Remaining delay after
+    // this is iOS platform behavior (APNs power management), not app code.
+    const topic = payload.tag ? payload.tag.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) : undefined;
+
     await Promise.all(
       subs.map(async (s) => {
         try {
           await webpush.sendNotification(
             { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
             body,
-            { TTL: 60 * 60 * 24 }, // hold for a day if the device is offline
+            {
+              TTL: 60 * 60 * 24, // hold for a day if the device is offline
+              urgency: "high",
+              ...(topic ? { topic } : {}),
+            },
           );
         } catch (err) {
           const code = (err as { statusCode?: number }).statusCode;

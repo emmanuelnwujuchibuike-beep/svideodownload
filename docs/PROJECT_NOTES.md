@@ -9,9 +9,38 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑07 (startup‑performance audit: de‑blocked app shell, dropped a dead query, fixed a double image fetch)._
+_Last updated: 2026‑07‑07 (scroll/render audit across webapp + public site; emoji-in-UI sweep)._
 
 ---
+
+## 2026‑07‑07 highlights (batch 10)
+
+- **Full cross-check of both the webapp and the public site**, this time
+  focused on scroll performance and general rough edges. The verdict on the
+  scroll-critical path (main feed, reels) was reassuring: it was already
+  well engineered — throttled scroll handlers, correctly scoped
+  memoization, no forced-reflow patterns. The real gaps were in secondary
+  surfaces: the notification list and comment threads weren't memoized (so
+  marking one notification read re-rendered every visible row), and the
+  mobile bottom nav — the one overlay present over scrolling content for
+  the entire session — was using the heaviest blur tier available. Both
+  fixed. On the public site, the download-result card was shipping into
+  every visitor's first page load even though it only appears after
+  someone submits a link; it's now loaded on demand instead.
+- **Swept the app for emoji used as UI decoration** (dashboard section
+  icons, landing-page placeholder avatars, a handful of toast messages) and
+  replaced them with real icons or initials, per the standing "no emoji in
+  the product" rule — with one deliberate exception restored: the
+  notification list's own wording (e.g. "accepted your friend request")
+  keeps its emoji, per an earlier explicit decision. Left the reaction
+  picker and story-sticker emoji alone on purpose — those are things a
+  user picks and sends, not decoration, so changing them is a bigger call
+  than a cross-check pass should make alone.
+- **Feed virtualization (windowing very long scroll sessions) was looked at
+  again and still deliberately deferred** — the feed already reclaims the
+  expensive parts (video decoders, off-screen rendering cost) and a full
+  windowing rewrite carries real regression risk against a feature that's
+  already working well.
 
 ## 2026‑07‑07 highlights (batch 9)
 

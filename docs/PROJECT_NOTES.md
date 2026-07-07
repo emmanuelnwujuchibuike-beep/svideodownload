@@ -9,9 +9,37 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑06 (fullscreen video, loading engine in Core, PWA auto‑update, TikTok HQ download fix, feed nav simplification)._
+_Last updated: 2026‑07‑07 (startup‑performance audit: de‑blocked app shell, dropped a dead query, fixed a double image fetch)._
 
 ---
+
+## 2026‑07‑07 highlights (batch 9)
+
+- **Startup‑performance audit against a TikTok/Instagram/Facebook‑style
+  loading spec.** Rather than re‑build what already works (reels' rolling
+  preload, feed video's lazy‑load/pause‑offscreen, the router/service‑worker
+  caching, background refresh) — all confirmed already correct — the audit
+  went looking for real gaps and found three:
+  - The **persistent app shell** (`app/(app)/layout.tsx`, `app/u/layout.tsx`)
+    was doing a server round‑trip (auth check + profile fetch) before
+    rendering the sidebar/topbar/mobile‑nav **at all**, on every navigation,
+    for every signed‑in visitor — a direct violation of "the shell must never
+    wait on a network request." The value it fetched (a user handle) turned
+    out to be silently discarded by the very component it was passed to. Both
+    shells are now synchronous — no fetch, instant paint.
+  - The same profile fetch was separately summing "likes received" across up
+    to 500 of a user's posts, **every time it wasn't cached**, for a number
+    that no page currently displays (its one consumer was itself dead code
+    from an earlier shell design). Removed the scan entirely.
+  - The blurred backdrop behind feed photos was downloading the **same
+    full‑resolution image twice** — once raw for the blur, once optimized for
+    the sharp foreground. It now fetches a genuinely tiny, separate thumbnail
+    for the blur instead, roughly halving the bytes per feed photo.
+  - Feed virtualization (windowing the DOM for very long feeds) was
+    considered and deliberately deferred — it's a real, larger undertaking
+    given how much the feed already depends on (per‑tab scroll‑position
+    cache, realtime "new posts" pill, resume‑from‑position), and wasn't
+    worth the regression risk without being asked for by name.
 
 ## 2026‑07‑07 highlights (batch 8)
 

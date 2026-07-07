@@ -3,10 +3,6 @@ import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 
-/**
- * Standard chrome for content/legal pages: fixed header, a centered prose
- * column with a title + last-updated line, and the footer.
- */
 export function PageShell({
   title,
   subtitle,

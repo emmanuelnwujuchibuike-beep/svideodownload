@@ -4,15 +4,6 @@ import { forwardRef, useId } from "react";
 
 import { cn } from "@/lib/utils";
 
-/**
- * The Frenzsave Wow mark — the platform's signature interaction (replaces the
- * generic like heart). A wide-eyed, open-mouthed "WOW" face: custom-drawn,
- * never the emoji. Two stable variants so call sites swap by state:
- *   <WowOutline />          quiet, inherits currentColor like any line icon
- *   <WowSolid />            pressed: electric blue → purple gradient + glow
- * Both are forwardRef components with lucide-compatible props, so they drop
- * into every `icon={...}` slot (action bars, rails, tabs, notification meta).
- */
 
 interface WowProps {
   className?: string;

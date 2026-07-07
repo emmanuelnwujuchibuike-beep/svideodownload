@@ -1,12 +1,15 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, BellRing, Check, Loader2, Settings, X } from "lucide-react";
+import { Bell, BellRing, Check, LogIn, Loader2, Settings, X } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { useUser } from "@/features/auth/use-user";
 import { enablePush, pushSupported, syncPush } from "@/features/notifications/push";
+import { hasExceededDeclines, recordDecline } from "@/lib/pwa/decline-tracker";
 
 /**
  * The missing last mile of Web Push: permission must be granted by a button tap
@@ -18,10 +21,19 @@ import { enablePush, pushSupported, syncPush } from "@/features/notifications/pu
  *  - otherwise shows an Enable banner until push is truly on;
  *  - on iOS browser tabs, defers to the install prompt (push can't work there);
  *  - offers a test notification so delivery is verifiable on the spot;
- *  - snoozes per session on dismiss, stops for good once subscribed.
+ *  - snoozes per session on dismiss, stops for good once subscribed;
+ *  - explicit dismisses are also counted per device (lib/pwa/decline-tracker)
+ *    and after 5 the nudge stops for good on that device until browser
+ *    storage/history is cleared;
+ *  - shown to SIGNED-OUT visitors too (subscribing itself needs an account,
+ *    since a push subscription has to belong to someone's notification feed —
+ *    so a guest sees a "Sign in to turn on notifications" CTA instead of the
+ *    Enable button, rather than silently failing a subscribe call with no
+ *    account to attach it to).
  */
 
 const DISMISS_KEY = "frenz:push-nudge-dismissed-session";
+const PROMPT_ID = "push-nudge";
 
 function isIos(): boolean {
   return (
@@ -45,25 +57,33 @@ function dismissedThisSession(): boolean {
   }
 }
 
-type Phase = "hidden" | "ask" | "denied" | "enabled";
+type Phase = "hidden" | "ask" | "denied" | "enabled" | "signed-out";
 
 export function PushNudge() {
   const [phase, setPhase] = useState<Phase>("hidden");
   const [busy, setBusy] = useState(false);
   const [testState, setTestState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
-  // Subscribing is an authed action (the /u shell also renders for anonymous
-  // visitors) — never nudge someone who couldn't complete it.
   const { user, loading } = useUser();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (typeof window === "undefined" || !pushSupported() || loading || !user) return;
+    if (typeof window === "undefined" || !pushSupported() || loading) return;
+    if (dismissedThisSession() || hasExceededDeclines(PROMPT_ID)) return;
+
+    if (!user) {
+      // A guest still sees the value of turning notifications on — just with
+      // a "sign in" CTA instead of a real subscribe attempt, since a push
+      // subscription has to belong to an account's notification feed.
+      if (isIos() && !isStandalone()) return;
+      const t = setTimeout(() => setPhase("signed-out"), 3000);
+      return () => clearTimeout(t);
+    }
 
     // Permission already granted → no UI needed, just keep the server row alive.
     if (Notification.permission === "granted") {
       void syncPush();
       return;
     }
-    if (dismissedThisSession()) return;
     // iOS browser tab: push only works from the installed app — the install
     // prompt owns that journey; asking for permission here would fail anyway.
     if (isIos() && !isStandalone()) return;
@@ -93,6 +113,7 @@ export function PushNudge() {
     } catch {
       /* ignore */
     }
+    recordDecline(PROMPT_ID);
   };
 
   const enable = async () => {
@@ -186,12 +207,29 @@ export function PushNudge() {
                       <Settings className="h-4 w-4" /> Settings → Notifications → Frenz
                     </p>
                   </>
+                ) : phase === "signed-out" ? (
+                  <>
+                    <p className="text-sm font-semibold leading-snug">Turn on notifications</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      Sign in to get messages, likes and new followers the moment they happen — even when the app is
+                      closed{isIos() ? " or your iPhone is locked" : ""}. You can turn notifications off anytime in
+                      Notification settings.
+                    </p>
+                    <Link
+                      href={`/login?next=${encodeURIComponent(pathname || "/home")}`}
+                      onClick={dismiss}
+                      className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95"
+                    >
+                      <LogIn className="h-4 w-4" /> Sign in
+                    </Link>
+                  </>
                 ) : (
                   <>
                     <p className="text-sm font-semibold leading-snug">Turn on notifications</p>
                     <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                       Get messages, likes and new followers the moment they happen — even when the app is closed
-                      {isIos() ? " or your iPhone is locked" : ""}.
+                      {isIos() ? " or your iPhone is locked" : ""}. You can turn them off anytime in Notification
+                      settings.
                     </p>
                     <button
                       type="button"

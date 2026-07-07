@@ -103,18 +103,31 @@ background** — and every new feature inherits this engine instead of inventing
    `SkeletonText`, `SkeletonRow`) wrapped in `SkeletonSection` (announces "Loading…" to screen
    readers). Section-level fetches use matching local skeleton fallbacks. Shimmer, exact
    dimensions, zero jump on swap.
-3. **Critical data first.** Server components stream the identity/text layer first; counts, media
+3. **Hero-instant, sections-skeleton (MANDATORY pattern — owner directive 2026-07-07, the
+   TikTok/SofaScore/Facebook feel).** On every page with a hero/identity/greeting area, that hero
+   renders SYNCHRONOUSLY (no `await`, no Suspense boundary above it) the instant the page is hit —
+   never gated behind any data fetch. Every section BELOW it streams independently behind its own
+   `<Suspense>` with a skeleton matching that section's exact final layout, so a first-ever visit
+   shows real content up top immediately while everything else fills in progressively, and a cached
+   revisit shows everything instantly. **Canonical reference implementation:**
+   `app/(app)/home/page.tsx` — `HomeGreeting` renders unconditionally before any `<Suspense>`, then
+   `StoriesSection`/`ReelsSection`/`SmartFeedSection`/`RailSection` each stream behind their own
+   boundary with a purpose-built skeleton (`StoriesSkeleton`, `ReelsSkeleton`, `FeedSkeleton`, a
+   plain `Skeleton` for the rail). Copy this exact shape for every new page: identify the
+   above-the-fold hero, render it with zero data dependency (or only the cheapest identity check),
+   and Suspense-stream everything else with a skeleton sized to match.
+4. **Critical data first.** Server components stream the identity/text layer first; counts, media
    and rails follow in their own Suspense boundaries. Client revisits are instant via the Router
    Cache (`staleTimes` in next.config) + the SWR data layer (`features/data`).
-4. **Media loads progressively.** Images: `next/image` (AVIF/WebP, sized) behind
+5. **Media loads progressively.** Images: `next/image` (AVIF/WebP, sized) behind
    `features/ui/fade-image.tsx` (`FadeImage` — decoded fade-in, no pop) over a shimmer/blur
    backdrop. Videos: poster first, `preload="metadata"`, IntersectionObserver autoplay
    only-in-view, unload off-screen (see reels/feed players). Never crop; never block paint.
-5. **Background layer.** Anything not needed for the current viewport defers through the loading
+6. **Background layer.** Anything not needed for the current viewport defers through the loading
    engine (`lib/loading/priority.ts`): `afterInteractive()` for idle-time work,
    `whenVisible(el, cb)` / `features/ui/lazy-mount.tsx` (`LazyMount`) for below-the-fold sections.
    No polling, no busy-waiting — battery-neutral by construction.
-6. **Freshness without staleness.** The service worker (`public/sw.js`) is cache-first ONLY for
+7. **Freshness without staleness.** The service worker (`public/sw.js`) is cache-first ONLY for
    immutable assets, network-first for navigations (with navigation preload), never touches
    media/API. Deploys reach every open tab and installed PWA via the build-stamp check
    (`/api/app-version` + `RegisterServiceWorker`), which reloads once on resume.

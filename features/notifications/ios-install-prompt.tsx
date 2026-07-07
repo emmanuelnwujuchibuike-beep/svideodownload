@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
+import { hasExceededDeclines, recordDecline } from "@/lib/pwa/decline-tracker";
 
 /**
  * Home-screen install prompt, per platform:
@@ -23,8 +24,13 @@ import { FrenzLogo } from "@/components/brand/frenz-logo";
  *    via UA and pointed at "copy the link, open it in your real browser".
  * Dismissing only snoozes for the current tab session — the banner returns on
  * the next visit/login and only stops for good once `isStandalone()` is true.
+ * Shown regardless of sign-in state (installing the app is useful before an
+ * account even exists); explicit dismisses are counted per device
+ * (lib/pwa/decline-tracker.ts) and after 5 the banner stops for good on that
+ * device until browser storage/history is cleared.
  */
 
+const PROMPT_ID = "add-to-home-screen";
 const DISMISS_KEY = "frenz:ios-install-dismissed-session";
 const VIEWS_KEY = "frenz:install-engagement-views";
 // Only interrupt people who are actually using the app: at least a 2nd page
@@ -123,7 +129,7 @@ export function IosInstallPrompt() {
   };
 
   useEffect(() => {
-    if (typeof window === "undefined" || isStandalone() || dismissedThisSession()) return;
+    if (typeof window === "undefined" || isStandalone() || dismissedThisSession() || hasExceededDeclines(PROMPT_ID)) return;
     let views = 1;
     try {
       views = Number(sessionStorage.getItem(VIEWS_KEY) ?? 0) + 1;
@@ -137,7 +143,7 @@ export function IosInstallPrompt() {
   }, [pathname]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || isStandalone() || dismissedThisSession()) return;
+    if (typeof window === "undefined" || isStandalone() || dismissedThisSession() || hasExceededDeclines(PROMPT_ID)) return;
 
     const onScroll = () => {
       if (window.scrollY >= SCROLL_PX) {
@@ -178,6 +184,7 @@ export function IosInstallPrompt() {
     } catch {
       /* ignore */
     }
+    recordDecline(PROMPT_ID);
   };
 
   const install = async () => {
@@ -188,6 +195,7 @@ export function IosInstallPrompt() {
       const { outcome } = await installEvt.userChoice;
       if (outcome === "dismissed") {
         sessionStorage.setItem(DISMISS_KEY, "1");
+        recordDecline(PROMPT_ID);
       }
     } catch {
       /* ignore */
@@ -231,17 +239,17 @@ export function IosInstallPrompt() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold leading-snug">
                   {mode === "android"
-                    ? "Install the Frenz app"
+                    ? "Add Frenz to your Home Screen"
                     : mode === "ios-inapp"
                       ? "Open in your browser to install"
-                      : "Get instant notifications on your iPhone"}
+                      : "Add Frenz to your Home Screen"}
                 </p>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                   {mode === "android"
-                    ? "Add Frenz to your home screen for instant push notifications, faster launches and a full-screen app feel."
+                    ? "A faster experience, quicker access from your Home Screen, and faster downloads — plus notifications if you'd like them. You can turn notifications off anytime in Notification settings."
                     : mode === "ios-inapp"
-                      ? "This link opened inside an app that can't install web apps. Copy the link below, open it in Safari, then add it to your Home Screen there to get push notifications."
-                      : `Nothing below is a button on this page — Apple requires every website to be added from ${browserName}'s own menu before it can send notifications while your phone's screen is off or the browser is closed. No site can skip this step.`}
+                      ? "This link opened inside an app that can't install web apps. Copy the link below, open it in Safari, then add it to your Home Screen there for a faster experience, quicker access, and faster downloads — with notifications if you'd like them (you can turn them off anytime in Notification settings)."
+                      : `A faster experience, quicker access from your Home Screen, and faster downloads — plus notifications if you'd like them (you can turn them off anytime in Notification settings). Nothing below is a button on this page — Apple requires every website to be added from ${browserName}'s own menu first. No site can skip this step.`}
                 </p>
                 {mode === "android" ? (
                   <button

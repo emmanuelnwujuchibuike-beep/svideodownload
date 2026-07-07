@@ -13,6 +13,32 @@ _Last updated: 2026‑07‑06 (fullscreen video, loading engine in Core, PWA aut
 
 ---
 
+## 2026‑07‑07 highlights (batch 8)
+
+- **Double-tap-to-Wow, audited and fixed.** Feed photos and reels already had it
+  working (verified directly rather than assumed). Feed videos never actually
+  had it — a single tap opened fullscreen immediately with no window for a
+  second tap to register. Fixed to match photos: a brief pause before opening
+  fullscreen, and a tap within that window Wows the post with the same heart
+  burst instead.
+- **Add‑to‑Home‑Screen and notification copy rewritten** around the actual
+  benefits — faster experience, quicker access, faster downloads, and
+  notifications only if you want them (with a clear note that they can be
+  turned off anytime in Notification settings). The notification prompt now
+  also appears for signed‑out visitors, inviting them to sign in rather than
+  silently doing nothing. Declining either prompt 5 times on a device now
+  stops it for good on that device, until browser storage is cleared.
+- **Feed hardened to feel like Instagram**: multi‑photo/video posts now have a
+  belt‑and‑suspenders guarantee that they only ever slide sideways — never up
+  or down — closing a subtle CSS gap where the browser could technically still
+  consider vertical movement. The story rail was already built Instagram‑style
+  and needed no changes.
+- **Confirmed the "instant hero, skeleton everything else" loading style is in
+  place** (the home page already renders its greeting immediately while stories/
+  reels/feed stream in behind their own skeletons — the TikTok/SofaScore/
+  Facebook feel) and made it the documented, mandatory template for every page
+  built from here on.
+
 ## 2026‑07‑07 highlights (batch 7)
 
 - **Albums now open on the EXACT slide you tap, and swipe through everything

@@ -1,9 +1,11 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Pause, Volume2, VolumeX } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { WowSolid } from "@/components/brand/wow-icon";
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { neutralizeAncestorTransforms } from "@/lib/dom/neutralize-transforms";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
@@ -64,6 +66,13 @@ export function FeedVideo({
   const startPt = useRef<{ x: number; y: number } | null>(null);
   const downAt = useRef(0);
   const userPaused = useRef(false);
+  // Double-tap-to-Wow (Instagram/TikTok style, matching FeedImage): a lone
+  // tap opens fullscreen only after a short grace window with no follow-up
+  // tap; two taps within that window like the post instead and never open
+  // fullscreen — same pattern every other media surface already uses.
+  const lastTapAt = useRef(0);
+  const expandTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [burst, setBurst] = useState(0);
   const [muted, setMuted] = useState(true);
   const [showPause, setShowPause] = useState(false);
   const [covered, setCovered] = useState(true);
@@ -192,6 +201,7 @@ export function FeedVideo({
     () => () => {
       if (holdTimer.current) clearTimeout(holdTimer.current);
       if (pauseSignTimer.current) clearTimeout(pauseSignTimer.current);
+      if (expandTimer.current) clearTimeout(expandTimer.current);
     },
     [],
   );
@@ -216,9 +226,11 @@ export function FeedVideo({
   };
 
   // ── Feed video gesture model ─────────────────────────────────────────────
-  //   • single tap  → open the full-screen reels
-  //   • press-hold  → pause (while held); release resumes
-  // Guarded so a graze, drag, hover, or scroll-tail never triggers either.
+  //   • single tap   → open the full-screen reels (after a short grace
+  //                    window with no follow-up tap — see endHold)
+  //   • double tap   → Wow the post (heart burst), stays inline
+  //   • press-hold   → pause (while held); release resumes
+  // Guarded so a graze, drag, hover, or scroll-tail never triggers any of them.
   const onPointerDown = (e: React.PointerEvent) => {
     holding.current = false;
     moved.current = false;
@@ -258,10 +270,21 @@ export function FeedVideo({
       resumePlay();
       return;
     }
-    // Deliberate quick tap → open full-screen reels.
-    if (started && !moved.current && dur >= 40 && dur < 300 && !recentlyScrolled(500)) {
-      onExpand?.();
+    if (!(started && !moved.current && dur >= 40 && dur < 300 && !recentlyScrolled(500))) return;
+
+    const now = Date.now();
+    if (now - lastTapAt.current < 300) {
+      // Second tap arrived in time → Wow, not fullscreen.
+      lastTapAt.current = 0;
+      if (expandTimer.current) clearTimeout(expandTimer.current);
+      setBurst((b) => b + 1);
+      onDoubleTapLike?.();
+      return;
     }
+    // Hold the open-fullscreen action briefly in case a second tap follows.
+    lastTapAt.current = now;
+    if (expandTimer.current) clearTimeout(expandTimer.current);
+    expandTimer.current = setTimeout(() => onExpand?.(), 280);
   };
   const onPointerLeaveCancel = () => {
     if (holdTimer.current) clearTimeout(holdTimer.current);
@@ -404,8 +427,28 @@ export function FeedVideo({
 
             {/* Hint */}
             <span className="pointer-events-none absolute bottom-2 left-2.5 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 opacity-0 backdrop-blur transition-opacity duration-200 group-hover:opacity-100">
-              Tap to watch · hold to pause
+              Double-tap to Wow
             </span>
+
+            {/* Double-tap Wow burst — centered (same reliable pattern as the
+                paused indicator above), not tap-position-tracked: the video's
+                own wrapper is `display: contents` when inline, so it has no
+                box of its own to measure a tap position against. */}
+            <AnimatePresence>
+              {burst > 0 ? (
+                <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+                  <motion.span
+                    key={burst}
+                    initial={{ opacity: 0, scale: 0.4 }}
+                    animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.3, 1.1, 1.5] }}
+                    transition={{ duration: 0.9, ease: "easeOut", times: [0, 0.2, 0.6, 1] }}
+                    className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
+                  >
+                    <WowSolid className="h-20 w-20" />
+                  </motion.span>
+                </span>
+              ) : null}
+            </AnimatePresence>
           </>
         ) : (
           <FullscreenVideoLayer

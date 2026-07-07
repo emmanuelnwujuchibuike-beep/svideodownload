@@ -73,6 +73,13 @@ export function PostMedia({ item }: { item: FeedItem }) {
               poster={item.thumbnailUrl}
               postId={item.id}
               onExpand={() => setReel(true)}
+              onDoubleTapLike={() => {
+                fetch(`/api/posts/${item.id}/react`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ type: "like" }),
+                }).catch(() => {});
+              }}
               className="aspect-video w-full lg:aspect-auto lg:max-h-[78vh]"
             />
           ) : (

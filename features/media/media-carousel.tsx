@@ -102,10 +102,13 @@ export function MediaCarousel({
         onScroll={onScroll}
         data-hscroll
         className={cn(
-          "flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          // overflow-x-auto alone implicitly sets overflow-y to auto too (a
+          // CSS quirk) — overflow-y-hidden makes the "sideways only, never up
+          // or down" contract explicit rather than relying on touch-action alone.
+          "flex snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           fs ? "h-full" : "aspect-[4/5]",
         )}
-        style={{ touchAction: "pan-x" }}
+        style={{ touchAction: "pan-x", overscrollBehaviorY: "contain" }}
       >
         {items.map((m, i) => (
           <div key={i} className="relative h-full w-full shrink-0 snap-center">

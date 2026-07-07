@@ -213,7 +213,7 @@ export function ConversationRoom({
     <>
       <div ref={scrollRef} className="flex-1 space-y-1.5 overflow-y-auto p-4">
         {messages.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">Say hello 👋</p>
+          <p className="py-10 text-center text-sm text-muted-foreground">Say hello</p>
         ) : (
           messages.map((m) => {
             const showReceipt = m.mine && m.id === lastMineId && !m.id.startsWith("optimistic-");

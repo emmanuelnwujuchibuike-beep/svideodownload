@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Check, MoreHorizontal, Trash2, UserRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { memo, useState } from "react";
 
 import { iconFor, isActorType, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
 import type { NotificationGroup } from "@/lib/social/notifications";
@@ -33,7 +33,7 @@ function hrefFor(g: NotificationGroup): string | null {
   return null;
 }
 
-export function NotificationCard({
+function NotificationCardImpl({
   group,
   onMarkRead,
   onDelete,
@@ -160,3 +160,7 @@ export function NotificationCard({
     </motion.div>
   );
 }
+
+// Notification lists re-render on every mark-read/delete/live-insert; memoizing
+// keeps unaffected rows from re-rendering their motion wrapper each time.
+export const NotificationCard = memo(NotificationCardImpl);

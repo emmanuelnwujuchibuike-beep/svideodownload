@@ -1,4 +1,4 @@
-import { BadgeCheck, MessageCircle, UserPlus } from "lucide-react";
+import { BadgeCheck, MessageCircle, UserPlus, UserRound } from "lucide-react";
 import Link from "next/link";
 
 import { getSuggestedCreators } from "@/lib/social/suggest";
@@ -7,17 +7,17 @@ import { formatCompactNumber } from "@/lib/utils";
 
 // Display profiles used when signed-out (and to pad the rail to a tidy 4).
 const SAMPLE_PEOPLE = [
-  { name: "Sarah", sub: "Lagos, Nigeria · Photography", emoji: "👩🏽", from: "from-rose-500 to-pink-600", action: "add" },
-  { name: "James", sub: "London, UK · Watching Trending", emoji: "🧑🏻", from: "from-blue-500 to-indigo-600", action: "chat" },
-  { name: "Maria", sub: "Brazil · Music Lover", emoji: "👩🏼", from: "from-violet-500 to-purple-600", action: "follow" },
-  { name: "Daniel", sub: "New York, USA · Football Fan", emoji: "🧑🏾", from: "from-emerald-500 to-teal-600", action: "add" },
+  { name: "Sarah", sub: "Lagos, Nigeria · Photography", from: "from-rose-500 to-pink-600", action: "add" },
+  { name: "James", sub: "London, UK · Watching Trending", from: "from-blue-500 to-indigo-600", action: "chat" },
+  { name: "Maria", sub: "Brazil · Music Lover", from: "from-violet-500 to-purple-600", action: "follow" },
+  { name: "Daniel", sub: "New York, USA · Football Fan", from: "from-emerald-500 to-teal-600", action: "add" },
 ] as const;
 
 const CLUSTER = [
-  { from: "from-rose-500 to-pink-600", emoji: "👩🏽" },
-  { from: "from-blue-500 to-indigo-600", emoji: "🧑🏻" },
-  { from: "from-violet-500 to-purple-600", emoji: "👨🏾" },
-  { from: "from-amber-500 to-orange-600", emoji: "👩🏼" },
+  { from: "from-rose-500 to-pink-600" },
+  { from: "from-blue-500 to-indigo-600" },
+  { from: "from-violet-500 to-purple-600" },
+  { from: "from-amber-500 to-orange-600" },
 ];
 
 const ACTION = {
@@ -33,7 +33,6 @@ type Card = {
   sub: string;
   verified: boolean;
   avatarUrl: string | null;
-  emoji: string;
   from: string;
   action: keyof typeof ACTION;
 };
@@ -62,7 +61,6 @@ export async function MeetNewPeople() {
         sub: `${formatCompactNumber(c.followersCount)} followers`,
         verified: c.isVerified,
         avatarUrl: c.avatarUrl,
-        emoji: style.emoji,
         from: style.from,
         action: style.action as keyof typeof ACTION,
       };
@@ -75,7 +73,6 @@ export async function MeetNewPeople() {
       sub: s.sub,
       verified: false,
       avatarUrl: null,
-      emoji: s.emoji,
       from: s.from,
       action: s.action as keyof typeof ACTION,
     }));
@@ -88,7 +85,6 @@ export async function MeetNewPeople() {
       sub: s.sub,
       verified: false,
       avatarUrl: null,
-      emoji: s.emoji,
       from: s.from,
       action: s.action as keyof typeof ACTION,
     }));
@@ -117,10 +113,10 @@ export async function MeetNewPeople() {
             >
               {c.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={c.avatarUrl} alt="" className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                <img src={c.avatarUrl} alt={c.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105" />
               ) : (
-                <span className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br ${c.from} text-6xl`}>
-                  {c.emoji}
+                <span className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br ${c.from} text-4xl font-bold text-white`}>
+                  {c.name.charAt(0).toUpperCase()}
                 </span>
               )}
               <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
@@ -154,8 +150,8 @@ export async function MeetNewPeople() {
           </h3>
           <div className="mt-3 flex -space-x-2">
             {CLUSTER.map((g, i) => (
-              <span key={i} className={`flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br ${g.from} text-sm ring-2 ring-background`}>
-                {g.emoji}
+              <span key={i} aria-hidden className={`flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br ${g.from} ring-2 ring-background`}>
+                <UserRound className="h-4 w-4 text-white" />
               </span>
             ))}
           </div>

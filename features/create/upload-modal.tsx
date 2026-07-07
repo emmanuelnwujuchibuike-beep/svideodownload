@@ -323,7 +323,7 @@ function ModalInner() {
                   <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" />
                 </motion.div>
                 <p className="mt-3 text-lg font-bold">
-                  {destination === "story" ? "Shared to your Story" : destination === "both" ? "Posted & shared to Story" : destination === "reel" ? "Your Reel is live" : isAlbum ? "Your album is live" : "Posted 🎉"}
+                  {destination === "story" ? "Shared to your Story" : destination === "both" ? "Posted & shared to Story" : destination === "reel" ? "Your Reel is live" : isAlbum ? "Your album is live" : "Posted"}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {destination === "post"

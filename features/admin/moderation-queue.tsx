@@ -57,7 +57,7 @@ export function ModerationQueue({ targets }: { targets: ReportedTarget[] }) {
       </p>
 
       {targets.length === 0 ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">Nothing to review. 🎉</p>
+        <p className="py-6 text-center text-sm text-muted-foreground">Nothing to review.</p>
       ) : (
         <ul className="divide-y divide-border/60">
           {targets.map((t) => (

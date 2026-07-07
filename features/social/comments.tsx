@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { RichText } from "@/components/social/rich-text";
@@ -228,7 +228,7 @@ export function Comments({
           <span className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
             <MessageCircle className="h-5 w-5" />
           </span>
-          <p className="text-sm text-muted-foreground">No comments yet — start the conversation ✨</p>
+          <p className="text-sm text-muted-foreground">No comments yet — start the conversation</p>
         </div>
       ) : (
         <ul className="space-y-4">
@@ -538,7 +538,7 @@ function ReactionBar({ node, loggedIn, onReact }: { node: CommentNode; loggedIn:
   );
 }
 
-function CommentItem({
+function CommentItemImpl({
   node,
   postId,
   depth,
@@ -706,6 +706,11 @@ function CommentItem({
     </motion.li>
   );
 }
+
+// A long thread re-renders every visible row on any single reaction/pin/best
+// toggle without this — onReact/onModerate/onPosted are already stable
+// (useCallback above), so this memo actually holds.
+const CommentItem = memo(CommentItemImpl);
 
 function MenuRow({ icon: Icon, label, onClick, danger }: { icon: typeof Copy; label: string; onClick: () => void; danger?: boolean }) {
   return (

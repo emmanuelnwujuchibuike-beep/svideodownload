@@ -82,7 +82,7 @@ function PanelBody({ onNavigate, onClose }: { onNavigate?: () => void; onClose?:
             <LogOut className="h-[18px] w-[18px]" /> Sign out
           </button>
         </form>
-        <p className="px-3 pb-1 pt-2 text-[11px] text-muted-foreground/70">More tools are on the way ✨</p>
+        <p className="px-3 pb-1 pt-2 text-[11px] text-muted-foreground/70">More tools are on the way</p>
       </div>
     </>
   );

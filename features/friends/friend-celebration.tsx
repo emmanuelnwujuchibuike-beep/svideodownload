@@ -5,7 +5,7 @@ import { MessageCircle, PartyPopper, X } from "lucide-react";
 
 /**
  * Acceptance celebration (Friend Request spec): a glass card with a blue→purple
- * light burst and soft particles — "🎉 You and {name} are now friends" — with
+ * light burst and soft particles — "You and {name} are now friends" — with
  * Start Chat as the primary action. Deliberately brief and elegant, not noisy.
  */
 export function FriendCelebration({
@@ -81,7 +81,7 @@ export function FriendCelebration({
             </motion.div>
 
             <h2 className="relative mt-4 text-lg font-bold tracking-tight">
-              You and {name} are now friends 🎉
+              You and {name} are now friends
             </h2>
             <p className="relative mt-1 text-sm text-muted-foreground">
               Say hello and start the conversation.

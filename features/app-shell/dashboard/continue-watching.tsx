@@ -1,6 +1,6 @@
 "use client";
 
-import { Play } from "lucide-react";
+import { Clock, Play } from "lucide-react";
 
 import { openPlayer } from "@/features/downloads/player-store";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
@@ -20,7 +20,7 @@ export function ContinueWatching() {
 
   return (
     <section>
-      <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-foreground">🕒 Continue Watching</h2>
+      <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-foreground"><Clock className="h-4 w-4 text-primary" /> Continue Watching</h2>
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {active.map((t) => {
           const pct = t.totalBytes > 0 ? Math.min(100, Math.round((t.receivedBytes / t.totalBytes) * 100)) : 0;

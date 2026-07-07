@@ -51,7 +51,10 @@ export function MobileNav() {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-border/25 bg-background/75 px-2 pb-[env(safe-area-inset-bottom)] pt-1.5 backdrop-blur-2xl lg:hidden"
+      // backdrop-blur-lg (not -2xl): this bar sits over scrolling content on
+      // every mobile page for the app's whole lifetime — the same perf trim
+      // already applied to the feed's sticky segmented control (smart-feed.tsx).
+      className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-border/25 bg-background/75 px-2 pb-[env(safe-area-inset-bottom)] pt-1.5 backdrop-blur-lg lg:hidden"
     >
       <NavTab label="Home" href="/home" icon={IoHomeOutline} activeIcon={IoHome} active={pathname === "/home"} onWarm={router.prefetch} />
       <NavTab label="Friends" href="/friends" icon={IoPeopleCircleOutline} activeIcon={IoPeopleCircle} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />

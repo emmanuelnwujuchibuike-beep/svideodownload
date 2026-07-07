@@ -37,7 +37,7 @@ export function RightRail({
             {firstName.charAt(0).toUpperCase()}
           </span>
         )}
-        <p className="mt-3 text-base font-bold">Hi, {firstName} 👋</p>
+        <p className="mt-3 text-base font-bold">Hi, {firstName}</p>
         <p className="text-xs text-muted-foreground">Welcome back!</p>
 
         <dl className="mt-4 grid grid-cols-3 gap-1 border-y border-border/50 py-3">

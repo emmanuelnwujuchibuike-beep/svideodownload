@@ -9,6 +9,7 @@ import {
   Search,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { RecommendedToolsClient } from "@/components/monetization/recommended-tools-client";
@@ -18,8 +19,12 @@ import { ResultOffer } from "@/features/monetization/result-offer";
 import { detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
 
-import { PreviewCard } from "./preview-card";
 import { useDownloader } from "./use-downloader";
+
+// Result card (+ its framer-motion dependency) only ever appears after a
+// visitor submits a link — code-split it out of the landing page's initial
+// bundle instead of shipping it to every visitor who never converts.
+const PreviewCard = dynamic(() => import("./preview-card").then((m) => m.PreviewCard), { ssr: false });
 
 // Cycled through in the input placeholder for a lively, on-brand prompt.
 const PLACEHOLDER_PLATFORMS = [
@@ -190,7 +195,7 @@ export function Downloader() {
               profile — the moment they're most likely to share. */}
           {status === "started" ? (
             <div className="mt-5 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-4 text-center ring-1 ring-inset ring-violet-500/20">
-              <p className="text-sm font-bold">Downloaded 🎉 — share it with your Frenz</p>
+              <p className="text-sm font-bold">Downloaded — share it with your Frenz</p>
               <p className="mt-0.5 text-xs text-muted-foreground">Publish it to your profile so your followers can watch and save it too.</p>
               <div className="mt-3 flex justify-center">
                 <PublishButton metadata={metadata} highlight />

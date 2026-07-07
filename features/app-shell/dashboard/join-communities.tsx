@@ -1,14 +1,14 @@
-import { Plus, Users } from "lucide-react";
+import { Camera, Goal, Headphones, Plane, Plus, Users } from "lucide-react";
 import Link from "next/link";
 
 import { formatCompactNumber } from "@/lib/utils";
 
 // Representative communities — a communities backend isn't modelled yet.
 const COMMUNITIES = [
-  { name: "Photography Club", members: 12_400, emoji: "📷", gradient: "from-rose-500 to-pink-600" },
-  { name: "Music Lovers", members: 8_700, emoji: "🎧", gradient: "from-violet-500 to-purple-600" },
-  { name: "Football Fans", members: 15_800, emoji: "⚽", gradient: "from-emerald-500 to-teal-600" },
-  { name: "Travel World", members: 9_300, emoji: "✈️", gradient: "from-sky-500 to-blue-600" },
+  { name: "Photography Club", members: 12_400, Icon: Camera, gradient: "from-rose-500 to-pink-600" },
+  { name: "Music Lovers", members: 8_700, Icon: Headphones, gradient: "from-violet-500 to-purple-600" },
+  { name: "Football Fans", members: 15_800, Icon: Goal, gradient: "from-emerald-500 to-teal-600" },
+  { name: "Travel World", members: 9_300, Icon: Plane, gradient: "from-sky-500 to-blue-600" },
 ];
 
 /** Join Communities — discover groups around shared interests. */
@@ -24,7 +24,7 @@ export function JoinCommunities() {
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {COMMUNITIES.map((c) => (
           <div key={c.name} className="w-40 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-background">
-            <div className={`flex h-20 items-center justify-center bg-gradient-to-br ${c.gradient} text-3xl`}>{c.emoji}</div>
+            <div className={`flex h-20 items-center justify-center bg-gradient-to-br ${c.gradient}`}><c.Icon className="h-7 w-7 text-white" /></div>
             <div className="p-2.5">
               <p className="truncate text-sm font-semibold">{c.name}</p>
               <p className="text-[11px] text-muted-foreground">{formatCompactNumber(c.members)} members</p>

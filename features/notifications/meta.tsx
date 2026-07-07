@@ -100,9 +100,9 @@ export function verbFor(type: NotificationType): string {
     case "friend_request":
       return "sent you a friend request";
     case "friend_accepted":
-      return "accepted your friend request 🎉";
+      return "accepted your friend request";
     case "friend_reminder":
-      return "is ready to chat — say hi 👋";
+      return "is ready to chat — say hi";
     case "like":
       return "Wow'd your post";
     case "love":
@@ -128,7 +128,7 @@ export function verbFor(type: NotificationType): string {
     case "invite":
       return "invited you";
     case "milestone":
-      return "reached a milestone 🎉";
+      return "reached a milestone";
     case "download_complete":
       return "Download complete";
     case "download_failed":

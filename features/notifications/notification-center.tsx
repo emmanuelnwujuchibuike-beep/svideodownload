@@ -2,7 +2,7 @@
 
 import { AnimatePresence } from "framer-motion";
 import { BellRing, CheckCheck } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { mutate, revalidate, useQuery } from "@/features/data";
 import {
@@ -75,7 +75,9 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
     return groups.filter((g) => g.category === tab);
   }, [groups, tab]);
 
-  const markRead = (g: NotificationGroup) => {
+  // Stable identities so the memoized NotificationCard rows below don't all
+  // re-render whenever one row's read/delete state changes.
+  const markRead = useCallback((g: NotificationGroup) => {
     mutate<GroupedNotificationsResult>(KEY, (prev) => ({
       groups: (prev?.groups ?? []).map((x) => (x.id === g.id ? { ...x, read: true } : x)),
       unread: prev?.unread ?? 0,
@@ -90,9 +92,9 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
         void revalidate(BELL_KEY, loadFlatNotifications, 0).catch(() => {});
       })
       .catch(() => {});
-  };
+  }, []);
 
-  const remove = (g: NotificationGroup) => {
+  const remove = useCallback((g: NotificationGroup) => {
     mutate<GroupedNotificationsResult>(KEY, (prev) => ({
       groups: (prev?.groups ?? []).filter((x) => x.id !== g.id),
       unread: prev?.unread ?? 0,
@@ -107,7 +109,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
         if (!g.read) void revalidate(BELL_KEY, loadFlatNotifications, 0).catch(() => {});
       })
       .catch(() => {});
-  };
+  }, []);
 
   const markAllRead = () => {
     if (unread === 0) return;
@@ -189,7 +191,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
           <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-secondary text-muted-foreground">
             <BellRing className="h-6 w-6" />
           </span>
-          <p className="text-sm font-medium">{tab === "unread" ? "You're all caught up 🎉" : "No notifications yet"}</p>
+          <p className="text-sm font-medium">{tab === "unread" ? "You're all caught up" : "No notifications yet"}</p>
           <p className="mt-1 text-xs text-muted-foreground">When people interact with you, it shows up here.</p>
         </div>
       ) : (

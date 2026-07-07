@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, X } from "lucide-react";
+import { ArrowRight, Newspaper, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -29,7 +29,7 @@ export function LatestNewsTabs() {
   return (
     <section className="mt-5 rounded-2xl border border-border/60 bg-card p-4 shadow-soft">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-base font-bold text-foreground">📰 Latest News</h2>
+        <h2 className="flex items-center gap-2 text-base font-bold text-foreground"><Newspaper className="h-4 w-4 text-primary" /> Latest News</h2>
         <Link href="/blog" className="text-xs font-semibold text-primary hover:underline">View all</Link>
       </div>
 

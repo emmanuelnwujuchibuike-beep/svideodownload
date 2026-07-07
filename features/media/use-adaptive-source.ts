@@ -85,6 +85,12 @@ export function useAdaptiveSource(
       onReady?.();
     };
 
+    // Native-HLS (iOS Safari) fallback: hls.js browsers get onFatal → MP4, but
+    // Safari's built-in player previously had NO error path — a manifest that
+    // isn't ready yet (a just-uploaded reel mid-encode) hung on a spinner until
+    // the user left and came back. Any media error now swaps to the MP4 source.
+    let nativeErrorHandler: (() => void) | null = null;
+
     if (hlsUrl) {
       if (supportsNativeHls(video)) {
         // Safari's native HLS manages its own ABR ladder with no JS-level cap
@@ -92,6 +98,15 @@ export function useAdaptiveSource(
         // its own heuristics, so we don't attempt a height cap here.
         mode = "native-hls";
         if (video.src !== hlsUrl) video.src = hlsUrl;
+        if (src) {
+          nativeErrorHandler = () => {
+            if (destroyed) return;
+            mode = "mp4";
+            setNative();
+            void video.play().catch(() => {});
+          };
+          video.addEventListener("error", nativeErrorHandler);
+        }
         onReady?.();
       } else {
         mode = "hls";
@@ -125,6 +140,7 @@ export function useAdaptiveSource(
 
     return () => {
       destroyed = true;
+      if (nativeErrorHandler) video.removeEventListener("error", nativeErrorHandler);
       if (sampled) {
         video.removeEventListener("playing", onPlaying);
         video.removeEventListener("waiting", onWaiting);

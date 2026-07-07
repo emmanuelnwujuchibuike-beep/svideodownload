@@ -55,6 +55,8 @@ export function PostMedia({ item }: { item: FeedItem }) {
             <FeedVideo
               src={item.mediaUrl}
               streamUid={item.streamUid}
+              streamReady={item.streamReady}
+              streamFailed={item.streamFailed}
               poster={item.thumbnailUrl}
               postId={item.id}
               onExpand={() => setReel(true)}

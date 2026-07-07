@@ -13,6 +13,28 @@ _Last updated: 2026‑07‑06 (fullscreen video, loading engine in Core, PWA aut
 
 ---
 
+## 2026‑07‑06 highlights (batch 2)
+
+- **Seamless For You/Following switching (feed + reels):** tabs slide past each
+  other (GPU transform), never reload or jump to top; each tab restores its
+  scroll/reel index, and a new session‑wide resume store
+  (`lib/media/resume-positions.ts`) makes every video continue exactly where it
+  stopped across tab switches, viewer closes and remounts.
+- **True full‑bleed video:** clips shaped close to the screen now COVER it
+  edge‑to‑edge — under the status bar and home indicator (TikTok style) — in the
+  reel player and in fullscreen; clearly different shapes stay uncropped over the
+  blur backdrop. Album carousels got their own fullscreen (same‑element promotion)
+  with slides, counter and dots still fully swipeable.
+- **Share/Send system (slice 1):** paper‑plane button on every feed card → lazy
+  bottom sheet: send to multiple friends/recent chats as DMs (search, multi‑select,
+  optional message, success animation, push to recipients via
+  `/api/posts/[id]/share`), plus Copy link, OS share sheet, and Repost shortcut.
+- **New reels play instantly:** players prefer the MP4 until Cloudflare Stream
+  confirms the encode (`streamReady`), Safari's native HLS finally has an
+  error→MP4 fallback (the "reel stuck on spinner until you reopen" bug), and
+  publishing busts the author's own feed caches (`bustHomeFeedCache`) so a new
+  post/reel appears immediately.
+
 ## 2026‑07‑06 highlights
 
 - **Fullscreen video (slice 1):** every `FeedVideo` gets a fullscreen button. The

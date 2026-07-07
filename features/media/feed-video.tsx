@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
+import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
 import { claimPlayback, recentlyScrolled, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ const TAP_MOVE_TOLERANCE = 18;
 export function FeedVideo({
   src,
   streamUid,
+  streamReady,
   streamFailed,
   poster,
   className,
@@ -40,6 +42,8 @@ export function FeedVideo({
 }: {
   src?: string | null;
   streamUid?: string | null;
+  /** Stream encode confirmed COMPLETE — before that, prefer the MP4 (plays instantly). */
+  streamReady?: boolean;
   /** A confirmed Stream encode failure (webhook) — skip HLS, go straight to MP4. */
   streamFailed?: boolean;
   poster?: string | null;
@@ -115,9 +119,12 @@ export function FeedVideo({
   }, []);
 
   // Adaptive playback: a Cloudflare Stream video plays HLS/ABR through our own
-  // <video>; anything else plays the plain MP4. Fall back to the Stream iframe only
-  // when there's a uid but neither an HLS URL (no customer code) nor an MP4.
-  const hlsUrl = streamUid && !streamFailed ? streamHlsUrl(streamUid) : null;
+  // <video>; anything else plays the plain MP4. A freshly uploaded video whose
+  // Stream encode hasn't been CONFIRMED ready plays the MP4 (instant) instead of
+  // hanging on a not-yet-existing manifest — the HLS ladder takes over on later
+  // views once the webhook flips stream_ready. Fall back to the Stream iframe
+  // only when there's a uid but neither an HLS URL (no customer code) nor an MP4.
+  const hlsUrl = streamUid && !streamFailed && (streamReady !== false || !src) ? streamHlsUrl(streamUid) : null;
   const hasNative = !!src || !!hlsUrl;
   const iframeMode = !hasNative && !!streamUid;
 
@@ -161,9 +168,12 @@ export function FeedVideo({
     obs.observe(el);
     return () => {
       obs.disconnect();
+      // Unmount mid-play (tab pane swap) → remember the position so the same
+      // post resumes seamlessly when its card mounts again.
+      savePlaybackPosition(postId, v.currentTime, v.duration);
       releasePlayback(v);
     };
-  }, [iframeMode, playIfReady]);
+  }, [iframeMode, playIfReady, postId]);
 
   // Clear pending timers on unmount (no leaks during long scroll sessions).
   useEffect(
@@ -299,7 +309,18 @@ export function FeedVideo({
           playsInline
           preload="metadata"
           className={cn(
-            "h-full w-full object-contain",
+            "h-full w-full",
+            // Fullscreen, TikTok-style: a clip whose shape is close to the
+            // screen's COVERS it edge-to-edge — video under the status bar and
+            // home indicator, no letterbox slivers. Clearly different shapes
+            // (landscape on a phone) stay object-contain so nothing meaningful
+            // is ever cut off.
+            fs &&
+              ratio !== null &&
+              typeof window !== "undefined" &&
+              Math.abs(ratio - window.innerWidth / window.innerHeight) / (window.innerWidth / window.innerHeight) < 0.22
+              ? "object-cover"
+              : "object-contain",
             fs ? "touch-none" : "touch-pan-y lg:h-auto lg:max-h-[82vh] lg:w-auto",
           )}
           onLoadedMetadata={() => {
@@ -307,6 +328,14 @@ export function FeedVideo({
             if (!v || !v.videoWidth || !v.videoHeight) return;
             // Exact ratio, clamped: tallest a card goes is full 9:16, widest 16:9.
             setRatio(Math.min(16 / 9, Math.max(9 / 16, v.videoWidth / v.videoHeight)));
+            // Resume where this post's video last stopped (tab switch, viewer
+            // close, remount) — the feed never "restarts from the top".
+            const resumeAt = getPlaybackPosition(postId);
+            if (resumeAt !== null && Math.abs(v.currentTime - resumeAt) > 1) v.currentTime = resumeAt;
+          }}
+          onPause={() => {
+            const v = video.current;
+            if (v) savePlaybackPosition(postId, v.currentTime, v.duration);
           }}
           onPlay={() => {
             video.current && claimPlayback(video.current);

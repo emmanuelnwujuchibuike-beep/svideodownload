@@ -18,6 +18,7 @@ import {
   Pencil,
   Play,
   Repeat2,
+  Send as SendIcon,
   Share2,
   Sparkles,
   UserPlus,
@@ -45,6 +46,7 @@ const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").
 const RepostComposer = dynamic(() => import("@/features/social/repost-composer").then((m) => m.RepostComposer), { ssr: false });
 const RepostOptionsSheet = dynamic(() => import("@/features/social/repost-options").then((m) => m.RepostOptionsSheet), { ssr: false });
 const RepostersSheet = dynamic(() => import("@/features/social/reposters-sheet").then((m) => m.RepostersSheet), { ssr: false });
+const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m) => m.ShareSheet), { ssr: false });
 import { floatReaction } from "@/features/ui/reaction-float";
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { downloadPost } from "@/lib/media/download-post";
@@ -103,6 +105,8 @@ function FeedPostCardImpl({
   const [composerCaption, setComposerCaption] = useState<string | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [repostersOpen, setRepostersOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareReady, setShareReady] = useState(false);
   // Gate the code-split sheets: mount only after first open (keeps their chunks
   // out of the feed until actually needed, then stays mounted for exit animations).
   const [editReady, setEditReady] = useState(false);
@@ -390,6 +394,7 @@ function FeedPostCardImpl({
           <FeedVideo
             src={item.mediaUrl}
             streamUid={item.streamUid}
+            streamReady={item.streamReady}
             streamFailed={item.streamFailed}
             poster={item.thumbnailUrl}
             postId={item.id}
@@ -460,9 +465,8 @@ function FeedPostCardImpl({
         </button>
       )}
 
-      {/* Actions — intentionally just Like / Comment / Repost / Save; everything
-          else (Share, Download, …) lives in the ••• overflow so content stays
-          the focus. */}
+      {/* Actions — Wow / Comment / Repost / Send / Save; anything rarer
+          (Download, …) lives in the ••• overflow so content stays the focus. */}
       <div className="mx-3 mb-3 mt-1 flex items-center justify-between rounded-2xl bg-secondary/40 px-1 py-1 ring-1 ring-inset ring-border/40">
         <div className="flex items-center">
           <ActionButton
@@ -483,9 +487,27 @@ function FeedPostCardImpl({
               <ActionButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-500" onClick={repost} label="Repost" press={repostPress} />
             </span>
           ) : null}
+          <ActionButton
+            icon={SendIcon}
+            onClick={() => {
+              setShareReady(true);
+              setShareOpen(true);
+            }}
+            label="Send"
+          />
         </div>
         <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-amber-500" label="Save" />
       </div>
+
+      {shareReady ? (
+        <ShareSheet
+          postId={item.id}
+          title={title ?? undefined}
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          onRepost={item.isOwner ? undefined : () => openComposer("create", null)}
+        />
+      ) : null}
 
       {item.isOwner && editReady ? (
         <PostEditSheet

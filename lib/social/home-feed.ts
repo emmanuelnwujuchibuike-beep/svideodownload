@@ -1,4 +1,4 @@
-import { getCached } from "@/lib/cache";
+import { cacheDelete, getCached } from "@/lib/cache";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -257,6 +257,22 @@ async function streamStatus(
     /* columns not migrated yet */
   }
   return out;
+}
+
+/**
+ * Busts a viewer's first-page feed caches right after THEY publish, so their
+ * new post/reel appears the moment the feed re-renders instead of after the
+ * 20s TTL. Other viewers ride the TTL (freshness within 20s is by design).
+ */
+export async function bustHomeFeedCache(viewerId: string): Promise<void> {
+  const sorts: HomeFeedSort[] = ["for_you", "following", "recent"];
+  const formats = ["feed", "reel"];
+  const limits = [8, 12, 24];
+  await Promise.all(
+    sorts.flatMap((s) =>
+      formats.flatMap((f) => limits.map((l) => cacheDelete(`homefeed:${viewerId}:${s}:${f}:0:${l}`))),
+    ),
+  ).catch(() => {});
 }
 
 /** A page of the rich home feed. Offset-based so it powers infinite scroll. */

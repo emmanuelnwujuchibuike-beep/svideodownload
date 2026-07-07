@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Clapperboard } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -50,6 +50,8 @@ export function ReelsFeed({
   const [items, setItems] = useState<FeedItem[]>(initialItems);
   const [offset, setOffset] = useState<number | null>(initialOffset);
   const [switching, setSwitching] = useState(false);
+  // Slide direction for the tab transition (For You ↔ Following).
+  const [direction, setDirection] = useState(1);
   const seen = useRef<Set<string>>(new Set(initialItems.map((i) => i.id)));
   const loading = useRef(false);
 
@@ -100,6 +102,7 @@ export function ReelsFeed({
       // Snapshot exactly where we're leaving so returning here is instant and
       // resumes on the same reel.
       cacheRef.current![tab] = { items, offset, seen: seen.current };
+      setDirection(next === "following" ? 1 : -1);
       setTab(next);
       const cached = cacheRef.current![next];
       if (cached) {
@@ -199,30 +202,45 @@ export function ReelsFeed({
           </Link>
         </div>
       ) : (
-        <ReelDeck
-          key={tab}
-          items={items}
-          // First time For You mounts, seed on the tapped clip (deep link from
-          // the feed); every other mount (a return visit after switching away)
-          // resumes on whichever reel was last active in this tab, instead of
-          // jumping back to the first one.
-          startIndex={
-            tab === "for_you" && startId && !forYouSeeded.current
-              ? Math.max(0, items.findIndex((i) => i.id === startId))
-              : (lastIndexRef.current[tab] ?? 0)
-          }
-          variant="page"
-          onEndReached={loadMore}
-          onClose={close}
-          autoOpenCommentsId={tab === "for_you" ? autoOpenCommentsId : null}
-          // Swipe left reveals the next tab (Following, to the right in the tab
-          // list); swipe right goes back — same instant switch as tapping.
-          onSwipeTab={(dir) => void switchTab(dir === "left" ? "following" : "for_you")}
-          onActiveIndexChange={(i) => {
-            lastIndexRef.current[tab] = i;
-            if (tab === "for_you") forYouSeeded.current = true;
-          }}
-        />
+        /* The two tabs SLIDE past each other (owner spec: smooth switching,
+           never a reload or jump) — pure transform/opacity, GPU-composited.
+           Each tab's deck resumes on its last reel, and the reel itself
+           resumes at its last playback position (resume-positions store). */
+        <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+          <motion.div
+            key={tab}
+            custom={direction}
+            initial={{ x: direction >= 0 ? "18%" : "-18%", opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: direction >= 0 ? "-18%" : "18%", opacity: 0 }}
+            transition={{ duration: 0.26, ease: [0.32, 0.72, 0, 1] }}
+            className="h-full w-full"
+          >
+            <ReelDeck
+              items={items}
+              // First time For You mounts, seed on the tapped clip (deep link from
+              // the feed); every other mount (a return visit after switching away)
+              // resumes on whichever reel was last active in this tab, instead of
+              // jumping back to the first one.
+              startIndex={
+                tab === "for_you" && startId && !forYouSeeded.current
+                  ? Math.max(0, items.findIndex((i) => i.id === startId))
+                  : (lastIndexRef.current[tab] ?? 0)
+              }
+              variant="page"
+              onEndReached={loadMore}
+              onClose={close}
+              autoOpenCommentsId={tab === "for_you" ? autoOpenCommentsId : null}
+              // Swipe left reveals the next tab (Following, to the right in the tab
+              // list); swipe right goes back — same instant switch as tapping.
+              onSwipeTab={(dir) => void switchTab(dir === "left" ? "following" : "for_you")}
+              onActiveIndexChange={(i) => {
+                lastIndexRef.current[tab] = i;
+                if (tab === "for_you") forYouSeeded.current = true;
+              }}
+            />
+          </motion.div>
+        </AnimatePresence>
       )}
     </>
   );

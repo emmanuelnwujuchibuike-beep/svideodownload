@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { bustHomeFeedCache } from "@/lib/social/home-feed";
 import { getActiveStories, type StoryScope } from "@/lib/social/stories";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -154,6 +155,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Finish setting up your profile to post." }, { status: 403 });
     }
   }
+
+  // The publisher's own feed caches are busted so the new post/reel shows up
+  // the moment their feed re-renders — never "where did my upload go?".
+  if (postId) await bustHomeFeedCache(user.id);
 
   return NextResponse.json({ ok: true, storyId, postId });
 }

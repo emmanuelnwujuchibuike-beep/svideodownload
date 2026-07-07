@@ -57,6 +57,7 @@ import { FrenzsaveError } from "@/lib/sdk";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { downloadPost } from "@/lib/media/download-post";
 import { getQualityPreference, setQualityPreference, type QualityPreference } from "@/lib/media/network-conditions";
+import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { streamHlsUrl } from "@/lib/media/stream";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
@@ -326,6 +327,8 @@ function ReelCard({
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
   const [buffering, setBuffering] = useState(false);
+  // Near-screen-aspect clips cover the screen edge-to-edge (TikTok full bleed).
+  const [fullBleed, setFullBleed] = useState(false);
   const [seekFlash, setSeekFlash] = useState<{ side: "back" | "fwd"; key: number } | null>(null);
   const [ui, setUi] = useState(true);
   const [scrubbing, setScrubbing] = useState(false);
@@ -380,8 +383,12 @@ function ReelCard({
   // Stream uid keeps playing the plain MP4. Either way it's the controllable native
   // element (our gestures/scrubber), never the heavy iframe. A confirmed encode
   // failure (the Stream webhook) skips HLS entirely — no point retrying a manifest
-  // that will never exist.
-  const hlsUrl = item.streamUid && !item.streamFailed ? streamHlsUrl(item.streamUid) : null;
+  // that will never exist. A NOT-YET-ready encode (a just-uploaded reel) plays
+  // the MP4 immediately instead of hanging on a manifest that doesn't exist yet.
+  const hlsUrl =
+    item.streamUid && !item.streamFailed && (item.streamReady !== false || !item.mediaUrl)
+      ? streamHlsUrl(item.streamUid)
+      : null;
   const native = !!item.mediaUrl || !!hlsUrl;
   const markSrcReady = useCallback(() => setSrcReady(true), []);
   // HLS (hls.js) buffers whatever is attached, so only wire the ACTIVE + NEXT reel
@@ -464,8 +471,13 @@ function ReelCard({
       if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
       if (holdTimer.current) clearTimeout(holdTimer.current);
       if (pauseSignTimer.current) clearTimeout(pauseSignTimer.current);
-      if (video.current) releasePlayback(video.current);
+      if (video.current) {
+        // Unmount mid-play (deck teardown, tab slide) → resume here next time.
+        savePlaybackPosition(item.id, video.current.currentTime, video.current.duration);
+        releasePlayback(video.current);
+      }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadComments = useCallback(async () => {
@@ -932,20 +944,41 @@ function ReelCard({
               loop
               playsInline
               preload={preload}
-              // TRUE aspect on every screen: tall clips fill the full height,
-              // shorter/wider clips show exactly as they are over the blurred
-              // backdrop — no part of the frame is ever cropped away.
-              className="relative z-10 h-full w-full object-contain lg:h-auto lg:max-h-full lg:w-auto lg:max-w-full"
+              // TikTok-style full bleed on phones: a clip shaped close to the
+              // screen COVERS it edge-to-edge (video runs under the status bar
+              // and home indicator — no letterbox slivers). Clearly different
+              // shapes (landscape/square) stay object-contain over the blurred
+              // backdrop so nothing meaningful is cut off. Desktop keeps the
+              // centered true-aspect column.
+              className={cn(
+                "relative z-10 h-full w-full lg:h-auto lg:max-h-full lg:w-auto lg:max-w-full lg:!object-contain",
+                fullBleed ? "object-cover" : "object-contain",
+              )}
               onPlay={() => {
                 video.current && claimPlayback(video.current);
                 setBuffering(false);
                 recordView(item.id);
               }}
+              onPause={() => {
+                const v = video.current;
+                if (v) savePlaybackPosition(item.id, v.currentTime, v.duration);
+              }}
               onWaiting={() => setBuffering(true)}
               onPlaying={() => setBuffering(false)}
               onCanPlay={() => onReady?.(item.id)}
               onError={() => onReady?.(item.id)}
-              onLoadedMetadata={(e) => setDur(e.currentTarget.duration || 0)}
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget;
+                setDur(v.duration || 0);
+                if (v.videoWidth && v.videoHeight) {
+                  const screen = window.innerWidth / window.innerHeight;
+                  setFullBleed(Math.abs(v.videoWidth / v.videoHeight - screen) / screen < 0.22);
+                }
+                // Resume where this reel last stopped (tab switch / reopen) —
+                // switching For You/Following continues, never restarts.
+                const resumeAt = getPlaybackPosition(item.id);
+                if (resumeAt !== null && Math.abs(v.currentTime - resumeAt) > 1) v.currentTime = resumeAt;
+              }}
               onTimeUpdate={(e) => {
                 const v = e.currentTarget;
                 setCur(v.currentTime);

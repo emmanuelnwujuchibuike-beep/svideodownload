@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Maximize2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FadeImage } from "@/features/ui/fade-image";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,32 @@ export function MediaCarousel({
   const [index, setIndex] = useState(0);
   const raf = useRef(0);
 
+  // Fullscreen: the SAME carousel box is promoted to a fixed edge-to-edge
+  // layer (owner spec: albums stay swipeable even in fullscreen — slides,
+  // counter, dots and in-view video autoplay all keep working, because it's
+  // the same scroller, just bigger). Instant, no remount, position preserved.
+  const [fs, setFs] = useState(false);
+  const enterFs = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFs(true);
+    document.body.style.overflowY = "hidden";
+  }, []);
+  const exitFs = useCallback(() => {
+    setFs(false);
+    document.body.style.overflowY = "";
+  }, []);
+  useEffect(() => {
+    if (!fs) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") exitFs();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflowY = "";
+    };
+  }, [fs, exitFs]);
+
   const onScroll = () => {
     cancelAnimationFrame(raf.current);
     raf.current = requestAnimationFrame(() => {
@@ -53,12 +80,20 @@ export function MediaCarousel({
   useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
   return (
-    <div className={cn("relative overflow-hidden bg-black", className)}>
+    <div
+      className={cn(
+        fs ? "fixed inset-0 z-[140] bg-black" : "relative overflow-hidden bg-black",
+        !fs && className,
+      )}
+    >
       <div
         ref={scroller}
         onScroll={onScroll}
         data-hscroll
-        className="flex aspect-[4/5] snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={cn(
+          "flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          fs ? "h-full" : "aspect-[4/5]",
+        )}
         style={{ touchAction: "pan-x" }}
       >
         {items.map((m, i) => (
@@ -92,12 +127,40 @@ export function MediaCarousel({
       </div>
 
       {/* page counter chip */}
-      <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur">
+      <span
+        className="pointer-events-none absolute right-2.5 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur"
+        style={{ top: fs ? "max(env(safe-area-inset-top), 0.75rem)" : "0.625rem" }}
+      >
         {index + 1}/{items.length}
       </span>
 
+      {/* fullscreen enter / exit */}
+      {fs ? (
+        <button
+          type="button"
+          onClick={exitFs}
+          aria-label="Exit fullscreen"
+          className="absolute left-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+          style={{ top: "max(env(safe-area-inset-top), 0.75rem)" }}
+        >
+          <X className="h-5 w-5" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={enterFs}
+          aria-label="Fullscreen"
+          className="absolute bottom-2.5 right-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </button>
+      )}
+
       {/* dots */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-2 flex items-center justify-center gap-1.5">
+      <div
+        className="pointer-events-none absolute inset-x-0 flex items-center justify-center gap-1.5"
+        style={{ bottom: fs ? "max(env(safe-area-inset-bottom), 0.75rem)" : "0.5rem" }}
+      >
         {items.map((_, i) => (
           <span
             key={i}

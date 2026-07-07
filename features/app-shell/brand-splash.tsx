@@ -54,7 +54,7 @@ export function BrandSplash() {
             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             className="relative flex flex-col items-center gap-4"
           >
-            <FrenzLogo size={96} className="drop-shadow-[0_8px_30px_rgba(139,92,246,0.45)]" />
+            <FrenzLogo size={96} priority className="drop-shadow-[0_8px_30px_rgba(139,92,246,0.45)]" />
             <motion.span
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}

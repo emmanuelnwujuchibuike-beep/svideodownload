@@ -1,4 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ReactElement } from "react";
 
 /**
@@ -10,6 +12,14 @@ import type { ReactElement } from "react";
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_ALT =
   "FrenzSave — Download and meet new friends with the latest news and reels";
+
+// The real brand mark, inlined as a data URI — Satori renders synchronously, so
+// a data URI (no network fetch) is the reliable way to embed it. Read once at
+// module load from the same source every other logo touchpoint uses (see
+// components/brand/frenz-logo.tsx).
+const iconDataUri = `data:image/png;base64,${readFileSync(
+  join(process.cwd(), "public", "brand", "frenz-icon-og.png"),
+).toString("base64")}`;
 
 export function OgImage({
   headline = "Download & meet new friends with the latest news and reels",
@@ -47,24 +57,7 @@ export function OgImage({
 
       {/* Logo lockup */}
       <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 92,
-            height: 92,
-            borderRadius: 24,
-            background: "linear-gradient(135deg, #2563eb, #22d3ee)",
-            color: "white",
-            fontSize: 60,
-            fontWeight: 800,
-            letterSpacing: -2,
-            paddingBottom: 4,
-          }}
-        >
-          F
-        </div>
+        <img src={iconDataUri} width={92} height={92} alt="" style={{ borderRadius: 20 }} />
         <div style={{ display: "flex", fontSize: 54, fontWeight: 800, color: "white" }}>
           <span style={{ color: "white" }}>Frenz</span>
           <span style={{ color: "#60a5fa" }}>Save</span>

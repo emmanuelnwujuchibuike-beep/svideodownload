@@ -47,7 +47,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
       <div className="container flex h-16 items-center justify-between">
         {/* Brand — hidden on mobile social surfaces (plain, full-bleed top bar) */}
         <Link href="/" className={cn("items-center", social ? "hidden lg:flex" : "flex")} onClick={() => setOpen(false)}>
-          <FrenzWordmark size={32} />
+          <FrenzWordmark size={32} priority />
         </Link>
 
         {/* Desktop nav — only at lg+; iPad-portrait (md) uses the roomy drawer so

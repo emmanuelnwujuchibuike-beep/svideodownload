@@ -88,7 +88,7 @@ export function AppSidebar({ handle }: { handle: string | null }) {
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col overflow-hidden border-r border-border/60 bg-gradient-to-b from-card/70 to-card/30 px-3 py-4 backdrop-blur-xl lg:flex">
       {/* Brand */}
       <Link href="/home" className="mb-6 flex shrink-0 items-center px-2">
-        <FrenzWordmark size={34} textClassName="text-lg" />
+        <FrenzWordmark size={34} textClassName="text-lg" priority />
       </Link>
 
       {/* Scrollable middle — nav + spaces. Keeps the Premium card always visible

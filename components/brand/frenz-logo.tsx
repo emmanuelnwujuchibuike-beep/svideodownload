@@ -1,69 +1,62 @@
+import Image from "next/image";
+
 import { cn } from "@/lib/utils";
 
 /**
  * The Frenz "F" mark — the single source of truth for the brand logo.
  *
- * A premium, luxury F: a bold rounded letterform in an indigo→violet→fuchsia
- * gradient with a subtle glossy highlight and a sparkle accent. Pure SVG (no
- * hooks) so it works in Server and Client Components and stays crisp at any size.
- * <FrenzLogo /> = the mark alone · <FrenzMark /> = the mark inside a luxury tile ·
+ * Real artwork, not a hand-drawn glyph: a glass/gradient F with an integrated
+ * play-triangle notch on its own rounded-square tile (`public/brand/frenz-icon-master.png`,
+ * cropped tight from the delivered source). This one file is now what renders
+ * everywhere the brand mark appears — favicon, apple-touch-icon, PWA manifest
+ * icons, the push-notification icon, the Open Graph/Twitter share card, and
+ * every in-app usage below — so there is exactly one logo asset in the whole
+ * product. The un-cropped delivered artwork lives at
+ * `public/brand/frenz-mark-source.jpg` and the icon+wordmark lockup at
+ * `public/brand/frenz-lockup-master.png`, kept for future re-exports.
+ *
+ * <FrenzLogo /> = the mark alone · <FrenzMark /> = the mark with a drop shadow ·
  * <FrenzWordmark /> = mark + "Frenz".
  */
-export function FrenzLogo({ className, size = 32 }: { className?: string; size?: number }) {
+export function FrenzLogo({
+  className,
+  size = 32,
+  priority = false,
+}: {
+  className?: string;
+  size?: number;
+  /** Set true for chrome that's always visible immediately (persistent nav,
+   * full-page splash) — everywhere else it lazy-loads like any other image. */
+  priority?: boolean;
+}) {
   return (
-    <svg
+    <Image
+      src="/brand/frenz-icon-master.png"
+      alt="Frenz"
       width={size}
       height={size}
-      viewBox="0 0 48 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      role="img"
-      aria-label="Frenz"
-    >
-      <defs>
-        <linearGradient id="frenz-f" x1="10" y1="6" x2="40" y2="44" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#6366F1" />
-          <stop offset="0.52" stopColor="#8B5CF6" />
-          <stop offset="1" stopColor="#D946EF" />
-        </linearGradient>
-        <linearGradient id="frenz-gloss" x1="14" y1="7" x2="14" y2="24" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#ffffff" stopOpacity="0.55" />
-          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-
-      {/* F — stem + top arm + mid arm, all rounded, one gradient */}
-      <rect x="14.5" y="7" width="8.5" height="34" rx="4.25" fill="url(#frenz-f)" />
-      <rect x="14.5" y="7" width="25.5" height="8.5" rx="4.25" fill="url(#frenz-f)" />
-      <rect x="14.5" y="19.5" width="18.5" height="8" rx="4" fill="url(#frenz-f)" />
-      {/* Glossy highlight down the stem for a premium sheen */}
-      <rect x="16.4" y="8.6" width="3" height="16" rx="1.5" fill="url(#frenz-gloss)" />
-
-      {/* Luxury 4-point sparkle */}
-      <path
-        d="M36.4 19.6 l1.15 2.55 2.55 1.15 -2.55 1.15 -1.15 2.55 -1.15 -2.55 -2.55 -1.15 2.55 -1.15 z"
-        fill="#22D3EE"
-      />
-    </svg>
+      priority={priority}
+      className={cn("shrink-0 rounded-[22%]", className)}
+    />
   );
 }
 
-/**
- * The mark inside a soft white rounded tile with a glow — the "app icon" lockup
- * used as a hero (e.g. the login collage centerpiece).
- */
-export function FrenzMark({ className, size = 72 }: { className?: string; size?: number }) {
+/** The mark with a soft brand-colored drop shadow — used as a hero (e.g. the login collage centerpiece). */
+export function FrenzMark({
+  className,
+  size = 72,
+  priority,
+}: {
+  className?: string;
+  size?: number;
+  priority?: boolean;
+}) {
   return (
-    <span
-      className={cn(
-        "relative inline-flex items-center justify-center rounded-[28%] bg-white shadow-[0_18px_50px_-12px_rgba(124,58,237,0.55)] ring-1 ring-black/5",
-        className,
-      )}
-      style={{ width: size, height: size }}
-    >
-      <FrenzLogo size={Math.round(size * 0.62)} />
-    </span>
+    <FrenzLogo
+      size={size}
+      priority={priority}
+      className={cn("shadow-[0_18px_50px_-12px_rgba(124,58,237,0.55)]", className)}
+    />
   );
 }
 
@@ -72,14 +65,16 @@ export function FrenzWordmark({
   className,
   size = 30,
   textClassName,
+  priority,
 }: {
   className?: string;
   size?: number;
   textClassName?: string;
+  priority?: boolean;
 }) {
   return (
     <span className={cn("inline-flex items-center gap-2 font-bold", className)}>
-      <FrenzLogo size={size} />
+      <FrenzLogo size={size} priority={priority} />
       <span className={cn("text-gradient text-[17px] tracking-tight", textClassName)}>Frenz</span>
     </span>
   );

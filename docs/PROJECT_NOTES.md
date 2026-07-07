@@ -9,9 +9,23 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑07 (scroll/render audit across webapp + public site; emoji-in-UI sweep)._
+_Last updated: 2026‑07‑07 (real brand logo replaces the placeholder F everywhere)._
 
 ---
+
+## 2026‑07‑07 highlights (batch 11)
+
+- **The real Frenz logo replaced the placeholder F, everywhere.** Every logo
+  asset in the product — the browser-tab favicon, the iOS home-screen icon,
+  the PWA install icons, the push-notification icon, the Open Graph/Twitter
+  share card, and the in-app mark used in the sidebar, site header, and
+  install/splash screens — had been a programmatic stand-in (a plain "F"
+  letter on a flat gradient) since day one, never the finished design. The
+  owner supplied the actual artwork (a glass, gradient F with an integrated
+  play-triangle notch); it's now cropped to one master image and every one
+  of those touchpoints is generated from it, so there's exactly one logo
+  asset in the whole product going forward. The maskable PWA icon specifically
+  got extra safe-zone padding so an OS circular icon mask can't clip it.
 
 ## 2026‑07‑07 highlights (batch 10)
 

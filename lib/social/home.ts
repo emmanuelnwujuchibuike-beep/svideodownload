@@ -16,10 +16,14 @@ export interface HomeProfile {
 }
 
 /**
- * Header/right-rail identity card for the signed-in user. Cached briefly because
- * it runs on the home page's blocking path and sums likes across the user's posts
- * — recomputing that on every navigation is wasteful; 20s staleness is invisible
- * for a header stat.
+ * Identity check used on the home/downloads blocking path (decides the
+ * welcome-redirect + the greeting name) and by the persistent shell layouts.
+ * Cached briefly since it runs on that blocking path — 20s staleness is
+ * invisible for a header. Deliberately does NOT compute `likesCount` (no
+ * current route renders it — the public profile page has its own independent
+ * stats query); summing `likes_count` across a user's posts here would scan up
+ * to 500 rows on every uncached load of a page that never displays the number.
+ * If a surface needs it again, fetch it in that surface's own Suspense slice.
  */
 export async function getHomeProfile(userId: string): Promise<HomeProfile | null> {
   if (!hasSupabase) return null;
@@ -45,18 +49,6 @@ async function loadHomeProfile(userId: string): Promise<HomeProfile | null> {
       following_count: number | null;
     };
 
-    // Total likes received across the user's published posts.
-    let likesCount = 0;
-    const { data: posts } = await db
-      .from("posts")
-      .select("likes_count")
-      .eq("publisher_id", userId)
-      .eq("status", "published")
-      .limit(500);
-    for (const row of (posts ?? []) as { likes_count: number | null }[]) {
-      likesCount += row.likes_count ?? 0;
-    }
-
     return {
       id: p.id,
       handle: p.handle,
@@ -65,7 +57,7 @@ async function loadHomeProfile(userId: string): Promise<HomeProfile | null> {
       isVerified: p.is_verified ?? false,
       followingCount: p.following_count ?? 0,
       followersCount: p.followers_count ?? 0,
-      likesCount,
+      likesCount: 0,
     };
   } catch {
     return null;

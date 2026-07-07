@@ -4,8 +4,6 @@ import { AppOverlays } from "@/features/app-shell/app-overlays";
 import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
-import { getHomeProfile } from "@/lib/social/home";
-import { createClient } from "@/lib/supabase/server";
 
 /**
  * Profile pages get the same shell as the rest of the app on desktop — the
@@ -13,27 +11,15 @@ import { createClient } from "@/lib/supabase/server";
  * On mobile the page's own top bar + the bottom MobileNav own navigation (the
  * desktop sidebar/topbar are hidden on small screens), so nothing is duplicated.
  *
- * Anonymous-safe: public profiles still render for signed-out visitors
- * (`handle = null`); each page keeps its own guard.
+ * Deliberately synchronous — no auth/profile fetch. `handle` only exists for
+ * `AppSidebar`'s prop signature (its nav build ignores it); the shell must
+ * paint instantly regardless of auth state, never block on a round-trip.
+ * Each child page keeps its own guard.
  */
-export default async function ProfileSectionLayout({ children }: { children: ReactNode }) {
-  let handle: string | null = null;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      const profile = await getHomeProfile(user.id);
-      handle = profile?.handle ?? null;
-    }
-  } catch {
-    /* anonymous — render the shell in signed-out mode */
-  }
-
+export default function ProfileSectionLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
-      <AppSidebar handle={handle} />
+      <AppSidebar handle={null} />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Desktop top bar — mobile uses the page's own SiteHeader instead */}
         <div className="hidden lg:block">

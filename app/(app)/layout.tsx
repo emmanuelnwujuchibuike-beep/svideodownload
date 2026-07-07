@@ -9,8 +9,6 @@ import { PresenceTracker } from "@/features/friends/use-presence";
 import { NotificationLiveToast } from "@/features/notifications/live-toast";
 import { ReactionFloatLayer } from "@/features/ui/reaction-float";
 import { Toaster } from "@/features/ui/toast";
-import { getHomeProfile } from "@/lib/social/home";
-import { createClient } from "@/lib/supabase/server";
 
 /**
  * Persistent app shell for signed-in surfaces. Rendered ONCE and preserved across
@@ -18,27 +16,18 @@ import { createClient } from "@/lib/supabase/server";
  * and modals never reload — only the page content swaps. This is what makes
  * navigation feel native/instant instead of a full page rebuild each time.
  *
- * Anonymous-safe: public (app) pages (Explore, profiles) still render for
- * signed-out visitors with `handle = null`; each page keeps its own auth guard.
+ * Deliberately synchronous (no auth/profile fetch): the shell must paint in the
+ * first render pass, never block on a network round-trip (Stage 1 of the
+ * loading architecture — see loading-architecture memory). `AppSidebar` takes a
+ * `handle` prop only for signature stability (its own nav build ignores it —
+ * see the comment on `buildNav`); the real per-user handle it needs elsewhere
+ * (e.g. MobileNav's profile link) comes from the client-cached `/api/me` via
+ * `useEntitlements`, not a server fetch here. Each page keeps its own auth guard.
  */
-export default async function AppLayout({ children }: { children: ReactNode }) {
-  let handle: string | null = null;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      const profile = await getHomeProfile(user.id);
-      handle = profile?.handle ?? null;
-    }
-  } catch {
-    /* anonymous — render the shell in signed-out mode */
-  }
-
+export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
-      <AppSidebar handle={handle} />
+      <AppSidebar handle={null} />
       <div className="flex min-w-0 flex-1 flex-col">
         <AppTopbar />
         {children}

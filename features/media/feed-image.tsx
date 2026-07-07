@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import Image from "next/image";
 import { useRef, useState } from "react";
 
 import { WowSolid } from "@/components/brand/wow-icon";
@@ -71,8 +72,20 @@ export function FeedImage({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl" />
+      {/* Blurred backdrop fills any letterbox space around the contained image.
+          Deliberately a separate, tiny (16px) optimized fetch — not the full-res
+          `src` — so it downloads near-instantly instead of duplicating the
+          full-quality image the foreground already requests (Loading Architecture:
+          never load full-resolution images just to blur them). */}
+      <Image
+        src={src}
+        alt=""
+        aria-hidden
+        width={16}
+        height={16}
+        quality={20}
+        className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl"
+      />
       {/* Foreground: next/image (AVIF/WebP + right-sized) when the natural size is
           known; otherwise a plain lazy <img> at natural aspect (older posts). */}
       {hasDims ? (

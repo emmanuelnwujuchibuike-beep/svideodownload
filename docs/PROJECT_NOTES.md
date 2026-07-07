@@ -13,6 +13,25 @@ _Last updated: 2026‑07‑06 (fullscreen video, loading engine in Core, PWA aut
 
 ---
 
+## 2026‑07‑07 highlights (batch 4)
+
+- **Reel albums:** a reel made of several videos now supports the exact gesture
+  the spec called for — vertical swipe still advances to the next REEL (native
+  deck scroll, untouched), horizontal swipe moves between the album's videos.
+  The two never conflict; position dots show which video you're on.
+- **Send on Reels:** the same paper‑plane Share sheet from the feed now lives on
+  both reel action‑rail layouts (mobile rail and the desktop persistent sidebar).
+- **Wow reaction picker (slice 2):** long‑press the Wow button for 8 flavors
+  (Love/Fire/Funny/Applause/Surprised/Celebrate/Insightful/Support). Stored as a
+  nullable `emotion` column on the SAME reaction row (migration 0033) — counts,
+  notifications and every existing query are unaffected; picking a new flavor
+  updates in place instead of erroring. The read path is 42703‑tolerant by
+  design: a naive 3‑column select failing on a pre‑migration database would have
+  silently blanked every viewer's like/save state, not just the new field, so
+  it falls back automatically. The chosen flavor now survives a page reload.
+
+**Owner action:** apply migration **0033** in Supabase (alongside 0030/0031/0032).
+
 ## 2026‑07‑06 highlights (batch 3)
 
 - **Chat is truly instant now:** the live stream (`postgres_changes`) has no

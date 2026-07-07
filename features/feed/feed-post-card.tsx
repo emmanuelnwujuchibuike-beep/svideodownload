@@ -35,6 +35,7 @@ import { MediaCarousel } from "@/features/media/media-carousel";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 
+import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
 import { RepostBurst } from "@/features/social/repost-burst";
 import { toast } from "@/features/ui/toast";
 
@@ -107,6 +108,10 @@ function FeedPostCardImpl({
   const [repostersOpen, setRepostersOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareReady, setShareReady] = useState(false);
+  // Long-press Wow → the reaction picker; the picked glyph replaces the icon.
+  const [reactionsOpen, setReactionsOpen] = useState(false);
+  const [myEmotion, setMyEmotion] = useState<string | null>(item.viewerReactionEmotion ?? null);
+  const wowPress = useLongPress(() => setReactionsOpen(true));
   // Gate the code-split sheets: mount only after first open (keeps their chunks
   // out of the feed until actually needed, then stays mounted for exit animations).
   const [editReady, setEditReady] = useState(false);
@@ -121,6 +126,7 @@ function FeedPostCardImpl({
     setOptionsOpen(true);
   });
 
+  // Plain toggle (Save, and the base Like on/off) — unchanged behavior.
   const react = async (type: "like" | "save") => {
     const isLike = type === "like";
     const cur = isLike ? liked : saved;
@@ -128,6 +134,7 @@ function FeedPostCardImpl({
     if (isLike) {
       setLiked(next);
       setLikes((n) => n + (next ? 1 : -1));
+      if (!next) setMyEmotion(null);
     } else setSaved(next);
     try {
       const res = await fetch(`/api/posts/${item.id}/react`, {
@@ -142,6 +149,30 @@ function FeedPostCardImpl({
         setLiked(cur);
         setLikes((n) => n + (next ? -1 : 1));
       } else setSaved(cur);
+    }
+  };
+
+  // Reaction picker: always ends in a Wow (liked=true) with a specific flavor,
+  // whether this is a fresh like or the user is just changing their flavor.
+  const reactWithEmotion = async (emotion: ReactionEmotion) => {
+    const wasLiked = liked;
+    const prevEmotion = myEmotion;
+    setLiked(true);
+    if (!wasLiked) setLikes((n) => n + 1);
+    setMyEmotion(emotion);
+    try {
+      const res = await fetch(`/api/posts/${item.id}/react`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "like", emotion }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      if (!wasLiked) {
+        setLiked(false);
+        setLikes((n) => n - 1);
+      }
+      setMyEmotion(prevEmotion);
     }
   };
 
@@ -469,17 +500,28 @@ function FeedPostCardImpl({
           (Download, …) lives in the ••• overflow so content stays the focus. */}
       <div className="mx-3 mb-3 mt-1 flex items-center justify-between rounded-2xl bg-secondary/40 px-1 py-1 ring-1 ring-inset ring-border/40">
         <div className="flex items-center">
-          <ActionButton
-            active={liked}
-            onClick={(e) => {
-              if (!liked) floatReaction(e.clientX, e.clientY);
-              void react("like");
-            }}
-            icon={liked ? WowSolid : WowOutline}
-            count={likes}
-            activeClass="text-violet-500"
-            label="Wow"
-          />
+          <span className="relative inline-flex">
+            <ActionButton
+              active={liked}
+              onClick={(e) => {
+                if (!liked) floatReaction(e.clientX, e.clientY);
+                void react("like");
+              }}
+              icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
+              count={likes}
+              activeClass="text-violet-500"
+              label="Wow"
+              press={wowPress}
+            />
+            <ReactionPicker
+              open={reactionsOpen}
+              onClose={() => setReactionsOpen(false)}
+              onPick={(emotion, _glyph, e) => {
+                floatReaction(e.clientX, e.clientY);
+                void reactWithEmotion(emotion);
+              }}
+            />
+          </span>
           <ActionButton icon={MessageCircle} count={item.commentsCount} onClick={() => onOpen(item, true)} label="Comment" />
           {!item.isOwner ? (
             <span className="relative inline-flex">

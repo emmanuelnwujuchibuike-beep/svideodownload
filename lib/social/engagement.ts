@@ -13,6 +13,8 @@ const hasSupabase =
 export interface ReactionState {
   liked: boolean;
   saved: boolean;
+  /** The Wow flavor picked via the reaction picker (null = the plain Wow). */
+  emotion?: string | null;
 }
 
 /** The viewer's like/save state for a post (both false when anonymous). */
@@ -22,16 +24,39 @@ export async function getViewerReactions(
 ): Promise<ReactionState> {
   if (!viewerId || !hasSupabase) return { liked: false, saved: false };
   try {
-    const { data } = await createAdminClient()
-      .from("post_reactions")
-      .select("type")
-      .eq("user_id", viewerId)
-      .eq("post_id", postId);
-    const types = new Set(((data ?? []) as { type: string }[]).map((r) => r.type));
-    return { liked: types.has("like"), saved: types.has("save") };
+    const rows = await fetchReactionRows(createAdminClient(), viewerId, [postId]);
+    const types = new Set(rows.map((r) => r.type));
+    return {
+      liked: types.has("like"),
+      saved: types.has("save"),
+      emotion: rows.find((r) => r.type === "like")?.emotion ?? null,
+    };
   } catch {
     return { liked: false, saved: false };
   }
+}
+
+/**
+ * Reads post_reactions rows, tolerant of migration 0033 (the `emotion`
+ * column) not being applied yet — a 3-column select that 42703s would
+ * otherwise silently blank out EVERY viewer's like/save state, not just the
+ * emotion. Shared by the post page and the home/reels feed batch queries.
+ */
+export async function fetchReactionRows(
+  db: ReturnType<typeof createAdminClient>,
+  viewerId: string,
+  postIds: string[],
+): Promise<{ post_id: string; type: string; emotion: string | null }[]> {
+  if (postIds.length === 0) return [];
+  const { data, error } = await db
+    .from("post_reactions")
+    .select("post_id, type, emotion")
+    .eq("user_id", viewerId)
+    .in("post_id", postIds);
+  if (!error) return (data ?? []) as { post_id: string; type: string; emotion: string | null }[];
+  if (error.code !== "42703") return [];
+  const fallback = await db.from("post_reactions").select("post_id, type").eq("user_id", viewerId).in("post_id", postIds);
+  return ((fallback.data ?? []) as { post_id: string; type: string }[]).map((r) => ({ ...r, emotion: null }));
 }
 
 export interface CommentAuthor {

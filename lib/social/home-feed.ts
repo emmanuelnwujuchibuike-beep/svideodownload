@@ -2,6 +2,7 @@ import { cacheDelete, getCached } from "@/lib/cache";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { fetchReactionRows } from "./engagement";
 import { getTrendingSettings } from "./feed";
 import type { MediaKind } from "./posts";
 import { followedReposters, repostCounts, viewerReposts } from "./reposts";
@@ -53,6 +54,8 @@ export interface FeedItem {
   publisher: FeedPublisher;
   viewerLiked: boolean;
   viewerSaved: boolean;
+  /** The Wow flavor the viewer picked (reaction picker) — null/undefined = plain Wow. */
+  viewerReactionEmotion?: string | null;
   isFollowing: boolean;
   isOwner: boolean;
   /** True when the post carries a poll (vote) — the card fetches + renders it. */
@@ -148,20 +151,23 @@ export async function getFeedItemById(id: string, viewerId: string | null): Prom
 
     let viewerLiked = false;
     let viewerSaved = false;
+    let viewerEmotion: string | null = null;
     let isFollowing = false;
     if (viewerId) {
-      const [{ count: blockedCount }, { data: reactions }, { count: followCount }] = await Promise.all([
+      const [{ count: blockedCount }, reactions, { count: followCount }] = await Promise.all([
         db
           .from("blocks")
           .select("blocker_id", { head: true, count: "exact" })
           .or(`and(blocker_id.eq.${row.publisher_id},blocked_id.eq.${viewerId}),and(blocker_id.eq.${viewerId},blocked_id.eq.${row.publisher_id})`),
-        db.from("post_reactions").select("type").eq("user_id", viewerId).eq("post_id", id),
+        fetchReactionRows(db, viewerId, [id]),
         db.from("follows").select("follower_id", { head: true, count: "exact" }).eq("follower_id", viewerId).eq("following_id", row.publisher_id),
       ]);
       if ((blockedCount ?? 0) > 0) return null;
-      for (const r of (reactions ?? []) as { type: string }[]) {
-        if (r.type === "like") viewerLiked = true;
-        else if (r.type === "save") viewerSaved = true;
+      for (const r of reactions) {
+        if (r.type === "like") {
+          viewerLiked = true;
+          viewerEmotion = r.emotion;
+        } else if (r.type === "save") viewerSaved = true;
       }
       isFollowing = (followCount ?? 0) > 0;
     }
@@ -207,6 +213,7 @@ export async function getFeedItemById(id: string, viewerId: string | null): Prom
       },
       viewerLiked,
       viewerSaved,
+      viewerReactionEmotion: viewerEmotion,
       isFollowing,
       isOwner: viewerId === row.publisher_id,
       hasPoll,
@@ -346,13 +353,11 @@ async function loadHomeFeed(
     if (rows.length === 0) return { items: [], nextOffset: null };
 
     const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
-    const [{ data: profs }, { data: privs }, { data: subs }, reactions, blocks] = await Promise.all([
+    const [{ data: profs }, { data: privs }, { data: subs }, reactionRows, blocks] = await Promise.all([
       db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, trust_score").in("id", publisherIds),
       db.from("privacy_settings").select("user_id, show_in_recommendations").in("user_id", publisherIds),
       db.from("subscriptions").select("user_id, plan, status").in("user_id", publisherIds).in("status", ["active", "trialing"]),
-      viewerId
-        ? db.from("post_reactions").select("post_id, type").eq("user_id", viewerId).in("post_id", rows.map((r) => r.id))
-        : Promise.resolve({ data: [] as { post_id: string; type: string }[] }),
+      viewerId ? fetchReactionRows(db, viewerId, rows.map((r) => r.id)) : Promise.resolve([]),
       viewerId
         ? db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`)
         : Promise.resolve({ data: [] as { blocker_id: string; blocked_id: string }[] }),
@@ -375,9 +380,12 @@ async function loadHomeFeed(
     const planById = new Map(((subs ?? []) as { user_id: string; plan: BillingPlan }[]).map((s) => [s.user_id, s.plan]));
     const liked = new Set<string>();
     const saved = new Set<string>();
-    for (const r of (reactions.data ?? []) as { post_id: string; type: string }[]) {
-      if (r.type === "like") liked.add(r.post_id);
-      else if (r.type === "save") saved.add(r.post_id);
+    const emotionByPost = new Map<string, string | null>();
+    for (const r of reactionRows) {
+      if (r.type === "like") {
+        liked.add(r.post_id);
+        emotionByPost.set(r.post_id, r.emotion);
+      } else if (r.type === "save") saved.add(r.post_id);
     }
     const blocked = new Set<string>();
     for (const b of (blocks.data ?? []) as { blocker_id: string; blocked_id: string }[]) {
@@ -432,6 +440,7 @@ async function loadHomeFeed(
         },
         viewerLiked: liked.has(r.id),
         viewerSaved: saved.has(r.id),
+        viewerReactionEmotion: emotionByPost.get(r.id) ?? null,
         isFollowing: followingSet.has(r.publisher_id),
         isOwner: viewerId === r.publisher_id,
         hasPoll: false,
@@ -591,10 +600,10 @@ async function surfaceFollowedReposts(
   if (rows.length === 0) return [];
 
   const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
-  const [{ data: profs }, { data: subs }, { data: reactions }, { data: blocks }] = await Promise.all([
+  const [{ data: profs }, { data: subs }, reactionRows, { data: blocks }] = await Promise.all([
     db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended").in("id", publisherIds),
     db.from("subscriptions").select("user_id, plan").in("user_id", publisherIds).in("status", ["active", "trialing"]),
-    db.from("post_reactions").select("post_id, type").eq("user_id", viewerId).in("post_id", rows.map((r) => r.id)),
+    fetchReactionRows(db, viewerId, rows.map((r) => r.id)),
     db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`),
   ]);
 
@@ -611,9 +620,12 @@ async function surfaceFollowedReposts(
   }
   const liked = new Set<string>();
   const saved = new Set<string>();
-  for (const r of (reactions ?? []) as { post_id: string; type: string }[]) {
-    if (r.type === "like") liked.add(r.post_id);
-    else if (r.type === "save") saved.add(r.post_id);
+  const emotionByPost = new Map<string, string | null>();
+  for (const r of reactionRows) {
+    if (r.type === "like") {
+      liked.add(r.post_id);
+      emotionByPost.set(r.post_id, r.emotion);
+    } else if (r.type === "save") saved.add(r.post_id);
   }
 
   rows = rows.filter((r) => !suspended.has(r.publisher_id) && !blocked.has(r.publisher_id)).slice(0, max);
@@ -673,6 +685,7 @@ async function surfaceFollowedReposts(
       },
       viewerLiked: liked.has(r.id),
       viewerSaved: saved.has(r.id),
+      viewerReactionEmotion: emotionByPost.get(r.id) ?? null,
       isFollowing: followingSet.has(r.publisher_id),
       isOwner: false,
       hasPoll: pollSet.has(r.id),

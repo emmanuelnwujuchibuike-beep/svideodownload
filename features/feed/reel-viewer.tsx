@@ -25,6 +25,7 @@ import {
   Pencil,
   Play,
   Repeat2,
+  Send as SendIcon,
   Share2,
   UserPlus,
   UserX,
@@ -34,7 +35,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { RichText } from "@/components/social/rich-text";
@@ -46,7 +47,9 @@ import { floatReaction } from "@/features/ui/reaction-float";
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { RepostComposer } from "@/features/social/repost-composer";
 import { RepostOptionsSheet } from "@/features/social/repost-options";
+import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
 import { RepostersSheet } from "@/features/social/reposters-sheet";
+import { ShareSheet } from "@/features/social/share-sheet";
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { RepostBurst } from "@/features/social/repost-burst";
@@ -363,6 +366,17 @@ function ReelCard({
   const [composerCaption, setComposerCaption] = useState<string | null>(null);
   const [repostOptionsOpen, setRepostOptionsOpen] = useState(false);
   const [repostersOpen, setRepostersOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  // Long-press Wow → the reaction picker; the picked glyph replaces the icon.
+  // Two independent instances: the action rail (visible on every size) and the
+  // desktop-only persistent comments sidebar render their OWN Wow button — both
+  // can be on screen together on large screens, so each needs its own picker
+  // state or opening one would pop both simultaneously.
+  const [myEmotion, setMyEmotion] = useState<string | null>(item.viewerReactionEmotion ?? null);
+  const [reactionsOpen, setReactionsOpen] = useState(false);
+  const wowPress = useLongPress(() => setReactionsOpen(true));
+  const [sidebarReactionsOpen, setSidebarReactionsOpen] = useState(false);
+  const sidebarWowPress = useLongPress(() => setSidebarReactionsOpen(true));
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
   // Holding the Repost button opens the advanced options sheet.
   const repostPress = useLongPress(() => setRepostOptionsOpen(true));
@@ -371,6 +385,42 @@ function ReelCard({
   const [srcReady, setSrcReady] = useState(false);
   const [qualityPref, setQualityPref] = useState<QualityPreference>("auto");
   const fetched = useRef(false);
+
+  // Album reels — one reel made of several videos. Gesture priority per the
+  // spec: vertical swipe = next REEL (native deck scroll), horizontal swipe =
+  // next VIDEO inside this reel (handled in onPointerUp; it takes the place of
+  // the tab switch for album reels so the two never conflict).
+  const albumVideos = useMemo(
+    () => (item.mediaItems ?? []).filter((m) => m.kind === "video"),
+    [item.mediaItems],
+  );
+  const isAlbum = albumVideos.length > 1;
+  const [slide, setSlide] = useState(0);
+  const goSlide = useCallback(
+    (dir: "left" | "right") => {
+      setSlide((s) => {
+        const next = dir === "left" ? Math.min(albumVideos.length - 1, s + 1) : Math.max(0, s - 1);
+        if (next !== s) {
+          setSrcReady(false); // autoplay waits for the new source
+          setProgress(0);
+          setCur(0);
+          try {
+            navigator.vibrate?.(6);
+          } catch {
+            /* no haptics */
+          }
+        }
+        return next;
+      });
+    },
+    [albumVideos.length],
+  );
+  // What actually plays right now (slide 0 = the reel's own media, so
+  // single-video reels are completely unaffected).
+  const slideSrc = isAlbum ? (albumVideos[slide]?.url ?? item.mediaUrl) : item.mediaUrl;
+  const slidePoster = isAlbum ? (albumVideos[slide]?.thumbnailUrl ?? item.thumbnailUrl) : item.thumbnailUrl;
+  // Per-slide resume key (slide 0 keeps the plain post id).
+  const playbackKey = isAlbum && slide > 0 ? `${item.id}#${slide}` : item.id;
 
   // Client-only read (localStorage) after mount — avoids an SSR/CSR mismatch.
   useEffect(() => {
@@ -386,17 +436,17 @@ function ReelCard({
   // that will never exist. A NOT-YET-ready encode (a just-uploaded reel) plays
   // the MP4 immediately instead of hanging on a manifest that doesn't exist yet.
   const hlsUrl =
-    item.streamUid && !item.streamFailed && (item.streamReady !== false || !item.mediaUrl)
+    (!isAlbum || slide === 0) && item.streamUid && !item.streamFailed && (item.streamReady !== false || !item.mediaUrl)
       ? streamHlsUrl(item.streamUid)
       : null;
-  const native = !!item.mediaUrl || !!hlsUrl;
+  const native = !!slideSrc || !!hlsUrl;
   const markSrcReady = useCallback(() => setSrcReady(true), []);
   // HLS (hls.js) buffers whatever is attached, so only wire the ACTIVE + NEXT reel
   // (predictive preload of exactly the next clip; decoders released for the rest).
   // Plain MP4 can attach across the nearby window — the `preload` attribute keeps
   // the far ones to metadata only, so it's cheap.
   const attachSource = hlsUrl ? isActive || isNext : nearby;
-  useAdaptiveSource(video, { hlsUrl, src: item.mediaUrl, poster: item.thumbnailUrl, active: attachSource, onReady: markSrcReady, postId: item.id });
+  useAdaptiveSource(video, { hlsUrl, src: slideSrc, poster: slidePoster, active: attachSource, onReady: markSrcReady, postId: item.id });
 
   // Report readiness so the deck can extend its scroll ceiling. Stream clips
   // buffer themselves; native clips report on canplay/error, with a fallback so a
@@ -559,6 +609,7 @@ function ReelCard({
     if (isLike) {
       setLiked(next);
       setLikes((n) => n + (next ? 1 : -1));
+      if (!next) setMyEmotion(null);
     } else setSaved(next);
     try {
       const res = await fetch(`/api/posts/${item.id}/react`, {
@@ -572,6 +623,29 @@ function ReelCard({
         setLiked(curState);
         setLikes((n) => n + (next ? -1 : 1));
       } else setSaved(curState);
+    }
+  };
+
+  // Reaction picker: always ends in a Wow (liked=true) with a specific flavor.
+  const reactWithEmotion = async (emotion: ReactionEmotion) => {
+    const wasLiked = liked;
+    const prevEmotion = myEmotion;
+    setLiked(true);
+    if (!wasLiked) setLikes((n) => n + 1);
+    setMyEmotion(emotion);
+    try {
+      const res = await fetch(`/api/posts/${item.id}/react`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "like", emotion }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      if (!wasLiked) {
+        setLiked(false);
+        setLikes((n) => n - 1);
+      }
+      setMyEmotion(prevEmotion);
     }
   };
 
@@ -807,12 +881,16 @@ function ReelCard({
       return;
     }
     if (moved.current) {
-      // A decisive horizontal drag (not the native vertical scroll) switches
-      // tabs instantly — a no-op where there's nothing to switch (modal variant,
-      // no tabs). Swiping left reveals the next tab (Following); right goes back.
-      if (axisLock.current === "h" && startX !== undefined && onSwipeTab) {
+      // A decisive horizontal drag (not the native vertical scroll): on an
+      // ALBUM reel it moves between the album's videos (spec: horizontal =
+      // next video, vertical = next reel — never both); on a normal reel it
+      // switches For You/Following (page variant; no-op in the modal).
+      if (axisLock.current === "h" && startX !== undefined) {
         const dx = e.clientX - startX;
-        if (Math.abs(dx) > 64) onSwipeTab(dx < 0 ? "left" : "right");
+        if (Math.abs(dx) > 64) {
+          if (isAlbum) goSlide(dx < 0 ? "left" : "right");
+          else onSwipeTab?.(dx < 0 ? "left" : "right");
+        }
       }
       return; // a scroll — leave vertical movement to the native scroller
     }
@@ -843,17 +921,32 @@ function ReelCard({
       {/* Cover — always painted underneath so a snapped-in reel never flashes black.
           The clip shows at its TRUE aspect (object-contain — nothing ever cropped);
           the blurred backdrop fills whatever the letterbox leaves. */}
-      {item.thumbnailUrl ? (
+      {slidePoster ? (
         <div className="absolute inset-0 bg-black">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.thumbnailUrl} alt="" aria-hidden loading="lazy" decoding="async" className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
+          <img src={slidePoster} alt="" aria-hidden loading="lazy" decoding="async" className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.thumbnailUrl} alt="" aria-hidden loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-contain" />
+          <img src={slidePoster} alt="" aria-hidden loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-contain" />
         </div>
       ) : null}
 
       {/* Top / bottom legibility scrims */}
       <div className={cn("pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-black/50 to-transparent transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")} />
+
+      {/* Album position dots — this reel has several videos; swipe sideways */}
+      {isAlbum ? (
+        <div className="pointer-events-none absolute left-1/2 top-[calc(max(0.75rem,env(safe-area-inset-top))+2.9rem)] z-20 flex -translate-x-1/2 items-center gap-1.5">
+          {albumVideos.map((_, i) => (
+            <span
+              key={i}
+              className={cn(
+                "h-1.5 rounded-full shadow-sm transition-all duration-300",
+                i === slide ? "w-5 bg-white" : "w-1.5 bg-white/45",
+              )}
+            />
+          ))}
+        </div>
+      ) : null}
 
       {/* Progress / scrubber (auto-hides). Drag to seek when we own the <video>. */}
       {(() => {
@@ -934,7 +1027,7 @@ function ReelCard({
             <video
               ref={video}
               // Source (HLS or MP4) is attached imperatively by useAdaptiveSource.
-              poster={item.thumbnailUrl ?? undefined}
+              poster={slidePoster ?? undefined}
               // Every reel repeats continuously while it's the one in view —
               // advancing only ever happens by the viewer's own scroll, never
               // automatically. Preloading of the upcoming clips is entirely
@@ -961,7 +1054,7 @@ function ReelCard({
               }}
               onPause={() => {
                 const v = video.current;
-                if (v) savePlaybackPosition(item.id, v.currentTime, v.duration);
+                if (v) savePlaybackPosition(playbackKey, v.currentTime, v.duration);
               }}
               onWaiting={() => setBuffering(true)}
               onPlaying={() => setBuffering(false)}
@@ -976,7 +1069,7 @@ function ReelCard({
                 }
                 // Resume where this reel last stopped (tab switch / reopen) —
                 // switching For You/Following continues, never restarts.
-                const resumeAt = getPlaybackPosition(item.id);
+                const resumeAt = getPlaybackPosition(playbackKey);
                 if (resumeAt !== null && Math.abs(v.currentTime - resumeAt) > 1) v.currentTime = resumeAt;
               }}
               onTimeUpdate={(e) => {
@@ -1082,17 +1175,29 @@ function ReelCard({
 
         {/* Refined action stack: Like · Comment · Repost · Save · More. Share and
             everything else live in the premium overflow sheet. */}
-        <RailButton
-          icon={liked ? WowSolid : WowOutline}
-          active={liked}
-          activeClass="text-violet-300"
-          count={likes}
-          label="Wow"
-          onClick={(e) => {
-            if (!liked) floatReaction(e.clientX, e.clientY);
-            void react("like");
-          }}
-        />
+        <span className="relative inline-flex">
+          <RailButton
+            icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
+            active={liked}
+            activeClass="text-violet-300"
+            count={likes}
+            label="Wow"
+            onClick={(e) => {
+              if (!liked) floatReaction(e.clientX, e.clientY);
+              void react("like");
+            }}
+            press={wowPress}
+          />
+          <ReactionPicker
+            open={reactionsOpen}
+            onClose={() => setReactionsOpen(false)}
+            align="left"
+            onPick={(emotion, _glyph, e) => {
+              floatReaction(e.clientX, e.clientY);
+              void reactWithEmotion(emotion);
+            }}
+          />
+        </span>
         <RailButton icon={MessageCircle} count={item.commentsCount} label="Comment" onClick={openComments} />
         <div className="relative flex flex-col items-center gap-1">
           <RepostBurst triggerKey={repostBurst} />
@@ -1117,6 +1222,7 @@ function ReelCard({
           ) : null}
           <RailButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-400" label="Repost" onClick={repost} press={repostPress} />
         </div>
+        <RailButton icon={SendIcon} label="Send" onClick={() => setShareOpen(true)} />
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
       </div>
 
@@ -1278,18 +1384,30 @@ function ReelCard({
               </p>
 
               <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
-                <SidebarAct
-                  icon={liked ? WowSolid : WowOutline}
-                  label="Wow"
-                  active={liked}
-                  activeClass="text-violet-500"
-                  count={likes}
-                  onClick={(e) => {
-                    if (!liked) floatReaction(e.clientX, e.clientY);
-                    void react("like");
-                  }}
-                />
+                <span className="relative inline-flex">
+                  <SidebarAct
+                    icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
+                    label="Wow"
+                    active={liked}
+                    activeClass="text-violet-500"
+                    count={likes}
+                    onClick={(e) => {
+                      if (!liked) floatReaction(e.clientX, e.clientY);
+                      void react("like");
+                    }}
+                    press={sidebarWowPress}
+                  />
+                  <ReactionPicker
+                    open={sidebarReactionsOpen}
+                    onClose={() => setSidebarReactionsOpen(false)}
+                    onPick={(emotion, _glyph, e) => {
+                      floatReaction(e.clientX, e.clientY);
+                      void reactWithEmotion(emotion);
+                    }}
+                  />
+                </span>
                 <SidebarAct icon={Repeat2} label="Repost" active={repostState.reposted} activeClass="text-emerald-500" count={repostState.count} onClick={repost} press={repostPress} />
+                <SidebarAct icon={SendIcon} label="Send" onClick={() => setShareOpen(true)} />
                 <SidebarAct icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-amber-400" onClick={() => react("save")} />
               </div>
 
@@ -1428,6 +1546,15 @@ function ReelCard({
 
       {/* Who reposted — behind the avatar cluster */}
       <RepostersSheet postId={item.id} open={repostersOpen} onClose={() => setRepostersOpen(false)} />
+
+      {/* Send — the same Share sheet as the feed (DMs, copy link, OS share) */}
+      <ShareSheet
+        postId={item.id}
+        title={title ?? undefined}
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        onRepost={item.isOwner ? undefined : () => openComposer("create", null)}
+      />
 
       {/* Inline editor — a creator edits caption/visibility (or deletes) without
           leaving the reel. */}

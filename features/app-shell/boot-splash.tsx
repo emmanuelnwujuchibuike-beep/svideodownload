@@ -13,7 +13,7 @@
  */
 const CSS = `
 #frenz-boot{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:#ffffff;transition:opacity .4s ease}
-@media (prefers-color-scheme:dark){#frenz-boot{background:#050816}}
+html.dark #frenz-boot{background:#050816}
 #frenz-boot.frenz-boot--hide{opacity:0;pointer-events:none}
 .frenz-boot__mark{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:20px;animation:frenz-boot-breathe 1.6s ease-in-out infinite}
 .frenz-boot__shine{position:absolute;inset:0;background:linear-gradient(115deg,transparent 40%,rgba(148,163,184,.45) 50%,transparent 60%);transform:translateX(-130%);animation:frenz-boot-shimmer 1.4s ease-in-out infinite}
@@ -26,9 +26,20 @@ const CSS = `
 // minimum so it reads as a loader, and a safety cap so it can never get stuck.
 const JS = `(function(){var el=document.getElementById('frenz-boot');if(!el)return;var start=Date.now();function hide(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){el.classList.add('frenz-boot--hide');setTimeout(function(){if(el&&el.parentNode)el.parentNode.removeChild(el)},440)},w)}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',hide)}else{hide()}setTimeout(hide,6000)})();`;
 
+// Must run BEFORE the <style> below is evaluated: resolves the SAME
+// light/dark decision next-themes will make (its own script, injected later
+// wherever <ThemeProvider> sits, hasn't run yet at this point) so the splash
+// paints in the theme the user actually chose — not just the device's raw OS
+// preference. Without this, someone who explicitly picked Light while their
+// phone's OS is in dark mode saw a dark flash on every cold entry, which on
+// iOS is EVERY time the installed app resumes after being backgrounded a
+// while (the OS frequently reloads it rather than truly restoring it).
+const THEME_JS = `(function(){try{var t=localStorage.getItem('theme');var dark=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(dark)document.documentElement.classList.add('dark')}catch(e){}})();`;
+
 export function BootSplash() {
   return (
     <>
+      <script dangerouslySetInnerHTML={{ __html: THEME_JS }} />
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div id="frenz-boot" aria-hidden="true">
         <span className="frenz-boot__mark">

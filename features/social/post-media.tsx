@@ -4,6 +4,7 @@ import { Play } from "lucide-react";
 import { useState } from "react";
 
 import { FeedVideo } from "@/features/media/feed-video";
+import { ImageViewer } from "@/features/feed/image-viewer";
 import { ReelViewer } from "@/features/feed/reel-viewer";
 import { MediaCarousel } from "@/features/media/media-carousel";
 import { SmartVideo } from "@/features/media/smart-video";
@@ -17,32 +18,44 @@ import type { FeedItem } from "@/lib/social/home-feed";
  */
 export function PostMedia({ item }: { item: FeedItem }) {
   const [reel, setReel] = useState(false);
+  const [reelSlide, setReelSlide] = useState(0);
   const [zoom, setZoom] = useState(false);
-  const [zoomSrc, setZoomSrc] = useState<string | null>(null);
+  const [imageSlide, setImageSlide] = useState(0);
 
   const isVideo = item.mediaKind === "video" && (item.mediaUrl || item.streamUid);
   const isImage = item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl);
 
   // Album post → the full swipeable carousel (counter, dots, in-view video
-  // autoplay), never just the cover. Tapping a photo zooms THAT photo; tapping
-  // a video opens the reel-quality viewer.
+  // autoplay), never just the cover. Tapping any slide opens the EXACT one
+  // tapped, in fullscreen, still swipeable through every other item — an
+  // all-video album opens the reel-quality viewer (seeded on that video); a
+  // photo-only or MIXED album opens the same rich immersive viewer photos
+  // get elsewhere, which renders every slide in order regardless of kind.
   if (item.mediaItems && item.mediaItems.length > 1) {
+    const allVideo = item.mediaItems.every((m) => m.kind === "video");
     return (
       <>
         <div className="overflow-hidden rounded-3xl border border-border/60 bg-black shadow-card">
           <MediaCarousel
             items={item.mediaItems}
-            onExpandItem={(_, m) => {
-              if (m.kind === "video") setReel(true);
-              else {
-                setZoomSrc(m.url);
+            onExpandItem={(index) => {
+              // An all-video album's slide indices line up with the reel
+              // viewer's own (video-only) album model; anything with even one
+              // photo goes through the image viewer instead, whose swipe
+              // stage indexes the FULL mixed array correctly regardless of
+              // which slide (photo or video) was actually tapped.
+              if (allVideo) {
+                setReelSlide(index);
+                setReel(true);
+              } else {
+                setImageSlide(index);
                 setZoom(true);
               }
             }}
           />
         </div>
-        {zoom && zoomSrc ? <ImageZoom src={zoomSrc} onClose={() => setZoom(false)} /> : null}
-        <ReelViewer items={reel ? [item] : null} startIndex={0} onClose={() => setReel(false)} />
+        {zoom ? <ImageViewer item={item} startIndex={imageSlide} onClose={() => setZoom(false)} /> : null}
+        <ReelViewer items={reel ? [item] : null} startIndex={0} startSlideIndex={reelSlide} onClose={() => setReel(false)} />
       </>
     );
   }

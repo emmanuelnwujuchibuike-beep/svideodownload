@@ -55,18 +55,33 @@ interface CommentsData {
  * Double-tap to like. Actions + caption overlay the image and auto-hide; a
  * comments sheet slides up on demand. Portaled to <body> so it sits above nav.
  */
-export function ImageViewer({ item, onClose }: { item: FeedItem | null; onClose: () => void }) {
+export function ImageViewer({
+  item,
+  startIndex = 0,
+  onClose,
+}: {
+  item: FeedItem | null;
+  /** Which slide of an album was actually tapped — not always the first. */
+  startIndex?: number;
+  onClose: () => void;
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
   return createPortal(
-    <AnimatePresence>{item ? <ImageStage key={item.id} item={item} onClose={onClose} /> : null}</AnimatePresence>,
+    <AnimatePresence>
+      {item ? <ImageStage key={item.id} item={item} startIndex={startIndex} onClose={onClose} /> : null}
+    </AnimatePresence>,
     document.body,
   );
 }
 
-function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) {
+function ImageStage({ item, startIndex = 0, onClose }: { item: FeedItem; startIndex?: number; onClose: () => void }) {
   const src = item.mediaUrl || item.thumbnailUrl || "";
+  // An album (>1 item) swipes through every photo/video right here in
+  // fullscreen, opening on the EXACT slide that was tapped.
+  const albumItems = item.mediaItems && item.mediaItems.length > 1 ? item.mediaItems : null;
+  const [slide, setSlide] = useState(() => Math.max(0, Math.min((albumItems?.length ?? 1) - 1, startIndex)));
   const [ui, setUi] = useState(true);
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
@@ -267,34 +282,47 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
           <MoreVertical className="h-5 w-5" />
         </button>
 
-        {/* Image — swipe down to dismiss (X/IG style) */}
-        <div
-          className="absolute inset-0 flex items-center justify-center"
-          onPointerDown={(e) => (startY.current = e.clientY)}
-          onPointerUp={(e) => {
-            if (startY.current !== null && e.clientY - startY.current > 90) onClose();
-            else onImgPointerUp(e);
-            startY.current = null;
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={src}
-            alt={title}
-            className={cn(
-              "select-none",
-              fullBleed ? "h-full w-full object-cover" : "max-h-full max-w-full object-contain",
-            )}
-            draggable={false}
-            onLoad={(e) => {
-              const img = e.currentTarget;
-              if (!img.naturalWidth || !img.naturalHeight || typeof window === "undefined") return;
-              const screen = window.innerWidth / window.innerHeight;
-              const ratio = img.naturalWidth / img.naturalHeight;
-              setFullBleed(Math.abs(ratio - screen) / screen < 0.22);
-            }}
+        {/* Media — swipe down to dismiss (X/IG style); an album also swipes
+            sideways through every photo/video, opening on the exact slide
+            that was tapped in the feed's carousel, never always the first. */}
+        {albumItems ? (
+          <AlbumSwipe
+            items={albumItems}
+            startIndex={slide}
+            onIndexChange={setSlide}
+            onTap={() => setUi((v) => !v)}
+            onDoubleTap={likeBurst}
+            onDismiss={onClose}
           />
-        </div>
+        ) : (
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            onPointerDown={(e) => (startY.current = e.clientY)}
+            onPointerUp={(e) => {
+              if (startY.current !== null && e.clientY - startY.current > 90) onClose();
+              else onImgPointerUp(e);
+              startY.current = null;
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={src}
+              alt={title}
+              className={cn(
+                "select-none",
+                fullBleed ? "h-full w-full object-cover" : "max-h-full max-w-full object-contain",
+              )}
+              draggable={false}
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                if (!img.naturalWidth || !img.naturalHeight || typeof window === "undefined") return;
+                const screen = window.innerWidth / window.innerHeight;
+                const ratio = img.naturalWidth / img.naturalHeight;
+                setFullBleed(Math.abs(ratio - screen) / screen < 0.22);
+              }}
+            />
+          </div>
+        )}
 
         {/* Double-tap heart */}
         <AnimatePresence>
@@ -551,6 +579,153 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
         />
       ) : null}
     </motion.div>
+  );
+}
+
+/**
+ * Fullscreen album — swipes horizontally through every photo/video of a
+ * multi-media post, opening on the exact slide that was tapped (never
+ * always the first). Reuses the same tap/double-tap/swipe-down-to-dismiss
+ * gesture model as a single photo: a tap toggles the chrome, a double-tap
+ * likes the post (comments/likes/caption stay post-level, matching how
+ * Instagram/TikTok carousel posts work — one thread for the whole post).
+ */
+function AlbumSwipe({
+  items,
+  startIndex,
+  onIndexChange,
+  onTap,
+  onDoubleTap,
+  onDismiss,
+}: {
+  items: NonNullable<FeedItem["mediaItems"]>;
+  startIndex: number;
+  onIndexChange: (i: number) => void;
+  onTap: () => void;
+  onDoubleTap: (x: number, y: number) => void;
+  onDismiss: () => void;
+}) {
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const [index, setIndex] = useState(startIndex);
+  const raf = useRef(0);
+  const startPt = useRef<{ x: number; y: number } | null>(null);
+  const moved = useRef(false);
+  const lastTap = useRef(0);
+
+  // Jump to the tapped slide instantly on mount — no smooth-scroll flash.
+  useEffect(() => {
+    const el = scroller.current;
+    if (el) el.scrollLeft = startIndex * el.clientWidth;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onScroll = () => {
+    cancelAnimationFrame(raf.current);
+    raf.current = requestAnimationFrame(() => {
+      const el = scroller.current;
+      if (!el || el.clientWidth === 0) return;
+      const i = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollLeft / el.clientWidth)));
+      setIndex(i);
+      onIndexChange(i);
+    });
+  };
+  useEffect(() => () => cancelAnimationFrame(raf.current), []);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    startPt.current = { x: e.clientX, y: e.clientY };
+    moved.current = false;
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!startPt.current || moved.current) return;
+    if (Math.abs(e.clientX - startPt.current.x) > 10 || Math.abs(e.clientY - startPt.current.y) > 10) moved.current = true;
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    const start = startPt.current;
+    startPt.current = null;
+    if (moved.current) {
+      // A real drag: a mostly-VERTICAL downward swipe dismisses (same as a
+      // single photo); a mostly-horizontal one is the album's own native
+      // swipe-between-slides — never misread as a tap or a dismiss.
+      if (start) {
+        const dx = e.clientX - start.x;
+        const dy = e.clientY - start.y;
+        if (Math.abs(dy) > Math.abs(dx) && dy > 90) onDismiss();
+      }
+      return;
+    }
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      lastTap.current = 0;
+      onDoubleTap(e.clientX, e.clientY);
+    } else {
+      lastTap.current = now;
+      setTimeout(() => {
+        if (lastTap.current && Date.now() - lastTap.current >= 280) onTap();
+      }, 290);
+    }
+  };
+
+  return (
+    <div className="absolute inset-0" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+      <div
+        ref={scroller}
+        onScroll={onScroll}
+        data-hscroll
+        className="flex h-full w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ touchAction: "pan-x" }}
+      >
+        {items.map((m, i) => (
+          <div key={i} className="relative flex h-full w-full shrink-0 snap-center items-center justify-center">
+            {/* blurred fill so a slide whose shape doesn't match the screen never letterboxes onto plain black */}
+            {(m.thumbnailUrl ?? (m.kind === "image" ? m.url : null)) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={(m.thumbnailUrl ?? m.url)!}
+                alt=""
+                aria-hidden
+                loading="lazy"
+                decoding="async"
+                className="absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl"
+              />
+            ) : null}
+            {m.kind === "video" ? (
+              // eslint-disable-next-line jsx-a11y/media-has-caption
+              <video
+                src={m.url}
+                poster={m.thumbnailUrl ?? undefined}
+                muted
+                loop
+                playsInline
+                preload={Math.abs(i - index) <= 1 ? "auto" : "metadata"}
+                className="relative max-h-full max-w-full select-none object-contain"
+                ref={(el) => {
+                  if (!el) return;
+                  // Autoplay only while this slide is the active one.
+                  if (i === index) void el.play().catch(() => {});
+                  else el.pause();
+                }}
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={m.url} alt="" draggable={false} className="relative max-h-full max-w-full select-none object-contain" />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Counter + dots — placed just under the top X / More buttons so they
+          never collide with the bottom caption/action rail. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[calc(max(1rem,env(safe-area-inset-top))+3.25rem)] z-[55] flex flex-col items-center gap-2">
+        <span className="rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur">
+          {index + 1}/{items.length}
+        </span>
+        <div className="flex items-center gap-1.5">
+          {items.map((_, i) => (
+            <span key={i} className={cn("h-1.5 rounded-full transition-all duration-300", i === index ? "w-4 bg-white" : "w-1.5 bg-white/45")} />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

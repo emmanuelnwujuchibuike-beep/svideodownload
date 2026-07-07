@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
  */
 
 const SPEEDS = [1, 1.25, 1.5, 2, 0.5, 0.75] as const;
-const HIDE_AFTER_MS = 2800;
+const HIDE_AFTER_MS = 3000;
 const DOUBLE_TAP_MS = 300;
 
 function formatTime(s: number): string {

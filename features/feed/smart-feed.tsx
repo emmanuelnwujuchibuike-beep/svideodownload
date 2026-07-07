@@ -76,11 +76,14 @@ export function SmartFeed({
   const [away, setAway] = useState<AwaySummary | null>(null);
   const [viewer, setViewer] = useState<{ item: FeedItem; comments: boolean } | null>(null);
   const [image, setImage] = useState<FeedItem | null>(null);
+  // Which slide of an album was actually tapped — an image viewer that always
+  // opened on the first slide regardless of what was tapped read as broken.
+  const [imageStartIndex, setImageStartIndex] = useState(0);
   // Lock the topbar visible while the feed is on screen: with it static, this
   // sticky tab bar sticks at ONE position — fixed once it touches the top,
   // never sliding around with scroll direction (owner spec).
   useEffect(() => lockTopbarVisible(), []);
-  const [reel, setReel] = useState<{ startId: string; commentsId: string | null } | null>(null);
+  const [reel, setReel] = useState<{ startId: string; commentsId: string | null; startSlideIndex?: number } | null>(null);
   // Once an overlay has been opened we keep it mounted (it hides itself when its
   // item is null) so its close animation plays; before first use its chunk is
   // never loaded.
@@ -131,13 +134,25 @@ export function SmartFeed({
 
   // Videos open the full-screen reel INSTANTLY (client-side, no navigation/server
   // round-trip) seeded on the tapped clip; everything else opens the split viewer.
-  const openViewer = useCallback((it: FeedItem, comments = false) => {
-    if (it.mediaKind === "video") {
-      setReel({ startId: it.id, commentsId: comments ? it.id : null });
-    } else if (it.mediaKind === "image") {
-      // Photos open full-screen + immersive (closeable like X / Instagram).
+  // `startIndex` is which SLIDE of an album was actually tapped in the feed's
+  // inline carousel — without it every album always opened on its first item.
+  const openViewer = useCallback((it: FeedItem, comments = false, startIndex = 0) => {
+    const isAlbum = (it.mediaItems?.length ?? 0) > 1;
+    // The reel viewer's internal album logic only tracks VIDEO slides (it
+    // filters mediaItems down to videos) — correct for an all-video album,
+    // but index math would be wrong for a MIXED photo+video album (its cover
+    // can still be a video). Mixed albums always go through the image
+    // viewer's swipe stage instead, which renders every slide in order
+    // regardless of kind.
+    const allVideo = isAlbum && it.mediaItems!.every((m) => m.kind === "video");
+    if (it.mediaKind === "video" && (!isAlbum || allVideo)) {
+      setReel({ startId: it.id, commentsId: comments ? it.id : null, startSlideIndex: startIndex });
+    } else if (isAlbum || it.mediaKind === "image") {
+      // Photos (and photo/mixed albums) open full-screen + immersive
+      // (closeable like X / Instagram).
       setImageReady(true);
       setImage(it);
+      setImageStartIndex(startIndex);
     } else {
       setViewerReady(true);
       setViewer({ item: it, comments });
@@ -642,7 +657,7 @@ export function SmartFeed({
           onClose={() => setViewer(null)}
         />
       ) : null}
-      {imageReady ? <ImageViewer item={image} onClose={() => setImage(null)} /> : null}
+      {imageReady ? <ImageViewer item={image} startIndex={imageStartIndex} onClose={() => setImage(null)} /> : null}
 
       {/* Instant, in-place full reels experience (For You / Following tabs), nav
           visible, seeded on the tapped video — closes via state (no navigation). */}
@@ -651,6 +666,7 @@ export function SmartFeed({
           initialItems={videos}
           initialOffset={nextOffset}
           startId={reel.startId}
+          startSlideIndex={reel.startSlideIndex}
           commentsId={reel.commentsId}
           onClose={() => setReel(null)}
         />

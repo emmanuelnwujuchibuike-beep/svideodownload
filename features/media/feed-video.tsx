@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
+import { neutralizeAncestorTransforms } from "@/lib/dom/neutralize-transforms";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
@@ -84,6 +85,7 @@ export function FeedVideo({
   const [fs, setFs] = useState(false);
   const fsRef = useRef(false);
   const fsBox = useRef<HTMLDivElement | null>(null);
+  const restoreTransforms = useRef<(() => void) | null>(null);
 
   const enterFs = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -92,6 +94,11 @@ export function FeedVideo({
     // Lock body scroll — overflowY specifically (the shorthand breaks sticky
     // layouts elsewhere; see shell notes).
     document.body.style.overflowY = "hidden";
+    // Belt-and-suspenders: a card wrapper up the tree (e.g. the feed card's
+    // entrance-animation motion.article) can carry a lingering inline
+    // transform that would otherwise anchor this "fixed" box to ITS box
+    // instead of the true viewport — see lib/dom/neutralize-transforms.
+    restoreTransforms.current = neutralizeAncestorTransforms(fsBox.current);
     const box = fsBox.current as (HTMLDivElement & { requestFullscreen?: () => Promise<void> }) | null;
     if (box && typeof box.requestFullscreen === "function") box.requestFullscreen().catch(() => {});
   }, []);
@@ -99,6 +106,8 @@ export function FeedVideo({
     fsRef.current = false;
     setFs(false);
     document.body.style.overflowY = "";
+    restoreTransforms.current?.();
+    restoreTransforms.current = null;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }, []);
   // Native fullscreen dismissed by the browser (Esc / system gesture) → fold
@@ -109,12 +118,15 @@ export function FeedVideo({
         fsRef.current = false;
         setFs(false);
         document.body.style.overflowY = "";
+        restoreTransforms.current?.();
+        restoreTransforms.current = null;
       }
     };
     document.addEventListener("fullscreenchange", onChange);
     return () => {
       document.removeEventListener("fullscreenchange", onChange);
       if (fsRef.current) document.body.style.overflowY = "";
+      restoreTransforms.current?.();
     };
   }, []);
 

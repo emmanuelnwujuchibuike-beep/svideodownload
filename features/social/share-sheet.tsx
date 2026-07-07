@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Copy, Link2, Repeat2, Search, Send, Share2, X } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { toast } from "@/features/ui/toast";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,8 @@ export function ShareSheet({
   /** When provided, a Repost row appears (opens the existing repost flow). */
   onRepost?: () => void;
 }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [people, setPeople] = useState<Person[] | null>(null);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -175,7 +178,13 @@ export function ShareSheet({
     }
   };
 
-  return (
+  // Portaled to <body> — this sheet is `fixed inset-0`, and mounting it
+  // wherever the caller happens to sit (a feed card, a reel's action rail…)
+  // risks it inheriting an ancestor's `transform`/`overflow-hidden` (feed
+  // cards have both), which silently turns "fixed" into "clipped to that
+  // card's box" — the exact bug that cut the sheet off at the bottom.
+  if (!mounted) return null;
+  return createPortal(
     <AnimatePresence>
       {open ? (
         <div className="fixed inset-0 z-[110]" role="dialog" aria-modal="true" aria-label="Share post">
@@ -361,7 +370,8 @@ export function ShareSheet({
           </motion.div>
         </div>
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 

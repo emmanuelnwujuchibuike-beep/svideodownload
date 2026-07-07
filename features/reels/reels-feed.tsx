@@ -23,6 +23,7 @@ export function ReelsFeed({
   initialItems,
   initialOffset,
   startId,
+  startSlideIndex,
   commentsId,
   onClose,
 }: {
@@ -30,6 +31,9 @@ export function ReelsFeed({
   initialOffset: number | null;
   /** Seed the For You deck on this video (feed/trending tap opens here). */
   startId?: string;
+  /** Which video of that reel's own album to open on — a feed/post carousel
+   *  tap on slide N of a video album should land there, not always slide 0. */
+  startSlideIndex?: number;
   /** Open this reel's comments on entry. */
   commentsId?: string | null;
   /** When rendered as an in-place overlay (from the feed), closes via state. */
@@ -238,6 +242,7 @@ export function ReelsFeed({
                   ? Math.max(0, items.findIndex((i) => i.id === startId))
                   : (lastIndexRef.current[tab] ?? 0)
               }
+              startSlideIndex={tab === "for_you" && startId && !forYouSeeded.current ? startSlideIndex : undefined}
               variant="page"
               onEndReached={loadMore}
               onClose={close}

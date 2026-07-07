@@ -100,15 +100,20 @@ const QUALITY_LABELS: Record<QualityPreference, string> = {
 export function ReelViewer({
   items,
   startIndex = 0,
+  startSlideIndex,
   onClose,
 }: {
   items: FeedItem[] | null;
   startIndex?: number;
+  /** Which video of the seeded reel's own album to open on (not always slide 0). */
+  startSlideIndex?: number;
   onClose: () => void;
 }) {
   return (
     <AnimatePresence>
-      {items && items.length ? <ReelDeck key="reeldeck" items={items} startIndex={startIndex} onClose={onClose} /> : null}
+      {items && items.length ? (
+        <ReelDeck key="reeldeck" items={items} startIndex={startIndex} startSlideIndex={startSlideIndex} onClose={onClose} />
+      ) : null}
     </AnimatePresence>
   );
 }
@@ -116,6 +121,7 @@ export function ReelViewer({
 export function ReelDeck({
   items,
   startIndex,
+  startSlideIndex,
   onClose,
   onEndReached,
   variant = "modal",
@@ -125,6 +131,9 @@ export function ReelDeck({
 }: {
   items: FeedItem[];
   startIndex: number;
+  /** Which video of the SEEDED reel's own album to open on (a feed/post
+   *  carousel tap on slide N of an album should land there, not slide 0). */
+  startSlideIndex?: number;
   onClose: () => void;
   /** Called as the viewer nears the end — powers infinite loading on the page. */
   onEndReached?: () => void;
@@ -221,17 +230,6 @@ export function ReelDeck({
       aria-modal="true"
       aria-label="Reels"
     >
-      {/* Back — ALWAYS visible and tappable, above every reel element (incl. the
-          scrubber) so it reliably closes the reel on every device. */}
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close reels"
-        className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] z-[80] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
-      >
-        <X className="h-5 w-5" />
-      </button>
-
       <div
         ref={scroller}
         onScroll={onScroll}
@@ -271,6 +269,7 @@ export function ReelDeck({
                 variant={variant}
                 onSwipeTab={onSwipeTab}
                 onReady={markReady}
+                initialSlide={i === start ? startSlideIndex : undefined}
               />
             </div>
           </section>
@@ -292,6 +291,7 @@ function ReelCard({
   onReady,
   preload = "auto",
   onSwipeTab,
+  initialSlide,
 }: {
   item: FeedItem;
   isActive: boolean;
@@ -306,6 +306,10 @@ function ReelCard({
   /** How aggressively to buffer this clip — "auto" for the ones you'll reach next,
    *  "metadata" for the further neighbours (saves mobile battery/data). */
   preload?: "auto" | "metadata";
+  /** Which video of THIS reel's album to open on — the exact slide the user
+   *  tapped in a feed/post carousel, not always the first. Only meaningful
+   *  when this reel is an album (ignored otherwise). */
+  initialSlide?: number;
   /** A decisive horizontal swipe — switches For You/Following (page variant only). */
   onSwipeTab?: (dir: "left" | "right") => void;
 }) {
@@ -395,7 +399,9 @@ function ReelCard({
     [item.mediaItems],
   );
   const isAlbum = albumVideos.length > 1;
-  const [slide, setSlide] = useState(0);
+  const [slide, setSlide] = useState(() =>
+    initialSlide !== undefined ? Math.max(0, Math.min(albumVideos.length - 1, initialSlide)) : 0,
+  );
   const goSlide = useCallback(
     (dir: "left" | "right") => {
       setSlide((s) => {
@@ -464,7 +470,7 @@ function ReelCard({
 
   const scheduleHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setUi(false), 4000);
+    hideTimer.current = setTimeout(() => setUi(false), 3000);
   }, []);
   // A single tap toggles play/pause; the pause sign fades in ~1s after pausing
   // (so a quick play/pause tap never flashes it). Shows the controls too.
@@ -991,17 +997,34 @@ function ReelCard({
         </div>
       ) : null}
 
-      {/* Options — top-right, mirroring the close (X) button at top-left. Also
-          opens on press-and-hold (see onPointerDown below) — one gesture reaches
-          every action, not just the small corner button. On large screens it
-          escapes past the video column's edge into the same right gutter the
-          action rail already uses (`lg:overflow-visible` on the column ancestor)
-          instead of sitting cramped on top of the video itself. */}
+      {/* Close — top-left, and Options (•••) — top-right. Both fade with the
+          rest of the chrome (tap to bring back, or ~3s idle) instead of
+          sitting permanently on screen — a clean, distraction-free view like
+          native TikTok/Instagram, which only show these on a deliberate tap. */}
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close reels"
+        className={cn(
+          "absolute left-4 top-[max(1rem,env(safe-area-inset-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-opacity duration-200 hover:bg-black/60 active:scale-95",
+          ui ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      >
+        <X className="h-5 w-5" />
+      </button>
+      {/* Also opens on press-and-hold (see onPointerDown below) — one gesture
+          reaches every action, not just the small corner button. On large
+          screens it escapes past the video column's edge into the same right
+          gutter the action rail already uses (`lg:overflow-visible` on the
+          column ancestor) instead of sitting cramped on top of the video. */}
       <button
         type="button"
         onClick={() => setMoreOpen(true)}
         aria-label="More options"
-        className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95 lg:-right-[4.5rem]"
+        className={cn(
+          "absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-opacity duration-200 hover:bg-black/60 active:scale-95 lg:-right-[4.5rem]",
+          ui ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
       >
         <MoreVertical className="h-5 w-5" />
       </button>

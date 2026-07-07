@@ -88,7 +88,7 @@ function FeedPostCardImpl({
   item: FeedItem;
   reason?: SmartReason | null;
   onRemove: (id: string) => void;
-  onOpen: (item: FeedItem, startComments?: boolean) => void;
+  onOpen: (item: FeedItem, startComments?: boolean, startIndex?: number) => void;
 }) {
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
@@ -427,7 +427,7 @@ function FeedPostCardImpl({
       {item.mediaItems && item.mediaItems.length > 1 ? (
         /* Album / carousel — swipeable slides with counter + dots */
         <div className="mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">
-          <MediaCarousel items={item.mediaItems} onExpand={() => onOpen(item)} />
+          <MediaCarousel items={item.mediaItems} onExpandItem={(index) => onOpen(item, false, index)} />
         </div>
       ) : item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
         // Big, immersive inline preview: autoplays muted in view, tap → fullscreen

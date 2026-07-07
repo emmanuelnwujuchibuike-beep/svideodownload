@@ -4,6 +4,7 @@ import { Maximize2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FadeImage } from "@/features/ui/fade-image";
+import { neutralizeAncestorTransforms } from "@/lib/dom/neutralize-transforms";
 import { cn } from "@/lib/utils";
 
 export interface CarouselMedia {
@@ -48,14 +49,23 @@ export function MediaCarousel({
   // counter, dots and in-view video autoplay all keep working, because it's
   // the same scroller, just bigger). Instant, no remount, position preserved.
   const [fs, setFs] = useState(false);
+  const fsBox = useRef<HTMLDivElement | null>(null);
+  const restoreTransforms = useRef<(() => void) | null>(null);
   const enterFs = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setFs(true);
     document.body.style.overflowY = "hidden";
+    // Belt-and-suspenders against the containing-block trap: a card ancestor
+    // (e.g. the feed card's entrance-animation motion.article) can carry a
+    // lingering inline transform that would anchor this "fixed" box to ITS
+    // own box instead of the true viewport — see lib/dom/neutralize-transforms.
+    restoreTransforms.current = neutralizeAncestorTransforms(fsBox.current);
   }, []);
   const exitFs = useCallback(() => {
     setFs(false);
     document.body.style.overflowY = "";
+    restoreTransforms.current?.();
+    restoreTransforms.current = null;
   }, []);
   useEffect(() => {
     if (!fs) return;
@@ -81,6 +91,7 @@ export function MediaCarousel({
 
   return (
     <div
+      ref={fsBox}
       className={cn(
         fs ? "fixed inset-0 z-[140] bg-black" : "relative overflow-hidden bg-black",
         !fs && className,

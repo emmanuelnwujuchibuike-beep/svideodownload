@@ -13,6 +13,24 @@ _Last updated: 2026‑07‑06 (fullscreen video, loading engine in Core, PWA aut
 
 ---
 
+## 2026‑07‑07 highlights (batch 7)
+
+- **Albums now open on the EXACT slide you tap, and swipe through everything
+  in fullscreen** — photos, videos, or a mix. This was a real bug: the feed's
+  carousel always opened the same thing regardless of which slide you tapped.
+  Fixed on both the feed and the standalone post page, for photo, mixed, and
+  video albums alike.
+- **Reel chrome (the ✕ and ••• buttons) now fades** with the rest of the
+  controls — visible on tap, gone after ~3 seconds — instead of sitting
+  permanently on screen, matching TikTok/Instagram.
+- **Found and fixed the Send‑sheet cut‑off bug.** Root cause: the Share sheet
+  was the only pop‑up sheet in the app that didn't detach itself to the top of
+  the page — every other sheet in the app does this, so it was an oversight
+  specific to the brand‑new Share feature. Once found, the fix was a one‑line
+  pattern match to the other five sheets. Added a second, independent safety
+  net to the video‑fullscreen buttons too, so this class of bug is far less
+  likely to resurface anywhere else.
+
 ## 2026‑07‑07 highlights (batch 6)
 
 - **Found and fixed a real full‑bleed regression in Reels.** The "seamless tab

@@ -78,6 +78,11 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
   // — currently the date posted — instead of opening the comments sheet.
   const [infoOpen, setInfoOpen] = useState(false);
   const [burst, setBurst] = useState<{ x: number; y: number; key: number } | null>(null);
+  // Near-screen-aspect photos cover the screen edge-to-edge — under the status
+  // bar and home indicator, no letterbox slivers — the same TikTok-style
+  // full-bleed rule the video players use. Clearly different shapes (a wide
+  // landscape photo on a tall phone) stay fully visible (object-contain).
+  const [fullBleed, setFullBleed] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [moreOpen, setMoreOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -273,7 +278,22 @@ function ImageStage({ item, onClose }: { item: FeedItem; onClose: () => void }) 
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt={title} className="max-h-full max-w-full select-none object-contain" draggable={false} />
+          <img
+            src={src}
+            alt={title}
+            className={cn(
+              "select-none",
+              fullBleed ? "h-full w-full object-cover" : "max-h-full max-w-full object-contain",
+            )}
+            draggable={false}
+            onLoad={(e) => {
+              const img = e.currentTarget;
+              if (!img.naturalWidth || !img.naturalHeight || typeof window === "undefined") return;
+              const screen = window.innerWidth / window.innerHeight;
+              const ratio = img.naturalWidth / img.naturalHeight;
+              setFullBleed(Math.abs(ratio - screen) / screen < 0.22);
+            }}
+          />
         </div>
 
         {/* Double-tap heart */}

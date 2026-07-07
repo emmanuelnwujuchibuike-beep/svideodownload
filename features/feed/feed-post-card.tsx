@@ -24,7 +24,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import Link from "next/link";
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { RichText } from "@/components/social/rich-text";
@@ -95,6 +95,7 @@ function FeedPostCardImpl({
   const following = useFollowState(item.publisher.id, item.isFollowing);
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
   const [likes, setLikes] = useState(item.likesCount);
+  const articleRef = useRef<HTMLElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState(item.title);
@@ -263,10 +264,20 @@ function FeedPostCardImpl({
 
   return (
     <motion.article
+      ref={articleRef}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      // Framer-motion leaves an inline `transform` on this element even once
+      // settled at rest — and ANY transform on an ancestor turns descendant
+      // `position: fixed` elements (the video's fullscreen promotion) into
+      // ones anchored to THIS card's box instead of the true viewport. Once
+      // the entrance animation actually finishes, strip it — there is no
+      // other reason for this card to carry a transform afterward.
+      onAnimationComplete={() => {
+        if (articleRef.current) articleRef.current.style.transform = "";
+      }}
       // Warm this post's comments on hover so opening the sheet is instant.
       onPointerEnter={() => prefetchPostComments(item.id)}
       // Mature, professional card: quiet hairline border + soft depth, no

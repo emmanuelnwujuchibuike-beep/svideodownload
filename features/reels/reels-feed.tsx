@@ -205,7 +205,18 @@ export function ReelsFeed({
         /* The two tabs SLIDE past each other (owner spec: smooth switching,
            never a reload or jump) — pure transform/opacity, GPU-composited.
            Each tab's deck resumes on its last reel, and the reel itself
-           resumes at its last playback position (resume-positions store). */
+           resumes at its last playback position (resume-positions store).
+           This wrapper is `fixed inset-0` (matching ReelDeck's own root)
+           rather than a plain in-flow box: framer-motion leaves an inline
+           `transform` on an animated element even at rest, and ANY transform
+           on an ancestor makes descendant `position: fixed` children (the
+           reel's top bar, scrubber, safe-area chrome…) anchor to THAT
+           ancestor's box instead of the true viewport — which is exactly
+           what silently stopped the reel deck short of the real screen edges
+           (under the status bar) once this slide wrapper was introduced. A
+           `fixed inset-0` wrapper's box already equals the full viewport, so
+           nothing shifts — the fix is invisible except that the deck reaches
+           all the way to the true top again. */
         <AnimatePresence mode="popLayout" initial={false} custom={direction}>
           <motion.div
             key={tab}
@@ -214,7 +225,7 @@ export function ReelsFeed({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: direction >= 0 ? "-18%" : "18%", opacity: 0 }}
             transition={{ duration: 0.26, ease: [0.32, 0.72, 0, 1] }}
-            className="h-full w-full"
+            className="fixed inset-0 z-30"
           >
             <ReelDeck
               items={items}

@@ -13,6 +13,28 @@ _Last updated: 2026‑07‑06 (fullscreen video, loading engine in Core, PWA aut
 
 ---
 
+## 2026‑07‑07 highlights (batch 6)
+
+- **Found and fixed a real full‑bleed regression in Reels.** The "seamless tab
+  slide" added the batch before wrapped the reel deck in an animated
+  container — and framer‑motion leaves an inline `transform` on that container
+  even once the animation settles. Any transform on an ancestor makes
+  `position: fixed` descendants anchor to THAT box instead of the true screen,
+  which is exactly what pulled the reel player's top bar/scrubber away from the
+  real edges (under the status bar). Fixed by making the wrapper itself
+  `fixed inset-0` — the slide animation looks identical, but the deck reaches
+  the true top again. The same bug class was found latent (not yet visibly
+  broken) in the feed card's video‑fullscreen button and fixed there too.
+- **Image viewer now goes full‑bleed** the same way video already does: a photo
+  shaped close to the screen covers it edge‑to‑edge instead of always
+  letterboxing.
+- **iOS message push, re‑investigated:** confirmed there's no remaining
+  app‑side bug (verified the whole subscribe → dispatch → service‑worker path),
+  shaved a small real delay (parallelized two independent queries in the
+  message‑push handler), and documented why the rest of the gap between iOS and
+  Android is Apple's own Web Push relay behavior — it is close to impossible to
+  make materially faster from application code today.
+
 ## 2026‑07‑07 highlights (batch 4)
 
 - **Reel albums:** a reel made of several videos now supports the exact gesture

@@ -57,23 +57,22 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true });
 }
 
-/** Best-effort: resolve the other participant + sender name and push them the message. */
+/**
+ * Best-effort: resolve the other participant + sender name and push them the
+ * message. Every millisecond here is added latency before the push even
+ * leaves our server (separate from — and much smaller than — the delivery
+ * hop itself), so the two independent lookups run in PARALLEL rather than
+ * sequentially.
+ */
 async function notifyRecipient(senderId: string, conversationId: string, body: string): Promise<void> {
   try {
     const db = createAdminClient();
-    const { data: conv } = await db
-      .from("conversations")
-      .select("user_low, user_high")
-      .eq("id", conversationId)
-      .maybeSingle();
+    const [{ data: conv }, { data: sender }] = await Promise.all([
+      db.from("conversations").select("user_low, user_high").eq("id", conversationId).maybeSingle(),
+      db.from("profiles").select("display_name, handle, avatar_url").eq("id", senderId).maybeSingle(),
+    ]);
     if (!conv) return;
     const recipientId = conv.user_low === senderId ? (conv.user_high as string) : (conv.user_low as string);
-
-    const { data: sender } = await db
-      .from("profiles")
-      .select("display_name, handle, avatar_url")
-      .eq("id", senderId)
-      .maybeSingle();
     const name = (sender?.display_name as string) || (sender?.handle ? `@${sender.handle as string}` : "New message");
 
     await sendPushToUser(recipientId, {

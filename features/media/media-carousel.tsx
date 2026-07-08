@@ -108,7 +108,7 @@ export function MediaCarousel({
           "flex snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           fs ? "h-full" : "aspect-[4/5]",
         )}
-        style={{ touchAction: "pan-x", overscrollBehaviorY: "contain" }}
+        style={{ touchAction: "pan-x" }}
       >
         {items.map((m, i) => (
           <div key={i} className="relative h-full w-full shrink-0 snap-center">

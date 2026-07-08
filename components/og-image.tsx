@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { ReactElement } from "react";
+
+import { OG_ICON_BASE64 } from "@/components/og-icon-data";
 
 /**
  * Shared artwork for the social-share / OpenGraph image, rendered to PNG by
@@ -14,12 +14,8 @@ export const OG_ALT =
   "FrenzSave — Download and meet new friends with the latest news and reels";
 
 // The real brand mark, inlined as a data URI — Satori renders synchronously, so
-// a data URI (no network fetch) is the reliable way to embed it. Read once at
-// module load from the same source every other logo touchpoint uses (see
-// components/brand/frenz-logo.tsx).
-const iconDataUri = `data:image/png;base64,${readFileSync(
-  join(process.cwd(), "public", "brand", "frenz-icon-og.png"),
-).toString("base64")}`;
+// a data URI (no network fetch) is the reliable way to embed it.
+const iconDataUri = `data:image/png;base64,${OG_ICON_BASE64}`;
 
 export function OgImage({
   headline = "Download & meet new friends with the latest news and reels",

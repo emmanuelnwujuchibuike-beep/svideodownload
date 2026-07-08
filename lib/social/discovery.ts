@@ -36,6 +36,8 @@ export interface DiscoveryResult {
   items: DiscoveryItem[];
   /** Whether any location signal was available (drives the "near you" copy). */
   located: boolean;
+  /** Pass back as `offset` to fetch the next page; null once exhausted. */
+  nextOffset: number | null;
 }
 
 interface PostRow {
@@ -51,12 +53,15 @@ interface PostRow {
 
 const SELECT = "id, publisher_id, media_kind, title, thumbnail_url, media_url, stream_uid, created_at";
 
+const WINDOW = 200;
+
 export async function getDiscoveryFeed(
   viewerId: string | null,
-  opts: { limit?: number; viewerLocation?: string | null } = {},
+  opts: { limit?: number; offset?: number; viewerLocation?: string | null } = {},
 ): Promise<DiscoveryResult> {
   const limit = opts.limit ?? 12;
-  if (!hasSupabase) return { items: [], located: false };
+  const offset = Math.max(0, opts.offset ?? 0);
+  if (!hasSupabase) return { items: [], located: false, nextOffset: null };
   try {
     const db = createAdminClient();
 
@@ -78,6 +83,8 @@ export async function getDiscoveryFeed(
     }
 
     // Fresh public media — over-fetch to absorb exclusions + per-creator capping.
+    // `offset`/WINDOW paginate the raw query; a full window means there may be
+    // more after it, a short one means the table's exhausted.
     const { data } = await db
       .from("posts")
       .select(SELECT)
@@ -85,9 +92,10 @@ export async function getDiscoveryFeed(
       .eq("visibility", "public")
       .in("media_kind", ["video", "image"])
       .order("created_at", { ascending: false })
-      .limit(200);
+      .range(offset, offset + WINDOW - 1);
+    const nextOffset = (data?.length ?? 0) === WINDOW ? offset + WINDOW : null;
     const rows = ((data ?? []) as PostRow[]).filter((r) => !exclude.has(r.publisher_id));
-    if (rows.length === 0) return { items: [], located: false };
+    if (rows.length === 0) return { items: [], located: false, nextOffset };
 
     const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
     const [profsRes, { data: privs }, blocksRes] = await Promise.all([
@@ -155,8 +163,8 @@ export async function getDiscoveryFeed(
     const located = !!wantLoc;
     if (located) items.sort((a, b) => Number(b.nearby) - Number(a.nearby));
 
-    return { items: items.slice(0, limit), located };
+    return { items: items.slice(0, limit), located, nextOffset };
   } catch {
-    return { items: [], located: false };
+    return { items: [], located: false, nextOffset: null };
   }
 }

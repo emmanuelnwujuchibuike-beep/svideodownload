@@ -1,15 +1,22 @@
+"use client";
+
 import { MapPin, Play } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
+import { DiscoveryDeck } from "@/features/friends/discovery-deck";
 import type { DiscoveryItem } from "@/lib/social/discovery";
 
 /**
  * Discovery grid for the bottom of /friends — fresh videos & photos from people
  * the viewer hasn't followed or friended yet, so there's always someone new to
  * meet. When location is known, nearby creators lead and get a "Near you" pin.
- * Pure links (no client JS): the media opens the post, the chip opens the profile.
+ * Tapping any tile opens the full-screen continuous deck (DiscoveryDeck) seeded
+ * on that tile, so it keeps scrolling through the rest of the grid instead of
+ * navigating away to view one post alone; the creator chip still opens the profile.
  */
-export function NearbyDiscovery({ items }: { items: DiscoveryItem[] }) {
+export function NearbyDiscovery({ items, nextOffset }: { items: DiscoveryItem[]; nextOffset: number | null }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   if (items.length === 0) return null;
   // Only claim "near you" when we actually surfaced someone in the same place.
   const anyNearby = items.some((i) => i.nearby);
@@ -29,7 +36,7 @@ export function NearbyDiscovery({ items }: { items: DiscoveryItem[] }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {items.map((it) => (
           <div key={it.id} className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card shadow-soft">
-            <Link href={`/p/${it.id}`} className="block">
+            <button type="button" onClick={() => setOpenId(it.id)} className="block w-full text-left" aria-label={it.mediaKind === "video" ? "Play video" : "View photo"}>
               <div className="relative aspect-square overflow-hidden bg-neutral-900">
                 {it.thumbnailUrl || (it.mediaKind === "image" && it.mediaUrl) ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -57,7 +64,7 @@ export function NearbyDiscovery({ items }: { items: DiscoveryItem[] }) {
                 {/* Bottom gradient so the creator chip is always legible */}
                 <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/70 to-transparent" />
               </div>
-            </Link>
+            </button>
 
             {/* Creator chip */}
             <Link
@@ -77,6 +84,15 @@ export function NearbyDiscovery({ items }: { items: DiscoveryItem[] }) {
           </div>
         ))}
       </div>
+
+      {openId ? (
+        <DiscoveryDeck
+          initialItems={items}
+          initialOffset={nextOffset}
+          startId={openId}
+          onClose={() => setOpenId(null)}
+        />
+      ) : null}
     </section>
   );
 }

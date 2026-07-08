@@ -59,7 +59,7 @@ export default async function FriendsPage() {
         </div>
         <FriendsHub initial={overview} />
         <div className="mx-auto w-full max-w-2xl">
-          <NearbyDiscovery items={discovery.items} />
+          <NearbyDiscovery items={discovery.items} nextOffset={discovery.nextOffset} />
         </div>
       </main>
     </div>

@@ -23,7 +23,7 @@ export interface SessionUser {
   via: "bearer" | "cookie";
 }
 
-function bearer(request: Request): string | null {
+export function bearer(request: Request): string | null {
   const header = request.headers.get("authorization") ?? request.headers.get("Authorization");
   if (!header) return null;
   const [scheme, token] = header.split(" ");

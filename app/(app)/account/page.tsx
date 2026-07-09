@@ -9,6 +9,7 @@ import { ApiKeys } from "@/features/api/api-keys";
 import { ManageBillingButton } from "@/features/monetization/manage-billing-button";
 import { UserList } from "@/components/social/user-list";
 import { ProfileEditor } from "@/features/social/profile-editor";
+import { ActiveSessions } from "@/features/account/active-sessions";
 import { PasswordEditor } from "@/features/account/password-editor";
 import { PrivacyEditor } from "@/features/social/privacy-editor";
 import { isAdmin } from "@/lib/admin";
@@ -171,6 +172,9 @@ export default async function AccountPage() {
 
             {/* Optional password (second way in + what "Forgot password?" resets) */}
             <PasswordEditor />
+
+            {/* Active sessions / device management */}
+            <ActiveSessions />
 
             {/* Blocked accounts (only shown when there are any) */}
             {blocked.length > 0 ? (

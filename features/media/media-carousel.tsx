@@ -89,6 +89,32 @@ export function MediaCarousel({
   };
   useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
+  // Mouse wheels and trackpads fire `wheel` events, not touch events — CSS
+  // (touch-action, overscroll-behavior) has no say over them at all. Left
+  // alone, a horizontally-scrollable element STILL claims a vertical wheel
+  // gesture for itself (a real, long-standing browser behavior — "this box
+  // can scroll, so route the wheel input here"), which is exactly why
+  // hovering a multi-media post and scrolling froze the page even after
+  // overscroll-behavior-y was fixed: that property only governs chaining
+  // AFTER a scroll boundary is hit, not this initial axis routing. Redirect
+  // vertical-dominant wheel input to the page ourselves; a horizontal
+  // trackpad swipe (deltaX dominant) still scrolls the carousel natively.
+  // Must be a real (non-passive) listener — React's synthetic onWheel is
+  // passive by default, so preventDefault() inside it is silently ignored.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const onWheelNative = (e: WheelEvent) => {
+      if (e.ctrlKey) return; // pinch-zoom gesture — never intercept
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        window.scrollBy({ top: e.deltaY, left: 0 });
+      }
+    };
+    el.addEventListener("wheel", onWheelNative, { passive: false });
+    return () => el.removeEventListener("wheel", onWheelNative);
+  }, []);
+
   return (
     <div
       ref={fsBox}

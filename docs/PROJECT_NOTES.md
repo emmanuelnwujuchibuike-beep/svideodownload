@@ -9,9 +9,44 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (F logo's black backdrop removed, site-down incident fixed, desktop scroll-freeze fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 14 — the carousel scroll fix didn't fully land + dark mode recurred)
+
+- **Multi-media carousel scroll: the earlier CSS-only fix (batch 12) wasn't the
+  real root cause.** `overscroll-behavior` only controls scroll-chaining
+  *after* a scroll boundary is hit — it never explained why hovering a
+  multi-image/video post and scrolling froze the page, because mouse
+  wheels/trackpads fire `wheel` events, and a horizontally-scrollable element
+  claims a vertical wheel gesture for itself as a native, long-standing
+  browser behavior, regardless of CSS. Real fix: a genuine (non-passive)
+  `wheel` listener on the carousel that redirects vertical-dominant scrolling
+  to the page, while a horizontal trackpad swipe still scrolls the carousel
+  natively. Gotcha: React's synthetic `onWheel` prop is passive by default, so
+  calling `preventDefault()` inside it silently no-ops — this has to be a real
+  `addEventListener("wheel", fn, { passive: false })`.
+- **Dark mode showing on every reentry, despite Light being selected —
+  recurred.** A previous fix (2026-07-08) addressed our own in-page boot
+  overlay reading the wrong theme signal. That fix was necessary but not
+  sufficient: `app/manifest.ts` had `background_color`/`theme_color`
+  hardcoded to the dark theme's color. For an installed/home-screen app, the
+  OS paints its own native splash screen and status-bar tint directly from
+  those **static** manifest values — before any of our page's HTML/JS runs at
+  all, and a manifest can't make them conditional the way our `viewport.
+  themeColor` meta tag can. Every relaunch flashed dark OS chrome regardless
+  of the user's actual choice. Fixed by setting both to white, matching the
+  boot overlay's own neutral default. Lesson for next time a "wrong theme on
+  launch" report comes in: check both layers (in-page boot script AND the
+  manifest's static colors) — they're independent, and fixing only one still
+  leaves the other showing.
+- **F logo "doesn't load" false alarm.** After the transparency fix (below),
+  the owner reported the site not loading / loading slowly. Checked the live
+  Vercel deployment directly (`vercel ls`: Ready, 2 min build) and curl'd the
+  production routes (all 200, no server errors) — found no evidence of an
+  actual break. Re-compressed the new icon PNGs at max lossless effort
+  regardless, as a low-risk precaution.
 
 ## 2026‑07‑09 highlights (batch 13 — F logo transparency)
 

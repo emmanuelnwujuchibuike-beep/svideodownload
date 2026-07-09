@@ -9,9 +9,32 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 15 — F logo hairline edge + premium OTP email)
+
+- **F logo still had a thin dark edge.** The transparency fix (batch 13) used a
+  flood-fill color-distance threshold of 65, which was enough to clear the
+  four corners but left a ~1-3px dark hairline rim right along the
+  rounded-square boundary — visible as "little black edges" on the landing
+  page, especially at larger render sizes (easy to miss in a quick preview;
+  obvious once flattened onto a solid contrasting color to strip out
+  transparency-rendering ambiguity in image previews). Bumped the threshold
+  to 120 for every icon derivative and re-verified all 4 corners clean with
+  no leakage into the tile at that value.
+- **OTP sign-in email redesigned — more premium + spam-avoidance.**
+  `lib/email/resend.ts`: the code now renders as individual digit chips
+  (matches the in-app OTP input's look, and is length-proof — one cell per
+  character, not hardcoded — so it's correct whatever length Supabase is
+  configured to issue), added the real transparent brand icon next to the
+  wordmark. For deliverability: added a hidden preheader (padded with
+  zero-width spaces so mail clients don't also append the first visible body
+  line to the inbox preview) instead of an arbitrary auto-picked snippet, and
+  the send now sets `reply_to` to the support address instead of leaving a
+  dead-end noreply sender — both read as more trustworthy to spam filters
+  than a bare transactional blast with no reply path.
 
 ## 2026‑07‑09 highlights (batch 14 — the carousel scroll fix didn't fully land + dark mode recurred)
 

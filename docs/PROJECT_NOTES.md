@@ -9,9 +9,74 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (bottom nav redesign shipped — balanced Create button, on-brand gradient, active-state glow — Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (Home page content-balancing bug fixed + Continue Watching wired in + spacing fix — bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 21 — Home page architecture, Feature 17 Part 4 slice 1)
+
+- **Owner dropped "Feature 17 Part 4 — Home Page Layout, Content Architecture,
+  Information Hierarchy & Scroll Experience,"** the fourth brief of the day.
+  Before writing anything, audited how much of it already existed — a lot of
+  it turned out to overlap with the earlier "Smart Home Feed" work (Feature 5,
+  built 2026-07-05/06): zero-empty-feed fallback, "while you were away"
+  catch-up, and spark-card discovery cards were already shipped and live.
+  That narrowed this slice to three things that were genuinely missing or
+  broken, found by reading the actual feed/pagination code rather than
+  guessing from the spec text.
+- **Real bug found and fixed: content-type balancing was completely inert.**
+  `lib/social/smart-feed.ts`'s `balanceByKind()` (caps same-media-type runs
+  at 2 — exactly the brief's "avoid long sequences of identical content")
+  was fully implemented and exported, but `features/feed/smart-feed.tsx`
+  called `buildSmartStream(items, { balance: false })` — balancing
+  permanently OFF on Home. The code comment next to that call explained the
+  *intended* design ("skipped when the caller already balanced each page on
+  arrival, to prevent the loaded feed from visibly reshuffling as new pages
+  append") — but grepping for `balanceByKind` showed it was never actually
+  called anywhere except inside that disabled branch. The described
+  mechanism had never been built. **Fixed** by balancing each page at the
+  point it's fetched (`fetchPage` in `smart-feed.tsx`), not the whole
+  accumulated list: on a full replace, `balanceByKind(data.items)`; on
+  pagination, the new page is balanced seeded with the *last two
+  already-rendered items* as context (`entry.items.slice(-2)`) so the
+  run-cap carries across the page boundary, then those two context items are
+  sliced back off before appending — verified with a standalone Node script
+  (not just read the code) that this never reorders already-seen posts and
+  correctly caps a run at the page seam, while a naive per-page-only
+  balance (no context) let a run of 4 through. Also balanced the
+  server-rendered first page at the `useState`/cache-seed level, since it
+  never passed through `fetchPage` at all.
+- **Wired "Continue Watching" into Home** (`app/(app)/home/page.tsx`) — the
+  component already existed (`features/app-shell/dashboard/continue-watching.tsx`,
+  real data via `useDownloadManager`/`useHistory`, returns `null` when empty)
+  but was dead code, imported nowhere. This is a section the Part 4 brief
+  names explicitly. Placed between the Trending Reels rail and the main
+  feed — the brief's example order is Trending Now → Continue Watching →
+  Recommended Creators, and Recommended Creators already lives in the right
+  rail (`HomeRail`), so this keeps the same relative order the brief asked
+  for. **Audited the other five orphaned `dashboard/` components too**
+  (`featured-hero`, `join-communities`, `explore-categories`, `latest-news`,
+  `home-download-bar`) and deliberately did **not** wire them in — three are
+  fully hardcoded mock content (a communities backend "isn't modelled yet"
+  per that file's own comment), which would mean shipping fake data as if it
+  were real, directly contradicting the brief's own "dynamic sections,
+  nothing should feel random" principle.
+- **Fixed a real double-margin bug**: Home stacked three separate top-spacing
+  rules between the Reels rail and the feed — the outer `space-y-6` (24px),
+  an extra `pt-2` wrapper div (8px), and `SmartFeed`'s own internal `mt-4`
+  (16px) — 48px of accumulated gap where every other section boundary only
+  gets 24px. Removed the redundant wrapper div and `SmartFeed`'s internal
+  margin, letting the single `space-y-6` own all inter-section spacing
+  consistently (the brief's "unbalanced spacing" complaint, and a real,
+  visible inconsistency, not a hypothetical one).
+- **Left open** (matches the "don't build the whole brief blind" approach
+  from Parts 1-3): Suggested Communities / Friend Activity modules (need a
+  communities backend that doesn't exist yet), a Module Engine™-style
+  enable/reorder/personalization system, cross-navigation scroll + video
+  playback continuity (Feed Continuity™ — SmartFeed only restores scroll
+  position per-tab within itself right now, not across leaving/returning to
+  `/home`), Adaptive Home™ time-of-day content shifts, AI Home Assistant
+  recommendations, offline home / home widgets (weather, birthdays, etc.).
 
 ## 2026‑07‑09 highlights (batch 20 — bottom nav redesign, Feature 17 Part 3 slice 1)
 

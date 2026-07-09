@@ -5,6 +5,7 @@ import { Suspense } from "react";
 
 import { AppContent } from "@/features/app-shell/app-content";
 import { BrandSplash } from "@/features/app-shell/brand-splash";
+import { ContinueWatching } from "@/features/app-shell/dashboard/continue-watching";
 import { HomeRail } from "@/features/app-shell/dashboard/home-rail";
 import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
@@ -66,13 +67,16 @@ export default async function HomePage() {
           <ReelsSection viewerId={viewerId} />
         </Suspense>
 
+        {/* Client-only, no server data dependency (reads live download/history
+            state) — renders nothing when there's nothing to resume, so it
+            never needs a Suspense boundary or a skeleton. */}
+        <ContinueWatching />
+
         {/* Smart Feed — the intelligent, blended, endless heart of the home
             experience. Rendered last because it never ends. */}
-        <div className="pt-2">
-          <Suspense fallback={<FeedSkeleton count={3} />}>
-            <SmartFeedSection viewerId={viewerId} />
-          </Suspense>
-        </div>
+        <Suspense fallback={<FeedSkeleton count={3} />}>
+          <SmartFeedSection viewerId={viewerId} />
+        </Suspense>
       </div>
     </AppContent>
   );

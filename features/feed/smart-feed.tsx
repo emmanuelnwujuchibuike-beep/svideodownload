@@ -34,6 +34,7 @@ const PostViewer = dynamic(() => import("@/features/feed/post-viewer").then((m) 
 const ImageViewer = dynamic(() => import("@/features/feed/image-viewer").then((m) => m.ImageViewer), { ssr: false });
 import {
   type AwaySummary,
+  balanceByKind,
   buildSmartStream,
   buildSparkDeck,
   summarizeAway,
@@ -67,7 +68,10 @@ export function SmartFeed({
   friendCount?: number;
 }) {
   const [sort, setSort] = useState<HomeFeedSort>("for_you");
-  const [items, setItems] = useState<FeedItem[]>(initialItems);
+  // Balanced once up front (server-rendered first page never went through
+  // fetchPage's balancing below) so content-type mixing is correct from the
+  // very first paint, not just after the first client-side page load.
+  const [items, setItems] = useState<FeedItem[]>(() => balanceByKind(initialItems));
   const [nextOffset, setNextOffset] = useState<number | null>(initialNextOffset);
   const [loading, setLoading] = useState(false);
   const [switching, setSwitching] = useState(false);
@@ -100,7 +104,7 @@ export function SmartFeed({
   const cacheRef = useRef<Partial<Record<HomeFeedSort, { items: FeedItem[]; nextOffset: number | null; seen: Set<string> }>> | null>(null);
   if (!cacheRef.current) {
     cacheRef.current = {
-      for_you: { items: initialItems, nextOffset: initialNextOffset, seen: new Set(initialItems.map((i) => i.id)) },
+      for_you: { items: balanceByKind(initialItems), nextOffset: initialNextOffset, seen: new Set(initialItems.map((i) => i.id)) },
     };
   }
   // Scroll position per tab, so switching back "continues from where it
@@ -179,11 +183,19 @@ export function SmartFeed({
         const entry = cacheRef.current![s] ?? { items: [], nextOffset: null, seen: new Set<string>() };
         if (replace) {
           entry.seen = new Set(data.items.map((i) => i.id));
-          entry.items = data.items;
+          entry.items = balanceByKind(data.items);
         } else {
           const fresh = data.items.filter((i) => !entry.seen.has(i.id));
           fresh.forEach((i) => entry.seen.add(i.id));
-          entry.items = [...entry.items, ...fresh];
+          // Balance only the new page, seeded with the last couple of already-
+          // rendered items so the run-cap carries across the page boundary —
+          // balancing the WHOLE accumulated list on every page load would
+          // visibly reshuffle posts a viewer has already seen (see
+          // buildSmartStream's `balance: false` below, which relies on pages
+          // arriving pre-balanced instead of re-balancing the full stream).
+          const context = entry.items.slice(-2);
+          const balancedFresh = balanceByKind([...context, ...fresh]).slice(context.length);
+          entry.items = [...entry.items, ...balancedFresh];
         }
         entry.nextOffset = data.nextOffset;
         cacheRef.current![s] = entry;
@@ -461,7 +473,7 @@ export function SmartFeed({
 
   return (
     <section
-      className="relative mt-4"
+      className="relative"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}

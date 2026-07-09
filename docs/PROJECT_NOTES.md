@@ -9,9 +9,57 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑07 (real brand logo replaces the placeholder F everywhere)._
+_Last updated: 2026‑07‑09 (site-down incident fixed, desktop scroll-freeze fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 12 — site-down incident + 2 real bugs + 1 feature)
+
+- **Production was crashing on every page** — the home feed showed "Something
+  went wrong" and other routes showed a raw Next.js client-side exception.
+  Root cause: `components/og-image.tsx` did a **module-level `readFileSync`**
+  of a `public/` asset to build the social-share icon's data URI. On Vercel,
+  `public/` isn't reliably available to serverless function bundles, so the
+  import threw — and because this module backs the root OG/Twitter-image
+  metadata that every route resolves, it took the *entire app* down, not just
+  share cards. A previous session had already diagnosed this and written the
+  fix (`components/og-icon-data.ts`, a hardcoded base64 constant generated
+  once from the source PNG) — but it was left **uncommitted and never wired
+  into `og-image.tsx`**, so the broken version stayed live the whole time.
+  Fixed and pushed (commit `4381b4b`). Lesson: a file existing locally is not
+  the same as a fix being shipped — always check `git status`/`log` before
+  trusting that prepared code is actually live.
+- **Desktop mouse-wheel scroll froze over any multi-image/video post.** The
+  feed's album carousel (`features/media/media-carousel.tsx`) had
+  `overscroll-behavior-y: contain` stacked on top of `overflow-y: hidden`.
+  Since the element can never scroll vertically at all, `contain` blocked the
+  wheel event from chaining up to the page instead of passing through — so
+  hovering a multi-media post and scrolling froze the whole page on large
+  screens. (This property had been added in a prior "Instagram axis-lock
+  hardening" pass with good intentions — `touch-action: pan-x` alone was
+  already sufficient for the touch-side "swipe sideways only" contract; the
+  extra property was redundant and, on desktop, actively harmful.) Removed
+  (commit `3c140b1`).
+- **Friends → Discover grid now opens a continuous full-screen deck.**
+  Tapping a video/photo tile used to navigate away to view that one post
+  alone. It now opens a TikTok-style vertical swipe deck
+  (`features/friends/discovery-deck.tsx`), seeded on the tapped tile, that
+  keeps scrolling through the rest of the grid's videos/photos — paginating
+  via a new `GET /api/discovery` route as it nears the end
+  (`lib/social/discovery.ts` gained `offset`/`nextOffset`). Scoped to
+  video + image only (no text-only post type exists in the schema). The
+  deck is browse-only (autoplay/mute-toggle + creator link + "View post"
+  link to `/p/[id]`) — no comments panel, to keep scope proportional; full
+  engagement still happens on the post page (commit `848d54a`).
+- **Investigated, found already correct, no change made:** tapping a video in
+  the main Feed or the Trending Reels rail already opens the shared
+  `ReelsFeed`/`ReelDeck` overlay seeded on that clip and keeps scrolling
+  (paginating from `/api/reels`). If this still looks broken after the crash
+  fix deploys, it was likely the crash itself causing the symptom, not a
+  separate bug in this path. Nav (sidebar/bottom bar) already renders
+  synchronously with no blocking fetch before first paint, and video
+  preloading (~200px ahead via `IntersectionObserver`) already exists in both
+  the feed and reels.
 
 ## 2026‑07‑07 highlights (batch 11)
 

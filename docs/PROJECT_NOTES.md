@@ -9,9 +9,38 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 18 — Frenz Motion engine + Signature Icon System, slice 1)
+
+- **Owner dropped "Feature 17 — Premium Home, Feed & Navigation Platform, Part
+  1"**, a full enterprise design-system brief (icon philosophy, color system,
+  typography, spacing, glass/material system, every component category,
+  accessibility, performance — the works). Given the scope, agreed with the
+  owner to treat it as the green light for the next two items already queued
+  on the approved design roadmap (tokens ✓ → **motion system** → glass/depth →
+  perf → dark/light) rather than attempting the entire brief at once.
+- **Frenz Motion** (`lib/motion/springs.ts`): one shared spring-physics
+  vocabulary (`press`/`bounce`/`elastic` presets) so every interactive control
+  moves the same way instead of ad-hoc CSS transitions per component.
+  `components/motion/press-icon.tsx` wraps a glyph with spring compression on
+  tap and a small overshoot bounce when it becomes active, gated on
+  `useReducedMotion()`.
+- **Signature Icon System** (`components/icons/frenz-icons.tsx`): the first
+  proprietary Frenz glyphs (Home, Friends, Inbox, Person — outline + solid
+  pairs) replacing `react-icons/io5` on the two nav destinations that appear
+  in *both* the mobile bottom nav and the desktop sidebar (kept them
+  consistent across surfaces rather than upgrading one and not the other).
+  Built entirely from native `<rect rx>` / `<circle>` primitives plus
+  straight-line paths — deliberately not freehand bezier art, since icon
+  geometry is exactly the kind of asset that needs visual QA and this
+  environment can't preview a render before shipping it. Verified by
+  screenshotting a standalone SVG gallery (outline/solid × light/dark × actual
+  26px nav scale) rather than trusting hand-derived path coordinates blind.
+  Explore/Trending/Reels/News/Communities/Notifications/Downloads/Saved stay
+  on `react-icons/io5` for now — next slice.
 
 ## 2026‑07‑09 highlights (batch 17 — independent security crosscheck + site-wide hardening)
 

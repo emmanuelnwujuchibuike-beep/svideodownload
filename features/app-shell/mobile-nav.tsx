@@ -1,19 +1,20 @@
 "use client";
 
 import type { ComponentType } from "react";
-import {
-  IoChatbubbleEllipses,
-  IoChatbubbleEllipsesOutline,
-  IoHome,
-  IoHomeOutline,
-  IoPeopleCircle,
-  IoPeopleCircleOutline,
-  IoPerson,
-} from "react-icons/io5";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { PressIcon } from "@/components/motion/press-icon";
+import {
+  FrenzFriendsOutline,
+  FrenzFriendsSolid,
+  FrenzHomeOutline,
+  FrenzHomeSolid,
+  FrenzInboxOutline,
+  FrenzInboxSolid,
+  FrenzPersonSolid,
+} from "@/components/icons/frenz-icons";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { openUpload } from "@/features/create/upload-store";
 import { useQuery } from "@/features/data";
@@ -56,8 +57,8 @@ export function MobileNav() {
       // already applied to the feed's sticky segmented control (smart-feed.tsx).
       className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-border/25 bg-background/75 px-2 pb-[env(safe-area-inset-bottom)] pt-1.5 backdrop-blur-lg lg:hidden"
     >
-      <NavTab label="Home" href="/home" icon={IoHomeOutline} activeIcon={IoHome} active={pathname === "/home"} onWarm={router.prefetch} />
-      <NavTab label="Friends" href="/friends" icon={IoPeopleCircleOutline} activeIcon={IoPeopleCircle} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />
+      <NavTab label="Home" href="/home" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/home"} onWarm={router.prefetch} />
+      <NavTab label="Friends" href="/friends" icon={FrenzFriendsOutline} activeIcon={FrenzFriendsSolid} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />
 
       {/* Signature create button — an elevated gradient orb with a soft halo.
           Uniquely Frenz: a clean circular FAB that reads as premium, not TikTok. */}
@@ -73,18 +74,20 @@ export function MobileNav() {
       <NavTab
         label="Inbox"
         href="/messages"
-        icon={IoChatbubbleEllipsesOutline}
-        activeIcon={IoChatbubbleEllipses}
+        icon={FrenzInboxOutline}
+        activeIcon={FrenzInboxSolid}
         active={pathname.startsWith("/messages")}
         badge={unread}
         onWarm={router.prefetch}
       />
 
       {/* Profile (Instagram-style avatar) */}
-      <Link href={profileHref} onPointerDown={() => router.prefetch(profileHref)} className="flex flex-col items-center gap-0.5 px-2 py-1 transition-transform duration-100 active:scale-90">
-        <span className={cn("flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white ring-2 transition", profileActive ? "ring-primary" : "ring-transparent")}>
-          <IoPerson className="h-3.5 w-3.5" />
-        </span>
+      <Link href={profileHref} onPointerDown={() => router.prefetch(profileHref)} className="flex flex-col items-center gap-0.5 px-2 py-1">
+        <PressIcon active={profileActive}>
+          <span className={cn("flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white ring-2 transition", profileActive ? "ring-primary" : "ring-transparent")}>
+            <FrenzPersonSolid className="h-3.5 w-3.5" />
+          </span>
+        </PressIcon>
         <span className={cn("text-[10px] font-medium", profileActive ? "text-foreground" : "text-muted-foreground")}>Profile</span>
       </Link>
     </nav>
@@ -110,16 +113,16 @@ function NavTab({
 }) {
   const Glyph = active ? ActiveIcon : Icon;
   return (
-    <Link href={href} onPointerDown={() => onWarm?.(href)} className="relative flex flex-col items-center gap-0.5 px-2 py-1 transition-transform duration-100 active:scale-90">
+    <Link href={href} onPointerDown={() => onWarm?.(href)} className="relative flex flex-col items-center gap-0.5 px-2 py-1">
       {active ? <span aria-hidden className="absolute -top-[7px] h-1 w-6 rounded-full bg-gradient-to-r from-blue-500 to-violet-600 shadow-[0_0_8px] shadow-violet-500/50" /> : null}
-      <span className="relative">
+      <PressIcon active={active} className="relative">
         <Glyph className={cn("h-[26px] w-[26px] transition", active ? "text-foreground" : "text-muted-foreground")} />
         {badge > 0 ? (
           <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-background">
             {badge > 9 ? "9+" : badge}
           </span>
         ) : null}
-      </span>
+      </PressIcon>
       <span className={cn("text-[10px] font-medium", active ? "text-foreground" : "text-muted-foreground")}>{label}</span>
     </Link>
   );

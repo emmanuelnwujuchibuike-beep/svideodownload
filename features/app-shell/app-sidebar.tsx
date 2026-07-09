@@ -13,15 +13,11 @@ import {
   IoFilmOutline,
   IoFlame,
   IoFlameOutline,
-  IoHome,
-  IoHomeOutline,
   IoNewspaper,
   IoNewspaperOutline,
   IoNotifications,
   IoNotificationsOutline,
   IoPeople,
-  IoPeopleCircle,
-  IoPeopleCircleOutline,
   IoPeopleOutline,
   IoAdd,
 } from "react-icons/io5";
@@ -29,6 +25,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { FrenzWordmark } from "@/components/brand/frenz-logo";
+import { PressIcon } from "@/components/motion/press-icon";
+import { FrenzFriendsOutline, FrenzFriendsSolid, FrenzHomeOutline, FrenzHomeSolid } from "@/components/icons/frenz-icons";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { cn } from "@/lib/utils";
 
@@ -48,13 +46,13 @@ export interface NavItem {
 // deep links may return here when the Friends Hub grows tabs).
 export function buildNav(_handle: string | null): NavItem[] {
   return [
-    { label: "Home", href: "/home", icon: IoHomeOutline, activeIcon: IoHome },
+    { label: "Home", href: "/home", icon: FrenzHomeOutline, activeIcon: FrenzHomeSolid },
     { label: "Explore", href: "/explore", icon: IoCompassOutline, activeIcon: IoCompass },
     { label: "Trending", href: "/explore?sort=trending", icon: IoFlameOutline, activeIcon: IoFlame },
     { label: "Reels", href: "/reels", icon: IoFilmOutline, activeIcon: IoFilm },
     { label: "News", href: "/blog", icon: IoNewspaperOutline, activeIcon: IoNewspaper },
     { label: "Communities", href: "/explore", icon: IoPeopleOutline, activeIcon: IoPeople, soon: true },
-    { label: "Friends", href: "/friends", icon: IoPeopleCircleOutline, activeIcon: IoPeopleCircle },
+    { label: "Friends", href: "/friends", icon: FrenzFriendsOutline, activeIcon: FrenzFriendsSolid },
     { label: "Notifications", href: "/notifications", icon: IoNotificationsOutline, activeIcon: IoNotifications },
     { label: "Downloads", href: "/downloads", icon: IoDownloadOutline, activeIcon: IoDownload },
     { label: "Saved", href: "/saved", icon: IoBookmarkOutline, activeIcon: IoBookmark },
@@ -123,12 +121,14 @@ export function AppSidebar({ handle }: { handle: string | null }) {
               {(() => {
                 const Icon = active ? item.activeIcon : item.icon;
                 return (
-                  <Icon
-                    className={cn(
-                      "h-[23px] w-[23px] shrink-0 transition-transform group-active:scale-90",
-                      active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground",
-                    )}
-                  />
+                  <PressIcon active={active}>
+                    <Icon
+                      className={cn(
+                        "h-[23px] w-[23px] shrink-0",
+                        active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground",
+                      )}
+                    />
+                  </PressIcon>
                 );
               })()}
               <span className="flex-1">{item.label}</span>

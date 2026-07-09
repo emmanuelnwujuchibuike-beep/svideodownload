@@ -9,9 +9,31 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (site-down incident fixed, desktop scroll-freeze fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (F logo's black backdrop removed, site-down incident fixed, desktop scroll-freeze fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 13 — F logo transparency)
+
+- **The F logo's dark backdrop is gone, everywhere.** Every brand-mark asset
+  (favicon, in-app `FrenzLogo`, standard PWA icons, the OG/Twitter share-card
+  icon, the icon+wordmark lockup) was cropped from delivered artwork that had
+  an opaque dark-purple/near-black fill behind the rounded-square tile — so
+  every placement of the logo showed a visible dark box around it. Stripped
+  via flood-fill from the 4 canvas corners using each corner's own **fixed**
+  seed color. Important gotcha hit and fixed along the way: an earlier
+  attempt let the flood-fill reference drift to each newly-accepted
+  neighbor's color instead of staying fixed — that leaks straight through the
+  tile's own internal gradient and erases the *entire* icon, not just the
+  corners (caught it visually before committing, reverted, redid it with a
+  fixed reference). Two assets deliberately stay opaque rather than
+  transparent: `app/apple-icon.png` (iOS can render alpha as forced black on
+  the home screen) and `icon-maskable-512.png` (Android maskable icons need a
+  full-bleed fill so launchers don't show a transparent hole) — both now fill
+  with the brand's Royal Purple (`#6C4DFF`) instead of black.
+  `components/og-icon-data.ts`'s hardcoded base64 (see the crash entry below
+  — it's never read from disk at runtime) was regenerated from the new
+  transparent icon.
 
 ## 2026‑07‑09 highlights (batch 12 — site-down incident + 2 real bugs + 1 feature)
 

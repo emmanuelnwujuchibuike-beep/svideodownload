@@ -110,12 +110,15 @@ background** — and every new feature inherits this engine instead of inventing
    `<Suspense>` with a skeleton matching that section's exact final layout, so a first-ever visit
    shows real content up top immediately while everything else fills in progressively, and a cached
    revisit shows everything instantly. **Canonical reference implementation:**
-   `app/(app)/home/page.tsx` — `HomeGreeting` renders unconditionally before any `<Suspense>`, then
+   `app/(app)/home/page.tsx` — the identity/redirect check is the only thing blocking first paint
+   (no greeting hero anymore — removed 2026-07-09 per the Feature 17 header spec, "content is the
+   hero, the header/chrome should never waste space on a per-visit greeting"), then
    `StoriesSection`/`ReelsSection`/`SmartFeedSection`/`RailSection` each stream behind their own
    boundary with a purpose-built skeleton (`StoriesSkeleton`, `ReelsSkeleton`, `FeedSkeleton`, a
-   plain `Skeleton` for the rail). Copy this exact shape for every new page: identify the
-   above-the-fold hero, render it with zero data dependency (or only the cheapest identity check),
-   and Suspense-stream everything else with a skeleton sized to match.
+   plain `Skeleton` for the rail). For pages that DO have a real above-the-fold hero (identity ring,
+   profile header, etc.), render it with zero data dependency (or only the cheapest identity check)
+   and Suspense-stream everything else with a skeleton sized to match — Home just no longer needs
+   one.
 4. **Critical data first.** Server components stream the identity/text layer first; counts, media
    and rails follow in their own Suspense boundaries. Client revisits are instant via the Router
    Cache (`staleTimes` in next.config) + the SWR data layer (`features/data`).

@@ -23,8 +23,10 @@ export function PressIcon({
 
   return (
     <motion.span
+      // No default `display` here on purpose: an inline style would beat any
+      // `hidden`/`sm:*` visibility class a caller passes in `className` (inline
+      // styles always win over classes), silently breaking responsive show/hide.
       className={className}
-      style={{ display: "inline-flex" }}
       whileTap={reduceMotion ? undefined : { scale: 0.8 }}
       animate={reduceMotion ? undefined : active ? { scale: [1, 1.16, 1] } : { scale: 1 }}
       transition={reduceMotion ? { duration: 0 } : springs.bounce}

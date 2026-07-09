@@ -9,9 +9,60 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (Home topbar redesign shipped — Download button + daily greeting removed, brand mark added — Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 19 — Home topbar redesign, Feature 17 Part 2 slice 1)
+
+- **Owner dropped "Feature 17 Part 2 — Premium Top Navigation, Global Header &
+  First Impression Experience."** Like Part 1, it's a huge brief (Smart
+  Header™, Living App Bar™, Quick Switch™ swipe-between-feeds, an optional
+  AI shortcut, voice/image/QR search, seasonal Adaptive Branding™,
+  notification-priority ranking, per-screen contextual headers,
+  personalization settings). Rather than build all of it blind, shipped the
+  slice that was **unambiguous and immediately actionable**: the brief's own
+  "REMOVE CURRENT DESIGN" list explicitly said to delete the Download button
+  and the daily greeting — those aren't open design questions, they're
+  instructions. Everything exploratory (Quick Switch, AI button, voice
+  search, etc.) stays open for a future slice.
+- **Removed the "Download" pill from the Home topbar**
+  (`features/app-shell/app-topbar.tsx`) — downloads already have a dedicated
+  tab on the owner's own profile (`features/profile/downloads-tab.tsx`, via
+  `ProfileTabs`) and a persistent sidebar entry on desktop
+  (`features/app-shell/app-sidebar.tsx`), so nothing was actually lost, just
+  the loud gradient CTA that cluttered Home.
+- **Removed the "Good morning, {name}" greeting** — deleted
+  `features/app-shell/dashboard/home-greeting.tsx` entirely (verified unused
+  elsewhere first) and the now-dead `firstName` computation in
+  `app/(app)/home/page.tsx`. Updated the "hero-instant, sections-skeleton"
+  MANDATORY pattern doc in `docs/FRENZ_CORE.md` — Home no longer has an
+  above-the-fold hero at all now (the identity/redirect check is still the
+  only synchronous gate), which is fine; the pattern still applies to any
+  page that *does* have a real hero.
+- **Added the Frenz wordmark to the topbar, mobile-only** — the desktop
+  sidebar already carries the brand mark, but on mobile (sidebar hidden)
+  the app previously showed zero brand presence once the launch splash
+  passed. Fills the space freed up by removing the Download button + the
+  dead mobile spacer, centered between the two icon clusters.
+- **Wired Frenz Motion press-spring feedback** (`components/motion/press-icon.tsx`,
+  from [[frenz-motion-icon-system|the Part 1 slice]]) onto the topbar's mobile
+  search icon and the Create button.
+- **Real bug caught before shipping**: `PressIcon` had a hardcoded inline
+  `style={{ display: "inline-flex" }}` (added in the Part 1 slice). Inline
+  styles always beat classes in CSS specificity, so wrapping any
+  responsively-hidden element (`hidden sm:inline-flex`, `sm:hidden`) in
+  `PressIcon` would have silently forced it visible/invisible at every
+  breakpoint regardless of the Tailwind class — exactly the case introduced
+  here (Create button, mobile search icon). Fixed by dropping the inline
+  style entirely and letting `className` fully own `display`, same as every
+  other element in this codebase. Caught during self-review, not by a test.
+- **Verification**: auth blocks driving the real `/home` page headlessly (no
+  test-account email inbox access), so — same approach as the icon-gallery
+  check in Part 1 — built a standalone HTML mock reproducing the topbar's
+  exact flex structure at 390px and screenshotted it with local Playwright to
+  confirm the brand mark centers cleanly in the freed-up space instead of
+  guessing from source alone.
 
 ## 2026‑07‑09 highlights (batch 18 — Frenz Motion engine + Signature Icon System, slice 1)
 

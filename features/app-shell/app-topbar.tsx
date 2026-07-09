@@ -1,10 +1,12 @@
 "use client";
 
-import { IoCloudDownloadOutline, IoCloudUploadOutline, IoSearchOutline } from "react-icons/io5";
+import { IoCloudUploadOutline, IoSearchOutline } from "react-icons/io5";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { FrenzWordmark } from "@/components/brand/frenz-logo";
+import { PressIcon } from "@/components/motion/press-icon";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { isTopbarLocked, setTopbarHidden, useTopbarLocked } from "@/features/app-shell/topbar-visibility";
@@ -91,13 +93,15 @@ export function AppTopbar() {
           the right side never gets crowded. */}
       <div className="flex shrink-0 items-center gap-2">
         {/* Mobile search entry (the search box is tablet+ only) */}
-        <Link
-          href="/search"
-          aria-label="Search"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary active:scale-95 sm:hidden"
-        >
-          <IoSearchOutline className="h-[20px] w-[20px]" />
-        </Link>
+        <PressIcon className="sm:hidden">
+          <Link
+            href="/search"
+            aria-label="Search"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary"
+          >
+            <IoSearchOutline className="h-[20px] w-[20px]" />
+          </Link>
+        </PressIcon>
         {/* Add friends — single top-nav icon */}
         <SuggestionsLauncher />
       </div>
@@ -118,29 +122,27 @@ export function AppTopbar() {
         </kbd>
       </form>
 
-      {/* Mobile spacer — pushes the action cluster to the far right */}
-      <div className="flex-1 sm:hidden" />
+      {/* Mobile center — brand mark. The sidebar (desktop-only) already carries
+          the Frenz wordmark, so it never repeats there; on mobile the app shell
+          otherwise never shows the brand at all once the splash has passed. */}
+      <div className="flex flex-1 items-center justify-center sm:hidden">
+        <FrenzWordmark size={24} textClassName="text-[15px]" />
+      </div>
 
       {/* Right action cluster */}
       <div className="flex shrink-0 items-center gap-2">
-        <Link
-          href="/downloads"
-          className="group inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 ring-1 ring-inset ring-white/10 transition hover:shadow-xl hover:shadow-violet-500/40"
-        >
-          <IoCloudDownloadOutline className="h-[18px] w-[18px] transition-transform group-hover:translate-y-0.5" />
-          <span className="hidden sm:inline">Download</span>
-        </Link>
-
         {/* Create / upload — opens the premium composer */}
-        <button
-          type="button"
-          onClick={() => openUpload("post")}
-          aria-label="Create a post"
-          title="Create"
-          className="hidden h-11 w-11 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary hover:text-primary hover:ring-primary/40 sm:inline-flex"
-        >
-          <IoCloudUploadOutline className="h-[21px] w-[21px]" />
-        </button>
+        <PressIcon className="hidden sm:inline-flex">
+          <button
+            type="button"
+            onClick={() => openUpload("post")}
+            aria-label="Create a post"
+            title="Create"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary hover:text-primary hover:ring-primary/40"
+          >
+            <IoCloudUploadOutline className="h-[21px] w-[21px]" />
+          </button>
+        </PressIcon>
 
         {/* Notifications — mobile/tablet only (large screens use the sidebar
             Notifications item, so the top-right stays uncluttered). */}

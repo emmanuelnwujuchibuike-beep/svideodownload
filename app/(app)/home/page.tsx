@@ -5,7 +5,6 @@ import { Suspense } from "react";
 
 import { AppContent } from "@/features/app-shell/app-content";
 import { BrandSplash } from "@/features/app-shell/brand-splash";
-import { HomeGreeting } from "@/features/app-shell/dashboard/home-greeting";
 import { HomeRail } from "@/features/app-shell/dashboard/home-rail";
 import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
@@ -40,7 +39,6 @@ export default async function HomePage() {
   const profile = await getHomeProfile(user.id);
   if (!profile?.handle) redirect("/welcome");
 
-  const firstName = profile.displayName.split(" ")[0] ?? "there";
   const firstVisit = !(await cookies()).get("frenz_welcomed");
   const viewerId = user.id;
 
@@ -60,8 +58,6 @@ export default async function HomePage() {
     >
       {firstVisit ? <BrandSplash /> : null}
       <div className="space-y-6">
-        <HomeGreeting name={firstName} />
-
         <Suspense fallback={<StoriesSkeleton />}>
           <StoriesSection viewerId={viewerId} avatarUrl={profile.avatarUrl} name={profile.displayName} />
         </Suspense>

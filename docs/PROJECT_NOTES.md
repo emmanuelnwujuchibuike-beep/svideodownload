@@ -9,9 +9,100 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 17 — independent security crosscheck + site-wide hardening)
+
+- **Ran a dedicated, independent security review** of the active-sessions diff
+  (batch 16, below) using a fresh sub-agent with no memory of writing the
+  code — specifically to verify the earlier self-caught fix (the
+  `revoke_user_session` ownership-check ordering bug) was actually correct
+  and complete, and to look for anything else missed. Also traced the CORS
+  config (`lib/api/cors.ts`, unchanged) against the new session-revoke
+  endpoints for CSRF risk: `Access-Control-Allow-Origin: "*"` with no
+  `Access-Control-Allow-Credentials` means browsers refuse to send cookies
+  on a cross-origin credentialed request to any `/api/v1/app/*` route —
+  this pre-existing setup already blocks a cross-site page from riding a
+  signed-in user's cookie to revoke/list their sessions. **Result: no
+  high-confidence findings** — the fix held up, nothing new surfaced.
+- **Shipped Content-Security-Policy in report-only mode**
+  (`next.config.ts` `buildCsp()`) — the item docs/SECURITY.md had tracked
+  as "needs a full origin inventory" since 2026-07-06. Inventoried real
+  external origins by grepping the codebase rather than guessing: Paystack
+  checkout is a server-side hosted-page redirect (no script/iframe, so no
+  CSP entry needed); no Google/analytics/Sentry/AdSense scripts are
+  actually wired in despite unused boilerplate env vars in `.env.example`;
+  Cloudflare Stream uses `iframe.cloudflarestream.com` (player) +
+  `customer-<code>.cloudflarestream.com` (HLS/thumbnails); Supabase needs
+  both its REST host and a `wss://` entry for Realtime. **Real finding
+  along the way**: `features/monetization/inject.ts` recreates and
+  executes `<script>` elements from admin-configured Adsterra/PropellerAds
+  ad markup — third-party script origins that are NOT knowable at build
+  time. This confirms report-only (never blocks) is the correct first
+  step, not a guess — enforcing now could have silently broken ad revenue.
+  `img-src`/`media-src`/`connect-src` stay intentionally broad (`https:`)
+  for the same reason `images.remotePatterns` already allows any https
+  host (arbitrary yt-dlp thumbnail CDNs); `object-src none`, `base-uri
+  self`, `frame-ancestors self`, `frame-src` (scoped to Stream only), and
+  `form-action self` are already tight since they cost nothing. Violations
+  collect at new `POST /api/csp-report` (logs only, no DB write, capped
+  body size, no auth — matches how browsers actually send these). Also
+  added `Cross-Origin-Opener-Policy: same-origin-allow-popups` (blocks
+  reverse-tabnabbing; doesn't affect Google sign-in since Supabase does a
+  full-page redirect, not a popup). **Owner action**: watch
+  `/api/csp-report` output in Vercel logs for a few days of real traffic
+  (with ads on) before ever moving this to enforcing.
+
+## 2026‑07‑09 highlights (batch 16 — active sessions / remote device sign-out)
+
+- **Owner dropped a large "Premium Auth, Caching & Performance" spec** covering
+  Redis-backed sessions, IndexedDB caching, offline queue, predictive
+  prefetch, and more. A survey found most of it already existed (Supabase
+  manages Secure/HttpOnly/SameSite cookies with rotation already; Upstash
+  Redis + rate limiting were already wired via `lib/cache.ts`/`lib/rate-limit.ts`;
+  the service worker, `staleTimes` router cache, and the `features/data`
+  SWR-style cache were already in place). Decision with the owner: **extend**
+  Supabase's session handling rather than replace it with a custom Redis
+  session store — replacing already-working, security-critical auth wasn't
+  worth the risk, and it contradicts the documented Frenz Core direction
+  (Passkeys/MFA/device-auth are planned *on top of* Supabase auth).
+- **Shipped first slice: active-sessions / multi-device remote sign-out**
+  (the one genuinely missing piece). Rather than build a second, parallel
+  session tracker, migration `0034_session_management.sql` exposes
+  Supabase's own `auth.sessions` table via three `SECURITY DEFINER` SQL
+  functions (`list_user_sessions`, `revoke_user_session`,
+  `revoke_other_user_sessions`) — locked to `service_role` only, search_path
+  hardened, every table reference fully qualified. `GET /api/v1/app/sessions`
+  lists a user's real devices (Redis-cached 20s via `getCached`); `DELETE
+  /api/v1/app/sessions/:id` revokes one device; `DELETE
+  /api/v1/app/sessions` revokes every device but the caller's. "This
+  device" is identified by decoding the `session_id` claim already present
+  in the caller's own (already-verified) Supabase access token — no new
+  tracking cookie needed. Revoking deletes the `auth.sessions` row (+ its
+  refresh tokens): the target device can't refresh again, though its
+  current short-lived access token stays valid until natural expiry — same
+  behavior as Supabase's own dashboard revoke, and the existing
+  `middleware.ts`/`onAuthStateChange` machinery already handles the
+  graceful redirect-to-login once that happens, so nothing new was needed
+  there. UI: `features/account/active-sessions.tsx` on the Account page —
+  device list with a friendly label parsed from the User-Agent (no
+  dependency added), "This device" badge, per-device sign-out, and a bulk
+  "sign out other devices" action.
+- **Needs migration `0034` applied** (same pattern as 0030/0031/0032) before
+  the sessions panel works in prod — until then it fails closed (Postgres
+  "function not found" → the route returns a 500, not a crash).
+- **Crosscheck pass caught a real bug before ship**: `revoke_user_session`'s
+  first draft deleted `auth.refresh_tokens` by session id BEFORE the
+  ownership check, so an authenticated caller with an arbitrary session
+  UUID could invalidate a stranger's refresh token even though the
+  `auth.sessions` row itself stayed protected. Fixed by deleting the
+  ownership-scoped `auth.sessions` row first and only then its refresh
+  tokens. Also fixed: the UI showed the same "no sessions" copy for a
+  failed fetch as for a genuinely empty list (misleading), and revoking
+  your own current session left the browser's local cookie stale instead
+  of signing out immediately.
 
 ## 2026‑07‑09 highlights (batch 15 — F logo hairline edge + premium OTP email)
 

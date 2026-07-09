@@ -75,7 +75,24 @@ attacker gets anywhere.
 - **Headers** (next.config.ts, all routes): `X-Content-Type-Options: nosniff`,
   `X-Frame-Options: SAMEORIGIN` (clickjacking), `Referrer-Policy:
   strict-origin-when-cross-origin`, `Permissions-Policy` (camera/mic/geo off),
-  `Strict-Transport-Security` (2y, preload). HTTPS is enforced by Vercel.
+  `Strict-Transport-Security` (2y, preload), `Cross-Origin-Opener-Policy:
+  same-origin-allow-popups` (blocks reverse-tabnabbing via `window.opener`;
+  doesn't affect Google sign-in since that's a full-page redirect, not a
+  popup). HTTPS is enforced by Vercel.
+- **Content-Security-Policy — report-only, shipped 2026-07-09**
+  (`next.config.ts` `buildCsp()`): `object-src none`, `base-uri self`,
+  `frame-ancestors self`, `frame-src` scoped to the Cloudflare Stream player
+  only, `form-action self` are already tight. `img-src`/`media-src`/
+  `connect-src` stay intentionally broad (`https:`) because the downloader
+  embeds thumbnails/media from whatever CDN yt-dlp resolves (same reason
+  `images.remotePatterns` allows any https host) and the ad system
+  (`features/monetization/inject.ts`) executes admin-configured third-party
+  script markup (Adsterra/PropellerAds) whose real origins aren't knowable
+  at build time. `script-src`/`style-src` allow `'unsafe-inline'` for now
+  (the boot/theme inline scripts use `dangerouslySetInnerHTML`, not nonces).
+  Report-only can never block a request — violations are collected at
+  `POST /api/csp-report` (logged to Vercel function logs, no DB write) so
+  real production origins can be observed before anything moves to enforce.
 - **Rate limiting** (`lib/rate-limit.ts`): Upstash sliding windows on
   metadata/downloads/messages/OTP + daily caps; OTP tightest at 4/min.
 - **Input validation:** API routes validate with zod (or strict regex — UUID
@@ -87,9 +104,16 @@ attacker gets anywhere.
 
 ## Known follow-ups (tracked)
 
-- Content-Security-Policy: roll out in report-only first (needs a full
-  inventory of media/CDN origins — Stream, R2, Supabase, avatars) so it
-  can't break playback; then enforce.
+- Content-Security-Policy: report-only shipped 2026-07-09 (see above).
+  **Owner action:** watch `/api/csp-report` output in Vercel function logs
+  for a few days of real traffic (esp. with ads enabled) to catch anything
+  the origin inventory above missed, then move `script-src`/`style-src` to
+  nonces and switch the header to enforcing
+  (`Content-Security-Policy`, drop `-Report-Only`).
 - Supabase Auth "leaked password protection" (HaveIBeenPwned check) — enable
   in dashboard once passwords ship.
 - Periodic `npm audit` / dependency updates.
+- Active-sessions/remote sign-out shipped 2026-07-09 (migration 0034 —
+  owner must apply); see docs/PROJECT_NOTES.md batch 16 for the full
+  writeup, including a cross-user session-revocation bug found and fixed
+  before ship.

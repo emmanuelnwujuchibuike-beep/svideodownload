@@ -7,6 +7,53 @@ import type { NextConfig } from "next";
 // without the user deleting and re-adding it to their home screen.
 const appBuild = (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 12) || `dev-${Date.now()}`;
 
+/**
+ * Content-Security-Policy — REPORT-ONLY (docs/SECURITY.md "known follow-up").
+ * Deliberately not enforcing yet: the ad system (features/monetization/inject.ts)
+ * executes admin-configured third-party script markup (Adsterra/PropellerAds)
+ * whose exact origins aren't knowable at build time, and the downloader itself
+ * embeds thumbnails from whatever CDN yt-dlp resolves (images.remotePatterns
+ * already allows any https host for the same reason) — enforcing blindly could
+ * silently break ads or thumbnails. Report-only can never block a request; it
+ * only surfaces violations (via report-uri, logged at /api/csp-report) so real
+ * production origins can be observed before anything is tightened to `enforce`.
+ * img/media/connect stay intentionally broad (https:) for that reason; the
+ * directives that are cheap to lock down now (object-src, base-uri, frame-src,
+ * frame-ancestors, form-action) already are.
+ */
+function buildCsp(): string {
+  const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseHost = supabase ? new URL(supabase).host : null;
+  const r2 = process.env.R2_PUBLIC_BASE_URL;
+  const streamCode = process.env.NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE;
+
+  const connect = ["'self'", "https:", "wss:"];
+  const frame = ["'self'", "https://iframe.cloudflarestream.com"];
+  if (supabaseHost) connect.push(`wss://${supabaseHost}`);
+  if (r2) connect.push(r2);
+  if (streamCode) frame.push(`https://customer-${streamCode}.cloudflarestream.com`);
+
+  const directives: Record<string, string[]> = {
+    "default-src": ["'self'"],
+    "base-uri": ["'self'"],
+    "object-src": ["'none'"],
+    "frame-ancestors": ["'self'"],
+    // Inline boot/theme scripts + JSON-LD use dangerouslySetInnerHTML, not nonces yet.
+    "script-src": ["'self'", "'unsafe-inline'"],
+    "style-src": ["'self'", "'unsafe-inline'"],
+    "img-src": ["'self'", "https:", "data:", "blob:"],
+    "media-src": ["'self'", "https:", "blob:"],
+    "connect-src": connect,
+    "frame-src": frame,
+    "form-action": ["'self'"],
+  };
+
+  const policy = Object.entries(directives)
+    .map(([key, values]) => `${key} ${values.join(" ")}`)
+    .join("; ");
+  return `${policy}; report-uri /api/csp-report`;
+}
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -57,6 +104,12 @@ const nextConfig: NextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains; preload",
           },
+          // Blocks a same-origin popup/tab from getting a `window.opener` handle
+          // back to this page (reverse-tabnabbing) while still allowing OAuth
+          // popups to open — Supabase's Google sign-in is a full-page redirect
+          // anyway, not a popup, so this has no functional effect on that flow.
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+          { key: "Content-Security-Policy-Report-Only", value: buildCsp() },
         ],
       },
     ];

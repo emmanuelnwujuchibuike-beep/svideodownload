@@ -60,16 +60,26 @@ export function MobileNav() {
       <NavTab label="Home" href="/home" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/home"} onWarm={router.prefetch} />
       <NavTab label="Friends" href="/friends" icon={FrenzFriendsOutline} activeIcon={FrenzFriendsSolid} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />
 
-      {/* Signature create button — an elevated gradient orb with a soft halo.
-          Uniquely Frenz: a clean circular FAB that reads as premium, not TikTok. */}
-      <button type="button" onClick={() => openUpload("post")} aria-label="Create" className="group relative -mt-6 flex h-14 w-14 items-center justify-center transition-transform duration-100 active:scale-90">
-        <span aria-hidden className="absolute inset-1 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 opacity-50 blur-md transition group-active:opacity-70" />
-        <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-600/40 ring-4 ring-background">
-          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </span>
-      </button>
+      {/* Signature create button — balanced, not oversized: a modest -3.5 lift
+          (not a floating orb), the same two-stop brand gradient used
+          everywhere else (not an off-brand third fuchsia stop), and a
+          restrained single-layer halo. Frenz Motion press spring replaces the
+          old ad-hoc active:scale. */}
+      <PressIcon className="-mt-3.5">
+        <button
+          type="button"
+          onClick={() => openUpload("post")}
+          aria-label="Create"
+          className="group relative flex h-12 w-12 items-center justify-center"
+        >
+          <span aria-hidden className="absolute inset-0.5 rounded-full bg-brand opacity-40 blur-[6px] transition group-active:opacity-60" />
+          <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-md shadow-violet-600/30 ring-[3px] ring-background">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </span>
+        </button>
+      </PressIcon>
 
       <NavTab
         label="Inbox"
@@ -116,7 +126,12 @@ function NavTab({
     <Link href={href} onPointerDown={() => onWarm?.(href)} className="relative flex flex-col items-center gap-0.5 px-2 py-1">
       {active ? <span aria-hidden className="absolute -top-[7px] h-1 w-6 rounded-full bg-gradient-to-r from-blue-500 to-violet-600 shadow-[0_0_8px] shadow-violet-500/50" /> : null}
       <PressIcon active={active} className="relative">
-        <Glyph className={cn("h-[26px] w-[26px] transition", active ? "text-foreground" : "text-muted-foreground")} />
+        <Glyph
+          className={cn(
+            "h-[26px] w-[26px] transition",
+            active ? "text-foreground drop-shadow-[0_0_5px_rgba(124,58,237,0.5)]" : "text-muted-foreground",
+          )}
+        />
         {badge > 0 ? (
           <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-background">
             {badge > 9 ? "9+" : badge}

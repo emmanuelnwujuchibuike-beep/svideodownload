@@ -9,9 +9,52 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (Home topbar redesign shipped — Download button + daily greeting removed, brand mark added — Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (bottom nav redesign shipped — balanced Create button, on-brand gradient, active-state glow — Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 20 — bottom nav redesign, Feature 17 Part 3 slice 1)
+
+- **Owner dropped "Feature 17 Part 3 — Premium Bottom Navigation, Global Tab
+  Bar, Create Button & Navigation Experience"**, the third brief of the day
+  in this series. Two structural asks turned out to already be satisfied by
+  earlier work, so the slice narrowed fast: the spec's required tab set
+  (**Home, Friends, Create, Inbox, Profile — "no Downloads"**) already
+  matches `features/app-shell/mobile-nav.tsx` exactly, and the "proprietary
+  icon family, no stock icons" requirement for those four tabs was already
+  shipped in the Part 1 Motion/Icon slice (`components/icons/frenz-icons.tsx`).
+  No code changes needed for either — verified, not assumed.
+- **Redesigned the Create button** (`features/app-shell/mobile-nav.tsx`) per
+  the brief's explicit "❌ Oversized Create button" removal item: shrunk
+  56px → 48px, elevation lift `-mt-6` (−24px) → `-mt-3.5` (−14px), and — a
+  real inconsistency this caught, not just a taste call — the gradient was a
+  three-stop `blue→violet→fuchsia` that doesn't match any documented brand
+  token ([[design-tokens]] only defines the two-stop Electric
+  Blue→Royal Purple gradient, exposed as the `.bg-brand` utility). Switched
+  to `.bg-brand` so the Create button now uses the same gradient as
+  everything else in the app instead of its own one-off variant. Softened
+  the halo/shadow to match the smaller scale. Replaced the ad-hoc
+  `active:scale-90` with [[frenz-motion-icon-system|Frenz Motion]]'s
+  `PressIcon` spring, same as every other nav icon now.
+- **Added a static active-state glow** (a single `drop-shadow` filter, brand
+  purple) to the active tab's icon in both the mobile bottom nav and the
+  desktop sidebar, addressing "❌ Weak active states." Deliberately static,
+  not an idle-breathing pulse — the brief's own "Living Navigation" section
+  says "nothing exaggerated," and a looping animation on a permanently-visible
+  nav element has a real battery/perf cost for zero functional benefit.
+- **Verified other "REMOVE CURRENT DESIGN" line items were already non-issues**
+  rather than inventing fixes for them: nav bar spacing already uses
+  `justify-around` (even by construction), tab icons already have no heavy
+  circular background (only the Profile avatar bubble and Create button are
+  circular, which is the correct/expected treatment for those, not a defect).
+- **Verified visually** the same way as the two prior Part 1/2 slices — a
+  standalone HTML mock at real mobile width + Playwright screenshot — since
+  auth still blocks driving the live nav headlessly.
+- **Left open** (all substantial standalone features, not visual polish):
+  the Create Hub bottom sheet (photo/video/story/reel/live/AI/draft/template
+  picker), Priority Inbox re-ranking, Navigation Intelligence long-press
+  per-tab shortcuts, header/nav personalization settings, and true morph
+  transitions between active/inactive icon states.
 
 ## 2026‑07‑09 highlights (batch 19 — Home topbar redesign, Feature 17 Part 2 slice 1)
 

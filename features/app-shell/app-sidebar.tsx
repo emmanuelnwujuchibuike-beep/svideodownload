@@ -125,7 +125,9 @@ export function AppSidebar({ handle }: { handle: string | null }) {
                     <Icon
                       className={cn(
                         "h-[23px] w-[23px] shrink-0",
-                        active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground",
+                        active
+                          ? "text-foreground drop-shadow-[0_0_5px_rgba(124,58,237,0.5)]"
+                          : "text-muted-foreground group-hover:text-foreground",
                       )}
                     />
                   </PressIcon>

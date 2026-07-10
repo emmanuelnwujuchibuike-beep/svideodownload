@@ -1,6 +1,7 @@
 import { MessageCircle } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { ConversationList } from "@/features/social/conversation-list";
 import { listConversations } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/server";
@@ -29,9 +30,7 @@ export default async function MessagesLayout({ children }: { children: ReactNode
       {/* Desktop inbox pane */}
       <aside className="hidden w-[340px] shrink-0 flex-col overflow-hidden rounded-3xl border border-border/70 bg-card/60 shadow-sm backdrop-blur-xl lg:flex">
         <h1 className="flex items-center gap-2 px-4 pb-2 pt-4 text-xl font-bold tracking-[-0.02em]">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-[0_4px_14px_-4px_rgba(124,58,237,0.7)]">
-            <MessageCircle className="h-4 w-4" />
-          </span>
+          <ModuleIconBadge icon={MessageCircle} className="h-8 w-8" />
           Messages
         </h1>
         <ConversationList initial={conversations} variant="pane" />

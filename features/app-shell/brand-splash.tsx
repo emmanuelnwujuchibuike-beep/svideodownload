@@ -7,8 +7,9 @@ import { useEffect, useState } from "react";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 
 // A distinctive display face for the wordmark ONLY — the app's one body/UI
-// font stays Inter everywhere else (see app/layout.tsx). Scoped this tightly
-// (a single splash moment) rather than adopting a second font app-wide.
+// font stays Plus Jakarta Sans everywhere else (see app/layout.tsx). Scoped
+// this tightly (a single splash moment) rather than adopting a second font
+// app-wide.
 const wordmarkFont = Space_Grotesk({ subsets: ["latin"], weight: ["500", "600"] });
 
 /**

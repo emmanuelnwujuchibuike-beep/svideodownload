@@ -66,8 +66,8 @@ export function FeedTopbarTabs({
             transition={springs.press}
             className={cn(
               "relative flex shrink-0 items-center gap-1.5 rounded-full py-2 font-bold transition-colors",
-              active ? "px-3.5 text-[13px] text-white" : "h-9 w-9 justify-center",
-              !active && isReels && "text-violet-500 dark:text-violet-300",
+              active ? "px-3.5 text-[13px] text-background" : "h-9 w-9 justify-center",
+              !active && isReels && "text-foreground/80",
               !active && !isReels && "text-foreground/60 hover:text-foreground",
             )}
           >
@@ -75,21 +75,19 @@ export function FeedTopbarTabs({
               <motion.span
                 layoutId="feed-topbar-pill"
                 transition={springs.bounce}
-                className="absolute inset-0 -z-10 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 shadow-[0_4px_16px_-4px] shadow-violet-500/50"
+                className="absolute inset-0 -z-10 rounded-full bg-foreground shadow-[0_4px_16px_-4px] shadow-foreground/40"
               />
             ) : null}
-            {/* Reels always keeps a soft violet-tinted backdrop (it never gets the
+            {/* Reels always keeps a soft tinted backdrop (it never gets the
                 active pill treatment, so it needs its own way to read as clearly
-                tappable/important, not just another filter icon). */}
+                tappable/important, not just another filter icon). Was a violet
+                tint — "too much purple splashing" correction (2026-07-10): a
+                neutral one instead. */}
             {!active && isReels ? (
-              <span aria-hidden className="absolute inset-0 -z-10 rounded-full bg-violet-500/10 ring-1 ring-inset ring-violet-500/15" />
+              <span aria-hidden className="absolute inset-0 -z-10 rounded-full bg-secondary ring-1 ring-inset ring-border" />
             ) : null}
             <PressIcon active={active}>
-              <Icon
-                className={cn(
-                  active || !isReels ? "h-[18px] w-[18px]" : "h-[22px] w-[22px] drop-shadow-[0_1px_5px_rgba(167,139,250,0.55)]",
-                )}
-              />
+              <Icon className={cn(active || !isReels ? "h-[18px] w-[18px]" : "h-[22px] w-[22px] drop-shadow-sm")} />
             </PressIcon>
             {active ? <span className="whitespace-nowrap">{t.label}</span> : null}
           </motion.button>

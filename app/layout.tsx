@@ -1,6 +1,6 @@
 import { MotionConfig } from "framer-motion";
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ThemeProvider } from "@/components/theme-provider";
@@ -13,7 +13,14 @@ import { SITE_URL as siteUrl } from "@/lib/site";
 
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+// Owner ask (2026-07-10): "a premium human font like snapchat and tiktok
+// font." Their actual fonts (Graphik/TikTok Sans) are proprietary; Plus
+// Jakarta Sans is the closest freely-licensed match to that same modern,
+// rounded-humanist-geometric feel — a common stand-in for exactly this brief
+// in premium consumer apps. Wired through the SAME `--font-sans` variable
+// Inter used, so every page inherits it automatically via Tailwind's
+// `font-sans` (no per-component changes needed).
+const displaySans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-sans" });
 
 // ISR: static pages (incl. the global footer's admin-managed Recommended Tools)
 // regenerate at most once a minute, so monetization changes go live without a
@@ -130,7 +137,7 @@ export default function RootLayout({
           )),
         )}
       </head>
-      <body className={`${inter.variable} font-sans`}>
+      <body className={`${displaySans.variable} font-sans`}>
         {/* Branded boot loader baked into the first HTML so cold entries never
             flash an empty page; it fades itself out once the document is ready. */}
         <BootSplash />

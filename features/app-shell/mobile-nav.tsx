@@ -63,10 +63,13 @@ export function MobileNav() {
       <NavTab label="Friends" href="/friends" icon={FrenzFriendsOutline} activeIcon={FrenzFriendsSolid} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />
 
       {/* Signature create button — balanced, not oversized: a modest -3.5 lift
-          (not a floating orb), the same two-stop brand gradient used
-          everywhere else (not an off-brand third fuchsia stop), and a
-          restrained single-layer halo. Frenz Motion press spring replaces the
-          old ad-hoc active:scale. */}
+          (not a floating orb), a distinct dark squircle (not another circle,
+          not the brand gradient) so it reads as the one deliberate, different
+          action in the bar rather than just another nav tab. Owner correction
+          (2026-07-10): was the same circular brand-gradient tile every other
+          "brand" tile used — asked for a different shape + a dark color
+          specifically here, distinct from the rest of the nav. Frenz Motion
+          press spring replaces the old ad-hoc active:scale. */}
       <PressIcon className="-mt-3.5">
         <button
           type="button"
@@ -77,8 +80,8 @@ export function MobileNav() {
           aria-label="Create"
           className="group relative flex h-12 w-12 items-center justify-center"
         >
-          <span aria-hidden className="absolute inset-0.5 rounded-full bg-brand opacity-40 blur-[6px] transition group-active:opacity-60" />
-          <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-md shadow-violet-600/30 ring-[3px] ring-background">
+          <span aria-hidden className="absolute inset-0.5 rounded-2xl bg-neutral-800 opacity-40 blur-[6px] transition group-active:opacity-60" />
+          <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-800 text-white shadow-md shadow-black/40 ring-[3px] ring-background">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
               <path d="M12 5v14M5 12h14" />
             </svg>
@@ -104,7 +107,7 @@ export function MobileNav() {
         className="flex flex-col items-center gap-0.5 px-2 py-1"
       >
         <PressIcon active={profileActive}>
-          <span className={cn("flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-[0_2px_6px_-1px] shadow-violet-600/50 ring-2 transition", profileActive ? "ring-primary" : "ring-transparent")}>
+          <span className={cn("flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background shadow-[0_2px_6px_-1px] shadow-foreground/40 ring-2 transition", profileActive ? "ring-foreground" : "ring-transparent")}>
             <FrenzPersonSolid className="h-3.5 w-3.5" />
           </span>
         </PressIcon>
@@ -139,7 +142,7 @@ function NavTab({
       onClick={() => haptic("light")}
       className="relative flex flex-col items-center gap-0.5 px-2 py-1"
     >
-      {active ? <span aria-hidden className="absolute -top-[7px] h-1 w-6 rounded-full bg-gradient-to-r from-blue-500 to-violet-600 shadow-[0_0_8px] shadow-violet-500/50" /> : null}
+      {active ? <span aria-hidden className="absolute -top-[7px] h-1 w-6 rounded-full bg-foreground shadow-[0_0_8px] shadow-foreground/40" /> : null}
       <PressIcon active={active} className="relative">
         <NavIconBadge icon={<Glyph />} active={active} tileClassName="h-10 w-10" iconClassName="h-[19px] w-[19px]" />
         {badge > 0 ? (

@@ -114,13 +114,15 @@ export function AppSidebar({ handle }: { handle: string | null }) {
               className={cn(
                 "group relative flex items-center gap-3.5 rounded-2xl px-3 py-2.5 text-[15px] font-semibold transition-all duration-200",
                 active
-                  ? "bg-gradient-to-r from-blue-600/12 via-violet-600/10 to-transparent text-foreground shadow-[0_1px_0_0_hsl(var(--border))] ring-1 ring-inset ring-violet-500/25"
+                  ? "bg-secondary text-foreground shadow-[0_1px_0_0_hsl(var(--border))] ring-1 ring-inset ring-border"
                   : "text-muted-foreground hover:translate-x-0.5 hover:bg-secondary/70 hover:text-foreground",
               )}
             >
-              {/* Active accent bar */}
+              {/* Active accent bar — was the brand blue→violet gradient here;
+                  "too much purple splashing" correction (2026-07-10): a solid
+                  foreground bar (dark in light mode, white in dark mode). */}
               {active ? (
-                <span aria-hidden className="absolute -left-3 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-blue-500 to-violet-600 shadow-[0_0_12px_2px] shadow-violet-500/40" />
+                <span aria-hidden className="absolute -left-3 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-foreground shadow-[0_0_12px_2px] shadow-foreground/30" />
               ) : null}
               {(() => {
                 const Icon = active ? item.activeIcon : item.icon;
@@ -132,7 +134,7 @@ export function AppSidebar({ handle }: { handle: string | null }) {
               })()}
               <span className="flex-1">{item.label}</span>
               {item.badge ? (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-1.5 text-[10px] font-bold text-white shadow-sm shadow-violet-500/40">{item.badge}</span>
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-foreground px-1.5 text-[10px] font-bold text-background shadow-sm shadow-foreground/30">{item.badge}</span>
               ) : item.soon ? (
                 <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Soon</span>
               ) : null}

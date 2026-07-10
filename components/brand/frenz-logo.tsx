@@ -5,33 +5,40 @@ import { cn } from "@/lib/utils";
 /**
  * The Frenz "F" mark — the single source of truth for the brand logo.
  *
- * Real artwork, not a hand-drawn glyph: a glass/gradient F with an integrated
- * play-triangle notch on its own rounded-square tile (`public/brand/frenz-icon-master.png`,
- * cropped tight from the delivered source). This one file is now what renders
- * everywhere the brand mark appears — favicon, apple-touch-icon, PWA manifest
- * icons, the push-notification icon, the Open Graph/Twitter share card, and
- * every in-app usage below — so there is exactly one logo asset in the whole
- * product. The un-cropped delivered artwork lives at
- * `public/brand/frenz-mark-source.jpg` and the icon+wordmark lockup at
- * `public/brand/frenz-lockup-master.png`, kept for future re-exports.
+ * Two square exports of the same real artwork (a glass/gradient F with an
+ * integrated play-triangle notch):
+ *  • `public/brand/frenz-logo.png` — TRANSPARENT background. The default, used
+ *    everywhere the mark sits on the app's own surfaces: marketing header/footer,
+ *    loaders, the pull-to-refresh spinner, the favicon, the email, and the
+ *    Open Graph / share cards. It adapts to whatever's behind it.
+ *  • `public/brand/frenz-logo-tile.png` — the same F on its dark navy tile
+ *    (opaque). Used via `tile` for the in-app "webapp logo" (the sidebar) so it
+ *    reads like the installed app icon, and it's the source for the PWA / iOS /
+ *    maskable home-screen icons (which must be opaque).
  *
  * <FrenzLogo /> = the mark alone · <FrenzMark /> = the mark with a drop shadow ·
- * <FrenzWordmark /> = mark + "Frenz".
+ * <FrenzWordmark /> = mark + "Frenz". Pass `tile` to any of them for the
+ * dark-tiled app-icon variant.
  */
 export function FrenzLogo({
   className,
   size = 32,
   priority = false,
+  tile = false,
 }: {
   className?: string;
   size?: number;
   /** Set true for chrome that's always visible immediately (persistent nav,
    * full-page splash) — everywhere else it lazy-loads like any other image. */
   priority?: boolean;
+  /** Use the dark-tiled (opaque, app-icon-style) mark instead of the
+   * transparent one — for the in-app webapp logo and anywhere a logo suits a
+   * background. */
+  tile?: boolean;
 }) {
   return (
     <Image
-      src="/brand/frenz-icon-master.png"
+      src={tile ? "/brand/frenz-logo-tile.png" : "/brand/frenz-logo.png"}
       alt="Frenz"
       width={size}
       height={size}
@@ -46,15 +53,18 @@ export function FrenzMark({
   className,
   size = 72,
   priority,
+  tile = false,
 }: {
   className?: string;
   size?: number;
   priority?: boolean;
+  tile?: boolean;
 }) {
   return (
     <FrenzLogo
       size={size}
       priority={priority}
+      tile={tile}
       className={cn("shadow-[0_18px_50px_-12px_rgba(124,58,237,0.55)]", className)}
     />
   );
@@ -66,15 +76,18 @@ export function FrenzWordmark({
   size = 30,
   textClassName,
   priority,
+  tile = false,
 }: {
   className?: string;
   size?: number;
   textClassName?: string;
   priority?: boolean;
+  /** Dark-tiled app-icon mark — for the in-app webapp logo (sidebar). */
+  tile?: boolean;
 }) {
   return (
     <span className={cn("inline-flex items-center gap-2 font-bold", className)}>
-      <FrenzLogo size={size} priority={priority} />
+      <FrenzLogo size={size} priority={priority} tile={tile} />
       <span className={cn("text-gradient text-[17px] tracking-tight", textClassName)}>Frenz</span>
     </span>
   );

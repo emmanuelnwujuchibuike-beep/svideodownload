@@ -84,9 +84,10 @@ export function AppSidebar({ handle }: { handle: string | null }) {
           space below it instead of reaching the bottom of the screen). Fixed is
           pinned to the viewport unconditionally, so it can never move. */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col overflow-hidden border-r border-border/60 bg-gradient-to-b from-card/70 to-card/30 px-3 py-4 backdrop-blur-xl lg:flex">
-      {/* Brand */}
+      {/* Brand — the in-app "webapp logo": the dark-tiled app-icon mark, so it
+          reads like the installed app icon rather than a bare glyph. */}
       <Link href="/home" className="mb-6 flex shrink-0 items-center px-2">
-        <FrenzWordmark size={34} textClassName="text-lg" priority />
+        <FrenzWordmark size={34} textClassName="text-lg" priority tile />
       </Link>
 
       {/* Scrollable middle — nav + spaces. Keeps the Premium card always visible

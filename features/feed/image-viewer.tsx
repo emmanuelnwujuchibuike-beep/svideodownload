@@ -93,11 +93,6 @@ function ImageStage({ item, startIndex = 0, onClose }: { item: FeedItem; startIn
   // — currently the date posted — instead of opening the comments sheet.
   const [infoOpen, setInfoOpen] = useState(false);
   const [burst, setBurst] = useState<{ x: number; y: number; key: number } | null>(null);
-  // Near-screen-aspect photos cover the screen edge-to-edge — under the status
-  // bar and home indicator, no letterbox slivers — the same TikTok-style
-  // full-bleed rule the video players use. Clearly different shapes (a wide
-  // landscape photo on a tall phone) stay fully visible (object-contain).
-  const [fullBleed, setFullBleed] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [moreOpen, setMoreOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -304,23 +299,22 @@ function ImageStage({ item, startIndex = 0, onClose }: { item: FeedItem; startIn
               startY.current = null;
             }}
           >
+            {/* Always object-contain — tapping a photo to "view" it must show
+                the WHOLE picture, never a cropped fill. (An earlier full-bleed
+                object-cover rule cropped near-screen-aspect photos, so the
+                edges were cut off — it read as "the picture doesn't show
+                full".) A blurred backdrop still fills the letterbox space. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={src}
               alt={title}
-              className={cn(
-                "select-none",
-                fullBleed ? "h-full w-full object-cover" : "max-h-full max-w-full object-contain",
-              )}
+              className="max-h-full max-w-full select-none object-contain"
               draggable={false}
-              onLoad={(e) => {
-                const img = e.currentTarget;
-                if (!img.naturalWidth || !img.naturalHeight || typeof window === "undefined") return;
-                const screen = window.innerWidth / window.innerHeight;
-                const ratio = img.naturalWidth / img.naturalHeight;
-                setFullBleed(Math.abs(ratio - screen) / screen < 0.22);
-              }}
             />
+            {/* blurred fill behind the letterbox so a photo whose shape doesn't
+                match the screen never sits on plain black */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={src} alt="" aria-hidden className="pointer-events-none absolute inset-0 -z-10 h-full w-full scale-110 object-cover opacity-30 blur-2xl" />
           </div>
         )}
 

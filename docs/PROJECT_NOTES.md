@@ -9,9 +9,62 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (reusable pull-to-refresh + Stories-style Continue Watching player shipped — unified zoom/expand across feed video/carousel/reel albums + reel-album crossfade, Feed card polish shipped, owner-reported bug batch: mobile topbar brand mark removed, Continue Watching instant-reopen cache-warm shipped, Profile-menu stuck-backdrop nav bug fixed, Stories strip redesign shipped, Home page content-balancing bug fixed + Continue Watching wired in, bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (definitive carousel vertical-scroll fix + full-photo image viewer + new branded F logo everywhere; reusable pull-to-refresh + Stories-style Continue Watching player shipped — unified zoom/expand across feed video/carousel/reel albums + reel-album crossfade, Feed card polish shipped, owner-reported bug batch: mobile topbar brand mark removed, Continue Watching instant-reopen cache-warm shipped, Profile-menu stuck-backdrop nav bug fixed, Stories strip redesign shipped, Home page content-balancing bug fixed + Continue Watching wired in, bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 27 — definitive carousel scroll fix, full-photo viewer, new branded F logo everywhere, owner-reported)
+
+Owner reported: album carousels still couldn't be scrolled past on touch ("multiple pictures in feed still doesn't scroll … I can only scroll sideways"), tapped photos didn't show in full, and asked to replace the logo everywhere with the newly-branded F art (a transparent version for share/email/favicon/marketing, a dark-tiled version for the in-app webapp logo).
+
+- **The real carousel vertical-scroll bug — found and PROVEN, not guessed.**
+  `MediaCarousel` (the feed's album/multi-media carousel, used by BOTH photo
+  and video albums) set `touch-action: pan-x` on its native horizontal
+  scroller. A CDP touch-emulation reproduction (real trusted touch events,
+  not synthetic) showed conclusively: with `pan-x` a vertical swipe that
+  begins on the carousel scrolls the page **0px** — the scroll container
+  captures the vertical gesture and, because it can't scroll vertically
+  (`overflow-y: hidden`), never chains to the page. Fix: `touch-action:
+  pan-x pan-y`, which the same reproduction proved restores vertical page
+  scroll (322px) while keeping horizontal carousel scroll (372px). This is
+  why single feed videos always scrolled fine — `FeedVideo` uses
+  `touch-pan-y`, not `pan-x`. The ONLY other explicit `pan-x` is the
+  fullscreen `AlbumSwipe` (image viewer), correctly left alone — it's a
+  locked modal with no page to scroll, where JS owns the swipe-down dismiss.
+  Every other in-app horizontal rail (stories, trending, continue-watching,
+  notification tabs…) uses default `touch-action: auto`, which the matrix
+  proved scrolls both axes — so none of them were ever affected. The reels
+  deck uses `pan-y` (its own scroll axis) and was never the bug; inline
+  **video albums** in the feed ARE `MediaCarousel`, so they're fixed by the
+  same one-line change.
+- **Tapped photos now show in FULL.** The single-image viewer
+  (`ImageViewer`) had a "full-bleed" rule that switched near-screen-aspect
+  photos to `object-cover`, cropping their edges — which read as "the
+  picture doesn't show full." Removed it: a tapped photo is now always
+  `object-contain` (whole picture visible) over a blurred backdrop that
+  fills the letterbox. (Albums already used `object-contain`; only the
+  single-photo path had the crop.)
+- **New branded F logo, everywhere, two variants.** Two clean square exports
+  drive the whole product from `components/brand/frenz-logo.tsx`:
+  `public/brand/frenz-logo.png` (transparent) and
+  `public/brand/frenz-logo-tile.png` (the same F on its dark navy tile,
+  opaque). `FrenzLogo`/`FrenzWordmark`/`FrenzMark` default to the
+  **transparent** mark and take a `tile` prop for the dark-tiled app-icon
+  variant. Placement per owner's instruction:
+  - **Transparent** — marketing header/footer, loaders, the pull-to-refresh
+    spinner, the sign-in email (`resend.ts`), the **favicon** (`app/icon.png`,
+    the browser-tab mark "by the side of the URL"), and the **share/Open Graph
+    cards** (`OG_ICON_BASE64` regenerated at 184px → covers the root
+    opengraph-image, twitter-image, and per-downloader OG). SEO/landing pages
+    inherit the transparent mark through the shared header/footer.
+  - **Dark tile** — the in-app **webapp logo** (the app sidebar wordmark) and
+    the opaque home-screen icons that must not be transparent: `app/apple-icon.png`
+    (iOS), `public/icon-192.png`/`icon-512.png`/`icon-maskable-512.png` (PWA +
+    Android maskable), and `public/icon.png` (the push-notification icon in
+    `sw.js`). All regenerated from the tile with `sharp`.
+  - **Sitemap**: a sitemap is a URL list with no logo — nothing to change
+    there; the "share a link" and "favicon by the URL" asks are the OG cards
+    and `app/icon.png` respectively, both updated.
 
 ## 2026‑07‑09 highlights (batch 26 — pull-to-refresh + Stories-style Continue Watching player, owner-reported)
 

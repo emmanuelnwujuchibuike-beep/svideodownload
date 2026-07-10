@@ -92,7 +92,17 @@ export function MediaCarousel({
           "flex snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           "aspect-[4/5]",
         )}
-        style={{ touchAction: "pan-x" }}
+        // MUST allow BOTH axes. `pan-x` ALONE was the bug: it tells the browser
+        // "only horizontal panning is possible for touches that start here", so
+        // a vertical swipe beginning on an album carousel scrolled NOTHING — the
+        // page couldn't move and the post felt frozen (photos AND video albums).
+        // With `pan-x pan-y` the browser direction-locks: a horizontal drag
+        // scrolls the carousel natively, a vertical drag chains to the page
+        // (the scroller has no vertical overflow, so it hands the gesture up).
+        // Back/forward-nav on horizontal overscroll is still blocked by the
+        // `overscroll-x-contain` above; single feed videos already do exactly
+        // this (they use `touch-pan-y`), which is why THEY always scrolled fine.
+        style={{ touchAction: "pan-x pan-y" }}
       >
         {items.map((m, i) => (
           <div key={i} className="relative h-full w-full shrink-0 snap-center">

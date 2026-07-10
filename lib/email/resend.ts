@@ -78,7 +78,7 @@ export function sendOtpEmail(to: string, code: string): Promise<boolean> {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;background:#ffffff;border-radius:24px;border:1px solid #ececf2;overflow:hidden;">
         <tr><td style="height:5px;background:linear-gradient(90deg,#0A84FF,#6C4DFF,#c026d3);font-size:0;line-height:0;">&nbsp;</td></tr>
         <tr><td style="padding:40px 40px 0;text-align:center;">
-          <img src="${SITE_URL}/brand/frenz-icon-og.png" width="52" height="52" alt="Frenz" style="display:block;margin:0 auto 14px;border-radius:13px;">
+          <img src="${SITE_URL}/brand/frenz-logo.png" width="52" height="52" alt="Frenz" style="display:block;margin:0 auto 14px;border-radius:13px;">
           <span style="font-family:${FONT};font-size:20px;font-weight:800;letter-spacing:-0.02em;">
             <span style="color:#17171c;">Frenz</span><span style="color:#0A84FF;">Save</span>
           </span>

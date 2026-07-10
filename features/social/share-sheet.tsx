@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { toast } from "@/features/ui/toast";
+import { haptic, hapticPattern } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
 /**
@@ -118,11 +119,7 @@ export function ShareSheet({
       else next.add(id);
       return next;
     });
-    try {
-      navigator.vibrate?.(6);
-    } catch {
-      /* no haptics */
-    }
+    haptic("light");
   };
 
   const postUrl = () => `${window.location.origin}/p/${postId}`;
@@ -142,11 +139,7 @@ export function ShareSheet({
         return;
       }
       setSentCount(json.sent as number);
-      try {
-        navigator.vibrate?.([10, 40, 10]);
-      } catch {
-        /* no haptics */
-      }
+      hapticPattern([10, 40, 10]);
       setTimeout(onClose, 950);
     } catch {
       toast("Network error — try again.", "error");

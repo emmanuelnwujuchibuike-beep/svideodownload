@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { type ReactNode, useRef, useState } from "react";
 
+import { haptic } from "@/lib/motion/haptics";
+
 /**
  * Hidden admin entry point: press and hold the wrapped element for ~600ms to
  * open the admin dashboard. Lives in the global footer, so it's reachable from
@@ -23,9 +25,7 @@ export function SecretAdminGesture({
   const start = () => {
     setHeld(true);
     timer.current = setTimeout(() => {
-      if (typeof navigator !== "undefined" && navigator.vibrate) {
-        navigator.vibrate(35);
-      }
+      haptic("strong");
       router.push("/admin");
     }, 600);
   };

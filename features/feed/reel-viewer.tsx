@@ -63,6 +63,7 @@ import { downloadPost } from "@/lib/media/download-post";
 import { getQualityPreference, setQualityPreference, type QualityPreference } from "@/lib/media/network-conditions";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { streamHlsUrl } from "@/lib/media/stream";
+import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
@@ -429,11 +430,7 @@ function ReelCard({
           setSlideFade(true); // crossfade out; cleared once the new slide is actually playing
           setProgress(0);
           setCur(0);
-          try {
-            navigator.vibrate?.(6);
-          } catch {
-            /* no haptics */
-          }
+          haptic("light");
         }
         return next;
       });
@@ -735,11 +732,7 @@ function ReelCard({
 
   const onReposted = () => {
     setRepostBurst(Date.now()); // OS-style bubble pops on repost (not on undo)
-    try {
-      navigator.vibrate?.(10);
-    } catch {
-      /* no haptics */
-    }
+    haptic("selection");
   };
 
   // ── Overflow (•••) actions ────────────────────────────────────────────────
@@ -1618,7 +1611,7 @@ function ReelCard({
                 role="menu"
                 initial={{ y: 24, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                transition={{ type: "spring", stiffness: 420, damping: 38 }}
+                transition={springs.sheet}
                 className="relative m-2 w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur-2xl"
               >
                 <div className="mx-auto mt-2.5 mb-1 h-1 w-9 rounded-full bg-border" />

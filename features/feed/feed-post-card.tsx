@@ -40,6 +40,7 @@ import Image from "next/image";
 import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
 import { RepostBurst } from "@/features/social/repost-burst";
 import { toast } from "@/features/ui/toast";
+import { haptic } from "@/lib/motion/haptics";
 
 // These sheets appear only on interaction (edit / save-to-collection / repost)
 // and this card renders many times per feed — code-split so they never weigh
@@ -243,11 +244,7 @@ function FeedPostCardImpl({
 
   const onReposted = () => {
     setRepostBurst(Date.now()); // OS-style bubble pops on repost (not on undo)
-    try {
-      navigator.vibrate?.(10);
-    } catch {
-      /* no haptics */
-    }
+    haptic("selection");
   };
 
   const report = async () => {

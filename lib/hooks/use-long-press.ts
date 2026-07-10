@@ -2,6 +2,8 @@
 
 import { useCallback, useRef } from "react";
 
+import { haptic } from "@/lib/motion/haptics";
+
 /**
  * Long-press detection for buttons that have both a tap and a hold action
  * (e.g. Repost: tap = composer, hold = advanced options). Pointer-based so it
@@ -27,11 +29,7 @@ export function useLongPress(onLongPress: () => void, { ms = 450 }: { ms?: numbe
       start.current = { x: e.clientX, y: e.clientY };
       timer.current = setTimeout(() => {
         fired.current = true;
-        try {
-          navigator.vibrate?.(12);
-        } catch {
-          /* no haptics */
-        }
+        haptic("selection");
         onLongPress();
       }, ms);
     },

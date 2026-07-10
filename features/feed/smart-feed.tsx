@@ -15,6 +15,7 @@ import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { FeedTopbarTabs } from "@/features/feed/feed-topbar-tabs";
 import { SparkCard } from "@/features/feed/spark-card";
+import { haptic } from "@/lib/motion/haptics";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
 
 // The full-screen overlays are interaction-only — code-split so the entire reels
@@ -502,11 +503,7 @@ export function SmartFeed({
     if (pull >= PULL_THRESHOLD) {
       setRefreshing(true);
       setPull(PULL_THRESHOLD);
-      try {
-        navigator.vibrate?.(12);
-      } catch {
-        /* no haptics */
-      }
+      haptic("selection");
       await fetchPage(sort, 0, true);
       setRefreshing(false);
     }

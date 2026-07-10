@@ -3,6 +3,7 @@
 import { useRef, useState, type ReactNode } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
+import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
 const PULL_THRESHOLD = 72;
@@ -54,11 +55,7 @@ export function PullToRefresh({
     if (pull >= PULL_THRESHOLD) {
       setRefreshing(true);
       setPull(PULL_THRESHOLD);
-      try {
-        navigator.vibrate?.(12);
-      } catch {
-        /* no haptics */
-      }
+      haptic("selection");
       await onRefresh();
       setRefreshing(false);
     }

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useSyncExternalStore } from "react";
 
 import { WowSolid } from "@/components/brand/wow-icon";
+import { haptic } from "@/lib/motion/haptics";
 
 /**
  * Premium floating-reaction layer. Fire `floatReaction(x, y)` (viewport
@@ -39,11 +40,7 @@ const emit = () => {
 };
 
 export function floatReaction(x: number, y: number, emoji?: string): void {
-  try {
-    navigator.vibrate?.(8);
-  } catch {
-    /* no haptics */
-  }
+  haptic("light");
   floaters.push({
     id: nextId++,
     x,

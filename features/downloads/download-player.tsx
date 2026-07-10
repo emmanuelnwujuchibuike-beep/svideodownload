@@ -10,6 +10,7 @@ import { closePlayer, playerNext, playerPrev, usePlayerQueue } from "@/features/
 import { removeDownload, toggleFavorite } from "@/features/history/store";
 import { toast } from "@/features/ui/toast";
 import { downloadUrl, saveBlob } from "@/lib/client-download";
+import { springs } from "@/lib/motion/springs";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -386,7 +387,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
               initial={{ y: 24, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 24, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 420, damping: 38 }}
+              transition={springs.sheet}
               className="relative m-2 w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur-2xl"
             >
               <div className="mx-auto mt-2.5 mb-1 h-1 w-9 rounded-full bg-border" />

@@ -14,6 +14,9 @@ export const springs = {
   bounce: { type: "spring", stiffness: 380, damping: 15, mass: 0.6 } satisfies Transition,
   /** Celebratory/elastic moments — pronounced overshoot, used sparingly. */
   elastic: { type: "spring", stiffness: 260, damping: 11, mass: 0.7 } satisfies Transition,
+  /** Bottom-sheet / modal entrance — the app's single most-repeated hand-rolled
+   *  spring (7 near-identical copies found across share/repost/collection/
+   *  download/comment sheets before this token existed). Use for anything
+   *  sliding up from an edge. */
+  sheet: { type: "spring", stiffness: 420, damping: 38 } satisfies Transition,
 } as const;
-
-export const REDUCED_MOTION_TRANSITION: Transition = { duration: 0 };

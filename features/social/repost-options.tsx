@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 
 import { toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
+import { springs } from "@/lib/motion/springs";
 import { setRepostPinned, toggleRepost } from "@/lib/social/repost-store";
 import { cn } from "@/lib/utils";
 
@@ -123,7 +124,7 @@ export function RepostOptionsSheet({
             initial={{ y: 24, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 24, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 420, damping: 38 }}
+            transition={springs.sheet}
             className="relative m-2 w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-card/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-2xl backdrop-blur-2xl"
           >
             <div className="mx-auto mb-2 mt-2.5 h-1 w-9 rounded-full bg-border" />

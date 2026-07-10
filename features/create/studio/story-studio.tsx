@@ -23,6 +23,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { closeStudio, useStudioOpen } from "@/features/create/studio/studio-store";
 import { captureVideoPoster } from "@/lib/media/video-poster";
+import { haptic } from "@/lib/motion/haptics";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { cn } from "@/lib/utils";
 
@@ -233,11 +234,7 @@ function StudioInner() {
       // Kick off adaptive-streaming ingestion for videos (best-effort, env-gated —
       // no-ops without Stream credentials). Gives the reel instant HLS/ABR playback.
       if (json.id && media.type === "video") void fetch(`/api/posts/${json.id}/stream-ingest`, { method: "POST" }).catch(() => {});
-      try {
-        navigator.vibrate?.(18);
-      } catch {
-        /* no haptics */
-      }
+      haptic("medium");
       setPublishing("done");
       clearDraft();
       setTimeout(() => {

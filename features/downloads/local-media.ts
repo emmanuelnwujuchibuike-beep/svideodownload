@@ -1,5 +1,7 @@
 "use client";
 
+import { downloadUrl } from "@/lib/client-download";
+import { getSyncConditions } from "@/lib/media/network-conditions";
 import type { MediaKind } from "@/types";
 
 /**
@@ -65,6 +67,36 @@ export async function getMedia(key: string): Promise<Blob | null> {
 
 export async function hasMedia(key: string): Promise<boolean> {
   return (await getMedia(key)) !== null;
+}
+
+/**
+ * The main downloader hands the file straight to the browser's native download
+ * manager (`downloadToDisk` — a raw anchor click, the only reliable path on
+ * iOS Safari) so the app never receives a Blob to cache from that path. Left
+ * as-is, re-opening that same download from Continue Watching/History always
+ * misses the cache and re-fetches the whole file from the network again,
+ * every time.
+ *
+ * This warms the cache with a second, independent, best-effort background
+ * fetch so a later re-open plays instantly — the same instant-open feel Reels
+ * already has. Skipped entirely on a constrained connection (Data Saver /
+ * 2G/3G) since it's a real second full download of the file, not free; never
+ * blocks or delays the native save, and any failure here is silent (the real
+ * download already succeeded independently via the anchor).
+ */
+export async function warmMediaCache(payload: { url: string; formatId: string; kind: MediaKind; title?: string }): Promise<void> {
+  const key = mediaKey(payload.url, payload.formatId, payload.kind);
+  if (await hasMedia(key)) return;
+  const { saveData, effectiveType } = getSyncConditions();
+  if (saveData || effectiveType === "slow-2g" || effectiveType === "2g" || effectiveType === "3g") return;
+  try {
+    const res = await fetch(downloadUrl(payload));
+    if (!res.ok) return;
+    const blob = await res.blob();
+    await saveMedia(key, blob);
+  } catch {
+    /* best-effort — the real download already happened via the native path */
+  }
 }
 
 export async function deleteMedia(key: string): Promise<void> {

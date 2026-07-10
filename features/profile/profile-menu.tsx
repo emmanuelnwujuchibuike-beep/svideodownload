@@ -133,33 +133,45 @@ export function ProfileMenu() {
         <LayoutGrid className="h-[18px] w-[18px]" />
       </button>
 
-      <AnimatePresence>
-        {open ? (
-          <>
-            <motion.button
-              type="button"
-              aria-label="Close menu"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setOpen(false)}
-              className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm lg:hidden"
-            />
-            <motion.aside
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", stiffness: 380, damping: 38 }}
-              className="fixed inset-y-0 right-0 z-[80] flex w-[86%] max-w-sm flex-col overflow-y-auto border-l border-border/60 bg-card/95 backdrop-blur-xl lg:hidden"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Profile menu"
-            >
-              <PanelBody onNavigate={() => setOpen(false)} onClose={() => setOpen(false)} />
-            </motion.aside>
-          </>
-        ) : null}
-      </AnimatePresence>
+      {/* `open` gates pointer-events synchronously, independent of the exit
+          animation below. AnimatePresence keeps the backdrop/drawer mounted
+          (and, without this, still tap-capturing) for the length of their
+          exit transition — closing the menu via a nav Link (e.g. "Settings")
+          fires a route change at the same instant, and if that transition
+          swallows or delays the exit-complete callback, the backdrop can
+          outlive the page it was on, silently absorbing the next tap
+          (reported: "Home doesn't open after opening Settings"). Gating on
+          `open` directly means a stray tap always passes through the instant
+          the menu closes, no matter how the animation resolves. */}
+      <div className={open ? undefined : "pointer-events-none"}>
+        <AnimatePresence>
+          {open ? (
+            <>
+              <motion.button
+                type="button"
+                aria-label="Close menu"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setOpen(false)}
+                className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm lg:hidden"
+              />
+              <motion.aside
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ type: "spring", stiffness: 380, damping: 38 }}
+                className="fixed inset-y-0 right-0 z-[80] flex w-[86%] max-w-sm flex-col overflow-y-auto border-l border-border/60 bg-card/95 backdrop-blur-xl lg:hidden"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Profile menu"
+              >
+                <PanelBody onNavigate={() => setOpen(false)} onClose={() => setOpen(false)} />
+              </motion.aside>
+            </>
+          ) : null}
+        </AnimatePresence>
+      </div>
     </>
   );
 }

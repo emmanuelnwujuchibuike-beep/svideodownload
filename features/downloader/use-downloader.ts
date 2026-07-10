@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { addDownload } from "@/features/history/store";
+import { warmMediaCache } from "@/features/downloads/local-media";
 import { downloadToDisk } from "@/lib/client-download";
 import type { ApiError, MediaKind, VideoMetadata } from "@/types";
 
@@ -64,6 +65,9 @@ export function useDownloader() {
       // Hand off to the browser's native download manager (the only reliable
       // path on iOS), then record the download locally and reset the button.
       downloadToDisk({ url: meta.sourceUrl, formatId, kind, title: meta.title });
+      // Independently warm the in-app media cache so reopening this from
+      // Continue Watching/History plays instantly instead of re-fetching.
+      void warmMediaCache({ url: meta.sourceUrl, formatId, kind, title: meta.title });
 
       const fmt = meta.formats.find((f) => f.formatId === formatId);
       addDownload({

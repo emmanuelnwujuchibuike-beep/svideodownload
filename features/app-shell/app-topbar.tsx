@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
-import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { PressIcon } from "@/components/motion/press-icon";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
@@ -122,12 +121,8 @@ export function AppTopbar() {
         </kbd>
       </form>
 
-      {/* Mobile center — brand mark. The sidebar (desktop-only) already carries
-          the Frenz wordmark, so it never repeats there; on mobile the app shell
-          otherwise never shows the brand at all once the splash has passed. */}
-      <div className="flex flex-1 items-center justify-center sm:hidden">
-        <FrenzWordmark size={24} textClassName="text-[15px]" />
-      </div>
+      {/* Mobile spacer — pushes the action cluster to the far right */}
+      <div className="flex-1 sm:hidden" />
 
       {/* Right action cluster */}
       <div className="flex shrink-0 items-center gap-2">

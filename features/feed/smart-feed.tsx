@@ -49,6 +49,7 @@ import {
   buildSparkDeck,
   summarizeAway,
 } from "@/lib/social/smart-feed";
+import { loadFeedContinuity, saveFeedContinuity } from "@/lib/social/feed-continuity";
 import { getApi } from "@/lib/sdk/browser";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -129,6 +130,69 @@ export function SmartFeed({
   const scrollPosRef = useRef<Partial<Record<HomeFeedSort, number>>>({});
   const restoreScrollFor = useRef<HomeFeedSort | null>(null);
   const [direction, setDirection] = useState(0);
+
+  // Snapshot the active tab + scroll position to localStorage, so leaving
+  // `/home` and coming back — even after a real app restart — restores
+  // "instantly resumed" rather than the plain SSR first page. Reads live refs
+  // only (never a stale closure), safe to call from anywhere without adding
+  // it to effect dependency arrays.
+  const persistContinuity = useCallback((opts?: { sort?: HomeFeedSort; scrollY?: number }) => {
+    if (typeof window === "undefined" || !cacheRef.current) return;
+    saveFeedContinuity({
+      sort: opts?.sort ?? sortRef.current,
+      scrollY: opts?.scrollY ?? window.scrollY,
+      tabs: cacheRef.current,
+    });
+  }, []);
+
+  // Restore the last-visited tab, its loaded pages, and scroll position —
+  // once, right after mount. Deliberately an effect (not a useState lazy
+  // initializer): the very first render must match the server's SSR output
+  // exactly (props-seeded `for_you` page 0) to avoid a hydration mismatch,
+  // the same constraint `lib/social/story-seen.ts`'s unseen/seen rings
+  // already follow. Runs before the "warm the Following tab" idle-prefetch
+  // effect below (source order), so a restored Following cache is never
+  // redundantly re-fetched.
+  useEffect(() => {
+    const snap = loadFeedContinuity();
+    if (!snap) return;
+    const restoredTabs: NonNullable<typeof cacheRef.current> = {};
+    for (const [k, v] of Object.entries(snap.tabs) as [HomeFeedSort, { items: FeedItem[]; nextOffset: number | null }][]) {
+      restoredTabs[k] = { items: v.items, nextOffset: v.nextOffset, seen: new Set(v.items.map((i) => i.id)) };
+    }
+    // Merge (not replace): keep the props-seeded fallback for any tab the
+    // snapshot didn't happen to include.
+    cacheRef.current = { ...cacheRef.current, ...restoredTabs };
+    const activeTab = restoredTabs[snap.sort];
+    if (!activeTab) return;
+    setSort(snap.sort);
+    setItems(activeTab.items);
+    setNextOffset(activeTab.nextOffset);
+    // Piggyback on the existing tab-switch scroll-restore effect below —
+    // it's already keyed on `[sort, items]` and watches this exact ref pair.
+    scrollPosRef.current[snap.sort] = snap.scrollY;
+    restoreScrollFor.current = snap.sort;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Throttled scroll-position capture (min 1.5s between writes — cheap, but
+  // no reason to hit localStorage on every scroll tick). Tab switches and
+  // every real feed fetch also persist immediately (see `changeSegment` /
+  // `fetchPage`), so this listener mainly covers "left mid-scroll, same tab."
+  useEffect(() => {
+    let lastAt = 0;
+    const onScroll = () => {
+      const now = Date.now();
+      if (now - lastAt < 1500) return;
+      lastAt = now;
+      persistContinuity();
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      persistContinuity(); // final save on unmount (e.g. navigating away)
+    };
+  }, [persistContinuity]);
 
   const deck = useMemo(() => buildSparkDeck({ friendCount }), [friendCount]);
   // Every loaded video, in feed order — the reel playlist. Kept live so the open
@@ -230,6 +294,7 @@ export function SmartFeed({
           setNextOffset(entry.nextOffset);
           if (replace) lastFeedFetchAt = Date.now();
         }
+        persistContinuity();
       } catch {
         if (isActiveTab()) setError(true);
       } finally {
@@ -239,7 +304,7 @@ export function SmartFeed({
         }
       }
     },
-    [],
+    [persistContinuity],
   );
 
   // Silently warm the Following tab's data once the feed has settled, so the
@@ -269,6 +334,10 @@ export function SmartFeed({
       setItems(cached.items);
       setNextOffset(cached.nextOffset);
       setError(false);
+      // fetchPage persists on its own completion; a cache-hit switch doesn't
+      // go through it, so persist here with the scroll position the new tab
+      // is ABOUT to be restored to (`window.scrollY` hasn't updated yet).
+      persistContinuity({ sort: s, scrollY: scrollPosRef.current[s] ?? 0 });
     } else {
       void fetchPage(s, 0, true);
     }

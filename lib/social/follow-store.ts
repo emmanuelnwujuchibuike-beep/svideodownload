@@ -3,6 +3,8 @@
 import { useCallback } from "react";
 import { useSyncExternalStore } from "react";
 
+import { enqueueOfflineAction } from "@/lib/offline/action-queue";
+
 /**
  * App-wide follow state, shared across every surface (feed cards, reels, profile
  * headers). Following a creator anywhere instantly updates *all* their cards, so
@@ -31,15 +33,32 @@ export function useFollowState(userId: string, initial: boolean): boolean {
   return useSyncExternalStore(subscribe, get, get);
 }
 
-/** Optimistically toggle follow everywhere, then persist; rolls back on failure. */
+/**
+ * Optimistically toggle follow everywhere, then persist; rolls back on a
+ * genuine failure. Follow/unfollow is an idempotent toggle (confirmed against
+ * the API: POST no-ops on a duplicate, DELETE no-ops on a missing row), so a
+ * request that fails because the device is OFFLINE gets queued for replay
+ * instead of rolled back — same "Offline Interactions" treatment as
+ * Like/Save (`lib/offline/action-queue.ts`), coalesced under `follow:<userId>`
+ * so toggling it twice offline replays only the final state.
+ */
 export async function toggleFollow(userId: string, next: boolean): Promise<boolean> {
   state.set(userId, next);
   emit();
+  const queued = { key: `follow:${userId}`, url: `/api/follow/${userId}`, method: next ? ("POST" as const) : ("DELETE" as const) };
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    await enqueueOfflineAction(queued);
+    return next;
+  }
   try {
-    const res = await fetch(`/api/follow/${userId}`, { method: next ? "POST" : "DELETE" });
+    const res = await fetch(queued.url, { method: queued.method });
     if (!res.ok) throw new Error();
     return next;
   } catch {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      await enqueueOfflineAction(queued);
+      return next;
+    }
     state.set(userId, !next);
     emit();
     return !next;

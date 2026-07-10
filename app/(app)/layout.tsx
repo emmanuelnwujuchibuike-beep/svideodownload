@@ -5,6 +5,7 @@ import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { FloatingMessages } from "@/features/app-shell/floating-messages";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
+import { OfflineQueueSync } from "@/features/app-shell/offline-queue-sync";
 import { PresenceTracker } from "@/features/friends/use-presence";
 import { NotificationLiveToast } from "@/features/notifications/live-toast";
 import { ReactionFloatLayer } from "@/features/ui/reaction-float";
@@ -44,6 +45,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <AppOverlays />
       {/* Joins the shared presence channel so this user shows as online. */}
       <PresenceTracker />
+      {/* Replays any offline-queued Like/Save writes on load + reconnect. */}
+      <OfflineQueueSync />
     </div>
   );
 }

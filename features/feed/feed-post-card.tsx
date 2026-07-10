@@ -54,6 +54,7 @@ const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m
 import { floatReaction } from "@/features/ui/reaction-float";
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { downloadPost } from "@/lib/media/download-post";
+import { enqueueOfflineAction } from "@/lib/offline/action-queue";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
 import { FrenzsaveError } from "@/lib/sdk";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
@@ -130,7 +131,13 @@ function FeedPostCardImpl({
     setOptionsOpen(true);
   });
 
-  // Plain toggle (Save, and the base Like on/off) — unchanged behavior.
+  // Plain toggle (Save, and the base Like on/off). Like/Save are idempotent
+  // set-membership toggles (confirmed against the API: POST upserts, DELETE
+  // no-ops on a missing row), so a request that fails because the device is
+  // OFFLINE gets queued for replay instead of rolled back — the "Offline
+  // Interactions" ask — while a genuine server rejection still rolls back as
+  // before. Queued under `${type}:${postId}` so flipping the same toggle
+  // multiple times offline coalesces into just the final desired state.
   const react = async (type: "like" | "save") => {
     const isLike = type === "like";
     const cur = isLike ? liked : saved;
@@ -140,15 +147,25 @@ function FeedPostCardImpl({
       setLikes((n) => n + (next ? 1 : -1));
       if (!next) setMyEmotion(null);
     } else setSaved(next);
+
+    const queued = { key: `${type}:${item.id}`, url: `/api/posts/${item.id}/react`, method: next ? ("POST" as const) : ("DELETE" as const), body: { type } };
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      await enqueueOfflineAction(queued);
+      return;
+    }
     try {
-      const res = await fetch(`/api/posts/${item.id}/react`, {
-        method: next ? "POST" : "DELETE",
+      const res = await fetch(queued.url, {
+        method: queued.method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type }),
+        body: JSON.stringify(queued.body),
       });
       if (!res.ok) throw new Error();
     } catch {
-      // rollback
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        await enqueueOfflineAction(queued);
+        return;
+      }
+      // rollback (a genuine rejection, not a connectivity issue)
       if (isLike) {
         setLiked(cur);
         setLikes((n) => n + (next ? -1 : 1));
@@ -158,20 +175,33 @@ function FeedPostCardImpl({
 
   // Reaction picker: always ends in a Wow (liked=true) with a specific flavor,
   // whether this is a fresh like or the user is just changing their flavor.
+  // Same offline-queue treatment as `react` above, same coalescing key
+  // (`like:<postId>`) — a flavor picked right after an offline plain-Like
+  // replaces it rather than queuing a second, redundant write.
   const reactWithEmotion = async (emotion: ReactionEmotion) => {
     const wasLiked = liked;
     const prevEmotion = myEmotion;
     setLiked(true);
     if (!wasLiked) setLikes((n) => n + 1);
     setMyEmotion(emotion);
+
+    const queued = { key: `like:${item.id}`, url: `/api/posts/${item.id}/react`, method: "POST" as const, body: { type: "like", emotion } };
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      await enqueueOfflineAction(queued);
+      return;
+    }
     try {
-      const res = await fetch(`/api/posts/${item.id}/react`, {
-        method: "POST",
+      const res = await fetch(queued.url, {
+        method: queued.method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "like", emotion }),
+        body: JSON.stringify(queued.body),
       });
       if (!res.ok) throw new Error();
     } catch {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        await enqueueOfflineAction(queued);
+        return;
+      }
       if (!wasLiked) {
         setLiked(false);
         setLikes((n) => n - 1);

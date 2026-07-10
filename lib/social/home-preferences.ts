@@ -44,13 +44,29 @@ export const DEFAULT_HOME_PREFERENCES: HomePreferences = {
   quietMode: false,
 };
 
-/** A saved order might predate a newly-added module key, or have been
- *  corrupted client-side — always resolve to a full permutation so callers
- *  never have to think about a module key going missing. */
+/** A saved order might predate a newly-added module key, have been
+ *  corrupted client-side, or (a malformed direct API call — the Reorder UI
+ *  itself can't produce this) contain a duplicate — always resolve to a
+ *  full, duplicate-free permutation so callers never have to think about a
+ *  module key going missing OR appearing twice (a duplicate would otherwise
+ *  render the same Home section twice with the same React key). */
 export function normalizeOrder(saved: unknown): HomeModuleKey[] {
-  const known = Array.isArray(saved) ? saved.filter(isHomeModuleKey) : [];
-  const seen = new Set(known);
-  for (const k of HOME_MODULE_KEYS) if (!seen.has(k)) known.push(k);
+  const known: HomeModuleKey[] = [];
+  const seen = new Set<HomeModuleKey>();
+  if (Array.isArray(saved)) {
+    for (const v of saved) {
+      if (isHomeModuleKey(v) && !seen.has(v)) {
+        known.push(v);
+        seen.add(v);
+      }
+    }
+  }
+  for (const k of HOME_MODULE_KEYS) {
+    if (!seen.has(k)) {
+      known.push(k);
+      seen.add(k);
+    }
+  }
   return known;
 }
 

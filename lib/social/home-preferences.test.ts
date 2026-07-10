@@ -29,4 +29,11 @@ describe("normalizeOrder", () => {
     expect(out).toHaveLength(HOME_MODULE_KEYS.length);
     expect(new Set(out).size).toBe(HOME_MODULE_KEYS.length);
   });
+
+  it("dedupes a repeated valid key instead of returning it twice (a real bug found in review: a duplicate used to survive and inflate the output past HOME_MODULE_KEYS.length)", () => {
+    const out = normalizeOrder(["stories", "stories", "friend_activity"]);
+    expect(out).toHaveLength(HOME_MODULE_KEYS.length);
+    expect(new Set(out).size).toBe(HOME_MODULE_KEYS.length);
+    expect(out).toEqual(["stories", "friend_activity", "trending_reels", "continue_watching"]);
+  });
 });

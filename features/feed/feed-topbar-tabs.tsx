@@ -78,8 +78,18 @@ export function FeedTopbarTabs({
                 className="absolute inset-0 -z-10 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 shadow-[0_4px_16px_-4px] shadow-violet-500/50"
               />
             ) : null}
+            {/* Reels always keeps a soft violet-tinted backdrop (it never gets the
+                active pill treatment, so it needs its own way to read as clearly
+                tappable/important, not just another filter icon). */}
+            {!active && isReels ? (
+              <span aria-hidden className="absolute inset-0 -z-10 rounded-full bg-violet-500/10 ring-1 ring-inset ring-violet-500/15" />
+            ) : null}
             <PressIcon active={active}>
-              <Icon className={cn("h-[18px] w-[18px]", !active && isReels && "drop-shadow-[0_0_6px_rgba(167,139,250,0.35)]")} />
+              <Icon
+                className={cn(
+                  active || !isReels ? "h-[18px] w-[18px]" : "h-[22px] w-[22px] drop-shadow-[0_1px_5px_rgba(167,139,250,0.55)]",
+                )}
+              />
             </PressIcon>
             {active ? <span className="whitespace-nowrap">{t.label}</span> : null}
           </motion.button>

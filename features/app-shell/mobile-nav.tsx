@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
+import { GradientIcon } from "@/components/icons/gradient-icon";
 import {
   FrenzFriendsOutline,
   FrenzFriendsSolid,
@@ -19,6 +20,7 @@ import { useEntitlements } from "@/features/auth/use-entitlements";
 import { openUpload } from "@/features/create/upload-store";
 import { useQuery } from "@/features/data";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
+import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
 /**
@@ -68,7 +70,10 @@ export function MobileNav() {
       <PressIcon className="-mt-3.5">
         <button
           type="button"
-          onClick={() => openUpload("post")}
+          onClick={() => {
+            haptic("selection");
+            openUpload("post");
+          }}
           aria-label="Create"
           className="group relative flex h-12 w-12 items-center justify-center"
         >
@@ -92,9 +97,14 @@ export function MobileNav() {
       />
 
       {/* Profile (Instagram-style avatar) */}
-      <Link href={profileHref} onPointerDown={() => router.prefetch(profileHref)} className="flex flex-col items-center gap-0.5 px-2 py-1">
+      <Link
+        href={profileHref}
+        onPointerDown={() => router.prefetch(profileHref)}
+        onClick={() => haptic("light")}
+        className="flex flex-col items-center gap-0.5 px-2 py-1"
+      >
         <PressIcon active={profileActive}>
-          <span className={cn("flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white ring-2 transition", profileActive ? "ring-primary" : "ring-transparent")}>
+          <span className={cn("flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-[0_2px_6px_-1px] shadow-violet-600/50 ring-2 transition", profileActive ? "ring-primary" : "ring-transparent")}>
             <FrenzPersonSolid className="h-3.5 w-3.5" />
           </span>
         </PressIcon>
@@ -123,15 +133,19 @@ function NavTab({
 }) {
   const Glyph = active ? ActiveIcon : Icon;
   return (
-    <Link href={href} onPointerDown={() => onWarm?.(href)} className="relative flex flex-col items-center gap-0.5 px-2 py-1">
+    <Link
+      href={href}
+      onPointerDown={() => onWarm?.(href)}
+      onClick={() => haptic("light")}
+      className="relative flex flex-col items-center gap-0.5 px-2 py-1"
+    >
       {active ? <span aria-hidden className="absolute -top-[7px] h-1 w-6 rounded-full bg-gradient-to-r from-blue-500 to-violet-600 shadow-[0_0_8px] shadow-violet-500/50" /> : null}
       <PressIcon active={active} className="relative">
-        <Glyph
-          className={cn(
-            "h-[26px] w-[26px] transition",
-            active ? "text-foreground drop-shadow-[0_0_5px_rgba(124,58,237,0.5)]" : "text-muted-foreground",
-          )}
-        />
+        {active ? (
+          <GradientIcon icon={<Glyph />} size={26} className="drop-shadow-[0_2px_5px_rgba(124,58,237,0.45)]" />
+        ) : (
+          <Glyph className="h-[26px] w-[26px] text-muted-foreground transition" />
+        )}
         {badge > 0 ? (
           <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-background">
             {badge > 9 ? "9+" : badge}

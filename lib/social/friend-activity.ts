@@ -70,10 +70,23 @@ export async function getFriendActivity(viewerId: string, limit = 8): Promise<Fr
       .select("user_low, user_high")
       .or(`user_low.eq.${viewerId},user_high.eq.${viewerId}`)
       .limit(500);
-    const friendIds = ((fr ?? []) as { user_low: string; user_high: string }[]).map((f) =>
+    let friendIds = ((fr ?? []) as { user_low: string; user_high: string }[]).map((f) =>
       f.user_low === viewerId ? f.user_high : f.user_low,
     );
     if (friendIds.length === 0) return [];
+
+    // A muted creator's posts already stop appearing in the muter's own MAIN
+    // feed (`home-feed.ts` excludes `muted_creators` there) — this module
+    // must honor the same choice, not quietly resurface a muted friend's
+    // posts/likes/stories/follows just because they're also a friend.
+    try {
+      const { data: mutes } = await db.from("muted_creators").select("muted_id").eq("muter_id", viewerId);
+      const muted = new Set(((mutes ?? []) as { muted_id: string }[]).map((m) => m.muted_id));
+      if (muted.size > 0) friendIds = friendIds.filter((id) => !muted.has(id));
+      if (friendIds.length === 0) return [];
+    } catch {
+      /* best-effort against migration 0035 not being applied yet */
+    }
 
     const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
     const [posts, stories, likes, follows] = await Promise.all([

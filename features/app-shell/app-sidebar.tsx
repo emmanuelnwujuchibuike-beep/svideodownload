@@ -26,8 +26,10 @@ import { usePathname } from "next/navigation";
 
 import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { PressIcon } from "@/components/motion/press-icon";
+import { GradientIcon } from "@/components/icons/gradient-icon";
 import { FrenzFriendsOutline, FrenzFriendsSolid, FrenzHomeOutline, FrenzHomeSolid } from "@/components/icons/frenz-icons";
 import { useShowAds } from "@/features/monetization/use-show-ads";
+import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
 type IconType = ComponentType<{ className?: string }>;
@@ -108,6 +110,7 @@ export function AppSidebar({ handle }: { handle: string | null }) {
             <Link
               key={item.label}
               href={item.href}
+              onClick={() => haptic("light")}
               className={cn(
                 "group relative flex items-center gap-3.5 rounded-2xl px-3 py-2.5 text-[15px] font-semibold transition-all duration-200",
                 active
@@ -123,14 +126,11 @@ export function AppSidebar({ handle }: { handle: string | null }) {
                 const Icon = active ? item.activeIcon : item.icon;
                 return (
                   <PressIcon active={active}>
-                    <Icon
-                      className={cn(
-                        "h-[23px] w-[23px] shrink-0",
-                        active
-                          ? "text-foreground drop-shadow-[0_0_5px_rgba(124,58,237,0.5)]"
-                          : "text-muted-foreground group-hover:text-foreground",
-                      )}
-                    />
+                    {active ? (
+                      <GradientIcon icon={<Icon />} size={23} className="shrink-0 drop-shadow-[0_2px_5px_rgba(124,58,237,0.45)]" />
+                    ) : (
+                      <Icon className="h-[23px] w-[23px] shrink-0 text-muted-foreground group-hover:text-foreground" />
+                    )}
                   </PressIcon>
                 );
               })()}

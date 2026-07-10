@@ -44,10 +44,20 @@ export function ContentPreferencesSheet({
   useEffect(() => {
     if (!open) return;
     setPrefs(null);
+    // Guards against a rapid close→reopen firing overlapping requests where
+    // an earlier one resolves AFTER a later one and clobbers it with stale data.
+    let cancelled = false;
     fetch("/api/home-preferences")
       .then((r) => (r.ok ? r.json() : { preferences: DEFAULT_HOME_PREFERENCES }))
-      .then((d) => setPrefs((d.preferences as HomePreferences) ?? DEFAULT_HOME_PREFERENCES))
-      .catch(() => setPrefs(DEFAULT_HOME_PREFERENCES));
+      .then((d) => {
+        if (!cancelled) setPrefs((d.preferences as HomePreferences) ?? DEFAULT_HOME_PREFERENCES);
+      })
+      .catch(() => {
+        if (!cancelled) setPrefs(DEFAULT_HOME_PREFERENCES);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
 
   const isBoosted = !!(category && prefs?.boostedCategories.includes(category));

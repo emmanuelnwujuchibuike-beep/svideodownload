@@ -33,7 +33,19 @@ export function saveFeedContinuity(snapshot: Omit<FeedContinuitySnapshot, "saved
   try {
     const tabs: FeedContinuitySnapshot["tabs"] = {};
     for (const [k, v] of Object.entries(snapshot.tabs) as [HomeFeedSort, { items: FeedItem[]; nextOffset: number | null }][]) {
-      tabs[k] = { items: v.items.slice(0, MAX_ITEMS_PER_TAB), nextOffset: v.nextOffset };
+      // Items accumulate oldest-first (smart-feed.tsx appends each new page to
+      // the end), so the viewer's current scroll position lives near the TAIL
+      // of the array, not the head. `slice(0, N)` (the original, buggy version
+      // of this line) kept the head — the top-of-feed content the viewer had
+      // already scrolled PAST — discarding exactly what a deep scroller needed
+      // restored. `slice(-N)` keeps the most recent items instead. This still
+      // isn't pixel-perfect once truncation actually kicks in (a `scrollY`
+      // computed against the full untruncated list can overshoot a shorter
+      // restored one) — but `window.scrollTo` clamps to the real max, which
+      // lands at the BOTTOM of the retained (most recent) items, still close
+      // to where the viewer actually was. Precise recovery would need
+      // per-item height tracking, out of scope for this fix.
+      tabs[k] = { items: v.items.slice(-MAX_ITEMS_PER_TAB), nextOffset: v.nextOffset };
     }
     const payload: FeedContinuitySnapshot = { ...snapshot, tabs, savedAt: Date.now() };
     localStorage.setItem(KEY, JSON.stringify(payload));

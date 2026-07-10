@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { bustHomeFeedCache } from "@/lib/social/home-feed";
 import { CATEGORIES } from "@/lib/social/categories";
 import {
   fromHomePreferencesRow,
   HOME_MODULE_KEYS,
+  normalizeOrder,
   type HomePreferencesRow,
 } from "@/lib/social/home-preferences";
 import { createClient } from "@/lib/supabase/server";
@@ -72,7 +74,11 @@ export async function PATCH(request: Request) {
     .eq("user_id", user.id)
     .maybeSingle();
   const current = fromHomePreferencesRow(existing as HomePreferencesRow | null);
-  const merged = { ...current, ...parsed.data };
+  // Re-normalize on the way IN too, not just on read: a duplicate key in a
+  // malformed direct API call (the Reorder UI itself can never produce one)
+  // would otherwise be upserted verbatim and render the same Home section
+  // twice with the same React key until the next read happened to fix it up.
+  const merged = { ...current, ...parsed.data, moduleOrder: normalizeOrder(parsed.data.moduleOrder ?? current.moduleOrder) };
 
   const { error } = await supabase
     .from("user_home_preferences")
@@ -91,5 +97,12 @@ export async function PATCH(request: Request) {
       { onConflict: "user_id" },
     );
   if (error) return NextResponse.json({ error: "Couldn't save preferences." }, { status: 500 });
+
+  // Preferences feed straight into the NEXT "for_you" ranking (muted/boosted
+  // categories, prefer-friends, fewer-reposts) — without this, a change could
+  // sit behind the feed's own 20s cache, contradicting the "updates
+  // immediately" promise this feature was built around.
+  void bustHomeFeedCache(user.id);
+
   return NextResponse.json({ preferences: merged });
 }

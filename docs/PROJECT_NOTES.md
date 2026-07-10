@@ -96,6 +96,34 @@ Verified: `tsc --noEmit`, `next lint`, and `next build` all clean project-wide. 
 
 ---
 
+## 2026‑07‑10 highlights (batch 40 — Nav/icon "3D premium" polish + full bug cross-check of Parts 11-15)
+
+Owner asked for four things in one message: a bigger/clearer Reels icon in the top bar, "3D premium" polish for the top and bottom nav with smooth click motion, ALL icons across ALL pages redone as premium 3D masterclass icons, and a full cross-check of everything shipped that day for bugs, display issues, and mistakes.
+
+**Scoped the "all icons everywhere" ask honestly.** Hand-redrawing unique geometry for every icon across the entire app (the feed action bar, every settings page, every sheet) is a multi-session design project, not a same-day task — said so directly rather than either attempting it blind or quietly only doing the nav and calling it "all icons." Built the reusable primitive needed to extend this efficiently later, and applied it now to the surfaces explicitly named (top nav, bottom nav, feed topbar tabs).
+
+**Shipped:**
+- **`components/icons/gradient-icon.tsx`** — a `GradientIcon` wrapper that fills ANY monochrome icon (the custom Frenz set, lucide-react, react-icons — anything using `currentColor`) with the brand gradient instead of a flat color, without redrawing geometry. Renders the icon once as an SVG mask's luminance source, forced to solid white via CSS inheritance (a wrapping `<g style={{color:"#fff"}}>`) rather than a `color` prop — an early draft tried the prop-injection approach and would have silently done nothing for the custom Frenz icons specifically, since they only expose `className`/`strokeWidth`, no `color` prop at all. Caught this by actually testing the real mechanism in a screenshotted static mock before shipping, not just reasoning about it.
+- **Reels icon**: 18px→22px (the other two feed tabs stay 18px — only Reels was called out), stronger glow, and a permanent soft violet backdrop circle since it never gets the active-pill treatment the other tabs do.
+- **`PressIcon`'s shared motion enhanced** — every nav icon already routes through this one component, so upgrading it once (tap now compresses AND nudges down 1px like a physically-pressed button; the activation bounce gained a brief upward lift) propagated everywhere instantly.
+- **Applied `GradientIcon` to the active-state icons** in the bottom nav and the desktop sidebar (including its react-icons/io5 items, proving the wrapper works across icon libraries, not just the custom set), and added nav-tap haptics that hadn't existed before.
+
+Verified via the established static-HTML-mock + Playwright-screenshot method (auth still blocks driving the real nav headlessly here) — confirmed the gradient-mask technique on both fill-based and stroke-based icons, and confirmed the assembled bottom-nav composition before calling it done.
+
+**Then, the bug cross-check** — spawned an independent review agent with no context from the building sessions, diffed the actual Parts 11-15 commits, and asked it to find what's wrong, not describe what the code does. It found 9 real issues, 2 of them serious:
+
+1. **HIGH — feed continuity kept the wrong end of a truncated item list.** Items accumulate oldest-first, so a viewer's scroll position lives near the tail of the array — but the truncation before saving to `localStorage` kept the HEAD (`slice(0, N)`), discarding exactly the content near where the viewer actually was. The code's own comment claimed the opposite of what it did. Fixed to `slice(-N)`, with 3 new regression tests.
+2. **HIGH — Friend Activity never checked muted creators.** The main feed excludes anyone the viewer has muted; the new Friend Activity module (mounted prominently on Home) didn't, so a muted friend's posts/likes/stories/follows still surfaced there. Fixed by filtering muted creators out before any of its four signal queries run.
+3. A permutation-invariant bug in the Home Module Editor's order-normalizing logic (a duplicate key could survive and render the same section twice) — fixed with proper dedup, on both the read and write paths.
+4. A lost-update race: the Module Editor's batched Save button bundled category-mute/boost fields that can ALSO be changed from a feed card while the settings page stays open, risking a silent overwrite of the newer change. Fixed by making category-chip removal its own small, immediately-persisted action, matching the discipline the rest of the app already uses for mute/unmute.
+5. The new device-check security route had no rate limiting, unlike its same-day sibling the report route — added the same limiter, keyed per-user.
+6. Preference changes could serve stale feed ranking for up to 20 seconds since the save route never busted the feed cache — fixed.
+7-9. Two accessibility gaps (an identical aria-label on every drag handle; no keyboard alternative to dragging for reordering — added real Move-up/Move-down buttons) and one missing fetch-cancellation guard on a settings sheet.
+
+Verified after all fixes: `npm run test` (44/44, 4 new), `tsc --noEmit`, `next lint`, `next build` all clean.
+
+---
+
 ## 2026‑07‑10 highlights (batch 39 — Feature 17 Part 15: Engineering Foundation — first committed test suite)
 
 Owner dropped **"Feature 17 Part 15 — Home Platform Architecture, Design System, Future Expansion & World-Class Engineering Foundation"** — the capstone of the Feature 17 series, and a different kind of ask from Parts 11-14: this one is about engineering process/infrastructure (design tokens, component library, state/service architecture, real-time foundation, theme engine, observability, testing strategy, dev tools, i18n, AI-integration architecture), not a user-facing feature.

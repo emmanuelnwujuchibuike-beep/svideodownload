@@ -1,7 +1,7 @@
 "use client";
 
 import { Reorder, useDragControls } from "framer-motion";
-import { Clock, Eye, EyeOff, Flame, GripVertical, Loader2, RotateCcw, Sparkles, ThumbsDown, ThumbsUp, Users, VolumeX, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Clock, Eye, EyeOff, Flame, GripVertical, Loader2, RotateCcw, Sparkles, ThumbsDown, ThumbsUp, Users, VolumeX, X } from "lucide-react";
 import { useState } from "react";
 
 import { categoryLabel, type Category } from "@/lib/social/categories";
@@ -56,11 +56,21 @@ export function HomeModulesEditor({ preferences }: { preferences: HomePreference
     setPreferFriends(false);
     setFewerReposts(false);
     setQuietMode(false);
-    setMutedCategories([]);
-    setBoostedCategories([]);
     setMsg(null);
+    // Deliberately does NOT touch muted/boosted categories — those are their
+    // own independently-persisted preference (see `removeCategory` below),
+    // not part of this "reset the Home layout" action.
   };
 
+  // Everything this button manages (module order/visibility + the 3 feed
+  // toggles) is only ever written from THIS one form, so there's no other
+  // surface that could have changed it since the page loaded — safe to send
+  // as one batched PATCH. Muted/boosted categories are deliberately NOT
+  // included here (see `removeCategory`): those can ALSO be changed from a
+  // feed card's "why am I seeing this" sheet while this page is open (a
+  // second tab, or just left mounted), so bundling them into this batched
+  // save risked silently overwriting a newer change with what this form
+  // loaded at mount — a real lost-update race.
   const save = async () => {
     setBusy(true);
     setMsg(null);
@@ -74,8 +84,6 @@ export function HomeModulesEditor({ preferences }: { preferences: HomePreference
           preferFriends,
           fewerReposts,
           quietMode,
-          mutedCategories,
-          boostedCategories,
         }),
       });
       setMsg(res.ok ? { ok: true, text: "Home preferences saved." } : { ok: false, text: "Couldn't save." });
@@ -83,6 +91,27 @@ export function HomeModulesEditor({ preferences }: { preferences: HomePreference
       setMsg({ ok: false, text: "Network error." });
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Removing a category chip is its own small, immediate action (like the
+  // Unmute button elsewhere on this same page) — persisted the instant it's
+  // tapped, sending ONLY the one field that changed, exactly the partial-PATCH
+  // shape `/api/home-preferences` was built for. Optimistic, with rollback.
+  const removeCategory = async (list: "muted" | "boosted", c: Category) => {
+    const setList = list === "muted" ? setMutedCategories : setBoostedCategories;
+    const prev = list === "muted" ? mutedCategories : boostedCategories;
+    const next = prev.filter((x) => x !== c);
+    setList(next);
+    try {
+      const res = await fetch("/api/home-preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(list === "muted" ? { mutedCategories: next } : { boostedCategories: next }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setList(prev); // rollback
     }
   };
 
@@ -98,10 +127,28 @@ export function HomeModulesEditor({ preferences }: { preferences: HomePreference
 
       <p className="mb-2 text-xs font-semibold text-muted-foreground">Home sections</p>
       <Reorder.Group axis="y" values={order} onReorder={setOrder} className="space-y-2">
-        {order.map((key) => (
-          <ModuleRow key={key} module={key} isHidden={hidden.has(key)} onToggle={() => toggleHidden(key)} />
+        {order.map((key, i) => (
+          <ModuleRow
+            key={key}
+            module={key}
+            isHidden={hidden.has(key)}
+            onToggle={() => toggleHidden(key)}
+            isFirst={i === 0}
+            isLast={i === order.length - 1}
+            onMove={(dir) => {
+              setOrder((prev) => {
+                const idx = prev.indexOf(key);
+                const swapWith = dir === "up" ? idx - 1 : idx + 1;
+                if (swapWith < 0 || swapWith >= prev.length) return prev;
+                const next = [...prev];
+                [next[idx], next[swapWith]] = [next[swapWith]!, next[idx]!];
+                return next;
+              });
+            }}
+          />
         ))}
       </Reorder.Group>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">Drag to reorder, or use the ↑/↓ buttons.</p>
 
       <div className="mt-5 space-y-2.5">
         <p className="mb-2 text-xs font-semibold text-muted-foreground">Feed behavior</p>
@@ -139,7 +186,7 @@ export function HomeModulesEditor({ preferences }: { preferences: HomePreference
               icon={ThumbsUp}
               label="Seeing more of"
               categories={boostedCategories}
-              onRemove={(c) => setBoostedCategories((prev) => prev.filter((x) => x !== c))}
+              onRemove={(c) => void removeCategory("boosted", c)}
             />
           ) : null}
           {mutedCategories.length > 0 ? (
@@ -147,7 +194,7 @@ export function HomeModulesEditor({ preferences }: { preferences: HomePreference
               icon={ThumbsDown}
               label="Hidden from For You"
               categories={mutedCategories}
-              onRemove={(c) => setMutedCategories((prev) => prev.filter((x) => x !== c))}
+              onRemove={(c) => void removeCategory("muted", c)}
             />
           ) : null}
         </div>
@@ -179,13 +226,20 @@ function ModuleRow({
   module,
   isHidden,
   onToggle,
+  isFirst,
+  isLast,
+  onMove,
 }: {
   module: HomeModuleKey;
   isHidden: boolean;
   onToggle: () => void;
+  isFirst: boolean;
+  isLast: boolean;
+  onMove: (direction: "up" | "down") => void;
 }) {
   const controls = useDragControls();
   const Icon = MODULE_ICON[module];
+  const label = HOME_MODULE_LABELS[module];
   return (
     <Reorder.Item
       value={module}
@@ -199,7 +253,7 @@ function ModuleRow({
       <button
         type="button"
         onPointerDown={(e) => controls.start(e)}
-        aria-label="Drag to reorder"
+        aria-label={`Drag to reorder ${label}`}
         className="shrink-0 cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
       >
         <GripVertical className="h-4 w-4" />
@@ -207,12 +261,35 @@ function ModuleRow({
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
         <Icon className="h-4 w-4" />
       </span>
-      <span className="min-w-0 flex-1 text-sm font-medium">{HOME_MODULE_LABELS[module]}</span>
+      <span className="min-w-0 flex-1 text-sm font-medium">{label}</span>
+      {/* Keyboard-operable alternative to dragging — the drag handle above
+          has no keyboard equivalent, so a keyboard-only user could hide/show
+          a section but never reorder it without these. */}
+      <div className="flex shrink-0 flex-col">
+        <button
+          type="button"
+          onClick={() => onMove("up")}
+          disabled={isFirst}
+          aria-label={`Move ${label} up`}
+          className="rounded-t-md p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-30"
+        >
+          <ChevronUp className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onMove("down")}
+          disabled={isLast}
+          aria-label={`Move ${label} down`}
+          className="rounded-b-md p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-30"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
       <button
         type="button"
         onClick={onToggle}
         aria-pressed={!isHidden}
-        aria-label={isHidden ? `Show ${HOME_MODULE_LABELS[module]}` : `Hide ${HOME_MODULE_LABELS[module]}`}
+        aria-label={isHidden ? `Show ${label}` : `Hide ${label}`}
         className="shrink-0 rounded-lg p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
       >
         {isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

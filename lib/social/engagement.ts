@@ -82,6 +82,15 @@ export interface CommentNode {
   sticker: string | null;
   /** Attached image URL when the comment carries a picture. */
   imageUrl: string | null;
+  /** Voice-note attachment (recorded in-app — see features/social/voice-recorder.tsx). */
+  voiceUrl: string | null;
+  voiceDurationMs: number | null;
+  /** Precomputed amplitude peaks (0-100 ints) — renders instantly, no re-decode. */
+  voiceWaveform: number[] | null;
+  /** Short video-reply attachment (recorded in-app). */
+  videoUrl: string | null;
+  videoDurationMs: number | null;
+  videoThumbnailUrl: string | null;
   /** Total reactions (any emoji). Kept as `likesCount` for compatibility. */
   likesCount: number;
   viewerLiked: boolean;
@@ -110,6 +119,12 @@ interface CommentRow {
   created_at: string;
   sticker?: string | null;
   image_url?: string | null;
+  voice_url?: string | null;
+  voice_duration_ms?: number | null;
+  voice_waveform?: number[] | null;
+  video_url?: string | null;
+  video_duration_ms?: number | null;
+  video_thumbnail_url?: string | null;
   likes_count?: number | null;
   mood?: string | null;
   pinned?: boolean | null;
@@ -128,7 +143,9 @@ export async function listComments(
     const db = createAdminClient();
     // Prefer the rich columns (sticker/image), but fall back cleanly if the
     // migration hasn't been applied yet so comments never vanish.
-    const EXT = "id, author_id, parent_id, body, status, created_at, sticker, image_url, likes_count, mood, pinned, is_best";
+    const EXT =
+      "id, author_id, parent_id, body, status, created_at, sticker, image_url, likes_count, mood, pinned, is_best, " +
+      "voice_url, voice_duration_ms, voice_waveform, video_url, video_duration_ms, video_thumbnail_url";
     const BASE = "id, author_id, parent_id, body, status, created_at, likes_count";
     const runQuery = (cols: string) =>
       db
@@ -236,6 +253,12 @@ export async function listComments(
         body: r.body,
         sticker: r.sticker ?? null,
         imageUrl: r.image_url ?? null,
+        voiceUrl: r.voice_url ?? null,
+        voiceDurationMs: r.voice_duration_ms ?? null,
+        voiceWaveform: r.voice_waveform ?? null,
+        videoUrl: r.video_url ?? null,
+        videoDurationMs: r.video_duration_ms ?? null,
+        videoThumbnailUrl: r.video_thumbnail_url ?? null,
         // Prefer the live reaction tally; fall back to the denormalized counter.
         likesCount: total || (r.likes_count ?? 0),
         viewerLiked: !!viewerReaction,

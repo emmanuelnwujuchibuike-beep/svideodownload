@@ -50,6 +50,15 @@ const schema = z.object({
   imageUrl: z.string().url().max(2048).nullable().optional(),
   mood: z.string().max(20).nullable().optional(),
   parentId: z.string().uuid().nullable().optional(),
+  voiceUrl: z.string().url().max(2048).nullable().optional(),
+  // A little over VOICE_MAX_MS/VIDEO_MAX_MS (lib/media/comment-recording.ts)
+  // to allow for clock drift between the recorder's own stop and this write
+  // — the recorder itself is what actually enforces the cap.
+  voiceDurationMs: z.number().int().min(0).max(200_000).nullable().optional(),
+  voiceWaveform: z.array(z.number().int().min(0).max(100)).max(200).nullable().optional(),
+  videoUrl: z.string().url().max(2048).nullable().optional(),
+  videoDurationMs: z.number().int().min(0).max(80_000).nullable().optional(),
+  videoThumbnailUrl: z.string().url().max(2048).nullable().optional(),
 });
 
 const GATE_MSG: Record<string, string> = {
@@ -94,8 +103,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const sticker = parsed.data.sticker && isStickerId(parsed.data.sticker) ? parsed.data.sticker : null;
   const imageUrl = parsed.data.imageUrl ?? null;
   const mood = parsed.data.mood && isCommentMood(parsed.data.mood) ? parsed.data.mood : null;
-  if (!body && !sticker && !imageUrl) {
-    return NextResponse.json({ error: "Add a comment, sticker, or picture." }, { status: 400 });
+  const voiceUrl = parsed.data.voiceUrl ?? null;
+  const videoUrl = parsed.data.videoUrl ?? null;
+  if (!body && !sticker && !imageUrl && !voiceUrl && !videoUrl) {
+    return NextResponse.json({ error: "Add a comment, sticker, picture, voice note, or video." }, { status: 400 });
   }
 
   if (body) {
@@ -139,11 +150,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (sticker) insert.sticker = sticker;
   if (imageUrl) insert.image_url = imageUrl;
   if (mood) insert.mood = mood;
+  if (voiceUrl) {
+    insert.voice_url = voiceUrl;
+    insert.voice_duration_ms = parsed.data.voiceDurationMs ?? null;
+    insert.voice_waveform = parsed.data.voiceWaveform ?? null;
+  }
+  if (videoUrl) {
+    insert.video_url = videoUrl;
+    insert.video_duration_ms = parsed.data.videoDurationMs ?? null;
+    insert.video_thumbnail_url = parsed.data.videoThumbnailUrl ?? null;
+  }
 
   const { data, error } = await supabase.from("post_comments").insert(insert).select("id").single();
   if (error) {
     const msg =
-      (sticker || imageUrl || mood) && /column|schema/i.test(error.message ?? "")
+      (sticker || imageUrl || mood || voiceUrl || videoUrl) && /column|schema/i.test(error.message ?? "")
         ? "Some comment features aren't enabled yet."
         : "Couldn't post comment.";
     return NextResponse.json({ error: msg }, { status: 500 });

@@ -9,6 +9,7 @@ import {
   ImagePlus,
   Link2,
   Loader2,
+  Mic,
   MessageCircle,
   MoreHorizontal,
   Pin,
@@ -17,20 +18,30 @@ import {
   SmilePlus,
   Sparkles,
   Trash2,
+  Video,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { RichText } from "@/components/social/rich-text";
+import { VideoComment, VoiceMessage } from "@/features/social/comment-media";
 import { StickerPicker } from "@/features/social/sticker-picker";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { COMMENT_MOODS, COMMENT_REACTIONS, commentMood } from "@/lib/social/comment-meta";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { SearchPerson } from "@/lib/social/search";
 import { stickerGlyph, type Sticker } from "@/lib/social/stickers";
+import { supportsRecording } from "@/lib/media/comment-recording";
 import { cn, formatCompactNumber } from "@/lib/utils";
+
+// Code-split: MediaRecorder/camera-mic UI most viewers never trigger, kept out
+// of every comment section's initial bundle (mirrors CollectionPicker/
+// PostEditSheet/etc. in feed-post-card.tsx).
+const VoiceRecorder = dynamic(() => import("@/features/social/voice-recorder").then((m) => m.VoiceRecorder), { ssr: false });
+const VideoCommentRecorder = dynamic(() => import("@/features/social/video-comment-recorder").then((m) => m.VideoCommentRecorder), { ssr: false });
 
 type SortMode = "smart" | "top" | "new" | "friends";
 const SORTS: { id: SortMode; label: string }[] = [
@@ -279,6 +290,16 @@ function Composer({
   const fileRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // Voice-note / video-reply attachments. Progressive enhancement: recording
+  // affordances only appear once confirmed client-side (avoids an SSR/CSR
+  // hydration mismatch — MediaRecorder support can't be known on the server).
+  const [canRecord, setCanRecord] = useState(false);
+  useEffect(() => setCanRecord(supportsRecording()), []);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
+  const [voice, setVoice] = useState<{ url: string; durationMs: number; waveform: number[] } | null>(null);
+  const [video, setVideo] = useState<{ url: string; durationMs: number; thumbnailUrl: string | null } | null>(null);
+
   // @mention autocomplete — a live in-progress "@partial" token right before
   // the caret triggers a debounced people search; picking a result inserts
   // the exact handle. Notifications are driven server-side by parsing the
@@ -390,7 +411,7 @@ function Composer({
     });
   };
 
-  const canSend = (!!body.trim() || !!sticker || !!image) && !busy && !uploading;
+  const canSend = (!!body.trim() || !!sticker || !!image || !!voice || !!video) && !busy && !uploading;
   const remaining = MAX - body.length;
   const moodMeta = commentMood(mood);
 
@@ -422,7 +443,19 @@ function Composer({
       const res = await fetch(`/api/posts/${postId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: body.trim(), sticker: sticker?.id ?? null, imageUrl: image ?? null, mood, parentId: parentId ?? null }),
+        body: JSON.stringify({
+          body: body.trim(),
+          sticker: sticker?.id ?? null,
+          imageUrl: image ?? null,
+          mood,
+          parentId: parentId ?? null,
+          voiceUrl: voice?.url ?? null,
+          voiceDurationMs: voice?.durationMs ?? null,
+          voiceWaveform: voice?.waveform ?? null,
+          videoUrl: video?.url ?? null,
+          videoDurationMs: video?.durationMs ?? null,
+          videoThumbnailUrl: video?.thumbnailUrl ?? null,
+        }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -433,6 +466,8 @@ function Composer({
       setSticker(null);
       setImage(null);
       setMood(null);
+      setVoice(null);
+      setVideo(null);
       setShowStickers(false);
       clearDraft();
       onDone?.();
@@ -473,8 +508,8 @@ function Composer({
       </AnimatePresence>
 
       {/* Attachment previews */}
-      {(sticker || image || moodMeta) && (
-        <div className="mb-2 flex items-center gap-2">
+      {(sticker || image || moodMeta || voice || video) && (
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           {moodMeta ? (
             <span className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold", moodMeta.tint)}>
               {moodMeta.emoji} {moodMeta.label}
@@ -494,9 +529,27 @@ function Composer({
               <button type="button" onClick={() => setImage(null)} aria-label="Remove image" className="absolute -right-1.5 -top-1.5 rounded-full bg-foreground/80 p-0.5 text-background"><X className="h-3 w-3" /></button>
             </span>
           ) : null}
+          {voice ? (
+            <span className="relative block w-full max-w-xs">
+              <VoiceMessage url={voice.url} durationMs={voice.durationMs} waveform={voice.waveform} />
+              <button type="button" onClick={() => setVoice(null)} aria-label="Remove voice note" className="absolute -right-1.5 -top-1.5 rounded-full bg-foreground/80 p-0.5 text-background"><X className="h-3 w-3" /></button>
+            </span>
+          ) : null}
+          {video ? (
+            <span className="relative inline-block">
+              <VideoComment url={video.url} thumbnailUrl={video.thumbnailUrl} durationMs={video.durationMs} />
+              <button type="button" onClick={() => setVideo(null)} aria-label="Remove video" className="absolute -right-1.5 -top-1.5 rounded-full bg-foreground/80 p-0.5 text-background"><X className="h-3 w-3" /></button>
+            </span>
+          ) : null}
         </div>
       )}
 
+      {showVoiceRecorder ? (
+        <VoiceRecorder
+          onRecorded={(r) => { setVoice(r); setShowVoiceRecorder(false); }}
+          onCancel={() => setShowVoiceRecorder(false)}
+        />
+      ) : (
       <div className="group flex items-end gap-1 rounded-3xl border border-border/60 bg-card/70 p-2 shadow-soft backdrop-blur-xl transition focus-within:border-primary/50 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.15),0_8px_30px_-12px_rgba(124,58,237,0.5)]">
         <button type="button" onClick={() => setShowStickers((s) => !s)} aria-label="Stickers" className={cn("shrink-0 rounded-full p-2 transition hover:bg-secondary", showStickers ? "text-primary" : "text-muted-foreground")}>
           <Smile className="h-5 w-5" />
@@ -507,6 +560,16 @@ function Composer({
         <button type="button" onClick={() => setShowMoods((s) => !s)} aria-label="Tag a mood" className={cn("shrink-0 rounded-full p-2 transition hover:bg-secondary", mood ? "text-primary" : "text-muted-foreground")}>
           <Sparkles className="h-5 w-5" />
         </button>
+        {canRecord && !voice ? (
+          <button type="button" onClick={() => setShowVoiceRecorder(true)} aria-label="Record a voice note" className="shrink-0 rounded-full p-2 text-muted-foreground transition hover:bg-secondary">
+            <Mic className="h-5 w-5" />
+          </button>
+        ) : null}
+        {canRecord && !video ? (
+          <button type="button" onClick={() => setShowVideoRecorder(true)} aria-label="Record a video reply" className="shrink-0 rounded-full p-2 text-muted-foreground transition hover:bg-secondary">
+            <Video className="h-5 w-5" />
+          </button>
+        ) : null}
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pickImage(e.target.files?.[0])} />
         <div className="relative min-w-0 flex-1">
           <textarea
@@ -565,6 +628,13 @@ function Composer({
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
         </motion.button>
       </div>
+      )}
+      {showVideoRecorder ? (
+        <VideoCommentRecorder
+          onRecorded={(r) => { setVideo(r); setShowVideoRecorder(false); }}
+          onClose={() => setShowVideoRecorder(false)}
+        />
+      ) : null}
       <div className="mt-1.5 flex items-center gap-3 pl-1">
         {onDone ? <button type="button" onClick={() => { clearDraft(); onDone(); }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button> : null}
         {err ? <span className="text-xs text-red-400">{err}</span> : null}
@@ -832,6 +902,8 @@ function CommentItemImpl({
               {zoom ? <ImageLightbox src={node.imageUrl} onClose={() => setZoom(false)} /> : null}
             </>
           ) : null}
+          {node.voiceUrl ? <VoiceMessage url={node.voiceUrl} durationMs={node.voiceDurationMs} waveform={node.voiceWaveform} /> : null}
+          {node.videoUrl ? <VideoComment url={node.videoUrl} thumbnailUrl={node.videoThumbnailUrl} durationMs={node.videoDurationMs} /> : null}
         </div>
 
         {/* Reaction bar */}

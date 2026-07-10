@@ -9,7 +9,61 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (definitive carousel vertical-scroll fix + full-photo image viewer + new branded F logo everywhere; reusable pull-to-refresh + Stories-style Continue Watching player shipped — unified zoom/expand across feed video/carousel/reel albums + reel-album crossfade, Feed card polish shipped, owner-reported bug batch: mobile topbar brand mark removed, Continue Watching instant-reopen cache-warm shipped, Profile-menu stuck-backdrop nav bug fixed, Stories strip redesign shipped, Home page content-balancing bug fixed + Continue Watching wired in, bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (feed's For You/Following/Reels control lifted into the shared top nav, redesigned as a premium high-contrast pill w/ new Frenz sparkle+reels icons; definitive carousel vertical-scroll fix + full-photo image viewer + new branded F logo everywhere; reusable pull-to-refresh + Stories-style Continue Watching player shipped — unified zoom/expand across feed video/carousel/reel albums + reel-album crossfade, Feed card polish shipped, owner-reported bug batch: mobile topbar brand mark removed, Continue Watching instant-reopen cache-warm shipped, Profile-menu stuck-backdrop nav bug fixed, Stories strip redesign shipped, Home page content-balancing bug fixed + Continue Watching wired in, bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+
+---
+
+## 2026‑07‑09 highlights (batch 28 — feed tabs lifted into the top nav, owner-reported)
+
+Owner asked: "take the For You, Following and Reels [tabs] upwards to the top nav and design the text and all the icons there more premium with high contrast" — then clarified "remember i mean in feed" (scope: the feed page only, not a global topbar redesign).
+
+- **New shared top-nav slot, feed-only.** `features/app-shell/topbar-slot.tsx`
+  is a tiny external store (same pattern as `topbar-visibility.ts`) letting a
+  page inject content into the CENTER of `AppTopbar`. `SmartFeed` is the only
+  writer — it sets the slot on mount/whenever `sort` changes and clears it on
+  unmount, so every other page's topbar (search bar included) is completely
+  untouched. `AppTopbar` renders the slot content in place of the search
+  bar/spacer when present, with a compact search-icon fallback added for
+  desktop (⌘K/search still needs a reachable entry point once the inline pill
+  is gone).
+- **The old sticky segmented control (a separate bar below the topbar,
+  plain text + thin underline) is REMOVED from the feed body** — it now
+  lives inside the topbar itself via the slot, not duplicated.
+- **New premium `FeedTopbarTabs`** (`features/feed/feed-topbar-tabs.tsx`):
+  the active tab expands into a solid blue→violet gradient pill with a white
+  icon+label (the highest-contrast element in the bar); the other tabs
+  collapse to a plain icon-only circle so three labels never fight for the
+  topbar's tight mobile width — verified to fit comfortably at 390px
+  alongside both icon clusters via a static mock screenshot (real headroom to
+  spare). "Reels" can never carry the active/toggle state (tapping it opens
+  the reel deck in place or navigates to `/reels` — `sort` never becomes
+  `"recent"`), so instead of faking a toggle it stays a permanently
+  violet-accented launcher pill with its own solid icon — an honest
+  representation of "always tappable" vs. "currently selected."
+- **Two new Signature Icon System glyphs** in `components/icons/frenz-icons.tsx`,
+  built from the same straight-line/`rect rx`/`circle` primitive language as
+  the rest of the set:
+  - `FrenzSparkleOutline`/`Solid` — a 4-point sparkle/twinkle polygon for "For
+    You" (personalization).
+  - `FrenzReelsOutline`/`Solid` — a portrait reel frame with a play notch.
+    The outline draws the notch as an open stroke triangle (matching how
+    `FrenzInboxOutline`'s flap is drawn); the **solid** variant needed the
+    triangle to read as a genuine cut-out rather than an invisible
+    same-color overlay, so it uses an SVG `<mask>` (white rect body, black
+    triangle) to punch the play notch out of the filled frame —
+    `useId()`-scoped so the mask id never collides if the icon renders more
+    than once on a page.
+  - "Following" reuses the existing `FrenzFriendsOutline`/`Solid` (already
+    means "people" on the sidebar's own Friends nav item — one glyph, one
+    meaning, app-wide).
+  - All verified by rendering the raw SVG path/mask markup in a static mock
+    and screenshotting it (not just reasoning about the path data) — caught
+    nothing wrong, but this is exactly the kind of "malformed at 18px, fine
+    at 48px" risk a screenshot catches that a pure code review wouldn't.
+
+No live-device testing (auth-gated environment) — verified via `tsc`/lint
+(clean) and the static topbar mock at both mobile (390px) and desktop
+(900px) widths, not the real app.
 
 ---
 

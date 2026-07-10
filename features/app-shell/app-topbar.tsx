@@ -9,6 +9,7 @@ import { PressIcon } from "@/components/motion/press-icon";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { isTopbarLocked, setTopbarHidden, useTopbarLocked } from "@/features/app-shell/topbar-visibility";
+import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { openUpload } from "@/features/create/upload-store";
 import { UserMenu } from "@/features/auth/user-menu";
 import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
@@ -19,6 +20,10 @@ export function AppTopbar() {
   const [q, setQ] = useState("");
   const [hidden, setHidden] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // The feed lifts its For You/Following/Reels control up here (owner spec)
+  // — every other page's search bar is untouched, since only the feed ever
+  // populates this slot.
+  const center = useTopbarCenter();
 
   // ⌘K / Ctrl+K focuses search.
   useEffect(() => {
@@ -64,8 +69,8 @@ export function AppTopbar() {
     if (locked) setHidden(false);
   }, [locked]);
 
-  // Broadcast so far-away sticky elements (the feed's segmented control) can
-  // shift up and fill the gap instead of leaving blank space above them.
+  // Broadcast so far-away sticky elements can react to the topbar's own
+  // hidden state without prop-drilling.
   useEffect(() => {
     setTopbarHidden(hidden);
   }, [hidden]);
@@ -105,24 +110,46 @@ export function AppTopbar() {
         <SuggestionsLauncher />
       </div>
 
-      {/* Search — pill, Instagram/Snapchat style (desktop, fills the middle) */}
-      <form onSubmit={submit} className="relative hidden max-w-xl flex-1 sm:block">
-        <IoSearchOutline className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
-        <input
-          ref={inputRef}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search videos, people, hashtags…"
-          aria-label="Search"
-          className="h-11 w-full rounded-full bg-secondary/50 pl-11 pr-12 text-sm outline-none ring-1 ring-inset ring-transparent transition focus:bg-background focus:ring-2 focus:ring-primary/40"
-        />
-        <kbd className="pointer-events-none absolute right-3.5 top-1/2 hidden -translate-y-1/2 rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
-          ⌘K
-        </kbd>
-      </form>
+      {center ? (
+        <>
+          {/* A page-owned center slot (currently just the feed's tabs)
+              replaces the search bar/spacer entirely — centered in the
+              middle of the bar at every width. */}
+          <div className="flex flex-1 items-center justify-center">{center}</div>
+          {/* Desktop search fallback — the inline pill is off-screen while the
+              slot is active, so ⌘K/search still needs a reachable entry point. */}
+          <PressIcon className="hidden sm:inline-flex">
+            <Link
+              href="/search"
+              aria-label="Search"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary"
+            >
+              <IoSearchOutline className="h-[20px] w-[20px]" />
+            </Link>
+          </PressIcon>
+        </>
+      ) : (
+        <>
+          {/* Search — pill, Instagram/Snapchat style (desktop, fills the middle) */}
+          <form onSubmit={submit} className="relative hidden max-w-xl flex-1 sm:block">
+            <IoSearchOutline className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
+            <input
+              ref={inputRef}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search videos, people, hashtags…"
+              aria-label="Search"
+              className="h-11 w-full rounded-full bg-secondary/50 pl-11 pr-12 text-sm outline-none ring-1 ring-inset ring-transparent transition focus:bg-background focus:ring-2 focus:ring-primary/40"
+            />
+            <kbd className="pointer-events-none absolute right-3.5 top-1/2 hidden -translate-y-1/2 rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
+              ⌘K
+            </kbd>
+          </form>
 
-      {/* Mobile spacer — pushes the action cluster to the far right */}
-      <div className="flex-1 sm:hidden" />
+          {/* Mobile spacer — pushes the action cluster to the far right */}
+          <div className="flex-1 sm:hidden" />
+        </>
+      )}
 
       {/* Right action cluster */}
       <div className="flex shrink-0 items-center gap-2">

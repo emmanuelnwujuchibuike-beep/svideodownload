@@ -10,8 +10,10 @@ import dynamic from "next/dynamic";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { lockTopbarVisible } from "@/features/app-shell/topbar-visibility";
+import { setTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
+import { FeedTopbarTabs } from "@/features/feed/feed-topbar-tabs";
 import { SparkCard } from "@/features/feed/spark-card";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
 
@@ -43,12 +45,6 @@ import { getApi } from "@/lib/sdk/browser";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-
-const SEGMENTS: { key: HomeFeedSort; label: string }[] = [
-  { key: "for_you", label: "For You" },
-  { key: "following", label: "Following" },
-  { key: "recent", label: "Reels" },
-];
 
 const PAGE = 8;
 const SEEN_KEY = "frenz:feed-seen-at";
@@ -260,6 +256,19 @@ export function SmartFeed({
     }
     changeSegment(key);
   };
+
+  // Lifts the For You/Following/Reels control into the shared top nav (owner
+  // spec) — only re-set when `sort` itself changes (not on every feed
+  // re-render), since that's the only thing the rendered tabs actually
+  // reflect; `onSegment`/`preloadReelsFeed` are re-captured fresh each run,
+  // which is fine — `changeSegment` reads the current `sort` via this same
+  // closure, so it's never stale between sort changes. Cleared on unmount so
+  // every other page's topbar search bar is untouched.
+  useEffect(() => {
+    setTopbarCenter(<FeedTopbarTabs sort={sort} onSegment={onSegment} onReelsPreload={preloadReelsFeed} />);
+    return () => setTopbarCenter(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort]);
 
   // Restores the scroll position saved for a tab, once its content has
   // actually rendered (so the page is tall enough to scroll to it). Guarded so
@@ -553,50 +562,6 @@ export function SmartFeed({
           </motion.div>
         ) : null}
       </AnimatePresence>
-
-      {/* Controls — a sticky, world-class nav bar: ONLY the hero segmented
-          control (owner spec removed the Photos/Videos/Discussed filter row).
-          It sticks below the (locked-visible) topbar and never translates.
-          `backdrop-blur-lg` (not the heavier `-2xl`) — a deliberate perf trim from
-          the earlier nav pass; the inset highlight below gives the same premium
-          glass feel without the extra GPU cost. */}
-      <div
-        className={cn(
-          "sticky top-[calc(4rem+env(safe-area-inset-top))] z-20 -mx-3 mb-4 rounded-b-2xl border-b border-border/50 bg-background/90 px-3 pb-2.5 pt-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_28px_-18px_rgba(0,0,0,0.3)] backdrop-blur-lg sm:-mx-4 sm:px-4",
-        )}
-      >
-        {/* Hero segmented control — minimal text + a thin sliding underline (same
-            identity language as the Reels tabs), no pill/border. */}
-        <div className="flex items-center justify-center gap-8">
-          {SEGMENTS.map((t) => {
-            const on = sort === t.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => onSegment(t.key)}
-                // Belt-and-suspenders on top of the idle-time warm-up above:
-                // pointerdown fires before click on both mouse and touch, so if
-                // the idle callback hasn't run yet on a busy device this still
-                // buys the chunk fetch a head start before the tap completes.
-                onPointerDown={t.key === "recent" ? preloadReelsFeed : undefined}
-                aria-pressed={on}
-                className="relative flex flex-col items-center gap-1.5 px-0.5 py-1.5 transition active:scale-95"
-              >
-                <span className={cn("text-[13px] font-semibold tracking-tight transition-colors", on ? "text-foreground" : "text-muted-foreground hover:text-foreground/80")}>
-                  {t.label}
-                </span>
-                {on ? (
-                  <motion.span layoutId="seg-underline" transition={{ type: "spring", stiffness: 420, damping: 34 }} className="h-[3px] w-5 rounded-full bg-brand" />
-                ) : (
-                  <span className="h-[3px] w-5" aria-hidden />
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-      </div>
 
       {/* Switching tabs (tap OR swipe) slides + crossfades the whole pane —
           `popLayout` takes the outgoing pane out of flow so it doesn't add

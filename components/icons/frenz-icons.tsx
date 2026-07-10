@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useId } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -139,6 +139,83 @@ export const FrenzPersonSolid = forwardRef<SVGSVGElement, IconProps>(function Fr
     <svg ref={ref} viewBox="0 0 24 24" fill="currentColor" aria-hidden className={cn(base, className)}>
       <circle cx="12" cy="9" r="3.4" />
       <rect x="5.5" y="14.6" width="13" height="8.4" rx="6.5" />
+    </svg>
+  );
+});
+
+/** Personalization glyph ("For You") — a 4-point sparkle/twinkle, straight-line polygon. */
+export const FrenzSparkleOutline = forwardRef<SVGSVGElement, IconProps>(function FrenzSparkleOutline(
+  { className, strokeWidth = 1.75 },
+  ref,
+) {
+  return (
+    <svg
+      ref={ref}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinejoin="round"
+      strokeLinecap="round"
+      aria-hidden
+      className={cn(base, className)}
+    >
+      <path d="M12 3 13.6 10.4 21 12 13.6 13.6 12 21 10.4 13.6 3 12 10.4 10.4 Z" />
+    </svg>
+  );
+});
+
+export const FrenzSparkleSolid = forwardRef<SVGSVGElement, IconProps>(function FrenzSparkleSolid(
+  { className },
+  ref,
+) {
+  return (
+    <svg ref={ref} viewBox="0 0 24 24" fill="currentColor" aria-hidden className={cn(base, className)}>
+      <path d="M12 3 13.6 10.4 21 12 13.6 13.6 12 21 10.4 13.6 3 12 10.4 10.4 Z" />
+    </svg>
+  );
+});
+
+/** A portrait reel frame with a play notch — "Reels". */
+export const FrenzReelsOutline = forwardRef<SVGSVGElement, IconProps>(function FrenzReelsOutline(
+  { className, strokeWidth = 1.75 },
+  ref,
+) {
+  return (
+    <svg
+      ref={ref}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={cn(base, className)}
+    >
+      <rect x="6.5" y="3.25" width="11" height="17.5" rx="3.25" />
+      <path d="M10.2 9.2 15.2 12 10.2 14.8 Z" />
+    </svg>
+  );
+});
+
+export const FrenzReelsSolid = forwardRef<SVGSVGElement, IconProps>(function FrenzReelsSolid(
+  { className },
+  ref,
+) {
+  // The play notch is a genuine cut-out (not an overlaid same-color shape,
+  // which would just vanish) — a same-shape mask punches the triangle out of
+  // the solid frame. `useId` keeps the mask id collision-free if this icon
+  // ever renders more than once on the same page.
+  const id = useId();
+  const maskId = `frenz-reels-mask-${id}`;
+  return (
+    <svg ref={ref} viewBox="0 0 24 24" fill="currentColor" aria-hidden className={cn(base, className)}>
+      <mask id={maskId}>
+        <rect x="6.5" y="3.25" width="11" height="17.5" rx="3.25" fill="#fff" />
+        <path d="M10.2 9.2 15.2 12 10.2 14.8 Z" fill="#000" />
+      </mask>
+      <rect x="6.5" y="3.25" width="11" height="17.5" rx="3.25" mask={`url(#${maskId})`} />
     </svg>
   );
 });

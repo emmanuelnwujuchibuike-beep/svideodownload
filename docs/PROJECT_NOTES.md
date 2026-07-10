@@ -9,9 +9,74 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (Feed card polish shipped — view count + video duration badges, bare-URL linkification — owner-reported bug batch: mobile topbar brand mark removed, Continue Watching instant-reopen cache-warm shipped, Profile-menu stuck-backdrop nav bug fixed, Stories strip redesign shipped, Home page content-balancing bug fixed + Continue Watching wired in, bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (unified zoom/expand across feed video, feed carousel, reel albums + reel-album crossfade transition — Feed card polish shipped, owner-reported bug batch: mobile topbar brand mark removed, Continue Watching instant-reopen cache-warm shipped, Profile-menu stuck-backdrop nav bug fixed, Stories strip redesign shipped, Home page content-balancing bug fixed + Continue Watching wired in, bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 25 — unified zoom button + reel-album smooth transition, owner-reported)
+
+Owner reported directly: "let the zoom button on post cards in feed open the video in reel and open images in full screen size" + "I still can't scroll on top of a multiple posts in feed and in reels, I can only scroll sideways and I want side ways scroll to be smooth motion."
+
+- **Real bug: the video "zoom" button opened a completely different, lesser
+  fullscreen mode than tapping the video did.** `FeedVideo` (`features/media/
+  feed-video.tsx`) had TWO separate fullscreen mechanisms: tapping the clip
+  itself already opened the real Reels viewer (`onExpand`), but the small
+  Maximize2 button in the corner triggered its own local `enterFs` — a
+  same-element "promote this box to `position:fixed`" in-place enlarge with
+  its own bespoke chrome (`FullscreenVideoLayer`), never showing comments,
+  the reel deck, or anything the real viewer has. Fixed by pointing the
+  button at the same `onExpand` handler tapping the video already uses — one
+  consistent "zoom" behavior everywhere. **`MediaCarousel`
+  (`features/media/media-carousel.tsx`, the feed's multi-image/video album)
+  had the exact same duplicated pattern** — its own Maximize2 button did its
+  own local `enterFs`/`exitFs` in-place enlarge instead of calling
+  `onExpandItem`, even though tapping a slide directly already correctly
+  opened the real reel/image viewer. Fixed the same way, targeting whichever
+  slide is currently showing (`index` state, already tracked for the page
+  counter/dots).
+- **Cleaned up, not just patched around**: once both buttons pointed at the
+  real viewers, the entire local fullscreen-promotion mechanism in both
+  files became **fully unreachable** (verified via grep — each `enterFs` had
+  exactly one caller, the button just changed) — removed the dead
+  `fs`/`enterFs`/`exitFs` state, refs, effects, and conditional
+  className/pointer-handler branches from both components, rather than
+  leaving zombie state that a future reader would have to re-verify is
+  inert. `features/media/fullscreen-video.tsx` (`FullscreenVideoLayer`) and
+  `lib/dom/neutralize-transforms.ts` became fully orphaned as a result
+  (confirmed zero other importers) — deleted both outright.
+- **Investigated "can't scroll over a multi-post" for both surfaces, found
+  different root causes.** For the **feed** carousel: re-verified the
+  existing `touch-action:pan-x` + non-passive wheel-redirect fix (shipped
+  earlier — see the carousel-scroll-freeze history in [[smart-home-feed]])
+  is still structurally sound — no conflicting `touch-action`/
+  `overscroll-behavior`, and `SmartFeed`'s own pull-to-refresh/tab-swipe
+  touch handlers never call `preventDefault` and already exclude
+  `[data-hscroll]` elements. **Could not find a further concrete bug here
+  through static analysis** — said so honestly rather than making blind
+  speculative changes to an area with two prior documented regressions.
+  For **reels**: found the album-swipe mechanism (`ReelCard` in
+  `features/feed/reel-viewer.tsx`) was NEVER given the feed carousel's fix
+  at all — it's pure pointer-drag math (`dx`/`dy` on `onPointerMove`), not a
+  scrollable element, so there's no `wheel` trap, but also no explicit
+  `touch-action` on the album's media wrapper (relying on inheriting the
+  deck's `pan-y` implicitly). Added it explicitly for a defensible, zero-
+  risk-to-add guarantee that vertical always reaches the deck regardless of
+  browser touch-action edge cases.
+- **Shipped the smooth-motion request for reel albums**: switching between
+  an album's videos was a hard instant cut (`goSlide` just flips an index,
+  swapping the source with no transition) — confirmed via `git log` this
+  fix was never ported from the feed carousel (which gets real momentum for
+  free via native CSS scroll-snap). A true sliding-carousel transition
+  wasn't safe to add here: the reel's `<video>` element is deliberately kept
+  mounted and stable across slides (`useAdaptiveSource` attaches HLS/MP4
+  imperatively; remounting it via a `key`-based approach risks breaking
+  adaptive playback). Instead added a brief crossfade (`slideFade` state,
+  `transition-opacity`) that fades out on `goSlide` and back in once the new
+  slide's video actually has data (`onCanPlay`, with an `onError` fallback
+  so it can never get stuck invisible) — smooths the transition without
+  touching the video element's lifecycle.
+- All changes verified against `tsc --noEmit` + lint; no live-device touch
+  testing was possible in this environment (auth-gated), noted honestly.
 
 ## 2026‑07‑09 highlights (batch 24 — feed card polish, Feature 17 Part 6 slice 1)
 

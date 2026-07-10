@@ -387,6 +387,12 @@ function ReelCard({
   const [repostBurst, setRepostBurst] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const [srcReady, setSrcReady] = useState(false);
+  // Smooth motion between album slides (owner spec): a brief crossfade rather
+  // than the video hard-cutting to the next source. Cleared once the new
+  // slide is actually rendering frames (`onPlaying`), not a guessed timeout —
+  // the video element itself stays mounted throughout (adaptive-source/HLS
+  // attachment is imperative and must never remount mid-swap).
+  const [slideFade, setSlideFade] = useState(false);
   const [qualityPref, setQualityPref] = useState<QualityPreference>("auto");
   const fetched = useRef(false);
 
@@ -408,6 +414,7 @@ function ReelCard({
         const next = dir === "left" ? Math.min(albumVideos.length - 1, s + 1) : Math.max(0, s - 1);
         if (next !== s) {
           setSrcReady(false); // autoplay waits for the new source
+          setSlideFade(true); // crossfade out; cleared once the new slide is actually playing
           setProgress(0);
           setCur(0);
           try {
@@ -1029,9 +1036,17 @@ function ReelCard({
         <MoreVertical className="h-5 w-5" />
       </button>
 
-      {/* Media */}
+      {/* Media — pan-y explicit here too (not just on the deck scroller above):
+          gesture priority is JS-computed (axisLock), not native horizontal
+          scrolling, so this doesn't change the album-swipe math, but it makes
+          the "vertical always reaches the deck" contract explicit rather than
+          relying on inheriting the ancestor's touch-action. */}
       <div
-        className="absolute inset-0 flex items-center justify-center"
+        className={cn(
+          "absolute inset-0 flex items-center justify-center transition-opacity duration-200 ease-out",
+          slideFade ? "opacity-0" : "opacity-100",
+        )}
+        style={{ touchAction: "pan-y" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -1081,8 +1096,18 @@ function ReelCard({
               }}
               onWaiting={() => setBuffering(true)}
               onPlaying={() => setBuffering(false)}
-              onCanPlay={() => onReady?.(item.id)}
-              onError={() => onReady?.(item.id)}
+              // Clears the crossfade once the new slide has enough data to show
+              // (fires regardless of whether autoplay actually starts — unlike
+              // `onPlaying`, which wouldn't fire at all if autoplay is blocked,
+              // leaving the media stuck invisible).
+              onCanPlay={() => {
+                onReady?.(item.id);
+                setSlideFade(false);
+              }}
+              onError={() => {
+                onReady?.(item.id);
+                setSlideFade(false);
+              }}
               onLoadedMetadata={(e) => {
                 const v = e.currentTarget;
                 setDur(v.duration || 0);

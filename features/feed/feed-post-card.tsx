@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   BadgeCheck,
   Ban,
+  BellOff,
   Bookmark,
   Check,
   Download,
@@ -29,6 +30,7 @@ import { memo, useRef, useState } from "react";
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { RichText } from "@/components/social/rich-text";
 import { PostPollInline } from "@/features/social/post-poll-inline";
+import { AnimatedCount } from "@/features/ui/animated-count";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
 import { MediaCarousel } from "@/features/media/media-carousel";
@@ -262,6 +264,20 @@ function FeedPostCardImpl({
     onRemove(item.id);
   };
 
+  // Softer than Hide/Not interested: their posts stop appearing in YOUR feed
+  // going forward, silently — nothing severed, they're never notified.
+  const muteCreator = async () => {
+    setMenuOpen(false);
+    try {
+      const r = await fetch(`/api/mute/${item.publisher.id}`, { method: "POST" });
+      if (!r.ok) throw new Error();
+      toast(`Muted @${item.publisher.handle} — you won't see their posts in your feed.`, "success");
+      onRemove(item.id);
+    } catch {
+      toast("Couldn't mute.", "error");
+    }
+  };
+
   return (
     <motion.article
       ref={articleRef}
@@ -377,7 +393,10 @@ function FeedPostCardImpl({
                     <MenuItem icon={Pencil} label="Edit post" onClick={() => { setMenuOpen(false); setEditReady(true); setEditOpen(true); }} />
                   ) : null}
                   {!item.isOwner ? (
-                    <MenuItem icon={UserPlus} label={following ? "Unfollow creator" : "Follow creator"} onClick={toggleFollow} />
+                    <>
+                      <MenuItem icon={UserPlus} label={following ? "Unfollow creator" : "Follow creator"} onClick={toggleFollow} />
+                      <MenuItem icon={BellOff} label="Mute creator" onClick={muteCreator} />
+                    </>
                   ) : null}
                   <MenuItem icon={FolderPlus} label="Save to collection" onClick={() => { setMenuOpen(false); setPickerReady(true); setPickerOpen(true); }} />
                   <MenuItem icon={EyeOff} label="Hide this post" onClick={() => onRemove(item.id)} />
@@ -668,7 +687,7 @@ function ActionButton({
       >
         <Icon className={cn("h-[19px] w-[19px]", fill && "fill-current")} strokeWidth={2.1} />
       </motion.span>
-      {count !== undefined && count > 0 ? <span className="text-xs font-semibold tabular-nums">{formatCompactNumber(count)}</span> : null}
+      {count !== undefined && count > 0 ? <AnimatedCount value={count} className="text-xs font-semibold tabular-nums" /> : null}
     </>
   );
   const cls = cn(

@@ -393,7 +393,7 @@ async function loadHomeFeed(
     if (sort === "for_you") rows = rankForYou(rows, new Set(followingIds));
 
     const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
-    const [{ data: profs }, { data: privs }, { data: subs }, reactionRows, blocks] = await Promise.all([
+    const [{ data: profs }, { data: privs }, { data: subs }, reactionRows, blocks, mutes] = await Promise.all([
       db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, trust_score").in("id", publisherIds),
       db.from("privacy_settings").select("user_id, show_in_recommendations").in("user_id", publisherIds),
       db.from("subscriptions").select("user_id, plan, status").in("user_id", publisherIds).in("status", ["active", "trialing"]),
@@ -401,6 +401,11 @@ async function loadHomeFeed(
       viewerId
         ? db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`)
         : Promise.resolve({ data: [] as { blocker_id: string; blocked_id: string }[] }),
+      // Best-effort against migration 0035 not being applied yet — a missing
+      // table just means nothing's muted, same fail-open shape as `blocks`.
+      viewerId
+        ? db.from("muted_creators").select("muted_id").eq("muter_id", viewerId)
+        : Promise.resolve({ data: [] as { muted_id: string }[] }),
     ]);
 
     const profById = new Map<string, Record<string, unknown>>();
@@ -431,6 +436,9 @@ async function loadHomeFeed(
     for (const b of (blocks.data ?? []) as { blocker_id: string; blocked_id: string }[]) {
       blocked.add(b.blocker_id === viewerId ? b.blocked_id : b.blocker_id);
     }
+    // Unlike `blocked`, this is one-directional by design — only creators
+    // THIS viewer muted, never the reverse.
+    const muted = new Set(((mutes.data ?? []) as { muted_id: string }[]).map((m) => m.muted_id));
     const followingSet = new Set(followingIds);
 
     // Per-publisher diversity cap keeps one creator from flooding the feed — but
@@ -442,7 +450,7 @@ async function loadHomeFeed(
     const perPublisher = new Map<string, number>();
     const kept: FeedItem[] = [];
     for (const r of rows) {
-      if (suspended.has(r.publisher_id) || lowTrust.has(r.publisher_id) || blocked.has(r.publisher_id)) continue;
+      if (suspended.has(r.publisher_id) || lowTrust.has(r.publisher_id) || blocked.has(r.publisher_id) || muted.has(r.publisher_id)) continue;
       // Opt-outs are hidden from discovery, but a creator you follow can still appear.
       if (optedOut.has(r.publisher_id) && !followingSet.has(r.publisher_id) && r.publisher_id !== viewerId) continue;
       const n = perPublisher.get(r.publisher_id) ?? 0;

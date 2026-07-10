@@ -43,6 +43,7 @@ import { SmartVideo } from "@/features/media/smart-video";
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { Comments } from "@/features/social/comments";
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
+import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { RepostComposer } from "@/features/social/repost-composer";
@@ -783,14 +784,23 @@ function ReelCard({
       toast("Couldn't block.", "error");
     }
   };
+  // Softer than a block: their posts stop appearing in YOUR feed going
+  // forward, silently — nothing severed, they're never notified, and (unlike
+  // a block) this reel stays open since you're already watching it.
+  const muteCreator = async () => {
+    setMoreOpen(false);
+    try {
+      const r = await fetch(`/api/mute/${item.publisher.id}`, { method: "POST" });
+      if (!r.ok) throw new Error();
+      toast(`Muted @${item.publisher.handle} — you won't see their posts in your feed.`, "success");
+    } catch {
+      toast("Couldn't mute.", "error");
+    }
+  };
   const hidePost = () => {
     setMoreOpen(false);
     toast("We'll show less like this.", "info");
     onClose();
-  };
-  const comingSoon = (what: string) => {
-    setMoreOpen(false);
-    toast(`${what} — coming soon.`, "info");
   };
 
   // Manual quality override (spec: automatic selection is the default, but let
@@ -1606,7 +1616,7 @@ function ReelCard({
                     ) : (
                       <>
                         <MoreItem icon={following ? Check : UserPlus} label={following ? "Following creator" : "Follow creator"} onClick={() => void toggleFollow()} />
-                        <MoreItem icon={BellOff} label="Mute creator" onClick={() => comingSoon("Mute creator")} />
+                        <MoreItem icon={BellOff} label="Mute creator" onClick={muteCreator} />
                       </>
                     )}
                     {native ? <MoreItem icon={mutedAuto ? VolumeX : Volume2} label={mutedAuto ? "Unmute audio" : "Mute audio"} onClick={() => { toggleMute(); setMoreOpen(false); }} /> : null}
@@ -1785,7 +1795,7 @@ function RailButton({
       >
         <Icon className={cn("h-6 w-6 drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]", fill && "fill-current", active && activeClass)} strokeWidth={2.1} />
       </span>
-      {count !== undefined && count > 0 ? <span className="text-[11px] font-bold tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">{formatCompactNumber(count)}</span> : null}
+      {count !== undefined && count > 0 ? <AnimatedCount value={count} className="text-[11px] font-bold tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]" /> : null}
     </motion.button>
   );
 }
@@ -1822,7 +1832,7 @@ function SidebarAct({
       {...press}
     >
       <Icon className={cn("h-[18px] w-[18px]", fill && "fill-current")} />
-      {count !== undefined && count > 0 ? <span className="text-xs font-medium tabular-nums">{formatCompactNumber(count)}</span> : null}
+      {count !== undefined && count > 0 ? <AnimatedCount value={count} className="text-xs font-medium tabular-nums" /> : null}
     </button>
   );
 }

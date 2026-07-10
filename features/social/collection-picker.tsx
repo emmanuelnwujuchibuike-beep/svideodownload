@@ -1,8 +1,8 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, FolderPlus, Globe, Loader2, Lock, Plus, Users, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Check, FolderPlus, Globe, Loader2, Lock, Plus, Search, Users, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { toast } from "@/features/ui/toast";
@@ -36,6 +36,7 @@ export function CollectionPicker({ postId, open, onClose }: { postId: string; op
   const [name, setName] = useState("");
   const [vis, setVis] = useState<Vis>("private");
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
   const busy = useRef<Set<string>>(new Set());
 
   useEffect(() => setMounted(true), []);
@@ -45,6 +46,7 @@ export function CollectionPicker({ postId, open, onClose }: { postId: string; op
     setLoading(true);
     setCreating(false);
     setName("");
+    setQuery("");
     fetch(`/api/collections?post=${postId}`)
       .then((r) => (r.ok ? r.json() : { collections: [] }))
       .then((d) => setRows((d.collections ?? []) as Row[]))
@@ -102,6 +104,11 @@ export function CollectionPicker({ postId, open, onClose }: { postId: string; op
     }
   };
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? rows.filter((r) => r.name.toLowerCase().includes(q)) : rows;
+  }, [rows, query]);
+
   if (!mounted) return null;
 
   return createPortal(
@@ -132,6 +139,23 @@ export function CollectionPicker({ postId, open, onClose }: { postId: string; op
               </button>
             </div>
 
+            {/* Search — only worth the space once there's actually enough to
+                search through; a couple of collections don't need it. */}
+            {rows.length > 5 ? (
+              <div className="px-5 pb-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search collections…"
+                    aria-label="Search collections"
+                    className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-foreground/30"
+                  />
+                </div>
+              </div>
+            ) : null}
+
             <div className="max-h-[52vh] overflow-y-auto px-2.5 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {loading ? (
                 <div className="flex items-center justify-center py-10 text-muted-foreground">
@@ -144,8 +168,15 @@ export function CollectionPicker({ postId, open, onClose }: { postId: string; op
                   </span>
                   <p className="text-sm text-muted-foreground">No collections yet — create your first.</p>
                 </div>
+              ) : filtered.length === 0 ? (
+                <div className="px-3 py-8 text-center">
+                  <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
+                    <Search className="h-6 w-6" />
+                  </span>
+                  <p className="text-sm text-muted-foreground">No collections match “{query.trim()}”.</p>
+                </div>
               ) : (
-                rows.map((r) => {
+                filtered.map((r) => {
                   const V = VIS_META[r.visibility].icon;
                   return (
                     <button

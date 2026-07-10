@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { MediaCarousel } from "@/features/media/media-carousel";
 import { SmartVideo } from "@/features/media/smart-video";
+import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
 import { Comments } from "@/features/social/comments";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
@@ -412,7 +413,7 @@ function Act({
       className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary", active && activeClass)}
     >
       <Icon className={cn("h-[18px] w-[18px]", fill && "fill-current")} />
-      {count !== undefined && count > 0 ? <span className="text-xs font-medium tabular-nums">{formatCompactNumber(count)}</span> : null}
+      {count !== undefined && count > 0 ? <AnimatedCount value={count} className="text-xs font-medium tabular-nums" /> : null}
     </button>
   );
 }

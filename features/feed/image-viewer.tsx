@@ -31,6 +31,7 @@ import { createPortal } from "react-dom";
 
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { RichText } from "@/components/social/rich-text";
+import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { Comments } from "@/features/social/comments";
@@ -212,14 +213,23 @@ function ImageStage({ item, startIndex = 0, onClose }: { item: FeedItem; startIn
       toast("Couldn't block.", "error");
     }
   };
+  // Softer than a block: their posts stop appearing in YOUR feed going
+  // forward, silently — nothing severed, they're never notified, and (unlike
+  // a block) this viewer stays open since you're already looking at it.
+  const muteCreator = async () => {
+    setMoreOpen(false);
+    try {
+      const r = await fetch(`/api/mute/${item.publisher.id}`, { method: "POST" });
+      if (!r.ok) throw new Error();
+      toast(`Muted @${item.publisher.handle} — you won't see their posts in your feed.`, "success");
+    } catch {
+      toast("Couldn't mute.", "error");
+    }
+  };
   const hidePost = () => {
     setMoreOpen(false);
     toast("We'll show less like this.", "info");
     onClose();
-  };
-  const comingSoon = (what: string) => {
-    setMoreOpen(false);
-    toast(`${what} — coming soon.`, "info");
   };
 
   const openComments = useCallback(async () => {
@@ -384,7 +394,6 @@ function ImageStage({ item, startIndex = 0, onClose }: { item: FeedItem; startIn
           <RailBtn icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
           <RailBtn icon={Share2} count={item.sharesCount} label="Share" onClick={share} />
           <RailBtn icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
-          <RailBtn icon={Download} label="Download" onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title })} />
         </div>
 
         {/* Comments sheet — mobile/tablet only; large screens use the persistent
@@ -472,14 +481,6 @@ function ImageStage({ item, startIndex = 0, onClose }: { item: FeedItem; startIn
           />
           <Act icon={Share2} label="Share" count={item.sharesCount} onClick={share} />
           <Act icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-primary" onClick={() => react("save")} />
-          <button
-            type="button"
-            onClick={() => downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title })}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary"
-            aria-label="Download to device"
-          >
-            <Download className="h-[18px] w-[18px]" />
-          </button>
         </div>
 
         <h3 className="mt-4 text-sm font-bold">Comments{item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}</h3>
@@ -531,7 +532,7 @@ function ImageStage({ item, startIndex = 0, onClose }: { item: FeedItem; startIn
                   ) : (
                     <>
                       <MoreItem icon={following ? Check : UserPlus} label={following ? "Following creator" : "Follow creator"} onClick={() => { setMoreOpen(false); toggleFollow(); }} />
-                      <MoreItem icon={BellOff} label="Mute creator" onClick={() => comingSoon("Mute creator")} />
+                      <MoreItem icon={BellOff} label="Mute creator" onClick={muteCreator} />
                     </>
                   )}
                 </MoreGroup>
@@ -771,7 +772,7 @@ function Act({
       className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary", active && activeClass)}
     >
       <Icon className={cn("h-[18px] w-[18px]", fill && "fill-current")} />
-      {count !== undefined && count > 0 ? <span className="text-xs font-medium tabular-nums">{formatCompactNumber(count)}</span> : null}
+      {count !== undefined && count > 0 ? <AnimatedCount value={count} className="text-xs font-medium tabular-nums" /> : null}
     </button>
   );
 }
@@ -782,7 +783,7 @@ function RailBtn({ icon: Icon, count, active, fill, activeClass, label, onClick 
       <span className={cn("flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors", active && "bg-white/15 ring-white/25")}>
         <Icon className={cn("h-6 w-6 drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]", fill && "fill-current", active && activeClass)} strokeWidth={2.1} />
       </span>
-      {count !== undefined && count > 0 ? <span className="text-[11px] font-bold tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">{formatCompactNumber(count)}</span> : null}
+      {count !== undefined && count > 0 ? <AnimatedCount value={count} className="text-[11px] font-bold tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]" /> : null}
     </motion.button>
   );
 }

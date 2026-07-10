@@ -28,14 +28,16 @@ import { StickerPicker } from "@/features/social/sticker-picker";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { COMMENT_MOODS, COMMENT_REACTIONS, commentMood } from "@/lib/social/comment-meta";
 import type { CommentNode } from "@/lib/social/engagement";
+import type { SearchPerson } from "@/lib/social/search";
 import { stickerGlyph, type Sticker } from "@/lib/social/stickers";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
-type SortMode = "smart" | "top" | "new";
+type SortMode = "smart" | "top" | "new" | "friends";
 const SORTS: { id: SortMode; label: string }[] = [
   { id: "smart", label: "Smart" },
   { id: "top", label: "Top" },
   { id: "new", label: "Newest" },
+  { id: "friends", label: "Friends" },
 ];
 const MAX = 1000;
 
@@ -167,13 +169,22 @@ export function Comments({
   const sorted = useMemo(() => {
     const arr = [...nodes];
     const base =
-      sort === "smart"
-        ? (a: CommentNode, b: CommentNode) => smartScore(b) - smartScore(a)
-        : sort === "top"
-          ? (a: CommentNode, b: CommentNode) => b.likesCount - a.likesCount || +new Date(b.createdAt) - +new Date(a.createdAt)
-          : (a: CommentNode, b: CommentNode) => +new Date(b.createdAt) - +new Date(a.createdAt);
-    // Pinned first, then best answer, then the chosen sort.
-    arr.sort((a, b) => Number(b.pinned) - Number(a.pinned) || Number(b.isBest) - Number(a.isBest) || base(a, b));
+      sort === "top"
+        ? (a: CommentNode, b: CommentNode) => b.likesCount - a.likesCount || +new Date(b.createdAt) - +new Date(a.createdAt)
+        : sort === "new"
+          ? (a: CommentNode, b: CommentNode) => +new Date(b.createdAt) - +new Date(a.createdAt)
+          // "smart" and "friends" both fall back to the same engagement/recency
+          // ordering — "friends" just adds a relationship pass in front of it.
+          : (a: CommentNode, b: CommentNode) => smartScore(b) - smartScore(a);
+    // Pinned first, then best answer, then (Friends sort only) mutual friends,
+    // then the chosen sort — "gently prioritized", never hiding anyone.
+    arr.sort(
+      (a, b) =>
+        Number(b.pinned) - Number(a.pinned) ||
+        Number(b.isBest) - Number(a.isBest) ||
+        (sort === "friends" ? Number(!!b.author?.isFriend) - Number(!!a.author?.isFriend) : 0) ||
+        base(a, b),
+    );
     return arr;
   }, [nodes, sort]);
 
@@ -266,6 +277,118 @@ function Composer({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // @mention autocomplete — a live in-progress "@partial" token right before
+  // the caret triggers a debounced people search; picking a result inserts
+  // the exact handle. Notifications are driven server-side by parsing the
+  // final body text (see migration 0037), so this is purely a typing aid —
+  // it doesn't need to tell the backend anything special.
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionAnchor, setMentionAnchor] = useState<number | null>(null);
+  const [mentionResults, setMentionResults] = useState<SearchPerson[]>([]);
+  const [mentionActive, setMentionActive] = useState(0);
+  const mentionReqId = useRef(0);
+
+  // Local draft — the comments sheet unmounts its Composer on close, which
+  // used to silently discard a half-typed reply. Keyed per post+target so
+  // several in-progress replies on the same post never collide.
+  const draftKey = `frenz:comment-draft:${postId}:${parentId ?? "root"}`;
+  const draftLoaded = useRef(false);
+  useEffect(() => {
+    if (draftLoaded.current) return;
+    draftLoaded.current = true;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw) as { body?: string; mood?: string | null };
+        if (d.body) setBody(d.body);
+        if (d.mood) setMood(d.mood);
+      }
+    } catch {
+      /* no draft */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        if (!body.trim() && !mood) localStorage.removeItem(draftKey);
+        else localStorage.setItem(draftKey, JSON.stringify({ body, mood }));
+      } catch {
+        /* storage unavailable/full — draft just won't persist */
+      }
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [body, mood]);
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // Debounced mention search.
+  useEffect(() => {
+    if (mentionQuery === null || mentionQuery.length === 0) {
+      setMentionResults([]);
+      return;
+    }
+    const reqId = ++mentionReqId.current;
+    const t = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(mentionQuery)}&type=people`)
+        .then((r) => (r.ok ? r.json() : { people: [] }))
+        .then((j: { people?: SearchPerson[] }) => {
+          if (reqId === mentionReqId.current) {
+            setMentionResults((j.people ?? []).slice(0, 6));
+            setMentionActive(0);
+          }
+        })
+        .catch(() => {
+          if (reqId === mentionReqId.current) setMentionResults([]);
+        });
+    }, 200);
+    return () => clearTimeout(t);
+  }, [mentionQuery]);
+
+  const onBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const next = e.target.value.slice(0, MAX);
+    setBody(next);
+    const caret = e.target.selectionStart ?? next.length;
+    const before = next.slice(0, caret);
+    const m = /(?:^|\s)@([A-Za-z0-9_.]{0,30})$/.exec(before);
+    if (m) {
+      setMentionAnchor(caret - m[1]!.length - 1);
+      setMentionQuery(m[1]!);
+    } else {
+      setMentionAnchor(null);
+      setMentionQuery(null);
+    }
+  };
+
+  const pickMention = (p: SearchPerson) => {
+    if (mentionAnchor === null || mentionQuery === null) return;
+    const before = body.slice(0, mentionAnchor);
+    const after = body.slice(mentionAnchor + 1 + mentionQuery.length);
+    // Only insert a separating space when `after` doesn't already start with
+    // one (e.g. picking a mention with the caret back inside already-typed
+    // text) — otherwise this doubles up the space.
+    const sep = after.startsWith(" ") ? "" : " ";
+    const next = `${before}@${p.handle}${sep}${after}`.slice(0, MAX);
+    setBody(next);
+    setMentionAnchor(null);
+    setMentionQuery(null);
+    setMentionResults([]);
+    const pos = Math.min(next.length, before.length + 1 + p.handle.length + sep.length);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(pos, pos);
+    });
+  };
 
   const canSend = (!!body.trim() || !!sticker || !!image) && !busy && !uploading;
   const remaining = MAX - body.length;
@@ -311,6 +434,7 @@ function Composer({
       setImage(null);
       setMood(null);
       setShowStickers(false);
+      clearDraft();
       onDone?.();
       await onPosted();
     } catch {
@@ -384,22 +508,65 @@ function Composer({
           <Sparkles className="h-5 w-5" />
         </button>
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pickImage(e.target.files?.[0])} />
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value.slice(0, MAX))}
-          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit(); }}
-          rows={1}
-          autoFocus={autoFocus}
-          placeholder={parentId ? "Write a reply…" : "Add to the conversation…"}
-          className="max-h-32 min-h-[36px] flex-1 resize-none bg-transparent py-1.5 text-sm outline-none"
-        />
+        <div className="relative min-w-0 flex-1">
+          <textarea
+            ref={textareaRef}
+            value={body}
+            onChange={onBodyChange}
+            onKeyDown={(e) => {
+              if (mentionQuery !== null && mentionResults.length > 0) {
+                if (e.key === "ArrowDown") { e.preventDefault(); setMentionActive((i) => Math.min(mentionResults.length - 1, i + 1)); return; }
+                if (e.key === "ArrowUp") { e.preventDefault(); setMentionActive((i) => Math.max(0, i - 1)); return; }
+                if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pickMention(mentionResults[mentionActive]!); return; }
+                if (e.key === "Escape") { setMentionAnchor(null); setMentionQuery(null); return; }
+              }
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
+            }}
+            rows={1}
+            autoFocus={autoFocus}
+            placeholder={parentId ? "Write a reply…" : "Add to the conversation…"}
+            className="max-h-32 min-h-[36px] w-full resize-none bg-transparent py-1.5 text-sm outline-none"
+          />
+          {/* @mention autocomplete */}
+          <AnimatePresence>
+            {mentionQuery !== null && mentionResults.length > 0 ? (
+              <motion.ul
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                className="absolute bottom-full left-0 z-30 mb-2 w-64 max-w-[80vw] overflow-hidden rounded-2xl border border-border/60 bg-card/95 py-1 shadow-elevated backdrop-blur-xl"
+              >
+                {mentionResults.map((p, i) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => { e.preventDefault(); pickMention(p); }}
+                      className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left transition", i === mentionActive ? "bg-secondary" : "hover:bg-secondary/60")}
+                    >
+                      {p.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+                      ) : (
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-xs font-bold text-white">{p.displayName.charAt(0).toUpperCase()}</span>
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">{p.displayName}</span>
+                        <span className="block truncate text-xs text-muted-foreground">@{p.handle}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </motion.ul>
+            ) : null}
+          </AnimatePresence>
+        </div>
         {remaining <= 120 ? <span className={cn("shrink-0 self-center pr-1 text-[11px] font-semibold tabular-nums", remaining <= 0 ? "text-rose-500" : "text-muted-foreground")}>{remaining}</span> : null}
         <motion.button type="button" onClick={submit} disabled={!canSend} whileTap={{ scale: 0.88 }} aria-label={parentId ? "Reply" : "Comment"} className="shrink-0 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 p-2 text-white shadow-md shadow-violet-500/30 transition hover:opacity-95 disabled:opacity-40 disabled:shadow-none">
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
         </motion.button>
       </div>
       <div className="mt-1.5 flex items-center gap-3 pl-1">
-        {onDone ? <button type="button" onClick={onDone} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button> : null}
+        {onDone ? <button type="button" onClick={() => { clearDraft(); onDone(); }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button> : null}
         {err ? <span className="text-xs text-red-400">{err}</span> : null}
       </div>
     </div>

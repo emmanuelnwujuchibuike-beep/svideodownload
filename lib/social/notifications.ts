@@ -18,6 +18,7 @@ export type NotificationType =
   | "quote"
   | "repost"
   | "repost_engagement"
+  | "comment_reaction"
   | "share"
   | "save"
   | "profile_view"
@@ -71,6 +72,7 @@ const CATEGORY_BY_TYPE: Partial<Record<NotificationType, NotificationCategory>> 
   quote: "social",
   repost: "social",
   repost_engagement: "social",
+  comment_reaction: "social",
   share: "social",
   save: "social",
   profile_view: "social",
@@ -224,7 +226,7 @@ export interface GroupedNotificationsResult {
 }
 
 // Post-scoped actions collapse per post; relationship signals collapse together.
-const GROUP_BY_POST = new Set<NotificationType>(["like", "love", "comment", "reply", "save", "repost", "repost_engagement", "share", "quote"]);
+const GROUP_BY_POST = new Set<NotificationType>(["like", "love", "comment", "reply", "mention", "comment_reaction", "save", "repost", "repost_engagement", "share", "quote"]);
 const GROUP_TOGETHER = new Set<NotificationType>(["follow", "profile_view"]);
 
 function groupKey(it: NotificationItem): string {

@@ -9,12 +9,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * `void pushSocialEvent(...)` after the write succeeds.
  */
 
-type SocialPushType = "like" | "save" | "comment" | "follow" | "repost";
+type SocialPushType = "like" | "save" | "comment" | "reply" | "follow" | "repost";
 
 const VERB: Record<SocialPushType, string> = {
   like: "Wow'd your post",
   save: "saved your post",
   comment: "commented on your post",
+  reply: "replied to your comment",
   follow: "started following you",
   repost: "reposted your post",
 };
@@ -22,9 +23,13 @@ const VERB: Record<SocialPushType, string> = {
 export async function pushSocialEvent(opts: {
   actorId: string;
   type: SocialPushType;
-  /** For post events the recipient is resolved from the post's publisher. */
+  /** For post events the recipient defaults to the post's publisher — unless
+   *  `recipientId` is already given (e.g. a reply's recipient is the parent
+   *  comment's author, not the post owner), in which case that wins; either
+   *  way the post is still looked up for its title. */
   postId?: string;
-  /** For follow — the user being followed. */
+  /** For follow — the user being followed. Also overrides postId's default
+   *  recipient (see above) when both are given. */
   recipientId?: string;
 }): Promise<void> {
   try {
@@ -39,7 +44,7 @@ export async function pushSocialEvent(opts: {
         .eq("id", opts.postId)
         .maybeSingle();
       if (!post) return;
-      recipientId = post.publisher_id as string;
+      if (!recipientId) recipientId = post.publisher_id as string;
       postTitle = (post.title as string | null) ?? null;
     }
     // Never push your own action back to you.

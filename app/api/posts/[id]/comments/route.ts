@@ -107,16 +107,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!gate.ok) return NextResponse.json({ error: GATE_MSG[gate.reason] }, { status: 403 });
 
   // Keep threads exactly one level deep: a reply to a reply attaches to the
-  // top-level parent. Ignore parents that aren't on this post.
+  // top-level parent. Ignore parents that aren't on this post. The composer
+  // UI never shows a Reply button below depth 0, so in practice `parentId`
+  // always already IS the top-level comment — `replyTargetAuthorId` is
+  // captured before any reassignment below so push notifies whoever was
+  // actually replied to, not whatever the (normally no-op) flatten resolves to.
   let parentId = parsed.data.parentId ?? null;
+  let replyTargetAuthorId: string | null = null;
   if (parentId) {
     const { data: parent } = await supabase
       .from("post_comments")
-      .select("post_id, parent_id")
+      .select("post_id, parent_id, author_id")
       .eq("id", parentId)
       .maybeSingle();
-    if (!parent || parent.post_id !== id) parentId = null;
-    else if (parent.parent_id) parentId = parent.parent_id as string;
+    if (!parent || parent.post_id !== id) {
+      parentId = null;
+    } else {
+      replyTargetAuthorId = parent.author_id as string;
+      if (parent.parent_id) parentId = parent.parent_id as string;
+    }
   }
 
   // Only send the rich columns when they carry a value, so a plain-text comment
@@ -139,7 +148,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         : "Couldn't post comment.";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
-  // Device push to the post owner (skipped when commenting on your own post).
-  void pushSocialEvent({ actorId: user.id, type: "comment", postId: id });
+  // Device push — to the parent comment's author for a reply, or the post
+  // owner for a top-level comment (either way, skipped when it'd just be
+  // pushing your own action back to you — pushSocialEvent's own guard).
+  if (parentId && replyTargetAuthorId) {
+    void pushSocialEvent({ actorId: user.id, type: "reply", postId: id, recipientId: replyTargetAuthorId });
+  } else {
+    void pushSocialEvent({ actorId: user.id, type: "comment", postId: id });
+  }
   return NextResponse.json({ ok: true, id: data.id });
 }

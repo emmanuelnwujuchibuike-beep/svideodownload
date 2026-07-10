@@ -66,6 +66,8 @@ export interface CommentAuthor {
   avatarUrl: string | null;
   isVerified: boolean;
   plan: BillingPlan;
+  /** Viewer and this author are mutual friends — powers "Friends First" sort. */
+  isFriend: boolean;
 }
 
 export interface CommentReactionCount {
@@ -178,6 +180,25 @@ export async function listComments(
         : Promise.resolve({ data: [] as { blocker_id: string; blocked_id: string }[] }),
     ]);
 
+    // Same bounded, one-shot pattern as blocks above — the viewer's own
+    // friendship edges (not one filter per commenter), for "Friends First"
+    // sort. Tolerant of the friends migration not being applied: degrades to
+    // an empty set rather than failing the whole comment list.
+    const friendIds = new Set<string>();
+    if (viewerId) {
+      try {
+        const { data: friendRows } = await db
+          .from("friendships")
+          .select("user_low, user_high")
+          .or(`user_low.eq.${viewerId},user_high.eq.${viewerId}`);
+        for (const f of (friendRows ?? []) as { user_low: string; user_high: string }[]) {
+          friendIds.add(f.user_low === viewerId ? f.user_high : f.user_low);
+        }
+      } catch {
+        /* friendships not migrated yet */
+      }
+    }
+
     const planById = new Map<string, BillingPlan>();
     for (const s of (subs ?? []) as { user_id: string; plan: BillingPlan }[]) planById.set(s.user_id, s.plan);
     const blockedIds = new Set<string>();
@@ -195,6 +216,7 @@ export async function listComments(
         avatarUrl: (p.avatar_url as string) ?? null,
         isVerified: (p.is_verified as boolean) ?? false,
         plan: planById.get(id) ?? "free",
+        isFriend: friendIds.has(id),
       });
     }
 

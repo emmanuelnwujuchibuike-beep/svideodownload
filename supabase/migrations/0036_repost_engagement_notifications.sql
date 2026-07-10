@@ -1,23 +1,3 @@
--- =====================================================================
--- 0036_repost_engagement_notifications.sql — "Sarah liked the post you
--- reposted" (Feature 17 Part 8's "Friend Repost Notifications")
--- =====================================================================
--- Every existing engagement trigger (notify_on_reaction, notify_on_comment)
--- only ever notifies the ORIGINAL post's publisher_id — none of them know
--- reposts exist. A reposter never hears about engagement their repost drove.
---
--- Relationship-aware by design (not "everyone who reposted this viral post
--- gets spammed by every stranger's like"): only fires when the person who
--- reacted/commented is an actual FRIEND of the reposter — the exact
--- "mutual friend" framing the spec asks for. Covers like, save, and comment
--- (which already covers replies — a reply is just a post_comments row with a
--- parent_id). Deliberately does NOT cover shares: shares_count is a plain
--- aggregate counter (posts.shares_count, 0007_content_posts.sql), not
--- per-actor rows, so there's no "who shared" to check friendship against.
---
--- Separate trigger functions (not folded into the existing notify_on_reaction/
--- notify_on_comment) so the already-working primary-owner notification path
--- is never touched — this is purely additive.
 
 alter table public.notifications drop constraint if exists notifications_type_chk;
 alter table public.notifications add constraint notifications_type_chk check (
@@ -25,6 +5,8 @@ alter table public.notifications add constraint notifications_type_chk check (
     -- social
     'follow','like','love','comment','reply','mention','tag','quote','repost',
     'share','save','profile_view','invite','milestone','repost_engagement',
+    -- friends
+    'friend_request','friend_accepted','friend_reminder',
     -- downloads
     'download_complete','download_failed','download_ready','processing_finished',
     -- community
@@ -43,11 +25,15 @@ alter table public.notifications add constraint notifications_type_chk check (
 
 -- Extend the anti-spam dedupe (one row per recipient+actor+type+post) to
 -- also cover the new type — a friend re-liking/un-liking/re-liking the same
--- reposted post won't spam its reposter either.
+-- reposted post won't spam its reposter either. Same union caveat as the
+-- constraint above: 0020_friends.sql already widened this WHERE clause to
+-- include friend_request/friend_accepted (friend_reminder deliberately stays
+-- out — its own reminder_sent flag already guarantees at-most-once) — keep
+-- that, just add repost_engagement, don't narrow back to 0018's original set.
 drop index if exists notifications_dedupe_uidx;
 create unique index if not exists notifications_dedupe_uidx
   on public.notifications (user_id, actor_id, type, coalesce(post_id, '00000000-0000-0000-0000-000000000000'::uuid))
-  where type in ('follow','like','save','repost_engagement');
+  where type in ('follow','like','save','friend_request','friend_accepted','repost_engagement');
 
 create or replace function public.notify_repost_engagement()
 returns trigger language plpgsql security definer set search_path = public as $$

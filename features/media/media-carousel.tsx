@@ -210,7 +210,10 @@ export function MediaCarousel({
                     <div
                       role="button"
                       aria-label="Open photo"
-                      className="absolute inset-0"
+                      // Subtle press feedback (Part 10) — safe per-slide since
+                      // the Expand/dots/counter controls all live OUTSIDE the
+                      // scroller as siblings, never nested inside a slide.
+                      className="absolute inset-0 transition-transform duration-150 active:scale-[0.985]"
                       onPointerDown={onSlidePointerDown}
                       onPointerMove={onSlidePointerMove}
                       onPointerUp={onSlideTap(i, m)}
@@ -336,7 +339,7 @@ function CarouselVideo({
     <div
       role="button"
       aria-label="Watch video"
-      className="absolute inset-0"
+      className="absolute inset-0 transition-transform duration-150 active:scale-[0.985]"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

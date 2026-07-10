@@ -221,11 +221,17 @@ export function VoiceRecorder({
           onTimeUpdate={(e) => setPlayProgress(e.currentTarget.duration ? e.currentTarget.currentTime / e.currentTarget.duration : 0)}
           className="hidden"
         />
-        <div className="flex h-8 flex-1 items-center gap-[3px]">
+        {/* min-w-0 lets this flex child actually shrink — without it a flex
+            item refuses to go below its content's intrinsic width (here, 46
+            fixed-width bars), which is exactly what forced the whole
+            composer row wider than the screen on narrow phones. Bars are
+            flex-1 (not a fixed px width) so they always divide up exactly
+            the space available instead of demanding a fixed total. */}
+        <div className="flex h-8 min-w-0 flex-1 items-center gap-[2px] overflow-hidden">
           {peaks.map((p, i) => (
             <span
               key={i}
-              className={cn("w-[3px] rounded-full transition-colors", i / peaks.length <= playProgress ? "bg-gradient-to-b from-blue-500 to-violet-500" : "bg-secondary")}
+              className={cn("min-w-[1px] flex-1 rounded-full transition-colors", i / peaks.length <= playProgress ? "bg-gradient-to-b from-blue-500 to-violet-500" : "bg-secondary")}
               style={{ height: `${Math.max(12, (p / maxPeak) * 100)}%` }}
             />
           ))}
@@ -249,13 +255,13 @@ export function VoiceRecorder({
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500/60" />
         <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
       </span>
-      <div className="flex h-8 flex-1 items-center gap-[3px] overflow-hidden">
+      <div className="flex h-8 min-w-0 flex-1 items-center gap-[2px] overflow-hidden">
         {phase === "starting" ? (
-          <span className="text-xs text-muted-foreground">Requesting microphone…</span>
+          <span className="truncate text-xs text-muted-foreground">Requesting microphone…</span>
         ) : (
           Array.from({ length: LIVE_BARS }).map((_, i) => {
             const v = bars[bars.length - LIVE_BARS + i] ?? 6;
-            return <span key={i} className="w-[3px] shrink-0 rounded-full bg-gradient-to-b from-blue-500 to-violet-500 transition-[height] duration-100" style={{ height: `${Math.max(10, v)}%` }} />;
+            return <span key={i} className="min-w-[1px] flex-1 rounded-full bg-gradient-to-b from-blue-500 to-violet-500 transition-[height] duration-100" style={{ height: `${Math.max(10, v)}%` }} />;
           })
         )}
       </div>

@@ -274,7 +274,14 @@ export function FeedVideo({
         muted
         playsInline
         preload="metadata"
-        className="h-full w-full touch-pan-y object-contain lg:h-auto lg:max-h-[82vh] lg:w-auto"
+        // Subtle press feedback on the clip itself (Part 10's "lift on
+        // touch" ask) — safe here because the mute/expand buttons below are
+        // DOM siblings, not descendants, so their own taps never trigger
+        // this :active state; a plain <video> has no framer-motion inline
+        // transform to conflict with either (unlike the card's outer
+        // motion.article, where whileTap would double up with every nested
+        // button's own press animation — see [[frenz-motion-icon-system]]).
+        className="h-full w-full touch-pan-y object-contain transition-transform duration-150 active:scale-[0.985] lg:h-auto lg:max-h-[82vh] lg:w-auto"
         onLoadedMetadata={() => {
           const v = video.current;
           if (!v || !v.videoWidth || !v.videoHeight) return;

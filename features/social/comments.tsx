@@ -39,9 +39,31 @@ import { cn, formatCompactNumber } from "@/lib/utils";
 
 // Code-split: MediaRecorder/camera-mic UI most viewers never trigger, kept out
 // of every comment section's initial bundle (mirrors CollectionPicker/
-// PostEditSheet/etc. in feed-post-card.tsx).
-const VoiceRecorder = dynamic(() => import("@/features/social/voice-recorder").then((m) => m.VoiceRecorder), { ssr: false });
-const VideoCommentRecorder = dynamic(() => import("@/features/social/video-comment-recorder").then((m) => m.VideoCommentRecorder), { ssr: false });
+// PostEditSheet/etc. in feed-post-card.tsx). `loading` fallbacks mean even an
+// un-preloaded first tap shows an immediate, on-brand placeholder instead of a
+// dead gap while the chunk fetches — preloadRecorders() below (called once
+// the composer is actually on screen) means that fallback is rarely seen.
+const VoiceRecorder = dynamic(() => import("@/features/social/voice-recorder").then((m) => m.VoiceRecorder), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[52px] items-center gap-2 rounded-3xl border border-border/60 bg-card/70 px-4 shadow-soft backdrop-blur-xl">
+      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      <span className="text-sm text-muted-foreground">Getting the mic ready…</span>
+    </div>
+  ),
+});
+const VideoCommentRecorder = dynamic(() => import("@/features/social/video-comment-recorder").then((m) => m.VideoCommentRecorder), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black" role="status" aria-label="Loading camera">
+      <Loader2 className="h-8 w-8 animate-spin text-white/60" />
+    </div>
+  ),
+});
+function preloadRecorders() {
+  void import("@/features/social/voice-recorder");
+  void import("@/features/social/video-comment-recorder");
+}
 
 type SortMode = "smart" | "top" | "new" | "friends";
 const SORTS: { id: SortMode; label: string }[] = [
@@ -199,8 +221,12 @@ export function Comments({
     return arr;
   }, [nodes, sort]);
 
+  // overflow-x-hidden defensively — no part of this section (composer,
+  // attachments, mention dropdown, threaded replies) should ever be able to
+  // push the page into a horizontal scroll on a narrow phone, whatever
+  // content ends up inside it.
   return (
-    <section id="comments" className={cn(!sheet && "mt-10 scroll-mt-24")}>
+    <section id="comments" className={cn("min-w-0 overflow-x-hidden", !sheet && "mt-10 scroll-mt-24")}>
       <div className={cn("flex items-center justify-between gap-3", sheet ? "mb-3" : "mb-4")}>
         {sheet ? (
           <span />
@@ -299,6 +325,19 @@ function Composer({
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [voice, setVoice] = useState<{ url: string; durationMs: number; waveform: number[] } | null>(null);
   const [video, setVideo] = useState<{ url: string; durationMs: number; thumbnailUrl: string | null } | null>(null);
+
+  // Warm both recorder chunks once the composer is actually on screen — by
+  // the time anyone reaches for the mic/video button the code is already
+  // sitting in the browser's module cache, so opening never shows the
+  // `loading` fallback in practice. Deferred to idle time so it never
+  // competes with the comments list's own first paint.
+  useEffect(() => {
+    if (!canRecord || typeof window === "undefined") return;
+    const ric = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(() => cb({} as IdleDeadline), 1200));
+    const cic = window.cancelIdleCallback ?? window.clearTimeout;
+    const id = ric(() => preloadRecorders());
+    return () => cic(id);
+  }, [canRecord]);
 
   // @mention autocomplete — a live in-progress "@partial" token right before
   // the caret triggers a debounced people search; picking a result inserts
@@ -587,8 +626,8 @@ function Composer({
             }}
             rows={1}
             autoFocus={autoFocus}
-            placeholder={parentId ? "Write a reply…" : "Add to the conversation…"}
-            className="max-h-32 min-h-[36px] w-full resize-none bg-transparent py-1.5 text-sm outline-none"
+            placeholder={parentId ? "Reply…" : "Add a comment…"}
+            className="max-h-32 min-h-[36px] w-full resize-none bg-transparent py-1.5 text-sm outline-none placeholder:text-[13px] sm:placeholder:text-sm"
           />
           {/* @mention autocomplete */}
           <AnimatePresence>
@@ -597,7 +636,12 @@ function Composer({
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 6 }}
-                className="absolute bottom-full left-0 z-30 mb-2 w-64 max-w-[80vw] overflow-hidden rounded-2xl border border-border/60 bg-card/95 py-1 shadow-elevated backdrop-blur-xl"
+                // inset-x-0 (not a fixed w-64) — sized to this wrapper's own
+                // available width, which by construction never overflows the
+                // composer (the wrapper is flex-1/min-w-0). The old fixed
+                // width, anchored left-0 after several icon buttons, could
+                // extend well past a narrow phone's viewport.
+                className="absolute inset-x-0 bottom-full z-30 mb-2 max-w-sm overflow-hidden rounded-2xl border border-border/60 bg-card/95 py-1 shadow-elevated backdrop-blur-xl"
               >
                 {mentionResults.map((p, i) => (
                   <li key={p.id}>
@@ -860,8 +904,8 @@ function CommentItemImpl({
 
         {/* Glass bubble — highlighted for best answer */}
         <div className={cn("rounded-3xl rounded-tl-lg border px-3.5 py-2.5 shadow-soft backdrop-blur-sm transition", node.isBest ? "border-emerald-500/40 bg-emerald-500/[0.06] ring-1 ring-emerald-500/20" : "border-border/50 bg-card/60 hover:border-border")}>
-          <div className="flex items-center gap-1.5 text-sm">
-            {a ? <Link href={`/u/${a.handle}`} className="font-semibold hover:underline">{a.displayName}</Link> : <span className="font-semibold text-muted-foreground">Unknown</span>}
+          <div className="flex flex-wrap items-center gap-1.5 text-sm">
+            {a ? <Link href={`/u/${a.handle}`} className="max-w-[55vw] truncate font-semibold hover:underline">{a.displayName}</Link> : <span className="font-semibold text-muted-foreground">Unknown</span>}
             {a?.isVerified ? <BadgeCheck className="h-3.5 w-3.5 text-primary" /> : null}
             {a ? <DiamondCrownBadge plan={a.plan} size="xs" /> : null}
             {mood ? <span className={cn("inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0 text-[10px] font-bold", mood.tint)}>{mood.emoji} {mood.label}</span> : null}

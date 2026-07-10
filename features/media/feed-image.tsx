@@ -67,7 +67,10 @@ export function FeedImage({
 
   return (
     <div
-      className={cn("relative flex items-center justify-center overflow-hidden bg-neutral-950", className)}
+      // Subtle press feedback (Part 10's "lift on touch" ask) — safe here
+      // since FeedImage has no nested interactive buttons of its own to
+      // double up with (unlike a whole feed card, which has its action bar).
+      className={cn("relative flex items-center justify-center overflow-hidden bg-neutral-950 transition-transform duration-150 active:scale-[0.985]", className)}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

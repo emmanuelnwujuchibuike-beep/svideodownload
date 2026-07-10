@@ -82,12 +82,12 @@ export function VoiceMessage({ url, durationMs, waveform }: { url: string; durat
           if (e.key === "ArrowRight") el.currentTime = Math.min(el.duration, el.currentTime + 3);
           if (e.key === "ArrowLeft") el.currentTime = Math.max(0, el.currentTime - 3);
         }}
-        className="flex h-8 flex-1 cursor-pointer items-center gap-[3px]"
+        className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-[2px] overflow-hidden"
       >
         {peaks.map((p, i) => (
           <span
             key={i}
-            className={cn("w-[3px] rounded-full transition-colors", i / peaks.length <= progress ? "bg-gradient-to-b from-blue-500 to-violet-500" : "bg-border")}
+            className={cn("min-w-[1px] flex-1 rounded-full transition-colors", i / peaks.length <= progress ? "bg-gradient-to-b from-blue-500 to-violet-500" : "bg-border")}
             style={{ height: `${Math.max(12, (p / maxPeak) * 100)}%` }}
           />
         ))}
@@ -107,13 +107,16 @@ export function VideoComment({ url, thumbnailUrl, durationMs }: { url: string; t
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} aria-label="Play video reply" className="group relative mt-1.5 block max-h-64 w-fit overflow-hidden rounded-2xl border border-border/60 bg-black">
+      <button type="button" onClick={() => setOpen(true)} aria-label="Play video reply" className="group relative mt-1.5 block max-h-64 w-fit max-w-full overflow-hidden rounded-2xl border border-border/60 bg-black">
         {thumbnailUrl ? (
+          // max-w-full: a landscape clip capped only by max-h-64 (height) would
+          // otherwise render wider than a phone screen at 16:9 (256px tall ×
+          // 16/9 ≈ 455px wide) — width now yields to the viewport instead.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={thumbnailUrl} alt="" loading="lazy" className="max-h-64 w-auto object-cover" />
+          <img src={thumbnailUrl} alt="" loading="lazy" className="max-h-64 w-auto max-w-full object-cover" />
         ) : (
           // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video src={url} muted playsInline preload="metadata" className="max-h-64 w-auto object-cover" />
+          <video src={url} muted playsInline preload="metadata" className="max-h-64 w-auto max-w-full object-cover" />
         )}
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/15 transition group-hover:bg-black/30">
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md">

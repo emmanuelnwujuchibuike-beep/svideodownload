@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, animate, motion, useMotionValue, useTransform, type MotionValue } from "framer-motion";
 import {
   BadgeCheck,
   Ban,
@@ -62,6 +62,7 @@ import { downloadPost } from "@/lib/media/download-post";
 import { getQualityPreference, setQualityPreference, type QualityPreference } from "@/lib/media/network-conditions";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { streamHlsUrl } from "@/lib/media/stream";
+import { springs } from "@/lib/motion/springs";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
@@ -327,6 +328,15 @@ function ReelCard({
   const moved = useRef(false);
   const startPt = useRef<{ x: number; y: number } | null>(null);
   const axisLock = useRef<"h" | "v" | null>(null);
+  // Live album-slide drag (owner spec: "as smooth as a top platform" — a real,
+  // finger-tracked slide, not a wait-for-release flip). `dragX` drives the
+  // current slide's transform directly; framer-motion updates it imperatively
+  // (no React re-render per pointermove), so this stays smooth at 60fps+.
+  const dragX = useMotionValue(0);
+  const dragActive = useRef(false);
+  const dragLastX = useRef(0);
+  const dragLastT = useRef(0);
+  const dragVelocity = useRef(0); // px/ms, signed
 
   const [paused, setPaused] = useState(false);
   const [mutedAuto, setMutedAuto] = useState(false);
@@ -867,15 +877,42 @@ function ReelCard({
     }, 500);
   };
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!startPt.current || moved.current) return;
-    const dx = Math.abs(e.clientX - startPt.current.x);
-    const dy = Math.abs(e.clientY - startPt.current.y);
-    if (dx > 10 || dy > 10) {
-      moved.current = true;
-      // Lock the gesture to whichever axis was dominant the moment it crossed
-      // the threshold — avoids a diagonal drag being ambiguous later.
-      axisLock.current = dx > dy ? "h" : "v";
-      if (holdTimer.current) clearTimeout(holdTimer.current);
+    if (!startPt.current) return;
+    if (!moved.current) {
+      const dx = Math.abs(e.clientX - startPt.current.x);
+      const dy = Math.abs(e.clientY - startPt.current.y);
+      if (dx > 10 || dy > 10) {
+        moved.current = true;
+        // Lock the gesture to whichever axis was dominant the moment it crossed
+        // the threshold — avoids a diagonal drag being ambiguous later.
+        axisLock.current = dx > dy ? "h" : "v";
+        if (holdTimer.current) clearTimeout(holdTimer.current);
+        // ALBUM + horizontal → a live, finger-tracked slide starts here (see
+        // the drag-tracking block below); everything else (native vertical
+        // scroll, non-album horizontal tab-swipe) stays release-only, unchanged.
+        if (axisLock.current === "h" && isAlbum) {
+          dragActive.current = true;
+          dragLastX.current = e.clientX;
+          dragLastT.current = e.timeStamp;
+          dragVelocity.current = 0;
+        }
+      }
+      return;
+    }
+    if (dragActive.current) {
+      const dt = e.timeStamp - dragLastT.current;
+      if (dt > 0) dragVelocity.current = (e.clientX - dragLastX.current) / dt;
+      dragLastX.current = e.clientX;
+      dragLastT.current = e.timeStamp;
+
+      const rawDx = e.clientX - (startPt.current?.x ?? e.clientX);
+      const atStart = slide === 0;
+      const atEnd = slide === albumVideos.length - 1;
+      // Rubber-band: dragging PAST the first/last video resists instead of
+      // moving freely — the same "soft wall" every native carousel gives at
+      // its edges, so it never feels like it's just doing nothing.
+      const resisted = (rawDx > 0 && atStart) || (rawDx < 0 && atEnd) ? rawDx * 0.35 : rawDx;
+      dragX.set(resisted);
     }
   };
   const onPointerUp = (e: React.PointerEvent) => {
@@ -893,17 +930,33 @@ function ReelCard({
       }
       return;
     }
+    if (dragActive.current) {
+      dragActive.current = false;
+      const w = typeof window !== "undefined" ? window.innerWidth : 1;
+      const rawDx = startX !== undefined ? e.clientX - startX : 0;
+      const dir: "left" | "right" = rawDx < 0 ? "left" : "right";
+      const canAdvance = dir === "left" ? slide < albumVideos.length - 1 : slide > 0;
+      // Advance on a decisive drag (past a fifth of the screen) OR a quick
+      // flick (fast enough even over a short distance) — the same dual
+      // threshold a native carousel/story deck uses, not a single hard cutoff.
+      const shouldAdvance = canAdvance && (Math.abs(rawDx) > w * 0.22 || Math.abs(dragVelocity.current) > 0.5);
+      if (shouldAdvance) {
+        void animate(dragX, dir === "left" ? -w : w, springs.press).then(() => {
+          goSlide(dir); // swaps the real video source — happens fully off-screen
+          dragX.set(0);
+        });
+      } else {
+        void animate(dragX, 0, springs.bounce); // rubber-band snap back
+      }
+      return;
+    }
     if (moved.current) {
-      // A decisive horizontal drag (not the native vertical scroll): on an
-      // ALBUM reel it moves between the album's videos (spec: horizontal =
-      // next video, vertical = next reel — never both); on a normal reel it
-      // switches For You/Following (page variant; no-op in the modal).
+      // A decisive horizontal drag on a NON-album reel (album drags are fully
+      // handled live above): switches For You/Following (page variant; no-op
+      // in the modal).
       if (axisLock.current === "h" && startX !== undefined) {
         const dx = e.clientX - startX;
-        if (Math.abs(dx) > 64) {
-          if (isAlbum) goSlide(dx < 0 ? "left" : "right");
-          else onSwipeTab?.(dx < 0 ? "left" : "right");
-        }
+        if (Math.abs(dx) > 64) onSwipeTab?.(dx < 0 ? "left" : "right");
       }
       return; // a scroll — leave vertical movement to the native scroller
     }
@@ -1036,17 +1089,34 @@ function ReelCard({
         <MoreVertical className="h-5 w-5" />
       </button>
 
+      {/* The incoming neighbor's poster — sits behind the current slide, always
+          mounted (cheap: just images) but off-screen at rest (dragX === 0), so
+          there's zero mount delay the instant a drag actually starts. */}
+      {isAlbum ? (
+        <>
+          {slide > 0 ? (
+            <AlbumNeighborPreview dragX={dragX} direction={-1} thumbnailUrl={albumVideos[slide - 1]?.thumbnailUrl ?? null} />
+          ) : null}
+          {slide < albumVideos.length - 1 ? (
+            <AlbumNeighborPreview dragX={dragX} direction={1} thumbnailUrl={albumVideos[slide + 1]?.thumbnailUrl ?? null} />
+          ) : null}
+        </>
+      ) : null}
+
       {/* Media — pan-y explicit here too (not just on the deck scroller above):
           gesture priority is JS-computed (axisLock), not native horizontal
           scrolling, so this doesn't change the album-swipe math, but it makes
           the "vertical always reaches the deck" contract explicit rather than
-          relying on inheriting the ancestor's touch-action. */}
-      <div
+          relying on inheriting the ancestor's touch-action. `x: dragX` is what
+          makes an album drag genuinely slide with the finger instead of only
+          reacting on release — 0 (identity) for every non-album/non-dragging
+          reel, so this never affects anything else. */}
+      <motion.div
         className={cn(
           "absolute inset-0 flex items-center justify-center transition-opacity duration-200 ease-out",
           slideFade ? "opacity-0" : "opacity-100",
         )}
-        style={{ touchAction: "pan-y" }}
+        style={{ touchAction: "pan-y", x: dragX }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -1056,6 +1126,10 @@ function ReelCard({
             holding.current = false;
             void video.current?.play();
             setPaused(false);
+          }
+          if (dragActive.current) {
+            dragActive.current = false;
+            void animate(dragX, 0, springs.bounce);
           }
         }}
       >
@@ -1176,7 +1250,7 @@ function ReelCard({
             </motion.span>
           </span>
         ))}
-      </div>
+      </motion.div>
 
       {/* Tap-to-unmute pill */}
       {native && mutedAuto && isActive ? (
@@ -1616,6 +1690,37 @@ function ReelCard({
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * The neighbor slide's poster, positioned exactly one viewport-width to the
+ * side and re-derived from the SAME `dragX` the current slide's video uses —
+ * so as the current video slides away under the finger, this slides into the
+ * space it vacates in perfect lockstep, exactly like a real native carousel.
+ * Purely a poster (no video element): swapping the real, adaptively-streamed
+ * `<video>` source only happens once a slide change actually commits (see
+ * `goSlide`), never mid-drag — this is what makes the live drag possible at
+ * all without juggling N buffered HLS sources per reel.
+ */
+function AlbumNeighborPreview({
+  dragX,
+  direction,
+  thumbnailUrl,
+}: {
+  dragX: MotionValue<number>;
+  direction: 1 | -1;
+  thumbnailUrl: string | null;
+}) {
+  const x = useTransform(dragX, (v) => v + direction * (typeof window !== "undefined" ? window.innerWidth : 0));
+  if (!thumbnailUrl) return null;
+  return (
+    <motion.div className="pointer-events-none absolute inset-0 bg-black" style={{ x }} aria-hidden>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-contain" />
+    </motion.div>
   );
 }
 

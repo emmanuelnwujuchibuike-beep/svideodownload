@@ -2,10 +2,29 @@ import { parseDevice } from "@/lib/auth/device-label";
 import { sendPushToUser } from "@/lib/push/web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-interface SessionRow {
+export interface SessionRow {
   id: string;
   created_at: string;
   user_agent: string | null;
+}
+
+/**
+ * The actual "is this worth alerting about" decision, isolated from the
+ * DB/push side effects so it has a real, direct unit test (see
+ * `lib/auth/device-check.test.ts`) instead of only a throwaway
+ * reimplementation. Exported pure.
+ */
+export function shouldAlertForNewDevice(rows: SessionRow[], currentUserAgent: string | null): boolean {
+  if (!currentUserAgent) return false;
+  // Only one (or zero) session on record — either the very first sign-in
+  // ever, or a fresh account. Nothing to compare against yet; alerting here
+  // would just be noise on account creation, not a real "new device" event.
+  if (rows.length <= 1) return false;
+
+  const sorted = [...rows].sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
+  const [, ...older] = sorted; // exclude the just-created session
+  const seenBefore = older.some((r) => r.user_agent === currentUserAgent);
+  return !seenBefore;
 }
 
 /**
@@ -44,15 +63,7 @@ export async function checkNewDevice(userId: string, currentUserAgent: string | 
     const { data, error } = await db.rpc("list_user_sessions", { p_user_id: userId });
     if (error) return false;
     const rows = (data ?? []) as SessionRow[];
-    // Only one (or zero) session on record — either the very first sign-in
-    // ever, or a fresh account. Nothing to compare against yet; alerting here
-    // would just be noise on account creation, not a real "new device" event.
-    if (rows.length <= 1) return false;
-
-    const sorted = [...rows].sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
-    const [, ...older] = sorted; // exclude the just-created session
-    const seenBefore = older.some((r) => r.user_agent === currentUserAgent);
-    if (seenBefore) return false;
+    if (!shouldAlertForNewDevice(rows, currentUserAgent)) return false;
 
     const { label } = parseDevice(currentUserAgent);
     const { error: insertError } = await db

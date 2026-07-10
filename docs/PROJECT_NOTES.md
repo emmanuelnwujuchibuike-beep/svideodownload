@@ -96,6 +96,27 @@ Verified: `tsc --noEmit`, `next lint`, and `next build` all clean project-wide. 
 
 ---
 
+## 2026‑07‑10 highlights (batch 39 — Feature 17 Part 15: Engineering Foundation — first committed test suite)
+
+Owner dropped **"Feature 17 Part 15 — Home Platform Architecture, Design System, Future Expansion & World-Class Engineering Foundation"** — the capstone of the Feature 17 series, and a different kind of ask from Parts 11-14: this one is about engineering process/infrastructure (design tokens, component library, state/service architecture, real-time foundation, theme engine, observability, testing strategy, dev tools, i18n, AI-integration architecture), not a user-facing feature.
+
+Most of what the spec names already exists from earlier rounds the same day — Frenz Core itself, design tokens, the motion/haptics/icon systems, the loading architecture — all already documented and shipped. A direct check (not a full audit — this session already knew the terrain) found exactly two things named by the spec with genuinely zero coverage.
+
+**Headline finding: this repo had ZERO committed automated tests.** No test runner in `package.json`, no `*.test.ts` file, no test config anywhere — despite an entire day of sessions verifying non-trivial logic (feed ranking, personalization caps, offline-queue decisions, new-device detection) via throwaway Node scripts in the scratchpad that got the verification done and then were simply discarded, never reaching the repo as lasting regression protection. A GitHub Actions CI pipeline already existed (typecheck → lint → build on every push/PR), so there was a ready-made place to plug real tests into.
+
+**Shipped:**
+- **Vitest** added as a dev dependency (`npm run test` / `test:watch`), config deliberately minimal — this pass covers pure logic only, no jsdom/component testing yet.
+- **7 real, committed test files, 40 passing tests** — converting this session's OWN throwaway verification into permanent tests that import the actual functions rather than reimplementing them: `rankForYou` and `capPerFriend` and `shouldDropAfterStatus` and `normalizeOrder` (each had to be exported from private — now real, testable public functions); a NEW `shouldAlertForNewDevice()` extracted out of the DB/push-calling `checkNewDevice()` specifically so the actual decision logic gets a direct unit test; and first-ever test coverage for two PRE-EXISTING, previously-untested pure functions this session happened to touch — `feedReason`/`balanceByKind` (core "why am I seeing this" logic) and `parseDevice` (the user-agent parser).
+- **Wired into CI** — a `Test` step added to `.github/workflows/ci.yml`, between Lint and Build.
+- **Scroll FPS + JS-heap-memory observability** — a new sampled beacon (same ~15%-of-sessions, fire-and-forget contract as the existing Core Web Vitals reporter) reusing the pre-existing `/api/vitals` sink, no new service. Frame counting only happens DURING an actual scroll burst (first scroll event to ~150ms after the last one) — deliberately never a continuous idle animation-frame loop, which would be a real, pointless battery cost for a background monitor.
+- `docs/FRENZ_CORE.md` gained a mandatory "Testing Strategy" section (the same way "Loading Architecture" became a mandatory section once that system shipped) — the standing rule going forward: any new non-trivial pure function gets a real exported function + a colocated test, not a throwaway scratch script.
+
+**Deliberately not attempted, with reasons**: Component/E2E testing (Playwright) — a materially bigger investment (auth fixtures, a running dev server, browser automation) than this pass, flagged as the next testing tier. Feature flags / remote config / A-B testing — only a product-level `live`/`beta`/`soon` module status exists, not a granular per-feature flag system; a real one is a standalone infra project. Real internationalization (translated UI, RTL) — the app is English-only UI-wide (auto-captions default to English+French for the Africa-primary audience, but that's caption text, unrelated to app chrome); building real i18n is a huge, separate undertaking, and there's no RTL toggle yet to even test against. Theme engine extensions beyond light/dark/system (OLED black, seasonal, creator themes) — cosmetic, lower priority than the two real gaps this pass closed.
+
+Verified: `npm run test` (40/40 passing), `tsc --noEmit`, `next lint`, `next build` all clean project-wide.
+
+---
+
 ## 2026‑07‑10 highlights (batch 38 — Feature 17 Part 14: Home Safety, Trust, Moderation & Privacy)
 
 Owner dropped **"Feature 17 Part 14 — Home Safety, Content Quality, Moderation, Trust, Privacy & User Well-Being Platform"**: a content-quality/spam engine, misinformation handling, an AI moderation assistant, full reporting across every content type, expanded mute/block, child/family safety, account security, content labels, mental well-being tools, and a "Trust Dashboard." Same standing approach: an Explore-agent audit of the real moderation/reporting/security code first.

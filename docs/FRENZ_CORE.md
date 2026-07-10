@@ -152,7 +152,21 @@ Multi-language · RTL · regional formatting · time zones · currencies · auto
 
 ## Observability
 Centralized logging · distributed tracing · metrics · performance monitoring · crash reporting ·
-health checks (`/api/health`) · alerts.
+health checks (`/api/health`) · alerts. Real-user signal today (privacy-preserving, ~15% sampled,
+fire-and-forget to `/api/vitals`, no third-party RUM service): Core Web Vitals (`features/perf/web-vitals.tsx`),
+video playback quality (`/api/metrics/playback`), and scroll FPS + JS heap memory
+(`features/perf/scroll-perf-monitor.tsx`, Feature 17 Part 15).
+
+## Testing Strategy (MANDATORY — every new pure/logic function)
+Vitest (`npm run test`, wired into `.github/workflows/ci.yml` — every push/PR). Real unit tests,
+colocated as `<file>.test.ts` next to the source (see `lib/social/home-feed.test.ts`,
+`lib/social/friend-activity.test.ts`, `lib/offline/action-queue.test.ts`,
+`lib/social/home-preferences.test.ts`, `lib/auth/device-check.test.ts`, `lib/social/smart-feed.test.ts`,
+`lib/auth/device-label.test.ts` — Feature 17 Part 15, the session that first noticed this repo had
+**zero** committed tests despite months of hand-verified logic). Rule going forward: any new
+non-trivial pure function (ranking, scoring, decision logic, data transforms) gets a real exported
+function + a colocated test — not a throwaway scratch script that never reaches the repo. Component/
+UI/E2E testing (Playwright) is a separate, larger investment not yet started.
 
 ---
 

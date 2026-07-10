@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { BootSplash } from "@/features/app-shell/boot-splash";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
 import { RegisterServiceWorker } from "@/features/notifications/register-sw";
+import { ScrollPerfMonitor } from "@/features/perf/scroll-perf-monitor";
 import { WebVitals } from "@/features/perf/web-vitals";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
@@ -147,6 +148,7 @@ export default function RootLayout({
                 profiles, messages, …) are ad-free; social monetization comes later. */}
             <RegisterServiceWorker />
             <WebVitals />
+            <ScrollPerfMonitor />
           </MotionConfig>
         </ThemeProvider>
       </body>

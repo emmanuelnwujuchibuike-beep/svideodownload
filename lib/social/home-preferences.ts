@@ -47,7 +47,7 @@ export const DEFAULT_HOME_PREFERENCES: HomePreferences = {
 /** A saved order might predate a newly-added module key, or have been
  *  corrupted client-side — always resolve to a full permutation so callers
  *  never have to think about a module key going missing. */
-function normalizeOrder(saved: unknown): HomeModuleKey[] {
+export function normalizeOrder(saved: unknown): HomeModuleKey[] {
   const known = Array.isArray(saved) ? saved.filter(isHomeModuleKey) : [];
   const seen = new Set(known);
   for (const k of HOME_MODULE_KEYS) if (!seen.has(k)) known.push(k);

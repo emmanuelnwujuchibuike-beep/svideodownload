@@ -84,7 +84,7 @@ export interface FeedPage {
   nextOffset: number | null;
 }
 
-interface Row {
+export interface Row {
   id: string;
   publisher_id: string;
   source_url: string;
@@ -153,7 +153,7 @@ async function hasFormatColumn(db: ReturnType<typeof createAdminClient>): Promis
  * `muted_creators`' absolute semantics ("mute" removes, it doesn't just
  * de-rank).
  */
-function rankForYou(
+export function rankForYou(
   rows: Row[],
   followingIds: Set<string>,
   prefs?: Pick<HomePreferences, "preferFriends" | "boostedCategories">,

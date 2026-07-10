@@ -89,17 +89,13 @@ function ModalInner() {
   };
 
   /** Pick a destination that's valid for the current selection. Rules:
-   * photos → feed; single video → Reels (or story); multi-video → Reels or
-   * feed; MIXED albums → feed ONLY. Stories are single-media. */
+   * photos → feed; single video → Reels (or story); multi-video/multi-upload
+   * albums → Feed ONLY (Reels never carries more than one video — owner
+   * rule); MIXED albums → feed ONLY. Stories are single-media. */
   const fixDestination = (next: AlbumItem[], current: Destination): Destination => {
     const video = next.some((i) => i.kind === "video");
-    const image = next.some((i) => i.kind === "image");
     const album = next.length > 1;
-    if (album && video && image) return "post"; // mixed → Feed only
-    if (album) {
-      if (video) return current === "post" ? "post" : "reel"; // video album: Reels default
-      return "post"; // photo album → Feed
-    }
+    if (album) return "post"; // any album (video, photo, or mixed) → Feed only
     if (video) return current === "story" ? "story" : "reel";
     return current === "reel" ? "post" : current;
   };
@@ -266,14 +262,12 @@ function ModalInner() {
   };
 
   // Destination options adapt to the selection (Feed and Reels are separate
-  // products; stories are single-media; MIXED albums are Feed-only by rule).
+  // products; stories are single-media; every kind of album — mixed, photo,
+  // OR multi-video — is Feed-only: Reels never carries more than one video).
   const DEST: { id: Destination; label: string; icon: typeof Clock; hint: string }[] = mixed
     ? [{ id: "post", label: "Feed", icon: Sparkles, hint: "Mixed albums post to the feed" }]
     : isAlbum && hasVideo
-      ? [
-          { id: "reel", label: "Reel", icon: Clapperboard, hint: "One reel, swipe between videos" },
-          { id: "post", label: "Feed", icon: Sparkles, hint: "Swipeable album in the feed" },
-        ]
+      ? [{ id: "post", label: "Feed", icon: Sparkles, hint: "Swipeable video album in the feed" }]
       : isAlbum
         ? [{ id: "post", label: "Feed", icon: Sparkles, hint: "Swipeable photo album" }]
         : hasVideo

@@ -95,6 +95,9 @@ export function SmartFeed({
   // Which slide of an album was actually tapped — an image viewer that always
   // opened on the first slide regardless of what was tapped read as broken.
   const [imageStartIndex, setImageStartIndex] = useState(0);
+  // A feed "Comment" tap on an image/album should land straight in the
+  // comments sheet, not just open the media.
+  const [imageAutoComments, setImageAutoComments] = useState(false);
   // Lock the topbar visible while the feed is on screen: with it static, this
   // sticky tab bar sticks at ONE position — fixed once it touches the top,
   // never sliding around with scroll direction (owner spec).
@@ -172,10 +175,13 @@ export function SmartFeed({
       setReel({ startId: it.id, commentsId: comments ? it.id : null, startSlideIndex: startIndex });
     } else if (isAlbum || it.mediaKind === "image") {
       // Photos (and photo/mixed albums) open full-screen + immersive
-      // (closeable like X / Instagram).
+      // (closeable like X / Instagram). `comments` was previously dropped
+      // here — a feed "Comment" tap on an image/album silently opened the
+      // media without ever showing the comments sheet.
       setImageReady(true);
       setImage(it);
       setImageStartIndex(startIndex);
+      setImageAutoComments(comments);
     } else {
       setViewerReady(true);
       setViewer({ item: it, comments });
@@ -669,7 +675,7 @@ export function SmartFeed({
           onClose={() => setViewer(null)}
         />
       ) : null}
-      {imageReady ? <ImageViewer item={image} startIndex={imageStartIndex} onClose={() => setImage(null)} /> : null}
+      {imageReady ? <ImageViewer item={image} startIndex={imageStartIndex} autoOpenComments={imageAutoComments} onClose={() => setImage(null)} /> : null}
 
       {/* Instant, in-place full reels experience (For You / Following tabs), nav
           visible, seeded on the tapped video — closes via state (no navigation). */}

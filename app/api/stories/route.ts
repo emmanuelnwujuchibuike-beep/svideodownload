@@ -48,8 +48,8 @@ const schema = z.object({
   destination: z.enum(["post", "reel", "story", "both"]).optional(),
   /**
    * Carousel/album: the full ORDERED media list (item 0 = the cover; mediaUrl/
-   * mediaKind must match it). Destination rules: photos → feed; multi-video →
-   * feed or reels (a reel album); MIXED photos+videos → feed only.
+   * mediaKind must match it). Destination rule: ANY album — photos, multiple
+   * videos, or a mix — is Feed-only. Reels never carries more than one video.
    */
   media: z.array(mediaItem).min(2).max(20).optional(),
   // Legacy flag from the old story-only composer.
@@ -83,11 +83,13 @@ export async function POST(request: Request) {
   const wantStory = destination === "story" || destination === "both";
   const wantPost = destination === "post" || destination === "both" || destination === "reel";
   // Explicit product choice: a Reel lives ONLY in Reels; a post lives ONLY in the feed.
-  // Album rule: a MIXED photos+videos album can never be a Reel — it publishes
-  // to the feed regardless of what the client asked for.
+  // Album rule: ANY album — mixed photos+videos, or multiple videos — can
+  // never be a Reel (Reels never carries more than one video) — it publishes
+  // to the feed regardless of what the client asked for. Enforced here too,
+  // not just in the upload UI, since a request can always be replayed/edited.
   const media = parsed.data.media;
-  const mixedAlbum = !!media && media.some((m) => m.kind === "image") && media.some((m) => m.kind === "video");
-  const format = destination === "reel" && !mixedAlbum ? "reel" : "feed";
+  const isAlbum = !!media && media.length > 1;
+  const format = destination === "reel" && !isAlbum ? "reel" : "feed";
 
   let storyId: string | null = null;
   if (wantStory) {

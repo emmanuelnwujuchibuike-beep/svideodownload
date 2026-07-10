@@ -59,11 +59,15 @@ interface CommentsData {
 export function ImageViewer({
   item,
   startIndex = 0,
+  autoOpenComments,
   onClose,
 }: {
   item: FeedItem | null;
   /** Which slide of an album was actually tapped — not always the first. */
   startIndex?: number;
+  /** Open straight into the comments sheet — a feed "Comment" tap should land
+   *  in the conversation, not just on the media. */
+  autoOpenComments?: boolean;
   onClose: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
@@ -71,13 +75,23 @@ export function ImageViewer({
   if (!mounted) return null;
   return createPortal(
     <AnimatePresence>
-      {item ? <ImageStage key={item.id} item={item} startIndex={startIndex} onClose={onClose} /> : null}
+      {item ? <ImageStage key={item.id} item={item} startIndex={startIndex} autoOpenComments={autoOpenComments} onClose={onClose} /> : null}
     </AnimatePresence>,
     document.body,
   );
 }
 
-function ImageStage({ item, startIndex = 0, onClose }: { item: FeedItem; startIndex?: number; onClose: () => void }) {
+function ImageStage({
+  item,
+  startIndex = 0,
+  autoOpenComments,
+  onClose,
+}: {
+  item: FeedItem;
+  startIndex?: number;
+  autoOpenComments?: boolean;
+  onClose: () => void;
+}) {
   const src = item.mediaUrl || item.thumbnailUrl || "";
   // An album (>1 item) swipes through every photo/video right here in
   // fullscreen, opening on the EXACT slide that was tapped.
@@ -239,6 +253,13 @@ function ImageStage({ item, startIndex = 0, onClose }: { item: FeedItem; startIn
       if (data) setComments(data);
     }
   }, [comments, item.id]);
+
+  // A feed "Comment" tap lands straight in the conversation, not just on the
+  // media — only ever fires once, right when this specific image is opened.
+  useEffect(() => {
+    if (autoOpenComments) void openComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // On large screens comments live in a persistent side panel (see below), not
   // the tap-to-open sheet — so load them eagerly. Cheap: `prefetchPostComments`

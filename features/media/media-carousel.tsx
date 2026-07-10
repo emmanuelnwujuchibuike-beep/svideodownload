@@ -65,6 +65,30 @@ export function MediaCarousel({
   const moved = useRef(false);
   useEffect(() => () => { if (singleTimer.current) clearTimeout(singleTimer.current); }, []);
 
+  // Sequential/priority loading: an album with many photos was firing N
+  // simultaneous image requests the instant it mounted, so the ONE slide
+  // actually being viewed competed with every other slide for the browser's
+  // per-host connection cap and was slow to appear. Only the current slide +
+  // its immediate neighbours ever mount a real <img>/<video> src; everything
+  // else stays an unmounted placeholder until scrolled near, so slides load
+  // one at a time, in order, as you swipe through them. Once a slide has
+  // loaded it stays loaded (sticky — never re-fetches on scrolling back).
+  const [unlocked, setUnlocked] = useState<Set<number>>(() => new Set([0, 1]));
+  useEffect(() => {
+    setUnlocked((prev) => {
+      if (prev.has(index) && prev.has(Math.max(0, index - 1)) && prev.has(Math.min(items.length - 1, index + 1))) return prev;
+      const next = new Set(prev);
+      next.add(index);
+      if (index > 0) next.add(index - 1);
+      if (index < items.length - 1) next.add(index + 1);
+      return next;
+    });
+  }, [index, items.length]);
+  // Combine the sticky set with the live neighbour window directly (not just
+  // the state above) so the slide you're actually swiping onto never has a
+  // one-render lag waiting for the effect to catch up.
+  const isNear = (i: number) => Math.abs(i - index) <= 1;
+
   const onSlidePointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
@@ -154,42 +178,64 @@ export function MediaCarousel({
         // this (they use `touch-pan-y`), which is why THEY always scrolled fine.
         style={{ touchAction: "pan-x pan-y" }}
       >
-        {items.map((m, i) => (
-          <div key={i} className="relative h-full w-full shrink-0 snap-center">
-            {/* blurred fill behind the letterbox */}
-            {(m.thumbnailUrl ?? (m.kind === "image" ? m.url : null)) ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={(m.thumbnailUrl ?? m.url)!}
-                alt=""
-                aria-hidden
-                loading="lazy"
-                decoding="async"
-                className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
-              />
-            ) : null}
-            {m.kind === "video" ? (
-              <CarouselVideo
-                src={m.url}
-                poster={m.thumbnailUrl}
-                onPointerDown={onSlidePointerDown}
-                onPointerMove={onSlidePointerMove}
-                onPointerUp={onSlideTap(i, m)}
-              />
-            ) : (
-              <div
-                role="button"
-                aria-label="Open photo"
-                className="absolute inset-0"
-                onPointerDown={onSlidePointerDown}
-                onPointerMove={onSlidePointerMove}
-                onPointerUp={onSlideTap(i, m)}
-              >
-                <FadeImage src={m.url} alt="" fill sizes="(max-width: 768px) 100vw, 640px" className="object-contain" loading={i < 2 ? "eager" : "lazy"} />
-              </div>
-            )}
-          </div>
-        ))}
+        {items.map((m, i) => {
+          const loaded = isNear(i) || unlocked.has(i);
+          return (
+            <div key={i} className="relative h-full w-full shrink-0 snap-center">
+              {!loaded ? (
+                <div className="absolute inset-0 bg-neutral-900" />
+              ) : (
+                <>
+                  {/* blurred fill behind the letterbox */}
+                  {(m.thumbnailUrl ?? (m.kind === "image" ? m.url : null)) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={(m.thumbnailUrl ?? m.url)!}
+                      alt=""
+                      aria-hidden
+                      loading="eager"
+                      decoding="async"
+                      className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
+                    />
+                  ) : null}
+                  {m.kind === "video" ? (
+                    <CarouselVideo
+                      src={m.url}
+                      poster={m.thumbnailUrl}
+                      onPointerDown={onSlidePointerDown}
+                      onPointerMove={onSlidePointerMove}
+                      onPointerUp={onSlideTap(i, m)}
+                    />
+                  ) : (
+                    <div
+                      role="button"
+                      aria-label="Open photo"
+                      className="absolute inset-0"
+                      onPointerDown={onSlidePointerDown}
+                      onPointerMove={onSlidePointerMove}
+                      onPointerUp={onSlideTap(i, m)}
+                    >
+                      <FadeImage src={m.url} alt="" fill sizes="(max-width: 768px) 100vw, 640px" className="object-contain" loading="eager" />
+                    </div>
+                  )}
+                </>
+              )}
+              {/* Not-yet-loaded slides still need to be tappable so a fast
+                  swipe-then-tap (or a strong fling landing several slides
+                  away in one native scroll) still responds. */}
+              {!loaded ? (
+                <div
+                  role="button"
+                  aria-label="Open"
+                  className="absolute inset-0"
+                  onPointerDown={onSlidePointerDown}
+                  onPointerMove={onSlidePointerMove}
+                  onPointerUp={onSlideTap(i, m)}
+                />
+              ) : null}
+            </div>
+          );
+        })}
       </div>
 
       {/* Double-tap Wow burst — centered, same reliable pattern FeedVideo/

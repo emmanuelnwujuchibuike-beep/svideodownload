@@ -72,11 +72,35 @@ export const viewport: Viewport = {
   // values — without it iOS letterboxes below the status bar and every
   // safe-area padding in the app evaluates to zero.
   viewportFit: "cover",
+  // #050816 matches globals.css's actual dark --background exactly (was
+  // #080b14 — a slightly different near-black that never matched anything
+  // else in the app, a small but real inconsistency found while auditing
+  // every dark-color source for the boot-flash investigation).
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#080b14" },
+    { media: "(prefers-color-scheme: dark)", color: "#050816" },
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
   ],
 };
+
+// Native iOS launch-screen images ("apple-touch-startup-image") — confirmed
+// absent before this fix. iOS shows its OWN splash BEFORE any of our JS/CSS
+// runs (including the theme-aware BootSplash), auto-generating a plain WHITE
+// one when no custom image is provided — so a dark-theme user saw a white
+// flash on literally every launch of the installed app, no in-page fix could
+// ever prevent it. Curated to the highest-population active iPhone sizes
+// (not exhaustive — iPad + older/rarer models fall back to iOS's default
+// plain splash, an honest, documented scoping choice). `media` must match
+// each device's CSS device-width/height + pixel ratio exactly for iOS to
+// pick the right file; images generated via scratchpad's gen-splash.mjs
+// (solid brand background + the existing frenz-logo.png centered).
+const SPLASH_SCREENS: { file: string; width: number; height: number; ratio: number }[] = [
+  { file: "1170x2532", width: 390, height: 844, ratio: 3 }, // iPhone 12/13/14
+  { file: "1179x2556", width: 393, height: 852, ratio: 3 }, // iPhone 14 Pro/15/16
+  { file: "1284x2778", width: 428, height: 926, ratio: 3 }, // Pro Max / Plus
+  { file: "1290x2796", width: 430, height: 932, ratio: 3 }, // Pro Max (newest)
+  { file: "1125x2436", width: 375, height: 812, ratio: 3 }, // X/XS/11 Pro/12 mini/13 mini
+  { file: "750x1334", width: 375, height: 667, ratio: 2 }, // SE
+];
 
 const jsonLd = {
   "@context": "https://schema.org",
@@ -94,6 +118,18 @@ export default function RootLayout({
 }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {SPLASH_SCREENS.flatMap(({ file, width, height, ratio }) =>
+          (["light", "dark"] as const).map((theme) => (
+            <link
+              key={`${theme}-${file}`}
+              rel="apple-touch-startup-image"
+              href={`/splash/${theme}-${file}.png`}
+              media={`(device-width: ${width}px) and (device-height: ${height}px) and (-webkit-device-pixel-ratio: ${ratio}) and (orientation: portrait) and (prefers-color-scheme: ${theme})`}
+            />
+          )),
+        )}
+      </head>
       <body className={`${inter.variable} font-sans`}>
         {/* Branded boot loader baked into the first HTML so cold entries never
             flash an empty page; it fades itself out once the document is ready. */}

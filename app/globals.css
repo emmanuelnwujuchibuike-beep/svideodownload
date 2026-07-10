@@ -4,6 +4,14 @@
 
 @layer base {
   :root {
+    /* Tells the BROWSER ITSELF (not just our own CSS variables) that this
+       page is light — governs the UA's native default background for any
+       moment/region before author CSS has actually applied (a real, if
+       narrow, cause of a dark flash independent of the `dark` class logic:
+       without this, a browser in OS dark mode can paint its own dark
+       default before Tailwind's stylesheet finishes loading/parsing), plus
+       native form controls/scrollbars. Confirmed absent before this fix. */
+    color-scheme: light;
     /* Frenzsave brand palette — Electric Blue #0A84FF + Royal Purple #6C4DFF.
        Light: pure white base, warm neutral grays. */
     --background: 0 0% 100%;
@@ -40,6 +48,8 @@
   }
 
   .dark {
+    /* Same reasoning as :root's color-scheme above, flipped. */
+    color-scheme: dark;
     /* Dark — the brand-first theme. Deep space-navy #050816 base, deep-navy
        cards, Electric Blue #0A84FF primary, Royal Purple #6C4DFF accent. Rich,
        never flat black; comfortable contrast; premium glow. */

@@ -2,10 +2,11 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { WowSolid } from "@/components/brand/wow-icon";
 import { FadeImage } from "@/features/ui/fade-image";
+import { prefetchImage } from "@/lib/media/prefetch-image";
 import { cn } from "@/lib/utils";
 
 /**
@@ -40,6 +41,29 @@ export function FeedImage({
   const startPt = useRef<{ x: number; y: number } | null>(null);
   const moved = useRef(false);
   const [burst, setBurst] = useState(0);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // Warm the RAW image URL well before the card is actually tapped (a much
+  // wider margin than the "is it visible yet" threshold below, since the
+  // goal is "already cached by the time you'd realistically tap it", not
+  // just "started loading as it appears") — see prefetch-image.ts for why
+  // this is the fix for the fullscreen viewer's real open-delay, not the
+  // inline thumbnail's own (already-optimized) loading.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          prefetchImage(src);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: "1200px 0px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [src]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
@@ -67,6 +91,7 @@ export function FeedImage({
 
   return (
     <div
+      ref={containerRef}
       // Subtle press feedback (Part 10's "lift on touch" ask) — safe here
       // since FeedImage has no nested interactive buttons of its own to
       // double up with (unlike a whole feed card, which has its action bar).

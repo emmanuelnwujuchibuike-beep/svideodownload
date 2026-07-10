@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { WowSolid } from "@/components/brand/wow-icon";
 import { FadeImage } from "@/features/ui/fade-image";
+import { prefetchImage } from "@/lib/media/prefetch-image";
 import { cn } from "@/lib/utils";
 
 export interface CarouselMedia {
@@ -88,6 +89,18 @@ export function MediaCarousel({
   // the state above) so the slide you're actually swiping onto never has a
   // one-render lag waiting for the effect to catch up.
   const isNear = (i: number) => Math.abs(i - index) <= 1;
+
+  // The thumbnail above only ever fetches next/image's resized variant — a
+  // different URL than the RAW one the fullscreen album viewer requests via
+  // a plain `<img src>`. Warm the raw bytes for every newly-unlocked photo
+  // slide so opening the viewer on any slide you've swiped near is an
+  // instant cache hit instead of a fresh fetch (see prefetch-image.ts).
+  useEffect(() => {
+    for (const i of unlocked) {
+      const m = items[i];
+      if (m?.kind === "image") prefetchImage(m.url);
+    }
+  }, [unlocked, items]);
 
   const onSlidePointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };

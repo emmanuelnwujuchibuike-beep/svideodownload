@@ -1,8 +1,10 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { WowSolid } from "@/components/brand/wow-icon";
 import { FadeImage } from "@/features/ui/fade-image";
 import { cn } from "@/lib/utils";
 
@@ -26,22 +28,70 @@ export interface CarouselMedia {
  * vertically or wobbles diagonally. `data-hscroll` tells ancestor swipe
  * readers (the feed's For You/Following tab switcher) to ignore gestures
  * that begin here, so swiping between slides never switches feed tabs.
+ *
+ * Tap handling deliberately does NOT use a plain `onClick` on the slides:
+ * inside a native horizontally-scrollable, snap-mandatory container the
+ * browser delays/suppresses `click` until it's sure the touch wasn't a scroll
+ * (the same tap-vs-scroll disambiguation every mobile browser does), which
+ * read as "opening is slow". Pointer events + a small movement tolerance
+ * (the same pattern FeedVideo/FeedImage already use) react the instant the
+ * finger lifts instead, and double-tap-to-Wow (Instagram/TikTok-style, never
+ * un-likes) rides the same gesture.
  */
 export function MediaCarousel({
   items,
   onExpand,
   onExpandItem,
+  liked,
+  onDoubleTapLike,
   className,
 }: {
   items: CarouselMedia[];
   onExpand?: () => void;
   /** Preferred over onExpand when set — receives the tapped slide. */
   onExpandItem?: (index: number, item: CarouselMedia) => void;
+  /** Already Wowed — hides the "Double-tap to Wow" hint. */
+  liked?: boolean;
+  onDoubleTapLike?: () => void;
   className?: string;
 }) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [index, setIndex] = useState(0);
   const raf = useRef(0);
+  const [burst, setBurst] = useState(0);
+  const lastTap = useRef(0);
+  const singleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startPt = useRef<{ x: number; y: number } | null>(null);
+  const moved = useRef(false);
+  useEffect(() => () => { if (singleTimer.current) clearTimeout(singleTimer.current); }, []);
+
+  const onSlidePointerDown = (e: React.PointerEvent) => {
+    startPt.current = { x: e.clientX, y: e.clientY };
+    moved.current = false;
+  };
+  const onSlidePointerMove = (e: React.PointerEvent) => {
+    if (!startPt.current || moved.current) return;
+    if (Math.abs(e.clientX - startPt.current.x) > 12 || Math.abs(e.clientY - startPt.current.y) > 12) moved.current = true;
+  };
+  const onSlideTap = (i: number, m: CarouselMedia) => () => {
+    if (moved.current) return;
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      // Second tap arrived in time → Wow, not fullscreen.
+      if (singleTimer.current) clearTimeout(singleTimer.current);
+      lastTap.current = 0;
+      setBurst((b) => b + 1);
+      onDoubleTapLike?.();
+      return;
+    }
+    // Hold the open-fullscreen action briefly in case a second tap follows.
+    lastTap.current = now;
+    if (singleTimer.current) clearTimeout(singleTimer.current);
+    singleTimer.current = setTimeout(() => {
+      if (onExpandItem) onExpandItem(i, m);
+      else onExpand?.();
+    }, 280);
+  };
 
   const onScroll = () => {
     cancelAnimationFrame(raf.current);
@@ -119,20 +169,51 @@ export function MediaCarousel({
               />
             ) : null}
             {m.kind === "video" ? (
-              <CarouselVideo src={m.url} poster={m.thumbnailUrl} onExpand={onExpandItem ? () => onExpandItem(i, m) : onExpand} />
+              <CarouselVideo
+                src={m.url}
+                poster={m.thumbnailUrl}
+                onPointerDown={onSlidePointerDown}
+                onPointerMove={onSlidePointerMove}
+                onPointerUp={onSlideTap(i, m)}
+              />
             ) : (
-              <button
-                type="button"
-                onClick={onExpandItem ? () => onExpandItem(i, m) : onExpand}
+              <div
+                role="button"
                 aria-label="Open photo"
                 className="absolute inset-0"
+                onPointerDown={onSlidePointerDown}
+                onPointerMove={onSlidePointerMove}
+                onPointerUp={onSlideTap(i, m)}
               >
                 <FadeImage src={m.url} alt="" fill sizes="(max-width: 768px) 100vw, 640px" className="object-contain" loading={i < 2 ? "eager" : "lazy"} />
-              </button>
+              </div>
             )}
           </div>
         ))}
       </div>
+
+      {/* Double-tap Wow burst — centered, same reliable pattern FeedVideo/
+          FeedImage use (not tap-position-tracked). */}
+      <AnimatePresence>
+        {burst > 0 ? (
+          <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+            <motion.span
+              key={burst}
+              initial={{ opacity: 0, scale: 0.4 }}
+              animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.3, 1.1, 1.5] }}
+              transition={{ duration: 0.9, ease: "easeOut", times: [0, 0.2, 0.6, 1] }}
+              className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
+            >
+              <WowSolid className="h-24 w-24" />
+            </motion.span>
+          </span>
+        ) : null}
+      </AnimatePresence>
+
+      {/* Wow hint */}
+      <span className={cn("pointer-events-none absolute bottom-2 left-2.5 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur", liked && "hidden")}>
+        Double-tap to Wow
+      </span>
 
       {/* page counter chip */}
       <span className="pointer-events-none absolute right-2.5 top-[0.625rem] rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur">
@@ -174,7 +255,19 @@ export function MediaCarousel({
 }
 
 /** In-view autoplaying slide video — muted, looping, paused off-screen. */
-function CarouselVideo({ src, poster, onExpand }: { src: string; poster: string | null; onExpand?: () => void }) {
+function CarouselVideo({
+  src,
+  poster,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+}: {
+  src: string;
+  poster: string | null;
+  onPointerDown: (e: React.PointerEvent) => void;
+  onPointerMove: (e: React.PointerEvent) => void;
+  onPointerUp: (e: React.PointerEvent) => void;
+}) {
   const ref = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
     const v = ref.current;
@@ -194,7 +287,14 @@ function CarouselVideo({ src, poster, onExpand }: { src: string; poster: string 
     };
   }, []);
   return (
-    <button type="button" onClick={onExpand} aria-label="Watch video" className="absolute inset-0">
+    <div
+      role="button"
+      aria-label="Watch video"
+      className="absolute inset-0"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
         ref={ref}
@@ -206,6 +306,6 @@ function CarouselVideo({ src, poster, onExpand }: { src: string; poster: string 
         preload="metadata"
         className="h-full w-full object-contain"
       />
-    </button>
+    </div>
   );
 }

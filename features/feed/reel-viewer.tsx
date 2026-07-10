@@ -338,6 +338,7 @@ function ReelCard({
   const dragLastX = useRef(0);
   const dragLastT = useRef(0);
   const dragVelocity = useRef(0); // px/ms, signed
+  const mediaStage = useRef<HTMLDivElement | null>(null);
 
   const [paused, setPaused] = useState(false);
   const [mutedAuto, setMutedAuto] = useState(false);
@@ -992,6 +993,28 @@ function ReelCard({
     singleTapTimer.current = setTimeout(() => togglePauseTap(), 280);
   };
 
+  // `touch-action: pan-y` on the media stage only tells the browser vertical
+  // panning is ALLOWED for touches starting here — it doesn't stop the browser
+  // from eagerly claiming a still-ambiguous touch for the deck's native
+  // vertical scroll before our own onPointerMove has classified the gesture as
+  // horizontal. Pointer events can't cancel that (preventDefault on a pointer
+  // event never suppresses native touch scrolling); only a real, non-passive
+  // `touchmove` listener can — same gotcha the album carousel's wheel handler
+  // already documents for the same reason. Once a horizontal album drag is
+  // actually underway (`dragActive`), suppress native scrolling so it can
+  // never steal the gesture mid-swipe; every other gesture (vertical
+  // reel-to-reel scroll, non-album swipes) is untouched since this only ever
+  // calls preventDefault while dragActive is true.
+  useEffect(() => {
+    const el = mediaStage.current;
+    if (!el || !isAlbum) return;
+    const onTouchMoveNative = (e: TouchEvent) => {
+      if (dragActive.current) e.preventDefault();
+    };
+    el.addEventListener("touchmove", onTouchMoveNative, { passive: false });
+    return () => el.removeEventListener("touchmove", onTouchMoveNative);
+  }, [isAlbum]);
+
   return (
     <>
       {/* Cover — always painted underneath so a snapped-in reel never flashes black.
@@ -1122,6 +1145,7 @@ function ReelCard({
           reacting on release — 0 (identity) for every non-album/non-dragging
           reel, so this never affects anything else. */}
       <motion.div
+        ref={mediaStage}
         className={cn(
           "absolute inset-0 flex items-center justify-center transition-opacity duration-200 ease-out",
           slideFade ? "opacity-0" : "opacity-100",

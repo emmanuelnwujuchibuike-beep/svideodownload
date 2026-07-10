@@ -446,7 +446,14 @@ function FeedPostCardImpl({
       {item.mediaItems && item.mediaItems.length > 1 ? (
         /* Album / carousel — swipeable slides with counter + dots */
         <div className="mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">
-          <MediaCarousel items={item.mediaItems} onExpandItem={(index) => onOpen(item, false, index)} />
+          <MediaCarousel
+            items={item.mediaItems}
+            onExpandItem={(index) => onOpen(item, false, index)}
+            liked={liked}
+            onDoubleTapLike={() => {
+              if (!liked) void react("like");
+            }}
+          />
         </div>
       ) : item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
         // Big, immersive inline preview: autoplays muted in view, tap → fullscreen

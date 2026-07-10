@@ -49,6 +49,7 @@ import { CollectionPicker } from "@/features/social/collection-picker";
 import { RepostComposer } from "@/features/social/repost-composer";
 import { RepostOptionsSheet } from "@/features/social/repost-options";
 import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
+import { ReportSheet } from "@/features/social/report-sheet";
 import { RepostersSheet } from "@/features/social/reposters-sheet";
 import { ShareSheet } from "@/features/social/share-sheet";
 import { useLongPress } from "@/lib/hooks/use-long-press";
@@ -377,6 +378,7 @@ function ReelCard({
   const [title, setTitle] = useState(item.title);
   const [editOpen, setEditOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerMode, setComposerMode] = useState<"create" | "edit">("create");
@@ -754,18 +756,9 @@ function ReelCard({
     setMoreOpen(false);
     window.location.assign(`/p/${item.id}`);
   };
-  const reportPost = async () => {
+  const openReport = () => {
     setMoreOpen(false);
-    try {
-      await fetch("/api/report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetType: "post", targetId: item.id, reason: "inappropriate" }),
-      });
-      toast("Reported. Thanks for keeping Frenz safe.", "success");
-    } catch {
-      toast("Couldn't send the report.", "error");
-    }
+    setReportOpen(true);
   };
   const blockUser = async () => {
     setMoreOpen(false);
@@ -1651,7 +1644,7 @@ function ReelCard({
                   {/* Danger */}
                   {!item.isOwner ? (
                     <MoreGroup>
-                      <MoreItem icon={Flag} label="Report post" onClick={reportPost} danger />
+                      <MoreItem icon={Flag} label="Report post" onClick={openReport} danger />
                       <MoreItem icon={UserX} label={`Block @${item.publisher.handle}`} onClick={blockUser} danger />
                     </MoreGroup>
                   ) : null}
@@ -1695,6 +1688,8 @@ function ReelCard({
 
       {/* Who reposted — behind the avatar cluster */}
       <RepostersSheet postId={item.id} open={repostersOpen} onClose={() => setRepostersOpen(false)} />
+
+      <ReportSheet targetType="post" targetId={item.id} open={reportOpen} onClose={() => setReportOpen(false)} />
 
       {/* Send — the same Share sheet as the feed (DMs, copy link, OS share) */}
       <ShareSheet

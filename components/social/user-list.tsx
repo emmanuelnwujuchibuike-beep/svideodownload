@@ -4,12 +4,13 @@ import Link from "next/link";
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { FollowButton } from "@/features/social/follow-button";
 import { UnblockButton } from "@/features/social/unblock-button";
+import { UnmuteButton } from "@/features/social/unmute-button";
 import type { ListUser } from "@/lib/social/profile";
 
 /**
- * Reusable list of user cards (followers / following / blocked). The trailing
- * action depends on `mode`. Server component — renders the interactive buttons
- * (which are client components) per row.
+ * Reusable list of user cards (followers / following / blocked / muted). The
+ * trailing action depends on `mode`. Server component — renders the
+ * interactive buttons (which are client components) per row.
  */
 export function UserList({
   users,
@@ -19,7 +20,7 @@ export function UserList({
 }: {
   users: ListUser[];
   viewerId: string | null;
-  mode?: "follow" | "blocked";
+  mode?: "follow" | "blocked" | "muted";
   emptyText?: string;
 }) {
   if (users.length === 0) {
@@ -51,6 +52,8 @@ export function UserList({
           </Link>
           {mode === "blocked" ? (
             <UnblockButton targetId={u.id} />
+          ) : mode === "muted" ? (
+            <UnmuteButton targetId={u.id} />
           ) : viewerId && viewerId !== u.id ? (
             <FollowButton targetId={u.id} initialFollowing={u.viewerFollows} canFollow />
           ) : null}

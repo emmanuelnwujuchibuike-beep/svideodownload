@@ -17,7 +17,7 @@ import { isAdmin } from "@/lib/admin";
 import { getPlanLimits } from "@/lib/monetization/plan";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { getHomePreferences } from "@/lib/social/home-preferences";
-import { getOwnProfile, getPrivacySettings, listBlocked } from "@/lib/social/profile";
+import { getOwnProfile, getPrivacySettings, listBlocked, listMutedCreators } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -91,11 +91,12 @@ export default async function AccountPage() {
     apiUsed7d = count ?? 0;
   }
 
-  // Social profile + privacy + blocked accounts + Home/feed preferences.
-  const [ownProfile, privacy, blocked, homePrefs] = await Promise.all([
+  // Social profile + privacy + blocked/muted accounts + Home/feed preferences.
+  const [ownProfile, privacy, blocked, muted, homePrefs] = await Promise.all([
     getOwnProfile(user.id),
     getPrivacySettings(user.id),
     listBlocked(user.id),
+    listMutedCreators(user.id),
     getHomePreferences(user.id),
   ]);
 
@@ -187,6 +188,15 @@ export default async function AccountPage() {
               <div className="border-b border-border/60 p-6 sm:p-8">
                 <h2 className="mb-3 text-sm font-semibold">Blocked accounts</h2>
                 <UserList users={blocked} viewerId={user.id} mode="blocked" />
+              </div>
+            ) : null}
+
+            {/* Muted accounts — muting was previously write-only (Feature 17
+                Part 14's Trust Dashboard: the first place to ever review/undo it). */}
+            {muted.length > 0 ? (
+              <div className="border-b border-border/60 p-6 sm:p-8">
+                <h2 className="mb-3 text-sm font-semibold">Muted accounts</h2>
+                <UserList users={muted} viewerId={user.id} mode="muted" />
               </div>
             ) : null}
 

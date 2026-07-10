@@ -60,6 +60,7 @@ const VideoCommentRecorder = dynamic(() => import("@/features/social/video-comme
     </div>
   ),
 });
+const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
 function preloadRecorders() {
   void import("@/features/social/voice-recorder");
   void import("@/features/social/video-comment-recorder");
@@ -841,6 +842,8 @@ function CommentItemImpl({
   const [replying, setReplying] = useState(false);
   const [zoom, setZoom] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReady, setReportReady] = useState(false);
   const [showReplies, setShowReplies] = useState(depth > 0);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -867,10 +870,10 @@ function CommentItemImpl({
     setMenuOpen(false);
     try { await navigator.clipboard.writeText(`${window.location.origin}/p/${postId}#comments`); flashNote("Link copied"); } catch { /* ignore */ }
   };
-  const report = async () => {
+  const openReport = () => {
     setMenuOpen(false);
-    try { await fetch("/api/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetType: "comment", targetId: node.id, reason: "inappropriate" }) }); } catch { /* ignore */ }
-    flashNote("Reported — thank you");
+    setReportReady(true);
+    setReportOpen(true);
   };
 
   const a = node.author;
@@ -926,7 +929,7 @@ function CommentItemImpl({
                       ) : null}
                       <MenuRow icon={Copy} label="Copy text" onClick={copyText} />
                       <MenuRow icon={Link2} label="Copy link" onClick={copyLink} />
-                      {loggedIn && !node.canDelete ? <MenuRow icon={Flag} label="Report" danger onClick={report} /> : null}
+                      {loggedIn && !node.canDelete ? <MenuRow icon={Flag} label="Report" danger onClick={openReport} /> : null}
                       {node.canDelete ? <MenuRow icon={Trash2} label="Delete" danger onClick={del} /> : null}
                     </motion.div>
                   </>
@@ -986,6 +989,8 @@ function CommentItemImpl({
           </div>
         ) : null}
       </div>
+
+      {reportReady ? <ReportSheet targetType="comment" targetId={node.id} open={reportOpen} onClose={() => setReportOpen(false)} /> : null}
     </motion.li>
   );
 }

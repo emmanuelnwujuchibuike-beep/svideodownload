@@ -52,6 +52,7 @@ const RepostOptionsSheet = dynamic(() => import("@/features/social/repost-option
 const RepostersSheet = dynamic(() => import("@/features/social/reposters-sheet").then((m) => m.RepostersSheet), { ssr: false });
 const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m) => m.ShareSheet), { ssr: false });
 const ContentPreferencesSheet = dynamic(() => import("@/features/social/content-preferences-sheet").then((m) => m.ContentPreferencesSheet), { ssr: false });
+const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
 import { floatReaction } from "@/features/ui/reaction-float";
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { downloadPost } from "@/lib/media/download-post";
@@ -128,6 +129,8 @@ function FeedPostCardImpl({
   const [repostersReady, setRepostersReady] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [prefsReady, setPrefsReady] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReady, setReportReady] = useState(false);
 
   // Holding the Repost button opens the advanced options sheet.
   const repostPress = useLongPress(() => {
@@ -281,18 +284,10 @@ function FeedPostCardImpl({
     haptic("selection");
   };
 
-  const report = async () => {
+  const openReport = () => {
     setMenuOpen(false);
-    try {
-      await fetch("/api/report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetType: "post", targetId: item.id, reason: "inappropriate" }),
-      });
-    } catch {
-      /* ignore */
-    }
-    onRemove(item.id);
+    setReportReady(true);
+    setReportOpen(true);
   };
 
   // Softer than Hide/Not interested: their posts stop appearing in YOUR feed
@@ -435,7 +430,7 @@ function FeedPostCardImpl({
                   ) : null}
                   <MenuItem icon={EyeOff} label="Hide this post" onClick={() => onRemove(item.id)} />
                   <MenuItem icon={Ban} label="Not interested" onClick={() => onRemove(item.id)} />
-                  <MenuItem icon={Flag} label="Report" danger onClick={report} />
+                  <MenuItem icon={Flag} label="Report" danger onClick={openReport} />
                 </motion.div>
               </>
             ) : null}
@@ -690,6 +685,10 @@ function FeedPostCardImpl({
           onClose={() => setPrefsOpen(false)}
           onMuteCreator={muteCreator}
         />
+      ) : null}
+
+      {reportReady ? (
+        <ReportSheet targetType="post" targetId={item.id} open={reportOpen} onClose={() => setReportOpen(false)} onReported={() => onRemove(item.id)} />
       ) : null}
     </motion.article>
   );

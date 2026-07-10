@@ -1,9 +1,10 @@
 "use client";
 
 import { Reorder, useDragControls } from "framer-motion";
-import { Clock, Eye, EyeOff, Flame, GripVertical, Loader2, RotateCcw, Sparkles, Users, VolumeX } from "lucide-react";
+import { Clock, Eye, EyeOff, Flame, GripVertical, Loader2, RotateCcw, Sparkles, ThumbsDown, ThumbsUp, Users, VolumeX, X } from "lucide-react";
 import { useState } from "react";
 
+import { categoryLabel, type Category } from "@/lib/social/categories";
 import {
   DEFAULT_HOME_PREFERENCES,
   HOME_MODULE_KEYS,
@@ -35,6 +36,8 @@ export function HomeModulesEditor({ preferences }: { preferences: HomePreference
   const [preferFriends, setPreferFriends] = useState(preferences.preferFriends);
   const [fewerReposts, setFewerReposts] = useState(preferences.fewerReposts);
   const [quietMode, setQuietMode] = useState(preferences.quietMode);
+  const [mutedCategories, setMutedCategories] = useState<Category[]>(preferences.mutedCategories);
+  const [boostedCategories, setBoostedCategories] = useState<Category[]>(preferences.boostedCategories);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -53,6 +56,8 @@ export function HomeModulesEditor({ preferences }: { preferences: HomePreference
     setPreferFriends(false);
     setFewerReposts(false);
     setQuietMode(false);
+    setMutedCategories([]);
+    setBoostedCategories([]);
     setMsg(null);
   };
 
@@ -69,6 +74,8 @@ export function HomeModulesEditor({ preferences }: { preferences: HomePreference
           preferFriends,
           fewerReposts,
           quietMode,
+          mutedCategories,
+          boostedCategories,
         }),
       });
       setMsg(res.ok ? { ok: true, text: "Home preferences saved." } : { ok: false, text: "Couldn't save." });
@@ -120,6 +127,31 @@ export function HomeModulesEditor({ preferences }: { preferences: HomePreference
           onToggle={() => setQuietMode((v) => !v)}
         />
       </div>
+
+      {/* Content preferences (Feature 17 Part 14's Trust Dashboard) — the same
+          mute/boost-by-category choices made from a feed card's "why am I
+          seeing this" sheet, reviewable and removable here in one place. */}
+      {mutedCategories.length > 0 || boostedCategories.length > 0 ? (
+        <div className="mt-5 space-y-2.5">
+          <p className="mb-2 text-xs font-semibold text-muted-foreground">Content preferences</p>
+          {boostedCategories.length > 0 ? (
+            <ChipRow
+              icon={ThumbsUp}
+              label="Seeing more of"
+              categories={boostedCategories}
+              onRemove={(c) => setBoostedCategories((prev) => prev.filter((x) => x !== c))}
+            />
+          ) : null}
+          {mutedCategories.length > 0 ? (
+            <ChipRow
+              icon={ThumbsDown}
+              label="Hidden from For You"
+              categories={mutedCategories}
+              onRemove={(c) => setMutedCategories((prev) => prev.filter((x) => x !== c))}
+            />
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-6 flex items-center gap-3">
         <button
@@ -186,6 +218,39 @@ function ModuleRow({
         {isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </button>
     </Reorder.Item>
+  );
+}
+
+function ChipRow({
+  icon: Icon,
+  label,
+  categories,
+  onRemove,
+}: {
+  icon: typeof Clock;
+  label: string;
+  categories: Category[];
+  onRemove: (c: Category) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-secondary/15 p-3.5">
+      <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" /> {label}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {categories.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onRemove(c)}
+            aria-label={`Remove ${categoryLabel(c)}`}
+            className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-foreground transition hover:bg-secondary/70"
+          >
+            {categoryLabel(c)} <X className="h-3 w-3 text-muted-foreground" />
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

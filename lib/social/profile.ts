@@ -376,6 +376,29 @@ export async function listBlocked(viewerId: string): Promise<ListUser[]> {
   }
 }
 
+/**
+ * Muting (unlike blocking) was previously write-only — a viewer could mute a
+ * creator from a feed card's overflow menu, but had no way to ever see or
+ * undo it again (confirmed: no reader of `muted_creators` for the muter's own
+ * list existed anywhere before Feature 17 Part 14's Trust Dashboard). Mirrors
+ * `listBlocked` exactly.
+ */
+export async function listMutedCreators(viewerId: string): Promise<ListUser[]> {
+  if (!hasSupabase) return [];
+  try {
+    const db = createAdminClient();
+    const { data } = await db
+      .from("muted_creators")
+      .select("muted_id")
+      .eq("muter_id", viewerId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    return buildList(db, ((data ?? []) as { muted_id: string }[]).map((r) => r.muted_id), viewerId);
+  } catch {
+    return [];
+  }
+}
+
 /** A user's privacy settings (defaults if none saved yet). */
 export async function getPrivacySettings(userId: string): Promise<PrivacySettings> {
   if (!hasSupabase) return DEFAULT_PRIVACY;

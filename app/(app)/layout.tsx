@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { AppOverlays } from "@/features/app-shell/app-overlays";
 import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
+import { DeviceCheck } from "@/features/app-shell/device-check";
 import { FloatingMessages } from "@/features/app-shell/floating-messages";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { OfflineQueueSync } from "@/features/app-shell/offline-queue-sync";
@@ -47,6 +48,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <PresenceTracker />
       {/* Replays any offline-queued Like/Save writes on load + reconnect. */}
       <OfflineQueueSync />
+      {/* Once-per-browser-session "new device" security check. */}
+      <DeviceCheck />
     </div>
   );
 }

@@ -36,6 +36,7 @@ import { floatReaction } from "@/features/ui/reaction-float";
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { Comments } from "@/features/social/comments";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
+import { ReportSheet } from "@/features/social/report-sheet";
 import { toast } from "@/features/ui/toast";
 import { downloadPost } from "@/lib/media/download-post";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
@@ -111,6 +112,7 @@ function ImageStage({
   const [burst, setBurst] = useState<{ x: number; y: number; key: number } | null>(null);
   const [title, setTitle] = useState(item.title);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerReady, setPickerReady] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -204,18 +206,9 @@ function ImageStage({
     setMoreOpen(false);
     window.location.assign(`/p/${item.id}`);
   };
-  const reportPost = async () => {
+  const openReport = () => {
     setMoreOpen(false);
-    try {
-      await fetch("/api/report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetType: "post", targetId: item.id, reason: "inappropriate" }),
-      });
-      toast("Reported. Thanks for keeping Frenz safe.", "success");
-    } catch {
-      toast("Couldn't send the report.", "error");
-    }
+    setReportOpen(true);
   };
   const blockUser = async () => {
     setMoreOpen(false);
@@ -568,7 +561,7 @@ function ImageStage({
 
                 {!item.isOwner ? (
                   <MoreGroup>
-                    <MoreItem icon={Flag} label="Report post" onClick={reportPost} danger />
+                    <MoreItem icon={Flag} label="Report post" onClick={openReport} danger />
                     <MoreItem icon={UserX} label={`Block @${item.publisher.handle}`} onClick={blockUser} danger />
                   </MoreGroup>
                 ) : null}
@@ -595,6 +588,8 @@ function ImageStage({
           onDeleted={onClose}
         />
       ) : null}
+
+      <ReportSheet targetType="post" targetId={item.id} open={reportOpen} onClose={() => setReportOpen(false)} />
     </motion.div>
   );
 }

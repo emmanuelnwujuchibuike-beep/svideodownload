@@ -139,6 +139,41 @@ Rules: no new spinners covering content; no fetch waterfalls where a Suspense bo
 every `loading.tsx` uses the shared primitives; every below-fold rail goes through
 `LazyMount`/`whenVisible`; reduced motion is respected (shimmer + fades are opacity-only).
 
+## Icon System (MANDATORY — every icon button, every page, current and future)
+No bare flat monochrome icon buttons anywhere in the app, marketing site included — every
+icon-only control renders on a dimensional "glass badge" tile (gradient/tint + a diagonal gloss
+highlight + a soft colored shadow), not just a recolored glyph floating in space. This replaced an
+earlier, subtler `GradientIcon` (gradient-filled line art) that shipped and was reported as
+"still looks the same" — the fix was giving every icon real depth via a background surface, not
+just changing its stroke color (see project memory `feedback-visually-verify-before-shipping`).
+
+- **`components/icons/nav-icon-badge.tsx` (`NavIconBadge`)** — route-based destinations with an
+  active/inactive state (bottom nav, sidebar): brand-gradient glass when active, calm neutral glass
+  when not. Every destination gets a tile, not just the active one.
+- **`components/icons/icon-tile.tsx` (`IconTile`)** — momentary action buttons with no route state
+  (search, create, notifications, the marketing site's mobile menu toggle). `tint="brand"` reserved
+  for the single highest-value action per bar; everything else stays neutral glass.
+- **`components/icons/module-icon-badge.tsx` (`ModuleIconBadge`)** — smaller inline badge for
+  section headers and menu/dropdown rows (Home's Trending Reels/Continue Watching/Friend Activity,
+  the account menu, the marketing header's mobile drawer).
+
+Both `NavIconBadge` and `IconTile` recolor an arbitrary icon element via `cloneElement`+`className`
+(CSS `currentColor` inheritance) — works identically across the custom Frenz icon set, lucide-react,
+and react-icons, so any icon library already in use drops in without modification.
+
+**Performance constraint (non-negotiable):** these are static CSS (gradient background + one
+`box-shadow` + one gloss overlay `<span>`) — zero JS, zero continuous animation, negligible
+GPU-compositing cost only. Nothing here may idle-loop, pulse, shimmer, or otherwise animate while
+at rest — the only motion is the existing tap-triggered `PressIcon` spring (a physical
+press-and-release, gated on `prefers-reduced-motion`), which fires once per interaction and then
+stops. A "premium" icon must never cost battery just for being on screen.
+
+**Scope note:** this covers every nav/topbar/module-header icon site-wide (in-app shell +
+marketing/SEO pages) as of 2026-07-10. A full pass over every settings-page/sheet/feed-action-bar
+icon still using bare lucide-react/react-icons is a larger, separate initiative, not yet started —
+any NEW icon button added anywhere from this point forward should use one of the three components
+above rather than a bare `<Icon />`, so the gap only shrinks going forward instead of growing.
+
 ## Security (Zero Trust)
 RBAC + ABAC · E2E encryption where applicable · encrypted storage & backups · audit logs · threat
 & fraud detection · device monitoring. Secrets live only in platform env vars (never committed).

@@ -271,7 +271,11 @@ function ImageStage({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
+      // Snappier than the original 0.2s — since the fallback preview above
+      // already paints the same photo instantly, this fade is really just
+      // covering the handoff to the interactive chrome, not "revealing" the
+      // image itself, so it can be much shorter without feeling abrupt.
+      transition={{ duration: 0.1 }}
       // On large screens this sits BESIDE the app sidebar (which stays fixed,
       // same as every other page) and splits into media + a persistent comments
       // sidebar — same split-pane pattern as PostViewer.

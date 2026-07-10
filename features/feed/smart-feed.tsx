@@ -13,6 +13,7 @@ import { lockTopbarVisible } from "@/features/app-shell/topbar-visibility";
 import { setTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
+import { ImageOpenFallback } from "@/features/feed/image-open-fallback";
 import { FeedTopbarTabs } from "@/features/feed/feed-topbar-tabs";
 import { SparkCard } from "@/features/feed/spark-card";
 import { haptic } from "@/lib/motion/haptics";
@@ -33,14 +34,21 @@ const ReelsFeed = dynamic(() => import("@/features/reels/reels-feed").then((m) =
 function preloadReelsFeed() {
   void import("@/features/reels/reels-feed");
 }
-const PostViewer = dynamic(() => import("@/features/feed/post-viewer").then((m) => m.PostViewer), { ssr: false });
+// Same instant-paint fallback as ReelsFeed above — PostViewer (text/audio
+// posts) has no single dominant photo to preview ahead of time, so a plain
+// black frame (matching Reels, which nobody's complained about) is the right
+// minimal fix here; ImageViewer gets a richer one below.
+const PostViewer = dynamic(() => import("@/features/feed/post-viewer").then((m) => m.PostViewer), {
+  ssr: false,
+  loading: () => <div className="fixed inset-0 z-[85] bg-black" aria-hidden />,
+});
 const ImageViewer = dynamic(() => import("@/features/feed/image-viewer").then((m) => m.ImageViewer), { ssr: false });
 // Same warm-up as `preloadReelsFeed`, for the two other viewer chunks — an
 // image tap should open exactly as instantly as a video tap does, not stall
-// on a first-time chunk fetch.
+// on a first-time chunk fetch. Returns the underlying promise so callers can
+// track resolution (see `viewerChunksReady` below), not just fire-and-forget.
 function preloadPostViewers() {
-  void import("@/features/feed/image-viewer");
-  void import("@/features/feed/post-viewer");
+  return Promise.all([import("@/features/feed/image-viewer"), import("@/features/feed/post-viewer")]);
 }
 import {
   type AwaySummary,
@@ -115,6 +123,11 @@ export function SmartFeed({
   // never loaded.
   const [viewerReady, setViewerReady] = useState(false);
   const [imageReady, setImageReady] = useState(false);
+  // Tracks whether the ImageViewer/PostViewer chunk has actually resolved
+  // (not just "we asked for it") — drives the instant fallback preview below.
+  const [viewerChunksReady, setViewerChunksReady] = useState(false);
+  const viewerChunksReadyRef = useRef(false);
+  viewerChunksReadyRef.current = viewerChunksReady;
   const sentinel = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
@@ -223,7 +236,7 @@ export function SmartFeed({
     const cic = window.cancelIdleCallback ?? window.clearTimeout;
     const id = ric(() => {
       preloadReelsFeed();
-      preloadPostViewers();
+      void preloadPostViewers().then(() => setViewerChunksReady(true));
       router.prefetch("/reels");
     });
     return () => cic(id);
@@ -253,6 +266,13 @@ export function SmartFeed({
       setImage(it);
       setImageStartIndex(startIndex);
       setImageAutoComments(comments);
+      // Belt-and-suspenders: kick the fetch again right at the moment of
+      // open, in case this tap landed before the idle-preload above (or the
+      // tap-time prefetch in FeedImage/MediaCarousel) had a chance to run —
+      // a no-op if already in flight/resolved (dynamic imports are cached).
+      if (!viewerChunksReadyRef.current) {
+        void import("@/features/feed/image-viewer").then(() => setViewerChunksReady(true));
+      }
     } else {
       setViewerReady(true);
       setViewer({ item: it, comments });
@@ -748,6 +768,7 @@ export function SmartFeed({
           onClose={() => setViewer(null)}
         />
       ) : null}
+      {imageReady && image && !viewerChunksReady ? <ImageOpenFallback item={image} startIndex={imageStartIndex} /> : null}
       {imageReady ? <ImageViewer item={image} startIndex={imageStartIndex} autoOpenComments={imageAutoComments} onClose={() => setImage(null)} /> : null}
 
       {/* Instant, in-place full reels experience (For You / Following tabs), nav

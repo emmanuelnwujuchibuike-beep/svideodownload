@@ -68,15 +68,26 @@ export function FeedImage({
   const onPointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
+    // Kick the fullscreen viewer's chunk off at the very first touch — not
+    // idle-time-after-mount, not tap-up — so it's had the longest possible
+    // head start by the time a real single tap resolves below. A no-op if
+    // it's already cached (Next dedupes identical dynamic-import specifiers
+    // with whatever else in the app requested the same module).
+    void import("@/features/feed/image-viewer");
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!startPt.current || moved.current) return;
     if (Math.abs(e.clientX - startPt.current.x) > 12 || Math.abs(e.clientY - startPt.current.y) > 12) moved.current = true;
   };
+  // Single-tap-open vs. double-tap-to-Wow disambiguation: DBLTAP_WINDOW and
+  // OPEN_DELAY are kept equal so the open timer can never fire before a
+  // genuine second tap has a chance to cancel it (was 300/280 — tightened to
+  // shave real latency off every single tap without reopening that gap).
+  const DBLTAP_WINDOW = 220;
   const onPointerUp = () => {
     if (moved.current) return;
     const now = Date.now();
-    if (now - lastTap.current < 300) {
+    if (now - lastTap.current < DBLTAP_WINDOW) {
       // Double tap → like.
       if (singleTimer.current) clearTimeout(singleTimer.current);
       lastTap.current = 0;
@@ -86,7 +97,7 @@ export function FeedImage({
     }
     lastTap.current = now;
     if (singleTimer.current) clearTimeout(singleTimer.current);
-    singleTimer.current = setTimeout(() => onExpand(), 280);
+    singleTimer.current = setTimeout(() => onExpand(), DBLTAP_WINDOW);
   };
 
   return (

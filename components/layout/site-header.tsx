@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { FrenzWordmark } from "@/components/brand/frenz-logo";
+import { IconTile } from "@/components/icons/icon-tile";
+import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useUser } from "@/features/auth/use-user";
@@ -86,9 +88,12 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-card/50 text-foreground backdrop-blur lg:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center lg:hidden"
           >
-            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {/* Same glass-tile treatment as the in-app topbar's search/create/
+                notification icons — consistent premium chrome across every
+                page, marketing or in-app. */}
+            <IconTile>{open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</IconTile>
           </button>
         )}
       </div>
@@ -177,37 +182,37 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
                 <Link
                   href={handle ? `/u/${handle}` : "/account#profile"}
                   onClick={() => setOpen(false)}
-                  className="mt-2 flex items-center gap-2 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
+                  className="mt-2 flex items-center gap-3 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
                 >
-                  <UserCircle className="h-5 w-5" /> {handle ? "My profile" : "Set up profile"}
+                  <ModuleIconBadge icon={UserCircle} /> {handle ? "My profile" : "Set up profile"}
                 </Link>
                 <Link
                   href="/messages"
                   onClick={() => setOpen(false)}
-                  className="flex items-center gap-2 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
+                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
                 >
-                  <MessageCircle className="h-5 w-5" /> Messages
+                  <ModuleIconBadge icon={MessageCircle} /> Messages
                 </Link>
                 <Link
                   href="/saved"
                   onClick={() => setOpen(false)}
-                  className="flex items-center gap-2 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
+                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
                 >
-                  <Bookmark className="h-5 w-5" /> Saved
+                  <ModuleIconBadge icon={Bookmark} /> Saved
                 </Link>
                 <Link
                   href="/account"
                   onClick={() => setOpen(false)}
-                  className="flex items-center gap-2 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
+                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
                 >
-                  <UserIcon className="h-5 w-5" /> Account
+                  <ModuleIconBadge icon={UserIcon} /> Account
                 </Link>
                 <form action="/auth/signout" method="post">
                   <button
                     type="submit"
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-3 text-base font-medium text-muted-foreground transition hover:bg-secondary"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-base font-medium text-muted-foreground transition hover:bg-secondary"
                   >
-                    <LogOut className="h-5 w-5" /> Sign out
+                    <ModuleIconBadge icon={LogOut} /> Sign out
                   </button>
                 </form>
               </>

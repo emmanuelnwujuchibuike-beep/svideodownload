@@ -105,15 +105,23 @@ export function MediaCarousel({
   const onSlidePointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
+    // Same tap-time head start as FeedImage — warms whichever fullscreen
+    // viewer this slide might open (image album → ImageViewer, video album →
+    // ReelsFeed; cheap to request both, only one is ever actually used).
+    void import("@/features/feed/image-viewer");
+    void import("@/features/reels/reels-feed");
   };
   const onSlidePointerMove = (e: React.PointerEvent) => {
     if (!startPt.current || moved.current) return;
     if (Math.abs(e.clientX - startPt.current.x) > 12 || Math.abs(e.clientY - startPt.current.y) > 12) moved.current = true;
   };
+  // Kept equal to the double-tap detection window — see FeedImage's identical
+  // comment; was 300/280, tightened to 220/220.
+  const DBLTAP_WINDOW = 220;
   const onSlideTap = (i: number, m: CarouselMedia) => () => {
     if (moved.current) return;
     const now = Date.now();
-    if (now - lastTap.current < 300) {
+    if (now - lastTap.current < DBLTAP_WINDOW) {
       // Second tap arrived in time → Wow, not fullscreen.
       if (singleTimer.current) clearTimeout(singleTimer.current);
       lastTap.current = 0;
@@ -127,7 +135,7 @@ export function MediaCarousel({
     singleTimer.current = setTimeout(() => {
       if (onExpandItem) onExpandItem(i, m);
       else onExpand?.();
-    }, 280);
+    }, DBLTAP_WINDOW);
   };
 
   const onScroll = () => {

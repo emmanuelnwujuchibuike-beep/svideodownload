@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { MyDiamondCrownBadge } from "@/components/badges/my-diamond-crown-badge";
+import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 
 import { useEntitlements } from "./use-entitlements";
 import { useUser } from "./use-user";
@@ -92,41 +93,41 @@ export function UserMenu() {
             href={handle ? `/u/${handle}` : "/account#profile"}
             role="menuitem"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
           >
-            <UserCircle className="h-4 w-4" /> {handle ? "My profile" : "Set up profile"}
+            <ModuleIconBadge icon={UserCircle} className="h-6 w-6 rounded-lg" /> {handle ? "My profile" : "Set up profile"}
           </Link>
           <Link
             href="/messages"
             role="menuitem"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
           >
-            <MessageCircle className="h-4 w-4" /> Messages
+            <ModuleIconBadge icon={MessageCircle} className="h-6 w-6 rounded-lg" /> Messages
           </Link>
           <Link
             href="/saved"
             role="menuitem"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
           >
-            <Bookmark className="h-4 w-4" /> Saved
+            <ModuleIconBadge icon={Bookmark} className="h-6 w-6 rounded-lg" /> Saved
           </Link>
           <Link
             href="/account"
             role="menuitem"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
           >
-            <UserIcon className="h-4 w-4" /> Account
+            <ModuleIconBadge icon={UserIcon} className="h-6 w-6 rounded-lg" /> Account
           </Link>
           <form action="/auth/signout" method="post">
             <button
               type="submit"
               role="menuitem"
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition hover:bg-secondary hover:text-foreground"
             >
-              <LogOut className="h-4 w-4" /> Sign out
+              <ModuleIconBadge icon={LogOut} className="h-6 w-6 rounded-lg" /> Sign out
             </button>
           </form>
         </div>

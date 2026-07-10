@@ -2,8 +2,10 @@ import { cacheDelete, getCached } from "@/lib/cache";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import type { Category } from "./categories";
 import { fetchReactionRows } from "./engagement";
 import { getTrendingSettings } from "./feed";
+import { getHomePreferences, type HomePreferences } from "./home-preferences";
 import type { MediaKind } from "./posts";
 import { followedReposters, repostCounts, viewerReposts } from "./reposts";
 
@@ -141,16 +143,32 @@ async function hasFormatColumn(db: ReturnType<typeof createAdminClient>): Promis
  * Before this, "for_you" and "recent" produced the IDENTICAL ordering (both
  * were just `ORDER BY created_at DESC`) — "For You" wasn't actually FOR
  * anyone; it was just "newest first" wearing a different label.
+ *
+ * `prefs` (Feature 17 Part 13) layers the viewer's own explicit choices on
+ * top, transparently — never hidden ML, just the same weighted-score model
+ * with a couple more real inputs: `preferFriends` raises the relationship
+ * bonus ("prioritize my friends"); `boostedCategories` adds a flat bonus to
+ * matching posts ("more technology"). Muted categories are NOT scored down
+ * here — they're excluded entirely one level up in `loadHomeFeed`, mirroring
+ * `muted_creators`' absolute semantics ("mute" removes, it doesn't just
+ * de-rank).
  */
-function rankForYou(rows: Row[], followingIds: Set<string>): Row[] {
+function rankForYou(
+  rows: Row[],
+  followingIds: Set<string>,
+  prefs?: Pick<HomePreferences, "preferFriends" | "boostedCategories">,
+): Row[] {
   const now = Date.now();
+  const relationshipBonus = prefs?.preferFriends ? 220 : 120;
+  const boosted = new Set(prefs?.boostedCategories ?? []);
   const scored = rows.map((row, i) => {
     const ageHours = Math.max(0, (now - new Date(row.created_at).getTime()) / 3_600_000);
-    const relationship = followingIds.has(row.publisher_id) ? 120 : 0;
+    const relationship = followingIds.has(row.publisher_id) ? relationshipBonus : 0;
     const quality =
       row.likes_count + row.comments_count * 2 + row.shares_count * 3 + row.saves_count * 2 + row.downloads_count * 2;
     const freshness = 40 / (1 + ageHours / 30);
-    return { row, score: relationship + quality + freshness, i };
+    const interest = row.category && boosted.has(row.category as Category) ? 60 : 0;
+    return { row, score: relationship + quality + freshness + interest, i };
   });
   // Tiebreak on original (recency) order — equal scores never shuffle
   // arbitrarily between otherwise-identical requests.
@@ -399,7 +417,20 @@ async function loadHomeFeed(
     const { data } = await q;
     let rows = (data as Row[]) ?? [];
     if (rows.length === 0) return { items: [], nextOffset: null };
-    if (sort === "for_you") rows = rankForYou(rows, new Set(followingIds));
+    // Personalization (Feature 17 Part 13) only ever applies to "for_you" —
+    // same rule as rankForYou itself: "following"/"recent"/"trending" stay a
+    // plain, literal view. A muted category is excluded outright (mirrors
+    // muted_creators' absolute semantics), THEN the remaining rows are ranked
+    // with the viewer's boost/relationship preferences.
+    let prefs: HomePreferences | null = null;
+    if (sort === "for_you") {
+      prefs = viewerId ? await getHomePreferences(viewerId) : null;
+      if (prefs && prefs.mutedCategories.length > 0) {
+        const muted = new Set(prefs.mutedCategories);
+        rows = rows.filter((r) => !r.category || !muted.has(r.category as Category));
+      }
+      rows = rankForYou(rows, new Set(followingIds), prefs ?? undefined);
+    }
 
     const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
     const [{ data: profs }, { data: privs }, { data: subs }, reactionRows, blocks, mutes] = await Promise.all([
@@ -592,7 +623,10 @@ async function loadHomeFeed(
     // Surface friend reposts that aren't already in your feed (Repost spec §5): a
     // followed user's repost PULLS the original post in — near the top, tagged with
     // the "X reposted" attribution badge. First page of the For You feed only.
-    if (offset === 0 && sort === "for_you" && viewerId && followingIds.length) {
+    // Skipped entirely when the viewer's own "fewer reposts" preference is on —
+    // the most literal reading of that toggle is to stop ADDING reposts on top
+    // of the organic feed, not just de-rank ones already there.
+    if (offset === 0 && sort === "for_you" && viewerId && followingIds.length && !prefs?.fewerReposts) {
       try {
         const exclude = new Set(kept.map((k) => k.id));
         const surfaced = await surfaceFollowedReposts(viewerId, followingIds, exclude, 2);

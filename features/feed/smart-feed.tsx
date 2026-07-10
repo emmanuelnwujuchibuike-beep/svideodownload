@@ -76,10 +76,15 @@ export function SmartFeed({
   initialItems,
   initialNextOffset,
   friendCount = 0,
+  quietMode = false,
 }: {
   initialItems: FeedItem[];
   initialNextOffset: number | null;
   friendCount?: number;
+  /** Feature 17 Part 13's Quiet Mode — suppresses Spark discovery cards and
+   *  the "while you were away" catch-up banner; everything else (the real
+   *  feed itself, infinite scroll, tab switching) is untouched. */
+  quietMode?: boolean;
 }) {
   const [sort, setSort] = useState<HomeFeedSort>("for_you");
   // Balanced once up front (server-rendered first page never went through
@@ -194,7 +199,8 @@ export function SmartFeed({
     };
   }, [persistContinuity]);
 
-  const deck = useMemo(() => buildSparkDeck({ friendCount }), [friendCount]);
+  // Quiet Mode: no Spark/discovery cards interleaved into the stream at all.
+  const deck = useMemo(() => (quietMode ? [] : buildSparkDeck({ friendCount })), [friendCount, quietMode]);
   // Every loaded video, in feed order — the reel playlist. Kept live so the open
   // deck keeps growing as the feed loads more (infinite, TikTok-style).
   const videos = useMemo(() => items.filter((i) => i.mediaKind === "video"), [items]);
@@ -640,9 +646,10 @@ export function SmartFeed({
         ) : null}
       </AnimatePresence>
 
-      {/* While you were away */}
+      {/* While you were away — suppressed in Quiet Mode (it's a catch-up/
+          engagement nudge, exactly what Quiet Mode asks to reduce). */}
       <AnimatePresence>
-        {away ? (
+        {away && !quietMode ? (
           <motion.div
             initial={{ opacity: 0, y: -8, height: 0 }}
             animate={{ opacity: 1, y: 0, height: "auto" }}

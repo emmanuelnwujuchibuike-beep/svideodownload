@@ -51,10 +51,12 @@ const RepostComposer = dynamic(() => import("@/features/social/repost-composer")
 const RepostOptionsSheet = dynamic(() => import("@/features/social/repost-options").then((m) => m.RepostOptionsSheet), { ssr: false });
 const RepostersSheet = dynamic(() => import("@/features/social/reposters-sheet").then((m) => m.RepostersSheet), { ssr: false });
 const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m) => m.ShareSheet), { ssr: false });
+const ContentPreferencesSheet = dynamic(() => import("@/features/social/content-preferences-sheet").then((m) => m.ContentPreferencesSheet), { ssr: false });
 import { floatReaction } from "@/features/ui/reaction-float";
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { downloadPost } from "@/lib/media/download-post";
 import { enqueueOfflineAction } from "@/lib/offline/action-queue";
+import { isCategory } from "@/lib/social/categories";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
 import { FrenzsaveError } from "@/lib/sdk";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
@@ -124,6 +126,8 @@ function FeedPostCardImpl({
   const [composerReady, setComposerReady] = useState(false);
   const [optionsReady, setOptionsReady] = useState(false);
   const [repostersReady, setRepostersReady] = useState(false);
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const [prefsReady, setPrefsReady] = useState(false);
 
   // Holding the Repost button opens the advanced options sheet.
   const repostPress = useLongPress(() => {
@@ -426,6 +430,9 @@ function FeedPostCardImpl({
                     </>
                   ) : null}
                   <MenuItem icon={FolderPlus} label="Save to collection" onClick={() => { setMenuOpen(false); setPickerReady(true); setPickerOpen(true); }} />
+                  {item.category ? (
+                    <MenuItem icon={Sparkles} label="Content preferences" onClick={() => { setMenuOpen(false); setPrefsReady(true); setPrefsOpen(true); }} />
+                  ) : null}
                   <MenuItem icon={EyeOff} label="Hide this post" onClick={() => onRemove(item.id)} />
                   <MenuItem icon={Ban} label="Not interested" onClick={() => onRemove(item.id)} />
                   <MenuItem icon={Flag} label="Report" danger onClick={report} />
@@ -436,13 +443,19 @@ function FeedPostCardImpl({
         </div>
       </div>
 
-      {/* Smart Explanation — why this is in your feed */}
+      {/* Smart Explanation — why this is in your feed. Tappable: opens the
+          real content-preference controls (Feature 17 Part 13's "Discovery
+          Transparency" made actionable, not just descriptive text). */}
       {reason ? (
         <div className="px-4 pb-1">
-          <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold", REASON_STYLE[reason.tone])}>
+          <button
+            type="button"
+            onClick={() => { setPrefsReady(true); setPrefsOpen(true); }}
+            className={cn("inline-flex items-center gap-1 text-[11px] font-semibold underline-offset-2 hover:underline", REASON_STYLE[reason.tone])}
+          >
             <Sparkles aria-hidden className="h-3 w-3" />
             {reason.label}
-          </span>
+          </button>
         </div>
       ) : null}
 
@@ -667,6 +680,17 @@ function FeedPostCardImpl({
       ) : null}
 
       {repostersReady ? <RepostersSheet postId={item.id} open={repostersOpen} onClose={() => setRepostersOpen(false)} /> : null}
+
+      {prefsReady ? (
+        <ContentPreferencesSheet
+          category={isCategory(item.category) ? item.category : null}
+          reason={reason}
+          publisherHandle={item.publisher.handle}
+          open={prefsOpen}
+          onClose={() => setPrefsOpen(false)}
+          onMuteCreator={muteCreator}
+        />
+      ) : null}
     </motion.article>
   );
 }

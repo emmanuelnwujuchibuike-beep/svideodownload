@@ -17,6 +17,7 @@ import { getFriendActivity } from "@/lib/social/friend-activity";
 import { friendsCount } from "@/lib/social/friends";
 import { getHomeProfile } from "@/lib/social/home";
 import { getHomeFeed } from "@/lib/social/home-feed";
+import { getHomePreferences, type HomeModuleKey } from "@/lib/social/home-preferences";
 import { getActiveStories } from "@/lib/social/stories";
 import { getSuggestedCreators } from "@/lib/social/suggest";
 import { createClient } from "@/lib/supabase/server";
@@ -41,9 +42,18 @@ export default async function HomePage() {
   // slowest feed query — the "instant, then fill" feel.
   const profile = await getHomeProfile(user.id);
   if (!profile?.handle) redirect("/welcome");
+  const handle = profile.handle; // narrowed to `string` here; `profile.handle`'s own
+  // type stays `string | null` inside closures (e.g. the module-order .map()
+  // below), so this local binding is what those closures should reference.
 
   const firstVisit = !(await cookies()).get("frenz_welcomed");
   const viewerId = user.id;
+  // Feature 17 Part 13 — the viewer's own Home Module Editor choices (reorder/
+  // hide Stories, Friend Activity, Trending Reels, Continue Watching) + Quiet
+  // Mode. Best-effort: defaults (today's exact hardcoded order, nothing
+  // hidden) if the table's unmigrated or the row doesn't exist yet.
+  const prefs = await getHomePreferences(viewerId);
+  const visibleModules = prefs.moduleOrder.filter((k) => !prefs.hiddenModules.includes(k));
 
   return (
     <AppContent
@@ -61,39 +71,64 @@ export default async function HomePage() {
     >
       {firstVisit ? <BrandSplash /> : null}
       <div className="space-y-6">
-        <Suspense fallback={<StoriesSkeleton />}>
-          <StoriesSection
-            viewerId={viewerId}
-            avatarUrl={profile.avatarUrl}
-            name={profile.displayName}
-            handle={profile.handle}
-          />
-        </Suspense>
-
-        {/* Relationship-first, above the global Trending rail — the spec's own
-            "most important module". Renders nothing for viewers with no
-            friends or no recent friend activity (no fake placeholder rows). */}
-        <Suspense fallback={<FriendActivitySkeleton />}>
-          <FriendActivitySection viewerId={viewerId} />
-        </Suspense>
-
-        <Suspense fallback={<ReelsSkeleton />}>
-          <ReelsSection viewerId={viewerId} />
-        </Suspense>
-
-        {/* Client-only, no server data dependency (reads live download/history
-            state) — renders nothing when there's nothing to resume, so it
-            never needs a Suspense boundary or a skeleton. */}
-        <ContinueWatching />
+        {/* Home Module Editor order (account settings), optional sections only
+            — the main feed below is never reorderable, it's infinite. */}
+        {visibleModules.map((key) =>
+          renderModule(key, {
+            viewerId,
+            profile: { avatarUrl: profile.avatarUrl, displayName: profile.displayName, handle },
+          }),
+        )}
 
         {/* Smart Feed — the intelligent, blended, endless heart of the home
             experience. Rendered last because it never ends. */}
         <Suspense fallback={<FeedSkeleton count={3} />}>
-          <SmartFeedSection viewerId={viewerId} />
+          <SmartFeedSection viewerId={viewerId} quietMode={prefs.quietMode} />
         </Suspense>
       </div>
     </AppContent>
   );
+}
+
+/* ── Module order/visibility dispatch (Feature 17 Part 13) ─────────────────── */
+
+function renderModule(
+  key: HomeModuleKey,
+  ctx: { viewerId: string; profile: { avatarUrl: string | null; displayName: string; handle: string } },
+) {
+  switch (key) {
+    case "stories":
+      return (
+        <Suspense key={key} fallback={<StoriesSkeleton />}>
+          <StoriesSection
+            viewerId={ctx.viewerId}
+            avatarUrl={ctx.profile.avatarUrl}
+            name={ctx.profile.displayName}
+            handle={ctx.profile.handle}
+          />
+        </Suspense>
+      );
+    case "friend_activity":
+      // Relationship-first, above the global Trending rail by default — the
+      // spec's own "most important module". Renders nothing for viewers with
+      // no friends or no recent friend activity (no fake placeholder rows).
+      return (
+        <Suspense key={key} fallback={<FriendActivitySkeleton />}>
+          <FriendActivitySection viewerId={ctx.viewerId} />
+        </Suspense>
+      );
+    case "trending_reels":
+      return (
+        <Suspense key={key} fallback={<ReelsSkeleton />}>
+          <ReelsSection viewerId={ctx.viewerId} />
+        </Suspense>
+      );
+    case "continue_watching":
+      // Client-only, no server data dependency (reads live download/history
+      // state) — renders nothing when there's nothing to resume, so it never
+      // needs a Suspense boundary or a skeleton.
+      return <ContinueWatching key={key} />;
+  }
 }
 
 /* ── Streamed sections: each awaits only its own slice ─────────────────────── */
@@ -132,13 +167,13 @@ async function RailSection({ viewerId }: { viewerId: string }) {
   return <HomeRail suggestions={suggestions} />;
 }
 
-async function SmartFeedSection({ viewerId }: { viewerId: string }) {
+async function SmartFeedSection({ viewerId, quietMode }: { viewerId: string; quietMode: boolean }) {
   const [page, friends] = await Promise.all([
     getHomeFeed({ viewerId, sort: "for_you", offset: 0, limit: 8 }),
     friendsCount(viewerId),
   ]);
   return (
-    <SmartFeed initialItems={page.items} initialNextOffset={page.nextOffset} friendCount={friends} />
+    <SmartFeed initialItems={page.items} initialNextOffset={page.nextOffset} friendCount={friends} quietMode={quietMode} />
   );
 }
 

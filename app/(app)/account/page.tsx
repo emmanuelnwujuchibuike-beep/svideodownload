@@ -10,11 +10,13 @@ import { ManageBillingButton } from "@/features/monetization/manage-billing-butt
 import { UserList } from "@/components/social/user-list";
 import { ProfileEditor } from "@/features/social/profile-editor";
 import { ActiveSessions } from "@/features/account/active-sessions";
+import { HomeModulesEditor } from "@/features/account/home-modules-editor";
 import { PasswordEditor } from "@/features/account/password-editor";
 import { PrivacyEditor } from "@/features/social/privacy-editor";
 import { isAdmin } from "@/lib/admin";
 import { getPlanLimits } from "@/lib/monetization/plan";
 import type { BillingPlan } from "@/lib/monetization/types";
+import { getHomePreferences } from "@/lib/social/home-preferences";
 import { getOwnProfile, getPrivacySettings, listBlocked } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -89,11 +91,12 @@ export default async function AccountPage() {
     apiUsed7d = count ?? 0;
   }
 
-  // Social profile + privacy + blocked accounts.
-  const [ownProfile, privacy, blocked] = await Promise.all([
+  // Social profile + privacy + blocked accounts + Home/feed preferences.
+  const [ownProfile, privacy, blocked, homePrefs] = await Promise.all([
     getOwnProfile(user.id),
     getPrivacySettings(user.id),
     listBlocked(user.id),
+    getHomePreferences(user.id),
   ]);
 
   return (
@@ -169,6 +172,9 @@ export default async function AccountPage() {
             {/* Public profile + privacy */}
             {ownProfile ? <ProfileEditor profile={ownProfile} /> : null}
             <PrivacyEditor settings={privacy} />
+
+            {/* Home layout + feed behavior preferences */}
+            <HomeModulesEditor preferences={homePrefs} />
 
             {/* Optional password (second way in + what "Forgot password?" resets) */}
             <PasswordEditor />

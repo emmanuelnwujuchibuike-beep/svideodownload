@@ -5,6 +5,7 @@ import { Clock, Flame } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { PostGrid } from "@/components/social/post-grid";
+import { PullToRefresh } from "@/features/ui/pull-to-refresh";
 import { CATEGORIES, categoryLabel, type Category } from "@/lib/social/categories";
 import type { FeedSort } from "@/lib/social/feed";
 import type { PostCard } from "@/lib/social/posts";
@@ -74,8 +75,26 @@ export function ExploreBrowser({
     }
   };
 
+  // Pull-to-refresh: a real refetch of the CURRENT combo, bypassing the
+  // cache `select` would otherwise serve (re-selecting the same tab/chip is
+  // normally an instant cache hit — refresh needs to actually hit the network).
+  const refresh = async () => {
+    const id = ++reqId.current;
+    try {
+      const sp = new URLSearchParams({ sort });
+      if (category) sp.set("category", category);
+      const res = await fetch(`/api/explore?${sp.toString()}`);
+      const json = (await res.json()) as { posts: PostCard[] };
+      if (id !== reqId.current) return;
+      cache.current.set(keyOf(sort, category), json.posts ?? []);
+      setPosts(json.posts ?? []);
+    } catch {
+      /* keep current grid */
+    }
+  };
+
   return (
-    <div>
+    <PullToRefresh onRefresh={refresh}>
       {/* Sort tabs */}
       <div className="mb-4 inline-flex rounded-xl bg-secondary p-1">
         <TabButton active={sort === "trending"} icon={Flame} label="Trending" onClick={() => select("trending", category)} />
@@ -107,7 +126,7 @@ export function ExploreBrowser({
       </div>
 
       <style>{`@keyframes explore-slide{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}`}</style>
-    </div>
+    </PullToRefresh>
   );
 }
 

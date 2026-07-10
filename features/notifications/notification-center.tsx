@@ -13,6 +13,7 @@ import {
 } from "@/features/notifications/data";
 import { NotificationCard } from "@/features/notifications/notification-card";
 import { PushToggle } from "@/features/notifications/push-toggle";
+import { PullToRefresh } from "@/features/ui/pull-to-refresh";
 import type { GroupedNotificationsResult, NotificationCategory, NotificationGroup } from "@/lib/social/notifications";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -123,7 +124,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
   };
 
   return (
-    <div>
+    <PullToRefresh onRefresh={async () => { await revalidate(KEY, loadGrouped, 0); }}>
       {/* Premium glass hero header */}
       <div className="relative mb-5 overflow-hidden rounded-3xl border border-border/70 bg-card/70 p-5 shadow-sm backdrop-blur-xl">
         <div aria-hidden className="pointer-events-none absolute -right-14 -top-14 h-44 w-44 rounded-full bg-gradient-to-br from-blue-500/25 to-violet-500/25 blur-3xl" />
@@ -203,6 +204,6 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
           </AnimatePresence>
         </div>
       )}
-    </div>
+    </PullToRefresh>
   );
 }

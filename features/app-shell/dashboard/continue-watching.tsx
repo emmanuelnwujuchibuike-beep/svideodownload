@@ -2,7 +2,7 @@
 
 import { Clock, Play } from "lucide-react";
 
-import { openPlayer } from "@/features/downloads/player-store";
+import { openPlayerQueue } from "@/features/downloads/player-store";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
 import { BRAND_ICONS } from "@/lib/platform-icons";
@@ -45,10 +45,10 @@ export function ContinueWatching() {
           );
         })}
 
-        {recent.map((r) => {
+        {recent.map((r, i) => {
           const Brand = BRAND_ICONS[r.platform];
           return (
-            <button key={r.id} type="button" onClick={() => openPlayer(r)} className="group w-60 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-card text-left shadow-soft transition hover:shadow-card">
+            <button key={r.id} type="button" onClick={() => openPlayerQueue(recent, i)} className="group w-60 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-card text-left shadow-soft transition hover:shadow-card">
               <div className="relative aspect-video bg-neutral-800">
                 {r.thumbnail ? (
                   // eslint-disable-next-line @next/next/no-img-element

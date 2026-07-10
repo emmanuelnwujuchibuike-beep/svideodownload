@@ -9,9 +9,52 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (unified zoom/expand across feed video, feed carousel, reel albums + reel-album crossfade transition — Feed card polish shipped, owner-reported bug batch: mobile topbar brand mark removed, Continue Watching instant-reopen cache-warm shipped, Profile-menu stuck-backdrop nav bug fixed, Stories strip redesign shipped, Home page content-balancing bug fixed + Continue Watching wired in, bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (reusable pull-to-refresh + Stories-style Continue Watching player shipped — unified zoom/expand across feed video/carousel/reel albums + reel-album crossfade, Feed card polish shipped, owner-reported bug batch: mobile topbar brand mark removed, Continue Watching instant-reopen cache-warm shipped, Profile-menu stuck-backdrop nav bug fixed, Stories strip redesign shipped, Home page content-balancing bug fixed + Continue Watching wired in, bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 26 — pull-to-refresh + Stories-style Continue Watching player, owner-reported)
+
+Owner asked directly for three things: "implement a slide down from top to refresh in the webapp", "make the videos in continue watching change[] to the next automatically like stories after watching and can be next by tapping right and backward by tapping left", and "when watching from [Continue Watching] it shouldn't show those buttons below, it should show the view of status and put all the buttons in the dotted menu above."
+
+- **Pull-to-refresh became a reusable primitive**: extracted the Home feed's
+  existing pull-to-refresh (premium quiet-grayscale-F treatment, real haptic,
+  never calls `preventDefault` so native scroll stays untouched) into
+  `features/ui/pull-to-refresh.tsx`. Deliberately did NOT refactor
+  `SmartFeed` to use it — it interleaves the same touch stream with
+  horizontal tab-swipe detection, and touching an already-shipped, delicate
+  combined gesture handler for a pure extraction carried more regression
+  risk than the small duplication was worth. Wired the new shared component
+  into **Explore** (a real cache-bypassing refetch, not just re-selecting
+  the already-cached current tab) and **Notifications** (`revalidate` the
+  grouped list). Reusable for any other page on request.
+- **Rebuilt the Continue Watching player as a Stories-style sequential
+  viewer.** `features/downloads/player-store.ts` went from holding a single
+  `DownloadRecord` to a `PlayerQueue` (`items[]` + `index`), with
+  `playerNext`/`playerPrev` (next auto-closes past the last item, matching
+  how Stories end). `ContinueWatching`'s recent-downloads row now opens the
+  whole row as a queue seeded at the tapped video (`openPlayerQueue`), not
+  just that one video in isolation — `openPlayer` (single-item, no queue
+  context) stays for the plain Downloads-dashboard list, unchanged.
+- **`DownloadPlayer` rebuilt to match**: a segmented top status bar (one
+  segment per queued video, the current one filling with real
+  `currentTime`/`duration` progress — exactly Stories' own progress-bar
+  convention), tap-left-third/tap-right for prev/next, press-and-hold to
+  pause (same tolerance/timing constants as `FeedVideo`/`reel-viewer.tsx`
+  for a consistent gesture feel across every media surface), and
+  `onEnded={playerNext}` for the requested "auto-advance after watching."
+  **Removed the persistent bottom action bar entirely** — Publish/Share and
+  Save to device moved into the existing ••• sheet alongside
+  Favorite/Choose-quality/Copy-link/Open-original/Remove, so there's now
+  exactly one place for every action, matching the brief's "put all the
+  buttons in the dotted menu above." The title (previously shown in the
+  removed bottom bar) moved to a top overlay with a "2/4" position label.
+- Single-item opens (`openPlayer`, no queue) fall back to the exact original
+  layout — no status bar, no position label, close/more buttons at their
+  original position — so nothing regresses for the plain Downloads list.
+- Verified with a standalone mock (status bar + close/more/title layout at
+  real mobile width) + `tsc`/lint; no live-device gesture testing was
+  possible in this environment (auth-gated).
 
 ## 2026‑07‑09 highlights (batch 25 — unified zoom button + reel-album smooth transition, owner-reported)
 

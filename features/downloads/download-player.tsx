@@ -1,27 +1,40 @@
 "use client";
 
-import { AlertCircle, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MoreVertical, Share2, Trash2, X } from "lucide-react";
+import { AlertCircle, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MoreVertical, Pause, Share2, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
-import { closePlayer, usePlayer } from "@/features/downloads/player-store";
+import { closePlayer, playerNext, playerPrev, usePlayerQueue } from "@/features/downloads/player-store";
 import { removeDownload, toggleFavorite } from "@/features/history/store";
 import { toast } from "@/features/ui/toast";
 import { downloadUrl, saveBlob } from "@/lib/client-download";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import type { DownloadRecord } from "@/types";
+
+// A tap only counts if the pointer barely moved (matches FeedVideo/reel-viewer's
+// tap-vs-drag tolerance so the gesture language is consistent everywhere).
+const TAP_MOVE_TOLERANCE = 18;
+const HOLD_MS = 300;
 
 export function DownloadPlayer() {
-  const rec = usePlayer();
-  if (!rec) return null;
-  return <PlayerInner key={rec.id} />;
+  const queue = usePlayerQueue();
+  const rec = queue?.items[queue.index];
+  if (!queue || !rec) return null;
+  return <PlayerInner key={rec.id} rec={rec} index={queue.index} total={queue.items.length} />;
 }
 
-function PlayerInner() {
-  const rec = usePlayer()!;
+/**
+ * Stories-style sequential player (owner spec): tap right/left to move
+ * through the queue (Continue Watching's row), auto-advance when a video
+ * ends, press-and-hold to pause, a segmented status bar up top instead of a
+ * scrubber, and every action folded into the ••• menu — no persistent bottom
+ * action bar competing with the content the way Stories/Reels never do.
+ */
+function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number; total: number }) {
   const router = useRouter();
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,7 +44,10 @@ function PlayerInner() {
   const [postId, setPostId] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [favorited, setFavorited] = useState(rec.favorite);
+  const [paused, setPaused] = useState(false);
+  const [progress, setProgress] = useState(0); // 0-100 within the CURRENT item, for the status bar
   const blobRef = useRef<Blob | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -84,7 +100,11 @@ function PlayerInner() {
       }
     })();
 
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closePlayer();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePlayer();
+      else if (e.key === "ArrowRight") playerNext();
+      else if (e.key === "ArrowLeft") playerPrev();
+    };
     window.addEventListener("keydown", onKey);
     // overflowY only — the `overflow` shorthand also resets overflow-x, undoing
     // the `overflow-x: clip` on <body> that keeps the app sidebar sticky.
@@ -157,7 +177,6 @@ function PlayerInner() {
     }
   };
 
-  // ── Overflow (•••) actions ────────────────────────────────────────────────
   const copyLink = async () => {
     setMoreOpen(false);
     try {
@@ -191,18 +210,111 @@ function PlayerInner() {
     toast("Removed from downloads.", "info", { duration: 2000 });
   };
 
+  /* ── Gesture model (Stories-style, owner spec) ────────────────────────────
+   *  • tap left third   → previous item
+   *  • tap right (rest) → next item
+   *  • press-and-hold   → pause (video only); release resumes
+   *  • video ends       → auto-advance, same as finishing a Story
+   * Guarded so a graze/drag never fires a navigation. */
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holding = useRef(false);
+  const moved = useRef(false);
+  const startPt = useRef<{ x: number; y: number } | null>(null);
+
+  const resumePlay = () => {
+    setPaused(false);
+    void videoRef.current?.play().catch(() => {});
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    startPt.current = { x: e.clientX, y: e.clientY };
+    moved.current = false;
+    holding.current = false;
+    if (rec.kind !== "video") return;
+    holdTimer.current = setTimeout(() => {
+      if (moved.current) return;
+      holding.current = true;
+      videoRef.current?.pause();
+      setPaused(true);
+    }, HOLD_MS);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!startPt.current || moved.current) return;
+    if (Math.abs(e.clientX - startPt.current.x) > TAP_MOVE_TOLERANCE || Math.abs(e.clientY - startPt.current.y) > TAP_MOVE_TOLERANCE) {
+      moved.current = true;
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+      if (holding.current) {
+        holding.current = false;
+        resumePlay();
+      }
+    }
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    if (holding.current) {
+      holding.current = false;
+      resumePlay();
+      return;
+    }
+    if (moved.current) return; // a drag, not a tap — no navigation
+    const w = typeof window !== "undefined" ? window.innerWidth : 1;
+    if (e.clientX < w * 0.33) playerPrev();
+    else playerNext();
+  };
+  const onPointerCancel = () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    if (holding.current) {
+      holding.current = false;
+      resumePlay();
+    }
+    startPt.current = null;
+  };
+
   return (
-    <div className="fixed inset-0 z-[92] flex flex-col bg-black/95 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={rec.title}>
-      {/* Close top-left / options top-right — same convention every other
-          full-screen media viewer in the app uses (reels, image viewer). */}
-      <button type="button" onClick={closePlayer} aria-label="Close" className="fixed left-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:bg-white/20">
+    <div className="fixed inset-0 z-[92] flex flex-col bg-black/95" role="dialog" aria-modal="true" aria-label={rec.title}>
+      {/* Status — segmented, like Stories: one bar per queued item, the
+          current one fills with real playback progress. */}
+      {total > 1 ? (
+        <div className="absolute inset-x-3 top-3 z-20 flex gap-1">
+          {Array.from({ length: total }).map((_, i) => (
+            <span key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
+              <span className="block h-full rounded-full bg-white" style={{ width: `${i < index ? 100 : i === index ? progress : 0}%` }} />
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={closePlayer}
+        aria-label="Close"
+        className={cn("fixed left-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur", total > 1 ? "top-8" : "top-4")}
+      >
         <X className="h-5 w-5" />
       </button>
-      <button type="button" onClick={() => setMoreOpen(true)} aria-label="More options" className="fixed right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:bg-white/20">
+      <button
+        type="button"
+        onClick={() => setMoreOpen(true)}
+        aria-label="More options"
+        className={cn("fixed right-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur", total > 1 ? "top-8" : "top-4")}
+      >
         <MoreVertical className="h-5 w-5" />
       </button>
 
-      <div className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-6">
+      {/* Title / position — where the status bar used to have nothing above it */}
+      <p className={cn("pointer-events-none absolute inset-x-16 z-10 truncate text-center text-sm font-medium text-white/90", total > 1 ? "top-9" : "top-5")}>
+        {rec.title}
+        {total > 1 ? <span className="text-white/60"> · {index + 1}/{total}</span> : null}
+      </p>
+
+      {/* Tap zones (prev/next) + hold-to-pause cover the whole stage */}
+      <div
+        className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-6"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+      >
         {error ? (
           <div className="max-w-sm text-center text-white">
             <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10"><AlertCircle className="h-7 w-7" /></span>
@@ -232,31 +344,31 @@ function PlayerInner() {
           <img src={url} alt={rec.title} className="max-h-full max-w-full rounded-2xl object-contain" />
         ) : url ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video src={url} controls autoPlay playsInline className="max-h-full w-full max-w-4xl rounded-2xl bg-black" />
+          <video
+            ref={videoRef}
+            src={url}
+            autoPlay
+            playsInline
+            className="max-h-full w-full max-w-4xl rounded-2xl bg-black"
+            onEnded={() => playerNext()}
+            onTimeUpdate={(e) => {
+              const v = e.currentTarget;
+              if (v.duration) setProgress((v.currentTime / v.duration) * 100);
+            }}
+          />
+        ) : null}
+
+        {/* Paused-while-holding indicator — same convention as FeedVideo/reels */}
+        {paused ? (
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
+              <Pause className="h-7 w-7 fill-white" />
+            </span>
+          </span>
         ) : null}
       </div>
 
-      {/* Action bar */}
-      {url ? (
-        <div className="flex flex-wrap items-center justify-center gap-2 border-t border-white/10 bg-black/40 p-4">
-          <p className="mr-auto hidden min-w-0 truncate pl-2 text-sm font-medium text-white sm:block">{rec.title}</p>
-          {postId ? (
-            <button type="button" onClick={share} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20">
-              <Share2 className="h-4 w-4" /> Share
-            </button>
-          ) : (
-            <button type="button" onClick={publish} disabled={publishing} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-60">
-              {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe2 className="h-4 w-4" />} Publish to everyone
-            </button>
-          )}
-          <button type="button" onClick={() => blobRef.current && saveBlob(blobRef.current, `${rec.title || "download"}`)} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20">
-            <Download className="h-4 w-4" /> Save to device
-          </button>
-        </div>
-      ) : null}
-
-      {/* Options (•••) menu — secondary actions that don't need a permanent
-          button in the action bar above. */}
+      {/* Options (•••) — every action lives here now; no persistent bottom bar. */}
       <AnimatePresence>
         {moreOpen ? (
           <div className="fixed inset-0 z-[95] flex items-end justify-center">
@@ -280,15 +392,25 @@ function PlayerInner() {
               <div className="mx-auto mt-2.5 mb-1 h-1 w-9 rounded-full bg-border" />
               <div className="p-1.5">
                 <div className="mb-1.5 overflow-hidden rounded-2xl bg-secondary/30">
-                  <MoreItem icon={Heart} label={favorited ? "Unfavorite" : "Favorite"} active={favorited} onClick={toggleFav} />
-                  {rec.kind === "video" ? (
-                    <MoreItem icon={Download} label="Choose a different quality" onClick={chooseAnotherQuality} />
+                  {url && !error ? (
+                    <>
+                      {postId ? (
+                        <MenuItem icon={Share2} label="Share" onClick={() => { setMoreOpen(false); void share(); }} />
+                      ) : (
+                        <MenuItem icon={Globe2} label={publishing ? "Publishing…" : "Publish to everyone"} onClick={() => { if (!publishing) void publish(); }} />
+                      )}
+                      <MenuItem icon={Download} label="Save to device" onClick={() => { setMoreOpen(false); blobRef.current && saveBlob(blobRef.current, rec.title || "download"); }} />
+                    </>
                   ) : null}
-                  <MoreItem icon={Link2} label="Copy source link" onClick={copyLink} />
-                  <MoreItem icon={ExternalLink} label="Open original post" onClick={openOriginal} />
+                  <MenuItem icon={Heart} label={favorited ? "Unfavorite" : "Favorite"} active={favorited} onClick={toggleFav} />
+                  {rec.kind === "video" ? (
+                    <MenuItem icon={Download} label="Choose a different quality" onClick={chooseAnotherQuality} />
+                  ) : null}
+                  <MenuItem icon={Link2} label="Copy source link" onClick={copyLink} />
+                  <MenuItem icon={ExternalLink} label="Open original post" onClick={openOriginal} />
                 </div>
                 <div className="overflow-hidden rounded-2xl bg-secondary/30">
-                  <MoreItem icon={Trash2} label="Remove from downloads" onClick={removeFromHistory} danger />
+                  <MenuItem icon={Trash2} label="Remove from downloads" onClick={removeFromHistory} danger />
                 </div>
               </div>
               <div className="p-1.5 pt-0">
@@ -304,7 +426,7 @@ function PlayerInner() {
   );
 }
 
-function MoreItem({
+function MenuItem({
   icon: Icon,
   label,
   onClick,

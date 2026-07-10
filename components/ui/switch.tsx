@@ -6,9 +6,16 @@ import { springs } from "@/lib/motion/springs";
 import { cn } from "@/lib/utils";
 
 /**
- * Premium iOS-style toggle — a spring-animated thumb (not a CSS transition),
- * brand gradient + soft glow when on. Shared by every Home-module visibility
- * switch and the account Home Modules Editor's feed-behavior rows.
+ * Premium toggle — a slim, monochrome track (no color, no glow) with a
+ * spring-animated thumb. Shared by every Home-module visibility switch and
+ * the account Home Modules Editor's feed-behavior rows. Owner correction
+ * (2026-07-10): the original was a taller track with a brand-gradient fill +
+ * colored glow when on — reported as "too fat and common," i.e. reading like
+ * a generic default OS toggle rather than a refined control. Trimmed the
+ * track and swapped the fill for the same `bg-foreground`/`bg-background`
+ * invert the rest of the nav/icon system now uses (dark track + light thumb
+ * in light mode, light track + dark thumb in dark mode) — smaller, flatter,
+ * no color at all.
  */
 export function Switch({
   checked,
@@ -30,17 +37,15 @@ export function Switch({
       aria-label={label}
       onClick={onChange}
       className={cn(
-        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200",
-        checked
-          ? "bg-gradient-to-r from-blue-500 to-violet-600 shadow-[0_0_10px_-1px] shadow-violet-500/60"
-          : "bg-secondary ring-1 ring-inset ring-border",
+        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200",
+        checked ? "bg-foreground" : "bg-secondary ring-1 ring-inset ring-border",
         className,
       )}
     >
       <motion.span
-        animate={{ x: checked ? 22 : 2 }}
+        animate={{ x: checked ? 18 : 2 }}
         transition={reduceMotion ? { duration: 0 } : springs.bounce}
-        className="inline-block h-4 w-4 rounded-full bg-white shadow"
+        className={cn("inline-block h-4 w-4 rounded-full shadow-sm", checked ? "bg-background" : "bg-white")}
       />
     </button>
   );

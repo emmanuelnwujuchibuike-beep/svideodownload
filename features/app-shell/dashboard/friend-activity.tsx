@@ -2,6 +2,7 @@
 
 import { Activity, Heart, ImageIcon, UserPlus, Video } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
@@ -19,24 +20,34 @@ const ICONS: Record<FriendActivityEntry["kind"], typeof Heart> = {
 /**
  * Home's "Friend Activity" module — relationship-first, real data (see
  * `getFriendActivity`), never a guessed engagement metric. Collapses to
- * nothing when a viewer has no friends or no recent activity — no fake
- * placeholder rows, matching `ContinueWatching`'s own empty-state contract.
- * Carries the same inline on/off switch as Continue Watching (owner ask) —
- * see that file's doc comment for why it PATCHes `hideModule`/`showModule`
- * instead of a full `hiddenModules` array.
+ * nothing when a viewer has no friends or no recent activity AND hasn't
+ * explicitly hidden it — no fake placeholder rows, matching
+ * `ContinueWatching`'s own empty-state contract. Carries the same inline
+ * on/off switch as Continue Watching (owner ask) — see that file's doc
+ * comment for why it PATCHes `hideModule`/`showModule` instead of a full
+ * `hiddenModules` array, and for why `initialHidden` (not a hardcoded
+ * `true`) plus a post-toggle `router.refresh()` fix the "switch resets when
+ * I leave and come back" bug (two separate causes — see that file).
  */
-export function FriendActivity({ items }: { items: FriendActivityEntry[] }) {
-  const [on, setOn] = useState(true);
-  if (items.length === 0) return null;
+export function FriendActivity({ items, initialHidden = false }: { items: FriendActivityEntry[]; initialHidden?: boolean }) {
+  const [on, setOn] = useState(!initialHidden);
+  const router = useRouter();
+  // Only auto-collapse for genuine emptiness while the module is actually
+  // "on" — if the viewer explicitly hid it, the header+switch must still
+  // render (regardless of whether there'd be activity to show) so it can be
+  // turned back on from Home itself.
+  if (on && items.length === 0) return null;
 
   const toggle = () => {
     const next = !on;
     setOn(next);
-    void fetch("/api/home-preferences", {
+    fetch("/api/home-preferences", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(next ? { showModule: "friend_activity" } : { hideModule: "friend_activity" }),
-    }).catch(() => {});
+    })
+      .then(() => router.refresh())
+      .catch(() => {});
   };
 
   return (

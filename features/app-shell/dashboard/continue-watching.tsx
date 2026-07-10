@@ -1,6 +1,7 @@
 "use client";
 
 import { Clock, Play } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
@@ -22,20 +23,40 @@ import type { DownloadRecord } from "@/types";
  * concurrent change made from Friend Activity's own switch or the account
  * Home Modules Editor. Turning it back on works the same way in reverse, so
  * this never needs a trip to Settings unlike a one-way dismiss would.
+ *
+ * Fixes a real "the switch resets when I leave and come back" bug, which had
+ * TWO separate causes: (1) this component always started its local `on`
+ * state at `true`, completely ignoring whatever was actually persisted —
+ * fixed by seeding it from `initialHidden`, threaded down from
+ * `getHomePreferences` via `app/(app)/home/page.tsx`. (2) even with that
+ * fixed, Next's client Router Cache (`staleTimes.dynamic`, several HOURS —
+ * see [[loading-architecture]]) can reuse an already-fetched `/home` RSC
+ * tree on a plain client-side navigation back to Home, without ever
+ * re-running the server component that would compute the correct
+ * `initialHidden` — so a toggle made in one visit could still appear to
+ * "not have stuck" on the very next visit within that window. Fixed by
+ * calling `router.refresh()` right after a successful PATCH, which
+ * invalidates that cache entry so the NEXT visit to Home (even a plain
+ * client-side one) fetches fresh server data — without disrupting this
+ * component's own already-mounted local state (`router.refresh()`
+ * reconciles new props into the existing tree, it doesn't remount).
  */
-export function ContinueWatching() {
+export function ContinueWatching({ initialHidden = false }: { initialHidden?: boolean }) {
   const { tasks } = useDownloadManager();
   const { items } = useHistory();
-  const [on, setOn] = useState(true);
+  const [on, setOn] = useState(!initialHidden);
+  const router = useRouter();
 
   const toggle = () => {
     const next = !on;
     setOn(next);
-    void fetch("/api/home-preferences", {
+    fetch("/api/home-preferences", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(next ? { showModule: "continue_watching" } : { hideModule: "continue_watching" }),
-    }).catch(() => {});
+    })
+      .then(() => router.refresh())
+      .catch(() => {});
   };
 
   const active = tasks.filter((t) => t.status === "downloading" || t.status === "paused");

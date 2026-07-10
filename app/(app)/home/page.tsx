@@ -53,7 +53,17 @@ export default async function HomePage() {
   // Mode. Best-effort: defaults (today's exact hardcoded order, nothing
   // hidden) if the table's unmigrated or the row doesn't exist yet.
   const prefs = await getHomePreferences(viewerId);
-  const visibleModules = prefs.moduleOrder.filter((k) => !prefs.hiddenModules.includes(k));
+  // Continue Watching / Friend Activity manage their own visibility client-side
+  // (an inline switch, not just the account Home Modules Editor's Eye/EyeOff),
+  // so they stay in the render list even when "hidden" — the component itself
+  // reads `initialHidden` and shows a collapsed header+switch instead of being
+  // unmounted entirely. Without this, hiding one of them here meant the module
+  // never rendered on the NEXT full page load, so its switch had no persisted
+  // state to read from and always came back showing "on" — the exact "resets
+  // when I leave and come back" bug the owner reported.
+  const visibleModules = prefs.moduleOrder.filter(
+    (k) => !prefs.hiddenModules.includes(k) || k === "continue_watching" || k === "friend_activity",
+  );
 
   return (
     <AppContent
@@ -77,6 +87,7 @@ export default async function HomePage() {
           renderModule(key, {
             viewerId,
             profile: { avatarUrl: profile.avatarUrl, displayName: profile.displayName, handle },
+            hiddenModules: prefs.hiddenModules,
           }),
         )}
 
@@ -94,7 +105,11 @@ export default async function HomePage() {
 
 function renderModule(
   key: HomeModuleKey,
-  ctx: { viewerId: string; profile: { avatarUrl: string | null; displayName: string; handle: string } },
+  ctx: {
+    viewerId: string;
+    profile: { avatarUrl: string | null; displayName: string; handle: string };
+    hiddenModules: HomeModuleKey[];
+  },
 ) {
   switch (key) {
     case "stories":
@@ -111,10 +126,13 @@ function renderModule(
     case "friend_activity":
       // Relationship-first, above the global Trending rail by default — the
       // spec's own "most important module". Renders nothing for viewers with
-      // no friends or no recent friend activity (no fake placeholder rows).
+      // no friends or no recent friend activity (no fake placeholder rows) —
+      // UNLESS the viewer explicitly hid it, in which case it still renders
+      // (as a collapsed header+switch) so the switch has real persisted state
+      // to read on mount instead of always starting "on".
       return (
         <Suspense key={key} fallback={<FriendActivitySkeleton />}>
-          <FriendActivitySection viewerId={ctx.viewerId} />
+          <FriendActivitySection viewerId={ctx.viewerId} initialHidden={ctx.hiddenModules.includes("friend_activity")} />
         </Suspense>
       );
     case "trending_reels":
@@ -127,7 +145,7 @@ function renderModule(
       // Client-only, no server data dependency (reads live download/history
       // state) — renders nothing when there's nothing to resume, so it never
       // needs a Suspense boundary or a skeleton.
-      return <ContinueWatching key={key} />;
+      return <ContinueWatching key={key} initialHidden={ctx.hiddenModules.includes("continue_watching")} />;
   }
 }
 
@@ -148,9 +166,9 @@ async function StoriesSection({
   return <StoriesRow initialGroups={groups} viewerAvatarUrl={avatarUrl} viewerName={name} viewerHandle={handle} />;
 }
 
-async function FriendActivitySection({ viewerId }: { viewerId: string }) {
+async function FriendActivitySection({ viewerId, initialHidden }: { viewerId: string; initialHidden: boolean }) {
   const items = await getFriendActivity(viewerId, 8);
-  return <FriendActivity items={items} />;
+  return <FriendActivity items={items} initialHidden={initialHidden} />;
 }
 
 async function ReelsSection({ viewerId }: { viewerId: string }) {

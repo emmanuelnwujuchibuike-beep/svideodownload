@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { FadeImage } from "@/features/ui/fade-image";
 
+import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { useQuery } from "@/features/data";
 import { ReelsFeed } from "@/features/reels/reels-feed";
 import { getApi } from "@/lib/sdk/browser";
@@ -43,9 +44,7 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
     <section className="mt-5">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-base font-bold">
-          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-secondary text-foreground">
-            <Flame className="h-3.5 w-3.5" />
-          </span>
+          <ModuleIconBadge icon={Flame} />
           Trending Reels
         </h2>
         <Link href="/reels" className="text-xs font-semibold text-primary hover:underline">View all</Link>

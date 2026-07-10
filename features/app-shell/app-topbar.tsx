@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
+import { IconTile } from "@/components/icons/icon-tile";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { isTopbarLocked, setTopbarHidden, useTopbarLocked } from "@/features/app-shell/topbar-visibility";
@@ -98,12 +99,10 @@ export function AppTopbar() {
       <div className="flex shrink-0 items-center gap-2">
         {/* Mobile search entry (the search box is tablet+ only) */}
         <PressIcon className="sm:hidden">
-          <Link
-            href="/search"
-            aria-label="Search"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary"
-          >
-            <IoSearchOutline className="h-[20px] w-[20px]" />
+          <Link href="/search" aria-label="Search" className="flex h-10 w-10 items-center justify-center">
+            <IconTile>
+              <IoSearchOutline className="h-[20px] w-[20px]" />
+            </IconTile>
           </Link>
         </PressIcon>
         {/* Add friends — single top-nav icon */}
@@ -119,12 +118,10 @@ export function AppTopbar() {
           {/* Desktop search fallback — the inline pill is off-screen while the
               slot is active, so ⌘K/search still needs a reachable entry point. */}
           <PressIcon className="hidden sm:inline-flex">
-            <Link
-              href="/search"
-              aria-label="Search"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary"
-            >
-              <IoSearchOutline className="h-[20px] w-[20px]" />
+            <Link href="/search" aria-label="Search" className="flex h-10 w-10 items-center justify-center">
+              <IconTile>
+                <IoSearchOutline className="h-[20px] w-[20px]" />
+              </IconTile>
             </Link>
           </PressIcon>
         </>
@@ -160,9 +157,11 @@ export function AppTopbar() {
             onClick={() => openUpload("post")}
             aria-label="Create a post"
             title="Create"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-secondary/50 text-foreground ring-1 ring-inset ring-border/50 transition hover:bg-secondary hover:text-primary hover:ring-primary/40"
+            className="inline-flex h-11 w-11 items-center justify-center"
           >
-            <IoCloudUploadOutline className="h-[21px] w-[21px]" />
+            <IconTile tint="brand">
+              <IoCloudUploadOutline className="h-[21px] w-[21px]" />
+            </IconTile>
           </button>
         </PressIcon>
 

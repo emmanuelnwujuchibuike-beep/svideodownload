@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
-import { GradientIcon } from "@/components/icons/gradient-icon";
+import { NavIconBadge } from "@/components/icons/nav-icon-badge";
 import {
   FrenzFriendsOutline,
   FrenzFriendsSolid,
@@ -141,11 +141,7 @@ function NavTab({
     >
       {active ? <span aria-hidden className="absolute -top-[7px] h-1 w-6 rounded-full bg-gradient-to-r from-blue-500 to-violet-600 shadow-[0_0_8px] shadow-violet-500/50" /> : null}
       <PressIcon active={active} className="relative">
-        {active ? (
-          <GradientIcon icon={<Glyph />} size={26} className="drop-shadow-[0_2px_5px_rgba(124,58,237,0.45)]" />
-        ) : (
-          <Glyph className="h-[26px] w-[26px] text-muted-foreground transition" />
-        )}
+        <NavIconBadge icon={<Glyph />} active={active} tileClassName="h-10 w-10" iconClassName="h-[19px] w-[19px]" />
         {badge > 0 ? (
           <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-background">
             {badge > 9 ? "9+" : badge}

@@ -11,7 +11,7 @@ import { removeDownload, toggleFavorite } from "@/features/history/store";
 import { toast } from "@/features/ui/toast";
 import { downloadUrl, saveBlob } from "@/lib/client-download";
 import { springs } from "@/lib/motion/springs";
-import { uploadPostMedia } from "@/lib/storage/client-upload";
+import { presignUpload, uploadWithPlan, type UploadPlan } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { DownloadRecord } from "@/types";
@@ -49,6 +49,15 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   const [progress, setProgress] = useState(0); // 0-100 within the CURRENT item, for the status bar
   const blobRef = useRef<Blob | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  // Prefetched the moment the ••• sheet opens (real signal of intent to maybe
+  // publish) — by the time "Publish to everyone" is actually tapped, the
+  // presign round-trip and the auth check are usually already resolved, so
+  // only the real network-bound part (the upload itself) remains on the
+  // critical path. Best-effort: `publish()` falls back to fetching both
+  // fresh if either prefetch hasn't landed yet or (rare — the sheet stayed
+  // open a long time) the presigned URL has since expired.
+  const planRef = useRef<UploadPlan | null>(null);
+  const authUserRef = useRef<{ id: string } | null>(null);
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -119,28 +128,50 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     };
   }, [rec]);
 
+  // Fires as soon as the options sheet opens — not on mount — so a video the
+  // viewer never opens the menu for never triggers a wasted presign/auth call.
+  useEffect(() => {
+    if (!moreOpen || postId) return;
+    if (!planRef.current) {
+      const ext = rec.kind === "audio" ? "mp3" : rec.kind === "image" ? "jpg" : "mp4";
+      presignUpload(rec.kind, ext)
+        .then((p) => { planRef.current = p; })
+        .catch(() => {});
+    }
+    if (!authUserRef.current) {
+      createClient()
+        .auth.getUser()
+        .then(({ data }) => { if (data.user) authUserRef.current = data.user; })
+        .catch(() => {});
+    }
+  }, [moreOpen, postId, rec.kind]);
+
   const publish = async () => {
     const blob = blobRef.current;
     if (!blob || publishing) return;
     setPublishing(true);
     const tid = toast("Publishing for everyone…", "loading");
     try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = authUserRef.current ?? (await createClient().auth.getUser()).data.user;
       if (!user) {
         toast("Please sign in.", "error", { id: tid, duration: 3000 });
         return;
       }
       const ext = rec.kind === "audio" ? "mp3" : rec.kind === "image" ? "jpg" : "mp4";
+      const contentType = blob.type || (rec.kind === "audio" ? "audio/mpeg" : rec.kind === "image" ? "image/jpeg" : "video/mp4");
       let publicUrl: string;
       try {
-        // Main media → Cloudflare R2 when configured, else Supabase.
-        publicUrl = await uploadPostMedia({
-          data: blob,
-          kind: rec.kind,
-          ext,
-          contentType: blob.type || (rec.kind === "audio" ? "audio/mpeg" : rec.kind === "image" ? "image/jpeg" : "video/mp4"),
-        });
+        // Main media → Cloudflare R2 when configured, else Supabase. Use the
+        // plan prefetched when the sheet opened if we have one (skips the
+        // presign round-trip); if it's missing or has since expired (short-
+        // lived R2 URLs), fall back to requesting + using a fresh one.
+        const prefetched = planRef.current;
+        planRef.current = null;
+        publicUrl = prefetched
+          ? await uploadWithPlan(prefetched, blob, contentType).catch(async () =>
+              uploadWithPlan(await presignUpload(rec.kind, ext), blob, contentType),
+            )
+          : await uploadWithPlan(await presignUpload(rec.kind, ext), blob, contentType);
       } catch {
         toast("Upload failed.", "error", { id: tid, duration: 3000 });
         return;

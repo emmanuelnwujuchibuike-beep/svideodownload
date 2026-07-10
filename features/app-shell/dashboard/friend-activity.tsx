@@ -1,6 +1,11 @@
+"use client";
+
 import { Activity, Heart, ImageIcon, UserPlus, Video } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
+import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
+import { Switch } from "@/components/ui/switch";
 import { timeAgo } from "@/features/notifications/meta";
 import type { FriendActivityEntry } from "@/lib/social/friend-activity";
 
@@ -16,20 +21,39 @@ const ICONS: Record<FriendActivityEntry["kind"], typeof Heart> = {
  * `getFriendActivity`), never a guessed engagement metric. Collapses to
  * nothing when a viewer has no friends or no recent activity — no fake
  * placeholder rows, matching `ContinueWatching`'s own empty-state contract.
+ * Carries the same inline on/off switch as Continue Watching (owner ask) —
+ * see that file's doc comment for why it PATCHes `hideModule`/`showModule`
+ * instead of a full `hiddenModules` array.
  */
 export function FriendActivity({ items }: { items: FriendActivityEntry[] }) {
+  const [on, setOn] = useState(true);
   if (items.length === 0) return null;
+
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    void fetch("/api/home-preferences", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(next ? { showModule: "friend_activity" } : { hideModule: "friend_activity" }),
+    }).catch(() => {});
+  };
 
   return (
     <section>
-      <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-foreground">
-        <Activity className="h-4 w-4 text-primary" /> Friend Activity
-      </h2>
-      <ul className="space-y-1.5">
-        {items.map((item, i) => (
-          <FriendActivityRow key={`${item.kind}-${item.actor.id}-${item.postId ?? item.target?.id ?? i}`} item={item} />
-        ))}
-      </ul>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-base font-bold text-foreground">
+          <ModuleIconBadge icon={Activity} /> Friend Activity
+        </h2>
+        <Switch checked={on} onChange={toggle} label="Show Friend Activity on Home" />
+      </div>
+      {on ? (
+        <ul className="space-y-1.5">
+          {items.map((item, i) => (
+            <FriendActivityRow key={`${item.kind}-${item.actor.id}-${item.postId ?? item.target?.id ?? i}`} item={item} />
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 }

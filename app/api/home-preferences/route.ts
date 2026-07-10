@@ -25,6 +25,14 @@ const schema = z.object({
   preferFriends: z.boolean().optional(),
   fewerReposts: z.boolean().optional(),
   quietMode: z.boolean().optional(),
+  // Surgical add/remove against whatever's ALREADY saved (see below) — for
+  // the inline Home-page switches (Continue Watching / Friend Activity),
+  // which only ever know about their own one module and must never clobber
+  // a hide/show made elsewhere (a second tab, the Home Modules Editor) at
+  // the same time the way sending a client-computed full `hiddenModules`
+  // array would.
+  hideModule: moduleKey.optional(),
+  showModule: moduleKey.optional(),
 });
 
 /** GET /api/home-preferences — the signed-in viewer's Home/feed preferences. */
@@ -74,11 +82,26 @@ export async function PATCH(request: Request) {
     .eq("user_id", user.id)
     .maybeSingle();
   const current = fromHomePreferencesRow(existing as HomePreferencesRow | null);
+  // hideModule/showModule apply against `current.hiddenModules` — read fresh,
+  // in THIS request — rather than trusting a client-sent full array (which
+  // could be a stale snapshot racing a concurrent change elsewhere).
+  let hiddenModules = parsed.data.hiddenModules ?? current.hiddenModules;
+  if (parsed.data.hideModule && !hiddenModules.includes(parsed.data.hideModule)) {
+    hiddenModules = [...hiddenModules, parsed.data.hideModule];
+  }
+  if (parsed.data.showModule) {
+    hiddenModules = hiddenModules.filter((k) => k !== parsed.data.showModule);
+  }
   // Re-normalize on the way IN too, not just on read: a duplicate key in a
   // malformed direct API call (the Reorder UI itself can never produce one)
   // would otherwise be upserted verbatim and render the same Home section
   // twice with the same React key until the next read happened to fix it up.
-  const merged = { ...current, ...parsed.data, moduleOrder: normalizeOrder(parsed.data.moduleOrder ?? current.moduleOrder) };
+  const merged = {
+    ...current,
+    ...parsed.data,
+    hiddenModules,
+    moduleOrder: normalizeOrder(parsed.data.moduleOrder ?? current.moduleOrder),
+  };
 
   const { error } = await supabase
     .from("user_home_preferences")

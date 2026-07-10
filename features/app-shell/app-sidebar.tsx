@@ -26,7 +26,7 @@ import { usePathname } from "next/navigation";
 
 import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { PressIcon } from "@/components/motion/press-icon";
-import { GradientIcon } from "@/components/icons/gradient-icon";
+import { NavIconBadge } from "@/components/icons/nav-icon-badge";
 import { FrenzFriendsOutline, FrenzFriendsSolid, FrenzHomeOutline, FrenzHomeSolid } from "@/components/icons/frenz-icons";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { haptic } from "@/lib/motion/haptics";
@@ -126,11 +126,7 @@ export function AppSidebar({ handle }: { handle: string | null }) {
                 const Icon = active ? item.activeIcon : item.icon;
                 return (
                   <PressIcon active={active}>
-                    {active ? (
-                      <GradientIcon icon={<Icon />} size={23} className="shrink-0 drop-shadow-[0_2px_5px_rgba(124,58,237,0.45)]" />
-                    ) : (
-                      <Icon className="h-[23px] w-[23px] shrink-0 text-muted-foreground group-hover:text-foreground" />
-                    )}
+                    <NavIconBadge icon={<Icon />} active={active} tileClassName="h-9 w-9" iconClassName="h-[18px] w-[18px] group-hover:text-foreground" />
                   </PressIcon>
                 );
               })()}

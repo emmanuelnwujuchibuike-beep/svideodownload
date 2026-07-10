@@ -1,8 +1,10 @@
 "use client";
 
 import { Clock, Play } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
+import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
+import { Switch } from "@/components/ui/switch";
 import { hasMedia, mediaKey, warmMediaCache } from "@/features/downloads/local-media";
 import { openPlayerQueue } from "@/features/downloads/player-store";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
@@ -11,10 +13,30 @@ import { BRAND_ICONS } from "@/lib/platform-icons";
 import { formatBytes } from "@/lib/utils";
 import type { DownloadRecord } from "@/types";
 
-/** "Continue Watching" — live download tasks (real progress) + recent downloads. */
+/**
+ * "Continue Watching" — live download tasks (real progress) + recent
+ * downloads. Carries its own on/off switch (owner ask): tapping it off
+ * collapses the rail immediately and persists via `hideModule` — a surgical,
+ * race-safe PATCH (see /api/home-preferences) rather than resending a
+ * client-computed full `hiddenModules` array, which could clobber a
+ * concurrent change made from Friend Activity's own switch or the account
+ * Home Modules Editor. Turning it back on works the same way in reverse, so
+ * this never needs a trip to Settings unlike a one-way dismiss would.
+ */
 export function ContinueWatching() {
   const { tasks } = useDownloadManager();
   const { items } = useHistory();
+  const [on, setOn] = useState(true);
+
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    void fetch("/api/home-preferences", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(next ? { showModule: "continue_watching" } : { hideModule: "continue_watching" }),
+    }).catch(() => {});
+  };
 
   const active = tasks.filter((t) => t.status === "downloading" || t.status === "paused");
   const recent = items.filter((r) => r.kind === "video").slice(0, 6);
@@ -53,7 +75,13 @@ export function ContinueWatching() {
 
   return (
     <section>
-      <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-foreground"><Clock className="h-4 w-4 text-primary" /> Continue Watching</h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-base font-bold text-foreground">
+          <ModuleIconBadge icon={Clock} /> Continue Watching
+        </h2>
+        <Switch checked={on} onChange={toggle} label="Show Continue Watching on Home" />
+      </div>
+      {!on ? null : (
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {active.map((t) => {
           const pct = t.totalBytes > 0 ? Math.min(100, Math.round((t.receivedBytes / t.totalBytes) * 100)) : 0;
@@ -98,6 +126,7 @@ export function ContinueWatching() {
           );
         })}
       </div>
+      )}
     </section>
   );
 }

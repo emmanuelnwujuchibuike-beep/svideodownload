@@ -68,9 +68,15 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ["lucide-react", "react-icons", "framer-motion"],
     // Client Router Cache: Next 15 defaults dynamic pages to staleTime 0, so every
     // in-app navigation refetches from the server and flashes a loading skeleton.
-    // Caching visited routes briefly makes revisits/back-nav instant (native feel),
-    // while realtime + the SWR layer keep content fresh. Tune here, not per-page.
-    staleTimes: { dynamic: 180, static: 300 },
+    // Owner spec: Home (and every other visited route) should load ONCE per
+    // session and be instant on every subsequent navigation back to it, no
+    // matter how long the visitor was away — 6 hours safely covers any realistic
+    // single session. Staying fresh over that long a window is NOT this cache's
+    // job — that's what SmartFeed's own realtime subscription + quiet
+    // mount/visibility-triggered revalidation (features/feed/smart-feed.tsx)
+    // exists for, so navigation can stay unconditionally instant while content
+    // still catches up invisibly. Tune here, not per-page.
+    staleTimes: { dynamic: 21600, static: 300 },
     scrollRestoration: true,
   },
   images: {

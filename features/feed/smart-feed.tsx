@@ -57,6 +57,15 @@ const PAGE = 8;
 const SEEN_KEY = "frenz:feed-seen-at";
 const PULL_THRESHOLD = 72;
 const SWIPE_THRESHOLD = 64;
+// Module-level (not component state): when the active tab's data was actually
+// last fetched from the server. Survives even if SmartFeed remounts when the
+// client Router Cache restores a cached /home navigation — a plain
+// `useRef`/`useState` wouldn't, since those reset on every fresh mount. This
+// is what lets "auto refresh while already shown" work for CROSS-PAGE
+// navigation back to Home, not just the tab-backgrounded case the "Alive on
+// return" effect below already covered on its own (visibilitychange never
+// fires for an in-app route change — the tab itself never actually hides).
+let lastFeedFetchAt = 0;
 /** Inline, swipeable tabs — "Reels" isn't inline content (it opens the deck
  *  overlay), so it's handled as the swipe destination past the last one. */
 const SWIPE_ORDER: HomeFeedSort[] = ["for_you", "following"];
@@ -212,6 +221,7 @@ export function SmartFeed({
         if (isActiveTab()) {
           setItems(entry.items);
           setNextOffset(entry.nextOffset);
+          if (replace) lastFeedFetchAt = Date.now();
         }
       } catch {
         if (isActiveTab()) setError(true);
@@ -356,7 +366,7 @@ export function SmartFeed({
     };
   }, []);
 
-  /* ── Alive on return: auto-refresh on app-visible / reconnect ─────────── */
+  /* ── Alive on return: auto-refresh on app-visible / reconnect / re-nav ─── */
   // Realtime lights the "new posts" pill while the tab is CONNECTED — this
   // covers the gap it can't see: posts made while the app was backgrounded
   // (installed-PWA switch-away) or the device was offline. Returning after
@@ -390,6 +400,17 @@ export function SmartFeed({
         void checkQuietly();
       }
     };
+
+    // Covers returning to Home via cached CROSS-PAGE navigation (the very
+    // long staleTimes.dynamic in next.config.ts is what makes that navigation
+    // itself instant — this is the "stay fresh anyway" half of that trade).
+    // visibilitychange below can't see this case: the tab was never actually
+    // hidden, only the in-app route changed and came back. `lastFeedFetchAt`
+    // is module-level, so it correctly reflects elapsed time regardless of
+    // whether this exact component instance persisted the whole time or got a
+    // fresh mount when the cached route was restored.
+    if (lastFeedFetchAt === 0) lastFeedFetchAt = Date.now(); // true first mount — SSR data is already fresh
+    else revive(Date.now() - lastFeedFetchAt);
 
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {

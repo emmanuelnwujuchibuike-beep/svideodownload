@@ -10,6 +10,13 @@
  * color and NO spinner. The loud, colorful "Frenz" welcome is reserved for the
  * very first uncached /home entry (see BrandSplash) — so a plain refresh only ever
  * shows this subtle skeleton, never a bold colorful loader.
+ *
+ * On the ONE landing this skeleton would otherwise show right underneath that
+ * colorful welcome (first-ever login, or any visit after site data was cleared —
+ * both mean the `frenz_welcomed` cookie is absent) it suppresses itself instead,
+ * so there's no grayscale-then-colorful double-flash — just the one premium
+ * welcome. Every other cold entry (a plain refresh, a normal sign-in) still gets
+ * this quiet skeleton exactly as before.
  */
 const CSS = `
 #frenz-boot{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:#ffffff;transition:opacity .4s ease}
@@ -24,7 +31,11 @@ html.dark #frenz-boot{background:#050816}
 
 // Hide as soon as the document has parsed (content is present), with a small
 // minimum so it reads as a loader, and a safety cap so it can never get stuck.
-const JS = `(function(){var el=document.getElementById('frenz-boot');if(!el)return;var start=Date.now();function hide(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){el.classList.add('frenz-boot--hide');setTimeout(function(){if(el&&el.parentNode)el.parentNode.removeChild(el)},440)},w)}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',hide)}else{hide()}setTimeout(hide,6000)})();`;
+// Suppression check runs FIRST, synchronously, before this element ever gets a
+// chance to paint: landing on /home with no `frenz_welcomed` cookie means the
+// colorful BrandSplash is about to take over immediately, so this skeleton
+// removes itself instead of flashing first.
+const JS = `(function(){var el=document.getElementById('frenz-boot');if(!el)return;try{if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){el.style.display='none';return}}catch(e){}var start=Date.now();function hide(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){el.classList.add('frenz-boot--hide');setTimeout(function(){if(el&&el.parentNode)el.parentNode.removeChild(el)},440)},w)}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',hide)}else{hide()}setTimeout(hide,6000)})();`;
 
 // Must run BEFORE the <style> below is evaluated: resolves the SAME
 // light/dark decision next-themes will make (its own script, injected later

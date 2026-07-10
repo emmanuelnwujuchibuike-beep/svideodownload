@@ -1,17 +1,22 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import { Space_Grotesk } from "next/font/google";
 import { useEffect, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 
+// A distinctive display face for the wordmark ONLY — the app's one body/UI
+// font stays Inter everywhere else (see app/layout.tsx). Scoped this tightly
+// (a single splash moment) rather than adopting a second font app-wide.
+const wordmarkFont = Space_Grotesk({ subsets: ["latin"], weight: ["500", "600"] });
+
 /**
- * The premium full-screen "F" welcome overlay (TikTok/Twitter-style resume
- * splash) — the shared visual for every trigger that shows it: first-ever
- * visit (`BrandSplash` below), a fresh sign-in, and returning after the app
- * was minimized/backgrounded a while (`SessionSplash`). Purely presentational
- * — callers own the `visible` state and their own auto-hide timing, so the
- * three triggers can never visually drift apart from each other.
+ * The premium full-screen "F" welcome overlay (TikTok/Twitter-style splash) —
+ * shown ONLY on first-ever login and after site data/cookies were cleared
+ * (owner spec: never on a plain refresh or an ordinary repeat sign-in). Purely
+ * presentational — `BrandSplash` below owns the one trigger that's actually
+ * wired up, gated server-side on the `frenz_welcomed` cookie.
  */
 export function WelcomeOverlay({ visible, label = "Loading Frenz" }: { visible: boolean; label?: string }) {
   return (
@@ -44,7 +49,7 @@ export function WelcomeOverlay({ visible, label = "Loading Frenz" }: { visible: 
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25, duration: 0.5 }}
-              className="text-gradient text-3xl font-extrabold tracking-tight"
+              className={`text-gradient ${wordmarkFont.className} text-xl font-medium tracking-wide`}
             >
               Frenz
             </motion.span>

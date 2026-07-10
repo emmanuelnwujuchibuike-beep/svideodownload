@@ -28,12 +28,7 @@ export async function GET(request: Request) {
       ? await supabase.auth.exchangeCodeForSession(code)
       : await supabase.auth.verifyOtp({ type: type!, token_hash: tokenHash! });
     if (!error) {
-      const res = NextResponse.redirect(`${origin}${next}`);
-      // Same short-lived marker `auth-panel.tsx`'s password/OTP paths set —
-      // `SessionSplash` reads-and-clears it once to show the welcome overlay
-      // right after this OAuth/magic-link sign-in, same as every other path in.
-      res.cookies.set("frenz_just_signed_in", "1", { path: "/", maxAge: 60, sameSite: "lax" });
-      return res;
+      return NextResponse.redirect(`${origin}${next}`);
     }
   }
 

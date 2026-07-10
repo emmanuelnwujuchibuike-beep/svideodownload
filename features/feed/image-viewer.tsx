@@ -629,6 +629,26 @@ function AlbumSwipe({
   const moved = useRef(false);
   const lastTap = useRef(0);
 
+  // Sequential/priority loading (same fix as the feed's inline MediaCarousel
+  // — see [[media-zoom-scroll-fixes]]): every slide used to mount its real
+  // <img>/<video> src unconditionally the instant this viewer opened, so an
+  // album with many photos fired that many simultaneous requests and the ONE
+  // slide the user actually tapped competed with all the others for the
+  // browser's connection cap. Only the tapped slide + its immediate
+  // neighbours load at first; more unlock (and stay unlocked) as you swipe.
+  const [unlocked, setUnlocked] = useState<Set<number>>(() => new Set([startIndex - 1, startIndex, startIndex + 1].filter((i) => i >= 0 && i < items.length)));
+  useEffect(() => {
+    setUnlocked((prev) => {
+      if (prev.has(index) && prev.has(Math.max(0, index - 1)) && prev.has(Math.min(items.length - 1, index + 1))) return prev;
+      const next = new Set(prev);
+      next.add(index);
+      if (index > 0) next.add(index - 1);
+      if (index < items.length - 1) next.add(index + 1);
+      return next;
+    });
+  }, [index, items.length]);
+  const isNear = (i: number) => Math.abs(i - index) <= 1;
+
   // Jump to the tapped slide instantly on mount — no smooth-scroll flash.
   useEffect(() => {
     const el = scroller.current;
@@ -691,43 +711,52 @@ function AlbumSwipe({
         className="flex h-full w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         style={{ touchAction: "pan-x" }}
       >
-        {items.map((m, i) => (
-          <div key={i} className="relative flex h-full w-full shrink-0 snap-center items-center justify-center">
-            {/* blurred fill so a slide whose shape doesn't match the screen never letterboxes onto plain black */}
-            {(m.thumbnailUrl ?? (m.kind === "image" ? m.url : null)) ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={(m.thumbnailUrl ?? m.url)!}
-                alt=""
-                aria-hidden
-                loading="lazy"
-                decoding="async"
-                className="absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl"
-              />
-            ) : null}
-            {m.kind === "video" ? (
-              // eslint-disable-next-line jsx-a11y/media-has-caption
-              <video
-                src={m.url}
-                poster={m.thumbnailUrl ?? undefined}
-                muted
-                loop
-                playsInline
-                preload={Math.abs(i - index) <= 1 ? "auto" : "metadata"}
-                className="relative max-h-full max-w-full select-none object-contain"
-                ref={(el) => {
-                  if (!el) return;
-                  // Autoplay only while this slide is the active one.
-                  if (i === index) void el.play().catch(() => {});
-                  else el.pause();
-                }}
-              />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={m.url} alt="" draggable={false} className="relative max-h-full max-w-full select-none object-contain" />
-            )}
-          </div>
-        ))}
+        {items.map((m, i) => {
+          const loaded = isNear(i) || unlocked.has(i);
+          return (
+            <div key={i} className="relative flex h-full w-full shrink-0 snap-center items-center justify-center">
+              {!loaded ? (
+                <div className="absolute inset-0 bg-black" />
+              ) : (
+                <>
+                  {/* blurred fill so a slide whose shape doesn't match the screen never letterboxes onto plain black */}
+                  {(m.thumbnailUrl ?? (m.kind === "image" ? m.url : null)) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={(m.thumbnailUrl ?? m.url)!}
+                      alt=""
+                      aria-hidden
+                      loading="eager"
+                      decoding="async"
+                      className="absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl"
+                    />
+                  ) : null}
+                  {m.kind === "video" ? (
+                    // eslint-disable-next-line jsx-a11y/media-has-caption
+                    <video
+                      src={m.url}
+                      poster={m.thumbnailUrl ?? undefined}
+                      muted
+                      loop
+                      playsInline
+                      preload={Math.abs(i - index) <= 1 ? "auto" : "metadata"}
+                      className="relative max-h-full max-w-full select-none object-contain"
+                      ref={(el) => {
+                        if (!el) return;
+                        // Autoplay only while this slide is the active one.
+                        if (i === index) void el.play().catch(() => {});
+                        else el.pause();
+                      }}
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={m.url} alt="" draggable={false} loading="eager" className="relative max-h-full max-w-full select-none object-contain" />
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Counter + dots — placed just under the top X / More buttons so they

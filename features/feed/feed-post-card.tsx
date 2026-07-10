@@ -57,7 +57,7 @@ import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social
 import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
 import type { FeedItem } from "@/lib/social/home-feed";
 import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
-import { cn, formatCompactNumber } from "@/lib/utils";
+import { cn, formatCompactNumber, formatDuration } from "@/lib/utils";
 
 const REASON_STYLE: Record<SmartReasonTone, string> = {
   follow: "text-blue-500 dark:text-blue-300",
@@ -432,7 +432,7 @@ function FeedPostCardImpl({
       ) : item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
         // Big, immersive inline preview: autoplays muted in view, tap → fullscreen
         // reel, press-hold → pause.
-        <div className="mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">
+        <div className="relative mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">
           <FeedVideo
             src={item.mediaUrl}
             streamUid={item.streamUid}
@@ -448,10 +448,20 @@ function FeedPostCardImpl({
             // the video) — tall clips expand, short/wide ones show as they are.
             className="w-full"
           />
+          {/* Views/duration — the two corners FeedVideo's own mute + expand
+              controls use are bottom-right and top-right, so this goes
+              top-left, the one unclaimed corner. */}
+          {item.viewsCount > 0 || item.durationSec ? (
+            <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+              {item.viewsCount > 0 ? `${formatCompactNumber(item.viewsCount)} views` : null}
+              {item.viewsCount > 0 && item.durationSec ? " · " : null}
+              {item.durationSec ? formatDuration(item.durationSec) : null}
+            </span>
+          ) : null}
         </div>
       ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
         // Image posts behave like videos: full-size, double-tap to like, tap to open.
-        <div className="mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">
+        <div className="relative mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">
           <FeedImage
             src={item.mediaUrl || item.thumbnailUrl!}
             alt={item.title}
@@ -464,6 +474,11 @@ function FeedPostCardImpl({
             onExpand={() => onOpen(item)}
             className="max-h-[85vh] w-full"
           />
+          {item.viewsCount > 0 ? (
+            <span className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+              {formatCompactNumber(item.viewsCount)} views
+            </span>
+          ) : null}
         </div>
       ) : item.mediaKind === "audio" ? (
         <button type="button" onClick={() => onOpen(item)} className="block w-full text-left" aria-label="Play">

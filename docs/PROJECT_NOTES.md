@@ -9,9 +9,61 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (owner-reported bug batch: mobile topbar brand mark removed, Continue Watching instant-reopen cache-warm shipped, Profile-menu stuck-backdrop nav bug fixed — Stories strip redesign shipped, Home page content-balancing bug fixed + Continue Watching wired in, bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (Feed card polish shipped — view count + video duration badges, bare-URL linkification — owner-reported bug batch: mobile topbar brand mark removed, Continue Watching instant-reopen cache-warm shipped, Profile-menu stuck-backdrop nav bug fixed, Stories strip redesign shipped, Home page content-balancing bug fixed + Continue Watching wired in, bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 24 — feed card polish, Feature 17 Part 6 slice 1)
+
+- **Owner dropped "Feature 17 Part 6 — Premium Feed Card System, Post Layout,
+  Content Presentation & Media Experience,"** the sixth brief of the day.
+  `feed-post-card.tsx` turned out to already be a mature implementation —
+  smart reason chips ("From someone you follow" etc., [[smart-home-feed]]),
+  a custom Wow reaction + long-press picker, repost badges/discovery,
+  inline polls, true-aspect-ratio media, code-split action sheets. Most of
+  the brief's asks (Business/Creator/Community post types, Live posts,
+  Marketplace/embedded content, Memory Connection™, an AI comment summary)
+  need backends that don't exist yet — same "don't build blind" call as
+  every other Part today. Auditing the real component against the brief's
+  "Post Footer" and "Post Typography" sections surfaced two concrete,
+  zero-backend-cost gaps: data the app already fetches but never displayed.
+- **View count and video duration were fetched on every post and shown
+  nowhere** — `FeedItem.viewsCount` and `.durationSec` come straight off the
+  `posts` table on every feed load, but the card only ever rendered a views
+  badge in the generic-fallback media branch (unknown/text posts), never on
+  the actual video or image branches almost every post uses. Added a
+  views+duration badge to the video branch (top-left — the corners
+  `FeedVideo`'s own mute/expand controls use are bottom-right and top-right)
+  and a views badge to the image branch (bottom-right, unclaimed there).
+  Confirmed no overlap with `FeedVideo`'s existing controls via a
+  standalone mock + Playwright screenshot before shipping, same method as
+  every prior slice today.
+- **Bare URLs typed into a caption rendered as inert plain text** —
+  `components/social/rich-text.tsx` already linkified `#hashtags` and
+  `@mentions` but had no case for a plain `https://...` URL, despite the
+  brief explicitly listing "inline links" under Post Typography. Extended
+  the same tokenizer to match `https?://` URLs, open them externally
+  (`target="_blank" rel="noopener noreferrer"`), and strip trailing sentence
+  punctuation (`.`, `)`, etc.) so a link at the end of a sentence doesn't
+  swallow the period — verified with a standalone Node script against five
+  representative caption strings (mid-sentence URL, URL immediately
+  followed by a hashtag/mention, a parenthesized URL, plain text with no
+  tokens) before trusting it, not just reading the regex.
+- **Deliberately did not touch**: full rich-text formatting (bold/italic/
+  quotes/lists) — rendering markdown syntax nobody can currently type into
+  the composer would be a half-feature; needs composer/authoring support
+  first, not just a renderer change. Also left the action-bar icon set on
+  lucide-react rather than migrating it to the [[frenz-motion-icon-system|
+  Frenz icon system]] this time — lucide is already clean/professional
+  there, not literally "cartoon," so it didn't clear the bar of a concrete,
+  provable defect the way the view-count/duration gap and the missing
+  URL-linkification did.
+- **Left open** (all need new backend/content models): Comments Preview
+  (needs a "most meaningful reply" ranking + no pinned-comment system
+  exists yet), Relationship Context™ ("your friend Sarah liked this" —
+  needs a friends-aware batched query, real but scoped as its own future
+  slice), Business/Creator/Community post badges and layouts, Live posts,
+  embedded content (music/maps/products/events), Memory Connection™.
 
 ## 2026‑07‑09 highlights (batch 23 — owner-reported bug batch: topbar brand mark reverted, Continue Watching instant-reopen, stuck profile-menu overlay)
 

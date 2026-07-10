@@ -28,7 +28,11 @@ export async function GET(request: Request) {
       token_hash: tokenHash,
     });
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      const res = NextResponse.redirect(`${origin}${next}`);
+      // Same marker every sign-in path sets — `SessionSplash` reads-and-clears
+      // it once to show the welcome overlay right after signing in.
+      res.cookies.set("frenz_just_signed_in", "1", { path: "/", maxAge: 60, sameSite: "lax" });
+      return res;
     }
   }
 

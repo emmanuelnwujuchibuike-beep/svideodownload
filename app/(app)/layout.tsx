@@ -7,6 +7,7 @@ import { FloatingMessages } from "@/features/app-shell/floating-messages";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { PresenceTracker } from "@/features/friends/use-presence";
 import { NotificationLiveToast } from "@/features/notifications/live-toast";
+import { SessionSplash } from "@/features/app-shell/session-splash";
 import { ReactionFloatLayer } from "@/features/ui/reaction-float";
 import { Toaster } from "@/features/ui/toast";
 
@@ -44,6 +45,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <AppOverlays />
       {/* Joins the shared presence channel so this user shows as online. */}
       <PresenceTracker />
+      {/* The TikTok/Twitter-style "welcome back" full-screen F — fires on a
+          fresh sign-in and on resuming from a real minimize, on top of
+          whatever page the user lands back on (not just /home). */}
+      <SessionSplash />
     </div>
   );
 }

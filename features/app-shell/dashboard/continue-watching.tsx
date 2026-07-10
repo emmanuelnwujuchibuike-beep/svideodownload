@@ -1,12 +1,15 @@
 "use client";
 
 import { Clock, Play } from "lucide-react";
+import { useEffect } from "react";
 
+import { hasMedia, mediaKey, warmMediaCache } from "@/features/downloads/local-media";
 import { openPlayerQueue } from "@/features/downloads/player-store";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { formatBytes } from "@/lib/utils";
+import type { DownloadRecord } from "@/types";
 
 /** "Continue Watching" — live download tasks (real progress) + recent downloads. */
 export function ContinueWatching() {
@@ -15,6 +18,36 @@ export function ContinueWatching() {
 
   const active = tasks.filter((t) => t.status === "downloading" || t.status === "paused");
   const recent = items.filter((r) => r.kind === "video").slice(0, 6);
+
+  // Load videos AHEAD of time — the same instant-open contract Reels and
+  // Stories already have — instead of only fetching once a tap opens the
+  // player (which is what made "opening" visibly show a network load).
+  // `warmMediaCache` was previously only ever called once, right after a
+  // fresh download completed — anything downloaded in an earlier session (or
+  // tapped before that background fetch finished) was never actually warmed,
+  // so re-opening it here always re-fetched over the network. Runs one at a
+  // time (never floods bandwidth) and only for entries not already cached;
+  // `warmMediaCache` itself still skips entirely on Data Saver / a slow
+  // connection, so this never costs a constrained viewer anything.
+  useEffect(() => {
+    if (recent.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      for (const r of recent) {
+        if (cancelled) return;
+        const key = mediaKey(r.url, r.formatId, r.kind);
+        if (await hasMedia(key)) continue;
+        await warmMediaCache({ url: r.url, formatId: r.formatId, kind: r.kind, title: r.title });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Re-run only when the actual set of recent videos changes, not on every
+    // render (`recent` is a fresh array each render even when its contents
+    // haven't changed).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recent.map((r: DownloadRecord) => r.id).join(",")]);
 
   if (active.length === 0 && recent.length === 0) return null;
 

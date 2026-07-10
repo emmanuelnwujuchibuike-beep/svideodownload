@@ -6,29 +6,14 @@ import { useEffect, useState } from "react";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 
 /**
- * First-open brand splash (Facebook/Twitter style). Premium, lightweight,
- * transform/opacity-only animation. It is rendered ONLY on the very first /home
- * open — the server gates it on the `frenz_welcomed` cookie, so it never mounts
- * (and never flashes) on repeat visits or any other page. Nothing else loads with
- * it: it's a full-screen opaque overlay that fades out to reveal the ready home.
+ * The premium full-screen "F" welcome overlay (TikTok/Twitter-style resume
+ * splash) — the shared visual for every trigger that shows it: first-ever
+ * visit (`BrandSplash` below), a fresh sign-in, and returning after the app
+ * was minimized/backgrounded a while (`SessionSplash`). Purely presentational
+ * — callers own the `visible` state and their own auto-hide timing, so the
+ * three triggers can never visually drift apart from each other.
  */
-export function BrandSplash() {
-  const [visible, setVisible] = useState(true);
-
-  useEffect(() => {
-    // Mark as welcomed immediately so it can't reappear mid-session, and lock
-    // scroll while the splash is up.
-    document.cookie = "frenz_welcomed=1; path=/; max-age=31536000; SameSite=Lax";
-    // overflowY only — the `overflow` shorthand also resets overflow-x, undoing
-    // the `overflow-x: clip` on <body> that keeps the app sidebar sticky.
-    document.body.style.overflowY = "hidden";
-    const t = setTimeout(() => setVisible(false), 1500);
-    return () => {
-      clearTimeout(t);
-      document.body.style.overflowY = "";
-    };
-  }, []);
-
+export function WelcomeOverlay({ visible, label = "Loading Frenz" }: { visible: boolean; label?: string }) {
   return (
     <AnimatePresence onExitComplete={() => (document.body.style.overflowY = "")}>
       {visible ? (
@@ -39,7 +24,7 @@ export function BrandSplash() {
           transition={{ duration: 0.5, ease: "easeInOut" }}
           className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background"
           role="status"
-          aria-label="Loading Frenz"
+          aria-label={label}
         >
           {/* Soft brand glow */}
           <motion.div
@@ -68,4 +53,31 @@ export function BrandSplash() {
       ) : null}
     </AnimatePresence>
   );
+}
+
+/**
+ * First-open brand splash (Facebook/Twitter style). Premium, lightweight,
+ * transform/opacity-only animation. It is rendered ONLY on the very first /home
+ * open — the server gates it on the `frenz_welcomed` cookie, so it never mounts
+ * (and never flashes) on repeat visits or any other page. Nothing else loads with
+ * it: it's a full-screen opaque overlay that fades out to reveal the ready home.
+ */
+export function BrandSplash() {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    // Mark as welcomed immediately so it can't reappear mid-session, and lock
+    // scroll while the splash is up.
+    document.cookie = "frenz_welcomed=1; path=/; max-age=31536000; SameSite=Lax";
+    // overflowY only — the `overflow` shorthand also resets overflow-x, undoing
+    // the `overflow-x: clip` on <body> that keeps the app sidebar sticky.
+    document.body.style.overflowY = "hidden";
+    const t = setTimeout(() => setVisible(false), 1500);
+    return () => {
+      clearTimeout(t);
+      document.body.style.overflowY = "";
+    };
+  }, []);
+
+  return <WelcomeOverlay visible={visible} />;
 }

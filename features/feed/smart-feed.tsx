@@ -34,6 +34,13 @@ function preloadReelsFeed() {
 }
 const PostViewer = dynamic(() => import("@/features/feed/post-viewer").then((m) => m.PostViewer), { ssr: false });
 const ImageViewer = dynamic(() => import("@/features/feed/image-viewer").then((m) => m.ImageViewer), { ssr: false });
+// Same warm-up as `preloadReelsFeed`, for the two other viewer chunks — an
+// image tap should open exactly as instantly as a video tap does, not stall
+// on a first-time chunk fetch.
+function preloadPostViewers() {
+  void import("@/features/feed/image-viewer");
+  void import("@/features/feed/post-viewer");
+}
 import {
   type AwaySummary,
   balanceByKind,
@@ -119,18 +126,25 @@ export function SmartFeed({
   const videosRef = useRef(videos);
   videosRef.current = videos;
 
-  // Warm the reels chunk once the feed itself has settled — Reels is the single
-  // most likely next tap, so by the time anyone actually hits the button its code
-  // is already sitting in the browser's module cache and opening it never shows
-  // the black loading frame. Deferred to idle time so it never competes with the
-  // feed's own first paint/hydration.
+  // Warm every full-screen viewer's chunk once the feed itself has settled —
+  // whichever a viewer taps next (a video, an image, or Reels), its code is
+  // already sitting in the browser's module cache, so opening never shows a
+  // loading frame. Also prefetches the /reels ROUTE itself (not just its JS):
+  // `onSegment` below falls back to a real navigation there when no video is
+  // loaded yet, and that fallback should be just as instant as the in-place
+  // deck. Deferred to idle time so none of this competes with the feed's own
+  // first paint/hydration.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const ric = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(() => cb({} as IdleDeadline), 1500));
     const cic = window.cancelIdleCallback ?? window.clearTimeout;
-    const id = ric(preloadReelsFeed);
+    const id = ric(() => {
+      preloadReelsFeed();
+      preloadPostViewers();
+      router.prefetch("/reels");
+    });
     return () => cic(id);
-  }, []);
+  }, [router]);
 
   // Videos open the full-screen reel INSTANTLY (client-side, no navigation/server
   // round-trip) seeded on the tapped clip; everything else opens the split viewer.

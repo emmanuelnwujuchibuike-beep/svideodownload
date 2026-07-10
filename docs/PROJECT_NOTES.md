@@ -9,9 +9,71 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑07‑09 (Home page content-balancing bug fixed + Continue Watching wired in + spacing fix — bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
+_Last updated: 2026‑07‑09 (Stories strip redesign shipped — seen/unseen rings, duplicate-self bug fixed, own-story viewing fixed — Home page content-balancing bug fixed + Continue Watching wired in, bottom nav redesign shipped, Home topbar redesign shipped, Frenz Motion engine + Signature Icon System slice 1 shipped, independent security crosscheck + report-only CSP/COOP shipped, active-sessions/device management shipped, F logo hairline edge fixed + premium OTP email, real carousel-scroll fix + recurring dark-mode-on-reentry fix, F logo's black backdrop removed, site-down incident fixed, Friends discovery deck)._
 
 ---
+
+## 2026‑07‑09 highlights (batch 22 — Stories strip redesign, Feature 17 Part 5 slice 1)
+
+- **Owner dropped "Feature 17 Part 5 — Stories Strip, Quick Discovery, Social
+  Presence & Premium First Content Row,"** the fifth brief of the day. It asks
+  for a lot of speculative surface area (Communities/Business/Live/AI Stories,
+  Story Constellations™, Relationship Rings™, Memory Shortcut™) that has no
+  backend to build on yet — same "don't build the whole brief blind" approach
+  as Parts 1-4. Reading the actual `stories-row.tsx` + `friends-stories.tsx`
+  implementation surfaced two **real, previously-unnoticed bugs** that map
+  directly onto the brief's own "REMOVE CURRENT DESIGN" list, which became
+  the slice.
+- **Real bug: your own active story showed up twice.** `getActiveStories`
+  surfaces the viewer's own story group first in the list when they have one
+  active — but both `StoriesRow` (Home) and `FriendsStories` (`/friends`)
+  ALSO rendered a separate hardcoded "Your Story" card unconditionally, then
+  looped over the *entire* group list including that same self-entry. Anyone
+  with an active story saw their own avatar twice in the row. Fixed by
+  filtering the viewer's own group out of the loop in both components
+  (matched by `handle`, threaded down from the server as a new `viewerHandle`
+  prop — cheap since the server already has it, avoids an async client fetch
+  flash).
+- **Real bug, worse than cosmetic: there was no way to view your own active
+  story from the row.** The hardcoded "Your Story" card always opened the
+  *composer* on tap, even when the viewer had a live story to review — and
+  once the duplicate-self bug above is fixed, there'd be no second entry to
+  fall back on either. Fixed: "Your Story" now opens the shared `StoryViewer`
+  (seeded at your own group's real index in the full array) when you have an
+  active story, and only falls back to the composer when you don't. The ring
+  around it also now only appears when there's something to watch — it
+  previously showed the same gradient ring unconditionally, which is
+  misleading (implies live content that may not exist).
+- **Shipped Story rings: Unseen vs. Seen** (the brief's own "Story Rings"
+  section, and the single most-expected Stories behavior that was completely
+  missing — every ring looked identical regardless of viewing history). No
+  `story_views` table exists yet, so implemented via a device-local
+  `localStorage` mark (`lib/social/story-seen.ts`), the same honest trade-off
+  already made for the feed's "while you were away" catch-up
+  ([[smart-home-feed]]) — real viewing history, just not cross-device synced
+  yet. Hydration-safe: renders "everything unseen" identically on server and
+  client's first paint, then refines from `localStorage` in an effect right
+  after mount, avoiding a hydration-mismatch warning.
+- **Fixed the same off-brand gradient found in Part 3's Create button**: both
+  Stories components used a one-off three-stop `fuchsia→violet→blue` ring
+  gradient that matches no documented token. Unseen rings now use `.bg-brand`
+  (the canonical two-stop Electric Blue→Royal Purple gradient); seen rings
+  get a quiet neutral hairline instead of a muted rainbow, per the brief's
+  "avoid excessive colors."
+- Wired Frenz Motion's `PressIcon` onto every story avatar button in both
+  components (previously had zero press feedback at all — not a redesign, a
+  gap, since literally nothing else in the row responded to touch).
+- **Verified visually**: a standalone HTML mock of the row (unseen/seen/no-
+  story states side by side) screenshotted via local Playwright, same
+  approach as every prior Feature 17 slice.
+- **Left open** (all require backend/product work this brief's brevity can't
+  paper over): Story Constellations™, Relationship Rings™ (Best
+  Friends/Family/Creator/Business ring styles — no relationship-type data
+  model), Memory Shortcut™ (no Life Memories system yet), Community/Creator/
+  Business Stories (no content-type distinction in the `stories` table),
+  presence indicators (online/live/recording — no presence system), long-press
+  preview + quick actions (mute/pin/favorite/hide), Living Stories Strip™
+  realtime background refresh, Adaptive Story Density™.
 
 ## 2026‑07‑09 highlights (batch 21 — Home page architecture, Feature 17 Part 4 slice 1)
 

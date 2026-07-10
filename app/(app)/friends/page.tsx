@@ -55,6 +55,7 @@ export default async function FriendsPage() {
             initialFollowing={followingStories}
             viewerAvatarUrl={overview.viewer?.avatarUrl}
             viewerName={overview.viewer?.displayName}
+            viewerHandle={overview.viewer?.handle}
           />
         </div>
         <FriendsHub initial={overview} />

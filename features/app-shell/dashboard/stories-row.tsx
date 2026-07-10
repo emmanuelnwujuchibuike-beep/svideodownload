@@ -3,10 +3,13 @@
 import { Loader2, Plus, Send, Smile, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { PressIcon } from "@/components/motion/press-icon";
 import { useQuery } from "@/features/data";
 import { openUpload } from "@/features/create/upload-store";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import type { StoryGroup } from "@/lib/social/stories";
+import { isGroupSeen, loadSeenMap, markGroupSeen, type SeenMap } from "@/lib/social/story-seen";
+import { cn } from "@/lib/utils";
 
 const QUICK_EMOJI = ["❤️", "😂", "😮", "😍", "🔥", "👏", "🙌"];
 const STICKERS = ["🎉", "💯", "😭", "🥰", "😎", "🤯", "👀", "🫶", "💀", "🤝", "✨", "🙏"];
@@ -17,10 +20,12 @@ export function StoriesRow({
   initialGroups,
   viewerAvatarUrl,
   viewerName,
+  viewerHandle,
 }: {
   initialGroups?: StoryGroup[];
   viewerAvatarUrl?: string | null;
   viewerName?: string;
+  viewerHandle?: string | null;
 }) {
   // Seeded from the server + cached-first: paints instantly, refreshed in background.
   const { data } = useQuery<StoryGroup[]>(
@@ -37,63 +42,105 @@ export function StoriesRow({
   const [start, setStart] = useState<number | null>(null);
   const initial = (viewerName ?? "").charAt(0).toUpperCase() || "+";
 
+  // Server groups sort the viewer's own stories first when present — surfaced
+  // once as a dedicated "Your Story" card, not a second time in the row below.
+  const ownGroup = viewerHandle ? groups.find((g) => g.handle === viewerHandle) : undefined;
+  const otherGroups = ownGroup ? groups.filter((g) => g !== ownGroup) : groups;
+
+  // Seen/unseen rings: hydration-safe default (everything reads "unseen" on
+  // first paint, same on server and client) then refined from localStorage
+  // right after mount — avoids a server/client markup mismatch.
+  const [seen, setSeen] = useState<SeenMap>({});
+  useEffect(() => setSeen(loadSeenMap()), [data]);
+
   return (
     <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {/* Create story — shows your own avatar with an add badge */}
-      <button type="button" onClick={() => openUpload("story")} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
-        <span className="relative rounded-full bg-gradient-to-br from-fuchsia-500 via-violet-500 to-blue-500 p-0.5">
-          <span className="block rounded-full bg-background p-0.5">
-            {viewerAvatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={viewerAvatarUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
-            ) : (
-              <span className="flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
-                {initial}
-              </span>
-            )}
+      {/* Your Story — opens the viewer if you have an active one, otherwise
+          the composer. The ring only appears when there's something to
+          watch; a plain dashed ring would misleadingly suggest live content. */}
+      <PressIcon className="shrink-0">
+        <button
+          type="button"
+          onClick={() => (ownGroup ? setStart(groups.indexOf(ownGroup)) : openUpload("story"))}
+          className="flex w-16 flex-col items-center gap-1.5"
+        >
+          <span className={cn("relative rounded-full p-0.5", ownGroup ? "bg-brand" : "ring-1 ring-inset ring-border/70")}>
+            <span className="block rounded-full bg-background p-0.5">
+              {viewerAvatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={viewerAvatarUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+              ) : (
+                <span className="flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
+                  {initial}
+                </span>
+              )}
+            </span>
+            <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background">
+              <Plus className="h-3.5 w-3.5" />
+            </span>
           </span>
-          <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background">
-            <Plus className="h-3.5 w-3.5" />
-          </span>
-        </span>
-        <span className="text-[11px] font-medium text-muted-foreground">Your Story</span>
-      </button>
+          <span className="text-[11px] font-medium text-muted-foreground">Your Story</span>
+        </button>
+      </PressIcon>
 
-      {groups.map((g, i) => {
+      {otherGroups.map((g) => {
         // Show the story's own cover (most recent first) in the circle so it
         // teases the content — not the author's profile picture.
         const cover = g.stories[0];
+        const unseen = !isGroupSeen(g, seen);
         return (
-          <button key={g.handle} type="button" onClick={() => setStart(i)} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
-            <span className="rounded-full bg-gradient-to-br from-fuchsia-500 via-violet-500 to-blue-500 p-0.5">
-              <span className="block overflow-hidden rounded-full bg-background p-0.5">
-                {cover?.mediaKind === "image" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={cover.mediaUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
-                ) : cover?.mediaKind === "video" ? (
-                  // eslint-disable-next-line jsx-a11y/media-has-caption
-                  <video src={`${cover.mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
-                ) : g.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={g.avatarUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
-                ) : (
-                  <span className="flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
-                    {g.displayName.charAt(0).toUpperCase()}
-                  </span>
+          <PressIcon key={g.handle} className="shrink-0">
+            <button type="button" onClick={() => setStart(groups.indexOf(g))} className="flex w-16 flex-col items-center gap-1.5">
+              <span
+                className={cn(
+                  "rounded-full p-0.5",
+                  unseen ? "bg-brand" : "ring-1 ring-inset ring-border/70",
                 )}
+              >
+                <span className="block overflow-hidden rounded-full bg-background p-0.5">
+                  {cover?.mediaKind === "image" ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={cover.mediaUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+                  ) : cover?.mediaKind === "video" ? (
+                    // eslint-disable-next-line jsx-a11y/media-has-caption
+                    <video src={`${cover.mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+                  ) : g.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={g.avatarUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+                  ) : (
+                    <span className="flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
+                      {g.displayName.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </span>
               </span>
-            </span>
-            <span className="w-16 truncate text-center text-[11px] font-medium text-foreground">{g.displayName.split(" ")[0]}</span>
-          </button>
+              <span className={cn("w-16 truncate text-center text-[11px]", unseen ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
+                {g.displayName.split(" ")[0]}
+              </span>
+            </button>
+          </PressIcon>
         );
       })}
 
-      {start !== null ? <StoryViewer groups={groups} startGroup={start} onClose={() => setStart(null)} /> : null}
+      {start !== null ? (
+        <StoryViewer groups={groups} startGroup={start} onClose={() => setStart(null)} onGroupSeen={() => setSeen(loadSeenMap())} />
+      ) : null}
     </div>
   );
 }
 
-export function StoryViewer({ groups, startGroup, onClose }: { groups: StoryGroup[]; startGroup: number; onClose: () => void }) {
+export function StoryViewer({
+  groups,
+  startGroup,
+  onClose,
+  onGroupSeen,
+}: {
+  groups: StoryGroup[];
+  startGroup: number;
+  onClose: () => void;
+  /** Fired once per group after it's marked seen (ring-state refresh in the row). */
+  onGroupSeen?: () => void;
+}) {
   const [gi, setGi] = useState(startGroup);
   const [si, setSi] = useState(0);
   const [pct, setPct] = useState(0);
@@ -104,6 +151,14 @@ export function StoryViewer({ groups, startGroup, onClose }: { groups: StoryGrou
   const group = groups[gi]!;
   const story = group?.stories[si];
   const isOwn = !!handle && group.handle === handle;
+
+  // Mark the group seen as soon as it's opened (matches how Instagram-style
+  // rings behave — opening counts as "seen", not finishing every segment).
+  useEffect(() => {
+    if (!group) return;
+    markGroupSeen(group);
+    onGroupSeen?.();
+  }, [group, onGroupSeen]);
 
   const next = useCallback(() => {
     setPct(0);

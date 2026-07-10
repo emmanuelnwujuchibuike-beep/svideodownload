@@ -60,7 +60,12 @@ export default async function HomePage() {
       {firstVisit ? <BrandSplash /> : null}
       <div className="space-y-6">
         <Suspense fallback={<StoriesSkeleton />}>
-          <StoriesSection viewerId={viewerId} avatarUrl={profile.avatarUrl} name={profile.displayName} />
+          <StoriesSection
+            viewerId={viewerId}
+            avatarUrl={profile.avatarUrl}
+            name={profile.displayName}
+            handle={profile.handle}
+          />
         </Suspense>
 
         <Suspense fallback={<ReelsSkeleton />}>
@@ -88,13 +93,15 @@ async function StoriesSection({
   viewerId,
   avatarUrl,
   name,
+  handle,
 }: {
   viewerId: string;
   avatarUrl: string | null;
   name: string;
+  handle: string;
 }) {
   const groups = await getActiveStories(viewerId, 24);
-  return <StoriesRow initialGroups={groups} viewerAvatarUrl={avatarUrl} viewerName={name} />;
+  return <StoriesRow initialGroups={groups} viewerAvatarUrl={avatarUrl} viewerName={name} viewerHandle={handle} />;
 }
 
 async function ReelsSection({ viewerId }: { viewerId: string }) {

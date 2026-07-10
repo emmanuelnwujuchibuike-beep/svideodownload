@@ -14,7 +14,7 @@ import { formatCompactNumber } from "@/lib/utils";
 
 const FALLBACK = ["from-rose-500 to-fuchsia-600", "from-sky-500 to-blue-600", "from-violet-500 to-purple-600", "from-amber-500 to-orange-600", "from-emerald-500 to-teal-600"];
 
-/** Trending Reels rail — real recent reels, autoplaying in view; tap to open. */
+/** Trending Reels rail — genuinely hot reels (hot_score, not just newest), autoplaying in view; tap to open. */
 export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
   const { data, isLoading } = useQuery<FeedItem[]>(
     "home-feed:reels",
@@ -25,7 +25,7 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
         // this rail (the "shows then disappears" bug). If a revalidation
         // errors or comes back empty, keep whatever we're already showing
         // instead of vanishing the section.
-        const d = await getApi().action<{ items: FeedItem[] }>("/api/reels", { method: "GET", query: { sort: "recent", limit: 15 } });
+        const d = await getApi().action<{ items: FeedItem[] }>("/api/reels", { method: "GET", query: { sort: "trending", limit: 15 } });
         const fresh = (d.items ?? []).filter((i) => i.mediaKind === "video").slice(0, 8);
         return fresh.length > 0 ? fresh : (initialItems ?? []);
       } catch {

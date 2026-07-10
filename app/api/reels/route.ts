@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SORTS: HomeFeedSort[] = ["for_you", "following", "recent"];
+const SORTS: HomeFeedSort[] = ["for_you", "following", "recent", "trending"];
 
 /**
  * GET /api/reels?sort=&offset=&limit= — the Reels product's OWN paginated

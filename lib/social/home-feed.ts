@@ -109,7 +109,7 @@ interface Row {
 const SELECT =
   "id, publisher_id, source_url, platform, media_kind, title, description, category, thumbnail_url, media_url, stream_uid, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at";
 
-export type HomeFeedSort = "for_you" | "following" | "recent";
+export type HomeFeedSort = "for_you" | "following" | "recent" | "trending";
 
 /** Feed vs Reels are separate products: each surface queries only its format. */
 export type ContentFormat = "feed" | "reel";
@@ -309,7 +309,7 @@ async function streamStatus(
  * 20s TTL. Other viewers ride the TTL (freshness within 20s is by design).
  */
 export async function bustHomeFeedCache(viewerId: string): Promise<void> {
-  const sorts: HomeFeedSort[] = ["for_you", "following", "recent"];
+  const sorts: HomeFeedSort[] = ["for_you", "following", "recent", "trending"];
   const formats = ["feed", "reel"];
   const limits = [8, 12, 24];
   await Promise.all(
@@ -381,11 +381,20 @@ async function loadHomeFeed(
     } else if (format === "reel") {
       q = q.eq("media_kind", "video");
     }
-    // Base fetch order is always newest-first — "following"/"recent" show
-    // exactly that (an unranked, literal view of what was posted); "for_you"
-    // re-ranks this same set below (relationship + quality + freshness),
-    // falling back to this same recency order as its tiebreak.
-    q = q.order("created_at", { ascending: false });
+    // Base fetch order is newest-first for "following"/"recent" (an unranked,
+    // literal view of what was posted) and "for_you" (re-ranked in JS below,
+    // falling back to this same recency order as its tiebreak). "trending" is
+    // the one sort that's a genuinely separate global signal — it orders by
+    // the same admin-tunable `hot_score` (log-engagement / age^gravity,
+    // recomputed nightly by `recompute_hot_scores`, see migration 0009) that
+    // `lib/social/feed.ts`'s Explore feed already uses for its own "trending"
+    // sort. Before this, nothing calling `getHomeFeed` ever ordered by it —
+    // Home's "Trending Reels" rail passed `sort: "recent"`, so it showed the
+    // newest reels, not the hottest ones, the same "label doesn't match the
+    // query" bug `rankForYou` above fixed for "for_you".
+    q = sort === "trending"
+      ? q.order("hot_score", { ascending: false }).order("created_at", { ascending: false })
+      : q.order("created_at", { ascending: false });
 
     const { data } = await q;
     let rows = (data as Row[]) ?? [];

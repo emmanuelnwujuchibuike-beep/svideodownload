@@ -6,12 +6,14 @@ import { Suspense } from "react";
 import { AppContent } from "@/features/app-shell/app-content";
 import { BrandSplash } from "@/features/app-shell/brand-splash";
 import { ContinueWatching } from "@/features/app-shell/dashboard/continue-watching";
+import { FriendActivity } from "@/features/app-shell/dashboard/friend-activity";
 import { HomeRail } from "@/features/app-shell/dashboard/home-rail";
 import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { SmartFeed } from "@/features/feed/smart-feed";
 import { Skeleton } from "@/features/ui/skeleton";
+import { getFriendActivity } from "@/lib/social/friend-activity";
 import { friendsCount } from "@/lib/social/friends";
 import { getHomeProfile } from "@/lib/social/home";
 import { getHomeFeed } from "@/lib/social/home-feed";
@@ -68,6 +70,13 @@ export default async function HomePage() {
           />
         </Suspense>
 
+        {/* Relationship-first, above the global Trending rail — the spec's own
+            "most important module". Renders nothing for viewers with no
+            friends or no recent friend activity (no fake placeholder rows). */}
+        <Suspense fallback={<FriendActivitySkeleton />}>
+          <FriendActivitySection viewerId={viewerId} />
+        </Suspense>
+
         <Suspense fallback={<ReelsSkeleton />}>
           <ReelsSection viewerId={viewerId} />
         </Suspense>
@@ -104,10 +113,17 @@ async function StoriesSection({
   return <StoriesRow initialGroups={groups} viewerAvatarUrl={avatarUrl} viewerName={name} viewerHandle={handle} />;
 }
 
+async function FriendActivitySection({ viewerId }: { viewerId: string }) {
+  const items = await getFriendActivity(viewerId, 8);
+  return <FriendActivity items={items} />;
+}
+
 async function ReelsSection({ viewerId }: { viewerId: string }) {
   // The home rail previews the Reels product — its own format, not feed posts.
-  const recent = await getHomeFeed({ viewerId, sort: "recent", limit: 15, format: "reel" });
-  const reelItems = recent.items.filter((i) => i.mediaKind === "video").slice(0, 8);
+  // Genuinely hot (not just newest) — see the `sort: "trending"` doc in
+  // lib/social/home-feed.ts for why "recent" was the wrong sort here.
+  const hot = await getHomeFeed({ viewerId, sort: "trending", limit: 15, format: "reel" });
+  const reelItems = hot.items.filter((i) => i.mediaKind === "video").slice(0, 8);
   return <TrendingReels initialItems={reelItems} />;
 }
 
@@ -136,6 +152,17 @@ function StoriesSkeleton() {
           <Skeleton className="h-16 w-16 rounded-full" />
           <Skeleton className="h-2.5 w-12" />
         </div>
+      ))}
+    </div>
+  );
+}
+
+function FriendActivitySkeleton() {
+  return (
+    <div className="space-y-2" aria-hidden>
+      <Skeleton className="h-5 w-36" />
+      {Array.from({ length: 2 }).map((_, i) => (
+        <Skeleton key={i} className="h-[52px] w-full rounded-2xl" />
       ))}
     </div>
   );

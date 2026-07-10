@@ -31,6 +31,8 @@ Owner dropped **"Feature 17 Part 8 — Feed Interactions, Social Engagement, Pre
 
 **Verification**: `tsc`/lint clean project-wide; the new mute API route reviewed against the existing `blocks` route's security model (authenticated user only ever acts on their own row; RLS as defense-in-depth) — same shape, no gaps found; `AnimatedCount`'s mount-skip/snap-threshold decision logic verified with 13 passing logic tests; the SQL trigger's correctness was reasoned through carefully (self-exclusion, multi-reposter loop, symmetric friendship lookup) but — honestly — could not be executed against a live Postgres in this environment, so it hasn't been run, only read closely.
 
+**Migration 0036 failed on the owner's first real run** — exactly the risk that last caveat flagged. `notifications_type_chk` had been widened THREE times across this table's history (0013 → 0018 → 0020_friends.sql, which added `friend_request`/`friend_accepted`/`friend_reminder`), and 0036's drop-and-recreate was built off only the 0018 copy — never grepped for a LATER migration also touching the same constraint name. Real friend-request rows already in the table violated the narrower replacement, and the same gap existed in the paired dedupe index. Fixed: the migration now carries the full union of every prior widening, not just the last one found. Standing rule going forward: `grep` every migration file for a check constraint's name before altering it, never assume the most recently written migration you happen to find is the last one that touched it.
+
 ---
 
 ## 2026‑07‑10 highlights (batch 32 — Home instant-nav, splash trigger-scope corrected, loader polish, owner-reported)

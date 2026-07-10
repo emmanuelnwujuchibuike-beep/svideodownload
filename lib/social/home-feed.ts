@@ -12,7 +12,11 @@ import { followedReposters, repostCounts, viewerReposts } from "./reposts";
  * carries the publisher card, engagement counts, and the viewer's like/save/
  * follow state so the dashboard feed can render fully without N extra requests.
  * Privacy always wins (suspended / opted-out / blocked publishers are removed)
- * and a per-publisher diversity cap keeps one creator from flooding the feed.
+ * and a per-publisher diversity cap keeps one creator from flooding the feed —
+ * capping happens AFTER ranking, so it keeps a creator's best posts, not just
+ * their newest. "for_you" is genuinely ranked (see `rankForYou` below —
+ * relationship + quality + freshness, no ML); "following"/"recent" stay a
+ * plain, unranked reverse-chronological view of exactly what was posted.
  */
 
 const hasSupabase =
@@ -119,6 +123,39 @@ async function hasFormatColumn(db: ReturnType<typeof createAdminClient>): Promis
   const { error } = await db.from("posts").select("format").limit(1);
   formatColumnKnown = !error;
   return formatColumnKnown;
+}
+
+/**
+ * "For You" ranking — a transparent, explainable weighted score over signals
+ * already stored on the row. No ML, no external calls, nothing hidden: a
+ * relationship layer (do you follow this creator?), a quality layer
+ * (conversation + shares weighted above passive likes — the same weights
+ * `lib/social/smart-feed.ts`'s `engagementScore`/`feedReason` already use
+ * client-side, kept in sync so the "why am I seeing this" chip stays
+ * truthful), and a freshness layer that decays smoothly rather than a hard
+ * cliff, so a great post from yesterday can still outrank a mediocre one
+ * from an hour ago. Only applied to "for_you" — "following" and "recent"
+ * stay a plain, unranked reverse-chronological view of exactly what was
+ * posted, which is the behavior a dedicated Following/Reels feed should have.
+ *
+ * Before this, "for_you" and "recent" produced the IDENTICAL ordering (both
+ * were just `ORDER BY created_at DESC`) — "For You" wasn't actually FOR
+ * anyone; it was just "newest first" wearing a different label.
+ */
+function rankForYou(rows: Row[], followingIds: Set<string>): Row[] {
+  const now = Date.now();
+  const scored = rows.map((row, i) => {
+    const ageHours = Math.max(0, (now - new Date(row.created_at).getTime()) / 3_600_000);
+    const relationship = followingIds.has(row.publisher_id) ? 120 : 0;
+    const quality =
+      row.likes_count + row.comments_count * 2 + row.shares_count * 3 + row.saves_count * 2 + row.downloads_count * 2;
+    const freshness = 40 / (1 + ageHours / 30);
+    return { row, score: relationship + quality + freshness, i };
+  });
+  // Tiebreak on original (recency) order — equal scores never shuffle
+  // arbitrarily between otherwise-identical requests.
+  scored.sort((a, b) => b.score - a.score || a.i - b.i);
+  return scored.map((s) => s.row);
 }
 
 /**
@@ -344,13 +381,16 @@ async function loadHomeFeed(
     } else if (format === "reel") {
       q = q.eq("media_kind", "video");
     }
-    // Newest first, always — both surfaces show what was actually posted most
-    // recently at the top, not whatever ranks highest by engagement.
+    // Base fetch order is always newest-first — "following"/"recent" show
+    // exactly that (an unranked, literal view of what was posted); "for_you"
+    // re-ranks this same set below (relationship + quality + freshness),
+    // falling back to this same recency order as its tiebreak.
     q = q.order("created_at", { ascending: false });
 
     const { data } = await q;
-    const rows = (data as Row[]) ?? [];
+    let rows = (data as Row[]) ?? [];
     if (rows.length === 0) return { items: [], nextOffset: null };
+    if (sort === "for_you") rows = rankForYou(rows, new Set(followingIds));
 
     const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
     const [{ data: profs }, { data: privs }, { data: subs }, reactionRows, blocks] = await Promise.all([

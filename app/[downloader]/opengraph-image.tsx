@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-import { OG_SIZE, OgImage } from "@/components/og-image";
+import { getOgFonts, OG_SIZE, OgImage } from "@/components/og-image";
 
 // Same universal logo card every route uses (see components/og-image.tsx) —
 // the per-page textual description lives in generateMetadata's `description`
@@ -14,5 +14,5 @@ export const size = OG_SIZE;
 export const contentType = "image/png";
 
 export default function Image() {
-  return new ImageResponse(<OgImage />, { ...OG_SIZE });
+  return new ImageResponse(<OgImage />, { ...OG_SIZE, fonts: getOgFonts() });
 }

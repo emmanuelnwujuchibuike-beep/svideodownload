@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 import { isCriticalActivityInProgress, onCriticalActivityIdle } from "@/lib/pwa/activity-lock";
+import { BAKED_APP_BUILD, fetchServerBuild } from "@/lib/pwa/app-version";
 
 /** Reloads now, or — if a critical section (e.g. an in-flight upload) is
  * open — waits for it to end first. Never skips the reload outright, since
@@ -39,7 +40,6 @@ function reloadRespectingCriticalActivity() {
  * this bundle's baked NEXT_PUBLIC_APP_BUILD against /api/app-version on
  * resume/focus and reloads once per new deploy — the moment the user returns.
  */
-const BUILD = process.env.NEXT_PUBLIC_APP_BUILD ?? "";
 const RELOADED_KEY = "frenz-reloaded-for";
 
 let versionCheckInFlight = false;
@@ -47,21 +47,19 @@ let lastVersionCheck = 0;
 
 async function reloadIfNewDeploy() {
   // Throttle: resume + focus often fire together; one probe per 30s is plenty.
-  if (!BUILD || versionCheckInFlight || Date.now() - lastVersionCheck < 30_000) return;
+  if (!BAKED_APP_BUILD || versionCheckInFlight || Date.now() - lastVersionCheck < 30_000) return;
   versionCheckInFlight = true;
   try {
-    const res = await fetch("/api/app-version", { cache: "no-store" });
-    if (!res.ok) return;
-    const { build } = (await res.json()) as { build?: string };
+    const build = await fetchServerBuild();
     lastVersionCheck = Date.now();
     // Reload once per new build (the sessionStorage guard breaks reload loops
     // if a CDN ever serves a mixed old/new deployment for a moment).
-    if (build && build !== BUILD && sessionStorage.getItem(RELOADED_KEY) !== build) {
+    if (build && build !== BAKED_APP_BUILD && sessionStorage.getItem(RELOADED_KEY) !== build) {
       sessionStorage.setItem(RELOADED_KEY, build);
       reloadRespectingCriticalActivity();
     }
   } catch {
-    /* offline — try again on the next resume */
+    /* sessionStorage unavailable (private browsing, quota) — try again next resume */
   } finally {
     versionCheckInFlight = false;
   }

@@ -514,6 +514,21 @@ Owner reported: album carousels still couldn't be scrolled past on touch ("multi
   - **Sitemap**: a sitemap is a URL list with no logo — nothing to change
     there; the "share a link" and "favicon by the URL" asks are the OG cards
     and `app/icon.png` respectively, both updated.
+  - **Superseded 2026‑07‑11** (owner: *"remove the black background from the
+    pwa logo... so it becomes white background... let the shared og look
+    like [a] premium background without write up"*): the dark-tile variant
+    above is retired. Every PWA/app icon (`app/apple-icon.png`,
+    `public/icon-192/512/1024.png`, `icon-maskable-512.png`, the 152/167
+    legacy Apple sizes) is now generated white-background + centered from the
+    single transparent `frenz-logo.png` master via `scripts/gen-icons.mjs` —
+    there is no more separate dark-tile source file in the pipeline.
+    `OG_ICON_BASE64` was regenerated at 480px (was 184px). The OG/share image
+    (`components/og-image.tsx`) dropped its wordmark+headline+description
+    text entirely — every route (including per-`[downloader]` pages, which
+    used to get dynamic headline text) now shares one universal white,
+    soft-glow "premium logo card" with no text; per-page descriptions live
+    only in each route's `generateMetadata` meta tags now, never on the
+    image itself.
 
 ## 2026‑07‑09 highlights (batch 26 — pull-to-refresh + Stories-style Continue Watching player, owner-reported)
 

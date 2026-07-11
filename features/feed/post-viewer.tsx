@@ -25,7 +25,9 @@ import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
 import { Comments } from "@/features/social/comments";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
+import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
 import { useEntitlements } from "@/features/auth/use-entitlements";
+import { useLongPress } from "@/lib/hooks/use-long-press";
 import { downloadPost } from "@/lib/media/download-post";
 import type { CommentNode } from "@/lib/social/engagement";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
@@ -77,6 +79,9 @@ function ViewerInner({
   const { isPremium } = useEntitlements();
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
+  const [myEmotion, setMyEmotion] = useState<string | null>(item.viewerReactionEmotion ?? null);
+  const [reactionsOpen, setReactionsOpen] = useState(false);
+  const wowPress = useLongPress(() => setReactionsOpen(true));
   const following = useFollowState(item.publisher.id, item.isFollowing);
   const [likes, setLikes] = useState(item.likesCount);
   const [title, setTitle] = useState(item.title);
@@ -125,6 +130,7 @@ function ViewerInner({
     if (isLike) {
       setLiked(next);
       setLikes((n) => n + (next ? 1 : -1));
+      if (!next) setMyEmotion(null);
     } else setSaved(next);
     try {
       const res = await fetch(`/api/posts/${item.id}/react`, {
@@ -138,6 +144,30 @@ function ViewerInner({
         setLiked(cur);
         setLikes((n) => n + (next ? -1 : 1));
       } else setSaved(cur);
+    }
+  };
+
+  // Reaction picker: always ends in a Wow (liked=true) with a specific
+  // flavor — same pattern as feed-post-card.tsx's reactWithEmotion.
+  const reactWithEmotion = async (emotion: ReactionEmotion) => {
+    const wasLiked = liked;
+    const prevEmotion = myEmotion;
+    setLiked(true);
+    if (!wasLiked) setLikes((n) => n + 1);
+    setMyEmotion(emotion);
+    try {
+      const res = await fetch(`/api/posts/${item.id}/react`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "like", emotion }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      if (!wasLiked) {
+        setLiked(false);
+        setLikes((n) => n - 1);
+      }
+      setMyEmotion(prevEmotion);
     }
   };
 
@@ -303,17 +333,28 @@ function ViewerInner({
 
         {/* Actions */}
         <div className="mt-4 flex items-center gap-1 border-y border-border/50 py-1.5">
-          <Act
-            icon={liked ? WowSolid : WowOutline}
-            label="Wow"
-            active={liked}
-            activeClass="text-violet-500"
-            count={likes}
-            onClick={(e) => {
-              if (!liked) floatReaction(e.clientX, e.clientY);
-              void react("like");
-            }}
-          />
+          <span className="relative inline-flex">
+            <Act
+              icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
+              label="Wow"
+              active={liked}
+              activeClass="text-violet-500"
+              count={likes}
+              onClick={(e) => {
+                if (!liked) floatReaction(e.clientX, e.clientY);
+                void react("like");
+              }}
+              press={wowPress}
+            />
+            <ReactionPicker
+              open={reactionsOpen}
+              onClose={() => setReactionsOpen(false)}
+              onPick={(emotion, _glyph, e) => {
+                floatReaction(e.clientX, e.clientY);
+                void reactWithEmotion(emotion);
+              }}
+            />
+          </span>
           <Act icon={MessageCircle} label="Comments" count={item.commentsCount} onClick={() => setShowComments(true)} />
           <Act icon={Share2} label="Share" count={item.sharesCount} onClick={share} />
           <Act icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-primary" onClick={() => react("save")} />
@@ -395,6 +436,7 @@ function Act({
   fill,
   activeClass,
   onClick,
+  press,
 }: {
   icon: typeof Heart;
   label: string;
@@ -403,6 +445,7 @@ function Act({
   fill?: boolean;
   activeClass?: string;
   onClick: (e: React.MouseEvent) => void;
+  press?: ReturnType<typeof useLongPress>;
 }) {
   return (
     <button
@@ -411,6 +454,7 @@ function Act({
       aria-label={label}
       aria-pressed={active}
       className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-secondary", active && activeClass)}
+      {...press}
     >
       <Icon className={cn("h-[18px] w-[18px]", fill && "fill-current")} />
       {count !== undefined && count > 0 ? <AnimatedCount value={count} className="text-xs font-medium tabular-nums" /> : null}

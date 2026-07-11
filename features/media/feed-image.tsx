@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import { ImageOff } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
@@ -41,6 +42,18 @@ export function FeedImage({
   const startPt = useRef<{ x: number; y: number } | null>(null);
   const moved = useRef(false);
   const [burst, setBurst] = useState(0);
+  // A 404/CORS/offline failure otherwise falls through to the browser's own
+  // default broken-image icon — jarring and off-brand. Reset SYNCHRONOUSLY
+  // during render (not a post-paint useEffect) when `src` changes — a
+  // recycled feed item (virtualization, a retried fetch with a refreshed
+  // signed URL) must not render one extra frame of the stale placeholder
+  // before the new image even starts loading.
+  const [broken, setBroken] = useState(false);
+  const [lastSrc, setLastSrc] = useState(src);
+  if (src !== lastSrc) {
+    setLastSrc(src);
+    setBroken(false);
+  }
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Warm the RAW image URL well before the card is actually tapped (a much
@@ -126,8 +139,15 @@ export function FeedImage({
         className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl"
       />
       {/* Foreground: next/image (AVIF/WebP + right-sized) when the natural size is
-          known; otherwise a plain lazy <img> at natural aspect (older posts). */}
-      {hasDims ? (
+          known; otherwise a plain lazy <img> at natural aspect (older posts).
+          A load failure (404/CORS/offline) falls back to a branded placeholder
+          instead of the browser's own default broken-image icon. */}
+      {broken ? (
+        <div className="relative flex h-48 w-full max-w-full flex-col items-center justify-center gap-2 text-muted-foreground/70">
+          <ImageOff className="h-8 w-8" aria-hidden />
+          <span className="text-xs font-medium">Image unavailable</span>
+        </div>
+      ) : hasDims ? (
         <FadeImage
           src={src}
           alt={alt}
@@ -135,10 +155,17 @@ export function FeedImage({
           height={height}
           sizes="(max-width: 768px) 100vw, 640px"
           className="relative h-auto max-h-[80vh] w-auto max-w-full object-contain"
+          onError={() => setBroken(true)}
         />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={alt} loading="lazy" className="relative max-h-[80vh] w-auto max-w-full object-contain" />
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          className="relative max-h-[80vh] w-auto max-w-full object-contain"
+          onError={() => setBroken(true)}
+        />
       )}
 
       {/* Double-tap Wow burst */}

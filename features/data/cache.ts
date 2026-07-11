@@ -112,6 +112,24 @@ let wired = false;
 function revalidateAllMounted(): void {
   for (const [key, fetcher] of fetchers) void revalidate(key, fetcher, 0).catch(() => {});
 }
+
+// Every key ever queried (every post's comments, every profile visited, …)
+// stays in this Map for the rest of the tab's life — there was no eviction
+// at all. Under memory pressure, drop entries nothing is currently
+// subscribed to (no mounted component reading them) and that haven't been
+// touched in a while — still-mounted surfaces (an active `listeners` set)
+// are never touched, so this can't cause a visible blank-out.
+const STALE_MS = 2 * 60_000;
+function pruneInactive(): void {
+  const cutoff = Date.now() - STALE_MS;
+  for (const [key, entry] of cache) {
+    if (listeners.get(key)?.size) continue; // still in use somewhere
+    if (entry.promise) continue; // an in-flight fetch — don't drop mid-request
+    if (entry.updatedAt > cutoff) continue; // recently used (0 for "never loaded" is always <= cutoff)
+    cache.delete(key);
+  }
+}
+
 export function ensureGlobalRevalidation(): void {
   if (wired || typeof window === "undefined") return;
   wired = true;
@@ -120,4 +138,5 @@ export function ensureGlobalRevalidation(): void {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") revalidateAllMounted();
   });
+  void import("@/lib/observability/memory-pressure").then(({ onMemoryPressure }) => onMemoryPressure(pruneInactive));
 }

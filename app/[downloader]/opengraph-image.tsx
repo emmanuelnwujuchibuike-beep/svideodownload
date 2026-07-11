@@ -1,31 +1,18 @@
 import { ImageResponse } from "next/og";
 
 import { OG_SIZE, OgImage } from "@/components/og-image";
-import { getSeoPage } from "@/lib/seo/seo-pages";
 
+// Same universal logo card every route uses (see components/og-image.tsx) —
+// the per-page textual description lives in generateMetadata's `description`
+// field, never on the image itself. The parent route's generateStaticParams +
+// dynamicParams=false (app/[downloader]/page.tsx) still prerenders this once
+// per slug at build time, same as before — but it's now a plain static render
+// with no per-slug data lookup (the old getSeoPage() call), which is the real
+// simplification here, not cross-slug caching.
 export const alt = "FrenzSave";
 export const size = OG_SIZE;
 export const contentType = "image/png";
 
-// Generate on-demand + cache (not one image per slug at build). This keeps
-// builds fast — there are many downloader slugs and each render is otherwise a
-// build-time cost — while the image still caches after its first request.
-export const revalidate = 604800; // 7 days
-
-export default async function Image({
-  params,
-}: {
-  params: Promise<{ downloader: string }>;
-}) {
-  const { downloader } = await params;
-  const page = getSeoPage(downloader);
-  return new ImageResponse(
-    (
-      <OgImage
-        headline={page ? `${page.brand} ${page.thing} Downloader` : undefined}
-        sub="Free · Watermark-free · HD · No login"
-      />
-    ),
-    { ...OG_SIZE },
-  );
+export default function Image() {
+  return new ImageResponse(<OgImage />, { ...OG_SIZE });
 }

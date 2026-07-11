@@ -65,7 +65,15 @@ export async function enablePush(): Promise<PushState> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
   });
-  return res.ok ? "subscribed" : "unsubscribed";
+  // Throw rather than returning "unsubscribed" here: the browser DID subscribe
+  // at this point, only the server-side save failed (network blip, session
+  // expired, 500) — silently reporting "unsubscribed" made callers treat a
+  // real failure identically to "user declined," which (see push-nudge.tsx)
+  // used to hide the whole Enable UI with zero feedback and count it as a
+  // decline toward the 5-strikes cutoff. A thrown error forces every caller to
+  // show the failure instead of swallowing it.
+  if (!res.ok) throw new Error("Couldn't save your notification subscription. Please try again.");
+  return "subscribed";
 }
 
 /**

@@ -1,15 +1,18 @@
 /**
- * Boot splash — a faint, COLORLESS bold "F" baked into the initial HTML so cold
- * entries (hard refresh, sign-in redirect, first visit after clearing the cache)
- * never flash an empty page before content paints. Plain markup + inline critical
- * CSS (works before the CSS bundle loads) + an inline script that fades it the
- * moment the document is ready. Renders once per hard load; SPA navigation keeps
- * the persistent layout, so it never re-shows.
+ * Boot splash — the real Frenz "F" mark, large and centered (X/Twitter and
+ * Tango-style boot loader), baked into the initial HTML so cold entries (hard
+ * refresh, sign-in redirect, first visit after clearing the cache) never flash
+ * an empty page before content paints. Plain markup + inline critical CSS
+ * (works before the CSS bundle loads) + an inline script that fades it the
+ * moment the document is ready. Renders once per hard load; SPA navigation
+ * keeps the persistent layout, so it never re-shows.
  *
- * Deliberately quiet: an almost-invisible grayscale F with a skeleton shimmer, NO
- * color and NO spinner. The loud, colorful "Frenz" welcome is reserved for the
- * very first uncached /home entry (see BrandSplash) — so a plain refresh only ever
- * shows this subtle skeleton, never a bold colorful loader.
+ * Uses the actual logo asset (`/brand/frenz-logo.png`, preloaded in
+ * app/layout.tsx's <head> so it's never the slow part) rather than a hand-drawn
+ * placeholder glyph — kept muted (grayscale + reduced opacity) rather than
+ * full color on purpose: the loud, colorful "Frenz" welcome is reserved for
+ * the very first uncached /home entry (see BrandSplash) — so a plain refresh
+ * shows a quiet, correctly-branded skeleton, never a bold colorful loader.
  *
  * On the ONE landing this skeleton would otherwise show right underneath that
  * colorful welcome (first-ever login, or any visit after site data was cleared —
@@ -22,9 +25,10 @@ const CSS = `
 #frenz-boot{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:#ffffff;transition:opacity .4s ease}
 html.dark #frenz-boot{background:#050816}
 #frenz-boot.frenz-boot--hide{opacity:0;pointer-events:none}
-.frenz-boot__mark{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:20px;animation:frenz-boot-breathe 1.6s ease-in-out infinite}
+.frenz-boot__mark{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:22%;width:104px;height:104px;animation:frenz-boot-breathe 1.6s ease-in-out infinite}
+.frenz-boot__mark img{display:block;width:100%;height:100%;filter:grayscale(1);opacity:.4}
 .frenz-boot__shine{position:absolute;inset:0;background:linear-gradient(115deg,transparent 40%,rgba(148,163,184,.45) 50%,transparent 60%);transform:translateX(-130%);animation:frenz-boot-shimmer 1.4s ease-in-out infinite}
-@keyframes frenz-boot-breathe{0%,100%{opacity:.26}50%{opacity:.14}}
+@keyframes frenz-boot-breathe{0%,100%{opacity:.9}50%{opacity:.55}}
 @keyframes frenz-boot-shimmer{0%{transform:translateX(-130%)}100%{transform:translateX(130%)}}
 @media (prefers-reduced-motion:reduce){.frenz-boot__mark,.frenz-boot__shine{animation:none}}
 `;
@@ -54,13 +58,9 @@ export function BootSplash() {
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div id="frenz-boot" aria-hidden="true">
         <span className="frenz-boot__mark">
-          {/* Single flat neutral color — no gradient, no sparkle. Reads on light
-              and dark backgrounds alike. */}
-          <svg width="56" height="56" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Frenz">
-            <rect x="14.5" y="7" width="8.5" height="34" rx="4.25" fill="#8892a6" />
-            <rect x="14.5" y="7" width="25.5" height="8.5" rx="4.25" fill="#8892a6" />
-            <rect x="14.5" y="19.5" width="18.5" height="8" rx="4" fill="#8892a6" />
-          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element -- must render
+              before the JS bundle (next/image) is available */}
+          <img src="/brand/frenz-logo.png" width={104} height={104} alt="" />
           <span className="frenz-boot__shine" />
         </span>
       </div>

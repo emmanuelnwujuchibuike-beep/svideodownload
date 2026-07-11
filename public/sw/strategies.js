@@ -58,9 +58,19 @@ SWX.staleWhileRevalidate = async function staleWhileRevalidate(request, cacheNam
 // miss. `preload` is the browser's navigation-preload response, started in
 // parallel with SW boot — using it instead of a fresh fetch() shaves the
 // worker's cold-start latency off every navigation.
-SWX.networkFirst = async function networkFirst(request, { cacheName, preload, offlineFallback }) {
+//
+// Hard timeout (default 10s): fetch() has no built-in timeout, so a stalled
+// connection (a flaky proxy, a socket that never resolves or rejects) used
+// to leave a navigation hanging indefinitely — the exact "webapp is stuck at
+// loading" symptom, since nothing here would ever fall back to the cached
+// page or the offline screen. Racing a timer forces a decision either way.
+SWX.networkFirst = async function networkFirst(request, { cacheName, preload, offlineFallback, timeoutMs = 10000 }) {
   try {
-    const res = (preload && (await preload)) || (await fetch(request));
+    const res = await Promise.race([
+      (async () => (preload && (await preload)) || (await fetch(request)))(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("navigation timed out")), timeoutMs)),
+    ]);
+    if (!res) throw new Error("no response");
     if (cacheName && res.ok) await SWX.safePut(cacheName, request, res.clone());
     return res;
   } catch {

@@ -44,7 +44,7 @@ function dismissedThisSession(): boolean {
   }
 }
 
-type Phase = "hidden" | "ask" | "denied" | "enabled" | "signed-out";
+type Phase = "hidden" | "ask" | "denied" | "enabled" | "signed-out" | "failed";
 
 export function PushNudge() {
   const [phase, setPhase] = useState<Phase>("hidden");
@@ -111,6 +111,13 @@ export function PushNudge() {
       if (state === "subscribed") setPhase("enabled");
       else if (state === "denied") setPhase("denied");
       else dismiss();
+    } catch {
+      // A real failure (subscribe rejected, server save failed) is NOT a
+      // decline — tapping the button and having it silently do nothing was
+      // the exact bug report ("enable notification button doesn't click").
+      // Surface it and offer a retry instead of calling dismiss(), which
+      // would both hide the banner AND count toward the 5-decline cutoff.
+      setPhase("failed");
     } finally {
       setBusy(false);
     }
@@ -193,6 +200,21 @@ export function PushNudge() {
                     <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl border border-border/70 bg-card/60 px-3.5 py-2 text-xs font-medium text-muted-foreground">
                       <Settings className="h-4 w-4" /> Settings → Notifications → Frenz
                     </p>
+                  </>
+                ) : phase === "failed" ? (
+                  <>
+                    <p className="text-sm font-semibold leading-snug">Couldn&apos;t turn on notifications</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      Something went wrong saving this device — check your connection and try again.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={enable}
+                      disabled={busy}
+                      className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 disabled:opacity-60"
+                    >
+                      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />} Try again
+                    </button>
                   </>
                 ) : phase === "signed-out" ? (
                   <>

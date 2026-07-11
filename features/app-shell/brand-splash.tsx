@@ -18,6 +18,11 @@ const wordmarkFont = Space_Grotesk({ subsets: ["latin"], weight: ["500", "600"] 
  * (owner spec: never on a plain refresh or an ordinary repeat sign-in). Purely
  * presentational — `BrandSplash` below owns the one trigger that's actually
  * wired up, gated server-side on the `frenz_welcomed` cookie.
+ *
+ * Background is a hardcoded white (owner ask, 2026-07-11), not the
+ * theme-aware `bg-background` — this is the one surface meant to look the
+ * same, colorful-logo-on-white, regardless of the visitor's light/dark
+ * preference, matching the PWA icons' own white-background treatment.
  */
 export function WelcomeOverlay({ visible, label = "Loading Frenz" }: { visible: boolean; label?: string }) {
   return (
@@ -28,7 +33,7 @@ export function WelcomeOverlay({ visible, label = "Loading Frenz" }: { visible: 
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.5, ease: "easeInOut" }}
-          className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background"
+          className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white"
           role="status"
           aria-label={label}
         >

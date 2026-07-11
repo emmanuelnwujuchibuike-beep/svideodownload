@@ -6,7 +6,7 @@
  * activation. */
 const SWX = (self.SWX = self.SWX || {});
 
-SWX.VERSION = "v7";
+SWX.VERSION = "v8";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

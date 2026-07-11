@@ -7,7 +7,6 @@ import { useState } from "react";
 import { categoryLabel, type Category } from "@/lib/social/categories";
 import {
   DEFAULT_HOME_PREFERENCES,
-  HOME_MODULE_KEYS,
   HOME_MODULE_LABELS,
   type HomeModuleKey,
   type HomePreferences,
@@ -16,19 +15,20 @@ import { cn } from "@/lib/utils";
 
 const MODULE_ICON: Record<HomeModuleKey, typeof Clock> = {
   stories: Sparkles,
-  friend_activity: Users,
   trending_reels: Flame,
   continue_watching: Clock,
 };
 
 /**
  * Home Module Editor (Feature 17 Part 13) — drag-to-reorder + hide/show for
- * the optional Home sections (Stories/Friend Activity/Trending Reels/
- * Continue Watching), plus the real feed-behavior toggles ("prioritize my
- * friends", "fewer reposts", Quiet Mode). The main feed itself is never in
- * this list — it's infinite and always renders last, "reordering" it isn't
- * meaningful. First real use of framer-motion's `Reorder` in this codebase
- * (already a dependency everywhere else, so no new package).
+ * the optional Home sections (Stories/Trending Reels/Continue Watching),
+ * plus the real feed-behavior toggles ("prioritize my friends", "fewer
+ * reposts", Quiet Mode). Friend Activity was retired as a Home module
+ * (2026-07-11, owner: avoid Home clutter) — it now lives only on /friends.
+ * The main feed itself is never in this list — it's infinite and always
+ * renders last, "reordering" it isn't meaningful. First real use of
+ * framer-motion's `Reorder` in this codebase (already a dependency
+ * everywhere else, so no new package).
  */
 export function HomeModulesEditor({ preferences }: { preferences: HomePreferences }) {
   const [order, setOrder] = useState<HomeModuleKey[]>(preferences.moduleOrder);

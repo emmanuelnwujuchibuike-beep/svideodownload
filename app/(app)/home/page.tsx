@@ -6,14 +6,12 @@ import { Suspense } from "react";
 import { AppContent } from "@/features/app-shell/app-content";
 import { BrandSplash } from "@/features/app-shell/brand-splash";
 import { ContinueWatching } from "@/features/app-shell/dashboard/continue-watching";
-import { FriendActivity } from "@/features/app-shell/dashboard/friend-activity";
 import { HomeRail } from "@/features/app-shell/dashboard/home-rail";
 import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { SmartFeed } from "@/features/feed/smart-feed";
 import { Skeleton } from "@/features/ui/skeleton";
-import { getFriendActivity } from "@/lib/social/friend-activity";
 import { friendsCount } from "@/lib/social/friends";
 import { getHomeProfile } from "@/lib/social/home";
 import { getHomeFeed } from "@/lib/social/home-feed";
@@ -53,17 +51,15 @@ export default async function HomePage() {
   // Mode. Best-effort: defaults (today's exact hardcoded order, nothing
   // hidden) if the table's unmigrated or the row doesn't exist yet.
   const prefs = await getHomePreferences(viewerId);
-  // Continue Watching / Friend Activity manage their own visibility client-side
-  // (an inline switch, not just the account Home Modules Editor's Eye/EyeOff),
-  // so they stay in the render list even when "hidden" — the component itself
-  // reads `initialHidden` and shows a collapsed header+switch instead of being
-  // unmounted entirely. Without this, hiding one of them here meant the module
-  // never rendered on the NEXT full page load, so its switch had no persisted
-  // state to read from and always came back showing "on" — the exact "resets
-  // when I leave and come back" bug the owner reported.
-  const visibleModules = prefs.moduleOrder.filter(
-    (k) => !prefs.hiddenModules.includes(k) || k === "continue_watching" || k === "friend_activity",
-  );
+  // Continue Watching manages its own visibility client-side (an inline
+  // switch, not just the account Home Modules Editor's Eye/EyeOff), so it
+  // stays in the render list even when "hidden" — the component itself reads
+  // `initialHidden` and shows a collapsed header+switch instead of being
+  // unmounted entirely. Without this, hiding it here meant the module never
+  // rendered on the NEXT full page load, so its switch had no persisted state
+  // to read from and always came back showing "on" — the exact "resets when I
+  // leave and come back" bug the owner reported.
+  const visibleModules = prefs.moduleOrder.filter((k) => !prefs.hiddenModules.includes(k) || k === "continue_watching");
 
   return (
     <AppContent
@@ -123,18 +119,6 @@ function renderModule(
           />
         </Suspense>
       );
-    case "friend_activity":
-      // Relationship-first, above the global Trending rail by default — the
-      // spec's own "most important module". Renders nothing for viewers with
-      // no friends or no recent friend activity (no fake placeholder rows) —
-      // UNLESS the viewer explicitly hid it, in which case it still renders
-      // (as a collapsed header+switch) so the switch has real persisted state
-      // to read on mount instead of always starting "on".
-      return (
-        <Suspense key={key} fallback={<FriendActivitySkeleton />}>
-          <FriendActivitySection viewerId={ctx.viewerId} initialHidden={ctx.hiddenModules.includes("friend_activity")} />
-        </Suspense>
-      );
     case "trending_reels":
       return (
         <Suspense key={key} fallback={<ReelsSkeleton />}>
@@ -164,11 +148,6 @@ async function StoriesSection({
 }) {
   const groups = await getActiveStories(viewerId, 24);
   return <StoriesRow initialGroups={groups} viewerAvatarUrl={avatarUrl} viewerName={name} viewerHandle={handle} />;
-}
-
-async function FriendActivitySection({ viewerId, initialHidden }: { viewerId: string; initialHidden: boolean }) {
-  const items = await getFriendActivity(viewerId, 8);
-  return <FriendActivity items={items} initialHidden={initialHidden} />;
 }
 
 async function ReelsSection({ viewerId }: { viewerId: string }) {
@@ -205,17 +184,6 @@ function StoriesSkeleton() {
           <Skeleton className="h-16 w-16 rounded-full" />
           <Skeleton className="h-2.5 w-12" />
         </div>
-      ))}
-    </div>
-  );
-}
-
-function FriendActivitySkeleton() {
-  return (
-    <div className="space-y-2" aria-hidden>
-      <Skeleton className="h-5 w-36" />
-      {Array.from({ length: 2 }).map((_, i) => (
-        <Skeleton key={i} className="h-[52px] w-full rounded-2xl" />
       ))}
     </div>
   );

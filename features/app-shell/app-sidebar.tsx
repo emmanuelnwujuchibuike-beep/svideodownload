@@ -22,15 +22,18 @@ import {
   IoAdd,
 } from "react-icons/io5";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { PressIcon } from "@/components/motion/press-icon";
 import { NavIconBadge } from "@/components/icons/nav-icon-badge";
 import { FrenzFriendsOutline, FrenzFriendsSolid, FrenzHomeOutline, FrenzHomeSolid } from "@/components/icons/frenz-icons";
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
+import { isSlowConnection } from "@/lib/pwa/use-network-status";
 
 type IconType = ComponentType<{ className?: string }>;
 
@@ -68,11 +71,26 @@ const SPACES = [
   { label: "Travel World", color: "from-sky-500 to-blue-600" },
 ];
 
-export function AppSidebar({ handle }: { handle: string | null }) {
+export function AppSidebar({ handle: _handle }: { handle: string | null }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { handle } = useEntitlements();
   const nav = buildNav(handle);
   const { showAds, ready } = useShowAds();
   const isPremium = ready && !showAds;
+  const profileHref = handle ? `/u/${handle}` : "/account";
+
+  // Same prefetch-warming MobileNav already does — was desktop-only missing
+  // this entirely, so the sidebar's first click on Friends/Messages/profile
+  // paid a full fresh-fetch instead of opening instantly like every mobile
+  // tap already does. Skipped on data-saver/2G, same as mobile.
+  useEffect(() => {
+    if (isSlowConnection()) return;
+    const id = setTimeout(() => {
+      for (const r of ["/home", "/friends", "/messages", profileHref]) router.prefetch(r);
+    }, 400);
+    return () => clearTimeout(id);
+  }, [router, profileHref]);
 
   return (
     <>

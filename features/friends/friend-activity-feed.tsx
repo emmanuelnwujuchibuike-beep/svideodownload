@@ -1,12 +1,7 @@
-"use client";
-
 import { Activity, Heart, ImageIcon, UserPlus, Video } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
-import { Switch } from "@/components/ui/switch";
 import { timeAgo } from "@/features/notifications/meta";
 import type { FriendActivityEntry } from "@/lib/social/friend-activity";
 
@@ -18,53 +13,30 @@ const ICONS: Record<FriendActivityEntry["kind"], typeof Heart> = {
 };
 
 /**
- * Home's "Friend Activity" module — relationship-first, real data (see
- * `getFriendActivity`), never a guessed engagement metric. Collapses to
- * nothing when a viewer has no friends or no recent activity AND hasn't
- * explicitly hidden it — no fake placeholder rows, matching
- * `ContinueWatching`'s own empty-state contract. Carries the same inline
- * on/off switch as Continue Watching (owner ask) — see that file's doc
- * comment for why it PATCHes `hideModule`/`showModule` instead of a full
- * `hiddenModules` array, and for why `initialHidden` (not a hardcoded
- * `true`) plus a post-toggle `router.refresh()` fix the "switch resets when
- * I leave and come back" bug (two separate causes — see that file).
+ * Friend Activity, relocated here from Home (owner ask, 2026-07-11: "remove
+ * friends activity entirely from homepage so users only use the friends
+ * page friends activity to avoid clutter"). This is a plain Server
+ * Component, not a client one — the Home version's inline on/off switch
+ * (tied to Home Module preferences) doesn't apply on a page whose entire
+ * purpose IS friends, so there's nothing to toggle here; it's always shown.
  */
-export function FriendActivity({ items, initialHidden = false }: { items: FriendActivityEntry[]; initialHidden?: boolean }) {
-  const [on, setOn] = useState(!initialHidden);
-  const router = useRouter();
-  // Only auto-collapse for genuine emptiness while the module is actually
-  // "on" — if the viewer explicitly hid it, the header+switch must still
-  // render (regardless of whether there'd be activity to show) so it can be
-  // turned back on from Home itself.
-  if (on && items.length === 0) return null;
-
-  const toggle = () => {
-    const next = !on;
-    setOn(next);
-    fetch("/api/home-preferences", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next ? { showModule: "friend_activity" } : { hideModule: "friend_activity" }),
-    })
-      .then(() => router.refresh())
-      .catch(() => {});
-  };
-
+export function FriendActivityFeed({ items }: { items: FriendActivityEntry[] }) {
   return (
     <section>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-base font-bold text-foreground">
-          <ModuleIconBadge icon={Activity} /> Friend Activity
-        </h2>
-        <Switch checked={on} onChange={toggle} label="Show Friend Activity on Home" />
-      </div>
-      {on ? (
+      <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-foreground">
+        <ModuleIconBadge icon={Activity} /> Friend Activity
+      </h2>
+      {items.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground">
+          No recent activity from your friends yet.
+        </p>
+      ) : (
         <ul className="space-y-1.5">
           {items.map((item, i) => (
             <FriendActivityRow key={`${item.kind}-${item.actor.id}-${item.postId ?? item.target?.id ?? i}`} item={item} />
           ))}
         </ul>
-      ) : null}
+      )}
     </section>
   );
 }

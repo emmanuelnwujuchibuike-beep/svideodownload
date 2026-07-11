@@ -155,6 +155,10 @@ export default function RootLayout({
             scripts/gen-icons.mjs; harmless to include, not load-bearing. */}
         <link rel="apple-touch-icon" sizes="152x152" href="/apple-icon-152.png" />
         <link rel="apple-touch-icon" sizes="167x167" href="/apple-icon-167.png" />
+        {/* BootSplash (below) renders this as a raw <img> before React/next-image
+            ever runs — preload it so the boot logo paints immediately on every
+            cold load instead of waiting on a cache-cold fetch. */}
+        <link rel="preload" as="image" href="/brand/frenz-logo.png" fetchPriority="high" />
         {SPLASH_SCREENS.flatMap(({ file, width, height, ratio }) =>
           (["light", "dark"] as const).map((theme) => (
             <link

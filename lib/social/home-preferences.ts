@@ -7,8 +7,13 @@ const hasSupabase =
 
 /** The optional Home sections a viewer can hide/reorder. The main feed is
  *  deliberately never a member — it's infinite, always renders last, and
- *  isn't something a "move it up/down" editor can meaningfully apply to. */
-export const HOME_MODULE_KEYS = ["stories", "friend_activity", "trending_reels", "continue_watching"] as const;
+ *  isn't something a "move it up/down" editor can meaningfully apply to.
+ *  Owner decision (2026-07-11): Friend Activity removed from this list
+ *  entirely — it now lives only on /friends (see FriendActivityFeed there),
+ *  never as a Home module. `isHomeModuleKey` naturally filters out any
+ *  already-stored `"friend_activity"` value from an existing viewer's saved
+ *  `hidden_modules`/`module_order` row, so no data migration is needed. */
+export const HOME_MODULE_KEYS = ["stories", "trending_reels", "continue_watching"] as const;
 export type HomeModuleKey = (typeof HOME_MODULE_KEYS)[number];
 
 export function isHomeModuleKey(v: unknown): v is HomeModuleKey {
@@ -17,7 +22,6 @@ export function isHomeModuleKey(v: unknown): v is HomeModuleKey {
 
 export const HOME_MODULE_LABELS: Record<HomeModuleKey, string> = {
   stories: "Stories",
-  friend_activity: "Friend Activity",
   trending_reels: "Trending Reels",
   continue_watching: "Continue Watching",
 };

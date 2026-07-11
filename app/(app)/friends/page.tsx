@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { FriendActivityFeed } from "@/features/friends/friend-activity-feed";
 import { FriendsHub } from "@/features/friends/friends-hub";
 import { FriendsStories } from "@/features/friends/friends-stories";
 import { NearbyDiscovery } from "@/features/friends/nearby-discovery";
 import { getDiscoveryFeed } from "@/lib/social/discovery";
+import { getFriendActivity } from "@/lib/social/friend-activity";
 import { friendsOverview, runFriendRemindersSoon } from "@/lib/social/friends";
 import { getActiveStories } from "@/lib/social/stories";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -39,11 +41,12 @@ export default async function FriendsPage() {
     /* location column not migrated yet */
   }
 
-  const [overview, friendStories, followingStories, discovery] = await Promise.all([
+  const [overview, friendStories, followingStories, discovery, activity] = await Promise.all([
     friendsOverview(user.id),
     getActiveStories(user.id, 24, "friends"),
     getActiveStories(user.id, 24, "following"),
     getDiscoveryFeed(user.id, { viewerLocation }),
+    getFriendActivity(user.id, 12),
   ]);
 
   return (
@@ -59,6 +62,9 @@ export default async function FriendsPage() {
           />
         </div>
         <FriendsHub initial={overview} />
+        <div className="mx-auto w-full max-w-2xl">
+          <FriendActivityFeed items={activity} />
+        </div>
         <div className="mx-auto w-full max-w-2xl">
           <NearbyDiscovery items={discovery.items} nextOffset={discovery.nextOffset} />
         </div>

@@ -29,6 +29,7 @@ export type NotificationType =
   | "friend_reminder"
   | "message"
   | "message_reaction"
+  | "message_mention"
   | "download_complete"
   | "download_failed"
   | "download_ready"
@@ -51,7 +52,8 @@ export type NotificationType =
   | "security_2fa"
   | "security_suspicious"
   | "security_recovery"
-  | "system";
+  | "system"
+  | "admin_broadcast";
 
 /** Notification Center tab categories. */
 export type NotificationCategory =
@@ -85,6 +87,7 @@ const CATEGORY_BY_TYPE: Partial<Record<NotificationType, NotificationCategory>> 
   friend_reminder: "social",
   message: "social",
   message_reaction: "social",
+  message_mention: "social",
   download_complete: "downloads",
   download_failed: "downloads",
   download_ready: "downloads",
@@ -249,7 +252,7 @@ export interface GroupedNotificationsResult {
 // same thread → one card, "Sam sent you 5 messages", not five separate rows).
 const GROUP_BY_POST = new Set<NotificationType>(["like", "love", "comment", "reply", "mention", "comment_reaction", "save", "repost", "repost_engagement", "share", "quote"]);
 const GROUP_TOGETHER = new Set<NotificationType>(["follow", "profile_view"]);
-const GROUP_BY_CONVERSATION = new Set<NotificationType>(["message", "message_reaction"]);
+const GROUP_BY_CONVERSATION = new Set<NotificationType>(["message", "message_reaction", "message_mention"]);
 
 function groupKey(it: NotificationItem): string {
   if (GROUP_BY_POST.has(it.type) && it.postId) return `${it.type}:${it.postId}`;

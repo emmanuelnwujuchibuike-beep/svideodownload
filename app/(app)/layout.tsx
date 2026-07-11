@@ -7,7 +7,7 @@ import { DeviceCheck } from "@/features/app-shell/device-check";
 import { FloatingMessages } from "@/features/app-shell/floating-messages";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { OfflineQueueSync } from "@/features/app-shell/offline-queue-sync";
-import { PresenceTracker } from "@/features/friends/use-presence";
+import { AutoAwayTracker, PresenceTracker } from "@/features/friends/use-presence";
 import { NotificationLiveToast } from "@/features/notifications/live-toast";
 import { InboxRealtimeTracker } from "@/features/social/inbox";
 import { ReactionFloatLayer } from "@/features/ui/reaction-float";
@@ -47,6 +47,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <AppOverlays />
       {/* Joins the shared presence channel so this user shows as online. */}
       <PresenceTracker />
+      {/* available <-> away after 5 minutes idle; never touches a manually
+          chosen Busy/DND/Invisible. */}
+      <AutoAwayTracker />
       {/* Live inbox badge — was dead code before, only updated while a thread was open. */}
       <InboxRealtimeTracker />
       {/* Replays any offline-queued Like/Save writes on load + reconnect. */}

@@ -3,12 +3,16 @@ import { Skeleton, SkeletonAvatar } from "@/features/ui/skeleton";
 /** Thread skeleton — fills the Glass Split right panel. */
 export default function ConversationLoading() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    // Matches [id]/page.tsx's mobile full-viewport overlay exactly (same
+    // fixed/z-50/lg: split) — otherwise the skeleton renders in-flow below
+    // the topbar and the real page snaps to fixed-fullscreen the instant it
+    // streams in, a jarring layout jump.
+    <div className="fixed inset-0 z-50 flex min-h-0 flex-col bg-background lg:static lg:inset-auto lg:z-auto lg:flex-1 lg:bg-transparent">
       <span role="status" aria-live="polite" className="sr-only">
         Loading conversation…
       </span>
       {/* Thread header */}
-      <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
+      <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-3">
         <SkeletonAvatar className="h-10 w-10" />
         <div className="space-y-1.5">
           <Skeleton className="h-3.5 w-32" />

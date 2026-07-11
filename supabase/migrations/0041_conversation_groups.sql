@@ -142,15 +142,27 @@ create index if not exists message_reactions_conversation_idx on public.message_
 
 alter table public.message_reactions enable row level security;
 drop policy if exists "message_reactions participant all" on public.message_reactions;
-create policy "message_reactions participant all" on public.message_reactions
-  for all using (
-    auth.uid() = user_id
-    and exists (
+
+-- SELECT is member-wide (any active member of the conversation can see WHO
+-- reacted, not just their own reaction) — a single combined "for all" policy
+-- here would have restricted SELECT to `auth.uid() = user_id` too, which was
+-- a real bug: postgres_changes enforces RLS on realtime delivery, so with a
+-- single self-only policy no participant would ever receive a LIVE reaction
+-- event from anyone but themselves. Split so reads are member-wide and only
+-- writes are self-scoped.
+drop policy if exists "message_reactions member read" on public.message_reactions;
+create policy "message_reactions member read" on public.message_reactions
+  for select using (
+    exists (
       select 1 from public.conversation_members cm
       where cm.conversation_id = message_reactions.conversation_id
         and cm.user_id = auth.uid() and cm.left_at is null
     )
-  ) with check (
+  );
+
+drop policy if exists "message_reactions self insert" on public.message_reactions;
+create policy "message_reactions self insert" on public.message_reactions
+  for insert with check (
     auth.uid() = user_id
     and conversation_id = (select m.conversation_id from public.messages m where m.id = message_reactions.message_id)
     and exists (
@@ -159,6 +171,17 @@ create policy "message_reactions participant all" on public.message_reactions
         and cm.user_id = auth.uid() and cm.left_at is null
     )
   );
+
+drop policy if exists "message_reactions self update" on public.message_reactions;
+create policy "message_reactions self update" on public.message_reactions
+  for update using (auth.uid() = user_id) with check (
+    auth.uid() = user_id
+    and conversation_id = (select m.conversation_id from public.messages m where m.id = message_reactions.message_id)
+  );
+
+drop policy if exists "message_reactions self delete" on public.message_reactions;
+create policy "message_reactions self delete" on public.message_reactions
+  for delete using (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------
 -- Replace the INSERT-only bump_conversation() with a preview-sync that also
@@ -219,6 +242,97 @@ drop trigger if exists conversations_touch_members_trg on public.conversations;
 create trigger conversations_touch_members_trg
   after update of title, avatar_url on public.conversations
   for each row execute function public.touch_members_on_conversation_change();
+
+-- ---------------------------------------------------------------------
+-- CRITICAL FIX: conversations/messages' original RLS policies (0011) are
+-- keyed on conversations.user_low/user_high — which are now NULL for every
+-- group conversation (see conversations_shape_chk above). Since Postgres
+-- Realtime enforces RLS on `postgres_changes` delivery, this silently
+-- blocked ALL realtime message delivery for group threads (they'd only
+-- catch up on resync/reconnect, never live), and — more severely — it
+-- blocked message_reactions INSERTs from EVER succeeding in a group at all:
+-- that policy's `with check` reads `messages.conversation_id` via a
+-- subquery, which is itself subject to `messages`' own SELECT RLS, so a
+-- broken `messages` SELECT policy silently rejected every group reaction.
+-- Rewritten to check `conversation_members` instead, which uniformly covers
+-- both direct and group conversations (direct behavior is unchanged: the
+-- backfilled membership rows are exactly the same 2 users `user_low`/
+-- `user_high` already named).
+-- ---------------------------------------------------------------------
+drop policy if exists "conversations participants" on public.conversations;
+create policy "conversations participants" on public.conversations
+  for select using (
+    exists (
+      select 1 from public.conversation_members cm
+      where cm.conversation_id = conversations.id
+        and cm.user_id = auth.uid() and cm.left_at is null
+    )
+  );
+
+drop policy if exists "messages participants read" on public.messages;
+create policy "messages participants read" on public.messages
+  for select using (
+    exists (
+      select 1 from public.conversation_members cm
+      where cm.conversation_id = messages.conversation_id
+        and cm.user_id = auth.uid() and cm.left_at is null
+    )
+  );
+
+drop policy if exists "messages sender insert" on public.messages;
+create policy "messages sender insert" on public.messages
+  for insert with check (
+    auth.uid() = sender_id
+    and exists (
+      select 1 from public.conversation_members cm
+      where cm.conversation_id = messages.conversation_id
+        and cm.user_id = auth.uid() and cm.left_at is null
+    )
+  );
+
+-- ---------------------------------------------------------------------
+-- Atomic ownership transfer. The service layer previously did this as two
+-- separate JS-orchestrated UPDATEs (demote old owner, then promote new
+-- owner) with a best-effort rollback on failure — if the SECOND update
+-- failed AND the rollback itself failed (e.g. a connection drop mid-
+-- sequence), the group could be left with zero owners and no recovery
+-- path (transferOwnership itself requires an existing owner to call it).
+-- A single SECURITY DEFINER function makes both updates one transaction:
+-- either both land or neither does.
+-- ---------------------------------------------------------------------
+create or replace function public.transfer_group_ownership(
+  p_conversation_id uuid,
+  p_actor_id uuid,
+  p_new_owner_id uuid
+) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare
+  actor_role text;
+  target_role text;
+begin
+  if p_actor_id = p_new_owner_id then
+    return false;
+  end if;
+
+  select role into actor_role from public.conversation_members
+    where conversation_id = p_conversation_id and user_id = p_actor_id and left_at is null;
+  if actor_role is distinct from 'owner' then
+    return false;
+  end if;
+
+  select role into target_role from public.conversation_members
+    where conversation_id = p_conversation_id and user_id = p_new_owner_id and left_at is null;
+  if target_role is null then
+    return false;
+  end if;
+
+  update public.conversation_members set role = 'admin'
+    where conversation_id = p_conversation_id and user_id = p_actor_id;
+  update public.conversation_members set role = 'owner'
+    where conversation_id = p_conversation_id and user_id = p_new_owner_id;
+
+  return true;
+end $$;
 
 -- ---------------------------------------------------------------------
 -- Realtime: without this, channels connect but never receive anything

@@ -8,6 +8,7 @@ import {
   Download,
   Eye,
   Heart,
+  Megaphone,
   MessageCircle,
   Newspaper,
   PartyPopper,
@@ -37,6 +38,7 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   friend_reminder: MessageCircle,
   message: MessageCircle,
   message_reaction: SmilePlus,
+  message_mention: AtSign,
   // Wow is Frenz's signature interaction — its notifications carry the mark.
   like: WowSolid,
   love: Heart,
@@ -75,6 +77,7 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   security_2fa: ShieldAlert,
   security_suspicious: ShieldAlert,
   security_recovery: ShieldAlert,
+  admin_broadcast: Megaphone,
 };
 
 export function iconFor(type: NotificationType): LucideIcon {
@@ -112,6 +115,8 @@ export function verbFor(type: NotificationType): string {
       return "sent you a message";
     case "message_reaction":
       return "reacted to your message";
+    case "message_mention":
+      return "mentioned you in a chat";
     case "like":
       return "Wow'd your post";
     case "love":
@@ -186,6 +191,8 @@ export function verbFor(type: NotificationType): string {
       return "Suspicious activity detected";
     case "security_recovery":
       return "Recovery email changed";
+    case "admin_broadcast":
+      return "Frenz announcement";
     default:
       return "sent you a notification";
   }
@@ -203,7 +210,8 @@ export function isActorType(type: NotificationType): boolean {
     type !== "premium_expiring" &&
     type !== "processing_finished" &&
     type !== "milestone" &&
-    type !== "system"
+    type !== "system" &&
+    type !== "admin_broadcast"
   );
 }
 
@@ -218,7 +226,7 @@ export function hrefFor(n: {
   if ((n.type === "friend_accepted" || n.type === "friend_reminder" || n.type === "follow") && n.actor) {
     return `/u/${n.actor.handle}`;
   }
-  if ((n.type === "message" || n.type === "message_reaction") && n.conversationId) return `/messages/${n.conversationId}`;
+  if ((n.type === "message" || n.type === "message_reaction" || n.type === "message_mention") && n.conversationId) return `/messages/${n.conversationId}`;
   if (n.postId) return `/p/${n.postId}`;
   return "/notifications";
 }

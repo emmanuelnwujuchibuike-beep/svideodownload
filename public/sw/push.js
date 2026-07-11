@@ -22,10 +22,10 @@ self.addEventListener("push", (event) => {
     badge: "/icon.png",
     tag: data.tag || undefined,
     renotify: !!data.tag,
-    // actorId rides along so an action button (e.g. Accept/Decline on a
-    // friend request) can act directly on the right user without opening a
-    // window — see notificationclick below.
-    data: { url: data.url || "/home", actorId: data.actorId },
+    // actorId/conversationId ride along so an action button (Accept/Decline
+    // on a friend request, Mark as read/Mute on a message) can act directly
+    // without opening a window — see notificationclick below.
+    data: { url: data.url || "/home", actorId: data.actorId, conversationId: data.conversationId },
     vibrate: [60, 30, 60],
     // Notification.actions — real interactive buttons (Chrome/Edge/Android;
     // Firefox/Safari silently ignore unsupported entries per spec, so this
@@ -74,6 +74,34 @@ async function respondToFriendRequestFromPush(actorId, action, tag) {
   }
 }
 
+// Mark-as-read/Mute act directly on the thread — same "no window needed"
+// pattern as the friend-request buttons above; the mark-read GET is the
+// SAME endpoint the open thread itself calls, which already marks the
+// conversation read as a side effect (see lib/social/messages.ts's
+// getConversation) — no separate mark-read route to keep in sync.
+async function respondToMessageActionFromPush(conversationId, action) {
+  if (!UUID_RE.test(conversationId)) {
+    SWX.log("message action skipped — malformed conversationId", conversationId);
+    return;
+  }
+  try {
+    if (action === "mark_read") {
+      const res = await fetch(`/api/messages/${conversationId}`, { credentials: "include" });
+      SWX.log("message mark_read action", res.status);
+    } else if (action === "mute") {
+      const res = await fetch(`/api/conversations/${conversationId}/me`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ muted: true }),
+      });
+      SWX.log("message mute action", res.status);
+    }
+  } catch (err) {
+    SWX.log("message action failed", err);
+  }
+}
+
 self.addEventListener("notificationclick", (event) => {
   const notifData = event.notification.data || {};
   const url = notifData.url || "/home";
@@ -86,6 +114,11 @@ self.addEventListener("notificationclick", (event) => {
   // silently doing nothing — a dead button is worse than a normal tap.
   if ((event.action === "accept" || event.action === "decline") && notifData.actorId) {
     event.waitUntil(respondToFriendRequestFromPush(notifData.actorId, event.action, event.notification.tag));
+    return; // background action — never opens/focuses a window
+  }
+
+  if ((event.action === "mark_read" || event.action === "mute") && notifData.conversationId) {
+    event.waitUntil(respondToMessageActionFromPush(notifData.conversationId, event.action));
     return; // background action — never opens/focuses a window
   }
 

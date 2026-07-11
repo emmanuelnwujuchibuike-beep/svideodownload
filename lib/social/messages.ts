@@ -1,4 +1,4 @@
-import { GROUP_TITLE_MAX, MAX_GROUP_MEMBERS } from "@/lib/social/message-meta";
+import { GROUP_TITLE_MAX, MAX_GROUP_MEMBERS, parseMentionedHandles } from "@/lib/social/message-meta";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export { GROUP_TITLE_MAX, MAX_GROUP_MEMBERS };
@@ -124,6 +124,25 @@ export async function getOrCreateConversation(
   const db = createAdminClient();
   const [low, high] = pair(senderId, recipientId);
 
+  // Self-healing upsert: if a PRIOR call created the `conversations` row but
+  // then failed/was interrupted before seeding `conversation_members` (no
+  // error was ever checked on that insert), the pair would otherwise be
+  // permanently stuck — every future call finds `existing` and returns early
+  // without ever re-verifying membership, and sendMessage's own membership
+  // check would then reject every send forever with no recovery path.
+  // `onConflict: do nothing` makes this safe to run unconditionally.
+  const seedMembers = async (conversationId: string) => {
+    await db
+      .from("conversation_members")
+      .upsert(
+        [
+          { conversation_id: conversationId, user_id: low },
+          { conversation_id: conversationId, user_id: high },
+        ],
+        { onConflict: "conversation_id,user_id", ignoreDuplicates: true },
+      );
+  };
+
   const { data: existing } = await db
     .from("conversations")
     .select("id")
@@ -131,7 +150,10 @@ export async function getOrCreateConversation(
     .eq("user_high", high)
     .eq("type", "direct")
     .maybeSingle();
-  if (existing) return { ok: true, id: existing.id as string };
+  if (existing) {
+    await seedMembers(existing.id as string);
+    return { ok: true, id: existing.id as string };
+  }
 
   const { data, error } = await db
     .from("conversations")
@@ -147,14 +169,13 @@ export async function getOrCreateConversation(
       .eq("user_high", high)
       .eq("type", "direct")
       .maybeSingle();
-    if (again) return { ok: true, id: again.id as string };
+    if (again) {
+      await seedMembers(again.id as string);
+      return { ok: true, id: again.id as string };
+    }
     return { ok: false, reason: "unavailable" };
   }
-  // Best-effort: a lost race here means the concurrent winner already seeded it.
-  await db.from("conversation_members").insert([
-    { conversation_id: data.id, user_id: low },
-    { conversation_id: data.id, user_id: high },
-  ]);
+  await seedMembers(data.id as string);
   return { ok: true, id: data.id as string };
 }
 
@@ -304,6 +325,14 @@ export async function setGroupAvatar(
   }
 }
 
+/**
+ * Demote-then-promote as ONE atomic transaction (a `security definer` SQL
+ * function, see migration 0041) rather than two separate JS-orchestrated
+ * UPDATEs — the previous two-step version could leave a group with zero
+ * owners (and no recovery path, since transferring ownership itself
+ * requires an existing owner) if the second update failed and the
+ * best-effort rollback also failed.
+ */
 export async function transferOwnership(
   conversationId: string,
   actorId: string,
@@ -312,28 +341,13 @@ export async function transferOwnership(
   if (actorId === newOwnerId) return { ok: false, reason: "invalid" };
   try {
     const db = createAdminClient();
-    const actorRole = await memberRole(db, conversationId, actorId);
-    if (actorRole !== "owner") return { ok: false, reason: "forbidden" };
-    const targetRole = await memberRole(db, conversationId, newOwnerId);
-    if (!targetRole) return { ok: false, reason: "not_a_member" };
-
-    const { error: demoteErr } = await db
-      .from("conversation_members")
-      .update({ role: "admin" })
-      .eq("conversation_id", conversationId)
-      .eq("user_id", actorId);
-    if (demoteErr) return { ok: false };
-    const { error: promoteErr } = await db
-      .from("conversation_members")
-      .update({ role: "owner" })
-      .eq("conversation_id", conversationId)
-      .eq("user_id", newOwnerId);
-    if (promoteErr) {
-      // Best-effort rollback so we never end up with zero owners.
-      await db.from("conversation_members").update({ role: "owner" }).eq("conversation_id", conversationId).eq("user_id", actorId);
-      return { ok: false };
-    }
-    return { ok: true };
+    const { data, error } = await db.rpc("transfer_group_ownership", {
+      p_conversation_id: conversationId,
+      p_actor_id: actorId,
+      p_new_owner_id: newOwnerId,
+    });
+    if (error) return { ok: false };
+    return { ok: data === true, reason: data === true ? undefined : "forbidden" };
   } catch {
     return { ok: false };
   }
@@ -383,8 +397,16 @@ export async function setConversationPrefs(
   }
 }
 
-/** Fire-and-forget: notify every other active member that a message landed. */
-async function notifyMembers(db: Db, conversationId: string, senderId: string, messageId: string): Promise<void> {
+/**
+ * Fire-and-forget: notify every other active member that a message landed —
+ * `message_mention` instead of the generic `message` type for anyone the
+ * text @mentions, so it's the one place a message's notification row is
+ * ever created and a mentioned member never gets BOTH a generic and a
+ * mention row for the same send. Returns the mentioned user ids so the
+ * caller (the API route, which owns push-sending) can word/prioritize their
+ * push differently too.
+ */
+async function notifyMembers(db: Db, conversationId: string, senderId: string, messageId: string, body: string): Promise<string[]> {
   try {
     const { data: members } = await db
       .from("conversation_members")
@@ -392,26 +414,64 @@ async function notifyMembers(db: Db, conversationId: string, senderId: string, m
       .eq("conversation_id", conversationId)
       .is("left_at", null)
       .neq("user_id", senderId);
-    const rows = ((members ?? []) as { user_id: string }[]).map((m) => ({
+    const recipients = (members ?? []) as { user_id: string }[];
+    if (recipients.length === 0) return [];
+
+    const mentionedHandles = parseMentionedHandles(body);
+    let mentionedUserIds = new Set<string>();
+    if (mentionedHandles.length > 0) {
+      const { data: profs } = await db
+        .from("profiles")
+        .select("id, handle")
+        .in(
+          "id",
+          recipients.map((r) => r.user_id),
+        );
+      const idByHandle = new Map(((profs ?? []) as { id: string; handle: string | null }[]).filter((p) => p.handle).map((p) => [p.handle!.toLowerCase(), p.id]));
+      mentionedUserIds = new Set(mentionedHandles.map((h) => idByHandle.get(h)).filter((id): id is string => !!id));
+    }
+
+    const rows = recipients.map((m) => ({
       user_id: m.user_id,
       actor_id: senderId,
-      type: "message",
+      type: mentionedUserIds.has(m.user_id) ? "message_mention" : "message",
       conversation_id: conversationId,
       message_id: messageId,
     }));
-    if (rows.length) await db.from("notifications").insert(rows);
+    await db.from("notifications").insert(rows);
+    return [...mentionedUserIds];
   } catch {
     /* notifications are best-effort */
+    return [];
   }
 }
 
-/** Send a message in an existing conversation (sender must be an active member). */
+export interface SendMessageOptions {
+  replyToId?: string;
+  /** Idempotency key: a client-generated UUID. Replaying the same send (an
+   * offline-queue retry racing a delayed success, e.g.) returns the
+   * ALREADY-created message instead of inserting a duplicate. */
+  clientId?: string;
+  /** Client-side send timestamp — purely a latency metric (server
+   * `created_at` stays the sole ordering/delivery authority). */
+  clientSentAt?: string;
+  /** Set when this send is a forward of an existing message. */
+  forwardedFromId?: string;
+}
+
+/**
+ * Send a message in an existing conversation (sender must be an active
+ * member). Idempotent when `clientId` is supplied: a second call with the
+ * same (conversationId, senderId, clientId) returns the original insert's
+ * id rather than creating a duplicate — safe to call from an offline-queue
+ * replay without a duplicate-detection dance at the call site.
+ */
 export async function sendMessage(
   senderId: string,
   conversationId: string,
   body: string,
-  replyToId?: string,
-): Promise<{ ok: true; id: string } | { ok: false }> {
+  options: SendMessageOptions = {},
+): Promise<{ ok: true; id: string; duplicate?: boolean } | { ok: false }> {
   if (!hasSupabase) return { ok: false };
   const text = body.trim();
   if (!text || text.length > 2000) return { ok: false };
@@ -438,29 +498,110 @@ export async function sendMessage(
       if (other && (await bothBlocked(db, senderId, other))) return { ok: false };
     }
 
+    // Idempotency check FIRST — a replayed send should never even attempt a
+    // second insert (avoids relying solely on the unique-index error path).
+    if (options.clientId) {
+      const { data: existing } = await db
+        .from("messages")
+        .select("id")
+        .eq("conversation_id", conversationId)
+        .eq("sender_id", senderId)
+        .eq("client_id", options.clientId)
+        .maybeSingle();
+      if (existing) return { ok: true, id: existing.id as string, duplicate: true };
+    }
+
     let replyTo: string | null = null;
-    if (replyToId) {
+    if (options.replyToId) {
       const { data: parent } = await db
         .from("messages")
         .select("id")
-        .eq("id", replyToId)
+        .eq("id", options.replyToId)
         .eq("conversation_id", conversationId)
         .maybeSingle();
       if (parent) replyTo = parent.id as string;
     }
 
+    let forwardedFrom: string | null = null;
+    if (options.forwardedFromId) {
+      const { data: origin } = await db.from("messages").select("id").eq("id", options.forwardedFromId).maybeSingle();
+      if (origin) forwardedFrom = origin.id as string;
+    }
+
     const { data: inserted, error } = await db
       .from("messages")
-      .insert({ conversation_id: conversationId, sender_id: senderId, body: text, reply_to_id: replyTo })
+      .insert({
+        conversation_id: conversationId,
+        sender_id: senderId,
+        body: text,
+        reply_to_id: replyTo,
+        client_id: options.clientId ?? null,
+        client_sent_at: options.clientSentAt ?? null,
+        forwarded_from_id: forwardedFrom,
+      })
       .select("id")
       .single();
-    if (error || !inserted) return { ok: false };
+    if (error || !inserted) {
+      // Lost a race on the (conversation, sender, client_id) unique index —
+      // the concurrent winner already landed; return its id, not a failure.
+      if (options.clientId) {
+        const { data: winner } = await db
+          .from("messages")
+          .select("id")
+          .eq("conversation_id", conversationId)
+          .eq("sender_id", senderId)
+          .eq("client_id", options.clientId)
+          .maybeSingle();
+        if (winner) return { ok: true, id: winner.id as string, duplicate: true };
+      }
+      return { ok: false };
+    }
 
-    void notifyMembers(db, conversationId, senderId, inserted.id as string);
+    void notifyMembers(db, conversationId, senderId, inserted.id as string, text);
 
     return { ok: true, id: inserted.id as string };
   } catch {
     return { ok: false };
+  }
+}
+
+/**
+ * Forward an existing message's text into one or more conversations the
+ * sender is already an active member of (direct or group — unlike Share,
+ * which only ever fans out to new/existing 1:1 threads, Forward can target
+ * a group you're in too). Each target gets its own real `sendMessage` call
+ * with `forwardedFromId` set, so it participates fully in the normal
+ * delivery/notification pipeline rather than being a special case.
+ */
+export async function forwardMessage(
+  senderId: string,
+  messageId: string,
+  toConversationIds: string[],
+): Promise<{ ok: boolean; sent: number }> {
+  try {
+    const db = createAdminClient();
+    const { data: source } = await db.from("messages").select("body, conversation_id, deleted_at").eq("id", messageId).maybeSingle();
+    if (!source || source.deleted_at) return { ok: false, sent: 0 };
+
+    // The forwarder must actually be able to see the source message.
+    const { data: sourceMembership } = await db
+      .from("conversation_members")
+      .select("user_id")
+      .eq("conversation_id", source.conversation_id)
+      .eq("user_id", senderId)
+      .is("left_at", null)
+      .maybeSingle();
+    if (!sourceMembership) return { ok: false, sent: 0 };
+
+    const targets = [...new Set(toConversationIds)].slice(0, 20);
+    let sent = 0;
+    for (const conversationId of targets) {
+      const res = await sendMessage(senderId, conversationId, source.body as string, { forwardedFromId: messageId });
+      if (res.ok && !res.duplicate) sent += 1;
+    }
+    return { ok: sent > 0, sent };
+  } catch {
+    return { ok: false, sent: 0 };
   }
 }
 
@@ -805,6 +946,8 @@ export interface ConversationView {
   members: ConversationMember[];
   viewerRole: MemberRole | null;
   messages: MessageItem[];
+  /** Pass this back as `sinceUpdatedAt` on the next call for a delta sync. */
+  syncedAt: string;
 }
 
 interface RawMessageRow {
@@ -820,8 +963,23 @@ interface RawMessageRow {
   pinned: boolean;
 }
 
-/** Full thread for an active member; marks read (direct) or advances the read cursor (group). */
-export async function getConversation(conversationId: string, userId: string): Promise<ConversationView | null> {
+/**
+ * Full thread for an active member; marks read (direct) or advances the
+ * read cursor (group).
+ *
+ * `sinceUpdatedAt`, when supplied, turns this into a DELTA sync: instead of
+ * the last 300 messages, only rows whose `updated_at` changed after that
+ * timestamp come back (new sends, edits, deletes, receipts, or a reaction
+ * on an older message — `updated_at` is touched by triggers for all of
+ * these, see migration 0043). The client already holds everything older;
+ * this just merges what moved. Falls back to the full last-300 window when
+ * omitted (first load, or a client with no prior snapshot to diff against).
+ */
+export async function getConversation(
+  conversationId: string,
+  userId: string,
+  sinceUpdatedAt?: string,
+): Promise<ConversationView | null> {
   if (!hasSupabase) return null;
   try {
     const db = createAdminClient();
@@ -890,13 +1048,41 @@ export async function getConversation(conversationId: string, userId: string): P
         .filter((m): m is ConversationMember => !!m);
     }
 
-    const { data: msgs } = await db
-      .from("messages")
-      .select("id, sender_id, body, created_at, delivered_at, read_at, reply_to_id, edited_at, deleted_at, pinned")
-      .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true })
-      .limit(300);
-    const rows = (msgs ?? []) as RawMessageRow[];
+    // Captured BEFORE the query runs, not after — so it's safe to hand back
+    // as the next delta call's `since`. A message that changes DURING this
+    // query's execution window is worst-case re-included next time
+    // (harmless, idempotent merge on the client); using a later timestamp
+    // instead could silently skip it.
+    const queryStartedAt = new Date().toISOString();
+    const MESSAGE_COLUMNS = "id, sender_id, body, created_at, delivered_at, read_at, reply_to_id, edited_at, deleted_at, pinned";
+    let rows: RawMessageRow[];
+    if (sinceUpdatedAt) {
+      // Delta path — small, order doesn't matter (the client merges by id
+      // into its own already-ordered state), so no need to reverse.
+      const { data: delta } = await db
+        .from("messages")
+        .select(MESSAGE_COLUMNS)
+        .eq("conversation_id", conversationId)
+        .gt("updated_at", sinceUpdatedAt)
+        .order("created_at", { ascending: true })
+        .limit(500);
+      rows = (delta ?? []) as RawMessageRow[];
+    } else {
+      // Full path — most-recent 300, then reversed back to oldest-first for
+      // display. A plain ascending order+limit (the pre-existing pre-Part-1
+      // shape of this query) returns the OLDEST 300 messages once a thread
+      // passes that size, permanently hiding the actual recent conversation
+      // behind ancient history. Groups make this materially worse (more
+      // senders → faster accumulation), so fixed it here rather than
+      // carrying it forward.
+      const { data: msgsDesc } = await db
+        .from("messages")
+        .select(MESSAGE_COLUMNS)
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: false })
+        .limit(300);
+      rows = ((msgsDesc ?? []) as RawMessageRow[]).slice().reverse();
+    }
 
     const replyIds = [...new Set(rows.map((m) => m.reply_to_id).filter((x): x is string => !!x))];
     const messageIds = rows.map((m) => m.id);
@@ -959,6 +1145,7 @@ export async function getConversation(conversationId: string, userId: string): P
       members,
       viewerRole: (myMembership.role as MemberRole) ?? null,
       messages,
+      syncedAt: queryStartedAt,
     };
   } catch {
     return null;

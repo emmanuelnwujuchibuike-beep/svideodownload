@@ -1,16 +1,54 @@
 "use client";
 
-import { Check, CheckCheck, Loader2, MoreHorizontal, Pencil, Pin, PinOff, Reply as ReplyIcon, Send, SmilePlus, Trash2, X } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import {
+  AlertTriangle,
+  Check,
+  CheckCheck,
+  Clock,
+  Forward,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  PinOff,
+  Reply as ReplyIcon,
+  Send,
+  SmilePlus,
+  Trash2,
+  WifiOff,
+  X,
+} from "lucide-react";
+import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { RichText } from "@/components/social/rich-text";
 import { revalidate } from "@/features/data";
+import { ForwardSheet } from "@/features/social/forward-sheet";
 import { INBOX_KEY, loadInbox } from "@/features/social/inbox";
 import { extractSharedPost, MessagePostEmbed } from "@/features/social/message-post-embed";
-import { MESSAGE_REACTIONS } from "@/lib/social/message-meta";
+import { useTypingIndicator } from "@/features/social/use-typing";
+import {
+  enqueueMessage,
+  listQueuedForConversation,
+  replayMessageQueue,
+  subscribeMessageFailure,
+  subscribeMessageQueue,
+} from "@/lib/offline/message-queue";
+import { haptic } from "@/lib/motion/haptics";
+import { springs } from "@/lib/motion/springs";
+import { playSound } from "@/lib/notifications/sound-fx";
+import { MESSAGE_REACTIONS, parseMentionedHandles } from "@/lib/social/message-meta";
 import type { ConversationMember, ConversationType, MessageItem } from "@/lib/social/messages";
 import { useVisualViewport } from "@/lib/pwa/use-visual-viewport";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+
+const COMPOSER_MAX_HEIGHT = 128;
+const DRAFT_PREFIX = "frenz-draft:";
+
+function draftKey(conversationId: string): string {
+  return `${DRAFT_PREFIX}${conversationId}`;
+}
 
 interface RawMessage {
   id: string;
@@ -44,13 +82,19 @@ function receiptLabel(m: MessageItem): { label: string; read: boolean; delivered
 export function ConversationRoom({
   conversationId,
   viewerId,
+  viewerName,
+  viewerHandle = null,
   initial,
+  initialSyncedAt,
   type = "direct",
   members = [],
 }: {
   conversationId: string;
   viewerId: string;
+  viewerName: string;
+  viewerHandle?: string | null;
   initial: MessageItem[];
+  initialSyncedAt: string;
   type?: ConversationType;
   members?: ConversationMember[];
 }) {
@@ -60,35 +104,214 @@ export function ConversationRoom({
   const [replyingTo, setReplyingTo] = useState<MessageItem | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  // The "..." button's own position varies a lot with bubble width (it sits
+  // right next to the bubble, not at a fixed screen edge) — anchoring the
+  // menu with plain `left-0`/`right-0` relative to that narrow button let it
+  // run off-screen on a real phone whenever a received message's bubble was
+  // wide (confirmed: "Forward" clipped at a 390px viewport). Measuring the
+  // button's rect and rendering the menu `fixed`, clamped to the viewport,
+  // keeps it on-screen regardless of bubble width or which side it's on.
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  // Chat @mention autocomplete — filters the already-loaded member roster
+  // client-side (a group has at most MAX_GROUP_MEMBERS=50, no server round
+  // trip needed, unlike comments.tsx's global-user search). Notifications
+  // are driven server-side by parsing the FINAL sent body (see
+  // lib/social/message-meta.ts's parseMentionedHandles) — this is purely a
+  // typing aid, same division of responsibility as the comment composer.
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionAnchor, setMentionAnchor] = useState<number | null>(null);
   const [reactingId, setReactingId] = useState<string | null>(null);
+  const [forwardingId, setForwardingId] = useState<string | null>(null);
+  // "connected" only after the FIRST successful subscribe — starts
+  // "connecting" so a slow initial handshake doesn't briefly flash
+  // "Reconnecting…" (that copy implies a prior connection existed).
+  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "reconnecting">("connecting");
+  const [queuedIds, setQueuedIds] = useState<Set<string>>(new Set());
+  const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const seen = useRef(new Set(initial.map((m) => m.id)));
   const bubbleRefs = useRef(new Map<string, HTMLDivElement>());
   const messagesRef = useRef<MessageItem[]>(initial);
+  const lastSyncedAt = useRef(initialSyncedAt);
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
+  const { typingNames, notifyTyping, clearTyping } = useTypingIndicator(conversationId, viewerId, viewerName);
+  // A single soft tick when someone STARTS typing — not per keystroke, and
+  // not re-triggered while they keep typing or a second person joins in.
+  const wasTypingRef = useRef(false);
+  useEffect(() => {
+    const isTyping = typingNames.length > 0;
+    if (isTyping && !wasTypingRef.current) playSound("typing");
+    wasTypingRef.current = isTyping;
+  }, [typingNames.length]);
+
+  // Draft persistence: restore on mount, save (debounced by the effect's own
+  // batching) on every change, clear once actually sent.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(draftKey(conversationId));
+      if (saved) setBody(saved);
+    } catch {
+      /* localStorage unavailable (private mode) — drafts just don't persist */
+    }
+    // Only ever run once per mounted thread — not on every `body` change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+  useEffect(() => {
+    try {
+      if (body.trim()) localStorage.setItem(draftKey(conversationId), body);
+      else localStorage.removeItem(draftKey(conversationId));
+    } catch {
+      /* best-effort */
+    }
+  }, [conversationId, body]);
+
+  // Offline queue: reflect queued/failed state onto the matching optimistic
+  // bubble (id scheme: `optimistic-<clientId>`, see submit()), and replay
+  // whatever's due whenever this thread mounts, comes back online, or the
+  // tab regains focus.
+  useEffect(() => {
+    const refreshQueueState = () => {
+      void listQueuedForConversation(conversationId).then((items) => {
+        setQueuedIds((prev) => {
+          const next = new Set(items.map((i) => i.clientId));
+          if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev;
+          return next;
+        });
+        // Re-seed a bubble for anything still queued that this mount's
+        // `initial` snapshot doesn't know about — a message queued while
+        // offline, then the app closed/reopened BEFORE it replayed, must
+        // still show in the thread (as "Waiting to send…"), not silently
+        // disappear until it eventually lands.
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          // Also skip anything whose content already landed under its REAL
+          // id (a rare race: the send actually succeeded server-side but
+          // the client never got the response, so the queue entry is
+          // stale) — the imminent replayMessageQueue() call below will
+          // clear that stale entry via the server's own duplicate check.
+          const existingMineBodies = new Set(prev.filter((m) => m.mine).map((m) => m.body));
+          const missing = items.filter((i) => !existingIds.has(`optimistic-${i.clientId}`) && !existingMineBodies.has(i.body));
+          if (missing.length === 0) return prev;
+          const seeded: MessageItem[] = missing.map((i) => ({
+            id: `optimistic-${i.clientId}`,
+            body: i.body,
+            createdAt: i.clientSentAt,
+            mine: true,
+            senderId: viewerId,
+            deliveredAt: null,
+            readAt: null,
+            replyTo: i.replyToPreview ?? null,
+            editedAt: null,
+            deletedAt: null,
+            pinned: false,
+            reactions: [],
+          }));
+          for (const m of seeded) seen.current.add(m.id);
+          return [...prev, ...seeded];
+        });
+      });
+    };
+    refreshQueueState();
+    const unsubscribeQueue = subscribeMessageQueue(refreshQueueState);
+    const unsubscribeFailure = subscribeMessageFailure((clientId) => {
+      setFailedIds((prev) => new Set(prev).add(clientId));
+    });
+    void replayMessageQueue();
+    const onOnline = () => void replayMessageQueue();
+    window.addEventListener("online", onOnline);
+    return () => {
+      unsubscribeQueue();
+      unsubscribeFailure();
+      window.removeEventListener("online", onOnline);
+    };
+  }, [conversationId]);
+  // Incoming messages from someone else feel "welcoming" (slide+fade in);
+  // outgoing feels "satisfying" (a quick scale pop on send) — matching the
+  // spec's own language for the two directions. Only messages that arrive
+  // AFTER mount get a class here; the initial server-rendered batch never
+  // does, so opening a thread with 50 messages doesn't cascade-animate all
+  // of them at once. A CSS animation only replays when its element is freshly
+  // mounted, so a persistent Set-membership check across re-renders is safe —
+  // it won't re-trigger once the bubble is already in the DOM.
+  const welcomedIds = useRef(new Set<string>());
+
+  // Auto-growing composer — expands with content up to a cap, then scrolls
+  // internally, instead of a fixed single-line input.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT)}px`;
+  }, [body]);
+
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
 
-  const append = useCallback((m: MessageItem) => {
-    setMessages((prev) => {
-      if (seen.current.has(m.id)) return prev;
-      // My own realtime echo reconciles with the optimistic bubble I already
-      // showed (same body, temp id) instead of appending a duplicate.
-      if (m.mine) {
-        const idx = prev.findIndex((x) => x.id.startsWith("optimistic-") && x.body === m.body);
-        if (idx !== -1) {
-          seen.current.add(m.id);
-          const copy = prev.slice();
-          copy[idx] = m;
-          return copy;
-        }
-      }
-      seen.current.add(m.id);
-      return [...prev, m];
+  const mentionMatches = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return members
+      .filter((m) => m.id !== viewerId && (m.handle.toLowerCase().startsWith(q) || m.displayName.toLowerCase().startsWith(q)))
+      .slice(0, 6);
+  }, [mentionQuery, members, viewerId]);
+
+  const checkMentionTrigger = (value: string, caret: number) => {
+    const before = value.slice(0, caret);
+    const m = /(?:^|\s)@([A-Za-z0-9_.]{0,30})$/.exec(before);
+    if (m) {
+      setMentionAnchor(caret - m[1]!.length - 1);
+      setMentionQuery(m[1]!);
+    } else {
+      setMentionAnchor(null);
+      setMentionQuery(null);
+    }
+  };
+
+  const selectMention = (member: ConversationMember) => {
+    if (mentionAnchor === null) return;
+    haptic("light");
+    const caret = textareaRef.current?.selectionStart ?? body.length;
+    const insertAt = mentionAnchor;
+    const next = `${body.slice(0, insertAt)}@${member.handle} ${body.slice(caret)}`;
+    setBody(next);
+    setMentionQuery(null);
+    setMentionAnchor(null);
+    requestAnimationFrame(() => {
+      const pos = insertAt + member.handle.length + 2;
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(pos, pos);
     });
-  }, []);
+  };
+
+  const append = useCallback(
+    (m: MessageItem) => {
+      setMessages((prev) => {
+        if (seen.current.has(m.id)) return prev;
+        if (!m.mine) {
+          welcomedIds.current.add(m.id);
+          const mentioned = viewerHandle ? parseMentionedHandles(m.body).includes(viewerHandle.toLowerCase()) : false;
+          playSound(mentioned ? "mention" : "message");
+        }
+        // My own realtime echo reconciles with the optimistic bubble I already
+        // showed (same body, temp id) instead of appending a duplicate.
+        if (m.mine) {
+          const idx = prev.findIndex((x) => x.id.startsWith("optimistic-") && x.body === m.body);
+          if (idx !== -1) {
+            seen.current.add(m.id);
+            const copy = prev.slice();
+            copy[idx] = m;
+            return copy;
+          }
+        }
+        seen.current.add(m.id);
+        return [...prev, m];
+      });
+    },
+    [viewerHandle],
+  );
 
   // Auto-scroll to the newest message — also re-runs when the on-screen
   // keyboard opens/closes (its height changes the thread's own scroll
@@ -104,15 +327,21 @@ export function ConversationRoom({
   // live stream. Refetch + MERGE (never replace — optimistic bubbles awaiting
   // their echo must survive) whenever the app resumes, comes back online, the
   // channel re-subscribes after a drop, or a reaction changed (see below).
+  // Delta sync (`?since=`) — only what changed since the last successful
+  // sync comes back, not the full last-300 window; `lastSyncedAt` only ever
+  // advances on a CONFIRMED successful response, so a dropped connection
+  // never silently skips a gap — the next successful call still asks for
+  // everything since the last point we know we actually saw.
   const resyncing = useRef(false);
   const resync = useCallback(async () => {
     if (resyncing.current) return;
     resyncing.current = true;
     try {
-      const res = await fetch(`/api/messages/${conversationId}`, { cache: "no-store" });
+      const res = await fetch(`/api/messages/${conversationId}?since=${encodeURIComponent(lastSyncedAt.current)}`, { cache: "no-store" });
       if (!res.ok) return;
-      const d = (await res.json()) as { messages: MessageItem[] };
+      const d = (await res.json()) as { messages: MessageItem[]; syncedAt?: string };
       if (!d.messages) return;
+      if (d.syncedAt) lastSyncedAt.current = d.syncedAt;
       setMessages((prev) => {
         const byId = new Map(prev.map((m) => [m.id, m]));
         let changed = false;
@@ -136,16 +365,21 @@ export function ConversationRoom({
           byId.set(m.id, m);
         }
         if (!changed) return prev;
-        // Server order for confirmed messages; optimistic bubbles awaiting
-        // their echo stay last — unless the server confirms they landed, or
-        // they're old enough (20s) to be a genuinely failed send (ghost).
-        const optimistic = prev.filter(
-          (m) =>
-            m.id.startsWith("optimistic-") &&
-            !d.messages.some((s) => s.mine && s.body === m.body) &&
-            Date.now() - new Date(m.createdAt).getTime() < 20_000,
-        );
-        return [...d.messages, ...optimistic];
+        // Ghost cleanup: drop an optimistic bubble once its real echo has
+        // landed (found in this delta) or it's old enough (20s) to be a
+        // genuinely failed send. Everything else already in `byId` — all
+        // prior history untouched by this delta batch — is kept as-is; with
+        // delta sync, `d.messages` is only the small changed set, NOT the
+        // full thread, so returning it alone (the pre-delta-sync shape of
+        // this code) would silently wipe every older message from view on
+        // every catch-up resync.
+        for (const m of prev) {
+          if (!m.id.startsWith("optimistic-")) continue;
+          const landed = d.messages.some((s) => s.mine && s.body === m.body);
+          const stale = Date.now() - new Date(m.createdAt).getTime() >= 20_000;
+          if (landed || stale) byId.delete(m.id);
+        }
+        return Array.from(byId.values()).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       });
       void revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
     } catch {
@@ -213,17 +447,33 @@ export function ConversationRoom({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "message_reactions", filter: `conversation_id=eq.${conversationId}` },
-        () => {
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const messageId = (payload.new as { message_id?: string; user_id?: string }).message_id;
+            const actorId = (payload.new as { user_id?: string }).user_id;
+            // Only a genuinely new reaction from someone else, on MY OWN
+            // message — not my own react, not an emoji switch (UPDATE), not
+            // a reaction on someone else's message in this same thread.
+            if (actorId !== viewerId && messagesRef.current.some((m) => m.id === messageId && m.mine)) {
+              playSound("reaction");
+            }
+          }
           if (reactionDebounce) clearTimeout(reactionDebounce);
           reactionDebounce = setTimeout(() => void resync(), 400);
         },
       )
       .subscribe((status) => {
-        // A RE-subscribe means the socket dropped at some point — catch up on
-        // whatever the live stream missed while it was down.
         if (status === "SUBSCRIBED") {
+          setConnectionStatus("connected");
+          // A RE-subscribe means the socket dropped at some point — catch up
+          // on whatever the live stream missed while it was down.
           if (everSubscribed) void resync();
           everSubscribed = true;
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          // Only announce "Reconnecting…" if we'd actually connected before —
+          // a slow FIRST handshake should stay "connecting", not flash a
+          // banner implying a prior connection just broke.
+          if (everSubscribed) setConnectionStatus("reconnecting");
         }
       });
 
@@ -260,11 +510,52 @@ export function ConversationRoom({
     setOpenMenuId(null);
   };
 
+  const MENU_WIDTH = 160; // w-40
+  const toggleMessageMenu = (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    haptic("light");
+    if (openMenuId === id) {
+      setOpenMenuId(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const margin = 8;
+    const left = Math.min(Math.max(rect.right - MENU_WIDTH, margin), window.innerWidth - MENU_WIDTH - margin);
+    setMenuPos({ top: rect.bottom + 4, left });
+    setOpenMenuId(id);
+  };
+
+  const onComposerKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // While the @mention dropdown is open, Enter picks the top match instead
+    // of sending — matching the comment composer's own autocomplete
+    // convention (a stray Enter shouldn't ship a half-typed @handle as text).
+    if (e.key === "Enter" && !e.shiftKey && mentionMatches.length > 0) {
+      e.preventDefault();
+      selectMention(mentionMatches[0]!);
+      return;
+    }
+    if (e.key === "Escape" && mentionQuery !== null) {
+      setMentionQuery(null);
+      setMentionAnchor(null);
+      return;
+    }
+    // Enter sends; Shift+Enter (or any IME composition) inserts a newline —
+    // the standard chat-app convention, now meaningful since this is a real
+    // multi-line textarea instead of a single-line input.
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      void submit();
+    }
+  };
+
   const submit = async (e?: FormEvent) => {
     e?.preventDefault();
     const text = body.trim();
     if (!text || busy) return;
+    haptic("selection");
     setBusy(true);
+    clearTyping();
+    setMentionQuery(null);
+    setMentionAnchor(null);
 
     if (editingId) {
       const id = editingId;
@@ -288,7 +579,12 @@ export function ConversationRoom({
     }
 
     // Optimistic: show it now; the realtime echo reconciles it (see `append`).
-    const optimisticId = `optimistic-${Date.now()}`;
+    // `clientId` doubles as the optimistic bubble id suffix AND the server's
+    // idempotency key — queuedIds/failedIds (keyed by raw clientId) can spot
+    // this exact bubble by stripping the `optimistic-` prefix off its id.
+    const clientId = crypto.randomUUID();
+    const optimisticId = `optimistic-${clientId}`;
+    const clientSentAt = new Date().toISOString();
     const replyTo = replyingTo
       ? { id: replyingTo.id, body: replyingTo.body, senderId: replyingTo.senderId, deleted: !!replyingTo.deletedAt }
       : null;
@@ -297,7 +593,7 @@ export function ConversationRoom({
       {
         id: optimisticId,
         body: text,
-        createdAt: new Date().toISOString(),
+        createdAt: clientSentAt,
         mine: true,
         senderId: viewerId,
         deliveredAt: null,
@@ -316,16 +612,32 @@ export function ConversationRoom({
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId, body: text, replyToId }),
+        body: JSON.stringify({ conversationId, body: text, replyToId, clientId, clientSentAt }),
       });
-      if (!res.ok) {
-        // Confirmed failure — remove the ghost bubble and give the text back.
+      if (res.ok) {
+        // Bubble reconciles via the realtime echo (see `append`).
+      } else if (res.status >= 500) {
+        // Transient server-side failure — the offline queue backs off and
+        // retries instead of just discarding the composer text.
+        await enqueueMessage({ clientId, conversationId, body: text, replyToId, replyToPreview: replyTo ?? undefined, clientSentAt });
+      } else {
+        // Permanent (blocked/invalid) — remove the ghost bubble, give the
+        // text back, and log it so the failure is visible in monitoring —
+        // this path never touches the offline queue, so it's the only place
+        // that has to log it itself.
         setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
         setBody(text);
+        void fetch("/api/messages/send-failures", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversationId, clientId, reason: `http_${res.status}`, attempts: 0 }),
+        }).catch(() => {});
       }
     } catch {
-      // Network dropped mid-send: the message may or may not have landed —
-      // resync decides (reconciles the echo or drops the ghost).
+      // Network dropped entirely mid-send — hand off to the offline queue
+      // (delivers on reconnect, even much later); resync() also fires in
+      // case the send actually landed despite the client-side exception.
+      await enqueueMessage({ clientId, conversationId, body: text, replyToId, clientSentAt });
       void resync();
     } finally {
       setBusy(false);
@@ -400,11 +712,18 @@ export function ConversationRoom({
 
   return (
     <>
+      {connectionStatus === "reconnecting" ? (
+        <div className="flex items-center justify-center gap-1.5 bg-amber-500/15 px-4 py-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+          <WifiOff className="h-3.5 w-3.5" />
+          Reconnecting…
+        </div>
+      ) : null}
+
       {pinnedMessages.length > 0 ? (
         <button
           type="button"
           onClick={() => scrollToMessage(pinnedMessages[0]!.id)}
-          className="flex items-center gap-2 border-b border-border/60 bg-secondary/40 px-4 py-2 text-left text-xs font-medium text-muted-foreground transition hover:bg-secondary/60"
+          className="glass flex items-center gap-2 border-x-0 border-t-0 px-4 py-2 text-left text-xs font-medium text-muted-foreground transition hover:bg-secondary/60"
         >
           <Pin className="h-3.5 w-3.5 shrink-0 text-primary" />
           <span className="truncate">
@@ -414,13 +733,38 @@ export function ConversationRoom({
         </button>
       ) : null}
 
-      <div ref={scrollRef} className="flex-1 space-y-1.5 overflow-y-auto p-4">
+      {/* overflow-x-hidden is a defensive backstop, not the primary fix — the
+          primary fix is MessagePostEmbed's card no longer asserting a fixed
+          width wider than its bubble; this just guarantees a stray media/
+          embed width can never force the whole thread to scroll sideways. */}
+      <div
+        ref={scrollRef}
+        onScroll={() => {
+          // The action menu is now `fixed` (see toggleMessageMenu) so it can
+          // clamp itself to the viewport — but that means it no longer
+          // scrolls with its message, so it must close instead of visually
+          // drifting away from the bubble it belongs to.
+          if (openMenuId) setOpenMenuId(null);
+        }}
+        className="flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto p-4"
+      >
         {messages.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">Say hello</p>
+          <div className="flex h-full flex-col items-center justify-center gap-3 py-10 text-center">
+            <span className="bg-brand brand-glow flex h-14 w-14 items-center justify-center rounded-full">
+              <Send className="h-5 w-5 -translate-x-0.5 text-white" />
+            </span>
+            <p className="text-sm font-semibold">Say hello</p>
+            <p className="max-w-[220px] text-xs text-muted-foreground">
+              {type === "group" ? "Send the first message to get this group talking." : "Send the first message to start the conversation."}
+            </p>
+          </div>
         ) : (
           messages.map((m) => {
             const showReceipt = m.mine && m.id === lastMineId && !m.id.startsWith("optimistic-");
             const r = showReceipt ? receiptLabel(m) : null;
+            const clientIdOfBubble = m.id.startsWith("optimistic-") ? m.id.slice("optimistic-".length) : null;
+            const isQueued = clientIdOfBubble ? queuedIds.has(clientIdOfBubble) : false;
+            const isFailed = clientIdOfBubble ? failedIds.has(clientIdOfBubble) : false;
             const deleted = !!m.deletedAt;
             // A shared post link renders as a rich preview card (creator,
             // cover, caption) with any note above it — never a raw URL.
@@ -435,7 +779,11 @@ export function ConversationRoom({
                   if (el) bubbleRefs.current.set(m.id, el);
                   else bubbleRefs.current.delete(m.id);
                 }}
-                className={cn("group flex flex-col", m.mine ? "items-end" : "items-start")}
+                className={cn(
+                  "group flex flex-col",
+                  m.mine ? "items-end" : "items-start",
+                  welcomedIds.current.has(m.id) && "animate-fade-up",
+                )}
               >
                 {type === "group" && !m.mine ? (
                   <span className="mb-0.5 px-1 text-[11px] font-semibold text-muted-foreground">{senderName(m.senderId)}</span>
@@ -443,13 +791,14 @@ export function ConversationRoom({
                 <div className={cn("flex items-end gap-1", m.mine ? "flex-row-reverse" : "flex-row")}>
                   <div
                     className={cn(
-                      "max-w-[80%] whitespace-pre-wrap break-words rounded-3xl text-sm leading-relaxed",
+                      "max-w-[80%] overflow-hidden whitespace-pre-wrap break-words rounded-3xl text-sm leading-relaxed",
                       deleted ? "px-4 py-2.5 italic text-muted-foreground" : shared ? "p-1.5" : "px-4 py-2.5",
                       deleted
                         ? "border border-dashed border-border/60 bg-transparent"
                         : m.mine
-                          ? "rounded-br-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/20"
-                          : "rounded-bl-lg border border-border/60 bg-card text-foreground shadow-sm",
+                          ? "bg-brand rounded-br-lg text-white shadow-md shadow-violet-500/20"
+                          : "glass rounded-bl-lg text-foreground shadow-sm",
+                      m.mine && m.id.startsWith("optimistic-") && "animate-scale-in",
                     )}
                   >
                     {deleted ? (
@@ -475,23 +824,32 @@ export function ConversationRoom({
                             <MessagePostEmbed postId={shared.postId} mine={m.mine} />
                           </>
                         ) : (
-                          m.body
+                          <RichText
+                            text={m.body}
+                            linkClassName={cn("font-semibold underline underline-offset-2", m.mine ? "text-white" : "text-primary")}
+                          />
                         )}
                       </>
                     )}
                   </div>
 
                   {canAct ? (
-                    <div className="relative shrink-0 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
-                      <button
+                    // Deliberately NOT opacity-0-until-hover: touch devices have no
+                    // hover state, which would make this whole menu (reply/react/
+                    // edit/delete/pin) undiscoverable on mobile. Visible-but-subtle
+                    // at rest, fuller contrast on hover/focus for desktop polish.
+                    <div className="relative shrink-0">
+                      <motion.button
                         type="button"
-                        onClick={() => setOpenMenuId(openMenuId === m.id ? null : m.id)}
+                        onClick={(e) => toggleMessageMenu(m.id, e)}
                         aria-label="Message actions"
-                        className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                        whileTap={{ scale: 0.85 }}
+                        transition={springs.press}
+                        className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/60 transition hover:bg-secondary hover:text-foreground"
                       >
                         <MoreHorizontal className="h-4 w-4" />
-                      </button>
-                      {openMenuId === m.id ? (
+                      </motion.button>
+                      {openMenuId === m.id && menuPos ? (
                         <>
                           <button
                             type="button"
@@ -500,13 +858,26 @@ export function ConversationRoom({
                             className="fixed inset-0 z-40 cursor-default"
                           />
                           <div
-                            className={cn(
-                              "absolute top-8 z-50 w-40 overflow-hidden rounded-2xl border border-border/70 bg-card py-1 shadow-elevated",
-                              m.mine ? "right-0" : "left-0",
-                            )}
+                            style={{ top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
+                            className="glass-strong animate-scale-in fixed z-50 overflow-hidden rounded-2xl py-1"
                           >
                             <MenuItem icon={ReplyIcon} label="Reply" onClick={() => startReply(m)} />
-                            <MenuItem icon={SmilePlus} label="React" onClick={() => setReactingId(m.id)} />
+                            <MenuItem
+                              icon={Forward}
+                              label="Forward"
+                              onClick={() => {
+                                setOpenMenuId(null);
+                                setForwardingId(m.id);
+                              }}
+                            />
+                            <MenuItem
+                              icon={SmilePlus}
+                              label="React"
+                              onClick={() => {
+                                setOpenMenuId(null);
+                                setReactingId(m.id);
+                              }}
+                            />
                             <MenuItem
                               icon={m.pinned ? PinOff : Pin}
                               label={m.pinned ? "Unpin" : "Pin"}
@@ -524,28 +895,49 @@ export function ConversationRoom({
                 </div>
 
                 {reactingId === m.id ? (
-                  <div className="mt-1 flex items-center gap-1 rounded-full border border-border/60 bg-card px-2 py-1 shadow-sm">
-                    {MESSAGE_REACTIONS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => react(m.id, emoji)}
-                        aria-label={`React ${emoji}`}
-                        className="flex h-7 w-7 items-center justify-center rounded-full text-base transition hover:scale-125"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
+                  <div className="relative mt-1">
+                    {/* Backdrop so the picker can be dismissed without forcing
+                        an emoji pick — previously the only way to close it. */}
+                    <button
+                      type="button"
+                      aria-label="Close reactions"
+                      onClick={() => setReactingId(null)}
+                      className="fixed inset-0 z-40 cursor-default"
+                    />
+                    <div className="glass animate-scale-in relative z-50 flex items-center gap-1 rounded-full px-2 py-1 shadow-sm">
+                      {MESSAGE_REACTIONS.map((emoji) => (
+                        <motion.button
+                          key={emoji}
+                          type="button"
+                          onClick={() => {
+                            haptic("selection");
+                            react(m.id, emoji);
+                          }}
+                          aria-label={`React ${emoji}`}
+                          whileTap={{ scale: 0.75 }}
+                          whileHover={{ scale: 1.2 }}
+                          transition={springs.press}
+                          className="flex h-7 w-7 items-center justify-center rounded-full text-base"
+                        >
+                          {emoji}
+                        </motion.button>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
 
                 {m.reactions.length > 0 ? (
                   <div className={cn("mt-0.5 flex flex-wrap gap-1 px-1", m.mine ? "justify-end" : "justify-start")}>
                     {m.reactions.map((rx) => (
-                      <button
+                      <motion.button
                         key={rx.emoji}
                         type="button"
-                        onClick={() => react(m.id, rx.emoji)}
+                        onClick={() => {
+                          haptic("light");
+                          react(m.id, rx.emoji);
+                        }}
+                        whileTap={{ scale: 0.85 }}
+                        transition={springs.press}
                         className={cn(
                           "flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px]",
                           rx.mine ? "border-violet-500/50 bg-violet-500/10" : "border-border/60 bg-secondary/60",
@@ -553,14 +945,22 @@ export function ConversationRoom({
                       >
                         <span>{rx.emoji}</span>
                         {rx.count > 1 ? <span className="text-muted-foreground">{rx.count}</span> : null}
-                      </button>
+                      </motion.button>
                     ))}
                   </div>
                 ) : null}
 
                 <span className={cn("mt-0.5 flex items-center gap-1 px-1 text-[10px] text-muted-foreground")}>
                   {m.editedAt && !deleted ? <span>edited</span> : null}
-                  {r ? (
+                  {isFailed ? (
+                    <span className="flex items-center gap-1 font-medium text-rose-500">
+                      <AlertTriangle className="h-3 w-3" /> Failed to send
+                    </span>
+                  ) : isQueued ? (
+                    <span className="flex items-center gap-1 font-medium text-muted-foreground">
+                      <Clock className="h-3 w-3" /> Waiting to send…
+                    </span>
+                  ) : r ? (
                     <span className={cn("flex items-center gap-1 font-medium", r.read ? "text-primary" : "text-muted-foreground")}>
                       {r.delivered ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />}
                       {r.label}
@@ -586,29 +986,90 @@ export function ConversationRoom({
         </div>
       ) : null}
 
+      {typingNames.length > 0 ? (
+        <div className="flex items-center gap-1.5 border-t border-border/60 bg-secondary/20 px-4 py-1.5 text-xs text-muted-foreground">
+          <span className="flex gap-0.5" aria-hidden>
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" />
+          </span>
+          {typingLabel(typingNames)}
+        </div>
+      ) : null}
+
+      {mentionMatches.length > 0 ? (
+        <div className="glass-strong mx-3 mb-1 overflow-hidden rounded-2xl py-1">
+          {mentionMatches.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => selectMention(m)}
+              className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition hover:bg-secondary"
+            >
+              {m.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={m.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+              ) : (
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-xs font-bold text-white">
+                  {m.displayName.charAt(0).toUpperCase()}
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate text-sm">
+                <span className="font-medium">{m.displayName}</span>{" "}
+                <span className="text-muted-foreground">@{m.handle}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <form
         onSubmit={submit}
-        className="flex items-center gap-2 border-t border-border/60 bg-card/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3"
+        className="flex items-end gap-2 border-t border-border/60 bg-card/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3"
       >
-        <input
+        <textarea
+          ref={textareaRef}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Message…"
+          onChange={(e) => {
+            setBody(e.target.value);
+            checkMentionTrigger(e.target.value, e.target.selectionStart ?? e.target.value.length);
+            if (e.target.value.trim()) notifyTyping();
+            else clearTyping();
+          }}
+          onKeyDown={onComposerKeyDown}
+          placeholder={editingId ? "Edit your message…" : replyingTo ? "Write a reply…" : "Message…"}
           aria-label="Message"
           maxLength={2000}
-          className="h-11 flex-1 rounded-2xl border border-border/60 bg-background/60 px-4 text-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20"
+          rows={1}
+          style={{ maxHeight: COMPOSER_MAX_HEIGHT }}
+          className="max-h-32 min-h-11 flex-1 resize-none overflow-y-auto rounded-2xl border border-border/60 bg-background/60 px-4 py-2.5 text-sm leading-relaxed outline-none transition placeholder:text-muted-foreground/60 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20"
         />
-        <button
+        <motion.button
           type="submit"
           disabled={busy || !body.trim()}
           aria-label="Send"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 active:scale-95 disabled:opacity-40"
+          whileTap={{ scale: 0.88 }}
+          transition={springs.press}
+          className="bg-brand flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 disabled:opacity-40"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </button>
+        </motion.button>
       </form>
+
+      <ForwardSheet
+        messageId={forwardingId ?? ""}
+        excludeConversationId={conversationId}
+        open={!!forwardingId}
+        onClose={() => setForwardingId(null)}
+      />
     </>
   );
+}
+
+function typingLabel(names: string[]): string {
+  if (names.length === 1) return `${names[0]} is typing…`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`;
+  return `${names[0]} and ${names.length - 1} others are typing…`;
 }
 
 function MenuItem({

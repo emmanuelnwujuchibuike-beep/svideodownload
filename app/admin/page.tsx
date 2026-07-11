@@ -30,13 +30,17 @@ import {
 import { AdManager } from "@/features/admin/ad-manager";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
+import { BroadcastComposer } from "@/features/admin/broadcast-composer";
 import { LimitsEditor } from "@/features/admin/limits-editor";
+import { MessagingMonitor } from "@/features/admin/messaging-monitor";
 import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
 import { PricingEditor } from "@/features/admin/pricing-editor";
 import { ModerationQueue } from "@/features/admin/moderation-queue";
 import { TrendingEditor } from "@/features/admin/trending-editor";
+import { listBroadcasts } from "@/lib/social/broadcasts";
 import { getTrendingSettings } from "@/lib/social/feed";
+import { fetchMessagingStats } from "@/lib/social/messaging-stats";
 import { listReportedTargets } from "@/lib/social/moderation";
 import { listAds } from "@/lib/monetization/ads";
 import { getPlanLimits } from "@/lib/monetization/plan";
@@ -97,6 +101,8 @@ export default async function AdminPage() {
     analytics,
     trendingSettings,
     reportedTargets,
+    messagingStats,
+    broadcasts,
   ] = await Promise.all([
     fetchProxyUsage(),
     fetchDownloadStats(),
@@ -111,6 +117,8 @@ export default async function AdminPage() {
     fetchMonetizationAnalytics(),
     getTrendingSettings(),
     listReportedTargets(),
+    fetchMessagingStats(),
+    listBroadcasts(),
   ]);
   // Fire the proxy-budget alert if we've crossed 90% (deduped to once/day).
   await maybeAlertProxyBudget(proxy);
@@ -255,6 +263,8 @@ export default async function AdminPage() {
         {/* Monetization controls + managers + analytics */}
         <MonetizationSettings settings={monetization} />
         <ModerationQueue targets={reportedTargets} />
+        <MessagingMonitor stats={messagingStats} />
+        <BroadcastComposer initialBroadcasts={broadcasts} />
         <AnalyticsPanel data={analytics} />
         <TrendingEditor settings={trendingSettings} />
         <AffiliateManager affiliates={affiliates} />

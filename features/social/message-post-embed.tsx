@@ -79,7 +79,7 @@ export function MessagePostEmbed({ postId, mine }: { postId: string; mine: boole
 
   if (!preview) {
     return (
-      <span className="block w-56 overflow-hidden rounded-2xl border border-border/60" aria-hidden>
+      <span className="block w-full max-w-60 overflow-hidden rounded-2xl border border-border/60" aria-hidden>
         <span className="block aspect-[4/3] w-full bg-secondary shimmer" />
         <span className="block space-y-1.5 p-2.5">
           <span className="block h-3 w-28 rounded bg-secondary shimmer" />
@@ -93,7 +93,7 @@ export function MessagePostEmbed({ postId, mine }: { postId: string; mine: boole
     <Link
       href={`/p/${preview.id}`}
       className={
-        "block w-60 overflow-hidden rounded-2xl border transition hover:opacity-95 active:scale-[0.99] " +
+        "block w-full max-w-60 overflow-hidden rounded-2xl border transition hover:opacity-95 active:scale-[0.99] " +
         (mine ? "border-white/25 bg-black/20" : "border-border/60 bg-card")
       }
     >

@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { loadPeople, PeoplePickerGrid, type Person } from "@/features/social/people-picker";
 import { toast } from "@/features/ui/toast";
 import { hapticPattern } from "@/lib/motion/haptics";
+import { springs } from "@/lib/motion/springs";
 import { cn } from "@/lib/utils";
 
 /**
@@ -152,8 +153,8 @@ export function ShareSheet({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 420, damping: 42 }}
-            className="absolute inset-x-0 bottom-0 mx-auto max-h-[82dvh] w-full max-w-lg overflow-hidden rounded-t-3xl border border-border/60 bg-card shadow-2xl sm:bottom-6 sm:rounded-3xl"
+            transition={springs.sheet}
+            className="glass-strong absolute inset-x-0 bottom-0 mx-auto max-h-[82dvh] w-full max-w-lg overflow-hidden rounded-t-3xl sm:bottom-6 sm:rounded-3xl"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             {/* Success overlay */}
@@ -169,7 +170,7 @@ export function ShareSheet({
                     initial={{ scale: 0.5, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ type: "spring", stiffness: 380, damping: 20 }}
-                    className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-lg"
+                    className="flex h-16 w-16 items-center justify-center rounded-full bg-brand text-white shadow-lg"
                   >
                     <Check className="h-8 w-8" strokeWidth={3} />
                   </motion.span>
@@ -240,7 +241,7 @@ export function ShareSheet({
                       type="button"
                       onClick={send}
                       disabled={sending}
-                      className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition active:scale-95 disabled:opacity-60"
+                      className="bg-brand flex shrink-0 items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition active:scale-95 disabled:opacity-60"
                     >
                       <Send className="h-4 w-4" /> Send{selected.size > 1 ? ` · ${selected.size}` : ""}
                     </button>

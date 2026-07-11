@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 
 import { loadPeople, PeoplePickerGrid, type Person } from "@/features/social/people-picker";
 import { toast } from "@/features/ui/toast";
+import { springs } from "@/lib/motion/springs";
 import { GROUP_TITLE_MAX, MAX_GROUP_MEMBERS } from "@/lib/social/message-meta";
 
 /** Bottom sheet: name a group + pick members (reuses the same people-picker as ShareSheet). */
@@ -95,8 +96,8 @@ export function CreateGroupSheet({ open, onClose }: { open: boolean; onClose: ()
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 420, damping: 42 }}
-            className="absolute inset-x-0 bottom-0 mx-auto max-h-[82dvh] w-full max-w-lg overflow-hidden rounded-t-3xl border border-border/60 bg-card shadow-2xl sm:bottom-6 sm:rounded-3xl"
+            transition={springs.sheet}
+            className="glass-strong absolute inset-x-0 bottom-0 mx-auto max-h-[82dvh] w-full max-w-lg overflow-hidden rounded-t-3xl sm:bottom-6 sm:rounded-3xl"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             <div className="flex items-center justify-between px-5 pb-2 pt-4">
@@ -149,7 +150,7 @@ export function CreateGroupSheet({ open, onClose }: { open: boolean; onClose: ()
                 type="button"
                 onClick={create}
                 disabled={creating || !title.trim() || selected.size === 0}
-                className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-md transition active:scale-95 disabled:opacity-50"
+                className="bg-brand flex w-full items-center justify-center gap-1.5 rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-md transition active:scale-95 disabled:opacity-50"
               >
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 Create group{selected.size > 0 ? ` · ${selected.size + 1}` : ""}

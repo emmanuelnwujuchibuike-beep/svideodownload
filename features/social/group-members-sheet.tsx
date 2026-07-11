@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 
 import { loadPeople, PeoplePickerGrid, type Person } from "@/features/social/people-picker";
 import { toast } from "@/features/ui/toast";
+import { springs } from "@/lib/motion/springs";
 import { GROUP_TITLE_MAX, MAX_GROUP_MEMBERS } from "@/lib/social/message-meta";
 import type { ConversationMember, MemberRole } from "@/lib/social/messages";
 import { cn } from "@/lib/utils";
@@ -161,8 +162,8 @@ export function GroupMembersSheet({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 420, damping: 42 }}
-            className="absolute inset-x-0 bottom-0 mx-auto flex max-h-[86dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-border/60 bg-card shadow-2xl sm:bottom-6 sm:rounded-3xl"
+            transition={springs.sheet}
+            className="glass-strong absolute inset-x-0 bottom-0 mx-auto flex max-h-[86dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl sm:bottom-6 sm:rounded-3xl"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             <div className="flex items-center justify-between px-5 pb-2 pt-4">
@@ -191,7 +192,7 @@ export function GroupMembersSheet({
                     onClick={saveTitle}
                     disabled={savingTitle || !title.trim()}
                     aria-label="Save name"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white disabled:opacity-50"
+                    className="bg-brand flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
                   >
                     <Check className="h-4 w-4" />
                   </button>
@@ -304,7 +305,7 @@ export function GroupMembersSheet({
                                 onClick={() => setOpenRowMenu(null)}
                                 className="fixed inset-0 z-40 cursor-default"
                               />
-                              <div className="absolute right-0 top-9 z-50 w-44 overflow-hidden rounded-2xl border border-border/70 bg-card py-1 shadow-elevated">
+                              <div className="glass-strong animate-scale-in absolute right-0 top-9 z-50 w-44 overflow-hidden rounded-2xl py-1">
                                 {m.role === "admin" ? (
                                   <RowMenuItem label="Remove as admin" onClick={() => changeRole(m.id, "member")} />
                                 ) : (

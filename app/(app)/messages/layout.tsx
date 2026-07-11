@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { ConversationList } from "@/features/social/conversation-list";
 import { CreateGroupLauncher } from "@/features/social/create-group-launcher";
+import { NotificationSettingsPicker } from "@/features/social/notification-settings-picker";
+import { PresenceStatusPicker } from "@/features/social/presence-status-picker";
 import { listConversations } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/server";
 
@@ -33,7 +35,11 @@ export default async function MessagesLayout({ children }: { children: ReactNode
         <h1 className="flex items-center gap-2 px-4 pb-2 pt-4 text-xl font-bold tracking-[-0.02em]">
           <ModuleIconBadge icon={MessageCircle} className="h-8 w-8" />
           Messages
-          <CreateGroupLauncher className="ml-auto" />
+          <span className="ml-auto flex items-center gap-1">
+            <PresenceStatusPicker />
+            <NotificationSettingsPicker />
+            <CreateGroupLauncher />
+          </span>
         </h1>
         <ConversationList initial={conversations} variant="pane" />
       </aside>

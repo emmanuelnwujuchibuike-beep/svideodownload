@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { BadgeCheck, BellOff, MoreHorizontal, Pin, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -9,6 +10,8 @@ import { mutate, useQuery } from "@/features/data";
 import { usePresence } from "@/features/friends/use-presence";
 import { GroupAvatarStack } from "@/features/social/group-avatar-stack";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
+import { haptic } from "@/lib/motion/haptics";
+import { springs } from "@/lib/motion/springs";
 import type { ConversationSummary } from "@/lib/social/messages";
 import { cn } from "@/lib/utils";
 
@@ -57,17 +60,23 @@ export function ConversationList({
   const online = usePresence();
   const [q, setQ] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  // Archiving used to be a one-way trap: the menu only ever set archived:true
+  // (no Unarchive), and archived conversations were filtered out with no
+  // other screen to find them again — they'd just silently vanish. This view
+  // toggle + the Unarchive action below close that gap.
+  const [showArchived, setShowArchived] = useState(false);
+  const archivedCount = useMemo(() => conversations.filter((c) => c.archived).length, [conversations]);
 
   const visible = useMemo(() => {
     const query = q.trim().toLowerCase();
-    const base = conversations.filter((c) => !c.archived);
+    const base = conversations.filter((c) => (showArchived ? c.archived : !c.archived));
     if (!query) return base;
     return base.filter((c) => {
       const name = c.type === "group" ? (c.title ?? "") : c.other!.displayName;
       const handle = c.type === "group" ? "" : c.other!.handle;
       return name.toLowerCase().includes(query) || handle.toLowerCase().includes(query);
     });
-  }, [conversations, q]);
+  }, [conversations, q, showArchived]);
 
   const pane = variant === "pane";
 
@@ -124,6 +133,24 @@ export function ConversationList({
         />
       </label>
 
+      {showArchived ? (
+        <button
+          type="button"
+          onClick={() => setShowArchived(false)}
+          className={cn("mb-2 flex items-center gap-1.5 text-sm font-semibold text-primary", pane && "mx-3")}
+        >
+          ← Back to chats
+        </button>
+      ) : archivedCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => setShowArchived(true)}
+          className={cn("mb-2 flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground", pane && "mx-3")}
+        >
+          Archived chats ({archivedCount})
+        </button>
+      ) : null}
+
       <ul
         className={cn(
           pane
@@ -137,18 +164,23 @@ export function ConversationList({
           const isOnline = !isGroup && online.has(c.other!.id);
           const name = isGroup ? c.title ?? "Group chat" : c.other!.displayName;
           return (
-            <li key={c.id} className={cn("group relative", !pane && "border-b border-border/50 last:border-0")}>
+            <li key={c.id} className={cn("flex items-center", !pane && "border-b border-border/50 last:border-0")}>
               <Link
                 href={`/messages/${c.id}`}
                 className={cn(
-                  "flex items-center gap-3 p-3 transition",
+                  "flex min-w-0 flex-1 items-center gap-3 p-3 transition",
                   pane ? "rounded-2xl" : "p-3.5",
                   active
                     ? "bg-gradient-to-r from-blue-500/[0.10] to-violet-500/[0.10] ring-1 ring-inset ring-violet-500/25"
                     : "hover:bg-secondary/40",
                 )}
               >
-                <span className="relative shrink-0">
+                <span
+                  className={cn(
+                    "relative shrink-0 rounded-full transition",
+                    c.unread && "ring-2 ring-primary/70 ring-offset-2 ring-offset-card",
+                  )}
+                >
                   {isGroup ? (
                     c.avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -165,7 +197,7 @@ export function ConversationList({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={c.other!.avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover" />
                   ) : (
-                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-base font-bold text-white">
+                    <span className="bg-brand flex h-12 w-12 items-center justify-center rounded-full text-base font-bold text-white">
                       {name.charAt(0).toUpperCase()}
                     </span>
                   )}
@@ -196,15 +228,24 @@ export function ConversationList({
                 ) : null}
               </Link>
 
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
-                <button
+              {/* A flex sibling, not an absolutely-positioned overlay on top of the
+                  Link's own timestamp/unread-badge — and deliberately NOT hidden via
+                  opacity-0-until-hover, since touch devices have no hover state, which
+                  would make mute/pin/archive undiscoverable on mobile. */}
+              <div className="relative shrink-0 pr-2">
+                <motion.button
                   type="button"
-                  onClick={() => setOpenMenuId(openMenuId === c.id ? null : c.id)}
+                  onClick={() => {
+                    haptic("light");
+                    setOpenMenuId(openMenuId === c.id ? null : c.id);
+                  }}
                   aria-label="Conversation options"
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-card/90 text-muted-foreground shadow-sm transition hover:text-foreground"
+                  whileTap={{ scale: 0.85 }}
+                  transition={springs.press}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground/70 transition hover:bg-secondary hover:text-foreground"
                 >
                   <MoreHorizontal className="h-4 w-4" />
-                </button>
+                </motion.button>
                 {openMenuId === c.id ? (
                   <>
                     <button
@@ -213,7 +254,7 @@ export function ConversationList({
                       onClick={() => setOpenMenuId(null)}
                       className="fixed inset-0 z-40 cursor-default"
                     />
-                    <div className="absolute right-0 top-9 z-50 w-40 overflow-hidden rounded-2xl border border-border/70 bg-card py-1 shadow-elevated">
+                    <div className="glass-strong animate-scale-in absolute right-2 top-9 z-50 w-40 overflow-hidden rounded-2xl py-1">
                       <button
                         type="button"
                         onClick={() => updatePref(c.id, { pinned: !c.pinned })}
@@ -230,10 +271,10 @@ export function ConversationList({
                       </button>
                       <button
                         type="button"
-                        onClick={() => updatePref(c.id, { archived: true })}
+                        onClick={() => updatePref(c.id, { archived: !c.archived })}
                         className="flex w-full items-center px-3.5 py-2 text-left text-sm transition hover:bg-secondary"
                       >
-                        Archive
+                        {c.archived ? "Unarchive" : "Archive"}
                       </button>
                     </div>
                   </>
@@ -243,7 +284,9 @@ export function ConversationList({
           );
         })}
         {visible.length === 0 ? (
-          <li className="px-4 py-8 text-center text-sm text-muted-foreground">No chats match “{q}”.</li>
+          <li className="px-4 py-8 text-center text-sm text-muted-foreground">
+            {q.trim() ? `No chats match "${q}".` : showArchived ? "No archived chats." : "No conversations here yet."}
+          </li>
         ) : null}
       </ul>
     </div>

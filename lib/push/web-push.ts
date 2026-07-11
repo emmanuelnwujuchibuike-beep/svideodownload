@@ -43,6 +43,9 @@ export interface PushPayload {
   /** The other user a friend-request action button acts on — lets the SW
    * call POST /api/friends/{actorId} directly without opening a window. */
   actorId?: string;
+  /** Lets a message notification's Mark-as-read/Mute action buttons act on
+   * the right thread directly, without opening a window (public/sw/push.js). */
+  conversationId?: string;
 }
 
 interface SubRow {

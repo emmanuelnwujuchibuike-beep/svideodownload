@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { sendPushToUser } from "@/lib/push/web-push";
-import { assistantLimiter } from "@/lib/rate-limit";
+import { messageLimiter } from "@/lib/rate-limit";
 import { listConversations, sendMessage } from "@/lib/social/messages";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -26,9 +26,10 @@ export async function GET() {
 const schema = z.object({
   conversationId: z.string().uuid(),
   body: z.string().trim().min(1).max(2000),
+  replyToId: z.string().uuid().optional(),
 });
 
-/** POST /api/messages — send a message in a conversation. */
+/** POST /api/messages — send a message in a conversation (direct or group). */
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
-  const { success } = await assistantLimiter.limit(`msg:${user.id}`);
+  const { success } = await messageLimiter.limit(`msg:${user.id}`);
   if (!success) return NextResponse.json({ error: "You're sending messages too fast." }, { status: 429 });
 
   let json: unknown;
@@ -48,40 +49,45 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(json);
   if (!parsed.success) return NextResponse.json({ error: "Write a message." }, { status: 400 });
 
-  const res = await sendMessage(user.id, parsed.data.conversationId, parsed.data.body);
+  const res = await sendMessage(user.id, parsed.data.conversationId, parsed.data.body, parsed.data.replyToId);
   if (!res.ok) return NextResponse.json({ error: "Couldn't send (blocked or unavailable)." }, { status: 400 });
 
-  // Web push to the recipient so a message reaches them with the site closed.
-  void notifyRecipient(user.id, parsed.data.conversationId, parsed.data.body);
+  // Web push to every other active member so a message reaches them with the site closed.
+  void notifyMembers(user.id, parsed.data.conversationId, parsed.data.body);
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, id: res.id });
 }
 
 /**
- * Best-effort: resolve the other participant + sender name and push them the
- * message. Every millisecond here is added latency before the push even
+ * Best-effort: resolve every other active member + sender name and push them
+ * the message. Every millisecond here is added latency before the push even
  * leaves our server (separate from — and much smaller than — the delivery
- * hop itself), so the two independent lookups run in PARALLEL rather than
- * sequentially.
+ * hop itself), so the member lookup and sender-profile lookup run in
+ * PARALLEL rather than sequentially.
  */
-async function notifyRecipient(senderId: string, conversationId: string, body: string): Promise<void> {
+async function notifyMembers(senderId: string, conversationId: string, body: string): Promise<void> {
   try {
     const db = createAdminClient();
-    const [{ data: conv }, { data: sender }] = await Promise.all([
-      db.from("conversations").select("user_low, user_high").eq("id", conversationId).maybeSingle(),
+    const [{ data: members }, { data: sender }] = await Promise.all([
+      db.from("conversation_members").select("user_id").eq("conversation_id", conversationId).is("left_at", null).neq("user_id", senderId),
       db.from("profiles").select("display_name, handle, avatar_url").eq("id", senderId).maybeSingle(),
     ]);
-    if (!conv) return;
-    const recipientId = conv.user_low === senderId ? (conv.user_high as string) : (conv.user_low as string);
+    const recipients = ((members ?? []) as { user_id: string }[]).map((m) => m.user_id);
+    if (recipients.length === 0) return;
     const name = (sender?.display_name as string) || (sender?.handle ? `@${sender.handle as string}` : "New message");
+    const preview = body.length > 140 ? `${body.slice(0, 140)}…` : body;
 
-    await sendPushToUser(recipientId, {
-      title: name,
-      body: body.length > 140 ? `${body.slice(0, 140)}…` : body,
-      url: `/messages/${conversationId}`,
-      icon: (sender?.avatar_url as string | null) ?? undefined,
-      tag: `msg:${conversationId}`,
-    });
+    await Promise.all(
+      recipients.map((recipientId) =>
+        sendPushToUser(recipientId, {
+          title: name,
+          body: preview,
+          url: `/messages/${conversationId}`,
+          icon: (sender?.avatar_url as string | null) ?? undefined,
+          tag: `msg:${conversationId}`,
+        }),
+      ),
+    );
   } catch {
     /* push is best-effort */
   }

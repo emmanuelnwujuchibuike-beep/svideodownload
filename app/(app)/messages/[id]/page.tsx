@@ -4,7 +4,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { ConversationRoom } from "@/features/social/conversation-room";
+import { GroupAvatarStack } from "@/features/social/group-avatar-stack";
 import { PresenceBadge } from "@/features/social/presence-badge";
+import { ThreadHeaderMenu } from "@/features/social/thread-header-menu";
 import { getConversation } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/server";
 
@@ -46,7 +48,20 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        {convo.other ? (
+        {convo.type === "group" ? (
+          <div className="relative flex min-w-0 flex-1 items-center gap-2.5">
+            {convo.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={convo.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-violet-500/25" />
+            ) : (
+              <GroupAvatarStack avatars={convo.members.map((m) => ({ avatarUrl: m.avatarUrl, displayName: m.displayName }))} size="lg" />
+            )}
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold">{convo.title ?? "Group chat"}</span>
+              <span className="block text-xs text-muted-foreground">{convo.members.length} members</span>
+            </span>
+          </div>
+        ) : convo.other ? (
           <Link href={`/u/${convo.other.handle}`} className="relative flex min-w-0 items-center gap-2.5">
             {convo.other.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -67,9 +82,19 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         ) : (
           <span className="text-sm font-semibold text-muted-foreground">Unknown</span>
         )}
+
+        {convo.type === "group" ? (
+          <ThreadHeaderMenu conversationId={convo.id} viewerId={user.id} viewerRole={convo.viewerRole} initialTitle={convo.title} />
+        ) : null}
       </div>
 
-      <ConversationRoom conversationId={convo.id} viewerId={user.id} initial={convo.messages} />
+      <ConversationRoom
+        conversationId={convo.id}
+        viewerId={user.id}
+        initial={convo.messages}
+        type={convo.type}
+        members={convo.members}
+      />
     </div>
   );
 }

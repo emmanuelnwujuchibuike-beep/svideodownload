@@ -20,6 +20,7 @@ function actorSummary(g: NotificationGroup): string {
 }
 
 function hrefFor(g: NotificationGroup): string | null {
+  if ((g.type === "message" || g.type === "message_reaction") && g.conversationId) return `/messages/${g.conversationId}`;
   if (g.postId) return `/p/${g.postId}`;
   if (g.type === "friend_request") return "/friends";
   const first = g.actors[0];

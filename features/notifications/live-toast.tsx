@@ -57,7 +57,13 @@ export function NotificationLiveToast() {
             (payload) => {
               // Tab hidden → device push / bell badge already cover it.
               if (document.visibilityState !== "visible") return;
-              const rowId = (payload.new as { id?: string }).id;
+              const row = payload.new as { id?: string; type?: string };
+              // message/message_reaction already have their own richer toast
+              // below (actual message preview, not just "sent you a message")
+              // driven by the conversation_members touch — skip here so a new
+              // message doesn't produce two toasts.
+              if (row.type === "message" || row.type === "message_reaction") return;
+              const rowId = row.id;
               // The realtime row is bare ids; fetch the enriched item (actor, post).
               void loadFlatNotifications()
                 .then((d) => {
@@ -70,39 +76,45 @@ export function NotificationLiveToast() {
           .subscribe(),
       );
 
-      // Incoming DMs: a conversation row is touched on every message. Only
-      // toast messages FROM the other side, and never while already reading
-      // that conversation.
-      for (const col of ["user_low", "user_high"] as const) {
-        channels.push(
-          supabase
-            .channel(`msg-toast:${col}:${uid}`)
-            .on(
-              "postgres_changes",
-              { event: "UPDATE", schema: "public", table: "conversations", filter: `${col}=eq.${uid}` },
-              (payload) => {
-                if (document.visibilityState !== "visible") return;
-                const row = payload.new as { id?: string; last_sender_id?: string; last_body?: string };
-                if (!row.id || !row.last_sender_id || row.last_sender_id === uid) return;
-                if (window.location.pathname === `/messages/${row.id}`) return;
-                void loadInbox()
-                  .then((inbox) => {
-                    const conv = inbox.conversations.find((c) => c.id === row.id);
-                    if (!conv) return;
-                    show({
-                      kind: "message",
-                      convId: row.id!,
-                      name: conv.other.displayName,
-                      avatarUrl: conv.other.avatarUrl,
-                      body: row.last_body ?? "New message",
-                    });
-                  })
-                  .catch(() => {});
-              },
-            )
-            .subscribe(),
-        );
-      }
+      // Incoming messages: every active `conversation_members` row you have
+      // is touched on every message/edit/delete/rename in that conversation
+      // (direct or group — see features/social/inbox.ts's matching fix), so
+      // one channel filtered on `user_id` covers both kinds, replacing the
+      // old 2-channel user_low/user_high hack. The touch doesn't say WHO
+      // sent it or WHEN the underlying message actually landed, so after
+      // refetching the inbox we only toast if the latest message is genuinely
+      // fresh (not from me, within the last few seconds) — guards against a
+      // stale re-toast from e.g. merely opening an old unread thread (which
+      // also touches this same row to advance the read cursor).
+      channels.push(
+        supabase
+          .channel(`msg-toast:${uid}`)
+          .on(
+            "postgres_changes",
+            { event: "UPDATE", schema: "public", table: "conversation_members", filter: `user_id=eq.${uid}` },
+            (payload) => {
+              if (document.visibilityState !== "visible") return;
+              const row = payload.new as { conversation_id?: string };
+              if (!row.conversation_id) return;
+              if (window.location.pathname === `/messages/${row.conversation_id}`) return;
+              void loadInbox()
+                .then((inbox) => {
+                  const conv = inbox.conversations.find((c) => c.id === row.conversation_id);
+                  if (!conv || conv.fromMe) return;
+                  if (Date.now() - new Date(conv.lastAt).getTime() > 8000) return;
+                  show({
+                    kind: "message",
+                    convId: conv.id,
+                    name: conv.type === "group" ? conv.title ?? "Group chat" : (conv.other?.displayName ?? "Someone"),
+                    avatarUrl: conv.type === "group" ? conv.avatarUrl : (conv.other?.avatarUrl ?? null),
+                    body: conv.lastBody ?? "New message",
+                  });
+                })
+                .catch(() => {});
+            },
+          )
+          .subscribe(),
+      );
     });
 
     return () => {

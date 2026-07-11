@@ -9,6 +9,7 @@ import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { OfflineQueueSync } from "@/features/app-shell/offline-queue-sync";
 import { PresenceTracker } from "@/features/friends/use-presence";
 import { NotificationLiveToast } from "@/features/notifications/live-toast";
+import { InboxRealtimeTracker } from "@/features/social/inbox";
 import { ReactionFloatLayer } from "@/features/ui/reaction-float";
 import { Toaster } from "@/features/ui/toast";
 
@@ -46,6 +47,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <AppOverlays />
       {/* Joins the shared presence channel so this user shows as online. */}
       <PresenceTracker />
+      {/* Live inbox badge — was dead code before, only updated while a thread was open. */}
+      <InboxRealtimeTracker />
       {/* Replays any offline-queued Like/Save writes on load + reconnect. */}
       <OfflineQueueSync />
       {/* Once-per-browser-session "new device" security check. */}

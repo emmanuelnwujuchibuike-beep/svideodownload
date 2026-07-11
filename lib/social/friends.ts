@@ -413,7 +413,11 @@ export async function friendsOverview(userId: string, limit = 100): Promise<Frie
       listConversations(userId),
     ]);
     const favorites = new Set(((fav as { friend_id: string }[]) ?? []).map((r) => r.friend_id));
-    const chatByFriend = new Map(convs.map((c) => [c.other.id, { lastAt: c.lastAt, unread: c.unreadCount }]));
+    // Direct conversations only — a friend's "last chat" here means a 1:1
+    // thread with them specifically, not a group they happen to share.
+    const chatByFriend = new Map(
+      convs.filter((c) => c.type === "direct" && c.other).map((c) => [c.other!.id, { lastAt: c.lastAt, unread: c.unreadCount }]),
+    );
 
     const friendships = (fr as { user_low: string; user_high: string; created_at: string }[]) ?? [];
     const incomingRows = (inc as { id: string; sender_id: string; note: string | null; created_at: string }[]) ?? [];

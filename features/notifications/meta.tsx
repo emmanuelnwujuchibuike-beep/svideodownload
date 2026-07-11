@@ -35,6 +35,8 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   friend_request: UserPlus,
   friend_accepted: PartyPopper,
   friend_reminder: MessageCircle,
+  message: MessageCircle,
+  message_reaction: SmilePlus,
   // Wow is Frenz's signature interaction — its notifications carry the mark.
   like: WowSolid,
   love: Heart,
@@ -106,6 +108,10 @@ export function verbFor(type: NotificationType): string {
       return "accepted your friend request 🎉";
     case "friend_reminder":
       return "is ready to chat — say hi 👋";
+    case "message":
+      return "sent you a message";
+    case "message_reaction":
+      return "reacted to your message";
     case "like":
       return "Wow'd your post";
     case "love":
@@ -206,11 +212,13 @@ export function hrefFor(n: {
   type: NotificationType;
   actor: { handle: string } | null;
   postId: string | null;
+  conversationId?: string | null;
 }): string {
   if (n.type === "friend_request") return "/friends";
   if ((n.type === "friend_accepted" || n.type === "friend_reminder" || n.type === "follow") && n.actor) {
     return `/u/${n.actor.handle}`;
   }
+  if ((n.type === "message" || n.type === "message_reaction") && n.conversationId) return `/messages/${n.conversationId}`;
   if (n.postId) return `/p/${n.postId}`;
   return "/notifications";
 }

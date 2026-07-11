@@ -27,6 +27,8 @@ export type NotificationType =
   | "friend_request"
   | "friend_accepted"
   | "friend_reminder"
+  | "message"
+  | "message_reaction"
   | "download_complete"
   | "download_failed"
   | "download_ready"
@@ -81,6 +83,8 @@ const CATEGORY_BY_TYPE: Partial<Record<NotificationType, NotificationCategory>> 
   friend_request: "social",
   friend_accepted: "social",
   friend_reminder: "social",
+  message: "social",
+  message_reaction: "social",
   download_complete: "downloads",
   download_failed: "downloads",
   download_ready: "downloads",
@@ -123,6 +127,7 @@ export interface NotificationItem {
   actor: NotificationActor | null;
   postId: string | null;
   postTitle: string | null;
+  conversationId: string | null;
 }
 
 interface Row {
@@ -130,9 +135,13 @@ interface Row {
   actor_id: string | null;
   type: NotificationType;
   post_id: string | null;
+  conversation_id: string | null;
   read: boolean;
   created_at: string;
 }
+
+/** Message notifications aren't deduped in the DB (every send is a genuine new event — see 0042's own comment); the bell's numeric badge excludes them so a chat burst doesn't drown out real social notifications, while the dropdown LIST still shows them (see notification-bell.tsx). */
+const MESSAGE_TYPES: NotificationType[] = ["message", "message_reaction"];
 
 export interface NotificationsResult {
   items: NotificationItem[];
@@ -172,10 +181,18 @@ async function enrichRows(db: ReturnType<typeof createAdminClient>, rows: Row[])
     actor: r.actor_id ? actorById.get(r.actor_id) ?? null : null,
     postId: r.post_id,
     postTitle: r.post_id ? titleById.get(r.post_id) ?? null : null,
+    conversationId: r.conversation_id,
   }));
 }
 
-/** A user's recent notifications + unread count (flat — powers the topbar bell). */
+/**
+ * A user's recent notifications + unread count (flat — powers the topbar bell).
+ * The `unread` count deliberately excludes message/message_reaction — those
+ * already have their own dedicated inbox badge (see features/social/inbox.ts),
+ * and including them here would double-count AND let a chat burst drown out
+ * real social notifications on the bell. The returned `items` list still
+ * includes them, so they're visible in the dropdown history.
+ */
 export async function listNotifications(userId: string, limit = 20): Promise<NotificationsResult> {
   if (!hasSupabase) return { items: [], unread: 0 };
   try {
@@ -183,7 +200,7 @@ export async function listNotifications(userId: string, limit = 20): Promise<Not
     const [{ data }, { count }] = await Promise.all([
       db
         .from("notifications")
-        .select("id, actor_id, type, post_id, read, created_at")
+        .select("id, actor_id, type, post_id, conversation_id, read, created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(limit),
@@ -191,7 +208,8 @@ export async function listNotifications(userId: string, limit = 20): Promise<Not
         .from("notifications")
         .select("id", { head: true, count: "exact" })
         .eq("user_id", userId)
-        .eq("read", false),
+        .eq("read", false)
+        .not("type", "in", `(${MESSAGE_TYPES.join(",")})`),
     ]);
     const items = await enrichRows(db, (data as Row[]) ?? []);
     return { items, unread: count ?? 0 };
@@ -217,6 +235,7 @@ export interface NotificationGroup {
   totalActors: number;
   postId: string | null;
   postTitle: string | null;
+  conversationId: string | null;
   notificationIds: string[];
 }
 
@@ -225,12 +244,16 @@ export interface GroupedNotificationsResult {
   unread: number;
 }
 
-// Post-scoped actions collapse per post; relationship signals collapse together.
+// Post-scoped actions collapse per post; relationship signals collapse together;
+// message notifications collapse per conversation (many new messages from the
+// same thread → one card, "Sam sent you 5 messages", not five separate rows).
 const GROUP_BY_POST = new Set<NotificationType>(["like", "love", "comment", "reply", "mention", "comment_reaction", "save", "repost", "repost_engagement", "share", "quote"]);
 const GROUP_TOGETHER = new Set<NotificationType>(["follow", "profile_view"]);
+const GROUP_BY_CONVERSATION = new Set<NotificationType>(["message", "message_reaction"]);
 
 function groupKey(it: NotificationItem): string {
   if (GROUP_BY_POST.has(it.type) && it.postId) return `${it.type}:${it.postId}`;
+  if (GROUP_BY_CONVERSATION.has(it.type) && it.conversationId) return `${it.type}:${it.conversationId}`;
   if (GROUP_TOGETHER.has(it.type)) return it.type;
   return `${it.type}:${it.id}`;
 }
@@ -247,7 +270,7 @@ export async function listGroupedNotifications(userId: string, limit = 60): Prom
     const [{ data }, { count }] = await Promise.all([
       db
         .from("notifications")
-        .select("id, actor_id, type, post_id, read, created_at")
+        .select("id, actor_id, type, post_id, conversation_id, read, created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(limit),
@@ -278,6 +301,7 @@ export async function listGroupedNotifications(userId: string, limit = 60): Prom
           totalActors: 0,
           postId: it.postId,
           postTitle: it.postTitle,
+          conversationId: it.conversationId,
           notificationIds: [],
         };
         byKey.set(key, g);

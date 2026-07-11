@@ -26,14 +26,18 @@ export async function loadInbox(): Promise<Inbox> {
 }
 
 /**
- * Live inbox: a `conversations` row is touched (last_message_at/last_body) whenever
- * a message is sent, so we subscribe to changes on the two conversations the viewer
- * can be part of (user_low / user_high) and revalidate the shared inbox key.
+ * Live inbox: every active `conversation_members` row you have gets its
+ * `updated_at` touched whenever a message is sent/edited/deleted in that
+ * conversation, or its title/avatar/roster changes — one column, one filter
+ * (`user_id=eq.<uid>`), covering direct AND group conversations alike.
+ * (Previously this subscribed to two separate `conversations` channels,
+ * `user_low`/`user_high`, because postgres_changes can't OR across columns
+ * — that hack no longer applies now that membership lives in its own table.)
  */
 export function useInboxRealtime(): void {
   useEffect(() => {
     const supabase = createClient();
-    const channels: ReturnType<typeof supabase.channel>[] = [];
+    let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
 
     const bump = () => void revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
@@ -41,17 +45,14 @@ export function useInboxRealtime(): void {
     supabase.auth.getUser().then(({ data: auth }) => {
       const uid = auth.user?.id;
       if (!uid || cancelled) return;
-      for (const col of ["user_low", "user_high"] as const) {
-        const ch = supabase
-          .channel(`inbox:${col}:${uid}`)
-          .on(
-            "postgres_changes",
-            { event: "*", schema: "public", table: "conversations", filter: `${col}=eq.${uid}` },
-            bump,
-          )
-          .subscribe();
-        channels.push(ch);
-      }
+      channel = supabase
+        .channel(`inbox:${uid}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "conversation_members", filter: `user_id=eq.${uid}` },
+          bump,
+        )
+        .subscribe();
     });
 
     // Realtime has no replay: refresh the inbox whenever the app resumes or
@@ -66,7 +67,13 @@ export function useInboxRealtime(): void {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", bump);
-      for (const ch of channels) void ch.unsubscribe();
+      if (channel) void channel.unsubscribe();
     };
   }, []);
+}
+
+/** Mount once in the app shell so the inbox badge live-updates app-wide, not just while a thread is open. */
+export function InboxRealtimeTracker() {
+  useInboxRealtime();
+  return null;
 }

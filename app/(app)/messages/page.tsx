@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { ConversationList } from "@/features/social/conversation-list";
+import { CreateGroupLauncher } from "@/features/social/create-group-launcher";
 import { listConversations } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/server";
 
@@ -36,6 +37,7 @@ export default async function MessagesPage() {
       <div className="flex-1 overflow-y-auto px-3 pt-4 lg:hidden">
         <h1 className="mb-4 flex items-center gap-2 text-2xl font-bold tracking-[-0.02em]">
           <MessageCircle className="h-6 w-6 text-primary" /> Messages
+          <CreateGroupLauncher className="ml-auto" />
         </h1>
         <ConversationList initial={conversations} />
       </div>

@@ -12,6 +12,7 @@ import {
   type FlatNotifications as NotifData,
 } from "@/features/notifications/data";
 import { hrefFor, iconFor, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
+import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { categoryForType } from "@/lib/social/notifications";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -22,23 +23,30 @@ export function NotificationBell() {
   const { data } = useQuery<NotifData>(KEY, loadNotifications);
   const items = data?.items ?? [];
   const unread = data?.unread ?? 0;
+  // Messages have their own dedicated badge (FloatingMessages/bottom-nav Inbox
+  // tab) — the bell's own count deliberately excludes them (see
+  // lib/social/notifications.ts) — but the single OS-level PWA app icon badge
+  // has no room for two numbers, so it's the union of both.
+  const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox);
+  const inboxUnread = inbox?.unread ?? 0;
   const [open, setOpen] = useState(false);
 
   // App-icon badge (installed PWA): mirror the unread count on the home-screen
   // icon and clear it the moment everything is read. Badging API — silently a
   // no-op where unsupported; on iOS it works for home-screen installs (16.4+).
   useEffect(() => {
+    const total = unread + inboxUnread;
     try {
       const nav = navigator as Navigator & {
         setAppBadge?: (count?: number) => Promise<void>;
         clearAppBadge?: () => Promise<void>;
       };
-      if (unread > 0) void nav.setAppBadge?.(unread).catch(() => {});
+      if (total > 0) void nav.setAppBadge?.(total).catch(() => {});
       else void nav.clearAppBadge?.().catch(() => {});
     } catch {
       /* unsupported */
     }
-  }, [unread]);
+  }, [unread, inboxUnread]);
 
   // Realtime subscription scoped to the current user.
   useEffect(() => {
@@ -54,7 +62,16 @@ export function NotificationBell() {
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${uid}` },
-          () => {
+          (payload) => {
+            const type = (payload.new as { type?: string }).type;
+            // message/message_reaction don't count toward the bell's own badge
+            // (they have their own dedicated inbox badge — see
+            // lib/social/notifications.ts's listNotifications) — skip the
+            // optimistic bump for those so the count never even flashes up.
+            if (type === "message" || type === "message_reaction") {
+              void revalidate(KEY, loadNotifications, 0).catch(() => {});
+              return;
+            }
             // Optimistic bump, then pull the real list.
             mutate<NotifData>(KEY, (prev) => ({ items: prev?.items ?? [], unread: (prev?.unread ?? 0) + 1 }));
             void revalidate(KEY, loadNotifications, 0).catch(() => {});

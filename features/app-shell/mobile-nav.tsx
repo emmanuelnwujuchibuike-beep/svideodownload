@@ -21,6 +21,7 @@ import { openUpload } from "@/features/create/upload-store";
 import { useQuery } from "@/features/data";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { haptic } from "@/lib/motion/haptics";
+import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { cn } from "@/lib/utils";
 
 /**
@@ -44,7 +45,12 @@ export function MobileNav() {
   // Warm the primary destinations once so the FIRST tap opens instantly — dynamic
   // routes (Messages/Friends) otherwise fetch on first navigation, which felt like
   // "tap twice before it opens". Runs after mount so it never blocks first paint.
+  // Skipped entirely on data-saver/2G — this fires unconditionally regardless
+  // of whether the user ever taps those tabs, unlike the hover/press-triggered
+  // prefetches below (onWarm/onPointerDown), which stay on: those only spend
+  // bandwidth once the user has already shown real intent to navigate there.
   useEffect(() => {
+    if (isSlowConnection()) return;
     const id = setTimeout(() => {
       for (const r of ["/home", "/friends", "/messages", profileHref]) router.prefetch(r);
     }, 400);

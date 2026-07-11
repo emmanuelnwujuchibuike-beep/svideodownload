@@ -1,3 +1,4 @@
+import { isIos } from "@/lib/pwa/platform";
 import type { MediaKind } from "@/types";
 
 export interface DownloadPayload {
@@ -55,13 +56,7 @@ export function saveBlob(blob: Blob, filename: string): void {
 }
 
 /** iOS (incl. iPadOS-as-Mac) — where in-app anchor saves are unreliable. */
-export function isIosDevice(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return (
-    /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  );
-}
+export const isIosDevice = isIos;
 
 /**
  * Hand a finished file to the DEVICE the premium way per platform. On iOS the

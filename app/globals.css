@@ -102,6 +102,14 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Kills the top-level rubber-band bounce/scroll-chain (Safari 16+, all
+       Chromium — older engines just keep their default bounce, no
+       regression). Standards-based, and additive: PullToRefresh never calls
+       preventDefault and only reads touch deltas + scrollY, so it doesn't
+       depend on native bounce existing. Also closes the Android gap where
+       the same native "swipe down to reload the page" gesture could
+       otherwise fire alongside the custom pull-to-refresh. */
+    overscroll-behavior-y: none;
   }
 
   /* Instant taps on touch devices: `touch-action: manipulation` removes the

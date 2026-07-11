@@ -5,6 +5,10 @@ import type { ReactNode } from "react";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { BootSplash } from "@/features/app-shell/boot-splash";
+import { EdgeSwipeBack } from "@/features/app-shell/edge-swipe-back";
+import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
+import { OfflineBanner } from "@/features/app-shell/offline-banner";
+import { StatusBarScrim } from "@/features/app-shell/status-bar-scrim";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
 import { RegisterServiceWorker } from "@/features/notifications/register-sw";
 import { ScrollPerfMonitor } from "@/features/perf/scroll-perf-monitor";
@@ -64,6 +68,16 @@ export const metadata: Metadata = {
   // this is what makes "Add to Home Screen" produce a real standalone app — the
   // prerequisite for Web Push on iPhone/iPad (Safari 16.4+).
   appleWebApp: { capable: true, title: "Frenz", statusBarStyle: "black-translucent" },
+  // iOS auto-links number-shaped text (phone numbers, dates, addresses,
+  // emails) into tap-to-call/tap-to-mail chips — undesirable inside feed/
+  // profile/comment text that isn't actually contact info.
+  formatDetection: { telephone: false, date: false, address: false, email: false },
+  other: {
+    // Chromium's non-Apple-prefixed equivalent of `appleWebApp.capable` above
+    // — `appleWebApp` only emits the `apple-mobile-web-app-*` tags, Next has
+    // no first-class field for this one yet.
+    "mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {
@@ -79,6 +93,14 @@ export const viewport: Viewport = {
   // values — without it iOS letterboxes below the status bar and every
   // safe-area padding in the app evaluates to zero.
   viewportFit: "cover",
+  // Standards-based fix for "the keyboard covers the fixed bottom nav /
+  // composer" (iOS 17.4+, Chrome 108+): makes the LAYOUT viewport itself
+  // shrink when the on-screen keyboard opens, so `100dvh` containers and
+  // `position: fixed` elements (MobileNav, sheet footers) correctly reflow
+  // above it instead of being hidden behind it. Falls back to the old
+  // "resizes-visual" behavior (content pans under a fixed keyboard-covered
+  // viewport) on older engines — no regression there, just no improvement.
+  interactiveWidget: "resizes-content",
   // #050816 matches globals.css's actual dark --background exactly (was
   // #080b14 — a slightly different near-black that never matched anything
   // else in the app, a small but real inconsistency found while auditing
@@ -124,8 +146,15 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" dir="ltr" suppressHydrationWarning>
       <head>
+        {/* app/apple-icon.png (180x180) already auto-emits the primary
+            apple-touch-icon link via Next's file convention — modern iOS
+            scales that single image fine. These two are legacy-size
+            fallbacks (older iPad/iPhone guidance) generated alongside it by
+            scripts/gen-icons.mjs; harmless to include, not load-bearing. */}
+        <link rel="apple-touch-icon" sizes="152x152" href="/apple-icon-152.png" />
+        <link rel="apple-touch-icon" sizes="167x167" href="/apple-icon-167.png" />
         {SPLASH_SCREENS.flatMap(({ file, width, height, ratio }) =>
           (["light", "dark"] as const).map((theme) => (
             <link
@@ -190,6 +219,10 @@ export default function RootLayout({
                 marketing landing page. The app/social surfaces (home, feed,
                 profiles, messages, …) are ad-free; social monetization comes later. */}
             <RegisterServiceWorker />
+            <GlobalErrorCapture />
+            <StatusBarScrim />
+            <EdgeSwipeBack />
+            <OfflineBanner />
             <WebVitals />
             <ScrollPerfMonitor />
           </MotionConfig>

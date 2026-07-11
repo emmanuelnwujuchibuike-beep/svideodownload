@@ -10,6 +10,7 @@ import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { useUser } from "@/features/auth/use-user";
 import { enablePush, pushSupported, syncPush } from "@/features/notifications/push";
 import { hasExceededDeclines, recordDecline } from "@/lib/pwa/decline-tracker";
+import { isIos, isStandalone } from "@/lib/pwa/platform";
 
 /**
  * The missing last mile of Web Push: permission must be granted by a button tap
@@ -34,20 +35,6 @@ import { hasExceededDeclines, recordDecline } from "@/lib/pwa/decline-tracker";
 
 const DISMISS_KEY = "frenz:push-nudge-dismissed-session";
 const PROMPT_ID = "push-nudge";
-
-function isIos(): boolean {
-  return (
-    /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  );
-}
-
-function isStandalone(): boolean {
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as unknown as { standalone?: boolean }).standalone === true
-  );
-}
 
 function dismissedThisSession(): boolean {
   try {

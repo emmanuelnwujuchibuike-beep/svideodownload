@@ -227,6 +227,7 @@ export async function sendFriendRequest(
         body: trimmed ?? "Open Frenz to accept.",
         url: "/friends",
         tag: `friend-req:${senderId}`,
+        actionable: true,
       });
     }
     return { ok: true, state: "outgoing" };
@@ -562,7 +563,7 @@ async function notifyPush(
   db: ReturnType<typeof createAdminClient>,
   actorId: string,
   recipientId: string,
-  opts: { verb: string; body: string; url: string; tag: string },
+  opts: { verb: string; body: string; url: string; tag: string; actionable?: boolean },
 ): Promise<void> {
   try {
     const { data: actor } = await db
@@ -578,6 +579,11 @@ async function notifyPush(
       url: opts.url,
       icon: (actor?.avatar_url as string | null) ?? undefined,
       tag: opts.tag,
+      // Accept/Decline buttons act directly on this request, no need to open
+      // the app — public/sw/push.js calls POST /api/friends/{actorId} itself.
+      ...(opts.actionable
+        ? { actorId, actions: [{ action: "accept", title: "Accept" }, { action: "decline", title: "Decline" }] }
+        : {}),
     });
   } catch {
     /* push is best-effort */

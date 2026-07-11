@@ -19,7 +19,11 @@ export type EventType =
   | "subscribe_cancel"
   | "api_call"
   | "api_key_created"
-  | "upgrade_prompt_view";
+  | "upgrade_prompt_view"
+  | "pwa_install_prompt_shown"
+  | "pwa_install_accepted"
+  | "pwa_install_dismissed"
+  | "pwa_installed";
 
 interface EventInput {
   userId?: string | null;

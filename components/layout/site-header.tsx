@@ -110,7 +110,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
             className="fixed inset-x-0 bottom-0 top-16 z-40 bg-background/50 backdrop-blur-sm lg:hidden"
           />
           <div className="fixed bottom-0 right-0 top-16 z-50 w-[62%] min-w-[18rem] max-w-sm overflow-y-auto overscroll-contain border-l border-border/40 bg-background/97 shadow-2xl lg:hidden">
-            <nav className="flex flex-col gap-1 p-4">
+            <nav className="flex flex-col gap-1 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {/* Go Pro — top CTA, hidden for paying users */}
             {!isPremium && (
               <Link

@@ -7,6 +7,7 @@ import { revalidate } from "@/features/data";
 import { INBOX_KEY, loadInbox } from "@/features/social/inbox";
 import { extractSharedPost, MessagePostEmbed } from "@/features/social/message-post-embed";
 import type { MessageItem } from "@/lib/social/messages";
+import { useVisualViewport } from "@/lib/pwa/use-visual-viewport";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -64,10 +65,14 @@ export function ConversationRoom({
     });
   }, []);
 
-  // Auto-scroll to the newest message.
+  // Auto-scroll to the newest message — also re-runs when the on-screen
+  // keyboard opens/closes (its height changes the thread's own scroll
+  // height even though no new message arrived), so the latest bubble never
+  // ends up hidden behind the keyboard the moment the composer is focused.
+  const { height: viewportHeight } = useVisualViewport();
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, viewportHeight]);
 
   // Catch-up resync: `postgres_changes` has NO replay — messages sent while the
   // socket was suspended (backgrounded phone, tunnel, sleep) are lost from the

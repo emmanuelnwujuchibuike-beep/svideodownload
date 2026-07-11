@@ -1,5 +1,6 @@
 "use client";
 
+import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import { createClient } from "@/lib/supabase/client";
 
 import { POST_BUCKET } from "./index";
@@ -34,24 +35,31 @@ export async function presignUpload(kind: "video" | "audio" | "image", ext: stri
 
 /** Execute an already-obtained upload plan against real bytes. */
 export async function uploadWithPlan(plan: UploadPlan, data: Blob | File, contentType: string): Promise<string> {
-  if (plan.backend === "r2") {
-    const put = await fetch(plan.uploadUrl, {
-      method: "PUT",
-      body: data,
-      headers: { "Content-Type": contentType },
-    });
-    if (!put.ok) throw new Error("Upload failed. Please try again.");
-    return plan.publicUrl;
-  }
+  // Held for the actual byte transfer only — a service-worker-driven reload
+  // mid-PUT would silently drop the upload with no way to resume it.
+  const endCriticalActivity = beginCriticalActivity();
+  try {
+    if (plan.backend === "r2") {
+      const put = await fetch(plan.uploadUrl, {
+        method: "PUT",
+        body: data,
+        headers: { "Content-Type": contentType },
+      });
+      if (!put.ok) throw new Error("Upload failed. Please try again.");
+      return plan.publicUrl;
+    }
 
-  // Supabase fallback — upload to the server-chosen, owner-scoped key.
-  const supabase = createClient();
-  const { error } = await supabase.storage
-    .from(POST_BUCKET)
-    .upload(plan.key, data, { upsert: true, contentType, cacheControl: "3600" });
-  if (error) throw new Error("Upload failed. Try a smaller file.");
-  const { data: pub } = supabase.storage.from(POST_BUCKET).getPublicUrl(plan.key);
-  return pub.publicUrl;
+    // Supabase fallback — upload to the server-chosen, owner-scoped key.
+    const supabase = createClient();
+    const { error } = await supabase.storage
+      .from(POST_BUCKET)
+      .upload(plan.key, data, { upsert: true, contentType, cacheControl: "3600" });
+    if (error) throw new Error("Upload failed. Try a smaller file.");
+    const { data: pub } = supabase.storage.from(POST_BUCKET).getPublicUrl(plan.key);
+    return pub.publicUrl;
+  } finally {
+    endCriticalActivity();
+  }
 }
 
 /**

@@ -2,6 +2,22 @@
 
 import { useEffect } from "react";
 
+import { isCriticalActivityInProgress, onCriticalActivityIdle } from "@/lib/pwa/activity-lock";
+
+/** Reloads now, or — if a critical section (e.g. an in-flight upload) is
+ * open — waits for it to end first. Never skips the reload outright, since
+ * that would leave the tab on stale code indefinitely. */
+function reloadRespectingCriticalActivity() {
+  if (!isCriticalActivityInProgress()) {
+    window.location.reload();
+    return;
+  }
+  const unsubscribe = onCriticalActivityIdle(() => {
+    unsubscribe();
+    window.location.reload();
+  });
+}
+
 /**
  * Registers the service worker on every visit (idempotent). Two reasons this
  * must NOT wait for "Turn on push":
@@ -42,7 +58,7 @@ async function reloadIfNewDeploy() {
     // if a CDN ever serves a mixed old/new deployment for a moment).
     if (build && build !== BUILD && sessionStorage.getItem(RELOADED_KEY) !== build) {
       sessionStorage.setItem(RELOADED_KEY, build);
-      window.location.reload();
+      reloadRespectingCriticalActivity();
     }
   } catch {
     /* offline — try again on the next resume */
@@ -87,7 +103,7 @@ export function RegisterServiceWorker() {
     const onControllerChange = () => {
       if (reloaded || !hadController) return;
       reloaded = true;
-      window.location.reload();
+      reloadRespectingCriticalActivity();
     };
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
 

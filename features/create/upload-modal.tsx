@@ -19,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { NEUTRAL_EDIT, PhotoEditor, type PhotoEdit } from "@/features/create/photo-editor";
 import { openStudio } from "@/features/create/studio/studio-store";
@@ -31,6 +31,12 @@ import { cn } from "@/lib/utils";
 
 const MAX_BYTES = 100 * 1024 * 1024;
 const MAX_ITEMS = 20;
+// Caption-only — the selected media itself (File objects) can't survive a
+// remount via localStorage, so a full draft isn't possible here the way it
+// is for comments/reposts (which have no media to lose). Losing typed
+// caption text on an accidental close is still the more common, more
+// frustrating case this recovers from.
+const DRAFT_KEY = "frenz:upload-draft-caption";
 
 type Destination = "post" | "reel" | "story" | "both";
 
@@ -63,7 +69,13 @@ function ModalInner() {
 
   const [items, setItems] = useState<AlbumItem[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
-  const [caption, setCaption] = useState("");
+  const [caption, setCaption] = useState(() => {
+    try {
+      return localStorage.getItem(DRAFT_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [destination, setDestination] = useState<Destination>(intent === "story" ? "story" : "post");
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -71,6 +83,17 @@ function ModalInner() {
   const [err, setErr] = useState<string | null>(null);
   const [doneUrl, setDoneUrl] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+
+  // Draft auto-save (and cleanup when emptied) — same pattern as
+  // repost-composer.tsx/comments.tsx.
+  useEffect(() => {
+    try {
+      if (caption.trim()) localStorage.setItem(DRAFT_KEY, caption);
+      else localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* storage unavailable/full — draft just won't persist */
+    }
+  }, [caption]);
 
   const active = items[Math.min(activeIdx, Math.max(0, items.length - 1))];
   const isAlbum = items.length > 1;
@@ -242,6 +265,11 @@ function ModalInner() {
       }
       const link = json.postId ? `${window.location.origin}/p/${json.postId}` : `${window.location.origin}/home`;
       setDoneUrl(link);
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        /* ignore */
+      }
       router.refresh();
     } catch {
       setErr("Network error.");

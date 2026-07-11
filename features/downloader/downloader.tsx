@@ -37,8 +37,8 @@ const PLACEHOLDER_PLATFORMS = [
   "Pinterest",
 ];
 
-export function Downloader() {
-  const [url, setUrl] = useState("");
+export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
+  const [url, setUrl] = useState(initialUrl ?? "");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [phIndex, setPhIndex] = useState(0);
   const { status, metadata, error, fetchMetadata, download, reset } = useDownloader();
@@ -46,6 +46,17 @@ export function Downloader() {
 
   const isBusy = status === "fetching";
   const detected = url ? detectPlatform(url) : null;
+
+  // Share Target (manifest `share_target`) hands us a link from another app
+  // (e.g. "Share" out of TikTok/Instagram) as a one-time initial value —
+  // auto-fetch it immediately so the user lands straight on a result instead
+  // of having to paste it again. Runs once; the already-validated
+  // `initialUrl` comes from the server (app/page.tsx), so no re-validation
+  // is needed here.
+  useEffect(() => {
+    if (initialUrl) fetchMetadata(initialUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // On phones, bring the result card into view once a fetch resolves.
   useEffect(() => {

@@ -36,6 +36,13 @@ export interface PushPayload {
   icon?: string;
   /** Collapse key — a later push with the same tag replaces the previous one. */
   tag?: string;
+  /** Notification action buttons (public/sw/push.js). `action` must be one of
+   * the ids that public/sw/push.js's notificationclick handler recognizes —
+   * an unrecognized id just falls back to a normal open/focus. */
+  actions?: { action: string; title: string }[];
+  /** The other user a friend-request action button acts on — lets the SW
+   * call POST /api/friends/{actorId} directly without opening a window. */
+  actorId?: string;
 }
 
 interface SubRow {

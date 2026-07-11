@@ -11,7 +11,7 @@ const TRUST = [
   { icon: Zap, line1: "Fast", line2: "Downloads", tint: "text-violet-500" },
 ];
 
-export function Hero() {
+export function Hero({ initialUrl }: { initialUrl?: string }) {
   return (
     <section className="relative overflow-hidden pb-12 pt-28 sm:pb-16 sm:pt-32">
       <HeroWave />
@@ -80,7 +80,7 @@ export function Hero() {
         <div className="mb-3 flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
           <span className="h-px w-8 bg-border" /> Paste a link to download <span className="h-px w-8 bg-border" />
         </div>
-        <Downloader />
+        <Downloader initialUrl={initialUrl} />
       </div>
     </section>
   );

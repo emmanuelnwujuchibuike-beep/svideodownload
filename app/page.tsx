@@ -18,10 +18,32 @@ import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { AdScripts } from "@/features/monetization/ad-scripts";
 import { AdSlot } from "@/features/monetization/ad-slot";
 import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
+import { sourceUrlSchema } from "@/lib/validation";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function HomePage() {
-  // Signed-in users get the app dashboard, not the marketing landing page.
+// manifest.ts `share_target` posts here as a GET with these params when
+// someone shares a link into Frenz from another app (e.g. TikTok/Instagram's
+// own "Share" sheet). Some senders put the link in `url`, others just dump it
+// in `text` — check both. Reuses the same schema the download APIs already
+// validate against, so a malformed/unsafe value is silently dropped rather
+// than handed to the client unchecked.
+function extractSharedUrl(params: { url?: string; text?: string }): string | undefined {
+  for (const candidate of [params.url, params.text?.match(/https?:\/\/\S+/)?.[0]]) {
+    if (candidate && sourceUrlSchema.safeParse(candidate).success) return candidate;
+  }
+  return undefined;
+}
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ url?: string; text?: string; title?: string }>;
+}) {
+  const sharedUrl = extractSharedUrl(await searchParams);
+
+  // Signed-in users get the app dashboard, not the marketing landing page —
+  // unless they just shared a link in, since the paste-a-link tool that
+  // Share Target hands off to only lives on this landing page today.
   // Only pay for the getUser() auth round-trip when a session cookie exists —
   // brand-new visitors skip it entirely and the landing renders immediately.
   const jar = await cookies();
@@ -38,13 +60,13 @@ export default async function HomePage() {
       /* anon → show landing */
     }
   }
-  if (signedIn) redirect("/home"); // outside try/catch — redirect() throws by design
+  if (signedIn && !sharedUrl) redirect("/home"); // outside try/catch — redirect() throws by design
 
   return (
     <>
       <SiteHeader />
       <main>
-        <Hero />
+        <Hero initialUrl={sharedUrl} />
         <FeatureCards />
 
         {/* Ad slot — unchanged zone, placed in the new flow */}

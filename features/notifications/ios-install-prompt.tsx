@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { hasExceededDeclines, recordDecline } from "@/lib/pwa/decline-tracker";
+import { reportInstallEvent } from "@/lib/pwa/install-analytics";
+import { classifyInstallPlatform, isIos, isIosInApp, isStandalone } from "@/lib/pwa/platform";
 
 /**
  * Home-screen install prompt, per platform:
@@ -43,32 +45,6 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-function isStandalone(): boolean {
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as unknown as { standalone?: boolean }).standalone === true
-  );
-}
-
-function isIos(): boolean {
-  const ua = navigator.userAgent;
-  return (
-    /iphone|ipad|ipod/i.test(ua) ||
-    // iPadOS 13+ reports as Mac; touch points give it away.
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  );
-}
-
-// In-app webviews (a link opened inside another app's own browser) don't
-// expose the OS share sheet that "Add to Home Screen" lives in — tapping our
-// instructions there does nothing, which is exactly the "doesn't press" bug
-// report this used to cause. Send those users to copy-the-link instead.
-const IOS_IN_APP_UA = /FBAN|FBAV|FB_IAB|Instagram|TikTok|musical_ly|Twitter|Line\/|MicroMessenger|Snapchat|LinkedInApp|Pinterest\/[\d.]+ /i;
-
-function isIosInApp(): boolean {
-  return isIos() && IOS_IN_APP_UA.test(navigator.userAgent);
-}
-
 // Every iOS browser is WebKit under Apple's rules and reaches "Add to Home
 // Screen" through the same OS share sheet — Safari, Chrome, Firefox, Edge
 // all need the identical manual step, none can skip it. We only use this to
@@ -98,6 +74,10 @@ function dismissedThisSession(): boolean {
   }
 }
 
+function platformForMode(mode: "ios" | "ios-inapp" | "android"): "ios" | "ios-inapp" | "android" | "desktop" {
+  return classifyInstallPlatform(mode, navigator.userAgent);
+}
+
 export function IosInstallPrompt() {
   const [mode, setMode] = useState<"hidden" | "ios" | "ios-inapp" | "android">("hidden");
   const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -121,10 +101,12 @@ export function IosInstallPrompt() {
       settledRef.current = true;
       setInstallEvt(pendingEvtRef.current);
       setMode("android");
+      reportInstallEvent("pwa_install_prompt_shown", platformForMode("android"));
     } else if (pendingIosRef.current) {
       settledRef.current = true;
       const next = pendingIosRef.current;
       setMode((m) => (m === "hidden" ? next : m));
+      reportInstallEvent("pwa_install_prompt_shown", platformForMode(next));
     }
   };
 
@@ -162,6 +144,14 @@ export function IosInstallPrompt() {
     };
     window.addEventListener("beforeinstallprompt", onPrompt);
 
+    // The authoritative "actually installed" signal — fires on real success,
+    // separate from (and sometimes without) the in-page Install button, e.g.
+    // a user installing via Chrome's own address-bar icon instead of our
+    // banner. iOS has no equivalent event (Apple gives web pages no visibility
+    // into Home Screen adds at all), so this only ever fires on Chromium.
+    const onInstalled = () => reportInstallEvent("pwa_installed", platformForMode("android"));
+    window.addEventListener("appinstalled", onInstalled);
+
     // iOS: no event ever fires — detect and instruct.
     let t: ReturnType<typeof setTimeout> | null = null;
     if (isIosNeedingInstall()) {
@@ -171,6 +161,7 @@ export function IosInstallPrompt() {
     }
     return () => {
       window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
       window.removeEventListener("scroll", onScroll);
       if (t) clearTimeout(t);
     };
@@ -178,6 +169,7 @@ export function IosInstallPrompt() {
   }, []);
 
   const dismiss = () => {
+    reportInstallEvent("pwa_install_dismissed", platformForMode(mode === "hidden" ? "android" : mode));
     setMode("hidden");
     try {
       sessionStorage.setItem(DISMISS_KEY, "1");
@@ -194,8 +186,11 @@ export function IosInstallPrompt() {
       await installEvt.prompt();
       const { outcome } = await installEvt.userChoice;
       if (outcome === "dismissed") {
+        reportInstallEvent("pwa_install_dismissed", platformForMode("android"));
         sessionStorage.setItem(DISMISS_KEY, "1");
         recordDecline(PROMPT_ID);
+      } else {
+        reportInstallEvent("pwa_install_accepted", platformForMode("android"));
       }
     } catch {
       /* ignore */

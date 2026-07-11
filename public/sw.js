@@ -1,182 +1,31 @@
-/* Frenz service worker — Web Push receiver + PWA runtime cache.
+/* Frenz service worker — entry point only. Each concern lives in its own
+ * module under /sw/, loaded via importScripts() (classic-worker-compatible
+ * across every browser this app targets, incl. Safari, which doesn't fully
+ * support `{ type: "module" }` service workers) and wired together through
+ * the shared `self.SWX` namespace:
  *
- * Caching strategy (native-app feel + offline shell):
- *  - Immutable build assets (/_next/static, fonts) → cache-first (instant repeat loads).
- *  - Images (thumbnails/avatars) → stale-while-revalidate, capped cache.
- *  - Navigations (HTML) → network-first with a cached fallback, then an offline page.
- *  - Everything else (API, realtime, POST) → straight to network (never cached).
+ *   config.js          cache names, versioning, limits, allowlists
+ *   log.js              dev-only diagnostics
+ *   cache-utils.js       trim / quota-safe write / cacheable-response checks
+ *   strategies.js        cache-first / stale-while-revalidate / network-first
+ *   lifecycle.js         install / activate / SKIP_WAITING promotion
+ *   routes.js            the fetch router — which strategy for which request
+ *   push.js              Web Push receive + notification click
+ *   background-sync.js   offline-queue replay via the Background Sync API
+ *
+ * See docs/ARCHITECTURE.md-style module boundaries applied to the SW: each
+ * file above only reads what an earlier one exported onto SWX, never the
+ * reverse — config/log/cache-utils have no dependencies, strategies depends
+ * on cache-utils, routes depends on strategies, lifecycle/push/background-
+ * sync are leaves.
  */
-
-const VERSION = "v6";
-const STATIC_CACHE = `frenz-static-${VERSION}`;
-const IMAGE_CACHE = `frenz-img-${VERSION}`;
-const PAGE_CACHE = `frenz-pages-${VERSION}`;
-const KEEP = [STATIC_CACHE, IMAGE_CACHE, PAGE_CACHE];
-const IMAGE_MAX = 80;
-
-const OFFLINE_HTML =
-  '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline · Frenz</title><style>html,body{height:100%;margin:0;background:#080b14;color:#e5e7eb;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;text-align:center}div{padding:2rem}h1{font-size:1.25rem;margin:.5rem 0}p{color:#9ca3af;font-size:.9rem}</style></head><body><div><h1>You’re offline</h1><p>Check your connection — Frenz will be right back.</p></div></body></html>';
-
-self.addEventListener("install", () => self.skipWaiting());
-
-// The page can tell a freshly-installed worker to take over now (instead of
-// waiting for every tab to close) — powers instant updates on open laptop tabs.
-self.addEventListener("message", (event) => {
-  if (event.data === "SKIP_WAITING" || (event.data && event.data.type === "SKIP_WAITING")) {
-    self.skipWaiting();
-  }
-});
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    (async () => {
-      const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => !KEEP.includes(k)).map((k) => caches.delete(k)));
-      // Navigation preload: the browser starts the navigation request in
-      // parallel with SW boot instead of after it — shaves the worker's cold
-      // start (easily 100ms+ in an installed app) off every page open.
-      if (self.registration.navigationPreload) {
-        await self.registration.navigationPreload.enable().catch(() => {});
-      }
-      await self.clients.claim();
-    })(),
-  );
-});
-
-async function trimCache(name, max) {
-  const cache = await caches.open(name);
-  const keys = await cache.keys();
-  if (keys.length <= max) return;
-  for (let i = 0; i < keys.length - max; i++) await cache.delete(keys[i]);
-}
-
-self.addEventListener("fetch", (event) => {
-  const req = event.request;
-  if (req.method !== "GET") return;
-
-  // Media streams (reels, feed video, HLS playlists/segments, audio) must
-  // never wait on service-worker logic — bail before any other work so the
-  // browser's native pipeline (incl. range requests) handles them untouched.
-  if (req.destination === "video" || req.destination === "audio") return;
-
-  let url;
-  try {
-    url = new URL(req.url);
-  } catch {
-    return;
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return;
-  if (/\.(m3u8|ts|m4s|mp4|m4a|mp3|webm)$/i.test(url.pathname)) return;
-
-  const isStatic =
-    url.origin === self.location.origin &&
-    (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/fonts/"));
-  const isFont = /\.(woff2?|ttf|otf)$/i.test(url.pathname);
-  const isImage = req.destination === "image" || /\.(avif|webp|png|jpe?g|gif|svg|ico)$/i.test(url.pathname);
-
-  // Immutable, hashed assets — cache-first (they never change under the same URL).
-  if (isStatic || isFont) {
-    event.respondWith(
-      caches.open(STATIC_CACHE).then(async (cache) => {
-        const hit = await cache.match(req);
-        if (hit) return hit;
-        const res = await fetch(req);
-        if (res.ok) cache.put(req, res.clone());
-        return res;
-      }),
-    );
-    return;
-  }
-
-  // Images — stale-while-revalidate.
-  if (isImage) {
-    event.respondWith(
-      caches.open(IMAGE_CACHE).then(async (cache) => {
-        const hit = await cache.match(req);
-        const network = fetch(req)
-          .then((res) => {
-            if (res.ok || res.type === "opaque") {
-              cache.put(req, res.clone());
-              trimCache(IMAGE_CACHE, IMAGE_MAX);
-            }
-            return res;
-          })
-          .catch(() => hit);
-        return hit || network;
-      }),
-    );
-    return;
-  }
-
-  // Navigations — network-first (using the preloaded response when the
-  // browser already started it), fall back to the last cached page, then offline.
-  if (req.mode === "navigate") {
-    event.respondWith(
-      (async () => {
-        try {
-          const res = (await event.preloadResponse) || (await fetch(req));
-          if (res.ok && url.origin === self.location.origin) {
-            const cache = await caches.open(PAGE_CACHE);
-            cache.put(req, res.clone());
-          }
-          return res;
-        } catch {
-          const cached = await caches.match(req);
-          return cached || new Response(OFFLINE_HTML, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-        }
-      })(),
-    );
-    return;
-  }
-
-  // Everything else (API, realtime, etc.) — untouched, straight to network.
-});
-
-/* ── Web Push ─────────────────────────────────────────────────────────────── */
-
-self.addEventListener("push", (event) => {
-  let data = {};
-  try {
-    data = event.data ? event.data.json() : {};
-  } catch {
-    data = { title: "Frenz", body: event.data ? event.data.text() : "" };
-  }
-
-  const title = data.title || "Frenz";
-  const options = {
-    body: data.body || "",
-    icon: data.icon || "/icon.png",
-    badge: "/icon.png",
-    tag: data.tag || undefined,
-    renotify: !!data.tag,
-    data: { url: data.url || "/home" },
-    vibrate: [60, 30, 60],
-  };
-
-  event.waitUntil(
-    Promise.all([
-      self.registration.showNotification(title, options),
-      // Flag the app icon while the app is closed — the page replaces this
-      // with the exact unread count the moment it next opens.
-      "setAppBadge" in self.navigator ? self.navigator.setAppBadge().catch(() => {}) : Promise.resolve(),
-    ]),
-  );
-});
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  if ("clearAppBadge" in self.navigator) self.navigator.clearAppBadge().catch(() => {});
-  const url = (event.notification.data && event.notification.data.url) || "/home";
-
-  event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if ("focus" in client) {
-          client.navigate(url).catch(() => {});
-          return client.focus();
-        }
-      }
-      return self.clients.openWindow(url);
-    }),
-  );
-});
+importScripts(
+  "/sw/config.js",
+  "/sw/log.js",
+  "/sw/cache-utils.js",
+  "/sw/strategies.js",
+  "/sw/lifecycle.js",
+  "/sw/routes.js",
+  "/sw/push.js",
+  "/sw/background-sync.js",
+);

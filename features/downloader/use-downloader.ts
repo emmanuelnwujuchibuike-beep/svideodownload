@@ -2,12 +2,9 @@
 
 import { useCallback, useRef, useState } from "react";
 
-import { addDownload } from "@/features/history/store";
-import { warmMediaCache } from "@/features/downloads/local-media";
-import { downloadToDisk } from "@/lib/client-download";
-import type { ApiError, MediaKind, VideoMetadata } from "@/types";
+import type { ApiError, VideoMetadata } from "@/types";
 
-type Status = "idle" | "fetching" | "ready" | "downloading" | "started" | "error";
+type Status = "idle" | "fetching" | "ready" | "error";
 
 interface State {
   status: Status;
@@ -56,40 +53,5 @@ export function useDownloader() {
     }
   }, []);
 
-  const download = useCallback(
-    (formatId: string, kind: MediaKind) => {
-      const meta = state.metadata;
-      if (!meta) return;
-      setState((s) => ({ ...s, status: "downloading", error: null }));
-
-      // Hand off to the browser's native download manager (the only reliable
-      // path on iOS), then record the download locally and reset the button.
-      downloadToDisk({ url: meta.sourceUrl, formatId, kind, title: meta.title });
-      // Independently warm the in-app media cache so reopening this from
-      // Continue Watching/History plays instantly instead of re-fetching.
-      void warmMediaCache({ url: meta.sourceUrl, formatId, kind, title: meta.title });
-
-      const fmt = meta.formats.find((f) => f.formatId === formatId);
-      addDownload({
-        url: meta.sourceUrl,
-        platform: meta.platform,
-        platformName: meta.platformName,
-        title: meta.title,
-        thumbnail: meta.thumbnail,
-        formatId,
-        kind,
-        qualityLabel: fmt?.label ?? (kind === "audio" ? "Audio" : "Video"),
-        // Native path can't measure bytes; use the format's known size.
-        size: fmt?.filesize ?? null,
-      });
-
-      // Briefly show "preparing", then a "download started" confirmation (the
-      // browser's own UI shows the real byte progress), then settle to ready.
-      setTimeout(() => setState((s) => ({ ...s, status: "started" })), 700);
-      setTimeout(() => setState((s) => ({ ...s, status: "ready" })), 3200);
-    },
-    [state.metadata],
-  );
-
-  return { ...state, fetchMetadata, download, reset };
+  return { ...state, fetchMetadata, reset };
 }

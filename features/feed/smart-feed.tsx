@@ -11,6 +11,7 @@ import dynamic from "next/dynamic";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { lockTopbarVisible } from "@/features/app-shell/topbar-visibility";
 import { setTopbarCenter } from "@/features/app-shell/topbar-slot";
+import { ContinueInReels } from "@/features/feed/continue-in-reels";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { ImageOpenFallback } from "@/features/feed/image-open-fallback";
@@ -369,15 +370,22 @@ export function SmartFeed({
     }
   };
 
-  // The third tab is "Reels" on every device — it opens the full reels
-  // experience IN PLACE — instant, no route change or loader — seeded on the
-  // first already-loaded video. Only if nothing is loaded yet do we fall back
-  // to navigating to the /reels route.
+  // Opens the full reels experience IN PLACE — instant, no route change or
+  // loader — seeded on the first already-loaded video (its JS chunk + the
+  // /reels route are both idle-preloaded on mount, see the effect above, so
+  // this really is instant). Only if nothing is loaded yet do we fall back to
+  // navigating to the /reels route. Shared by the "Reels" segmented tab AND
+  // the "Continue in Reels" card at the bottom of an exhausted feed.
+  const openReelsInPlace = useCallback(() => {
+    const first = videosRef.current[0];
+    if (first) setReel({ startId: first.id, commentsId: null });
+    else router.push("/reels");
+  }, [router]);
+
+  // The third tab is "Reels" on every device — see openReelsInPlace above.
   const onSegment = (key: HomeFeedSort) => {
     if (key === "recent") {
-      const first = videosRef.current[0];
-      if (first) setReel({ startId: first.id, commentsId: null });
-      else router.push("/reels");
+      openReelsInPlace();
       return;
     }
     changeSegment(key);
@@ -754,9 +762,9 @@ export function SmartFeed({
             </div>
           ) : null}
           {nextOffset === null && stream.length > 0 && !switching ? (
-            <p className="flex items-center justify-center gap-1.5 py-6 text-center text-sm text-muted-foreground">
-              <Sparkles className="h-4 w-4" /> You&apos;re all caught up
-            </p>
+            <div className="py-6">
+              <ContinueInReels onOpen={openReelsInPlace} />
+            </div>
           ) : null}
         </>
       )}

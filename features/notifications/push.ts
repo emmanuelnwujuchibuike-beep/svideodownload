@@ -33,6 +33,17 @@ export async function getPushState(): Promise<PushState> {
   }
 }
 
+/** Thrown by `enablePush()` when the server rejects the save because the
+ * session is gone (401) — distinct from a transient/server failure so
+ * callers can point the user at signing in again instead of a "try again"
+ * that would just fail the same way forever. */
+export class PushSessionExpiredError extends Error {
+  constructor() {
+    super("Your session expired. Sign in again to turn on notifications.");
+    this.name = "PushSessionExpiredError";
+  }
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -72,6 +83,12 @@ export async function enablePush(): Promise<PushState> {
   // used to hide the whole Enable UI with zero feedback and count it as a
   // decline toward the 5-strikes cutoff. A thrown error forces every caller to
   // show the failure instead of swallowing it.
+  //
+  // 401 specifically means the session died between page load and this tap
+  // (client-side `user` state was stale) — the server route requires auth, so
+  // a generic "try again" would just 401 again forever. Surface it distinctly
+  // so callers can point at signing in again instead.
+  if (res.status === 401) throw new PushSessionExpiredError();
   if (!res.ok) throw new Error("Couldn't save your notification subscription. Please try again.");
   return "subscribed";
 }

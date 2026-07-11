@@ -22,10 +22,10 @@ import {
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
+import { BatchUpgradeGate } from "@/features/downloader/batch-upgrade-gate";
 import { startDownload as enqueueDownload } from "@/features/downloads/manager";
 import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
 import { useShowAds } from "@/features/monetization/use-show-ads";
-import { toast } from "@/features/ui/toast";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes, formatCompactNumber, formatDuration } from "@/lib/utils";
@@ -83,10 +83,11 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     });
   const allSelected = isBatchable && selected.size === imageFormats.length;
   const batchBytes = imageFormats.reduce((n, f) => (selected.has(f.formatId) ? n + (f.filesize ?? 0) : n), 0);
+  const [showUpgradeGate, setShowUpgradeGate] = useState(false);
 
   const batchDownload = () => {
     if (showAds) {
-      toast("Batch download is a Pro & Above feature — see plans below.", "info", { duration: 5000 });
+      setShowUpgradeGate(true);
       return;
     }
     const items = imageFormats.filter((f) => selected.has(f.formatId));
@@ -495,6 +496,18 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         setGate(null);
       }}
       onCancel={() => setGate(null)}
+    />
+
+    <BatchUpgradeGate
+      open={showUpgradeGate}
+      itemCount={selected.size}
+      onUseSingleDownload={() => {
+        setShowUpgradeGate(false);
+        // Drop the multi-select so the primary button reverts to the free
+        // single-item download the currently-active photo already offers.
+        setSelected(new Set());
+      }}
+      onClose={() => setShowUpgradeGate(false)}
     />
     </>
   );

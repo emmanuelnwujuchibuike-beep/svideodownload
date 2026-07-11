@@ -4,6 +4,7 @@ import { addDownload } from "@/features/history/store";
 import { mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { toast } from "@/features/ui/toast";
 import { isIosDevice, saveBlob, saveToDevice } from "@/lib/client-download";
+import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import type { MediaKind, PlatformId } from "@/types";
 
 /**
@@ -110,6 +111,12 @@ async function run(id: string) {
   controllers.set(id, controller);
   patch(id, { status: "downloading", error: null, receivedBytes: 0, speed: 0 });
 
+  // Held for the actual byte transfer — a service-worker-driven reload mid-
+  // download would silently drop it with no way to resume (the stream isn't
+  // range-resumable). Released in `finally` below, same lifecycle as the
+  // AbortController: pause/cancel/complete/fail all end this `run()` call.
+  const endCriticalActivity = beginCriticalActivity();
+
   try {
     const res = await fetch(task.directUrl ?? buildUrl(task), { signal: controller.signal });
     if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
@@ -172,6 +179,7 @@ async function run(id: string) {
     toast("Download failed — tap retry", "error");
   } finally {
     controllers.delete(id);
+    endCriticalActivity();
   }
 }
 

@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { useUser } from "@/features/auth/use-user";
-import { enablePush, pushSupported, syncPush } from "@/features/notifications/push";
+import { enablePush, PushSessionExpiredError, pushSupported, syncPush } from "@/features/notifications/push";
 import { hasExceededDeclines, recordDecline } from "@/lib/pwa/decline-tracker";
 import { isIos, isStandalone } from "@/lib/pwa/platform";
 
@@ -111,13 +111,17 @@ export function PushNudge() {
       if (state === "subscribed") setPhase("enabled");
       else if (state === "denied") setPhase("denied");
       else dismiss();
-    } catch {
+    } catch (err) {
       // A real failure (subscribe rejected, server save failed) is NOT a
       // decline — tapping the button and having it silently do nothing was
       // the exact bug report ("enable notification button doesn't click").
       // Surface it and offer a retry instead of calling dismiss(), which
       // would both hide the banner AND count toward the 5-decline cutoff.
-      setPhase("failed");
+      //
+      // A session-expired 401 is a different failure mode: retrying the same
+      // subscribe call would just 401 again, so route to the sign-in CTA
+      // instead of a retry button that can never succeed.
+      setPhase(err instanceof PushSessionExpiredError ? "signed-out" : "failed");
     } finally {
       setBusy(false);
     }

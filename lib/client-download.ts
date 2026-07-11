@@ -19,27 +19,6 @@ export function downloadUrl(payload: DownloadPayload): string {
   return `/api/download?${params.toString()}`;
 }
 
-/**
- * Triggers a download via the browser's NATIVE download manager by navigating a
- * link to the GET download endpoint (which responds with
- * `Content-Disposition: attachment`).
- *
- * This replaces the old fetch()+Blob approach, which iOS Safari silently
- * ignores (the request finishes but no file is ever saved). A real navigation
- * works across iOS, Android and desktop.
- */
-export function downloadToDisk(payload: DownloadPayload): void {
-  const a = document.createElement("a");
-  a.href = downloadUrl(payload);
-  a.download = "";
-  a.rel = "noopener";
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  // Remove on the next tick so the click/navigation is registered first.
-  setTimeout(() => a.remove(), 0);
-}
-
 /** Saves an already-fetched Blob to disk (used by the in-app download manager). */
 export function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);

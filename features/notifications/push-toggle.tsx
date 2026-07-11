@@ -1,9 +1,18 @@
 "use client";
 
 import { Bell, BellOff, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { disablePush, enablePush, getPushState, pushSupported, type PushState } from "@/features/notifications/push";
+import {
+  disablePush,
+  enablePush,
+  getPushState,
+  PushSessionExpiredError,
+  pushSupported,
+  type PushState,
+} from "@/features/notifications/push";
 import { cn } from "@/lib/utils";
 
 /**
@@ -15,6 +24,8 @@ export function PushToggle() {
   const [state, setState] = useState<PushState | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [expired, setExpired] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!pushSupported()) {
@@ -33,15 +44,17 @@ export function PushToggle() {
     if (busy || denied) return;
     setBusy(true);
     setFailed(false);
+    setExpired(false);
     try {
       setState(on ? await disablePush() : await enablePush());
-    } catch {
+    } catch (err) {
       // enablePush() throws on a real failure (subscribe rejected, server
       // save failed) instead of silently reporting "unsubscribed" — without
       // this catch, `state` never updates and the button just reverts to
       // idle with zero feedback, indistinguishable from "the click did
       // nothing."
-      setFailed(true);
+      if (err instanceof PushSessionExpiredError) setExpired(true);
+      else setFailed(true);
     } finally {
       setBusy(false);
     }
@@ -72,7 +85,16 @@ export function PushToggle() {
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : on ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
         {on ? "Mute push" : "Turn on push"}
       </button>
-      {failed ? <span className="text-[11px] font-medium text-destructive">Couldn&apos;t update push — try again.</span> : null}
+      {expired ? (
+        <Link
+          href={`/login?next=${encodeURIComponent(pathname || "/home")}`}
+          className="text-[11px] font-medium text-destructive underline underline-offset-2"
+        >
+          Session expired — sign in again
+        </Link>
+      ) : failed ? (
+        <span className="text-[11px] font-medium text-destructive">Couldn&apos;t update push — try again.</span>
+      ) : null}
     </span>
   );
 }

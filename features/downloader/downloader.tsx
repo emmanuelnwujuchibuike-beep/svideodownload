@@ -13,11 +13,14 @@ import dynamic from "next/dynamic";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { RecommendedToolsClient } from "@/components/monetization/recommended-tools-client";
+import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
+import { startDownload as enqueueDownload } from "@/features/downloads/manager";
 import { PublishButton } from "@/features/social/publish-button";
 import { FetchedAd } from "@/features/monetization/fetched-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
 import { detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
+import type { MediaKind } from "@/types";
 
 import { useDownloader } from "./use-downloader";
 
@@ -41,11 +44,38 @@ export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
   const [url, setUrl] = useState(initialUrl ?? "");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [phIndex, setPhIndex] = useState(0);
-  const { status, metadata, error, fetchMetadata, download, reset } = useDownloader();
+  const { status, metadata, error, fetchMetadata, reset } = useDownloader();
   const previewRef = useRef<HTMLDivElement | null>(null);
 
   const isBusy = status === "fetching";
   const detected = url ? detectPlatform(url) : null;
+
+  // Set once the user taps download on this fetch's result — drives the
+  // "publish it" prompt below. Reset whenever a new video is fetched.
+  const [justDownloaded, setJustDownloaded] = useState(false);
+  useEffect(() => setJustDownloaded(false), [metadata?.id]);
+
+  const handleDownload = (formatId: string, kind: MediaKind) => {
+    if (!metadata) return;
+    const fmt = metadata.formats.find((f) => f.formatId === formatId);
+    // In-app background download: streamed with live progress in the floating
+    // card, the page stays fully usable, and the user NEVER lands on a raw
+    // file/Quick Look page (the old link-navigation stranded the installed
+    // iOS webapp there — see features/downloads/manager.ts). The manager
+    // saves to the on-device library, records history, and hands the file to
+    // the device (share-sheet Save on iOS, direct save elsewhere).
+    enqueueDownload({
+      url: metadata.sourceUrl,
+      formatId,
+      kind,
+      title: metadata.title,
+      thumbnail: metadata.thumbnail,
+      platform: metadata.platform,
+      platformName: metadata.platformName,
+      qualityLabel: fmt?.label ?? (kind === "audio" ? "Audio" : kind === "image" ? "Image" : "Video"),
+    });
+    setJustDownloaded(true);
+  };
 
   // Share Target (manifest `share_target`) hands us a link from another app
   // (e.g. "Share" out of TikTok/Instagram) as a one-time initial value —
@@ -189,13 +219,7 @@ export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
       {metadata ? (
         <div ref={previewRef} className="scroll-mt-24">
           <FetchedAd key={`ad-${metadata.id}`} />
-          <PreviewCard
-            metadata={metadata}
-            phase={
-              status === "downloading" ? "working" : status === "started" ? "done" : "idle"
-            }
-            onDownload={download}
-          />
+          <PreviewCard metadata={metadata} phase="idle" onDownload={handleDownload} />
 
           {/* Decision-engine offer: ad / affiliate / upgrade — keyed per video. */}
           <ResultOffer key={metadata.id} />
@@ -204,7 +228,7 @@ export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
 
           {/* Once the download starts, invite the user to publish it to their
               profile — the moment they're most likely to share. */}
-          {status === "started" ? (
+          {justDownloaded ? (
             <div className="mt-5 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-4 text-center ring-1 ring-inset ring-violet-500/20">
               <p className="text-sm font-bold">Downloaded — share it with your Frenz</p>
               <p className="mt-0.5 text-xs text-muted-foreground">Publish it to your profile so your followers can watch and save it too.</p>
@@ -215,7 +239,7 @@ export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
           ) : null}
 
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            {status !== "started" ? <PublishButton metadata={metadata} /> : null}
+            {!justDownloaded ? <PublishButton metadata={metadata} /> : null}
             <button
               type="button"
               onClick={() => {
@@ -229,6 +253,12 @@ export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
           </div>
         </div>
       ) : null}
+
+      {/* Progress / "Save to device" completion card — singleton (safe to
+          mount alongside the app shell's own copy; first mount wins). Needed
+          here since Downloader also renders on public pages outside the
+          signed-in app shell, which is the only place AppOverlays mounts it. */}
+      <FloatingDownloadProgress />
     </div>
   );
 }

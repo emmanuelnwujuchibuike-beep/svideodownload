@@ -14,6 +14,12 @@ import { cn } from "@/lib/utils";
 
 type Tab = "for_you" | "following";
 
+// Module-level (not component state) so it survives a fresh mount when the
+// Router Cache restores a cached in-app navigation back to /reels — the exact
+// same idiom features/feed/smart-feed.tsx uses for its own "Alive on return"
+// clock. Resets only on a real page reload/new tab.
+let lastReelsFetchAt = 0;
+
 /**
  * Full-screen /reels with a For You / Following toggle. "For You" is the
  * personalized deck (seeded from the server); "Following" refetches to reels only
@@ -77,10 +83,12 @@ export function ReelsFeed({
     try {
       // Reels has its OWN API (format='reel' posts only) — a separate product
       // from the feed, through the shared SDK like everything else.
-      return await getApi().action<{ items: FeedItem[]; nextOffset: number | null }>("/api/reels", {
+      const res = await getApi().action<{ items: FeedItem[]; nextOffset: number | null }>("/api/reels", {
         method: "GET",
         query: { sort, offset: off, limit: 24 },
       });
+      if (off === 0) lastReelsFetchAt = Date.now();
+      return res;
     } catch {
       return { items: [] as FeedItem[], nextOffset: null as number | null };
     }
@@ -147,6 +155,56 @@ export function ReelsFeed({
     })();
     return () => {
       cancelled = true;
+    };
+  }, [fetchPage]);
+
+  // Alive on return: a reel posted while this installed PWA was backgrounded
+  // (or the device was offline) never showed up even after switching back to
+  // the app — this deck has no realtime subscription and, unlike smart-feed's
+  // Home feed, no client refetch at all beyond explicit pagination, so it just
+  // sat on whatever `initialItems` SSR handed it at the last real page load.
+  // Coming back after ≥2 min quietly fetches page 0 of the CURRENT tab and
+  // APPENDS any genuinely new reels to the end of the deck (never prepends or
+  // replaces — the reel the viewer is actively on must never move).
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const lastHiddenAt = useRef<number | null>(null);
+  useEffect(() => {
+    const STALE_MS = 2 * 60_000;
+
+    const revive = async () => {
+      const activeTab = tabRef.current;
+      const d = await fetchPage(activeTab, 0);
+      if (tabRef.current !== activeTab) return; // switched tabs while this was in flight
+      const fresh = (d.items ?? []).filter((i) => i.mediaKind === "video" && !seen.current.has(i.id));
+      if (!fresh.length) return;
+      for (const i of fresh) seen.current.add(i.id);
+      setItems((prev) => [...prev, ...fresh]);
+    };
+
+    // Covers returning via cached CROSS-PAGE navigation too (the generous
+    // staleTimes.dynamic in next.config.ts is what makes that nav instant) —
+    // visibilitychange alone can't see that case, the tab was never actually
+    // hidden. `lastReelsFetchAt` is module-level so it's correct regardless of
+    // whether this component instance persisted or got a fresh mount.
+    if (lastReelsFetchAt === 0) lastReelsFetchAt = Date.now(); // true first mount — SSR data is already fresh
+    else if (Date.now() - lastReelsFetchAt >= STALE_MS) void revive();
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        lastHiddenAt.current = Date.now();
+      } else if (lastHiddenAt.current !== null) {
+        if (Date.now() - lastHiddenAt.current >= STALE_MS) void revive();
+        lastHiddenAt.current = null;
+      }
+    };
+    const onOnline = () => void revive();
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", onOnline);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", onOnline);
     };
   }, [fetchPage]);
 

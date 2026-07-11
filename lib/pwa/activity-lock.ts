@@ -1,14 +1,14 @@
 /**
- * Ref-counted "don't reload out from under me" flag for the small set of
- * workflows where an unexpected page reload would destroy in-flight work —
- * today, only an upload actually moving bytes (lib/storage/client-upload.ts).
- * A downloaded FILE is not this: `downloadToDisk` hands off to the browser's
- * own native download manager, which keeps running independently of the page
- * (the whole reason it's used on iOS), so a reload can't interrupt it.
+ * Ref-counted "don't reload out from under me" flag for workflows where an
+ * unexpected page reload would destroy in-flight work: an upload actually
+ * moving bytes (lib/storage/client-upload.ts), and a download's fetch+blob
+ * transfer (features/downloads/manager.ts) — both run in-page, not handed
+ * off to the browser's own download manager, so a reload mid-transfer would
+ * silently drop them with no way to resume.
  *
  * register-sw.tsx's auto-reload-on-new-deploy checks this and, if held,
  * defers rather than skipping — it just waits for the current critical
- * section to end instead of reloading mid-upload.
+ * section to end instead of reloading mid-upload/mid-download.
  */
 let count = 0;
 const listeners = new Set<() => void>();

@@ -20,7 +20,7 @@ export type UploadPlan =
  * critical path. R2 presigned URLs are short-lived (5 min), so a caller that
  * prefetches should fall back to a fresh `presignUpload` if the PUT fails.
  */
-export async function presignUpload(kind: "video" | "audio" | "image", ext: string): Promise<UploadPlan> {
+export async function presignUpload(kind: "video" | "audio" | "image" | "document", ext: string): Promise<UploadPlan> {
   const res = await fetch("/api/uploads/presign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -69,7 +69,7 @@ export async function uploadWithPlan(plan: UploadPlan, data: Blob | File, conten
  */
 export async function uploadPostMedia(opts: {
   data: Blob | File;
-  kind: "video" | "audio" | "image";
+  kind: "video" | "audio" | "image" | "document";
   ext: string;
   contentType: string;
 }): Promise<string> {

@@ -1,12 +1,13 @@
 "use client";
 
-import { AlertCircle, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MoreVertical, Pause, Share2, Trash2, X } from "lucide-react";
+import { AlertCircle, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MessageCircle, MoreVertical, Pause, Share2, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { closePlayer, playerNext, playerPrev, usePlayerQueue } from "@/features/downloads/player-store";
+import { SendToChatSheet } from "@/features/downloads/send-to-chat-sheet";
 import { removeDownload, toggleFavorite } from "@/features/history/store";
 import { toast } from "@/features/ui/toast";
 import { downloadUrl, saveBlob } from "@/lib/client-download";
@@ -44,6 +45,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   const [publishing, setPublishing] = useState(false);
   const [postId, setPostId] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [sendToChatOpen, setSendToChatOpen] = useState(false);
   const [favorited, setFavorited] = useState(rec.favorite);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0); // 0-100 within the CURRENT item, for the status bar
@@ -431,6 +433,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
                       ) : (
                         <MenuItem icon={Globe2} label={publishing ? "Publishing…" : "Publish to everyone"} onClick={() => { if (!publishing) void publish(); }} />
                       )}
+                      <MenuItem icon={MessageCircle} label="Send to chat" onClick={() => { setMoreOpen(false); setSendToChatOpen(true); }} />
                       <MenuItem icon={Download} label="Save to device" onClick={() => { setMoreOpen(false); blobRef.current && saveBlob(blobRef.current, rec.title || "download"); }} />
                     </>
                   ) : null}
@@ -454,6 +457,16 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           </div>
         ) : null}
       </AnimatePresence>
+
+      <SendToChatSheet
+        open={sendToChatOpen}
+        onClose={() => setSendToChatOpen(false)}
+        blob={blobRef.current}
+        kind={rec.kind}
+        title={rec.title || "Shared media"}
+        thumbnailUrl={rec.thumbnail ?? null}
+        prefetchedPlan={planRef.current}
+      />
     </div>
   );
 }

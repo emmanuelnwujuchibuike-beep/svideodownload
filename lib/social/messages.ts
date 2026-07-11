@@ -1,4 +1,5 @@
 import { GROUP_TITLE_MAX, MAX_GROUP_MEMBERS, parseMentionedHandles } from "@/lib/social/message-meta";
+import { MAX_ATTACHMENTS_PER_MESSAGE, type AttachmentKind } from "@/lib/social/message-media";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export { GROUP_TITLE_MAX, MAX_GROUP_MEMBERS };
@@ -446,8 +447,27 @@ async function notifyMembers(db: Db, conversationId: string, senderId: string, m
   }
 }
 
+export interface AttachmentInput {
+  mediaKind: AttachmentKind;
+  mediaUrl: string;
+  thumbnailUrl?: string;
+  mediaWidth?: number;
+  mediaHeight?: number;
+  durationMs?: number;
+  waveform?: number[];
+  filename?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+}
+
 export interface SendMessageOptions {
   replyToId?: string;
+  /** Already-uploaded media (image/video/voice/document) — the client
+   * uploads bytes directly to R2/Storage first (same presign+PUT pipeline
+   * posts use), then hands over just the resulting URL(s); this function
+   * never touches raw bytes. Empty text + at least one attachment is valid
+   * (an attachment-only message, same as every other chat app). */
+  attachments?: AttachmentInput[];
   /** Idempotency key: a client-generated UUID. Replaying the same send (an
    * offline-queue retry racing a delayed success, e.g.) returns the
    * ALREADY-created message instead of inserting a duplicate. */
@@ -474,7 +494,9 @@ export async function sendMessage(
 ): Promise<{ ok: true; id: string; duplicate?: boolean } | { ok: false }> {
   if (!hasSupabase) return { ok: false };
   const text = body.trim();
-  if (!text || text.length > 2000) return { ok: false };
+  const attachments = (options.attachments ?? []).slice(0, MAX_ATTACHMENTS_PER_MESSAGE);
+  if (text.length > 2000) return { ok: false };
+  if (!text && attachments.length === 0) return { ok: false }; // attachment-only sends are valid; a truly empty send isn't
   try {
     const db = createAdminClient();
     const { data: conv } = await db
@@ -555,6 +577,45 @@ export async function sendMessage(
         if (winner) return { ok: true, id: winner.id as string, duplicate: true };
       }
       return { ok: false };
+    }
+
+    if (attachments.length > 0) {
+      const { error: attachErr } = await db.from("message_attachments").insert(
+        attachments.map((a, idx) => ({
+          message_id: inserted.id,
+          conversation_id: conversationId,
+          idx,
+          media_kind: a.mediaKind,
+          media_url: a.mediaUrl,
+          thumbnail_url: a.thumbnailUrl ?? null,
+          media_width: a.mediaWidth ?? null,
+          media_height: a.mediaHeight ?? null,
+          duration_ms: a.durationMs ?? null,
+          waveform: a.waveform ?? null,
+          filename: a.filename ?? null,
+          mime_type: a.mimeType ?? null,
+          size_bytes: a.sizeBytes ?? null,
+        })),
+      );
+      // The message itself already landed — an attachment-row failure
+      // shouldn't silently vanish the whole send, but it does mean the
+      // recipient sees a text-only (or empty) bubble instead of the media.
+      // Best-effort logged the same way a send failure is elsewhere; not
+      // worth a full transaction/rollback for what's fundamentally a
+      // metadata-row insert after the real bytes are already safely stored.
+      if (attachErr) {
+        try {
+          await db.from("message_send_failures").insert({
+            user_id: senderId,
+            conversation_id: conversationId,
+            client_id: options.clientId ?? null,
+            reason: "attachment_insert_failed",
+            attempts: 1,
+          });
+        } catch {
+          /* best-effort telemetry only */
+        }
+      }
     }
 
     void notifyMembers(db, conversationId, senderId, inserted.id as string, text);
@@ -919,6 +980,61 @@ export function aggregateReactions(
   return byMessage;
 }
 
+const ATTACHMENT_COLUMNS =
+  "id, message_id, media_kind, media_url, thumbnail_url, media_width, media_height, duration_ms, waveform, filename, mime_type, size_bytes";
+
+interface RawAttachmentRow {
+  id: string;
+  message_id: string;
+  media_kind: AttachmentKind;
+  media_url: string;
+  thumbnail_url: string | null;
+  media_width: number | null;
+  media_height: number | null;
+  duration_ms: number | null;
+  waveform: number[] | null;
+  filename: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+}
+
+/** Groups already-`idx`-ordered attachment rows per message. Pure/exported so it's unit-testable without a DB. */
+export function groupAttachments(rows: RawAttachmentRow[]): Map<string, MessageAttachment[]> {
+  const byMessage = new Map<string, MessageAttachment[]>();
+  for (const r of rows) {
+    const list = byMessage.get(r.message_id) ?? [];
+    list.push({
+      id: r.id,
+      kind: r.media_kind,
+      url: r.media_url,
+      thumbnailUrl: r.thumbnail_url,
+      width: r.media_width,
+      height: r.media_height,
+      durationMs: r.duration_ms,
+      waveform: r.waveform,
+      filename: r.filename,
+      mimeType: r.mime_type,
+      sizeBytes: r.size_bytes,
+    });
+    byMessage.set(r.message_id, list);
+  }
+  return byMessage;
+}
+
+export interface MessageAttachment {
+  id: string;
+  kind: AttachmentKind;
+  url: string;
+  thumbnailUrl: string | null;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  waveform: number[] | null;
+  filename: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+}
+
 export interface MessageItem {
   id: string;
   body: string;
@@ -933,6 +1049,7 @@ export interface MessageItem {
   deletedAt: string | null;
   pinned: boolean;
   reactions: MessageReactionSummary[];
+  attachments: MessageAttachment[];
 }
 
 export interface ConversationView {
@@ -1086,18 +1203,22 @@ export async function getConversation(
 
     const replyIds = [...new Set(rows.map((m) => m.reply_to_id).filter((x): x is string => !!x))];
     const messageIds = rows.map((m) => m.id);
-    const [{ data: replyRows }, { data: reactionRows }] = await Promise.all([
+    const [{ data: replyRows }, { data: reactionRows }, { data: attachmentRows }] = await Promise.all([
       replyIds.length
         ? db.from("messages").select("id, sender_id, body, deleted_at").in("id", replyIds)
         : Promise.resolve({ data: [] as { id: string; sender_id: string; body: string; deleted_at: string | null }[] }),
       messageIds.length
         ? db.from("message_reactions").select("message_id, user_id, emoji").in("message_id", messageIds)
         : Promise.resolve({ data: [] as { message_id: string; user_id: string; emoji: string }[] }),
+      messageIds.length
+        ? db.from("message_attachments").select(ATTACHMENT_COLUMNS).in("message_id", messageIds).order("idx", { ascending: true })
+        : Promise.resolve({ data: [] as RawAttachmentRow[] }),
     ]);
     const replyById = new Map(
       ((replyRows ?? []) as { id: string; sender_id: string; body: string; deleted_at: string | null }[]).map((r) => [r.id, r]),
     );
     const reactionsByMsg = aggregateReactions((reactionRows ?? []) as { message_id: string; user_id: string; emoji: string }[], userId);
+    const attachmentsByMsg = groupAttachments((attachmentRows ?? []) as RawAttachmentRow[]);
 
     // Side effect: direct threads mark the other side's messages delivered+read
     // (unchanged); group threads advance the VIEWER's own read cursor instead
@@ -1133,6 +1254,7 @@ export async function getConversation(
         deletedAt: m.deleted_at,
         pinned: m.pinned,
         reactions: reactionsByMsg.get(m.id) ?? [],
+        attachments: m.deleted_at ? [] : (attachmentsByMsg.get(m.id) ?? []),
       };
     });
 

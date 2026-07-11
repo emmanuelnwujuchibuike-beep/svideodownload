@@ -13,7 +13,7 @@ export function OPTIONS() {
 }
 
 const schema = z.object({
-  kind: z.enum(["video", "audio", "image"]),
+  kind: z.enum(["video", "audio", "image", "document"]),
   ext: z.string().min(1).max(5),
 });
 

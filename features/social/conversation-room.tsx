@@ -6,9 +6,12 @@ import {
   Check,
   CheckCheck,
   Clock,
+  File as FileIcon,
   Forward,
   Loader2,
+  Mic,
   MoreHorizontal,
+  Paperclip,
   Pencil,
   Pin,
   PinOff,
@@ -25,8 +28,12 @@ import { RichText } from "@/components/social/rich-text";
 import { revalidate } from "@/features/data";
 import { ForwardSheet } from "@/features/social/forward-sheet";
 import { INBOX_KEY, loadInbox } from "@/features/social/inbox";
+import { MediaComposerSheet } from "@/features/social/media-composer-sheet";
 import { extractSharedPost, MessagePostEmbed } from "@/features/social/message-post-embed";
 import { useTypingIndicator } from "@/features/social/use-typing";
+import { VoiceMessage, VideoComment } from "@/features/social/comment-media";
+import { VoiceRecorder } from "@/features/social/voice-recorder";
+import { ImageLightbox } from "@/features/social/image-lightbox";
 import {
   enqueueMessage,
   listQueuedForConversation,
@@ -34,14 +41,26 @@ import {
   subscribeMessageFailure,
   subscribeMessageQueue,
 } from "@/lib/offline/message-queue";
+import { readImageDimensions, readVideoMetadata } from "@/lib/media/message-attachments-client";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { MESSAGE_REACTIONS, parseMentionedHandles } from "@/lib/social/message-meta";
-import type { ConversationMember, ConversationType, MessageItem } from "@/lib/social/messages";
+import {
+  attachmentKindForMime,
+  extForFilename,
+  formatBytes,
+  isAllowedMime,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  MAX_SIZE_BYTES,
+  type AttachmentKind,
+} from "@/lib/social/message-media";
+import type { AttachmentInput, ConversationMember, ConversationType, MessageAttachment, MessageItem } from "@/lib/social/messages";
+import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { useVisualViewport } from "@/lib/pwa/use-visual-viewport";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { toast } from "@/features/ui/toast";
 
 const COMPOSER_MAX_HEIGHT = 128;
 const DRAFT_PREFIX = "frenz-draft:";
@@ -100,6 +119,18 @@ export function ConversationRoom({
 }) {
   const [messages, setMessages] = useState<MessageItem[]>(initial);
   const [body, setBody] = useState("");
+  // Staged image/video/document attachments — uploaded the moment they're
+  // picked (see the media composer sheet), previewed as chips above the
+  // composer, then sent together with whatever caption text is present.
+  // Voice notes bypass this entirely — VoiceRecorder's own preview/send UI
+  // already covers that step, so a recorded note sends immediately instead
+  // of becoming a staged chip (matches every real chat app's mic-button
+  // behavior: record → release → sent, no separate caption step).
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentInput[]>([]);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const [recordingVoice, setRecordingVoice] = useState(false);
+  const [mediaSheetOpen, setMediaSheetOpen] = useState(false);
+  const [viewingImage, setViewingImage] = useState<{ url: string; alt: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [replyingTo, setReplyingTo] = useState<MessageItem | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -209,6 +240,7 @@ export function ConversationRoom({
             deletedAt: null,
             pinned: false,
             reactions: [],
+            attachments: [], // the offline queue is text-only — see submit()'s own note
           }));
           for (const m of seeded) seen.current.add(m.id);
           return [...prev, ...seeded];
@@ -418,6 +450,12 @@ export function ConversationRoom({
             deletedAt: r.deleted_at,
             pinned: r.pinned,
             reactions: [],
+            // Attachment rows land in a SEPARATE insert right after this one
+            // (sendMessage() awaits both, but this INSERT event can still
+            // arrive first) — the message_attachments subscription below
+            // triggers a resync() shortly after to pick them up, same
+            // pattern as reactions arriving on an existing message.
+            attachments: [],
           });
           void revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
         },
@@ -458,6 +496,17 @@ export function ConversationRoom({
               playSound("reaction");
             }
           }
+          if (reactionDebounce) clearTimeout(reactionDebounce);
+          reactionDebounce = setTimeout(() => void resync(), 400);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "message_attachments", filter: `conversation_id=eq.${conversationId}` },
+        () => {
+          // Attachment rows land in their own insert right after the parent
+          // message's — same debounced-resync reconciliation as reactions,
+          // rather than hand-patching a partial payload into state.
           if (reactionDebounce) clearTimeout(reactionDebounce);
           reactionDebounce = setTimeout(() => void resync(), 400);
         },
@@ -511,16 +560,29 @@ export function ConversationRoom({
   };
 
   const MENU_WIDTH = 160; // w-40
+  const MENU_ITEM_HEIGHT = 40; // matches MenuItem's px-3.5 py-2 + text-sm line height
   const toggleMessageMenu = (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
     haptic("light");
     if (openMenuId === id) {
       setOpenMenuId(null);
       return;
     }
+    // Only clamping the horizontal side (see the comment above menuPos) still
+    // let the menu render off the BOTTOM of the viewport when tapped near
+    // the bottom of the screen — the fixed `top-8`-equivalent offset never
+    // accounted for how much room was actually left below the button. Reply/
+    // Forward/React/Pin are always present; Edit/Delete only for your own,
+    // non-deleted, non-optimistic messages — same gating as the menu's own
+    // render — so the estimate matches exactly what's about to be shown.
+    const msg = messages.find((x) => x.id === id);
+    const editDelete = msg && msg.mine && !msg.deletedAt && !id.startsWith("optimistic-") ? 2 : 0;
+    const menuHeight = (4 + editDelete) * MENU_ITEM_HEIGHT + 12;
     const rect = e.currentTarget.getBoundingClientRect();
     const margin = 8;
     const left = Math.min(Math.max(rect.right - MENU_WIDTH, margin), window.innerWidth - MENU_WIDTH - margin);
-    setMenuPos({ top: rect.bottom + 4, left });
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow >= menuHeight + margin ? rect.bottom + 4 : Math.max(margin, rect.top - menuHeight - 4);
+    setMenuPos({ top, left });
     setOpenMenuId(id);
   };
 
@@ -547,10 +609,16 @@ export function ConversationRoom({
     }
   };
 
-  const submit = async (e?: FormEvent) => {
+  const submit = async (e?: FormEvent, overrideAttachments?: AttachmentInput[]) => {
     e?.preventDefault();
     const text = body.trim();
-    if (!text || busy) return;
+    // Voice notes send immediately (VoiceRecorder's own preview already
+    // covers the record→review→send step) rather than becoming a staged
+    // chip — an explicit override lets that call site bypass the
+    // `pendingAttachments` state entirely, since setState is async and
+    // wouldn't be visible to a submit() called right after setting it.
+    const attachments = overrideAttachments ?? pendingAttachments;
+    if ((!text && attachments.length === 0) || busy) return;
     haptic("selection");
     setBusy(true);
     clearTyping();
@@ -588,6 +656,19 @@ export function ConversationRoom({
     const replyTo = replyingTo
       ? { id: replyingTo.id, body: replyingTo.body, senderId: replyingTo.senderId, deleted: !!replyingTo.deletedAt }
       : null;
+    const optimisticAttachments: MessageAttachment[] = attachments.map((a, i) => ({
+      id: `pending-${i}`,
+      kind: a.mediaKind,
+      url: a.mediaUrl,
+      thumbnailUrl: a.thumbnailUrl ?? null,
+      width: a.mediaWidth ?? null,
+      height: a.mediaHeight ?? null,
+      durationMs: a.durationMs ?? null,
+      waveform: a.waveform ?? null,
+      filename: a.filename ?? null,
+      mimeType: a.mimeType ?? null,
+      sizeBytes: a.sizeBytes ?? null,
+    }));
     setMessages((prev) => [
       ...prev,
       {
@@ -603,30 +684,37 @@ export function ConversationRoom({
         deletedAt: null,
         pinned: false,
         reactions: [],
+        attachments: optimisticAttachments,
       },
     ]);
     setBody("");
+    setPendingAttachments([]);
     const replyToId = replyingTo?.id;
     setReplyingTo(null);
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId, body: text, replyToId, clientId, clientSentAt }),
+        body: JSON.stringify({ conversationId, body: text, replyToId, clientId, clientSentAt, attachments: attachments.length ? attachments : undefined }),
       });
       if (res.ok) {
         // Bubble reconciles via the realtime echo (see `append`).
-      } else if (res.status >= 500) {
+      } else if (res.status >= 500 && attachments.length === 0) {
         // Transient server-side failure — the offline queue backs off and
-        // retries instead of just discarding the composer text.
+        // retries instead of just discarding the composer text. Text-only:
+        // the queue (lib/offline/message-queue.ts) has no attachment
+        // support (re-uploading a large blob from a background retry is a
+        // materially different, bigger feature) — an attachment send that
+        // fails falls through to the permanent-failure branch below instead
+        // of silently vanishing into a queue that can't actually carry it.
         await enqueueMessage({ clientId, conversationId, body: text, replyToId, replyToPreview: replyTo ?? undefined, clientSentAt });
       } else {
-        // Permanent (blocked/invalid) — remove the ghost bubble, give the
-        // text back, and log it so the failure is visible in monitoring —
-        // this path never touches the offline queue, so it's the only place
-        // that has to log it itself.
+        // Permanent (blocked/invalid), or transient-but-has-attachments —
+        // remove the ghost bubble, give the text back, and log it so the
+        // failure is visible in monitoring.
         setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
         setBody(text);
+        if (attachments.length > 0) setPendingAttachments(attachments);
         void fetch("/api/messages/send-failures", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -634,14 +722,97 @@ export function ConversationRoom({
         }).catch(() => {});
       }
     } catch {
-      // Network dropped entirely mid-send — hand off to the offline queue
-      // (delivers on reconnect, even much later); resync() also fires in
-      // case the send actually landed despite the client-side exception.
-      await enqueueMessage({ clientId, conversationId, body: text, replyToId, clientSentAt });
-      void resync();
+      if (attachments.length === 0) {
+        // Network dropped entirely mid-send — hand off to the offline queue
+        // (delivers on reconnect, even much later); resync() also fires in
+        // case the send actually landed despite the client-side exception.
+        await enqueueMessage({ clientId, conversationId, body: text, replyToId, clientSentAt });
+        void resync();
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        setBody(text);
+        setPendingAttachments(attachments);
+      }
     } finally {
       setBusy(false);
     }
+  };
+
+  // Uploads happen the moment a file is picked (not deferred to Send) — the
+  // SAME presign+PUT pipeline post/reel media already uses (lib/storage/
+  // client-upload.ts), so this never touches raw bytes server-side either.
+  // Client-side re-validated against the same MAX_SIZE_BYTES/ALLOWED_MIME
+  // the API route re-checks — never trust the file picker alone, but also
+  // fail fast/cheap before spending a real upload on something that would
+  // just get rejected server-side anyway.
+  const handleFilesPicked = async (files: File[], kind: "image" | "video" | "document") => {
+    const room = MAX_ATTACHMENTS_PER_MESSAGE - pendingAttachments.length;
+    if (room <= 0) {
+      toast(`You can attach up to ${MAX_ATTACHMENTS_PER_MESSAGE} files to one message.`, "error");
+      return;
+    }
+    const list = files.slice(0, room);
+    setUploadingCount((c) => c + list.length);
+    for (const file of list) {
+      try {
+        const resolvedKind: AttachmentKind = attachmentKindForMime(file.type) ?? kind;
+        if (file.size > MAX_SIZE_BYTES[resolvedKind]) {
+          toast(`${file.name} is over the ${formatBytes(MAX_SIZE_BYTES[resolvedKind])} limit for ${resolvedKind}s.`, "error");
+          continue;
+        }
+        if (!isAllowedMime(resolvedKind, file.type)) {
+          toast(`${file.name} isn't a supported file type.`, "error");
+          continue;
+        }
+        const ext = extForFilename(file.name);
+        const url = await uploadPostMedia({ data: file, kind: resolvedKind, ext, contentType: file.type });
+        let mediaWidth: number | undefined;
+        let mediaHeight: number | undefined;
+        let durationMs: number | undefined;
+        if (resolvedKind === "image") {
+          const dims = await readImageDimensions(file);
+          if (dims) {
+            mediaWidth = dims.width;
+            mediaHeight = dims.height;
+          }
+        } else if (resolvedKind === "video") {
+          const meta = await readVideoMetadata(file);
+          if (meta) {
+            mediaWidth = meta.width;
+            mediaHeight = meta.height;
+            durationMs = meta.durationMs;
+          }
+        }
+        setPendingAttachments((prev) => [
+          ...prev,
+          {
+            mediaKind: resolvedKind,
+            mediaUrl: url,
+            mediaWidth,
+            mediaHeight,
+            durationMs,
+            filename: file.name,
+            mimeType: file.type,
+            sizeBytes: file.size,
+          },
+        ]);
+      } catch {
+        toast(`Couldn't upload ${file.name}. Try again.`, "error");
+      } finally {
+        setUploadingCount((c) => Math.max(0, c - 1));
+      }
+    }
+  };
+
+  const removePendingAttachment = (index: number) => {
+    haptic("light");
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Voice notes send immediately — see the state comment above.
+  const handleVoiceRecorded = async (result: { url: string; durationMs: number; waveform: number[] }) => {
+    setRecordingVoice(false);
+    await submit(undefined, [{ mediaKind: "audio", mediaUrl: result.url, durationMs: result.durationMs, waveform: result.waveform, mimeType: "audio/webm" }]);
   };
 
   const deleteMsg = async (id: string) => {
@@ -769,6 +940,11 @@ export function ConversationRoom({
             // A shared post link renders as a rich preview card (creator,
             // cover, caption) with any note above it — never a raw URL.
             const shared = !deleted ? extractSharedPost(m.body) : null;
+            // Image/video attachments go edge-to-edge in the bubble (same
+            // tight p-1.5 treatment as a shared-post embed); voice/document
+            // attachments stay in the normal padded card layout since
+            // they're compact rows, not full-bleed media.
+            const hasMediaAttachment = m.attachments.some((a) => a.kind === "image" || a.kind === "video");
             const canEdit = m.mine && !deleted && !m.id.startsWith("optimistic-");
             const canDelete = m.mine && !deleted && !m.id.startsWith("optimistic-");
             const canAct = !deleted && !m.id.startsWith("optimistic-");
@@ -792,7 +968,7 @@ export function ConversationRoom({
                   <div
                     className={cn(
                       "max-w-[80%] overflow-hidden whitespace-pre-wrap break-words rounded-3xl text-sm leading-relaxed",
-                      deleted ? "px-4 py-2.5 italic text-muted-foreground" : shared ? "p-1.5" : "px-4 py-2.5",
+                      deleted ? "px-4 py-2.5 italic text-muted-foreground" : shared || hasMediaAttachment ? "p-1.5" : "px-4 py-2.5",
                       deleted
                         ? "border border-dashed border-border/60 bg-transparent"
                         : m.mine
@@ -818,17 +994,55 @@ export function ConversationRoom({
                             {m.replyTo.deleted ? "Deleted message" : m.replyTo.body || "Message"}
                           </button>
                         ) : null}
+                        {m.attachments.length > 0 ? (
+                          <div className={cn("flex flex-col gap-1.5", hasMediaAttachment ? "" : "px-0", m.body && "mb-1.5")}>
+                            {m.attachments.map((att) =>
+                              att.kind === "image" ? (
+                                <button
+                                  key={att.id}
+                                  type="button"
+                                  onClick={() => setViewingImage({ url: att.url, alt: att.filename ?? "Image" })}
+                                  className="block overflow-hidden rounded-2xl"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={att.url} alt="" className="max-h-80 w-full max-w-full object-cover" />
+                                </button>
+                              ) : att.kind === "video" ? (
+                                <VideoComment key={att.id} url={att.url} thumbnailUrl={att.thumbnailUrl} durationMs={att.durationMs} />
+                              ) : att.kind === "audio" ? (
+                                <VoiceMessage key={att.id} url={att.url} durationMs={att.durationMs} waveform={att.waveform} />
+                              ) : (
+                                <a
+                                  key={att.id}
+                                  href={att.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={cn(
+                                    "mt-1.5 flex items-center gap-2.5 rounded-2xl border px-3 py-2.5",
+                                    m.mine ? "border-white/20 bg-white/10" : "border-border/50 bg-secondary/30",
+                                  )}
+                                >
+                                  <FileIcon className="h-6 w-6 shrink-0 opacity-80" />
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-xs font-semibold">{att.filename ?? "Document"}</span>
+                                    {att.sizeBytes ? <span className="block text-[11px] opacity-70">{formatBytes(att.sizeBytes)}</span> : null}
+                                  </span>
+                                </a>
+                              ),
+                            )}
+                          </div>
+                        ) : null}
                         {shared ? (
                           <>
                             {shared.text ? <span className="block px-2.5 pb-1.5 pt-1">{shared.text}</span> : null}
                             <MessagePostEmbed postId={shared.postId} mine={m.mine} />
                           </>
-                        ) : (
+                        ) : m.body ? (
                           <RichText
                             text={m.body}
                             linkClassName={cn("font-semibold underline underline-offset-2", m.mine ? "text-white" : "text-primary")}
                           />
-                        )}
+                        ) : null}
                       </>
                     )}
                   </div>
@@ -1023,38 +1237,104 @@ export function ConversationRoom({
         </div>
       ) : null}
 
-      <form
-        onSubmit={submit}
-        className="flex items-end gap-2 border-t border-border/60 bg-card/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3"
-      >
-        <textarea
-          ref={textareaRef}
-          value={body}
-          onChange={(e) => {
-            setBody(e.target.value);
-            checkMentionTrigger(e.target.value, e.target.selectionStart ?? e.target.value.length);
-            if (e.target.value.trim()) notifyTyping();
-            else clearTyping();
-          }}
-          onKeyDown={onComposerKeyDown}
-          placeholder={editingId ? "Edit your message…" : replyingTo ? "Write a reply…" : "Message…"}
-          aria-label="Message"
-          maxLength={2000}
-          rows={1}
-          style={{ maxHeight: COMPOSER_MAX_HEIGHT }}
-          className="max-h-32 min-h-11 flex-1 resize-none overflow-y-auto rounded-2xl border border-border/60 bg-background/60 px-4 py-2.5 text-sm leading-relaxed outline-none transition placeholder:text-muted-foreground/60 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20"
-        />
-        <motion.button
-          type="submit"
-          disabled={busy || !body.trim()}
-          aria-label="Send"
-          whileTap={{ scale: 0.88 }}
-          transition={springs.press}
-          className="bg-brand flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 disabled:opacity-40"
+      {pendingAttachments.length > 0 || uploadingCount > 0 ? (
+        <div className="flex items-center gap-2 overflow-x-auto border-t border-border/60 bg-secondary/20 px-3 py-2">
+          {pendingAttachments.map((a, i) => (
+            <div key={i} className="relative shrink-0">
+              {a.mediaKind === "image" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={a.mediaUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
+              ) : a.mediaKind === "video" ? (
+                // eslint-disable-next-line jsx-a11y/media-has-caption
+                <video src={a.mediaUrl} muted className="h-16 w-16 rounded-xl bg-black object-cover" />
+              ) : (
+                <div className="flex h-16 w-16 flex-col items-center justify-center gap-1 rounded-xl bg-secondary px-1.5 text-center">
+                  <FileIcon className="h-5 w-5 shrink-0 text-muted-foreground" />
+                  <span className="w-full truncate text-[9px] text-muted-foreground">{a.filename ?? "File"}</span>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => removePendingAttachment(i)}
+                aria-label="Remove attachment"
+                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-background text-muted-foreground shadow ring-1 ring-border/60 transition hover:text-rose-500"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+          {uploadingCount > 0 ? (
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-secondary">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {recordingVoice ? (
+        <div className="border-t border-border/60 bg-card/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3">
+          <VoiceRecorder onRecorded={handleVoiceRecorded} onCancel={() => setRecordingVoice(false)} />
+        </div>
+      ) : (
+        <form
+          onSubmit={submit}
+          className="flex items-end gap-2 border-t border-border/60 bg-card/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3"
         >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </motion.button>
-      </form>
+          <motion.button
+            type="button"
+            onClick={() => setMediaSheetOpen(true)}
+            aria-label="Attach"
+            whileTap={{ scale: 0.85 }}
+            transition={springs.press}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+          >
+            <Paperclip className="h-5 w-5" />
+          </motion.button>
+          <textarea
+            ref={textareaRef}
+            value={body}
+            onChange={(e) => {
+              setBody(e.target.value);
+              checkMentionTrigger(e.target.value, e.target.selectionStart ?? e.target.value.length);
+              if (e.target.value.trim()) notifyTyping();
+              else clearTyping();
+            }}
+            onKeyDown={onComposerKeyDown}
+            placeholder={editingId ? "Edit your message…" : replyingTo ? "Write a reply…" : "Message…"}
+            aria-label="Message"
+            maxLength={2000}
+            rows={1}
+            style={{ maxHeight: COMPOSER_MAX_HEIGHT }}
+            className="max-h-32 min-h-11 flex-1 resize-none overflow-y-auto rounded-2xl border border-border/60 bg-background/60 px-4 py-2.5 text-sm leading-relaxed outline-none transition placeholder:text-muted-foreground/60 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20"
+          />
+          {body.trim() || pendingAttachments.length > 0 ? (
+            <motion.button
+              type="submit"
+              disabled={busy || uploadingCount > 0}
+              aria-label="Send"
+              whileTap={{ scale: 0.88 }}
+              transition={springs.press}
+              className="bg-brand flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 disabled:opacity-40"
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </motion.button>
+          ) : (
+            <motion.button
+              type="button"
+              onClick={() => setRecordingVoice(true)}
+              aria-label="Record voice message"
+              whileTap={{ scale: 0.88 }}
+              transition={springs.press}
+              className="bg-brand flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-md shadow-violet-500/25 transition hover:opacity-95"
+            >
+              <Mic className="h-4 w-4" />
+            </motion.button>
+          )}
+        </form>
+      )}
+
+      <MediaComposerSheet open={mediaSheetOpen} onClose={() => setMediaSheetOpen(false)} onFilesPicked={handleFilesPicked} />
+      {viewingImage ? <ImageLightbox src={viewingImage.url} alt={viewingImage.alt} onClose={() => setViewingImage(null)} /> : null}
 
       <ForwardSheet
         messageId={forwardingId ?? ""}

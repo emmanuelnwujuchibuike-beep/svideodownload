@@ -222,7 +222,12 @@ export function ReelDeck({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
       className={cn(
-        "fixed inset-0 overflow-hidden overscroll-none bg-black",
+        // pointer-events-auto: reels-feed.tsx's tab-slide wrapper (variant
+        // "page") is `pointer-events-none` so its full-viewport box never
+        // swallows clicks over the sidebar column this deck deliberately
+        // leaves empty (see `lg:left-64` below) — this explicit override is
+        // what makes the deck itself clickable again inside that wrapper.
+        "pointer-events-auto fixed inset-0 overflow-hidden overscroll-none bg-black",
         // On large screens reels sit BESIDE the app sidebar (which stays visible
         // + scrollable, same as every other page) instead of covering it —
         // whether opened as the /reels page or in-place from the feed.

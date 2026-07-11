@@ -278,7 +278,20 @@ export function ReelsFeed({
            (under the status bar) once this slide wrapper was introduced. A
            `fixed inset-0` wrapper's box already equals the full viewport, so
            nothing shifts — the fix is invisible except that the deck reaches
-           all the way to the true top again. */
+           all the way to the true top again.
+
+           `pointer-events-none` here (re-enabled on ReelDeck's own root,
+           which explicitly sets `pointer-events-auto`) is load-bearing: this
+           wrapper shares the app sidebar's exact z-30, and being LATER in DOM
+           order (it's rendered inside the page content, after the persistent
+           shell's sidebar) it would otherwise win every same-z-index paint/
+           hit-test tie across the ENTIRE viewport — including the sidebar's
+           own 16rem column, which ReelDeck deliberately leaves empty
+           (`lg:left-64`) specifically so the sidebar stays usable while a
+           reel plays. Without this, that column was still invisibly "there"
+           on this outer div and silently swallowed every sidebar click,
+           which is exactly why nav buttons stopped responding until the
+           reel's own X (unmounting this wrapper) was tapped. */
         <AnimatePresence mode="popLayout" initial={false} custom={direction}>
           <motion.div
             key={tab}
@@ -287,7 +300,7 @@ export function ReelsFeed({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: direction >= 0 ? "-18%" : "18%", opacity: 0 }}
             transition={{ duration: 0.26, ease: [0.32, 0.72, 0, 1] }}
-            className="fixed inset-0 z-30"
+            className="pointer-events-none fixed inset-0 z-30"
           >
             <ReelDeck
               items={items}

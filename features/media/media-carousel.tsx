@@ -167,7 +167,16 @@ export function MediaCarousel({
       if (e.ctrlKey) return; // pinch-zoom gesture — never intercept
       if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
         e.preventDefault();
-        window.scrollBy({ top: e.deltaY, left: 0 });
+        // `behavior: "auto"` is NOT optional here — globals.css sets a global
+        // `html { scroll-behavior: smooth }` (for anchor-link navigation), which
+        // an unqualified scrollBy() silently inherits. A mouse wheel fires many
+        // deltaY events per second, so every tick was queuing/restarting a NEW
+        // smooth-scroll animation on top of the still-running previous one —
+        // that compounding is exactly what read as "scrolls very slow and
+        // hangs" over a multi-photo post. Forcing "auto" makes wheel input
+        // track the cursor 1:1, like native scrolling, regardless of that
+        // page-wide smooth-scroll default.
+        window.scrollBy({ top: e.deltaY, left: 0, behavior: "auto" });
       }
     };
     el.addEventListener("wheel", onWheelNative, { passive: false });

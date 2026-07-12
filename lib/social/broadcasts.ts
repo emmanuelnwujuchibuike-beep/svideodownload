@@ -77,7 +77,7 @@ export async function createAndSendBroadcast(
         chunk.map((userId) => ({ user_id: userId, actor_id: null, type: "admin_broadcast", post_id: null })),
       );
       await Promise.all(
-        chunk.map((userId) => sendSmartPush(userId, { title: cleanTitle, body: cleanBody, url: "/notifications", tag: `broadcast:${broadcast.id}` }, "high")),
+        chunk.map((userId) => sendSmartPush(userId, { title: cleanTitle, body: cleanBody, url: "/notifications", tag: `broadcast:${broadcast.id}` }, "high", "system")),
       );
       sent += chunk.length;
     }

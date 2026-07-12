@@ -29,7 +29,7 @@ export function IconTile({
       className={cn(
         "relative flex h-full w-full items-center justify-center overflow-hidden rounded-full",
         tint === "brand"
-          ? "bg-foreground shadow-[0_3px_10px_-2px] shadow-foreground/40"
+          ? "bg-brand-tile shadow-[0_3px_10px_-2px] shadow-[hsl(var(--brand-purple)/0.45)]"
           : "bg-gradient-to-b from-white/10 via-secondary/70 to-secondary/40 shadow-[0_1px_6px_-2px] shadow-black/20 ring-1 ring-inset ring-white/10",
         className,
       )}
@@ -38,10 +38,10 @@ export function IconTile({
         aria-hidden
         className={cn(
           "pointer-events-none absolute inset-0 bg-gradient-to-b to-transparent",
-          tint === "brand" ? "from-background/25" : "from-white/25 via-transparent",
+          tint === "brand" ? "from-white/20" : "from-white/25 via-transparent",
         )}
       />
-      <span className={cn("relative flex items-center justify-center", tint === "brand" ? "text-background drop-shadow-sm" : "text-foreground/85")}>
+      <span className={cn("relative flex items-center justify-center", tint === "brand" ? "text-white drop-shadow-sm" : "text-foreground/85")}>
         {children}
       </span>
     </span>

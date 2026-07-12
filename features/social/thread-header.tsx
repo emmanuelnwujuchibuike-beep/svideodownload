@@ -78,7 +78,7 @@ export function ThreadHeader({
 
     return () => {
       cancelled = true;
-      void channel.unsubscribe();
+      void supabase.removeChannel(channel);
     };
   }, [conversationId, type]);
 

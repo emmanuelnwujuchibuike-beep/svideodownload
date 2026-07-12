@@ -111,11 +111,33 @@ export function RegisterServiceWorker() {
       reg?.update().catch(() => {});
       void reloadIfNewDeploy();
     };
+
+    // A version-check that finds a new build reloads the WHOLE page (full
+    // cold boot — boot splash + every route's loading.tsx) — correct for a
+    // real return from being away, but during active development a new
+    // deploy can land every few minutes, so gating this on visibility/focus
+    // alone reloaded on almost every brief app-switch too (owner: "Home
+    // seems to always load and delay ... when I minimize and come back
+    // within a minute"). Only run the check if the tab was actually hidden
+    // for a real stretch of time — a quick alt-tab or a few seconds in
+    // another app skips it entirely; the 60s interval below still catches a
+    // long-open tab that's never backgrounded.
+    const MIN_AWAY_MS = 60_000;
+    let hiddenAt = 0;
     const onVisible = () => {
-      if (document.visibilityState === "visible") check();
+      if (document.visibilityState !== "visible") {
+        hiddenAt = Date.now();
+        return;
+      }
+      if (hiddenAt && Date.now() - hiddenAt < MIN_AWAY_MS) return;
+      check();
+    };
+    const onFocus = () => {
+      if (hiddenAt && Date.now() - hiddenAt < MIN_AWAY_MS) return;
+      check();
     };
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", check);
+    window.addEventListener("focus", onFocus);
     const interval = window.setInterval(check, 60_000);
     // First check shortly after startup (off the critical path).
     const initial = window.setTimeout(() => void reloadIfNewDeploy(), 4_000);
@@ -123,7 +145,7 @@ export function RegisterServiceWorker() {
     return () => {
       navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", check);
+      window.removeEventListener("focus", onFocus);
       window.clearInterval(interval);
       window.clearTimeout(initial);
     };

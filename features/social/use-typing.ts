@@ -60,7 +60,11 @@ export function useTypingIndicator(conversationId: string, viewerId: string, vie
     return () => {
       clearInterval(staleCheck);
       if (clearTimer.current) clearTimeout(clearTimer.current);
-      void channel.unsubscribe();
+      // removeChannel — the browser client is a shared singleton
+      // (lib/supabase/client.ts), and this hook mounts/tears down with every
+      // thread visit, so a leaked channel here compounded exactly the same
+      // way conversation-room.tsx's did.
+      void supabase.removeChannel(channel);
       channelRef.current = null;
     };
   }, [conversationId, viewerId]);

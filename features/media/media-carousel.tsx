@@ -243,7 +243,13 @@ export function MediaCarousel({
                       // Subtle press feedback (Part 10) — safe per-slide since
                       // the Expand/dots/counter controls all live OUTSIDE the
                       // scroller as siblings, never nested inside a slide.
-                      className="absolute inset-0 transition-transform duration-150 active:scale-[0.985]"
+                      // cursor-default overrides Tailwind Preflight's
+                      // `[role="button"]{cursor:pointer}` — a mouse-pointer
+                      // hand icon spanning the ENTIRE slide read as "this is
+                      // grabbing my scroll" even though the wheel redirect
+                      // above already made it scroll correctly; a plain arrow
+                      // matches every other (single-media) feed post.
+                      className="absolute inset-0 cursor-default transition-transform duration-150 active:scale-[0.985]"
                       onPointerDown={onSlidePointerDown}
                       onPointerMove={onSlidePointerMove}
                       onPointerUp={onSlideTap(i, m)}
@@ -260,7 +266,7 @@ export function MediaCarousel({
                 <div
                   role="button"
                   aria-label="Open"
-                  className="absolute inset-0"
+                  className="absolute inset-0 cursor-default"
                   onPointerDown={onSlidePointerDown}
                   onPointerMove={onSlidePointerMove}
                   onPointerUp={onSlideTap(i, m)}
@@ -369,7 +375,7 @@ function CarouselVideo({
     <div
       role="button"
       aria-label="Watch video"
-      className="absolute inset-0 transition-transform duration-150 active:scale-[0.985]"
+      className="absolute inset-0 cursor-default transition-transform duration-150 active:scale-[0.985]"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

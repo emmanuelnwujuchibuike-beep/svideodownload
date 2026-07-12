@@ -36,6 +36,9 @@ export async function loadInbox(): Promise<Inbox> {
  */
 export function useInboxRealtime(): void {
   useEffect(() => {
+    // Memoized singleton (lib/supabase/client.ts) — safe to call again here
+    // even though conversation-room.tsx also calls it; both share one client
+    // and one Realtime socket now instead of each opening its own.
     const supabase = createClient();
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
@@ -67,7 +70,7 @@ export function useInboxRealtime(): void {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", bump);
-      if (channel) void channel.unsubscribe();
+      if (channel) void supabase.removeChannel(channel);
     };
   }, []);
 }

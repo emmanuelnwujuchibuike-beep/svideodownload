@@ -199,6 +199,23 @@
     );
   }
 
+  /* Icon-tile brand gradient — deep navy anchored into electric blue and
+     royal purple, for every icon badge/tile background site-wide (nav tabs,
+     module headers, topbar actions). Owner correction (2026-07-11): the
+     tiles were `bg-foreground` (a flat black/white invert) — asked for the
+     brand colors back, but "dark premium", not the earlier flat, fully-lit
+     `.bg-brand` sweep that got reported as "too much purple splashing" —
+     anchoring one end in near-black keeps it moody/premium at icon size
+     instead of a bright candy fill. */
+  .bg-brand-tile {
+    background-image: linear-gradient(
+      145deg,
+      hsl(234 45% 9%) 0%,
+      hsl(var(--brand-blue)) 55%,
+      hsl(var(--brand-purple)) 100%
+    );
+  }
+
   /* Blue→purple gradient text — hero headings, brand moments */
   .text-gradient {
     @apply bg-gradient-to-r from-blue-500 via-violet-500 to-purple-500 bg-clip-text text-transparent;

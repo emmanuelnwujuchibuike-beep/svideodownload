@@ -122,18 +122,30 @@ async function makeOgFontData() {
   // the same reason as makeOgIconData above — Vercel serverless functions
   // can't reliably fetch a local static-asset URL outside edge runtime, and a
   // network fetch to Google Fonts at request time adds an avoidable failure
-  // mode. Source file: components/fonts/SpaceGrotesk-Bold.ttf (Google Fonts,
-  // OFL license) — replace it and re-run this to pick up a different weight/cut.
+  // mode. Source file: components/fonts/BricolageGrotesque-ExtraBold.ttf
+  // (Google Fonts, OFL license) — a STATIC instance (wght=800, wdth=100,
+  // opsz=96), instanced from the upstream variable font via
+  // `fonttools varLib.instancer` (run through `uvx --from fonttools fonttools
+  // varLib.instancer <variable.ttf> wght=800 wdth=100 opsz=96 -o
+  // BricolageGrotesque-ExtraBold.ttf`). Owner (2026-07-11): swapped from
+  // Space Grotesk for a more distinctive, "premium/charming" wordmark — the
+  // RAW variable TTF crashed next/og's Satori renderer ("Cannot read
+  // properties of undefined (reading '256')"), so it must stay instanced to a
+  // static cut, never swapped back to the variable file. Replace the file and
+  // re-run this to pick a different family/cut.
   const fs = await import("node:fs/promises");
-  const fontPath = path.join(COMPONENTS, "fonts/SpaceGrotesk-Bold.ttf");
+  const fontPath = path.join(COMPONENTS, "fonts/BricolageGrotesque-ExtraBold.ttf");
   const buf = await fs.readFile(fontPath);
   const base64 = buf.toString("base64");
   const out =
-    `// Auto-generated from components/fonts/SpaceGrotesk-Bold.ttf (Google Fonts, OFL) — see components/og-image.tsx.\n` +
+    `// Auto-generated from components/fonts/BricolageGrotesque-ExtraBold.ttf (Google Fonts, OFL) — see components/og-image.tsx.\n` +
     `// Hardcoded, not fetched/read at runtime: Vercel serverless functions do not\n` +
     `// reliably resolve local static-asset URLs via fetch(new URL(..., import.meta.url))\n` +
     `// outside edge runtime, and a network fetch adds an avoidable failure mode (see\n` +
-    `// the OG-image crash incident memory). Regenerate via scripts/gen-icons.mjs.\n` +
+    `// the OG-image crash incident memory). A STATIC font instance — the raw\n` +
+    `// variable TTF crashes Satori (next/og's renderer); see the comment above\n` +
+    `// makeOgFontData() in scripts/gen-icons.mjs before swapping this. Regenerate\n` +
+    `// via scripts/gen-icons.mjs.\n` +
     `export const OG_WORDMARK_FONT_BASE64 =\n  "${base64}";\n`;
   await fs.writeFile(path.join(COMPONENTS, "og-font-data.ts"), out);
   console.log(

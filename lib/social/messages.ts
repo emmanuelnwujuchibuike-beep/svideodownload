@@ -270,6 +270,17 @@ export async function removeGroupMember(
 ): Promise<{ ok: boolean; reason?: string }> {
   try {
     const db = createAdminClient();
+    // Direct conversations have no "leave" concept — without this, calling
+    // this route with a DIRECT conversation id and your own user id set
+    // `left_at` on your own DM membership (a direct member's role defaults to
+    // "member", not "owner", so the self-removal branch below never caught
+    // it), permanently locking you out of that conversation: both
+    // getConversation() and sendMessage() require an active membership row,
+    // and getOrCreateConversation()'s reseed uses ignoreDuplicates so it
+    // never clears an existing left_at.
+    const { data: conv } = await db.from("conversations").select("type").eq("id", conversationId).maybeSingle();
+    if (conv?.type !== "group") return { ok: false, reason: "not_found" };
+
     const targetRole = await memberRole(db, conversationId, targetUserId);
     if (!targetRole) return { ok: false, reason: "not_found" };
 

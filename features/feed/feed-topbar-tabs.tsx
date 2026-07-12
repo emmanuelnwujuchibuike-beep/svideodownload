@@ -66,8 +66,8 @@ export function FeedTopbarTabs({
             transition={springs.press}
             className={cn(
               "relative flex shrink-0 items-center gap-1.5 rounded-full py-2 font-bold transition-colors",
-              active ? "px-3.5 text-[13px] text-background" : "h-9 w-9 justify-center",
-              !active && isReels && "text-foreground/80",
+              active ? "px-3.5 text-[13px] text-white" : "h-9 w-9 justify-center",
+              !active && isReels && "text-white",
               !active && !isReels && "text-foreground/60 hover:text-foreground",
             )}
           >
@@ -75,16 +75,18 @@ export function FeedTopbarTabs({
               <motion.span
                 layoutId="feed-topbar-pill"
                 transition={springs.bounce}
-                className="absolute inset-0 -z-10 rounded-full bg-foreground shadow-[0_4px_16px_-4px] shadow-foreground/40"
+                className="absolute inset-0 -z-10 rounded-full bg-brand-tile shadow-[0_4px_16px_-4px] shadow-[hsl(var(--brand-purple)/0.45)]"
               />
             ) : null}
-            {/* Reels always keeps a soft tinted backdrop (it never gets the
-                active pill treatment, so it needs its own way to read as clearly
-                tappable/important, not just another filter icon). Was a violet
-                tint — "too much purple splashing" correction (2026-07-10): a
-                neutral one instead. */}
+            {/* Reels always keeps its own tinted backdrop (it never gets the
+                active pill treatment, so it needs its own way to read as
+                clearly tappable/important, not just another filter icon).
+                Owner (2026-07-11): make it obviously "the Reels button" now
+                that Trending Reels no longer gives mobile a second, bigger
+                entry point — a full brand tile (not just a faint tint) so
+                it's unmistakable at a glance. */}
             {!active && isReels ? (
-              <span aria-hidden className="absolute inset-0 -z-10 rounded-full bg-secondary ring-1 ring-inset ring-border" />
+              <span aria-hidden className="absolute inset-0 -z-10 rounded-full bg-brand-tile shadow-[0_3px_10px_-2px] shadow-[hsl(var(--brand-purple)/0.4)]" />
             ) : null}
             <PressIcon active={active}>
               <Icon className={cn(active || !isReels ? "h-[18px] w-[18px]" : "h-[22px] w-[22px] drop-shadow-sm")} />

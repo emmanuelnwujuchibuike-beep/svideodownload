@@ -46,6 +46,11 @@ export interface PushPayload {
   /** Lets a message notification's Mark-as-read/Mute action buttons act on
    * the right thread directly, without opening a window (public/sw/push.js). */
   conversationId?: string;
+  /** Part 6 "hide push preview" privacy setting: shown instead of `body` when
+   * the recipient has that toggle on (e.g. "New message" instead of the
+   * actual text) — stripped before the payload is ever sent, never itself
+   * delivered. See sendSmartPush. */
+  genericBody?: string;
 }
 
 interface SubRow {
@@ -55,9 +60,45 @@ interface SubRow {
   auth: string;
 }
 
+interface SendOutcome {
+  ok: boolean;
+  code?: number;
+  message?: string;
+}
+
+async function sendOnce(s: SubRow, body: string, topic: string | undefined): Promise<SendOutcome> {
+  try {
+    await webpush.sendNotification(
+      { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+      body,
+      {
+        TTL: 60 * 60 * 24, // hold for a day if the device is offline
+        urgency: "high",
+        ...(topic ? { topic } : {}),
+      },
+    );
+    return { ok: true };
+  } catch (err) {
+    const code = (err as { statusCode?: number }).statusCode;
+    const message = (err as { message?: string }).message?.slice(0, 300);
+    return { ok: false, code, message };
+  }
+}
+
 /**
  * Push `payload` to every device the user has registered. Best-effort and never
  * throws — a failed/expired subscription is dropped, the rest still receive it.
+ *
+ * Part 7 additions: a dead subscription (404/410 — the push service itself
+ * says "gone") is pruned immediately, no retry (retrying a dead endpoint is
+ * pure waste). Any OTHER failure (network blip, 500/503 from the push
+ * service) gets ONE bounded retry after a short delay — the honest version
+ * of "intelligent retry system" at this app's real scale; a full queue/
+ * dead-letter/exponential-backoff scheduler would be solving a scale problem
+ * this app doesn't have yet (see smart-delivery.ts's identical reasoning).
+ * Every attempt (sent/retried/failed/pruned) is logged to
+ * `push_delivery_log`, fire-and-forget — the source for the admin
+ * "Push delivery" monitor (features/admin/push-delivery-monitor.tsx).
  */
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
   if (!ensureConfigured()) return;
@@ -70,8 +111,20 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     const subs = (data as SubRow[]) ?? [];
     if (subs.length === 0) return;
 
-    const body = JSON.stringify(payload);
+    // genericBody is a hint for THIS function's caller-facing type only —
+    // never part of the actual payload delivered to the service worker.
+    const { genericBody: _genericBody, ...deliverable } = payload;
+    const body = JSON.stringify(deliverable);
     const dead: string[] = [];
+    const logRows: {
+      user_id: string;
+      subscription_id: string;
+      tag: string | null;
+      status: "sent" | "retried" | "failed" | "pruned";
+      status_code: number | null;
+      error: string | null;
+      attempt: number;
+    }[] = [];
 
     // Latency: every push here is user-facing (a message, a Wow, a follow), so
     // send with Urgency: high — without it, push services treat delivery as
@@ -82,27 +135,40 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     // of stacking duplicates when the device reconnects. Remaining delay after
     // this is iOS platform behavior (APNs power management), not app code.
     const topic = payload.tag ? payload.tag.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) : undefined;
+    const tag = payload.tag ?? null;
 
     await Promise.all(
       subs.map(async (s) => {
-        try {
-          await webpush.sendNotification(
-            { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-            body,
-            {
-              TTL: 60 * 60 * 24, // hold for a day if the device is offline
-              urgency: "high",
-              ...(topic ? { topic } : {}),
-            },
-          );
-        } catch (err) {
-          const code = (err as { statusCode?: number }).statusCode;
-          if (code === 404 || code === 410) dead.push(s.id); // gone — prune it
+        const first = await sendOnce(s, body, topic);
+        if (first.ok) {
+          logRows.push({ user_id: userId, subscription_id: s.id, tag, status: "sent", status_code: 201, error: null, attempt: 1 });
+          return;
+        }
+        if (first.code === 404 || first.code === 410) {
+          dead.push(s.id); // gone — prune it, no retry
+          logRows.push({ user_id: userId, subscription_id: s.id, tag, status: "pruned", status_code: first.code, error: first.message ?? null, attempt: 1 });
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        const retry = await sendOnce(s, body, topic);
+        if (retry.ok) {
+          logRows.push({ user_id: userId, subscription_id: s.id, tag, status: "retried", status_code: 201, error: null, attempt: 2 });
+        } else {
+          logRows.push({
+            user_id: userId,
+            subscription_id: s.id,
+            tag,
+            status: "failed",
+            status_code: retry.code ?? first.code ?? null,
+            error: (retry.message ?? first.message ?? null),
+            attempt: 2,
+          });
         }
       }),
     );
 
     if (dead.length) await db.from("push_subscriptions").delete().in("id", dead);
+    if (logRows.length) void db.from("push_delivery_log").insert(logRows).then(() => {}, () => {});
   } catch {
     /* never let push failures affect the caller */
   }

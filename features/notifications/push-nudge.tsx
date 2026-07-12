@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { useUser } from "@/features/auth/use-user";
-import { enablePush, PushSessionExpiredError, pushSupported, syncPush } from "@/features/notifications/push";
+import { enablePush, PushSessionExpiredError, PushSubscribeFailedError, pushSupported, syncPush } from "@/features/notifications/push";
 import { hasExceededDeclines, recordDecline } from "@/lib/pwa/decline-tracker";
 import { isIos, isStandalone } from "@/lib/pwa/platform";
 
@@ -48,6 +48,7 @@ type Phase = "hidden" | "ask" | "denied" | "enabled" | "signed-out" | "failed";
 
 export function PushNudge() {
   const [phase, setPhase] = useState<Phase>("hidden");
+  const [failedMessage, setFailedMessage] = useState<string>("Something went wrong saving this device — check your connection and try again.");
   const [busy, setBusy] = useState(false);
   const [testState, setTestState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
   const { user, loading } = useUser();
@@ -121,7 +122,20 @@ export function PushNudge() {
       // A session-expired 401 is a different failure mode: retrying the same
       // subscribe call would just 401 again, so route to the sign-in CTA
       // instead of a retry button that can never succeed.
-      setPhase(err instanceof PushSessionExpiredError ? "signed-out" : "failed");
+      if (err instanceof PushSessionExpiredError) {
+        setPhase("signed-out");
+      } else {
+        // Show the thrown error's own message — a browser-side subscribe
+        // failure (bad VAPID key, push service unreachable) and a
+        // server-side save failure are different problems; the old copy
+        // blamed "your connection" for both.
+        setFailedMessage(
+          err instanceof PushSubscribeFailedError || err instanceof Error
+            ? err.message
+            : "Something went wrong saving this device — check your connection and try again.",
+        );
+        setPhase("failed");
+      }
     } finally {
       setBusy(false);
     }
@@ -208,9 +222,7 @@ export function PushNudge() {
                 ) : phase === "failed" ? (
                   <>
                     <p className="text-sm font-semibold leading-snug">Couldn&apos;t turn on notifications</p>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                      Something went wrong saving this device — check your connection and try again.
-                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{failedMessage}</p>
                     <button
                       type="button"
                       onClick={enable}

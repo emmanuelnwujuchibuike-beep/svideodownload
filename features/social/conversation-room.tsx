@@ -405,9 +405,24 @@ export function ConversationRoom({
         // full thread, so returning it alone (the pre-delta-sync shape of
         // this code) would silently wipe every older message from view on
         // every catch-up resync.
+        // Body-text is the only signal available here (delta rows don't carry
+        // the client id an optimistic bubble was created with) — but matching
+        // "any landed row with this body" let ONE landed message consume
+        // EVERY optimistic bubble with equal text, notably every attachment-
+        // only send (body === "" for all of them): firing off two photos
+        // back-to-back and having only the first land could silently vanish
+        // the second, still in-flight one. Each landed body can now only
+        // resolve ONE optimistic bubble.
+        const landedBodyCounts = new Map<string, number>();
+        for (const s of d.messages) {
+          if (!s.mine) continue;
+          landedBodyCounts.set(s.body, (landedBodyCounts.get(s.body) ?? 0) + 1);
+        }
         for (const m of prev) {
           if (!m.id.startsWith("optimistic-")) continue;
-          const landed = d.messages.some((s) => s.mine && s.body === m.body);
+          const remaining = landedBodyCounts.get(m.body) ?? 0;
+          const landed = remaining > 0;
+          if (landed) landedBodyCounts.set(m.body, remaining - 1);
           const stale = Date.now() - new Date(m.createdAt).getTime() >= 20_000;
           if (landed || stale) byId.delete(m.id);
         }
@@ -428,6 +443,8 @@ export function ConversationRoom({
   useEffect(() => {
     const supabase = createClient();
     let everSubscribed = false;
+    let firstAttemptFailures = 0;
+    let cancelled = false;
     let reactionDebounce: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase
       .channel(`conversation:${conversationId}`)
@@ -476,6 +493,11 @@ export function ConversationRoom({
                     editedAt: r.edited_at,
                     deletedAt: r.deleted_at,
                     pinned: r.pinned,
+                    // deleteMessage() clears message_reactions server-side —
+                    // mirror that here too, otherwise a reaction pill added
+                    // just before the delete landed stays visible/tappable
+                    // on a bubble that's now just "This message was deleted".
+                    reactions: r.deleted_at ? [] : m.reactions,
                   }
                 : m,
             ),
@@ -518,11 +540,31 @@ export function ConversationRoom({
           // on whatever the live stream missed while it was down.
           if (everSubscribed) void resync();
           everSubscribed = true;
+          firstAttemptFailures = 0;
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
           // Only announce "Reconnecting…" if we'd actually connected before —
           // a slow FIRST handshake should stay "connecting", not flash a
           // banner implying a prior connection just broke.
-          if (everSubscribed) setConnectionStatus("reconnecting");
+          if (everSubscribed) {
+            setConnectionStatus("reconnecting");
+          } else {
+            // BUT a first attempt that keeps failing (bad RLS grant, a
+            // transient outage right at page load) used to sit silently in
+            // "connecting" forever — Supabase doesn't auto-retry a channel
+            // past this point, so nothing ever recovered it on its own. Retry
+            // the SAME channel (re-registering .on() handlers would double
+            // them; only .subscribe() itself is safe to call again) with a
+            // short backoff, and surface the same "Reconnecting…" banner once
+            // it's failed enough times to no longer look like a fluke.
+            firstAttemptFailures += 1;
+            if (firstAttemptFailures >= 3) setConnectionStatus("reconnecting");
+            if (!cancelled) {
+              const delay = Math.min(1000 * firstAttemptFailures, 5000);
+              window.setTimeout(() => {
+                if (!cancelled) channel.subscribe();
+              }, delay);
+            }
+          }
         }
       });
 
@@ -533,10 +575,15 @@ export function ConversationRoom({
     window.addEventListener("online", onVisible);
 
     return () => {
+      cancelled = true;
       if (reactionDebounce) clearTimeout(reactionDebounce);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onVisible);
-      void channel.unsubscribe();
+      // removeChannel (not just channel.unsubscribe()) — the browser client
+      // is now a shared singleton (lib/supabase/client.ts), so a channel left
+      // registered here would sit on that ONE client for the rest of the tab's
+      // life instead of being thrown away with a short-lived client instance.
+      void supabase.removeChannel(channel);
     };
   }, [conversationId, viewerId, append, resync]);
 
@@ -818,7 +865,7 @@ export function ConversationRoom({
   const deleteMsg = async (id: string) => {
     setOpenMenuId(null);
     const prev = messages;
-    setMessages((cur) => cur.map((m) => (m.id === id ? { ...m, body: "", deletedAt: new Date().toISOString(), pinned: false } : m)));
+    setMessages((cur) => cur.map((m) => (m.id === id ? { ...m, body: "", deletedAt: new Date().toISOString(), pinned: false, reactions: [] } : m)));
     try {
       const res = await fetch(`/api/messages/msg/${id}`, { method: "DELETE" });
       if (!res.ok) setMessages(prev);
@@ -1140,7 +1187,7 @@ export function ConversationRoom({
                   </div>
                 ) : null}
 
-                {m.reactions.length > 0 ? (
+                {!m.deletedAt && m.reactions.length > 0 ? (
                   <div className={cn("mt-0.5 flex flex-wrap gap-1 px-1", m.mine ? "justify-end" : "justify-start")}>
                     {m.reactions.map((rx) => (
                       <motion.button

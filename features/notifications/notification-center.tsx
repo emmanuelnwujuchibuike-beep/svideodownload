@@ -60,7 +60,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
     });
     return () => {
       cancelled = true;
-      if (channel) void channel.unsubscribe();
+      if (channel) void supabase.removeChannel(channel);
     };
   }, []);
 

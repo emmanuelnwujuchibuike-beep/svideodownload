@@ -87,7 +87,10 @@ export function AppSidebar({ handle: _handle }: { handle: string | null }) {
   useEffect(() => {
     if (isSlowConnection()) return;
     const id = setTimeout(() => {
-      for (const r of ["/home", "/friends", "/messages", profileHref]) router.prefetch(r);
+      // /reels added (2026-07-11) — was missing, so the sidebar's Reels link
+      // paid a real fresh-fetch on first click while every other tab here
+      // already opened instantly.
+      for (const r of ["/home", "/friends", "/messages", "/reels", profileHref]) router.prefetch(r);
     }, 400);
     return () => clearTimeout(id);
   }, [router, profileHref]);

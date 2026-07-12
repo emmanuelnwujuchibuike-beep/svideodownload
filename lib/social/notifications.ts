@@ -1,3 +1,4 @@
+import { getNotificationSettings, mutedTypesFor } from "@/lib/social/notification-settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const hasSupabase =
@@ -65,7 +66,7 @@ export type NotificationCategory =
   | "security"
   | "system";
 
-const CATEGORY_BY_TYPE: Partial<Record<NotificationType, NotificationCategory>> = {
+export const CATEGORY_BY_TYPE: Partial<Record<NotificationType, NotificationCategory>> = {
   follow: "social",
   like: "social",
   love: "social",
@@ -200,20 +201,27 @@ export async function listNotifications(userId: string, limit = 20): Promise<Not
   if (!hasSupabase) return { items: [], unread: 0 };
   try {
     const db = createAdminClient();
-    const [{ data }, { count }] = await Promise.all([
-      db
-        .from("notifications")
-        .select("id, actor_id, type, post_id, conversation_id, read, created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(limit),
-      db
-        .from("notifications")
-        .select("id", { head: true, count: "exact" })
-        .eq("user_id", userId)
-        .eq("read", false)
-        .not("type", "in", `(${MESSAGE_TYPES.join(",")})`),
-    ]);
+    const settings = await getNotificationSettings(userId);
+    if (!settings.masterEnabled || !settings.inAppEnabled) return { items: [], unread: 0 };
+    // Part 6: a category the viewer disabled in-app is excluded from both the
+    // list AND the unread count — "Disable" means genuinely not seeing it,
+    // not just hiding a badge while the row still shows up in the dropdown.
+    const muted = mutedTypesFor(settings, CATEGORY_BY_TYPE);
+    const excluded = [...new Set([...MESSAGE_TYPES, ...muted])];
+    let listQuery = db
+      .from("notifications")
+      .select("id, actor_id, type, post_id, conversation_id, read, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    let countQuery = db
+      .from("notifications")
+      .select("id", { head: true, count: "exact" })
+      .eq("user_id", userId)
+      .eq("read", false);
+    if (muted.length > 0) listQuery = listQuery.not("type", "in", `(${muted.join(",")})`);
+    countQuery = countQuery.not("type", "in", `(${excluded.join(",")})`);
+    const [{ data }, { count }] = await Promise.all([listQuery, countQuery]);
     const items = await enrichRows(db, (data as Row[]) ?? []);
     return { items, unread: count ?? 0 };
   } catch {
@@ -270,19 +278,25 @@ export async function listGroupedNotifications(userId: string, limit = 60): Prom
   if (!hasSupabase) return { groups: [], unread: 0 };
   try {
     const db = createAdminClient();
-    const [{ data }, { count }] = await Promise.all([
-      db
-        .from("notifications")
-        .select("id, actor_id, type, post_id, conversation_id, read, created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(limit),
-      db
-        .from("notifications")
-        .select("id", { head: true, count: "exact" })
-        .eq("user_id", userId)
-        .eq("read", false),
-    ]);
+    const settings = await getNotificationSettings(userId);
+    if (!settings.masterEnabled || !settings.inAppEnabled) return { groups: [], unread: 0 };
+    const muted = mutedTypesFor(settings, CATEGORY_BY_TYPE);
+    let listQuery = db
+      .from("notifications")
+      .select("id, actor_id, type, post_id, conversation_id, read, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    let countQuery = db
+      .from("notifications")
+      .select("id", { head: true, count: "exact" })
+      .eq("user_id", userId)
+      .eq("read", false);
+    if (muted.length > 0) {
+      listQuery = listQuery.not("type", "in", `(${muted.join(",")})`);
+      countQuery = countQuery.not("type", "in", `(${muted.join(",")})`);
+    }
+    const [{ data }, { count }] = await Promise.all([listQuery, countQuery]);
     const items = await enrichRows(db, (data as Row[]) ?? []);
 
     const byKey = new Map<string, NotificationGroup>();

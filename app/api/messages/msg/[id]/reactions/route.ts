@@ -37,8 +37,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     /* empty body → default ❤️ */
   }
 
-  const { data: msg } = await supabase.from("messages").select("conversation_id").eq("id", id).maybeSingle();
+  const { data: msg } = await supabase.from("messages").select("conversation_id, deleted_at").eq("id", id).maybeSingle();
   if (!msg) return NextResponse.json({ error: "Message not found." }, { status: 404 });
+  // deleteMessage() clears reactions ONCE at delete-time — without this
+  // check, a react posted any time after that (the client never showed the
+  // pill again, but the endpoint itself didn't care) would permanently
+  // reattach a reaction to content that's supposed to be gone for good.
+  if (msg.deleted_at) return NextResponse.json({ error: "Message not found." }, { status: 404 });
 
   const { error } = await supabase
     .from("message_reactions")

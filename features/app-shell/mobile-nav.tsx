@@ -113,7 +113,7 @@ export function MobileNav() {
         className="flex flex-col items-center gap-0.5 px-2 py-1"
       >
         <PressIcon active={profileActive}>
-          <span className={cn("flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background shadow-[0_2px_6px_-1px] shadow-foreground/40 ring-2 transition", profileActive ? "ring-foreground" : "ring-transparent")}>
+          <span className={cn("flex h-6 w-6 items-center justify-center rounded-full bg-brand-tile text-white shadow-[0_2px_6px_-1px] shadow-[hsl(var(--brand-purple)/0.45)] ring-2 transition", profileActive ? "ring-foreground" : "ring-transparent")}>
             <FrenzPersonSolid className="h-3.5 w-3.5" />
           </span>
         </PressIcon>

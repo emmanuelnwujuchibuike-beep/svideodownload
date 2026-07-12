@@ -120,10 +120,16 @@ function renderModule(
         </Suspense>
       );
     case "trending_reels":
+      // Desktop/tablet only — CSS-hidden on mobile so the skeleton never even
+      // flashes there (the Reels nav button is the mobile entry point
+      // instead; see TrendingReels' own doc comment for the client-side
+      // fetch/video-mount skip that backs this up).
       return (
-        <Suspense key={key} fallback={<ReelsSkeleton />}>
-          <ReelsSection viewerId={ctx.viewerId} />
-        </Suspense>
+        <div key={key} className="hidden lg:block">
+          <Suspense fallback={<ReelsSkeleton />}>
+            <ReelsSection viewerId={ctx.viewerId} />
+          </Suspense>
+        </div>
       );
     case "continue_watching":
       // Client-only, no server data dependency (reads live download/history

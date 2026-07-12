@@ -198,6 +198,7 @@ async function notifyMembers(senderId: string, conversationId: string, body: str
           {
             title: mentioned ? `${name} mentioned you` : name,
             body: preview,
+            genericBody: mentioned ? "You were mentioned" : "New message",
             url: `/messages/${conversationId}`,
             icon: (sender?.avatar_url as string | null) ?? undefined,
             tag: `msg:${conversationId}`,
@@ -208,6 +209,7 @@ async function notifyMembers(senderId: string, conversationId: string, body: str
             ],
           },
           priority,
+          "social",
         );
       }),
     );

@@ -22,6 +22,14 @@ import { cn } from "@/lib/utils";
  * same mechanism `GradientIcon` used — works identically for the custom Frenz
  * icon set (no `color` prop, only `className`) and react-icons/lucide glyphs
  * (both default to `currentColor`), since only `className` is ever touched.
+ *
+ * Owner correction (2026-07-11): the flat `bg-foreground` invert read as a
+ * plain black tile — asked for the brand purple/blue back, specifically a
+ * "dark premium" gradient (`.bg-brand-tile`, globals.css) rather than the
+ * earlier fully-lit sweep that was originally toned down for "too much
+ * purple splashing". The icon stays a fixed white now (not the
+ * theme-adaptive `text-background`) since the tile is colored in both
+ * themes, not a light/dark invert.
  */
 export function NavIconBadge({
   icon,
@@ -36,7 +44,7 @@ export function NavIconBadge({
 }) {
   const glyph = isValidElement(icon)
     ? cloneElement(icon, {
-        className: cn(active ? "text-background drop-shadow-sm" : "text-muted-foreground", iconClassName),
+        className: cn(active ? "text-white drop-shadow-sm" : "text-muted-foreground", iconClassName),
       })
     : icon;
 
@@ -45,13 +53,13 @@ export function NavIconBadge({
       className={cn(
         "relative flex shrink-0 items-center justify-center overflow-hidden rounded-2xl transition-colors duration-200",
         active
-          ? "bg-foreground shadow-[0_4px_14px_-2px] shadow-foreground/40 ring-1 ring-inset ring-background/20"
+          ? "bg-brand-tile shadow-[0_4px_14px_-2px] shadow-[hsl(var(--brand-purple)/0.45)] ring-1 ring-inset ring-white/10"
           : "bg-secondary/60 ring-1 ring-inset ring-border/50",
         tileClassName,
       )}
     >
       {active ? (
-        <span aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/25 via-transparent to-transparent" />
+        <span aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-transparent" />
       ) : null}
       <span className="relative flex items-center justify-center">{glyph}</span>
     </span>

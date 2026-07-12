@@ -10,6 +10,7 @@ import {
   enablePush,
   getPushState,
   PushSessionExpiredError,
+  PushSubscribeFailedError,
   pushSupported,
   type PushState,
 } from "@/features/notifications/push";
@@ -23,7 +24,7 @@ import { cn } from "@/lib/utils";
 export function PushToggle() {
   const [state, setState] = useState<PushState | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const pathname = usePathname();
 
@@ -43,7 +44,7 @@ export function PushToggle() {
   const toggle = async () => {
     if (busy || denied) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     setExpired(false);
     try {
       setState(on ? await disablePush() : await enablePush());
@@ -52,9 +53,12 @@ export function PushToggle() {
       // save failed) instead of silently reporting "unsubscribed" — without
       // this catch, `state` never updates and the button just reverts to
       // idle with zero feedback, indistinguishable from "the click did
-      // nothing."
+      // nothing." The thrown error's own message is shown directly (rather
+      // than one hardcoded string) so a browser-side subscribe failure and a
+      // server-side save failure read as the two different problems they are.
       if (err instanceof PushSessionExpiredError) setExpired(true);
-      else setFailed(true);
+      else if (err instanceof PushSubscribeFailedError) setFailed(err.message);
+      else setFailed(err instanceof Error ? err.message : "Couldn't update push — try again.");
     } finally {
       setBusy(false);
     }
@@ -93,7 +97,7 @@ export function PushToggle() {
           Session expired — sign in again
         </Link>
       ) : failed ? (
-        <span className="text-[11px] font-medium text-destructive">Couldn&apos;t update push — try again.</span>
+        <span className="text-[11px] font-medium text-destructive">{failed}</span>
       ) : null}
     </span>
   );

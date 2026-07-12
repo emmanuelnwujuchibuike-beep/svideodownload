@@ -120,7 +120,7 @@ export function NotificationLiveToast() {
     return () => {
       cancelled = true;
       if (hideTimer.current) clearTimeout(hideTimer.current);
-      for (const ch of channels) void ch.unsubscribe();
+      for (const ch of channels) void supabase.removeChannel(ch);
     };
   }, []);
 

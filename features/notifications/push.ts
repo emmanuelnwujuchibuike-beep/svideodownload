@@ -6,7 +6,12 @@
  * unsupported or unconfigured, so callers can render an enable button safely.
  */
 
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+// .trim() guards against the single most common way this silently breaks: a
+// trailing newline/space picked up when the key was pasted into an env-var
+// dashboard. Untrimmed, atob() below decodes to the wrong byte length and
+// `subscribe()` rejects with an opaque InvalidAccessError that surfaced to
+// users as a generic "failed" — see PushSubscribeFailedError below.
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() || undefined;
 
 export function pushSupported(): boolean {
   return (
@@ -44,6 +49,20 @@ export class PushSessionExpiredError extends Error {
   }
 }
 
+/** Thrown when the BROWSER itself rejects `pushManager.subscribe()` — a real
+ * failure, but distinct from `enablePush()`'s other thrown error (the server
+ * rejecting the save): this one never reaches the network at all (a bad/
+ * malformed VAPID key, the push service being unreachable from this device,
+ * or the user's browser blocking it outright), so callers showing "check
+ * your connection" for THIS case were blaming the wrong layer. */
+export class PushSubscribeFailedError extends Error {
+  constructor(cause: unknown) {
+    super("This browser couldn't connect to the push service. Try again in a moment.");
+    this.name = "PushSubscribeFailedError";
+    this.cause = cause;
+  }
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -63,12 +82,21 @@ export async function enablePush(): Promise<PushState> {
   await navigator.serviceWorker.ready;
 
   const existing = await reg.pushManager.getSubscription();
-  const sub =
-    existing ??
-    (await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!) as BufferSource,
-    }));
+  let sub = existing;
+  if (!sub) {
+    try {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!) as BufferSource,
+      });
+    } catch (err) {
+      // Distinct from the fetch failure below — this never reached our
+      // server at all, so "check your connection" (the old, one-size-fits-
+      // all copy) was misleading whenever this was really a bad VAPID key or
+      // the push service rejecting the browser outright.
+      throw new PushSubscribeFailedError(err);
+    }
+  }
 
   const json = sub.toJSON();
   const res = await fetch("/api/push/subscribe", {

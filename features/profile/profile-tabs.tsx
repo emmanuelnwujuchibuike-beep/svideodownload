@@ -160,7 +160,7 @@ export function ProfileTabs({
                 aria-pressed={view === v}
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-lg transition active:scale-95",
-                  view === v ? "bg-foreground text-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  view === v ? "bg-brand-tile text-white shadow-sm" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <Icon className="h-[17px] w-[17px]" />

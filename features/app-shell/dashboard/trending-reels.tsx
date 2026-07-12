@@ -15,8 +15,28 @@ import { formatCompactNumber } from "@/lib/utils";
 
 const FALLBACK = ["from-rose-500 to-fuchsia-600", "from-sky-500 to-blue-600", "from-violet-500 to-purple-600", "from-amber-500 to-orange-600", "from-emerald-500 to-teal-600"];
 
-/** Trending Reels rail — genuinely hot reels (hot_score, not just newest), autoplaying in view; tap to open. */
+/**
+ * Trending Reels rail — genuinely hot reels (hot_score, not just newest),
+ * autoplaying in view; tap to open.
+ *
+ * Desktop/tablet only (owner: mobile home-page load speed + battery). Mobile
+ * users get the same entry point via the now-more-prominent Reels nav button
+ * instead. Gated with a JS viewport check (not just CSS `hidden`) so mobile
+ * genuinely skips the client-side cost this rail carries — the revalidation
+ * fetch (`enabled: isDesktop` below) AND the up-to-8 autoplaying <video>
+ * elements with their own IntersectionObservers never mount at all, rather
+ * than mounting hidden and still paying for it.
+ */
 export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    setIsDesktop(mq.matches);
+    const onChange = () => setIsDesktop(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   const { data, isLoading } = useQuery<FeedItem[]>(
     "home-feed:reels",
     async () => {
@@ -33,11 +53,12 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
         return initialItems ?? [];
       }
     },
-    { initialData: initialItems },
+    { initialData: initialItems, enabled: isDesktop },
   );
   const [startId, setStartId] = useState<string | null>(null);
   // Cached-first: instant on return visits, silently revalidated in the background.
   const items = isLoading ? null : data ?? [];
+  if (!isDesktop) return null;
   if (items !== null && items.length === 0) return null;
 
   return (

@@ -5,6 +5,7 @@ import { BadgeCheck, BellOff, MoreHorizontal, Pin, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { mutate, useQuery } from "@/features/data";
 import { usePresence } from "@/features/friends/use-presence";
@@ -60,6 +61,27 @@ export function ConversationList({
   const online = usePresence();
   const [q, setQ] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  // Portal-rendered + position computed on open (not a plain `absolute
+  // right-2 top-9` sibling): a row near the bottom of the scrollable list
+  // had this menu clipped by the list's own overflow — same class of bug,
+  // same fix, as the message-actions menu in conversation-room.tsx.
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const ROW_MENU_WIDTH = 160; // w-40
+  const openRowMenu = (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    haptic("light");
+    if (openMenuId === id) {
+      setOpenMenuId(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const margin = 8;
+    const menuHeight = 3 * 40 + 8; // Pin/Mute/Archive rows + py-1 padding
+    const left = Math.min(Math.max(rect.right - ROW_MENU_WIDTH, margin), window.innerWidth - ROW_MENU_WIDTH - margin);
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow >= menuHeight + margin ? rect.bottom + 4 : Math.max(margin, rect.top - menuHeight - 4);
+    setMenuPos({ top, left });
+    setOpenMenuId(id);
+  };
   // Archiving used to be a one-way trap: the menu only ever set archived:true
   // (no Unarchive), and archived conversations were filtered out with no
   // other screen to find them again — they'd just silently vanish. This view
@@ -235,10 +257,7 @@ export function ConversationList({
               <div className="relative shrink-0 pr-2">
                 <motion.button
                   type="button"
-                  onClick={() => {
-                    haptic("light");
-                    setOpenMenuId(openMenuId === c.id ? null : c.id);
-                  }}
+                  onClick={(e) => openRowMenu(c.id, e)}
                   aria-label="Conversation options"
                   whileTap={{ scale: 0.85 }}
                   transition={springs.press}
@@ -246,39 +265,45 @@ export function ConversationList({
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </motion.button>
-                {openMenuId === c.id ? (
-                  <>
-                    <button
-                      type="button"
-                      aria-label="Close menu"
-                      onClick={() => setOpenMenuId(null)}
-                      className="fixed inset-0 z-40 cursor-default"
-                    />
-                    <div className="glass-strong animate-scale-in absolute right-2 top-9 z-50 w-40 overflow-hidden rounded-2xl py-1">
-                      <button
-                        type="button"
-                        onClick={() => updatePref(c.id, { pinned: !c.pinned })}
-                        className="flex w-full items-center px-3.5 py-2 text-left text-sm transition hover:bg-secondary"
-                      >
-                        {c.pinned ? "Unpin" : "Pin"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updatePref(c.id, { muted: !c.muted })}
-                        className="flex w-full items-center px-3.5 py-2 text-left text-sm transition hover:bg-secondary"
-                      >
-                        {c.muted ? "Unmute" : "Mute"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updatePref(c.id, { archived: !c.archived })}
-                        className="flex w-full items-center px-3.5 py-2 text-left text-sm transition hover:bg-secondary"
-                      >
-                        {c.archived ? "Unarchive" : "Archive"}
-                      </button>
-                    </div>
-                  </>
-                ) : null}
+                {openMenuId === c.id && menuPos
+                  ? createPortal(
+                      <>
+                        <button
+                          type="button"
+                          aria-label="Close menu"
+                          onClick={() => setOpenMenuId(null)}
+                          className="fixed inset-0 z-40 cursor-default"
+                        />
+                        <div
+                          style={{ top: menuPos.top, left: menuPos.left, width: ROW_MENU_WIDTH }}
+                          className="glass-strong animate-scale-in fixed z-50 overflow-hidden rounded-2xl py-1"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => updatePref(c.id, { pinned: !c.pinned })}
+                            className="flex w-full items-center px-3.5 py-2 text-left text-sm transition hover:bg-secondary"
+                          >
+                            {c.pinned ? "Unpin" : "Pin"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updatePref(c.id, { muted: !c.muted })}
+                            className="flex w-full items-center px-3.5 py-2 text-left text-sm transition hover:bg-secondary"
+                          >
+                            {c.muted ? "Unmute" : "Mute"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updatePref(c.id, { archived: !c.archived })}
+                            className="flex w-full items-center px-3.5 py-2 text-left text-sm transition hover:bg-secondary"
+                          >
+                            {c.archived ? "Unarchive" : "Archive"}
+                          </button>
+                        </div>
+                      </>,
+                      document.body,
+                    )
+                  : null}
               </div>
             </li>
           );

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { ConversationList } from "@/features/social/conversation-list";
 import { CreateGroupLauncher } from "@/features/social/create-group-launcher";
+import { MessageSearchLauncher } from "@/features/social/message-search-launcher";
 import { NotificationSettingsPicker } from "@/features/social/notification-settings-picker";
 import { PresenceStatusPicker } from "@/features/social/presence-status-picker";
 import { listConversations } from "@/lib/social/messages";
@@ -43,6 +44,7 @@ export default async function MessagesLayout({ children }: { children: ReactNode
           <ModuleIconBadge icon={MessageCircle} className="h-8 w-8" />
           Messages
           <span className="ml-auto flex items-center gap-1">
+            <MessageSearchLauncher />
             <PresenceStatusPicker />
             <NotificationSettingsPicker />
             <CreateGroupLauncher />

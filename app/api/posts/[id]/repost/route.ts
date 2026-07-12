@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { getRequestUser } from "@/lib/auth/request-user";
 import { pushSocialEvent } from "@/lib/push/social-push";
@@ -86,7 +86,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Couldn't repost." }, { status: 500 });
   }
   // Device push (the in-app notification row is created by the DB trigger).
-  void pushSocialEvent({ actorId: user.id, type: "repost", postId: id });
+  // after(), not bare void — see lib/social/messages.ts's sendMessage() for
+  // why (Vercel can freeze a serverless function right after it responds).
+  after(() => pushSocialEvent({ actorId: user.id, type: "repost", postId: id }));
   return NextResponse.json({ ok: true, reposted: true, count: await repostCount(db, id) });
 }
 

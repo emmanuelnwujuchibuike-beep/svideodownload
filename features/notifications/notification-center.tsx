@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence } from "framer-motion";
-import { BellRing, CheckCheck, Search, X } from "lucide-react";
+import { BellRing, CheckCheck, Download, MoreHorizontal, Search, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { mutate, revalidate, useQuery } from "@/features/data";
@@ -39,6 +39,8 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
   const unread = data?.unread ?? initial.unread;
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   // Live: a new notification row for me → refresh the center (and the bell).
   useEffect(() => {
@@ -131,6 +133,29 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
       .catch(() => {});
   };
 
+  // Part 8 privacy controls: export (a real file download, RLS-scoped to
+  // this user's own data) and clear-all (irreversible — gated behind a
+  // native confirm(), the same pattern this codebase already uses for other
+  // destructive actions, e.g. comments.tsx/collections-tab.tsx).
+  const exportData = () => {
+    setMoreOpen(false);
+    window.open("/api/notifications/export", "_blank");
+  };
+
+  const clearAll = () => {
+    setMoreOpen(false);
+    if (!window.confirm("Delete your entire notification history? This can't be undone.")) return;
+    setClearing(true);
+    mutate<GroupedNotificationsResult>(KEY, () => ({ groups: [], unread: 0 }));
+    fetch("/api/notifications", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) })
+      .then(() => {
+        void revalidate(KEY, loadGrouped, 0).catch(() => {});
+        void revalidate(BELL_KEY, loadFlatNotifications, 0).catch(() => {});
+      })
+      .catch(() => {})
+      .finally(() => setClearing(false));
+  };
+
   return (
     <PullToRefresh onRefresh={async () => { await revalidate(KEY, loadGrouped, 0); }}>
       {/* Premium glass hero header */}
@@ -164,6 +189,34 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
             >
               <CheckCheck className="h-4 w-4" /> Mark all read
             </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMoreOpen((v) => !v)}
+                aria-label="More options"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-card/60 text-muted-foreground backdrop-blur transition hover:bg-secondary hover:text-foreground"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+              {moreOpen ? (
+                <>
+                  <button type="button" aria-label="Close menu" onClick={() => setMoreOpen(false)} className="fixed inset-0 z-40 cursor-default" />
+                  <div className="glass-strong animate-scale-in absolute right-0 top-10 z-50 w-56 overflow-hidden rounded-2xl py-1.5">
+                    <button type="button" onClick={exportData} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition hover:bg-secondary">
+                      <Download className="h-4 w-4 text-muted-foreground" /> Export my data
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearAll}
+                      disabled={clearing}
+                      className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-rose-500 transition hover:bg-rose-500/10 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" /> Clear all history
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>

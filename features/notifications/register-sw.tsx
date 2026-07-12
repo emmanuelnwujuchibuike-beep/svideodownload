@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { isCriticalActivityInProgress, onCriticalActivityIdle } from "@/lib/pwa/activity-lock";
@@ -66,6 +67,25 @@ async function reloadIfNewDeploy() {
 }
 
 export function RegisterServiceWorker() {
+  const router = useRouter();
+
+  // Tapping a notification with the app already open hands the destination
+  // URL back here (public/sw/push.js's notificationclick handler) instead of
+  // the service worker forcing a hard `client.navigate()` — that API is
+  // unreliable on iOS Safari/WKWebView and could leave the tab stuck
+  // mid-navigation. A normal client-side router push is the same fast,
+  // robust path a Link click already takes.
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === "frenz-navigate" && typeof event.data.url === "string") {
+        router.push(event.data.url);
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [router]);
+
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 

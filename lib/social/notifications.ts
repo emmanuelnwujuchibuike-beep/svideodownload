@@ -54,7 +54,8 @@ export type NotificationType =
   | "security_suspicious"
   | "security_recovery"
   | "system"
-  | "admin_broadcast";
+  | "admin_broadcast"
+  | "post_under_review";
 
 /** Notification Center tab categories. */
 export type NotificationCategory =
@@ -111,6 +112,7 @@ export const CATEGORY_BY_TYPE: Partial<Record<NotificationType, NotificationCate
   security_2fa: "security",
   security_suspicious: "security",
   security_recovery: "security",
+  post_under_review: "system",
 };
 
 export function categoryForType(type: NotificationType): NotificationCategory {

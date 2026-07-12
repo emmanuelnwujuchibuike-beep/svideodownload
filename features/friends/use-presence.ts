@@ -48,6 +48,20 @@ function ensureStarted(): void {
       .subscribe((status) => {
         if (status === "SUBSCRIBED" && myStatus !== "invisible" && getCachedMyPresenceStatus() !== "invisible") {
           void channel?.track({ at: Date.now() });
+          // "Last seen" heartbeat — bumps user_presence_status.updated_at so
+          // PresenceBadge can show "last seen Xm ago" for someone who isn't
+          // currently online. Status-change events alone (the only other
+          // writer of this column) leave it stale for anyone who stays
+          // "available" for a whole session without ever idling into "away"
+          // — this fires on every real app open/reconnect instead, which is
+          // the same granularity every mainstream chat app's "last seen"
+          // actually uses. Skipped for invisible (matches the track() skip
+          // above — never touch anything that could reveal activity).
+          void fetch("/api/presence-status", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: myStatus }),
+          }).catch(() => {});
         }
       });
     subscribeMyPresenceStatus((status) => {

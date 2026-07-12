@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, BellOff, Download, EyeOff, Loader2, MessageCircle, Moon, Newspaper, ShieldCheck, Sparkles, Users2, Wrench } from "lucide-react";
+import { Bell, BellOff, Download, EyeOff, Loader2, Mail, MessageCircle, Moon, Newspaper, ShieldCheck, Sparkles, Users2, Wrench } from "lucide-react";
 import { useState } from "react";
 
 import type { CategoryPref, NotificationSettings } from "@/lib/social/notification-settings";
@@ -183,6 +183,14 @@ export function NotificationSettingsEditor({ initial }: { initial: NotificationS
           desc={'Push shows "New message" instead of the actual text'}
           on={settings.hidePushPreview}
           onToggle={() => setSettings((p) => ({ ...p, hidePushPreview: !p.hidePushPreview }))}
+        />
+
+        <Toggle
+          icon={Mail}
+          title="Daily digest"
+          desc="One daily summary — new followers, comments, friend requests, finished downloads — only sent when there's something to report"
+          on={settings.digestEnabled}
+          onToggle={() => setSettings((p) => ({ ...p, digestEnabled: !p.digestEnabled }))}
         />
       </div>
 

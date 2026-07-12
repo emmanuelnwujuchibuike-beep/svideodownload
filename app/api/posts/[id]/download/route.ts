@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { getRequestUser } from "@/lib/auth/request-user";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { consumeDaily } from "@/lib/rate-limit";
+import { checkDownloadMilestone } from "@/lib/social/milestones";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -23,6 +24,20 @@ function extFromUrl(url: string, kind: string): string {
 function safeName(title: string | null, id: string, ext: string): string {
   const base = (title || "frenz").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 60) || `frenz-${id.slice(0, 8)}`;
   return `${base}.${ext}`;
+}
+
+/** Best-effort counter bump + Part 8 milestone check. `.then()` is
+ * load-bearing — see the [[sw-swx-duplicate-const-bug]] memory; a bare
+ * `void` on its own never sent this UPDATE at all. Wrapped in `after()`
+ * (not a bare fire-and-forget call) at both call sites below — a serverless
+ * Route Handler can freeze the instant its response is sent, so anything
+ * still in flight at that moment needs `after()` to be guaranteed to run. */
+async function bumpDownloadsCount(admin: ReturnType<typeof createAdminClient>, postId: string, publisherId: string, before: number): Promise<void> {
+  const result = await admin.from("posts").update({ downloads_count: before + 1 }).eq("id", postId);
+  // Postgrest RESOLVES (doesn't reject) on a query-level error — a failed
+  // update must not still fire the milestone check as if the count
+  // genuinely advanced.
+  if (!result.error) await checkDownloadMilestone(publisherId, before, before + 1);
 }
 
 /**
@@ -67,18 +82,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           { status: 402 },
         );
       }
-      // Best-effort download counter bump. Supabase's query builder is a lazy
-      // thenable — the request only actually fires once something calls
-      // `.then()`/awaits it, so a bare `void` on its own (with no `.then()`
-      // anywhere in the chain) never sent this UPDATE at all. Verified this
-      // empirically, not just from reading the source.
-      admin.from("posts").update({ downloads_count: (post.downloads_count ?? 0) + 1 }).eq("id", id).then(undefined, () => {});
+      after(() => bumpDownloadsCount(admin, id, post.publisher_id as string, post.downloads_count ?? 0));
       const ext = extFromUrl(post.media_url, post.media_kind);
       return NextResponse.json({ url: post.media_url, filename: safeName(post.title, id, ext), remaining: cap.remaining });
     }
   }
 
-  admin.from("posts").update({ downloads_count: (post.downloads_count ?? 0) + 1 }).eq("id", id).then(undefined, () => {});
+  after(() => bumpDownloadsCount(admin, id, post.publisher_id as string, post.downloads_count ?? 0));
   const ext = extFromUrl(post.media_url, post.media_kind);
   return NextResponse.json({ url: post.media_url, filename: safeName(post.title, id, ext), remaining: null });
 }

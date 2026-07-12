@@ -5,6 +5,7 @@ import { Check, MoreHorizontal, Trash2, UserRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { memo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { iconFor, isActorType, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
 import type { NotificationGroup } from "@/lib/social/notifications";
@@ -44,6 +45,26 @@ function NotificationCardImpl({
   onDelete: (g: NotificationGroup) => void;
 }) {
   const [menu, setMenu] = useState(false);
+  // Portal-rendered + position computed on open, not a plain `absolute right-2
+  // top-11` sibling — a card near the bottom of the Notification Center's
+  // scrollable list had this menu clipped by the list's own overflow, same
+  // class of bug as conversation-list.tsx's row menu.
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const MENU_WIDTH = 160; // w-40
+  const toggleMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (menu) {
+      setMenu(false);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const margin = 8;
+    const menuHeight = (group.read ? 1 : 2) * 44 + 8;
+    const left = Math.min(Math.max(rect.right - MENU_WIDTH, margin), window.innerWidth - MENU_WIDTH - margin);
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow >= menuHeight + margin ? rect.bottom + 4 : Math.max(margin, rect.top - menuHeight - 4);
+    setMenuPos({ top, left });
+    setMenu(true);
+  };
   const Icon = iconFor(group.type);
   const actor = group.actors[0] ?? null;
   const href = hrefFor(group);
@@ -63,12 +84,12 @@ function NotificationCardImpl({
             </span>
           )
         ) : (
-          <span className={cn("flex h-12 w-12 items-center justify-center rounded-2xl", tintFor(group.category))}>
+          <span className={cn("flex h-12 w-12 items-center justify-center rounded-2xl", tintFor(group.category, group.type))}>
             <Icon className="h-5 w-5" />
           </span>
         )}
         {actorLed ? (
-          <span className={cn("absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-card", tintFor(group.category))}>
+          <span className={cn("absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-card", tintFor(group.category, group.type))}>
             <Icon className="h-3.5 w-3.5" />
           </span>
         ) : null}
@@ -107,7 +128,6 @@ function NotificationCardImpl({
           ? "border-border/60 bg-card/60"
           : "border-violet-500/25 bg-gradient-to-br from-blue-500/[0.06] to-violet-500/[0.06] shadow-[0_0_0_1px_rgba(124,58,237,0.06)]",
       )}
-      onMouseLeave={() => setMenu(false)}
     >
       {/* Unread left accent */}
       {!group.read ? <span className="absolute inset-y-3 left-0 w-1 rounded-full bg-gradient-to-b from-blue-500 to-violet-500" /> : null}
@@ -125,39 +145,53 @@ function NotificationCardImpl({
         <button
           type="button"
           aria-label="More"
-          onClick={() => setMenu((m) => !m)}
+          onClick={toggleMenu}
           className="flex h-8 w-8 items-center justify-center rounded-full bg-background/80 text-muted-foreground backdrop-blur transition hover:text-foreground"
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
       </div>
 
-      {menu ? (
-        <div className="absolute right-2 top-11 z-10 w-40 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-elevated">
-          {!group.read ? (
-            <button
-              type="button"
-              onClick={() => {
-                onMarkRead(group);
-                setMenu(false);
-              }}
-              className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
-            >
-              <Check className="h-4 w-4" /> Mark read
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => {
-              onDelete(group);
-              setMenu(false);
-            }}
-            className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm text-rose-500 transition hover:bg-rose-500/10"
-          >
-            <Trash2 className="h-4 w-4" /> Delete
-          </button>
-        </div>
-      ) : null}
+      {menu && menuPos
+        ? createPortal(
+            <>
+              <button
+                type="button"
+                aria-label="Close menu"
+                onClick={() => setMenu(false)}
+                className="fixed inset-0 z-40 cursor-default"
+              />
+              <div
+                style={{ top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
+                className="fixed z-50 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-elevated"
+              >
+                {!group.read ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onMarkRead(group);
+                      setMenu(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm transition hover:bg-secondary"
+                  >
+                    <Check className="h-4 w-4" /> Mark read
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDelete(group);
+                    setMenu(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm text-rose-500 transition hover:bg-rose-500/10"
+                >
+                  <Trash2 className="h-4 w-4" /> Delete
+                </button>
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
     </motion.div>
   );
 }

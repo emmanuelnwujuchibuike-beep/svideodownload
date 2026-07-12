@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Crown, LogOut, MoreHorizontal, Shield, UserMinus, UserPlus, X } from "lucide-react";
+import { Check, Crown, Lock, LogOut, MoreHorizontal, Shield, UserMinus, UserPlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -21,6 +21,7 @@ export function GroupMembersSheet({
   viewerId,
   viewerRole,
   initialTitle,
+  initialOnlyAdminsCanSend = false,
 }: {
   conversationId: string;
   open: boolean;
@@ -28,6 +29,7 @@ export function GroupMembersSheet({
   viewerId: string;
   viewerRole: MemberRole | null;
   initialTitle: string | null;
+  initialOnlyAdminsCanSend?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -40,20 +42,48 @@ export function GroupMembersSheet({
   const [people, setPeople] = useState<Person[] | null>(null);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [onlyAdminsCanSend, setOnlyAdminsCanSend] = useState(initialOnlyAdminsCanSend);
+  const [savingPermission, setSavingPermission] = useState(false);
 
   const canManage = viewerRole === "owner" || viewerRole === "admin";
   const isOwner = viewerRole === "owner";
 
+  const toggleSendPermission = async () => {
+    if (savingPermission) return;
+    const next = !onlyAdminsCanSend;
+    setSavingPermission(true);
+    setOnlyAdminsCanSend(next); // optimistic
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ onlyAdminsCanSend: next }),
+      });
+      if (!res.ok) {
+        setOnlyAdminsCanSend(!next);
+        toast("Couldn't update message permissions.", "error");
+      } else {
+        router.refresh();
+      }
+    } catch {
+      setOnlyAdminsCanSend(!next);
+      toast("Network error — try again.", "error");
+    } finally {
+      setSavingPermission(false);
+    }
+  };
+
   useEffect(() => {
     if (!open) return;
     setTitle(initialTitle ?? "");
+    setOnlyAdminsCanSend(initialOnlyAdminsCanSend);
     setAdding(false);
     setSelected(new Set());
     void fetch(`/api/conversations/${conversationId}/members`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setMembers(d?.members ?? []))
       .catch(() => setMembers([]));
-  }, [open, conversationId, initialTitle]);
+  }, [open, conversationId, initialTitle, initialOnlyAdminsCanSend]);
 
   useEffect(() => {
     if (!adding || people) return;
@@ -201,6 +231,39 @@ export function GroupMembersSheet({
             ) : (
               <p className="px-5 pb-3 text-sm font-semibold">{initialTitle ?? "Group"}</p>
             )}
+
+            {canManage ? (
+              <button
+                type="button"
+                onClick={toggleSendPermission}
+                disabled={savingPermission}
+                aria-pressed={onlyAdminsCanSend}
+                className="mx-5 mb-3 flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/15 p-3.5 text-left disabled:opacity-60"
+              >
+                <span className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
+                    <Lock className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">Only admins can send</span>
+                    <span className="block text-xs text-muted-foreground">Everyone else can still read and react</span>
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+                    onlyAdminsCanSend ? "bg-primary" : "bg-secondary ring-1 ring-inset ring-border",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
+                      onlyAdminsCanSend ? "translate-x-6" : "translate-x-1",
+                    )}
+                  />
+                </span>
+              </button>
+            ) : null}
 
             <div className="flex-1 overflow-y-auto px-5 pb-3">
               {canManage ? (

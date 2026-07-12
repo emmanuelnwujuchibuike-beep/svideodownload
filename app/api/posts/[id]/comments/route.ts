@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { pushSocialEvent } from "@/lib/push/social-push";
@@ -172,10 +172,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // Device push — to the parent comment's author for a reply, or the post
   // owner for a top-level comment (either way, skipped when it'd just be
   // pushing your own action back to you — pushSocialEvent's own guard).
+  // after(), not bare void — see lib/social/messages.ts's sendMessage() for why.
   if (parentId && replyTargetAuthorId) {
-    void pushSocialEvent({ actorId: user.id, type: "reply", postId: id, recipientId: replyTargetAuthorId });
+    after(() => pushSocialEvent({ actorId: user.id, type: "reply", postId: id, recipientId: replyTargetAuthorId }));
   } else {
-    void pushSocialEvent({ actorId: user.id, type: "comment", postId: id });
+    after(() => pushSocialEvent({ actorId: user.id, type: "comment", postId: id }));
   }
   return NextResponse.json({ ok: true, id: data.id });
 }

@@ -78,6 +78,7 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   security_suspicious: ShieldAlert,
   security_recovery: ShieldAlert,
   admin_broadcast: Megaphone,
+  post_under_review: ShieldAlert,
 };
 
 export function iconFor(type: NotificationType): LucideIcon {
@@ -89,7 +90,13 @@ export function iconFor(type: NotificationType): LucideIcon {
  * is reserved for the two categories where it carries real meaning: Premium
  * (gold) and Security (urgent red).
  */
-export function tintFor(category: NotificationCategory): string {
+export function tintFor(category: NotificationCategory, type?: NotificationType): string {
+  // Milestones are celebratory — the one "social" type worth breaking the
+  // monochrome-by-default rule for (Part 8 achievement notifications).
+  if (type === "milestone") return "bg-amber-500/15 text-amber-500";
+  // Also worth breaking it for — a post under review needs to read as
+  // urgent/actionable, not blend into ordinary system chatter.
+  if (type === "post_under_review") return "bg-rose-500/15 text-rose-500";
   switch (category) {
     case "premium":
       return "bg-amber-500/15 text-amber-500";
@@ -193,6 +200,8 @@ export function verbFor(type: NotificationType): string {
       return "Recovery email changed";
     case "admin_broadcast":
       return "Frenz announcement";
+    case "post_under_review":
+      return "Your post was hidden pending review";
     default:
       return "sent you a notification";
   }
@@ -211,7 +220,8 @@ export function isActorType(type: NotificationType): boolean {
     type !== "processing_finished" &&
     type !== "milestone" &&
     type !== "system" &&
-    type !== "admin_broadcast"
+    type !== "admin_broadcast" &&
+    type !== "post_under_review"
   );
 }
 

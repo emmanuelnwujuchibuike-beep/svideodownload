@@ -27,6 +27,7 @@ export function ThreadHeader({
   initialMembers,
   viewerRole,
   other,
+  onlyAdminsCanSend = false,
 }: {
   conversationId: string;
   viewerId: string;
@@ -36,6 +37,7 @@ export function ThreadHeader({
   initialMembers: ConversationMember[];
   viewerRole: MemberRole | null;
   other: OtherUser | null;
+  onlyAdminsCanSend?: boolean;
 }) {
   const [title, setTitle] = useState(initialTitle);
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
@@ -126,7 +128,15 @@ export function ThreadHeader({
         <span className="text-sm font-semibold text-muted-foreground">Unknown</span>
       )}
 
-      {type === "group" ? <ThreadHeaderMenu conversationId={conversationId} viewerId={viewerId} viewerRole={viewerRole} initialTitle={title} /> : null}
+      {type === "group" ? (
+        <ThreadHeaderMenu
+          conversationId={conversationId}
+          viewerId={viewerId}
+          viewerRole={viewerRole}
+          initialTitle={title}
+          initialOnlyAdminsCanSend={onlyAdminsCanSend}
+        />
+      ) : null}
     </div>
   );
 }

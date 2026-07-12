@@ -42,6 +42,10 @@ export interface NotificationSettings {
   quietHoursStartUtc: number;
   quietHoursEndUtc: number;
   hidePushPreview: boolean;
+  /** Part 8 Smart Daily Digest opt-out. */
+  digestEnabled: boolean;
+  /** System-managed — set by the digest cron, never by the settings API. */
+  lastDigestSentAt: string | null;
 }
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -53,6 +57,8 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   quietHoursStartUtc: 22,
   quietHoursEndUtc: 8,
   hidePushPreview: false,
+  digestEnabled: true,
+  lastDigestSentAt: null,
 };
 
 interface Row {
@@ -64,6 +70,8 @@ interface Row {
   quiet_hours_start_utc: number;
   quiet_hours_end_utc: number;
   hide_push_preview: boolean;
+  digest_enabled: boolean;
+  last_digest_sent_at: string | null;
 }
 
 function fromRow(r: Row): NotificationSettings {
@@ -76,6 +84,8 @@ function fromRow(r: Row): NotificationSettings {
     quietHoursStartUtc: r.quiet_hours_start_utc,
     quietHoursEndUtc: r.quiet_hours_end_utc,
     hidePushPreview: r.hide_push_preview,
+    digestEnabled: r.digest_enabled,
+    lastDigestSentAt: r.last_digest_sent_at,
   };
 }
 
@@ -115,7 +125,9 @@ export async function getNotificationSettings(userId: string): Promise<Notificat
     const db = createAdminClient();
     const { data } = await db
       .from("notification_settings")
-      .select("master_enabled, push_enabled, in_app_enabled, category_prefs, quiet_hours_enabled, quiet_hours_start_utc, quiet_hours_end_utc, hide_push_preview")
+      .select(
+        "master_enabled, push_enabled, in_app_enabled, category_prefs, quiet_hours_enabled, quiet_hours_start_utc, quiet_hours_end_utc, hide_push_preview, digest_enabled, last_digest_sent_at",
+      )
       .eq("user_id", userId)
       .maybeSingle();
     return data ? fromRow(data as Row) : DEFAULT_NOTIFICATION_SETTINGS;
@@ -133,6 +145,7 @@ export interface NotificationSettingsPatch {
   quietHoursStartUtc?: number;
   quietHoursEndUtc?: number;
   hidePushPreview?: boolean;
+  digestEnabled?: boolean;
 }
 
 export async function setNotificationSettings(userId: string, patch: NotificationSettingsPatch): Promise<{ ok: boolean }> {
@@ -152,6 +165,7 @@ export async function setNotificationSettings(userId: string, patch: Notificatio
     if (typeof patch.quietHoursStartUtc === "number") clean.quiet_hours_start_utc = Math.max(0, Math.min(23, Math.round(patch.quietHoursStartUtc)));
     if (typeof patch.quietHoursEndUtc === "number") clean.quiet_hours_end_utc = Math.max(0, Math.min(23, Math.round(patch.quietHoursEndUtc)));
     if (typeof patch.hidePushPreview === "boolean") clean.hide_push_preview = patch.hidePushPreview;
+    if (typeof patch.digestEnabled === "boolean") clean.digest_enabled = patch.digestEnabled;
     if (Object.keys(clean).length === 0) return { ok: true };
     const { error } = await db
       .from("notification_settings")
@@ -159,6 +173,22 @@ export async function setNotificationSettings(userId: string, patch: Notificatio
     return { ok: !error };
   } catch {
     return { ok: false };
+  }
+}
+
+/** System-managed — called only by the digest cron after a successful send.
+ * Upserts (not a plain update) so it works even for a user with no prior
+ * settings row (the common case — most users never touch /account's
+ * notification settings, so their row is created here on first digest). */
+export async function markDigestSent(userId: string): Promise<void> {
+  try {
+    const db = createAdminClient();
+    await db
+      .from("notification_settings")
+      .upsert({ user_id: userId, last_digest_sent_at: new Date().toISOString() }, { onConflict: "user_id" })
+      .then(undefined, () => {});
+  } catch {
+    /* best-effort — worst case the next cron run re-sends one extra digest */
   }
 }
 

@@ -44,6 +44,17 @@ export async function getOwnPresenceStatus(userId: string): Promise<PresenceStat
   }
 }
 
+export interface DisplayedPresence {
+  status: PresenceStatus;
+  /** Last time this row was touched (a status change, or the heartbeat
+   * `use-presence.ts` fires on every successful presence-channel connect) —
+   * shown as "last seen" for a target who isn't currently online. Same
+   * privacy transform as `status` itself: never populated for an invisible
+   * target, so it can't leak through a different code path than the one
+   * `usePresence()`'s online set already goes through. */
+  lastActiveAt: string | null;
+}
+
 /**
  * What OTHER users are allowed to see. An "invisible" target is simply
  * OMITTED from the result (not mapped to a fake value) — the calling UI's
@@ -52,17 +63,17 @@ export async function getOwnPresenceStatus(userId: string): Promise<PresenceStat
  * the client never tracking presence when invisible (see the module
  * comment), they read as a perfectly ordinary never-customized user.
  */
-export async function getDisplayedStatuses(viewerId: string, targetUserIds: string[]): Promise<Map<string, PresenceStatus>> {
-  const out = new Map<string, PresenceStatus>();
+export async function getDisplayedStatuses(viewerId: string, targetUserIds: string[]): Promise<Map<string, DisplayedPresence>> {
+  const out = new Map<string, DisplayedPresence>();
   const ids = [...new Set(targetUserIds)];
   if (ids.length === 0) return out;
   try {
     const db = createAdminClient();
-    const { data } = await db.from("user_presence_status").select("user_id, status").in("user_id", ids);
-    for (const row of (data ?? []) as { user_id: string; status: string }[]) {
+    const { data } = await db.from("user_presence_status").select("user_id, status, updated_at").in("user_id", ids);
+    for (const row of (data ?? []) as { user_id: string; status: string; updated_at: string }[]) {
       if (!isPresenceStatus(row.status)) continue;
       if (row.status === "invisible" && row.user_id !== viewerId) continue;
-      out.set(row.user_id, row.status);
+      out.set(row.user_id, { status: row.status, lastActiveAt: row.updated_at });
     }
   } catch {
     /* best-effort; a missing entry just means "available" (the default) at the call site */

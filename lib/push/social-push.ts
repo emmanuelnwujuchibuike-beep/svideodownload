@@ -6,7 +6,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * notification row is created by DB triggers (migration 0013/0018); this mirrors
  * it to the user's registered browsers/home-screen apps so it arrives instantly
  * even with the site closed. Best-effort and never throws — call as
- * `void pushSocialEvent(...)` after the write succeeds.
+ * `after(() => pushSocialEvent(...))` after the write succeeds (next/server's
+ * `after()`, not a bare `void` — a fire-and-forget call started right before a
+ * serverless Route Handler returns isn't guaranteed to finish; see the
+ * 2026-07-12 fix at every call site for the "push arrives minutes late" bug
+ * this caused).
  */
 
 type SocialPushType = "like" | "save" | "comment" | "reply" | "follow" | "repost";

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Camera, File as FileIcon, Images, X } from "lucide-react";
+import { Camera, File as FileIcon, Images, Music, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -9,13 +9,19 @@ import { springs } from "@/lib/motion/springs";
 import { ALLOWED_MIME } from "@/lib/social/message-media";
 
 /**
- * The "+" attachment picker — Camera / Gallery / Document, the real,
- * buildable slice of the spec's much larger composer (Music/Cloud/Life
- * Memories/Moments/Events/Contacts/Location/Polls/AI content all need
- * infrastructure this app doesn't have — see docs/PROJECT_NOTES.md's Part 5
- * entry). Camera vs Gallery are genuinely distinct here (not just two
- * labels on the same picker): Camera sets `capture` so mobile browsers open
- * the camera directly instead of the file/photo library.
+ * The "+" attachment picker — Camera / Gallery / Document / Audio, the real,
+ * buildable slice of the spec's much larger composer (Cloud/Life Memories/
+ * Moments/Events/Contacts/Location/Polls/AI content all need infrastructure
+ * this app doesn't have — see docs/PROJECT_NOTES.md's Part 5 entry). Camera
+ * vs Gallery are genuinely distinct here (not just two labels on the same
+ * picker): Camera sets `capture` so mobile browsers open the camera directly
+ * instead of the file/photo library.
+ *
+ * Audio (2026-07-12): the send/render pipeline already fully supported an
+ * "audio" attachment kind — VoiceRecorder's recorded notes use it, and
+ * ALLOWED_MIME.audio already allowlists mp3/m4a/wav/ogg — but this sheet
+ * never offered a way to pick an EXISTING audio file from the device, only
+ * record a fresh one. "Owner: couldn't see audio/music/download in chat."
  */
 export function MediaComposerSheet({
   open,
@@ -24,13 +30,14 @@ export function MediaComposerSheet({
 }: {
   open: boolean;
   onClose: () => void;
-  onFilesPicked: (files: File[], kind: "image" | "video" | "document") => void;
+  onFilesPicked: (files: File[], kind: "image" | "video" | "document" | "audio") => void;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const cameraRef = useRef<HTMLInputElement | null>(null);
   const galleryRef = useRef<HTMLInputElement | null>(null);
   const documentRef = useRef<HTMLInputElement | null>(null);
+  const audioRef = useRef<HTMLInputElement | null>(null);
 
   const pick = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -76,10 +83,11 @@ export function MediaComposerSheet({
               </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 px-5 pb-6 pt-2">
+            <div className="grid grid-cols-4 gap-3 px-5 pb-6 pt-2">
               <PickerButton icon={Camera} label="Camera" onClick={() => cameraRef.current?.click()} />
               <PickerButton icon={Images} label="Gallery" onClick={() => galleryRef.current?.click()} />
               <PickerButton icon={FileIcon} label="Document" onClick={() => documentRef.current?.click()} />
+              <PickerButton icon={Music} label="Audio" onClick={() => audioRef.current?.click()} />
             </div>
 
             {/* capture="environment" is what actually distinguishes Camera from
@@ -102,6 +110,17 @@ export function MediaComposerSheet({
               className="hidden"
               onChange={(e) => {
                 if (e.target.files?.length) onFilesPicked(Array.from(e.target.files), "document");
+                onClose();
+              }}
+            />
+            <input
+              ref={audioRef}
+              type="file"
+              accept={ALLOWED_MIME.audio.join(",")}
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) onFilesPicked(Array.from(e.target.files), "audio");
                 onClose();
               }}
             />

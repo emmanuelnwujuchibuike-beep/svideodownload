@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { ConversationList } from "@/features/social/conversation-list";
 import { CreateGroupLauncher } from "@/features/social/create-group-launcher";
+import { MessageSearchLauncher } from "@/features/social/message-search-launcher";
 import { NotificationSettingsPicker } from "@/features/social/notification-settings-picker";
 import { PresenceStatusPicker } from "@/features/social/presence-status-picker";
 import { listConversations, type ConversationSummary } from "@/lib/social/messages";
@@ -56,6 +57,7 @@ export default async function MessagesPage() {
         <h1 className="mb-4 flex items-center gap-2 text-2xl font-bold tracking-[-0.02em]">
           <MessageCircle className="h-6 w-6 text-primary" /> Messages
           <span className="ml-auto flex items-center gap-1">
+            <MessageSearchLauncher />
             <PresenceStatusPicker />
             <NotificationSettingsPicker />
             <CreateGroupLauncher />

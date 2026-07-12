@@ -29,6 +29,31 @@ function getContext(): AudioContext | null {
   return ctx;
 }
 
+// Browser autoplay policy: an AudioContext starts "suspended" and can only be
+// resumed as a DIRECT result of a genuine user gesture (click/tap/keydown) —
+// a `resume()` call from inside a Realtime message handler (an incoming
+// message/reaction/mention, not something the user just clicked) is not a
+// user gesture and the browser silently refuses it. Since `playSound()` used
+// to call `resume()` reactively, fire-and-forget, on every single play
+// attempt — including the very first "message" sound for an incoming chat,
+// which is almost never preceded by the recipient having typed/clicked
+// anything in that tab yet — the very first sound (and every one after it,
+// until SOME unrelated click happened to land on the page) never actually
+// played. This one-time listener resumes the context the moment the user
+// does anything at all, anywhere on the page, so it's already running by the
+// time a real-time event needs to play a sound.
+let unlocked = false;
+function unlockOnFirstGesture(): void {
+  if (typeof window === "undefined" || unlocked) return;
+  unlocked = true;
+  const resume = () => {
+    void getContext()?.resume().catch(() => {});
+  };
+  const events: (keyof WindowEventMap)[] = ["pointerdown", "keydown", "touchstart"];
+  for (const type of events) window.addEventListener(type, resume, { once: true, passive: true });
+}
+unlockOnFirstGesture();
+
 interface Note {
   freq: number;
   at: number; // seconds from the sound's start
@@ -78,7 +103,16 @@ export function playSound(type: SoundType): void {
     if (!prefs.masterEnabled || !prefs[PREF_KEY[type]]) return;
     const audioCtx = getContext();
     if (!audioCtx) return;
-    if (audioCtx.state === "suspended") void audioCtx.resume().catch(() => {});
+    if (audioCtx.state === "suspended") {
+      // Scheduling notes on a still-suspended context produces no audible
+      // sound (see unlockOnFirstGesture's comment above for why) — attempt a
+      // resume anyway in case THIS particular call is itself inside a user
+      // gesture (e.g. the composer's own keydown), but don't bother
+      // scheduling notes that would just silently not play; the next call
+      // after the context is actually running will sound normal.
+      void audioCtx.resume().catch(() => {});
+      return;
+    }
     for (const note of TONES[type]) playNote(audioCtx, note);
   } catch {
     /* best-effort UI polish, never breaks the app */

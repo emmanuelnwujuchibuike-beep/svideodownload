@@ -1,4 +1,4 @@
-/* Frenz service worker v10 — entry point only. Each concern lives in its own
+/* Frenz service worker v11 — entry point only. Each concern lives in its own
  * module under /sw/, loaded via importScripts() (classic-worker-compatible
  * across every browser this app targets, incl. Safari, which doesn't fully
  * support `{ type: "module" }` service workers) and wired together through

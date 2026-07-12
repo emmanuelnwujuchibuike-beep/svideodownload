@@ -12,11 +12,13 @@ export function ThreadHeaderMenu({
   viewerId,
   viewerRole,
   initialTitle,
+  initialOnlyAdminsCanSend = false,
 }: {
   conversationId: string;
   viewerId: string;
   viewerRole: MemberRole | null;
   initialTitle: string | null;
+  initialOnlyAdminsCanSend?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -36,6 +38,7 @@ export function ThreadHeaderMenu({
         viewerId={viewerId}
         viewerRole={viewerRole}
         initialTitle={initialTitle}
+        initialOnlyAdminsCanSend={initialOnlyAdminsCanSend}
       />
     </>
   );

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { type PushPriority, sendSmartPush } from "@/lib/notifications/smart-delivery";
@@ -108,13 +108,23 @@ export async function POST(request: Request) {
     clientSentAt: parsed.data.clientSentAt,
     attachments: parsed.data.attachments as AttachmentInput[] | undefined,
   });
-  if (!res.ok) return NextResponse.json({ error: "Couldn't send (blocked or unavailable)." }, { status: 400 });
+  if (!res.ok) {
+    const message = res.reason === "admins_only" ? "Only admins can send messages in this group." : "Couldn't send (blocked or unavailable).";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 
   // Web push to every other active member so a message reaches them with the
   // site closed — skipped on a deduped replay, since the original send
   // already pushed (an offline-queue retry must never double-notify).
   if (!res.duplicate) {
-    void notifyMembers(user.id, parsed.data.conversationId, parsed.data.body, parsed.data.attachments);
+    // after(), not bare void — a fire-and-forget call started right before
+    // this Route Handler returns isn't guaranteed to finish; Vercel can
+    // freeze the function the instant the response is sent, deferring the
+    // actual push send until some unrelated later request happens to reuse
+    // the same warm instance (anywhere from seconds to minutes later, or
+    // never). This is the real cause behind "push notifications arrive
+    // minutes late" — found 2026-07-12.
+    after(() => notifyMembers(user.id, parsed.data.conversationId, parsed.data.body, parsed.data.attachments));
   }
 
   return NextResponse.json({ ok: true, id: res.id, duplicate: res.duplicate ?? false });

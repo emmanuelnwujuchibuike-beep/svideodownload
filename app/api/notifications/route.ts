@@ -57,7 +57,10 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ ok: true });
 }
 
-/** DELETE /api/notifications — remove one or a group. Body: { id? } | { ids?[] }. RLS-scoped. */
+/** DELETE /api/notifications — remove one, a group, or (Part 8 privacy
+ * control) everything. Body: { id? } | { ids?[] } | { all: true }. `all`
+ * must be explicit and exactly `true` — an empty/malformed body still 400s,
+ * same as before, rather than silently wiping history by accident. RLS-scoped. */
 export async function DELETE(request: Request) {
   const supabase = await createClient();
   const {
@@ -67,16 +70,20 @@ export async function DELETE(request: Request) {
 
   let id: string | undefined;
   let ids: string[] | undefined;
+  let all = false;
   try {
-    const body = (await request.json()) as { id?: string; ids?: string[] };
+    const body = (await request.json()) as { id?: string; ids?: string[]; all?: boolean };
     id = body?.id;
     ids = Array.isArray(body?.ids) ? body.ids.filter((x) => typeof x === "string").slice(0, 200) : undefined;
+    all = body?.all === true;
   } catch {
     return NextResponse.json({ error: "Nothing to delete." }, { status: 400 });
   }
 
   let q = supabase.from("notifications").delete().eq("user_id", user.id);
-  if (ids && ids.length) q = q.in("id", ids);
+  if (all) {
+    // No further filter — every row already scoped to this user by the .eq() above.
+  } else if (ids && ids.length) q = q.in("id", ids);
   else if (id) q = q.eq("id", id);
   else return NextResponse.json({ error: "Nothing to delete." }, { status: 400 });
 

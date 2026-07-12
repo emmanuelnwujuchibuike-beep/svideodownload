@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { after as runAfterResponse, NextResponse } from "next/server";
 
+import { checkFollowerMilestone } from "@/lib/social/milestones";
 import { pushSocialEvent } from "@/lib/push/social-push";
 import { createClient } from "@/lib/supabase/server";
 
@@ -33,7 +34,23 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: "Couldn't follow (blocked or unavailable)." }, { status: 400 });
   }
   // Fresh follow only: device push to the followed user.
-  if (!error) void pushSocialEvent({ actorId: user.id, type: "follow", recipientId: id });
+  if (!error) {
+    // runAfterResponse (next/server's `after()`), not bare void — a
+    // fire-and-forget call started right before a serverless Route Handler
+    // returns isn't guaranteed to finish; Vercel can freeze the function the
+    // instant the response is sent. Real cause of "push notifications arrive
+    // minutes late" — found 2026-07-12.
+    runAfterResponse(() => pushSocialEvent({ actorId: user.id, type: "follow", recipientId: id }));
+    // Part 8 milestone check — best-effort, never blocks the response.
+    // `followers_count` is trigger-maintained (bump_follow_counts()) and
+    // this insert just incremented it by exactly 1, so `after - 1` is the
+    // correct "before" value without a second read racing the trigger.
+    runAfterResponse(async () => {
+      const { data: profile } = await supabase.from("profiles").select("followers_count").eq("id", id).maybeSingle();
+      const followersAfter = (profile?.followers_count as number | undefined) ?? null;
+      if (followersAfter !== null) await checkFollowerMilestone(id, followersAfter - 1, followersAfter);
+    });
+  }
   return NextResponse.json({ ok: true, following: true });
 }
 

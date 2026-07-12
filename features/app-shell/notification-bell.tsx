@@ -143,7 +143,7 @@ export function NotificationBell() {
                         onClick={() => setOpen(false)}
                         className={cn("flex items-start gap-3 px-4 py-3 transition hover:bg-secondary", !n.read && "bg-primary/[0.04]")}
                       >
-                        <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", tintFor(categoryForType(n.type)))}>
+                        <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", tintFor(categoryForType(n.type), n.type))}>
                           <Icon className="h-4 w-4" />
                         </span>
                         <span className="min-w-0 flex-1">

@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { parseDevice } from "@/lib/auth/device-label";
 import { sendPushToUser } from "@/lib/push/web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -71,12 +73,15 @@ export async function checkNewDevice(userId: string, currentUserAgent: string | 
       .insert({ user_id: userId, actor_id: null, type: "security_new_device" });
     if (insertError) return false;
 
-    void sendPushToUser(userId, {
-      title: "New device signed in",
-      body: `A sign-in from ${label} was detected. Wasn't you? Review your active sessions.`,
-      url: "/account#sessions",
-      tag: "security-new-device",
-    });
+    // after(), not bare void — see lib/social/messages.ts's sendMessage() for why.
+    after(() =>
+      sendPushToUser(userId, {
+        title: "New device signed in",
+        body: `A sign-in from ${label} was detected. Wasn't you? Review your active sessions.`,
+        url: "/account#sessions",
+        tag: "security-new-device",
+      }),
+    );
     return true;
   } catch {
     return false;

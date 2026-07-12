@@ -28,7 +28,12 @@ export async function GET(request: Request) {
       ? await supabase.auth.exchangeCodeForSession(code)
       : await supabase.auth.verifyOtp({ type: type!, token_hash: tokenHash! });
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      const res = NextResponse.redirect(`${origin}${next}`);
+      // Read once by boot-splash.tsx's inline script, then cleared — forces
+      // the colored boot logo to show on this one load even if this browser
+      // session already booted once (e.g. sign-out then sign back in).
+      res.cookies.set("frenz_just_signed_in", "1", { maxAge: 30, path: "/" });
+      return res;
     }
   }
 

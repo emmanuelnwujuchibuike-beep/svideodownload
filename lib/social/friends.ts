@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { sendPushToUser } from "@/lib/push/web-push";
 import { listConversations } from "@/lib/social/messages";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -222,13 +224,17 @@ export async function sendFriendRequest(
         .from("notifications")
         .insert({ user_id: receiverId, actor_id: senderId, type: "friend_request" })
         .then(() => {});
-      void notifyPush(db, senderId, receiverId, {
-        verb: "sent you a friend request",
-        body: trimmed ?? "Open Frenz to accept.",
-        url: "/friends",
-        tag: `friend-req:${senderId}`,
-        actionable: true,
-      });
+      // after(), not bare void — see the identical comment in
+      // lib/social/messages.ts's sendMessage(); same Vercel freeze risk.
+      after(() =>
+        notifyPush(db, senderId, receiverId, {
+          verb: "sent you a friend request",
+          body: trimmed ?? "Open Frenz to accept.",
+          url: "/friends",
+          tag: `friend-req:${senderId}`,
+          actionable: true,
+        }),
+      );
     }
     return { ok: true, state: "outgoing" };
   } catch {
@@ -284,12 +290,14 @@ export async function respondToFriendRequest(
       .from("notifications")
       .insert({ user_id: otherId, actor_id: userId, type: "friend_accepted" })
       .then(() => {});
-    void notifyPush(db, userId, otherId, {
-      verb: "accepted your friend request 🎉",
-      body: "You're now friends on Frenz.",
-      url: `/messages/new/${userId}`,
-      tag: `friend-acc:${userId}`,
-    });
+    after(() =>
+      notifyPush(db, userId, otherId, {
+        verb: "accepted your friend request 🎉",
+        body: "You're now friends on Frenz.",
+        url: `/messages/new/${userId}`,
+        tag: `friend-acc:${userId}`,
+      }),
+    );
     return { ok: true, state: "friends" };
   } catch {
     return { ok: false, reason: "unavailable" };

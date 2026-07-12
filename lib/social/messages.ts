@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { GROUP_TITLE_MAX, MAX_GROUP_MEMBERS, parseMentionedHandles } from "@/lib/social/message-meta";
 import { MAX_ATTACHMENTS_PER_MESSAGE, type AttachmentKind } from "@/lib/social/message-media";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -337,6 +339,27 @@ export async function setGroupAvatar(
   }
 }
 
+/** Owner/admin only — "only admins can send messages" toggle (owner ask, 2026-07-12). */
+export async function setGroupSendPermission(
+  conversationId: string,
+  actorId: string,
+  onlyAdminsCanSend: boolean,
+): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const db = createAdminClient();
+    const role = await memberRole(db, conversationId, actorId);
+    if (role !== "owner" && role !== "admin") return { ok: false, reason: "forbidden" };
+    const { error } = await db
+      .from("conversations")
+      .update({ only_admins_can_send: onlyAdminsCanSend })
+      .eq("id", conversationId)
+      .eq("type", "group");
+    return { ok: !error };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /**
  * Demote-then-promote as ONE atomic transaction (a `security definer` SQL
  * function, see migration 0041) rather than two separate JS-orchestrated
@@ -502,7 +525,7 @@ export async function sendMessage(
   conversationId: string,
   body: string,
   options: SendMessageOptions = {},
-): Promise<{ ok: true; id: string; duplicate?: boolean } | { ok: false }> {
+): Promise<{ ok: true; id: string; duplicate?: boolean } | { ok: false; reason?: string }> {
   if (!hasSupabase) return { ok: false };
   const text = body.trim();
   const attachments = (options.attachments ?? []).slice(0, MAX_ATTACHMENTS_PER_MESSAGE);
@@ -512,19 +535,23 @@ export async function sendMessage(
     const db = createAdminClient();
     const { data: conv } = await db
       .from("conversations")
-      .select("id, type, user_low, user_high")
+      .select("id, type, user_low, user_high, only_admins_can_send")
       .eq("id", conversationId)
       .maybeSingle();
     if (!conv) return { ok: false };
 
     const { data: membership } = await db
       .from("conversation_members")
-      .select("user_id")
+      .select("user_id, role")
       .eq("conversation_id", conversationId)
       .eq("user_id", senderId)
       .is("left_at", null)
       .maybeSingle();
     if (!membership) return { ok: false };
+
+    if (conv.type === "group" && conv.only_admins_can_send && membership.role === "member") {
+      return { ok: false, reason: "admins_only" };
+    }
 
     if (conv.type === "direct") {
       const other = conv.user_low === senderId ? (conv.user_high as string | null) : (conv.user_low as string | null);
@@ -629,7 +656,15 @@ export async function sendMessage(
       }
     }
 
-    void notifyMembers(db, conversationId, senderId, inserted.id as string, text);
+    // `after()`, not a bare `void` — a fire-and-forget call started right
+    // before a serverless Route Handler returns its response isn't
+    // guaranteed to finish; Vercel can freeze the function the moment the
+    // response is sent, silently deferring (or dropping) whatever was still
+    // in flight until some unrelated later request happens to reuse the same
+    // warm instance. That's the actual explanation for "push notifications
+    // arrive minutes late" — found 2026-07-12 chasing that report. `after()`
+    // keeps the function alive until this specific work finishes.
+    after(() => notifyMembers(db, conversationId, senderId, inserted.id as string, text));
 
     return { ok: true, id: inserted.id as string };
   } catch {
@@ -1077,6 +1112,8 @@ export interface ConversationView {
   /** Full roster — group conversations only (empty for direct). */
   members: ConversationMember[];
   viewerRole: MemberRole | null;
+  /** Group only — when true, sendMessage() rejects a plain "member" sender. */
+  onlyAdminsCanSend: boolean;
   messages: MessageItem[];
   /** Pass this back as `sinceUpdatedAt` on the next call for a delta sync. */
   syncedAt: string;
@@ -1117,7 +1154,7 @@ export async function getConversation(
     const db = createAdminClient();
     const { data: conv } = await db
       .from("conversations")
-      .select("id, type, title, avatar_url, user_low, user_high")
+      .select("id, type, title, avatar_url, user_low, user_high, only_admins_can_send")
       .eq("id", conversationId)
       .maybeSingle();
     if (!conv) return null;
@@ -1287,6 +1324,7 @@ export async function getConversation(
       other,
       members,
       viewerRole: (myMembership.role as MemberRole) ?? null,
+      onlyAdminsCanSend: (conv.only_admins_can_send as boolean | null) ?? false,
       messages,
       syncedAt: queryStartedAt,
     };

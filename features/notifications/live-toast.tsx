@@ -134,7 +134,7 @@ export function NotificationLiveToast() {
   const tint = item
     ? item.kind === "message"
       ? "bg-secondary text-foreground"
-      : tintFor(categoryForType(item.n.type))
+      : tintFor(categoryForType(item.n.type), item.n.type)
     : "";
   const avatarUrl = item ? (item.kind === "message" ? item.avatarUrl : item.n.actor?.avatarUrl) : null;
   const key = item ? (item.kind === "message" ? `m:${item.convId}:${item.body}` : item.n.id) : "";

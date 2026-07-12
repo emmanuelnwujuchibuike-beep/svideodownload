@@ -74,6 +74,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         initialMembers={convo.members}
         viewerRole={convo.viewerRole}
         other={convo.other}
+        onlyAdminsCanSend={convo.onlyAdminsCanSend}
       />
 
       <ConversationRoom
@@ -85,6 +86,8 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         initialSyncedAt={convo.syncedAt}
         type={convo.type}
         members={convo.members}
+        viewerRole={convo.viewerRole}
+        onlyAdminsCanSend={convo.onlyAdminsCanSend}
       />
     </div>
   );

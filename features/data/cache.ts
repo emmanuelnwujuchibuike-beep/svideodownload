@@ -138,5 +138,18 @@ export function ensureGlobalRevalidation(): void {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") revalidateAllMounted();
   });
+  // `visibilitychange` doesn't reliably fire for a BACK-FORWARD CACHE
+  // restore — iOS Safari's edge-swipe "back" gesture (and any browser's
+  // back/forward button, to a lesser extent) can restore a frozen page
+  // without the tab ever having gone through a "hidden" state from the
+  // page's own perspective. `pageshow` with `event.persisted === true` is
+  // the event actually meant for this. Without it, a query key whose fetch
+  // was still in flight (or already stale) at the moment the page was
+  // frozen stays exactly that way forever after a gesture-back restore —
+  // found chasing a "messages page stuck loading, only after the iOS
+  // back-gesture" report.
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted) revalidateAllMounted();
+  });
   void import("@/lib/observability/memory-pressure").then(({ onMemoryPressure }) => onMemoryPressure(pruneInactive));
 }

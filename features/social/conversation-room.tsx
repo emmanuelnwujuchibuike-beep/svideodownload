@@ -9,6 +9,7 @@ import {
   File as FileIcon,
   Forward,
   Loader2,
+  Lock,
   Mic,
   MoreHorizontal,
   Paperclip,
@@ -18,11 +19,14 @@ import {
   Reply as ReplyIcon,
   Send,
   SmilePlus,
+  Star,
   Trash2,
   WifiOff,
   X,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { RichText } from "@/components/social/rich-text";
 import { revalidate } from "@/features/data";
@@ -55,7 +59,7 @@ import {
   MAX_SIZE_BYTES,
   type AttachmentKind,
 } from "@/lib/social/message-media";
-import type { AttachmentInput, ConversationMember, ConversationType, MessageAttachment, MessageItem } from "@/lib/social/messages";
+import type { AttachmentInput, ConversationMember, ConversationType, MemberRole, MessageAttachment, MessageItem } from "@/lib/social/messages";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { useVisualViewport } from "@/lib/pwa/use-visual-viewport";
 import { createClient } from "@/lib/supabase/client";
@@ -107,6 +111,8 @@ export function ConversationRoom({
   initialSyncedAt,
   type = "direct",
   members = [],
+  viewerRole = null,
+  onlyAdminsCanSend = false,
 }: {
   conversationId: string;
   viewerId: string;
@@ -116,6 +122,8 @@ export function ConversationRoom({
   initialSyncedAt: string;
   type?: ConversationType;
   members?: ConversationMember[];
+  viewerRole?: MemberRole | null;
+  onlyAdminsCanSend?: boolean;
 }) {
   const [messages, setMessages] = useState<MessageItem[]>(initial);
   const [body, setBody] = useState("");
@@ -579,14 +587,24 @@ export function ConversationRoom({
     const onVisible = () => {
       if (document.visibilityState === "visible") void resync();
     };
+    // Same bfcache gap as features/data/cache.ts's ensureGlobalRevalidation
+    // — this component has its own bespoke message state instead of that
+    // shared cache, so it needs its own `pageshow` listener. Without it, an
+    // iOS back-gesture restoring a frozen thread (e.g. navigated away
+    // mid-load, or just plain stale) never resyncs on its own.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) void resync();
+    };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", onVisible);
+    window.addEventListener("pageshow", onPageShow);
 
     return () => {
       cancelled = true;
       if (reactionDebounce) clearTimeout(reactionDebounce);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
       // removeChannel (not just channel.unsubscribe()) — the browser client
       // is now a shared singleton (lib/supabase/client.ts), so a channel left
       // registered here would sit on that ONE client for the rest of the tab's
@@ -616,6 +634,15 @@ export function ConversationRoom({
 
   const MENU_WIDTH = 160; // w-40
   const MENU_ITEM_HEIGHT = 40; // matches MenuItem's px-3.5 py-2 + text-sm line height
+  // The rendered menu is a document.body PORTAL (see its createPortal call
+  // below), not an inline sibling — on desktop this component lives inside
+  // <main> (app/(app)/messages/layout.tsx), which carries lg:backdrop-blur-xl.
+  // Per the CSS spec, backdrop-filter establishes a new containing block for
+  // position:fixed descendants, so a `left`/`top` computed against
+  // window.innerWidth/innerHeight (below) would render offset by <main>'s own
+  // position instead of the true viewport — confirmed to push the menu ~600px
+  // off-screen on a 1280px-wide desktop window. Portaling to <body> keeps this
+  // math correct regardless of any blurred/transformed ancestor.
   const toggleMessageMenu = (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
     haptic("light");
     if (openMenuId === id) {
@@ -626,12 +653,12 @@ export function ConversationRoom({
     // let the menu render off the BOTTOM of the viewport when tapped near
     // the bottom of the screen — the fixed `top-8`-equivalent offset never
     // accounted for how much room was actually left below the button. Reply/
-    // Forward/React/Pin are always present; Edit/Delete only for your own,
-    // non-deleted, non-optimistic messages — same gating as the menu's own
-    // render — so the estimate matches exactly what's about to be shown.
+    // Forward/React/Pin/Star are always present; Edit/Delete only for your
+    // own, non-deleted, non-optimistic messages — same gating as the menu's
+    // own render — so the estimate matches exactly what's about to be shown.
     const msg = messages.find((x) => x.id === id);
     const editDelete = msg && msg.mine && !msg.deletedAt && !id.startsWith("optimistic-") ? 2 : 0;
-    const menuHeight = (4 + editDelete) * MENU_ITEM_HEIGHT + 12;
+    const menuHeight = (5 + editDelete) * MENU_ITEM_HEIGHT + 12;
     const rect = e.currentTarget.getBoundingClientRect();
     const margin = 8;
     const left = Math.min(Math.max(rect.right - MENU_WIDTH, margin), window.innerWidth - MENU_WIDTH - margin);
@@ -800,7 +827,7 @@ export function ConversationRoom({
   // the API route re-checks — never trust the file picker alone, but also
   // fail fast/cheap before spending a real upload on something that would
   // just get rejected server-side anyway.
-  const handleFilesPicked = async (files: File[], kind: "image" | "video" | "document") => {
+  const handleFilesPicked = async (files: File[], kind: "image" | "video" | "document" | "audio") => {
     const room = MAX_ATTACHMENTS_PER_MESSAGE - pendingAttachments.length;
     if (room <= 0) {
       toast(`You can attach up to ${MAX_ATTACHMENTS_PER_MESSAGE} files to one message.`, "error");
@@ -870,6 +897,22 @@ export function ConversationRoom({
     await submit(undefined, [{ mediaKind: "audio", mediaUrl: result.url, durationMs: result.durationMs, waveform: result.waveform, mimeType: "audio/webm" }]);
   };
 
+  // Part 10 — save to the viewer's private Starred list (distinct from
+  // `pinned`, which is shared with the whole conversation). Deliberately no
+  // client-side "is this starred" state/indicator on the bubble itself — the
+  // Starred Messages view (reachable from the search sheet) is the one place
+  // to see and manage what's starred, same scoping trade every other
+  // fire-and-forget action-menu item here makes.
+  const starMsg = async (id: string) => {
+    setOpenMenuId(null);
+    try {
+      const res = await fetch(`/api/messages/msg/${id}/star`, { method: "POST" });
+      toast(res.ok ? "Message starred." : "Couldn't star message.", res.ok ? "success" : "error");
+    } catch {
+      toast("Network error — try again.", "error");
+    }
+  };
+
   const deleteMsg = async (id: string) => {
     setOpenMenuId(null);
     const prev = messages;
@@ -929,10 +972,37 @@ export function ConversationRoom({
   }, [messages, type]);
 
   const pinnedMessages = useMemo(() => messages.filter((m) => m.pinned && !m.deletedAt), [messages]);
+  // Group owner/admin toggle (owner ask, 2026-07-12) — a plain "member" sees
+  // a locked composer instead of the normal one; owner/admin are unaffected
+  // regardless of the setting (they're always allowed to send).
+  const sendLocked = type === "group" && onlyAdminsCanSend && viewerRole === "member";
 
   const scrollToMessage = (id: string) => {
     bubbleRefs.current.get(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
+
+  // Deep-link from the Part 10 search sheet (`/messages/<id>?highlight=<messageId>`)
+  // — scroll to + briefly flash the target bubble once it's actually mounted.
+  // Known, accepted limit: only works if the message is within the initial
+  // ~300-message load window `getConversation()` already fetches; jumping to
+  // a much older starred/searched message would need real "load older
+  // messages around this point" pagination, a real follow-up, not silently
+  // faked here.
+  const searchParams = useSearchParams();
+  const highlightTarget = searchParams.get("highlight");
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!highlightTarget) return;
+    if (!messages.some((m) => m.id === highlightTarget)) return;
+    const raf = requestAnimationFrame(() => scrollToMessage(highlightTarget));
+    setHighlightedId(highlightTarget);
+    const clear = setTimeout(() => setHighlightedId(null), 2200);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(clear);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the target or the message list changes, not on every scrollToMessage identity change
+  }, [highlightTarget, messages]);
 
   const senderName = (id: string): string => memberById.get(id)?.displayName ?? "Someone";
 
@@ -1030,6 +1100,7 @@ export function ConversationRoom({
                           ? "bg-brand rounded-br-lg text-white shadow-md shadow-violet-500/20"
                           : "glass rounded-bl-lg text-foreground shadow-sm",
                       m.mine && m.id.startsWith("optimistic-") && "animate-scale-in",
+                      m.id === highlightedId && "ring-2 ring-offset-2 ring-offset-background ring-amber-400 transition-shadow duration-500",
                     )}
                   >
                     {deleted ? (
@@ -1118,47 +1189,51 @@ export function ConversationRoom({
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </motion.button>
-                      {openMenuId === m.id && menuPos ? (
-                        <>
-                          <button
-                            type="button"
-                            aria-label="Close menu"
-                            onClick={() => setOpenMenuId(null)}
-                            className="fixed inset-0 z-40 cursor-default"
-                          />
-                          <div
-                            style={{ top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
-                            className="glass-strong animate-scale-in fixed z-50 overflow-hidden rounded-2xl py-1"
-                          >
-                            <MenuItem icon={ReplyIcon} label="Reply" onClick={() => startReply(m)} />
-                            <MenuItem
-                              icon={Forward}
-                              label="Forward"
-                              onClick={() => {
-                                setOpenMenuId(null);
-                                setForwardingId(m.id);
-                              }}
-                            />
-                            <MenuItem
-                              icon={SmilePlus}
-                              label="React"
-                              onClick={() => {
-                                setOpenMenuId(null);
-                                setReactingId(m.id);
-                              }}
-                            />
-                            <MenuItem
-                              icon={m.pinned ? PinOff : Pin}
-                              label={m.pinned ? "Unpin" : "Pin"}
-                              onClick={() => togglePin(m)}
-                            />
-                            {canEdit ? <MenuItem icon={Pencil} label="Edit" onClick={() => startEdit(m)} /> : null}
-                            {canDelete ? (
-                              <MenuItem icon={Trash2} label="Delete" tone="danger" onClick={() => deleteMsg(m.id)} />
-                            ) : null}
-                          </div>
-                        </>
-                      ) : null}
+                      {openMenuId === m.id && menuPos
+                        ? createPortal(
+                            <>
+                              <button
+                                type="button"
+                                aria-label="Close menu"
+                                onClick={() => setOpenMenuId(null)}
+                                className="fixed inset-0 z-40 cursor-default"
+                              />
+                              <div
+                                style={{ top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
+                                className="glass-strong animate-scale-in fixed z-50 overflow-hidden rounded-2xl py-1"
+                              >
+                                <MenuItem icon={ReplyIcon} label="Reply" onClick={() => startReply(m)} />
+                                <MenuItem
+                                  icon={Forward}
+                                  label="Forward"
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    setForwardingId(m.id);
+                                  }}
+                                />
+                                <MenuItem
+                                  icon={SmilePlus}
+                                  label="React"
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    setReactingId(m.id);
+                                  }}
+                                />
+                                <MenuItem
+                                  icon={m.pinned ? PinOff : Pin}
+                                  label={m.pinned ? "Unpin" : "Pin"}
+                                  onClick={() => togglePin(m)}
+                                />
+                                <MenuItem icon={Star} label="Star" onClick={() => starMsg(m.id)} />
+                                {canEdit ? <MenuItem icon={Pencil} label="Edit" onClick={() => startEdit(m)} /> : null}
+                                {canDelete ? (
+                                  <MenuItem icon={Trash2} label="Delete" tone="danger" onClick={() => deleteMsg(m.id)} />
+                                ) : null}
+                              </div>
+                            </>,
+                            document.body,
+                          )
+                        : null}
                     </div>
                   ) : null}
                 </div>
@@ -1326,7 +1401,11 @@ export function ConversationRoom({
         </div>
       ) : null}
 
-      {recordingVoice ? (
+      {sendLocked ? (
+        <div className="flex items-center justify-center gap-1.5 border-t border-border/60 bg-card/70 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-center text-xs font-medium text-muted-foreground backdrop-blur-xl lg:pb-4">
+          <Lock className="h-3.5 w-3.5 shrink-0" /> Only admins can send messages in this group
+        </div>
+      ) : recordingVoice ? (
         <div className="border-t border-border/60 bg-card/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3">
           <VoiceRecorder onRecorded={handleVoiceRecorded} onCancel={() => setRecordingVoice(false)} />
         </div>

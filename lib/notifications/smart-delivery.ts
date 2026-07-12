@@ -1,3 +1,4 @@
+import { isOverPushFrequencyCap } from "@/lib/notifications/frequency-limit";
 import { computeShouldPush, getNotificationSettings } from "@/lib/social/notification-settings";
 import type { NotificationCategory } from "@/lib/social/notifications";
 import { getOwnPresenceStatus } from "@/lib/social/presence-status";
@@ -52,5 +53,9 @@ export async function sendSmartPush(userId: string, payload: PushPayload, priori
   if (status === "dnd") return; // in-app delivery still happens via Realtime/Notification Center
   const nowUtcHour = new Date().getUTCHours();
   if (!computeShouldPush(settings, category, nowUtcHour)) return;
+  // Part 8 fatigue reduction — only for medium/low, same carve-out as
+  // everything else in this branch; a generous safety-net cap, not a tight
+  // limiter (see frequency-limit.ts's own reasoning + fail-open behavior).
+  if (await isOverPushFrequencyCap(userId)) return;
   await sendPushToUser(userId, deliver);
 }

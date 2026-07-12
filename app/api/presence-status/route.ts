@@ -30,8 +30,12 @@ export async function GET(request: Request) {
 
   const map = await getDisplayedStatuses(user.id, ids);
   const statuses: Record<string, string> = {};
-  for (const [id, status] of map) statuses[id] = status;
-  return NextResponse.json({ statuses }, { headers: { "Cache-Control": "private, no-store" } });
+  const lastSeen: Record<string, string> = {};
+  for (const [id, entry] of map) {
+    statuses[id] = entry.status;
+    if (entry.lastActiveAt) lastSeen[id] = entry.lastActiveAt;
+  }
+  return NextResponse.json({ statuses, lastSeen }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 const schema = z.object({ status: z.string() });

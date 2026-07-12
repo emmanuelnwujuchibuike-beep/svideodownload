@@ -126,7 +126,17 @@ self.addEventListener("notificationclick", (event) => {
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
         if ("focus" in client) {
-          client.navigate(url).catch(() => {});
+          // Was `client.navigate(url)` — a service-worker-driven HARD
+          // navigation of the existing tab. WindowClient.navigate() is
+          // notoriously unreliable on iOS Safari/WKWebView (the engine
+          // behind every iOS browser, including installed PWAs): tapping a
+          // message notification with the app already open could leave the
+          // tab stuck mid-navigation with nothing to recover it. Instead,
+          // hand the URL to the already-running page and let it do a normal
+          // client-side (Next.js router) navigation — the same fast, robust
+          // path a Link click already takes. register-sw.tsx listens for
+          // this message.
+          client.postMessage({ type: "frenz-navigate", url });
           return client.focus();
         }
       }

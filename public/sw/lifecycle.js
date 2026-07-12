@@ -1,6 +1,6 @@
 /* Install / activate / update-promotion — the "never leave the user with a
  * broken or half-installed cache" half of the enterprise ask. */
-const SWX = (self.SWX = self.SWX || {});
+var SWX = (self.SWX = self.SWX || {});
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

@@ -1,13 +1,19 @@
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, RefreshCw } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ConversationList } from "@/features/social/conversation-list";
 import { CreateGroupLauncher } from "@/features/social/create-group-launcher";
 import { NotificationSettingsPicker } from "@/features/social/notification-settings-picker";
 import { PresenceStatusPicker } from "@/features/social/presence-status-picker";
-import { listConversations } from "@/lib/social/messages";
+import { listConversations, type ConversationSummary } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/server";
+import { withTimeout } from "@/lib/utils";
+
+type LoadResult = { ok: true; conversations: ConversationSummary[] } | { ok: false; conversations: ConversationSummary[] };
+
+const LOAD_TIMEOUT_MS = 8000;
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +37,17 @@ export default async function MessagesPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/messages");
 
-  const conversations = await listConversations(user.id);
+  // A stuck/slow query here used to leave the whole inbox on its loading
+  // skeleton forever — nothing timed it out, so Next had nothing to fall
+  // back to. Racing it means the WORST case is now "shows a retry prompt
+  // after 8s", never "stuck indefinitely".
+  const result = await withTimeout<LoadResult>(
+    listConversations(user.id).then((c) => ({ ok: true, conversations: c })),
+    LOAD_TIMEOUT_MS,
+    { ok: false, conversations: [] },
+  );
+  const timedOut = !result.ok;
+  const { conversations } = result;
 
   return (
     <>
@@ -45,7 +61,17 @@ export default async function MessagesPage() {
             <CreateGroupLauncher />
           </span>
         </h1>
-        <ConversationList initial={conversations} />
+        {timedOut ? (
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/70 p-10 text-center">
+            <p className="text-sm font-medium">This is taking longer than usual</p>
+            <p className="text-xs text-muted-foreground">Check your connection and try again.</p>
+            <Link href="/messages" className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">
+              <RefreshCw className="h-3.5 w-3.5" /> Retry
+            </Link>
+          </div>
+        ) : (
+          <ConversationList initial={conversations} />
+        )}
       </div>
 
       {/* Desktop: pick-a-conversation state */}

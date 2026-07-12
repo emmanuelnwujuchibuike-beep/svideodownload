@@ -8,6 +8,9 @@ import { NotificationSettingsPicker } from "@/features/social/notification-setti
 import { PresenceStatusPicker } from "@/features/social/presence-status-picker";
 import { listConversations } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/server";
+import { withTimeout } from "@/lib/utils";
+
+const LOAD_TIMEOUT_MS = 8000;
 
 /**
  * Glass Split (owner-picked design): on desktop the inbox is a persistent left
@@ -23,7 +26,11 @@ export default async function MessagesLayout({ children }: { children: ReactNode
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (user) conversations = await listConversations(user.id);
+    // Same reasoning as page.tsx's identical guard — a stuck query here used
+    // to leave the desktop pane on its skeleton forever; racing it means it
+    // degrades to "shows an empty pane" (a real, if imperfect, page) rather
+    // than never resolving at all.
+    if (user) conversations = await withTimeout(listConversations(user.id), LOAD_TIMEOUT_MS, []);
   } catch {
     /* pages handle their own auth redirects */
   }

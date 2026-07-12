@@ -67,14 +67,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           { status: 402 },
         );
       }
-      // Best-effort download counter bump.
-      void admin.from("posts").update({ downloads_count: (post.downloads_count ?? 0) + 1 }).eq("id", id);
+      // Best-effort download counter bump. Supabase's query builder is a lazy
+      // thenable — the request only actually fires once something calls
+      // `.then()`/awaits it, so a bare `void` on its own (with no `.then()`
+      // anywhere in the chain) never sent this UPDATE at all. Verified this
+      // empirically, not just from reading the source.
+      admin.from("posts").update({ downloads_count: (post.downloads_count ?? 0) + 1 }).eq("id", id).then(undefined, () => {});
       const ext = extFromUrl(post.media_url, post.media_kind);
       return NextResponse.json({ url: post.media_url, filename: safeName(post.title, id, ext), remaining: cap.remaining });
     }
   }
 
-  void admin.from("posts").update({ downloads_count: (post.downloads_count ?? 0) + 1 }).eq("id", id);
+  admin.from("posts").update({ downloads_count: (post.downloads_count ?? 0) + 1 }).eq("id", id).then(undefined, () => {});
   const ext = extFromUrl(post.media_url, post.media_kind);
   return NextResponse.json({ url: post.media_url, filename: safeName(post.title, id, ext), remaining: null });
 }

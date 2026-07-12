@@ -9,7 +9,7 @@
  * (name, store, and schema below must stay in sync with that file — a
  * service worker can't import a TS module, so this is a deliberate,
  * minimal, vanilla-JS mirror of its enqueue schema, not a duplicate queue). */
-const SWX = (self.SWX = self.SWX || {});
+var SWX = (self.SWX = self.SWX || {});
 
 const DB_NAME = "frenz-offline-queue";
 const STORE = "actions";

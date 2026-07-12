@@ -707,7 +707,7 @@ export async function deleteMessage(userId: string, messageId: string): Promise<
       .update({ body: "", deleted_at: new Date().toISOString(), pinned: false, pinned_at: null, pinned_by: null })
       .eq("id", messageId);
     if (error) return { ok: false };
-    void db.from("message_reactions").delete().eq("message_id", messageId);
+    db.from("message_reactions").delete().eq("message_id", messageId).then(undefined, () => {});
     return { ok: true };
   } catch {
     return { ok: false };
@@ -886,13 +886,17 @@ export async function listConversations(userId: string): Promise<ConversationSum
     // Fetching the inbox = the recipient's app has the direct messages →
     // mark them delivered (fire-and-forget). Drives the sender's "Delivered"
     // receipt. Unchanged from before — direct-only, groups use last_read_at.
+    // `.then()` is load-bearing, not decoration — Supabase's query builder is
+    // a lazy thenable; a bare `void` with no `.then()`/`await` anywhere in
+    // the chain never actually sends the request (verified empirically this
+    // round). This UPDATE had silently never been firing.
     if (directConvIds.length) {
-      void db
-        .from("messages")
+      db.from("messages")
         .update({ delivered_at: new Date().toISOString() })
         .in("conversation_id", directConvIds)
         .neq("sender_id", userId)
-        .is("delivered_at", null);
+        .is("delivered_at", null)
+        .then(undefined, () => {});
     }
 
     const out: ConversationSummary[] = [];
@@ -1234,20 +1238,26 @@ export async function getConversation(
     // Side effect: direct threads mark the other side's messages delivered+read
     // (unchanged); group threads advance the VIEWER's own read cursor instead
     // (no per-message-per-member receipts — see the D4 note in the migration).
+    // Fire-and-forget, but `.catch()`'d rather than bare `void` — an
+    // unhandled rejection on a promise nobody awaits still fires Node's
+    // `unhandledRejection` (this route's own try/catch can't see it, since
+    // it isn't awaited inside the try), and on Vercel's Node runtime that can
+    // tear down the function instance — no effect on THIS request/response
+    // (already sent), but a real one on the container's next invocation.
     const now = new Date().toISOString();
     if (conv.type === "direct") {
-      void db
-        .from("messages")
+      db.from("messages")
         .update({ read_at: now, delivered_at: now })
         .eq("conversation_id", conversationId)
         .neq("sender_id", userId)
-        .is("read_at", null);
+        .is("read_at", null)
+        .then(undefined, () => {});
     } else {
-      void db
-        .from("conversation_members")
+      db.from("conversation_members")
         .update({ last_read_at: now, last_delivered_at: now })
         .eq("conversation_id", conversationId)
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .then(undefined, () => {});
     }
 
     const messages: MessageItem[] = rows.map((m) => {

@@ -1,12 +1,18 @@
+import { RefreshCw } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { ConversationRoom } from "@/features/social/conversation-room";
 import { ThreadHeader } from "@/features/social/thread-header";
-import { getConversation } from "@/lib/social/messages";
+import { getConversation, type ConversationView } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/server";
+import { withTimeout } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+const LOAD_TIMEOUT_MS = 8000;
+const TIMED_OUT = Symbol("timed-out");
 
 export const metadata: Metadata = {
   title: "Conversation",
@@ -29,7 +35,22 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=/messages/${id}`);
 
-  const convo = await getConversation(id, user.id);
+  // A stuck/slow query here used to leave the whole thread — including its
+  // header and composer — on the loading skeleton forever, with no way back
+  // out short of a hard reload. Racing it turns that into a fast, honest
+  // "couldn't load, try again" state after 8s instead.
+  const convo = await withTimeout<ConversationView | null | typeof TIMED_OUT>(getConversation(id, user.id), LOAD_TIMEOUT_MS, TIMED_OUT);
+  if (convo === TIMED_OUT) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+        <p className="text-sm font-semibold">This is taking longer than usual</p>
+        <p className="text-sm text-muted-foreground">Check your connection and try again.</p>
+        <Link href="/messages" className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">
+          <RefreshCw className="h-3.5 w-3.5" /> Back to Messages
+        </Link>
+      </div>
+    );
+  }
   if (!convo) notFound();
 
   const { data: viewerProfile } = await supabase.from("profiles").select("display_name, handle").eq("id", user.id).maybeSingle();

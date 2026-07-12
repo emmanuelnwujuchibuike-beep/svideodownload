@@ -1,7 +1,7 @@
 /* The fetch router — decides which strategy (strategies.js) applies to
  * which request. This is the only place that inspects a request and picks a
  * cache; the strategies themselves stay resource-agnostic. */
-const SWX = (self.SWX = self.SWX || {});
+var SWX = (self.SWX = self.SWX || {});
 
 // #050816 matches globals.css's actual dark --background and the manifest's
 // BootSplash rest-state exactly (see app/layout.tsx's viewport.themeColor
@@ -67,13 +67,24 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Navigations — network-first, using preload when the browser already
-  // started it; cache only for same-origin pages (no point caching e.g. an
-  // OAuth redirect to a third-party origin under this app's page cache).
+  // started it. Only genuinely public/static pages (config.js's
+  // PAGE_CACHE_ALLOWLIST_*) are written to PAGE_CACHE — that cache is one
+  // shared bucket keyed by URL alone, not partitioned per signed-in user, so
+  // caching a personalized page (e.g. /messages) risked a slow-network
+  // timeout falling back to a STALE (or, on a shared device with a second
+  // account since, wrong-user's) cached copy — same reasoning
+  // API_CACHE_ALLOWLIST already applied to API responses, just missed here
+  // originally. Every other page still gets the network-first + timeout +
+  // offline-fallback behavior, just never reads/writes the page cache.
   if (req.mode === "navigate") {
     const sameOrigin = url.origin === self.location.origin;
+    const cacheable =
+      sameOrigin &&
+      (SWX.PAGE_CACHE_ALLOWLIST_EXACT.includes(url.pathname) ||
+        SWX.PAGE_CACHE_ALLOWLIST_PREFIXES.some((p) => url.pathname.startsWith(p)));
     event.respondWith(
       SWX.networkFirst(req, {
-        cacheName: sameOrigin ? SWX.PAGE_CACHE : null,
+        cacheName: cacheable ? SWX.PAGE_CACHE : null,
         preload: event.preloadResponse,
         offlineFallback,
       }),

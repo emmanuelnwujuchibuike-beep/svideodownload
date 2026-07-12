@@ -35,10 +35,15 @@ export async function verifyApiKey(raw: string | null | undefined): Promise<ApiK
       .eq("key_hash", hashKey(raw))
       .maybeSingle();
     if (!data || data.revoked) return null;
-    void supabase
+    // `.then()` is load-bearing — Supabase's query builder is a lazy
+    // thenable; a bare `void` with no `.then()`/`await` anywhere in the
+    // chain never actually sends the request. This UPDATE had silently
+    // never been firing, so `last_used` never advanced past its initial value.
+    supabase
       .from("api_keys")
       .update({ last_used: new Date().toISOString() })
-      .eq("id", data.id);
+      .eq("id", data.id)
+      .then(undefined, () => {});
     return { keyId: data.id as string, userId: data.user_id as string };
   } catch {
     return null;

@@ -8,29 +8,30 @@
  * keeps the persistent layout, so it never re-shows.
  *
  * Uses the actual logo asset (`/brand/frenz-logo.png`, preloaded in
- * app/layout.tsx's <head> so it's never the slow part) rather than a hand-drawn
- * placeholder glyph — kept muted (grayscale + reduced opacity) rather than
- * full color on purpose: the loud, colorful "Frenz" welcome is reserved for
- * the very first uncached /home entry (see BrandSplash) — so a plain refresh
- * shows a quiet, correctly-branded skeleton, never a bold colorful loader.
+ * app/layout.tsx's <head> so it's never the slow part).
  *
- * On the ONE landing this skeleton would otherwise show right underneath that
- * colorful welcome (first-ever login, or any visit after site data was cleared —
- * both mean the `frenz_welcomed` cookie is absent) it suppresses itself instead,
- * so there's no grayscale-then-colorful double-flash — just the one premium
- * welcome. Every other cold entry (a plain refresh, a normal sign-in) still gets
- * this quiet skeleton exactly as before.
+ * Owner (2026-07-12, after asking for this three times): full color, not the
+ * earlier muted grayscale treatment — the logo's own blue/violet/pink gradient
+ * shows at full opacity, with a soft violet ambient glow behind it and a
+ * bright shine sweep across it, on EVERY cold entry (hard refresh, sign-in
+ * redirect, cache-cleared visit), not just the once-ever BrandSplash welcome.
+ * BrandSplash (a separate, bigger full-screen moment with the animated
+ * wordmark) still owns the genuine first-ever-login case and still suppresses
+ * this skeleton on that one specific landing (see the JS below) so the two
+ * don't double-flash — but every OTHER cold boot is now colorful too, matching
+ * what was actually asked for rather than the narrower reading used before.
  */
 const CSS = `
 #frenz-boot{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:#ffffff;transition:opacity .4s ease}
 html.dark #frenz-boot{background:#050816}
 #frenz-boot.frenz-boot--hide{opacity:0;pointer-events:none}
+.frenz-boot__glow{position:absolute;width:260px;height:260px;border-radius:9999px;background:radial-gradient(circle,rgba(124,58,237,.32),rgba(124,58,237,0) 70%);filter:blur(14px);animation:frenz-boot-breathe 2s ease-in-out infinite}
 .frenz-boot__mark{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:22%;width:104px;height:104px;animation:frenz-boot-breathe 1.6s ease-in-out infinite}
-.frenz-boot__mark img{display:block;width:100%;height:100%;filter:grayscale(1);opacity:.4}
-.frenz-boot__shine{position:absolute;inset:0;background:linear-gradient(115deg,transparent 40%,rgba(148,163,184,.45) 50%,transparent 60%);transform:translateX(-130%);animation:frenz-boot-shimmer 1.4s ease-in-out infinite}
-@keyframes frenz-boot-breathe{0%,100%{opacity:.9}50%{opacity:.55}}
+.frenz-boot__mark img{display:block;width:100%;height:100%}
+.frenz-boot__shine{position:absolute;inset:0;background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.65) 50%,transparent 60%);transform:translateX(-130%);animation:frenz-boot-shimmer 1.4s ease-in-out infinite}
+@keyframes frenz-boot-breathe{0%,100%{opacity:.95}50%{opacity:.65}}
 @keyframes frenz-boot-shimmer{0%{transform:translateX(-130%)}100%{transform:translateX(130%)}}
-@media (prefers-reduced-motion:reduce){.frenz-boot__mark,.frenz-boot__shine{animation:none}}
+@media (prefers-reduced-motion:reduce){.frenz-boot__mark,.frenz-boot__shine,.frenz-boot__glow{animation:none}}
 `;
 
 // Hide as soon as the document has parsed (content is present), with a small
@@ -57,6 +58,7 @@ export function BootSplash() {
       <script dangerouslySetInnerHTML={{ __html: THEME_JS }} />
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div id="frenz-boot" aria-hidden="true">
+        <span className="frenz-boot__glow" />
         <span className="frenz-boot__mark">
           {/* eslint-disable-next-line @next/next/no-img-element -- must render
               before the JS bundle (next/image) is available */}

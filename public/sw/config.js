@@ -4,9 +4,9 @@
  * SHAPE changes incompatibly — activate() (lifecycle.js) deletes every cache
  * not in KEEP, so an old and new version's data can never coexist past one
  * activation. */
-const SWX = (self.SWX = self.SWX || {});
+var SWX = (self.SWX = self.SWX || {});
 
-SWX.VERSION = "v9";
+SWX.VERSION = "v10";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;
@@ -52,6 +52,32 @@ SWX.PRECACHE_URLS = ["/icon-192.png", "/icon-512.png", "/icon-maskable-512.png"]
 // shared/public device. Add a pathname here only once a route is confirmed
 // anonymous-safe by construction.
 SWX.API_CACHE_ALLOWLIST = [];
+
+// Explicit allowlist for PAGE_CACHE (navigation HTML), same reasoning and
+// same "empty/allowlist, never blocklist" discipline as API_CACHE_ALLOWLIST
+// above — found missing 2026-07-12 while chasing a "messages page stuck
+// loading, webapp-only" report. routes.js used to page-cache EVERY
+// same-origin navigation indiscriminately, including `(app)`'s personalized
+// pages (/messages, /home, /account, ...). On a slow/flaky connection —
+// exactly the profile a mobile installed PWA sees far more than a desktop
+// browser tab — networkFirst's 10s timeout falls back to whatever's cached
+// for that exact URL: a STALE snapshot of someone's own inbox/thread (best
+// case) or, on a shared/public device with a second account signed in since,
+// literally the wrong person's messages (worst case). Only genuinely public,
+// unpersonalized marketing/static pages belong here.
+// The [downloader] SEO pages (/tiktok-hd-downloader etc, config/seoPages.ts)
+// are ALSO genuinely public/static, but they're single dynamic root
+// segments with no shared prefix to match cheaply here — left out (safe:
+// they simply don't get the cache-speed benefit, same as any other
+// non-allowlisted URL) rather than guessing at path patterns.
+SWX.PAGE_CACHE_ALLOWLIST_PREFIXES = ["/blog", "/contact", "/developers", "/dmca", "/privacy", "/terms", "/pricing"];
+// "/" is deliberately NOT here even though it's the marketing landing page:
+// app/page.tsx redirects a SIGNED-IN visitor straight to /home (personalized),
+// so "/" isn't purely public by construction. A signed-out visitor's landing
+// page not getting the cache-speed benefit is a fine trade for never risking
+// this bucket seeing personalized HTML under any circumstance — the whole
+// point of this allowlist. See the block comment above.
+SWX.PAGE_CACHE_ALLOWLIST_EXACT = [];
 
 // Dev-only diagnostics. sw.js is a static file (no bundler env-var inlining
 // like the rest of the app gets), so this checks the actual hostname at

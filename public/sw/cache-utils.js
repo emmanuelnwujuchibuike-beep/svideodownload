@@ -2,7 +2,7 @@
  * store a response we shouldn't), quota safety (never let a storage failure
  * break the actual network response), and bounded growth (per-cache entry
  * caps). */
-const SWX = (self.SWX = self.SWX || {});
+var SWX = (self.SWX = self.SWX || {});
 
 // Cache.keys() returns insertion order, so this trims oldest-first.
 SWX.trimCache = async function trimCache(name, max) {

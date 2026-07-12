@@ -43,6 +43,26 @@ export function formatPostedOn(iso: string): string {
   });
 }
 
+/**
+ * Races `promise` against a timeout, resolving to `fallback` if it takes too
+ * long. A slow/stuck DB query or connection has no built-in ceiling on its
+ * own — left alone, an `await` on it blocks a server component's render
+ * forever, which is exactly what a stuck `loading.tsx` skeleton looks like
+ * from the outside (Next has nothing to fall back to since the component
+ * never finishes). This turns that into a fast, recoverable failure instead.
+ */
+export async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
+
 /** Builds a safe, human-readable filename from a video title. */
 export function slugifyFilename(title: string, ext: string): string {
   const base = title

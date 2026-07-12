@@ -2,7 +2,7 @@
  * which one; this file only implements the HOW. Never mix strategies inside
  * one function: each resource class gets exactly one, chosen for what that
  * content actually needs. */
-const SWX = (self.SWX = self.SWX || {});
+var SWX = (self.SWX = self.SWX || {});
 
 // Cache-poisoning guard, cacheFirst only: a captive portal (airport/hotel
 // wifi) intercepts a request for a .js/.css/font URL and returns its OWN

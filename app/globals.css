@@ -199,20 +199,23 @@
     );
   }
 
-  /* Icon-tile brand gradient — deep navy anchored into electric blue and
-     royal purple, for every icon badge/tile background site-wide (nav tabs,
-     module headers, topbar actions). Owner correction (2026-07-11): the
-     tiles were `bg-foreground` (a flat black/white invert) — asked for the
-     brand colors back, but "dark premium", not the earlier flat, fully-lit
-     `.bg-brand` sweep that got reported as "too much purple splashing" —
-     anchoring one end in near-black keeps it moody/premium at icon size
-     instead of a bright candy fill. */
+  /* Icon-tile brand gradient — DARK BLUE into DARK PURPLE, for every icon
+     badge/tile background site-wide (nav tabs, module headers, topbar
+     actions). Owner correction (2026-07-11): the tiles were `bg-foreground`
+     (a flat black/white invert) — asked for the brand colors back but
+     "dark premium", not the earlier flat, fully-lit `.bg-brand` sweep that
+     got reported as "too much purple splashing". Owner correction
+     (2026-07-12): the first attempt at "dark premium" anchored one stop in
+     near-black (`hsl(234 45% 9%)`) — read as "black fading to blue", not
+     "dark blue and dark purple". Fixed: two stops only, BOTH already dark
+     and clearly hued (a deep indigo-blue, a deep royal-purple) — no
+     near-black/desaturated anchor at all, so neither end can ever read as
+     plain black. */
   .bg-brand-tile {
     background-image: linear-gradient(
-      125deg,
-      hsl(234 45% 9%) 0%,
-      hsl(var(--brand-blue)) 32%,
-      hsl(var(--brand-purple-accent)) 100%
+      135deg,
+      hsl(221 65% 24%) 0%,
+      hsl(262 58% 30%) 100%
     );
   }
 

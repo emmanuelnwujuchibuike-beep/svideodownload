@@ -1,5 +1,5 @@
 /* Web Push receive + notification click. */
-const SWX = (self.SWX = self.SWX || {});
+var SWX = (self.SWX = self.SWX || {});
 
 // actorId is always server-derived today (see lib/social/friends.ts) — this
 // is a fail-closed backstop, not a trust boundary fix, so a future

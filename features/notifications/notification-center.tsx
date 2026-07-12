@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence } from "framer-motion";
-import { BellRing, CheckCheck } from "lucide-react";
+import { BellRing, CheckCheck, Search, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { mutate, revalidate, useQuery } from "@/features/data";
@@ -38,6 +38,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
   const groups = data?.groups ?? initial.groups;
   const unread = data?.unread ?? initial.unread;
   const [tab, setTab] = useState<Tab>("all");
+  const [query, setQuery] = useState("");
 
   // Live: a new notification row for me → refresh the center (and the bell).
   useEffect(() => {
@@ -71,10 +72,17 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
   }, [groups]);
 
   const visible = useMemo(() => {
-    if (tab === "all") return groups;
-    if (tab === "unread") return groups.filter((g) => !g.read);
-    return groups.filter((g) => g.category === tab);
-  }, [groups, tab]);
+    let list = tab === "all" ? groups : tab === "unread" ? groups.filter((g) => !g.read) : groups.filter((g) => g.category === tab);
+    const q = query.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (g) =>
+          (g.postTitle ?? "").toLowerCase().includes(q) ||
+          g.actors.some((a) => a.displayName.toLowerCase().includes(q) || a.handle.toLowerCase().includes(q)),
+      );
+    }
+    return list;
+  }, [groups, tab, query]);
 
   // Stable identities so the memoized NotificationCard rows below don't all
   // re-render whenever one row's read/delete state changes.
@@ -160,6 +168,23 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
         </div>
       </div>
 
+      {/* Search — filters by who's involved or the post it's about, within the active tab. */}
+      <div className="mb-4 flex items-center gap-2 rounded-2xl border border-border/60 bg-card/60 px-3.5 py-2.5 backdrop-blur">
+        <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search notifications"
+          aria-label="Search notifications"
+          className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        />
+        {query ? (
+          <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="shrink-0 rounded-full p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
+
       {/* Tabs */}
       <div className="-mx-1 mb-5 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((t) => {
@@ -192,8 +217,8 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
           <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-secondary text-muted-foreground">
             <BellRing className="h-6 w-6" />
           </span>
-          <p className="text-sm font-medium">{tab === "unread" ? "You're all caught up" : "No notifications yet"}</p>
-          <p className="mt-1 text-xs text-muted-foreground">When people interact with you, it shows up here.</p>
+          <p className="text-sm font-medium">{query ? "No matches" : tab === "unread" ? "You're all caught up" : "No notifications yet"}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{query ? "Try a different name or search term." : "When people interact with you, it shows up here."}</p>
         </div>
       ) : (
         <div className="space-y-2.5">

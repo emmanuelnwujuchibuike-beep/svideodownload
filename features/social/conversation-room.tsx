@@ -533,40 +533,48 @@ export function ConversationRoom({
           reactionDebounce = setTimeout(() => void resync(), 400);
         },
       )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          setConnectionStatus("connected");
-          // A RE-subscribe means the socket dropped at some point — catch up
-          // on whatever the live stream missed while it was down.
-          if (everSubscribed) void resync();
-          everSubscribed = true;
-          firstAttemptFailures = 0;
-        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          // Only announce "Reconnecting…" if we'd actually connected before —
-          // a slow FIRST handshake should stay "connecting", not flash a
-          // banner implying a prior connection just broke.
-          if (everSubscribed) {
-            setConnectionStatus("reconnecting");
-          } else {
-            // BUT a first attempt that keeps failing (bad RLS grant, a
-            // transient outage right at page load) used to sit silently in
-            // "connecting" forever — Supabase doesn't auto-retry a channel
-            // past this point, so nothing ever recovered it on its own. Retry
-            // the SAME channel (re-registering .on() handlers would double
-            // them; only .subscribe() itself is safe to call again) with a
-            // short backoff, and surface the same "Reconnecting…" banner once
-            // it's failed enough times to no longer look like a fluke.
-            firstAttemptFailures += 1;
-            if (firstAttemptFailures >= 3) setConnectionStatus("reconnecting");
-            if (!cancelled) {
-              const delay = Math.min(1000 * firstAttemptFailures, 5000);
-              window.setTimeout(() => {
-                if (!cancelled) channel.subscribe();
-              }, delay);
-            }
+      .subscribe(onSubscribeStatus);
+
+    // Named (not inline) so the first-attempt retry below can pass it again —
+    // `channel.subscribe()` called with NO callback silently drops every
+    // future status delivery on this channel (verified against
+    // @supabase/realtime-js: `callback?.(...)` everywhere), which would have
+    // permanently killed reconnection/resync after the very first retry,
+    // reproducing the exact "stuck" bug this was meant to fix.
+    function onSubscribeStatus(status: string) {
+      if (status === "SUBSCRIBED") {
+        setConnectionStatus("connected");
+        // A RE-subscribe means the socket dropped at some point — catch up
+        // on whatever the live stream missed while it was down.
+        if (everSubscribed) void resync();
+        everSubscribed = true;
+        firstAttemptFailures = 0;
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        // Only announce "Reconnecting…" if we'd actually connected before —
+        // a slow FIRST handshake should stay "connecting", not flash a
+        // banner implying a prior connection just broke.
+        if (everSubscribed) {
+          setConnectionStatus("reconnecting");
+        } else {
+          // BUT a first attempt that keeps failing (bad RLS grant, a
+          // transient outage right at page load) used to sit silently in
+          // "connecting" forever — Supabase doesn't auto-retry a channel
+          // past this point, so nothing ever recovered it on its own. Retry
+          // the SAME channel (re-registering .on() handlers would double
+          // them; only .subscribe() itself is safe to call again) with a
+          // short backoff, and surface the same "Reconnecting…" banner once
+          // it's failed enough times to no longer look like a fluke.
+          firstAttemptFailures += 1;
+          if (firstAttemptFailures >= 3) setConnectionStatus("reconnecting");
+          if (!cancelled) {
+            const delay = Math.min(1000 * firstAttemptFailures, 5000);
+            window.setTimeout(() => {
+              if (!cancelled) channel.subscribe(onSubscribeStatus);
+            }, delay);
           }
         }
-      });
+      }
+    }
 
     const onVisible = () => {
       if (document.visibilityState === "visible") void resync();

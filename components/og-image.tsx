@@ -254,7 +254,7 @@ export function OgImage(): ReactElement {
             position: "relative",
             display: "flex",
             fontFamily: WORDMARK_FONT,
-            fontWeight: 700,
+            fontWeight: 800,
             fontSize: 132,
             letterSpacing: -3,
             lineHeight: 1,

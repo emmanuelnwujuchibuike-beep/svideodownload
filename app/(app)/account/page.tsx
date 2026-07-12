@@ -180,6 +180,9 @@ export default async function AccountPage() {
             {/* Home layout + feed behavior preferences */}
             <HomeModulesEditor preferences={homePrefs} />
 
+            {/* Notification settings (Part 6) */}
+            <NotificationSettingsEditor initial={notificationSettings} />
+
             {/* Optional password (second way in + what "Forgot password?" resets) */}
             <PasswordEditor />
 

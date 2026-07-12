@@ -183,7 +183,10 @@ export function ConversationRoom({
   const wasTypingRef = useRef(false);
   useEffect(() => {
     const isTyping = typingNames.length > 0;
-    if (isTyping && !wasTypingRef.current) playSound("typing");
+    if (isTyping && !wasTypingRef.current) {
+      playSound("typing");
+      haptic("light");
+    }
     wasTypingRef.current = isTyping;
   }, [typingNames.length]);
 
@@ -334,6 +337,7 @@ export function ConversationRoom({
           welcomedIds.current.add(m.id);
           const mentioned = viewerHandle ? parseMentionedHandles(m.body).includes(viewerHandle.toLowerCase()) : false;
           playSound(mentioned ? "mention" : "message");
+          haptic(mentioned ? "selection" : "light");
         }
         // My own realtime echo reconciles with the optimistic bubble I already
         // showed (same body, temp id) instead of appending a duplicate.
@@ -1097,8 +1101,8 @@ export function ConversationRoom({
                       deleted
                         ? "border border-dashed border-border/60 bg-transparent"
                         : m.mine
-                          ? "bg-brand rounded-br-lg text-white shadow-md shadow-violet-500/20"
-                          : "glass rounded-bl-lg text-foreground shadow-sm",
+                          ? "bg-brand rounded-br-xl text-white shadow-md shadow-violet-500/20"
+                          : "glass rounded-bl-xl text-foreground shadow-sm",
                       m.mine && m.id.startsWith("optimistic-") && "animate-scale-in",
                       m.id === highlightedId && "ring-2 ring-offset-2 ring-offset-background ring-amber-400 transition-shadow duration-500",
                     )}

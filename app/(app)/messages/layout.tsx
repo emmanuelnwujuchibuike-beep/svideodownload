@@ -37,7 +37,10 @@ export default async function MessagesLayout({ children }: { children: ReactNode
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-4rem-3.6rem)] w-full max-w-[1600px] gap-4 px-0 lg:h-[calc(100dvh-4rem)] lg:px-4 lg:py-4">
+    // 5.95rem (not the old 3.6rem) — MobileNav is a floating pill with real
+    // margin on every side now, not a flush full-width bar; measured at
+    // 95px against a 16px root, 2026-07-12.
+    <div className="mx-auto flex h-[calc(100dvh-4rem-5.95rem)] w-full max-w-[1600px] gap-4 px-0 lg:h-[calc(100dvh-4rem)] lg:px-4 lg:py-4">
       {/* Desktop inbox pane */}
       <aside className="hidden w-[340px] shrink-0 flex-col overflow-hidden rounded-3xl border border-border/70 bg-card/60 shadow-sm backdrop-blur-xl lg:flex">
         <h1 className="flex items-center gap-2 px-4 pb-2 pt-4 text-xl font-bold tracking-[-0.02em]">

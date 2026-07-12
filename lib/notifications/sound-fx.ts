@@ -18,7 +18,7 @@ import { getCachedSoundPrefs } from "@/lib/social/notification-sound-prefs-clien
  * either iOS or Android.
  */
 
-type SoundType = "message" | "mention" | "reaction" | "typing";
+type SoundType = "message" | "mention" | "reaction" | "typing" | "tap";
 
 let ctx: AudioContext | null = null;
 function getContext(): AudioContext | null {
@@ -69,6 +69,10 @@ const TONES: Record<SoundType, Note[]> = {
   ],
   reaction: [{ freq: 1180, at: 0, duration: 0.05, gain: 0.09 }],
   typing: [{ freq: 420, at: 0, duration: 0.04, gain: 0.045 }],
+  // Nav tap (owner ask, 2026-07-12: "add haptic sound in webapp nav buttons")
+  // — the quietest tone here by design: it fires on every bottom-nav/sidebar
+  // navigation, so it must read as a soft physical "tick", never a beep.
+  tap: [{ freq: 950, at: 0, duration: 0.035, gain: 0.05 }],
 };
 
 function playNote(audioCtx: AudioContext, note: Note): void {
@@ -89,28 +93,36 @@ function playNote(audioCtx: AudioContext, note: Note): void {
   osc.stop(end + 0.01);
 }
 
-const PREF_KEY: Record<SoundType, "messageEnabled" | "mentionEnabled" | "reactionEnabled" | "typingEnabled"> = {
+const PREF_KEY: Partial<Record<SoundType, "messageEnabled" | "mentionEnabled" | "reactionEnabled" | "typingEnabled">> = {
   message: "messageEnabled",
   mention: "mentionEnabled",
   reaction: "reactionEnabled",
   typing: "typingEnabled",
+  // "tap" has no per-type preference — it rides the master switch only.
 };
 
 /** Best-effort — never throws (autoplay-blocked/unsupported browsers just stay silent). */
 export function playSound(type: SoundType): void {
   try {
     const prefs = getCachedSoundPrefs();
-    if (!prefs.masterEnabled || !prefs[PREF_KEY[type]]) return;
+    if (!prefs.masterEnabled) return;
+    const prefKey = PREF_KEY[type];
+    if (prefKey && !prefs[prefKey]) return;
     const audioCtx = getContext();
     if (!audioCtx) return;
     if (audioCtx.state === "suspended") {
-      // Scheduling notes on a still-suspended context produces no audible
-      // sound (see unlockOnFirstGesture's comment above for why) — attempt a
-      // resume anyway in case THIS particular call is itself inside a user
-      // gesture (e.g. the composer's own keydown), but don't bother
-      // scheduling notes that would just silently not play; the next call
-      // after the context is actually running will sound normal.
-      void audioCtx.resume().catch(() => {});
+      // A suspended context can only be resumed from inside a genuine user
+      // gesture (see unlockOnFirstGesture above). Many playSound calls ARE
+      // inside one (a nav tap, the composer's keydown) — so resume and, if
+      // the resume actually succeeds, play THIS sound rather than dropping
+      // it; a gesture-less trigger's resume() just rejects/never runs and
+      // stays silent, same as before.
+      void audioCtx
+        .resume()
+        .then(() => {
+          if (audioCtx.state === "running") for (const note of TONES[type]) playNote(audioCtx, note);
+        })
+        .catch(() => {});
       return;
     }
     for (const note of TONES[type]) playNote(audioCtx, note);

@@ -6,7 +6,7 @@ import { notFound, redirect } from "next/navigation";
 import { ConversationRoom } from "@/features/social/conversation-room";
 import { ThreadHeader } from "@/features/social/thread-header";
 import { getConversation, type ConversationView } from "@/lib/social/messages";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUserBounded } from "@/lib/supabase/server";
 import { withTimeout } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -30,10 +30,25 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   if (!UUID.test(id)) notFound();
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect(`/login?next=/messages/${id}`);
+  // Time-boxed auth (docs/STARTUP_AUDIT.md): the data query below was
+  // already raced against a timeout, but the auth call BEFORE it wasn't —
+  // a stalled auth socket kept this page on its skeleton forever. A timeout
+  // renders the same Retry state as a slow query; only a REAL "no session"
+  // answer redirects to login.
+  const auth = await getUserBounded(supabase);
+  if (auth.kind === "signed-out") redirect(`/login?next=/messages/${id}`);
+  if (auth.kind === "timeout") {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+        <p className="text-sm font-semibold">This is taking longer than usual</p>
+        <p className="text-sm text-muted-foreground">Check your connection and try again.</p>
+        <Link href={`/messages/${id}`} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">
+          <RefreshCw className="h-3.5 w-3.5" /> Retry
+        </Link>
+      </div>
+    );
+  }
+  const user = auth.user;
 
   // A stuck/slow query here used to leave the whole thread — including its
   // header and composer — on the loading skeleton forever, with no way back
@@ -88,6 +103,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         members={convo.members}
         viewerRole={convo.viewerRole}
         onlyAdminsCanSend={convo.onlyAdminsCanSend}
+        otherName={convo.other?.displayName ?? null}
       />
     </div>
   );

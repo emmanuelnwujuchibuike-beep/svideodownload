@@ -120,6 +120,9 @@ export function categoryForType(type: NotificationType): NotificationCategory {
 }
 
 export interface NotificationActor {
+  /** The actor's user id — powers direct actions on a notification card
+   *  (Accept/Decline a friend request, Follow back), added 2026-07-12. */
+  id: string;
   handle: string;
   displayName: string;
   avatarUrl: string | null;
@@ -172,6 +175,7 @@ async function enrichRows(db: ReturnType<typeof createAdminClient>, rows: Row[])
   for (const p of (profs ?? []) as Record<string, unknown>[]) {
     if (!p.handle) continue;
     actorById.set(p.id as string, {
+      id: p.id as string,
       handle: p.handle as string,
       displayName: (p.display_name as string) || `@${p.handle as string}`,
       avatarUrl: (p.avatar_url as string) ?? null,

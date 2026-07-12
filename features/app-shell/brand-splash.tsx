@@ -74,9 +74,21 @@ export function WelcomeOverlay({ visible, label = "Loading Frenz" }: { visible: 
  * it: it's a full-screen opaque overlay that fades out to reveal the ready home.
  */
 export function BrandSplash() {
-  const [visible, setVisible] = useState(true);
+  // Owner bug (2026-07-12, "going back to home keeps showing the color load
+  // on a new device"): the server only gates this component on the
+  // `frenz_welcomed` cookie at RENDER time — but Next's client Router Cache
+  // then re-serves that same /home tree (BrandSplash included) for hours on
+  // every SPA return to Home, remounting the splash long after the cookie
+  // was set. The lazy initializer re-checks the cookie ON THE CLIENT at each
+  // mount, so only the genuine first-ever open plays it. (`typeof document`
+  // guard: during SSR/hydration of the true first open the cookie isn't set
+  // yet, so server and client agree on `true` — no hydration mismatch.)
+  const [visible, setVisible] = useState(
+    () => typeof document === "undefined" || !document.cookie.includes("frenz_welcomed="),
+  );
 
   useEffect(() => {
+    if (!visible) return;
     // Mark as welcomed immediately so it can't reappear mid-session, and lock
     // scroll while the splash is up.
     document.cookie = "frenz_welcomed=1; path=/; max-age=31536000; SameSite=Lax";
@@ -88,7 +100,7 @@ export function BrandSplash() {
       clearTimeout(t);
       document.body.style.overflowY = "";
     };
-  }, []);
+  }, [visible]);
 
   return <WelcomeOverlay visible={visible} />;
 }

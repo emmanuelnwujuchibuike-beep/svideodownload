@@ -82,6 +82,37 @@ async function loadProfiles(
   return new Map(((data as ProfileRow[]) ?? []).map((r) => [r.id, toProfile(r)]));
 }
 
+/**
+ * Just the viewer's incoming pending requests — a light slice of
+ * friendsOverview for surfaces that only need the Requests list (the
+ * Messages page's "Requests" tab from the owner's inbox mockup) without
+ * paying for friends + outgoing + activity too.
+ */
+export async function listIncomingFriendRequests(userId: string, limit = 30): Promise<FriendRequestItem[]> {
+  if (!hasSupabase) return [];
+  try {
+    const db = createAdminClient();
+    const { data } = await db
+      .from("friend_requests")
+      .select("id, sender_id, note, created_at")
+      .eq("receiver_id", userId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    const rows = (data as { id: string; sender_id: string; note: string | null; created_at: string }[]) ?? [];
+    if (rows.length === 0) return [];
+    const profiles = await loadProfiles(db, [...new Set(rows.map((r) => r.sender_id))]);
+    return rows
+      .map((r) => {
+        const user = profiles.get(r.sender_id);
+        return user ? { id: r.id, note: r.note, createdAt: r.created_at, user } : null;
+      })
+      .filter((x): x is FriendRequestItem => !!x);
+  } catch {
+    return [];
+  }
+}
+
 async function eitherBlocked(
   db: ReturnType<typeof createAdminClient>,
   a: string,

@@ -66,12 +66,14 @@ import type { FeedItem } from "@/lib/social/home-feed";
 import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
 import { cn, formatCompactNumber, formatDuration } from "@/lib/utils";
 
-const REASON_STYLE: Record<SmartReasonTone, string> = {
-  follow: "text-blue-500 dark:text-blue-300",
-  fresh: "text-emerald-500 dark:text-emerald-300",
-  hot: "text-rose-500 dark:text-rose-300",
-  download: "text-teal-500 dark:text-teal-300",
-  interest: "text-violet-500 dark:text-violet-300",
+// The mockup's eyebrow keeps its text muted and carries the tone in the DOT
+// (solid blue for follow, etc.) — replaces the old all-colored text chip.
+const REASON_DOT: Record<SmartReasonTone, string> = {
+  follow: "bg-blue-500",
+  fresh: "bg-emerald-500",
+  hot: "bg-rose-500",
+  download: "bg-teal-500",
+  interest: "bg-violet-500",
 };
 
 function timeAgo(iso: string): string {
@@ -357,6 +359,25 @@ function FeedPostCardImpl({
         </div>
       ) : null}
 
+      {/* Smart Explanation — why this is in your feed, styled to the owner's
+          home mockup: an uppercase, letter-spaced eyebrow with a solid tone
+          dot ("● FROM SOMEONE YOU FOLLOW") ABOVE the post, exactly where the
+          mockup places it. Still tappable: opens the real content-preference
+          controls (Feature 17 Part 13's "Discovery Transparency" made
+          actionable, not just descriptive text). */}
+      {reason ? (
+        <div className="px-4 pb-0 pt-3 sm:px-5">
+          <button
+            type="button"
+            onClick={() => { setPrefsReady(true); setPrefsOpen(true); }}
+            className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground transition hover:text-foreground"
+          >
+            <span aria-hidden className={cn("h-2 w-2 rounded-full", REASON_DOT[reason.tone])} />
+            {reason.label}
+          </button>
+        </div>
+      ) : null}
+
       {/* Header */}
       <div className="flex items-center gap-3 p-4 pb-3 sm:p-5 sm:pb-3">
         <Link href={`/u/${item.publisher.handle}`} className="shrink-0 rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] transition-transform duration-300 group-hover:scale-105">
@@ -437,22 +458,6 @@ function FeedPostCardImpl({
           </AnimatePresence>
         </div>
       </div>
-
-      {/* Smart Explanation — why this is in your feed. Tappable: opens the
-          real content-preference controls (Feature 17 Part 13's "Discovery
-          Transparency" made actionable, not just descriptive text). */}
-      {reason ? (
-        <div className="px-4 pb-1">
-          <button
-            type="button"
-            onClick={() => { setPrefsReady(true); setPrefsOpen(true); }}
-            className={cn("inline-flex items-center gap-1 text-[11px] font-semibold underline-offset-2 hover:underline", REASON_STYLE[reason.tone])}
-          >
-            <Sparkles aria-hidden className="h-3 w-3" />
-            {reason.label}
-          </button>
-        </div>
-      ) : null}
 
       {/* Caption */}
       {title ? (

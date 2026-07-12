@@ -55,7 +55,21 @@ const JS = `(function(){var el=document.getElementById('frenz-boot');if(!el)retu
 // phone's OS is in dark mode saw a dark flash on every cold entry, which on
 // iOS is EVERY time the installed app resumes after being backgrounded a
 // while (the OS frequently reloads it rather than truly restoring it).
-const THEME_JS = `(function(){try{var t=localStorage.getItem('theme');var dark=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(dark)document.documentElement.classList.add('dark')}catch(e){}})();`;
+//
+// Owner bug (2026-07-12): with theme=SYSTEM, the installed mobile app showed
+// the OPPOSITE theme for 1-2s on entry before snapping to the right one.
+// Cause: iOS WKWebView (standalone PWAs especially) can report a stale
+// `prefers-color-scheme` for the first moments after launch and correct it
+// shortly after — and this script used to read it exactly ONCE (and only
+// ever ADD the dark class, never remove it), so the correction had to wait
+// for next-themes to finish hydrating (the 1-2s = JS bundle time on a
+// phone). Now: `classList.toggle` (corrects both directions) + a matchMedia
+// `change` listener + a `pageshow` re-check, so the class flips the instant
+// WebKit fixes its answer — or the OS theme genuinely changed while the app
+// was backgrounded — without waiting for hydration. localStorage is re-read
+// on every re-apply, so an explicit Light/Dark choice always wins and this
+// never fights next-themes (both compute the identical decision).
+const THEME_JS = `(function(){var mq=window.matchMedia('(prefers-color-scheme: dark)');function apply(){try{var t=localStorage.getItem('theme');var dark=t==='dark'||(t!=='light'&&mq.matches);document.documentElement.classList.toggle('dark',dark)}catch(e){}}apply();try{if(mq.addEventListener)mq.addEventListener('change',apply);else if(mq.addListener)mq.addListener(apply)}catch(e){}window.addEventListener('pageshow',apply)})();`;
 
 export function BootSplash() {
   return (

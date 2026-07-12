@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { isMessageReaction } from "@/lib/social/message-meta";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -37,7 +38,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     /* empty body → default ❤️ */
   }
 
-  const { data: msg } = await supabase.from("messages").select("conversation_id, deleted_at").eq("id", id).maybeSingle();
+  const { data: msg } = await supabase
+    .from("messages")
+    .select("conversation_id, sender_id, deleted_at")
+    .eq("id", id)
+    .maybeSingle();
   if (!msg) return NextResponse.json({ error: "Message not found." }, { status: 404 });
   // deleteMessage() clears reactions ONCE at delete-time — without this
   // check, a react posted any time after that (the client never showed the
@@ -52,6 +57,41 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       { onConflict: "message_id,user_id" },
     );
   if (error) return NextResponse.json({ error: "Couldn't react." }, { status: 500 });
+
+  // Device push to the message's author (owner bug 2026-07-12: "message
+  // reaction doesn't even send push notification") — the in-app notification
+  // row comes from the DB trigger (migration 0042's notify_on_message_
+  // reaction), but nothing ever mirrored it to Web Push the way every other
+  // social event does. after(), not bare void — see [[vercel-after-fire-and-
+  // forget]]; smart delivery so the recipient's settings/quiet-hours apply.
+  if (msg.sender_id !== user.id) {
+    const senderId = msg.sender_id as string;
+    const conversationId = msg.conversation_id as string;
+    const reactedEmoji = emoji;
+    after(async () => {
+      try {
+        const db = createAdminClient();
+        const { data: actor } = await db.from("profiles").select("display_name, handle, avatar_url").eq("id", user.id).maybeSingle();
+        const name = (actor?.display_name as string) || (actor?.handle ? `@${actor.handle as string}` : "Someone");
+        await sendSmartPush(
+          senderId,
+          {
+            title: `${name} reacted ${reactedEmoji} to your message`,
+            body: "Open the chat to see it.",
+            genericBody: "New activity in your messages",
+            url: `/messages/${conversationId}`,
+            icon: (actor?.avatar_url as string | null) ?? undefined,
+            tag: `msg-react:${id}`,
+            conversationId,
+          },
+          "medium",
+          "social",
+        );
+      } catch {
+        /* push is best-effort */
+      }
+    });
+  }
   return NextResponse.json({ ok: true });
 }
 

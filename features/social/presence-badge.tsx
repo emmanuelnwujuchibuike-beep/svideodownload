@@ -41,15 +41,8 @@ export function PresenceBadge({ userId, handle }: { userId: string; handle: stri
   }, [userId, online]);
 
   if (online) {
-    return (
-      <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-500">
-        <span className="relative flex h-2 w-2">
-          <span className="absolute h-full w-full animate-ping rounded-full bg-emerald-400/60 motion-reduce:hidden" />
-          <span className="relative h-2 w-2 rounded-full bg-emerald-400" />
-        </span>
-        online
-      </span>
-    );
+    // "Active now" — the owner's chat mockup's exact label (was "online").
+    return <span className="text-xs font-medium text-emerald-500">Active now</span>;
   }
   return (
     <span className="block truncate text-xs text-muted-foreground">

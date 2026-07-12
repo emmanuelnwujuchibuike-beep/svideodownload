@@ -3,12 +3,10 @@ import type { ReactNode } from "react";
 
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { ConversationList } from "@/features/social/conversation-list";
-import { CreateGroupLauncher } from "@/features/social/create-group-launcher";
-import { MessageSearchLauncher } from "@/features/social/message-search-launcher";
-import { NotificationSettingsPicker } from "@/features/social/notification-settings-picker";
-import { PresenceStatusPicker } from "@/features/social/presence-status-picker";
+import { InboxHeaderActions } from "@/features/social/inbox-header-actions";
+import { listIncomingFriendRequests, type FriendRequestItem } from "@/lib/social/friends";
 import { listConversations } from "@/lib/social/messages";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUserBounded } from "@/lib/supabase/server";
 import { withTimeout } from "@/lib/utils";
 
 const LOAD_TIMEOUT_MS = 8000;
@@ -22,38 +20,41 @@ const LOAD_TIMEOUT_MS = 8000;
  */
 export default async function MessagesLayout({ children }: { children: ReactNode }) {
   let conversations: Awaited<ReturnType<typeof listConversations>> = [];
+  let requests: FriendRequestItem[] = [];
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    // Same reasoning as page.tsx's identical guard — a stuck query here used
-    // to leave the desktop pane on its skeleton forever; racing it means it
-    // degrades to "shows an empty pane" (a real, if imperfect, page) rather
-    // than never resolving at all.
-    if (user) conversations = await withTimeout(listConversations(user.id), LOAD_TIMEOUT_MS, []);
+    // Time-boxed auth + time-boxed queries (docs/STARTUP_AUDIT.md) — a stuck
+    // call anywhere here used to leave the desktop pane on its skeleton
+    // forever; every path now degrades to "shows an empty pane" (a real, if
+    // imperfect, page) rather than never resolving at all.
+    const auth = await getUserBounded(supabase);
+    if (auth.kind === "user") {
+      [conversations, requests] = await Promise.all([
+        withTimeout(listConversations(auth.user.id), LOAD_TIMEOUT_MS, []),
+        withTimeout(listIncomingFriendRequests(auth.user.id), LOAD_TIMEOUT_MS, []),
+      ]);
+    }
   } catch {
     /* pages handle their own auth redirects */
   }
 
   return (
-    // 5.95rem (not the old 3.6rem) — MobileNav is a floating pill with real
-    // margin on every side now, not a flush full-width bar; measured at
-    // 95px against a 16px root, 2026-07-12.
-    <div className="mx-auto flex h-[calc(100dvh-4rem-5.95rem)] w-full max-w-[1600px] gap-4 px-0 lg:h-[calc(100dvh-4rem)] lg:px-4 lg:py-4">
+    // Mobile height reservation: the global topbar HIDES on /messages below
+    // lg (the owner's mockup starts straight at the "Messages" title), so
+    // mobile only reserves the floating-pill nav's own box (~4.7rem measured
+    // live 2026-07-12, incl. label + pill padding) + its bottom offset — the
+    // SAME max(inset−10px, 6px) expression the nav itself uses
+    // (mobile-nav.tsx), so browser tabs and the installed app (large
+    // home-indicator inset) both come out exactly flush.
+    <div className="mx-auto flex h-[calc(100dvh-4.3125rem-max(calc(env(safe-area-inset-bottom)-10px),0.375rem))] w-full max-w-[1600px] gap-4 px-0 pt-[env(safe-area-inset-top)] lg:h-[calc(100dvh-4rem)] lg:px-4 lg:py-4 lg:pt-4">
       {/* Desktop inbox pane */}
       <aside className="hidden w-[340px] shrink-0 flex-col overflow-hidden rounded-3xl border border-border/70 bg-card/60 shadow-sm backdrop-blur-xl lg:flex">
         <h1 className="flex items-center gap-2 px-4 pb-2 pt-4 text-xl font-bold tracking-[-0.02em]">
           <ModuleIconBadge icon={MessageCircle} className="h-8 w-8" />
           Messages
-          <span className="ml-auto flex items-center gap-1">
-            <MessageSearchLauncher />
-            <PresenceStatusPicker />
-            <NotificationSettingsPicker />
-            <CreateGroupLauncher />
-          </span>
+          <InboxHeaderActions />
         </h1>
-        <ConversationList initial={conversations} variant="pane" />
+        <ConversationList initial={conversations} variant="pane" initialRequests={requests} />
       </aside>
 
       {/* Thread / index panel */}

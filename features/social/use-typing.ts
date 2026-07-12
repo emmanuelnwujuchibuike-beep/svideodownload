@@ -22,17 +22,38 @@ interface TypingPayload {
  * spoof) who's typing in a thread they're not even a member of. Scoped to
  * one thread at a time (mounted/torn down with the open ConversationRoom),
  * unlike the app-wide singleton `presence:online` channel.
+ *
+ * 2026-07-12 rework — the original version had two real bugs that made the
+ * indicator never work in practice (owner report):
+ *  1. No `presence.key` was set, so the server assigned every client a
+ *     RANDOM UUID presence key — `key === viewerId` (the skip-self check)
+ *     never matched anything, and the roster was keyed by meaningless ids.
+ *     The key is now the viewer's user id, which also collapses multiple
+ *     tabs from the same user into one presence entry.
+ *  2. `channel.track()` calls made before the channel finished joining are
+ *     REJECTED by realtime-js (not queued) — fast typists hit this on their
+ *     first keystrokes, and if the join was slow every track before it was
+ *     silently lost. Track state is now buffered until `SUBSCRIBED` and
+ *     re-sent on every (re)join.
  */
 export function useTypingIndicator(conversationId: string, viewerId: string, viewerName: string) {
   const [typingNames, setTypingNames] = useState<string[]>([]);
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const trackedRef = useRef(false);
+  const joinedRef = useRef(false);
+  // The latest state we WANT tracked — flushed on join, so a keystroke that
+  // raced the initial subscribe still lands instead of silently dropping.
+  const desiredRef = useRef<TypingPayload | null>(null);
+  const viewerNameRef = useRef(viewerName);
+  viewerNameRef.current = viewerName;
 
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase.channel(`typing:${conversationId}`, { config: { private: true } });
+    const channel = supabase.channel(`typing:${conversationId}`, {
+      config: { private: true, presence: { key: viewerId } },
+    });
     channelRef.current = channel;
+    joinedRef.current = false;
 
     const recompute = () => {
       const state = channel.presenceState<TypingPayload>();
@@ -51,7 +72,16 @@ export function useTypingIndicator(conversationId: string, viewerId: string, vie
       .on("presence", { event: "sync" }, recompute)
       .on("presence", { event: "join" }, recompute)
       .on("presence", { event: "leave" }, recompute)
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          joinedRef.current = true;
+          // Flush whatever the composer wanted tracked while we were joining
+          // (or re-establish state after a reconnect's fresh join).
+          if (desiredRef.current) void channel.track(desiredRef.current);
+        } else if (status === "CLOSED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          joinedRef.current = false;
+        }
+      });
 
     // Presence state can go stale if a tab is killed mid-"typing" (no leave
     // event fires) — a periodic re-check clears it once STALE_MS passes.
@@ -60,6 +90,7 @@ export function useTypingIndicator(conversationId: string, viewerId: string, vie
     return () => {
       clearInterval(staleCheck);
       if (clearTimer.current) clearTimeout(clearTimer.current);
+      desiredRef.current = null;
       // removeChannel — the browser client is a shared singleton
       // (lib/supabase/client.ts), and this hook mounts/tears down with every
       // thread visit, so a leaked channel here compounded exactly the same
@@ -69,25 +100,25 @@ export function useTypingIndicator(conversationId: string, viewerId: string, vie
     };
   }, [conversationId, viewerId]);
 
+  const trackState = useCallback((typing: boolean) => {
+    const payload: TypingPayload = { typing, at: Date.now(), name: viewerNameRef.current };
+    desiredRef.current = payload;
+    const channel = channelRef.current;
+    if (channel && joinedRef.current) void channel.track(payload);
+  }, []);
+
   /** Call on every composer keystroke — debounced, auto-clears after idle. */
   const notifyTyping = useCallback(() => {
-    const channel = channelRef.current;
-    if (!channel) return;
-    if (!trackedRef.current) trackedRef.current = true;
-    void channel.track({ typing: true, at: Date.now(), name: viewerName } satisfies TypingPayload);
+    trackState(true);
     if (clearTimer.current) clearTimeout(clearTimer.current);
-    clearTimer.current = setTimeout(() => {
-      void channel.track({ typing: false, at: Date.now(), name: viewerName } satisfies TypingPayload);
-    }, IDLE_CLEAR_MS);
-  }, [viewerName]);
+    clearTimer.current = setTimeout(() => trackState(false), IDLE_CLEAR_MS);
+  }, [trackState]);
 
   /** Call immediately on send — no need to wait out the idle timer. */
   const clearTyping = useCallback(() => {
-    const channel = channelRef.current;
     if (clearTimer.current) clearTimeout(clearTimer.current);
-    if (!channel || !trackedRef.current) return;
-    void channel.track({ typing: false, at: Date.now(), name: viewerName } satisfies TypingPayload);
-  }, [viewerName]);
+    trackState(false);
+  }, [trackState]);
 
   return { typingNames, notifyTyping, clearTyping };
 }

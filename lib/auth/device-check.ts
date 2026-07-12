@@ -10,21 +10,41 @@ export interface SessionRow {
   user_agent: string | null;
 }
 
+/** How recently a session must have been CREATED for this visit to count as
+ *  "right after a login" — outside this window we never alert, no matter what
+ *  the user-agent comparison says (an app re-entry is not a login event). */
+export const RECENT_LOGIN_WINDOW_MS = 15 * 60 * 1000;
+
 /**
  * The actual "is this worth alerting about" decision, isolated from the
  * DB/push side effects so it has a real, direct unit test (see
  * `lib/auth/device-check.test.ts`) instead of only a throwaway
  * reimplementation. Exported pure.
+ *
+ * 2026-07-12 rework (owner bug: "I get a security notification each time I
+ * enter the app instead of when I login"): the old version excluded the
+ * NEWEST session row and asked "has this UA been seen among the others?" —
+ * which is only correct when called immediately after a sign-in (when the
+ * newest row IS this device's brand-new session). But this check runs on
+ * every app entry (see features/app-shell/device-check.tsx), where no new
+ * session was created — so on a 2-device account, whichever device did NOT
+ * create the most recent session row got flagged as "new" on EVERY entry,
+ * forever. The fix gates on evidence a login actually just happened: some
+ * session row created inside RECENT_LOGIN_WINDOW_MS. No recent session →
+ * plain re-entry → never alert. With a recent login, alert only if this
+ * user-agent doesn't appear on any OLDER (pre-login) session.
  */
-export function shouldAlertForNewDevice(rows: SessionRow[], currentUserAgent: string | null): boolean {
+export function shouldAlertForNewDevice(rows: SessionRow[], currentUserAgent: string | null, now = Date.now()): boolean {
   if (!currentUserAgent) return false;
   // Only one (or zero) session on record — either the very first sign-in
   // ever, or a fresh account. Nothing to compare against yet; alerting here
   // would just be noise on account creation, not a real "new device" event.
   if (rows.length <= 1) return false;
 
-  const sorted = [...rows].sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
-  const [, ...older] = sorted; // exclude the just-created session
+  const isRecent = (r: SessionRow) => now - +new Date(r.created_at) <= RECENT_LOGIN_WINDOW_MS;
+  if (!rows.some(isRecent)) return false; // no login just happened — this is an app re-entry
+  const older = rows.filter((r) => !isRecent(r));
+  if (older.length === 0) return false; // every session is brand new — account creation, not a new device
   const seenBefore = older.some((r) => r.user_agent === currentUserAgent);
   return !seenBefore;
 }
@@ -66,6 +86,20 @@ export async function checkNewDevice(userId: string, currentUserAgent: string | 
     if (error) return false;
     const rows = (data ?? []) as SessionRow[];
     if (!shouldAlertForNewDevice(rows, currentUserAgent)) return false;
+
+    // DB-side dedupe on top of the pure check: within the recent-login
+    // window a PWA relaunch gets a fresh sessionStorage (so the client-side
+    // once-per-session gate doesn't help) — one alert per half-day is the
+    // most this should ever produce, however many times the app reopens.
+    const { data: recentAlert } = await db
+      .from("notifications")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("type", "security_new_device")
+      .gte("created_at", new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString())
+      .limit(1)
+      .maybeSingle();
+    if (recentAlert) return false;
 
     const { label } = parseDevice(currentUserAgent);
     const { error: insertError } = await db

@@ -4,12 +4,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ConversationList } from "@/features/social/conversation-list";
-import { CreateGroupLauncher } from "@/features/social/create-group-launcher";
-import { MessageSearchLauncher } from "@/features/social/message-search-launcher";
-import { NotificationSettingsPicker } from "@/features/social/notification-settings-picker";
-import { PresenceStatusPicker } from "@/features/social/presence-status-picker";
+import { InboxHeaderActions } from "@/features/social/inbox-header-actions";
+import { listIncomingFriendRequests, type FriendRequestItem } from "@/lib/social/friends";
 import { listConversations, type ConversationSummary } from "@/lib/social/messages";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUserBounded } from "@/lib/supabase/server";
 import { withTimeout } from "@/lib/utils";
 
 type LoadResult = { ok: true; conversations: ConversationSummary[] } | { ok: false; conversations: ConversationSummary[] };
@@ -33,35 +31,37 @@ const hasSupabase =
 export default async function MessagesPage() {
   if (!hasSupabase) redirect("/login");
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/messages");
+  // Time-boxed auth (docs/STARTUP_AUDIT.md) — a timeout renders the same
+  // Retry state as a slow query below; only a real "no session" redirects.
+  const auth = await getUserBounded(supabase);
+  if (auth.kind === "signed-out") redirect("/login?next=/messages");
 
   // A stuck/slow query here used to leave the whole inbox on its loading
   // skeleton forever — nothing timed it out, so Next had nothing to fall
   // back to. Racing it means the WORST case is now "shows a retry prompt
   // after 8s", never "stuck indefinitely".
-  const result = await withTimeout<LoadResult>(
-    listConversations(user.id).then((c) => ({ ok: true, conversations: c })),
-    LOAD_TIMEOUT_MS,
-    { ok: false, conversations: [] },
-  );
+  const [result, requests] =
+    auth.kind === "timeout"
+      ? [{ ok: false as const, conversations: [] }, []]
+      : await Promise.all([
+          withTimeout<LoadResult>(
+            listConversations(auth.user.id).then((c) => ({ ok: true, conversations: c })),
+            LOAD_TIMEOUT_MS,
+            { ok: false, conversations: [] },
+          ),
+          withTimeout<FriendRequestItem[]>(listIncomingFriendRequests(auth.user.id), LOAD_TIMEOUT_MS, []),
+        ]);
   const timedOut = !result.ok;
   const { conversations } = result;
 
   return (
     <>
-      {/* Mobile inbox */}
+      {/* Mobile inbox — header per the owner's mockup: big bold title, two
+          glass action circles (compose + "..." with the remaining tools). */}
       <div className="flex-1 overflow-y-auto px-3 pt-4 lg:hidden">
-        <h1 className="mb-4 flex items-center gap-2 text-2xl font-bold tracking-[-0.02em]">
-          <MessageCircle className="h-6 w-6 text-primary" /> Messages
-          <span className="ml-auto flex items-center gap-1">
-            <MessageSearchLauncher />
-            <PresenceStatusPicker />
-            <NotificationSettingsPicker />
-            <CreateGroupLauncher />
-          </span>
+        <h1 className="mb-4 flex items-center gap-2 text-[28px] font-bold tracking-[-0.03em]">
+          Messages
+          <InboxHeaderActions />
         </h1>
         {timedOut ? (
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/70 p-10 text-center">
@@ -72,7 +72,7 @@ export default async function MessagesPage() {
             </Link>
           </div>
         ) : (
-          <ConversationList initial={conversations} />
+          <ConversationList initial={conversations} initialRequests={requests} />
         )}
       </div>
 

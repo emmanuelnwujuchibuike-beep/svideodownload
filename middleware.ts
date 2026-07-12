@@ -83,9 +83,29 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Time-boxed (5s): this await sits on the critical path of EVERY document
+  // load that carries an auth cookie — nothing paints until it settles. A
+  // stalled socket to Supabase's auth endpoint (flaky mobile network, waking
+  // laptop, upstream outage) used to hold the whole tab on a blank/loader
+  // state indefinitely — the "app stuck at loading" symptom (see
+  // docs/STARTUP_AUDIT.md). On timeout the request passes through
+  // un-refreshed: every page still runs its own auth guard, and the next
+  // successful request refreshes the session cookie.
+  const AUTH_TIMEOUT_MS = 5000;
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] = null;
+  try {
+    const result = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("auth timeout")), AUTH_TIMEOUT_MS)),
+    ]);
+    user = result.data.user;
+  } catch {
+    // Fail CLOSED for /admin (its pages re-check admin server-side too, but
+    // the middleware gate shouldn't silently disappear on a slow network);
+    // everything else passes through and self-guards.
+    if (path.startsWith("/admin")) return NextResponse.redirect(new URL("/", request.url));
+    return response;
+  }
 
   const { pathname } = request.nextUrl;
   const isProtected =

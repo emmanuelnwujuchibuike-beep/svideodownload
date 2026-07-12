@@ -1,4 +1,5 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 /**
@@ -30,4 +31,30 @@ export async function createClient() {
       },
     },
   );
+}
+
+/**
+ * `auth.getUser()` with a hard time-box, for SERVER PAGES on the render
+ * critical path. The un-time-boxed call sits between the request and the
+ * page's loading.tsx skeleton resolving — a stalled socket to Supabase's
+ * auth endpoint held pages on their skeleton indefinitely (the "stuck at
+ * loading" symptom; full trace in docs/STARTUP_AUDIT.md).
+ *
+ * The three outcomes are deliberately DISTINCT so a slow network never
+ * masquerades as "signed out": `user` (proceed), `signed-out` (redirect to
+ * login), `timeout` (render the page's Retry state — do NOT redirect).
+ */
+export async function getUserBounded(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  timeoutMs = 6000,
+): Promise<{ kind: "user"; user: User } | { kind: "signed-out" } | { kind: "timeout" }> {
+  try {
+    const result = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("auth timeout")), timeoutMs)),
+    ]);
+    return result.data.user ? { kind: "user", user: result.data.user } : { kind: "signed-out" };
+  } catch {
+    return { kind: "timeout" };
+  }
 }

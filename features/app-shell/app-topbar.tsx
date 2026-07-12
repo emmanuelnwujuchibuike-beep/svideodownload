@@ -2,7 +2,7 @@
 
 import { IoCloudUploadOutline, IoSearchOutline } from "react-icons/io5";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
@@ -18,8 +18,15 @@ import { cn } from "@/lib/utils";
 
 export function AppTopbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [q, setQ] = useState("");
   const [hidden, setHidden] = useState(false);
+  // The owner's Messages mockup starts straight at the big "Messages" title —
+  // no global topbar above it on mobile. That page carries its own header
+  // (compose + tools circles), so the topbar hides there below lg; every
+  // other route keeps it. Thread pages already cover it with their own
+  // full-screen overlay, so only the index needs this.
+  const onMessagesIndex = pathname === "/messages";
   const inputRef = useRef<HTMLInputElement | null>(null);
   // The feed lifts its For You/Following/Reels control up here (owner spec)
   // — every other page's search bar is untouched, since only the feed ever
@@ -92,6 +99,7 @@ export function AppTopbar() {
         "sticky top-0 z-30 flex items-center gap-2 border-b border-border/20 bg-background/60 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl transition-transform duration-300 will-change-transform",
         "h-[calc(4rem+env(safe-area-inset-top))]",
         hidden ? "-translate-y-full lg:translate-y-0" : "translate-y-0",
+        onMessagesIndex && "hidden lg:flex",
       )}
     >
       {/* Far-left: search + add friends — kept apart from the action cluster so
@@ -149,7 +157,7 @@ export function AppTopbar() {
       )}
 
       {/* Right action cluster */}
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {/* Create / upload — opens the premium composer */}
         <PressIcon className="hidden sm:inline-flex">
           <button
@@ -166,7 +174,11 @@ export function AppTopbar() {
         </PressIcon>
 
         {/* Notifications — mobile/tablet only (large screens use the sidebar
-            Notifications item, so the top-right stays uncluttered). */}
+            Notifications item, so the top-right stays uncluttered). The
+            mockup's other right-side circles (two-people, play) are the
+            feed's own Following/Reels segments, rendered by FeedTopbarTabs
+            in the center slot — adding separate Friends/Reels icons here
+            duplicated them and pushed this bell off-screen. */}
         <span className="lg:hidden">
           <NotificationBell />
         </span>

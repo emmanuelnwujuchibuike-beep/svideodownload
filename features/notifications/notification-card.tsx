@@ -1,13 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, MoreHorizontal, Trash2, UserRound } from "lucide-react";
+import { Check, Loader2, MoreHorizontal, Trash2, UserPlus, UserRound, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { memo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { iconFor, isActorType, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
+import { haptic } from "@/lib/motion/haptics";
 import type { NotificationGroup } from "@/lib/social/notifications";
 import { cn } from "@/lib/utils";
 
@@ -71,6 +72,49 @@ function NotificationCardImpl({
   const summary = actorSummary(group);
   const actorLed = isActorType(group.type);
 
+  // Direct actions ON the card (owner bug 2026-07-12: "users can't even
+  // accept request or follow back") — a friend_request used to only LINK to
+  // /friends, and a follow notification offered no way to follow back at
+  // all. Single-actor cards act right here; grouped cards still link out.
+  const [actionState, setActionState] = useState<"idle" | "busy" | "accepted" | "declined" | "followed">("idle");
+  const canActInline = group.totalActors === 1 && !!actor;
+  const respondToRequest = async (e: React.MouseEvent, action: "accept" | "decline") => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!actor || actionState === "busy") return;
+    haptic("selection");
+    setActionState("busy");
+    try {
+      const res = await fetch(`/api/friends/${actor.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (res.ok) {
+        setActionState(action === "accept" ? "accepted" : "declined");
+        if (!group.read) onMarkRead(group);
+      } else setActionState("idle");
+    } catch {
+      setActionState("idle");
+    }
+  };
+  const followBack = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!actor || actionState === "busy") return;
+    haptic("selection");
+    setActionState("busy");
+    try {
+      const res = await fetch(`/api/follow/${actor.id}`, { method: "POST" });
+      if (res.ok) {
+        setActionState("followed");
+        if (!group.read) onMarkRead(group);
+      } else setActionState("idle");
+    } catch {
+      setActionState("idle");
+    }
+  };
+
   const body = (
     <div className="flex items-start gap-3.5">
       {/* Avatar + type badge (or a plain icon tile for system notifications) */}
@@ -106,6 +150,58 @@ function NotificationCardImpl({
         <p className="mt-1 text-[11px] font-medium text-muted-foreground" suppressHydrationWarning>
           {timeAgo(group.createdAt)} ago
         </p>
+
+        {group.type === "friend_request" && canActInline ? (
+          <div className="mt-2 flex items-center gap-2">
+            {actionState === "accepted" ? (
+              <span className="flex items-center gap-1 text-xs font-semibold text-emerald-500">
+                <Check className="h-3.5 w-3.5" /> Friends
+              </span>
+            ) : actionState === "declined" ? (
+              <span className="text-xs font-medium text-muted-foreground">Request declined</span>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={actionState === "busy"}
+                  onClick={(e) => respondToRequest(e, "accept")}
+                  className="bg-brand flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50"
+                >
+                  {actionState === "busy" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  Accept
+                </button>
+                <button
+                  type="button"
+                  disabled={actionState === "busy"}
+                  onClick={(e) => respondToRequest(e, "decline")}
+                  className="flex items-center gap-1.5 rounded-full border border-border/70 px-4 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-50"
+                >
+                  <X className="h-3.5 w-3.5" /> Decline
+                </button>
+              </>
+            )}
+          </div>
+        ) : null}
+
+        {group.type === "follow" && canActInline ? (
+          <div className="mt-2">
+            {actionState === "followed" ? (
+              <span className="flex items-center gap-1 text-xs font-semibold text-emerald-500">
+                <Check className="h-3.5 w-3.5" /> Following
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={actionState === "busy"}
+                onClick={followBack}
+                className="bg-brand flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50"
+              >
+                {actionState === "busy" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+                Follow back
+              </button>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {/* Unread dot */}

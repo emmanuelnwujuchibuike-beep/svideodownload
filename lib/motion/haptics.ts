@@ -8,6 +8,19 @@
  * values (6 vs 8, 10 vs 12) are intentionally merged into one shared tier —
  * a handful of distinguishable, reusable intents beats a dozen arbitrary
  * near-duplicate numbers no one could tell apart anyway.
+ *
+ * iOS (2026-07-12): Safari/WKWebView has NEVER supported the Vibration API —
+ * `navigator.vibrate` is simply undefined there, so every haptic silently
+ * no-op'd on exactly the devices the owner tests on ("the haptic doesn't even
+ * work"). The only web-exposed haptic on iOS is the system tick fired when a
+ * native `<input type="checkbox" switch>` control toggles (Safari 17.4+'s
+ * switch control; the haptic ships with iOS 18) — clicking a visually-hidden
+ * switch from inside a user-gesture call stack reproduces the standard iOS
+ * selection tick. That's the fallback here. Two honest limits, both platform
+ * facts not bugs: (1) it only fires inside a genuine user gesture, so
+ * gesture-less triggers (an incoming message while you're just reading) stay
+ * silent on iOS — nothing on the web platform can do that today; (2) it's one
+ * fixed system tick, so intent tiers all feel the same on iOS.
  */
 
 const PATTERNS = {
@@ -26,12 +39,38 @@ const PATTERNS = {
 
 export type HapticIntent = keyof typeof PATTERNS;
 
-/** Fire a named haptic. Silently no-ops where the Vibration API is unsupported
- *  (iOS Safari, desktop) — never throws, never needs its own try/catch at the
- *  call site. */
+let iosSwitch: HTMLInputElement | null = null;
+function iosHapticTick(): void {
+  if (typeof document === "undefined" || !document.body) return;
+  if (!iosSwitch || !iosSwitch.isConnected) {
+    const label = document.createElement("label");
+    // Hidden but NOT display:none (a display:none control never toggles) and
+    // inert to the page: zero size, no pointer events, out of the a11y tree.
+    label.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;z-index:-1";
+    label.setAttribute("aria-hidden", "true");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    // Non-standard attribute — Safari's native switch control. Other browsers
+    // just see a hidden checkbox that toggles to no effect.
+    input.setAttribute("switch", "");
+    input.tabIndex = -1;
+    label.appendChild(input);
+    document.body.appendChild(label);
+    iosSwitch = input;
+  }
+  iosSwitch.click();
+}
+
+/** Fire a named haptic. Uses the Vibration API where it exists (Android,
+ *  desktop no-ops harmlessly) and the iOS switch-control system tick where it
+ *  doesn't — never throws, never needs its own try/catch at the call site. */
 export function haptic(intent: HapticIntent): void {
   try {
-    navigator.vibrate?.(PATTERNS[intent]);
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(PATTERNS[intent]);
+      return;
+    }
+    iosHapticTick();
   } catch {
     /* unsupported */
   }
@@ -41,7 +80,11 @@ export function haptic(intent: HapticIntent): void {
  *  (e.g. share-sheet's multi-pulse copy-link confirmation). */
 export function hapticPattern(pattern: number | number[]): void {
   try {
-    navigator.vibrate?.(pattern);
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(pattern);
+      return;
+    }
+    iosHapticTick();
   } catch {
     /* unsupported */
   }

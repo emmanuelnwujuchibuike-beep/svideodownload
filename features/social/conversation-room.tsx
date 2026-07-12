@@ -8,6 +8,7 @@ import {
   Clock,
   File as FileIcon,
   Forward,
+  Image as ImageIcon,
   Loader2,
   Lock,
   Mic,
@@ -86,10 +87,32 @@ interface RawMessage {
   pinned: boolean;
 }
 
-function receiptLabel(m: MessageItem): { label: string; read: boolean; delivered: boolean } {
-  if (m.readAt) return { label: "Seen", read: true, delivered: true };
-  if (m.deliveredAt) return { label: "Delivered", read: false, delivered: true };
-  return { label: "Sent", read: false, delivered: false };
+function receiptLabel(m: MessageItem): { label: string; read: boolean; delivered: boolean; at: string } {
+  if (m.readAt) return { label: "Seen", read: true, delivered: true, at: m.readAt };
+  if (m.deliveredAt) return { label: "Delivered", read: false, delivered: true, at: m.deliveredAt };
+  return { label: "Sent", read: false, delivered: false, at: m.createdAt };
+}
+
+/** "9:14 AM" — the mockup's under-bubble time label. */
+function timeLabel(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+/** "TODAY" / "YESTERDAY" / "JUL 4" — the mockup's centered date divider. */
+function dayDividerLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOf(today) - startOf(d)) / 86_400_000);
+  if (diffDays <= 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", ...(d.getFullYear() !== today.getFullYear() ? { year: "numeric" } : {}) });
+}
+
+function sameDay(a: string, b: string): boolean {
+  const x = new Date(a);
+  const y = new Date(b);
+  return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate();
 }
 
 /**
@@ -113,6 +136,7 @@ export function ConversationRoom({
   members = [],
   viewerRole = null,
   onlyAdminsCanSend = false,
+  otherName = null,
 }: {
   conversationId: string;
   viewerId: string;
@@ -124,6 +148,9 @@ export function ConversationRoom({
   members?: ConversationMember[];
   viewerRole?: MemberRole | null;
   onlyAdminsCanSend?: boolean;
+  /** Direct threads: the other party's display name (drives the mockup's
+   *  personalized "Message Maya…" composer placeholder). */
+  otherName?: string | null;
 }) {
   const [messages, setMessages] = useState<MessageItem[]>(initial);
   const [body, setBody] = useState("");
@@ -292,6 +319,12 @@ export function ConversationRoom({
   }, [body]);
 
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
+
+  // Mockup's personalized composer placeholder ("Message Maya…") — first
+  // name of the other party, direct threads only. (`members` is empty for
+  // direct threads — getConversation only fills it for groups — so this
+  // comes from the dedicated otherName prop.)
+  const otherFirstName = type === "direct" && otherName ? (otherName.split(" ")[0] ?? null) : null;
 
   const mentionMatches = useMemo(() => {
     if (mentionQuery === null) return [];
@@ -1059,7 +1092,9 @@ export function ConversationRoom({
             </p>
           </div>
         ) : (
-          messages.map((m) => {
+          messages.map((m, i) => {
+            const prevMsg = i > 0 ? messages[i - 1]! : null;
+            const showDayDivider = !prevMsg || !sameDay(prevMsg.createdAt, m.createdAt);
             const showReceipt = m.mine && m.id === lastMineId && !m.id.startsWith("optimistic-");
             const r = showReceipt ? receiptLabel(m) : null;
             const clientIdOfBubble = m.id.startsWith("optimistic-") ? m.id.slice("optimistic-".length) : null;
@@ -1090,6 +1125,12 @@ export function ConversationRoom({
                   welcomedIds.current.has(m.id) && "animate-fade-up",
                 )}
               >
+                {showDayDivider ? (
+                  // The mockup's centered "TODAY" divider between day groups.
+                  <div className="w-full self-stretch py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
+                    {dayDividerLabel(m.createdAt)}
+                  </div>
+                ) : null}
                 {type === "group" && !m.mine ? (
                   <span className="mb-0.5 px-1 text-[11px] font-semibold text-muted-foreground">{senderName(m.senderId)}</span>
                 ) : null}
@@ -1298,8 +1339,11 @@ export function ConversationRoom({
                   </div>
                 ) : null}
 
-                <span className={cn("mt-0.5 flex items-center gap-1 px-1 text-[10px] text-muted-foreground")}>
-                  {m.editedAt && !deleted ? <span>edited</span> : null}
+                {/* Under-bubble meta, mockup format: "9:14 AM" under every
+                    message; my most recent message shows "Seen 9:17 AM ✓"
+                    instead (the receipt's own timestamp + a check). */}
+                <span className={cn("mt-0.5 flex items-center gap-1 px-1 text-[10px] text-muted-foreground")} suppressHydrationWarning>
+                  {m.editedAt && !deleted ? <span>edited ·</span> : null}
                   {isFailed ? (
                     <span className="flex items-center gap-1 font-medium text-rose-500">
                       <AlertTriangle className="h-3 w-3" /> Failed to send
@@ -1310,10 +1354,12 @@ export function ConversationRoom({
                     </span>
                   ) : r ? (
                     <span className={cn("flex items-center gap-1 font-medium", r.read ? "text-primary" : "text-muted-foreground")}>
+                      {r.label} {timeLabel(r.at)}
                       {r.delivered ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />}
-                      {r.label}
                     </span>
-                  ) : null}
+                  ) : (
+                    <span>{timeLabel(m.createdAt)}</span>
+                  )}
                 </span>
               </div>
             );
@@ -1414,6 +1460,11 @@ export function ConversationRoom({
           <VoiceRecorder onRecorded={handleVoiceRecorded} onCancel={() => setRecordingVoice(false)} />
         </div>
       ) : (
+        // Composer, rebuilt to the owner's mockup: a glass attach circle, ONE
+        // pill input that carries the gallery + mic buttons inside its right
+        // edge, and an always-present circular gradient send button. The
+        // placeholder is personalized ("Message Maya…") for direct threads,
+        // exactly like the mockup.
         <form
           onSubmit={submit}
           className="flex items-end gap-2 border-t border-border/60 bg-card/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3"
@@ -1424,50 +1475,67 @@ export function ConversationRoom({
             aria-label="Attach"
             whileTap={{ scale: 0.85 }}
             transition={springs.press}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+            className="glass flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:text-foreground"
           >
             <Paperclip className="h-5 w-5" />
           </motion.button>
-          <textarea
-            ref={textareaRef}
-            value={body}
-            onChange={(e) => {
-              setBody(e.target.value);
-              checkMentionTrigger(e.target.value, e.target.selectionStart ?? e.target.value.length);
-              if (e.target.value.trim()) notifyTyping();
-              else clearTyping();
-            }}
-            onKeyDown={onComposerKeyDown}
-            placeholder={editingId ? "Edit your message…" : replyingTo ? "Write a reply…" : "Message…"}
-            aria-label="Message"
-            maxLength={2000}
-            rows={1}
-            style={{ maxHeight: COMPOSER_MAX_HEIGHT }}
-            className="max-h-32 min-h-11 flex-1 resize-none overflow-y-auto rounded-2xl border border-border/60 bg-background/60 px-4 py-2.5 text-sm leading-relaxed outline-none transition placeholder:text-muted-foreground/60 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20"
-          />
-          {body.trim() || pendingAttachments.length > 0 ? (
+          <div className="glass flex min-w-0 flex-1 items-end rounded-[24px] pl-4 pr-1.5 transition focus-within:ring-2 focus-within:ring-violet-500/25">
+            <textarea
+              ref={textareaRef}
+              value={body}
+              onChange={(e) => {
+                setBody(e.target.value);
+                checkMentionTrigger(e.target.value, e.target.selectionStart ?? e.target.value.length);
+                if (e.target.value.trim()) notifyTyping();
+                else clearTyping();
+              }}
+              onKeyDown={onComposerKeyDown}
+              placeholder={
+                editingId
+                  ? "Edit your message…"
+                  : replyingTo
+                    ? "Write a reply…"
+                    : type === "direct" && otherFirstName
+                      ? `Message ${otherFirstName}…`
+                      : "Message…"
+              }
+              aria-label="Message"
+              maxLength={2000}
+              rows={1}
+              style={{ maxHeight: COMPOSER_MAX_HEIGHT }}
+              className="max-h-32 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2.5 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/60"
+            />
             <motion.button
-              type="submit"
-              disabled={busy || uploadingCount > 0}
-              aria-label="Send"
-              whileTap={{ scale: 0.88 }}
+              type="button"
+              onClick={() => setMediaSheetOpen(true)}
+              aria-label="Add a photo or video"
+              whileTap={{ scale: 0.85 }}
               transition={springs.press}
-              className="bg-brand flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 disabled:opacity-40"
+              className="flex h-11 w-9 shrink-0 items-center justify-center text-muted-foreground transition hover:text-foreground"
             >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              <ImageIcon className="h-5 w-5" />
             </motion.button>
-          ) : (
             <motion.button
               type="button"
               onClick={() => setRecordingVoice(true)}
               aria-label="Record voice message"
-              whileTap={{ scale: 0.88 }}
+              whileTap={{ scale: 0.85 }}
               transition={springs.press}
-              className="bg-brand flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-md shadow-violet-500/25 transition hover:opacity-95"
+              className="flex h-11 w-9 shrink-0 items-center justify-center text-muted-foreground transition hover:text-foreground"
             >
-              <Mic className="h-4 w-4" />
+              <Mic className="h-5 w-5" />
             </motion.button>
-          )}
+          </div>
+          <motion.button
+            type="submit"
+            disabled={busy || uploadingCount > 0 || (!body.trim() && pendingAttachments.length === 0)}
+            aria-label="Send"
+            whileTap={{ scale: 0.88 }}
+            transition={springs.press}
+            className="bg-brand flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-violet-500/30 transition hover:opacity-95 disabled:opacity-40"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 -translate-x-px" />}
+          </motion.button>
         </form>
       )}
 

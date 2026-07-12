@@ -32,6 +32,7 @@ import { FrenzFriendsOutline, FrenzFriendsSolid, FrenzHomeOutline, FrenzHomeSoli
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
 
@@ -131,7 +132,10 @@ export function AppSidebar({ handle: _handle }: { handle: string | null }) {
             <Link
               key={item.label}
               href={item.href}
-              onClick={() => haptic("light")}
+              onClick={() => {
+                haptic("light");
+                playSound("tap");
+              }}
               className={cn(
                 "group relative flex items-center gap-3.5 rounded-2xl px-3 py-2.5 text-[15px] font-semibold transition-all duration-200",
                 active

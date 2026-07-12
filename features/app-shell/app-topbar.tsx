@@ -14,6 +14,8 @@ import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { openUpload } from "@/features/create/upload-store";
 import { UserMenu } from "@/features/auth/user-menu";
 import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
+import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 
 export function AppTopbar() {
@@ -107,7 +109,15 @@ export function AppTopbar() {
       <div className="flex shrink-0 items-center gap-2">
         {/* Mobile search entry (the search box is tablet+ only) */}
         <PressIcon className="sm:hidden">
-          <Link href="/search" aria-label="Search" className="flex h-10 w-10 items-center justify-center">
+          <Link
+            href="/search"
+            aria-label="Search"
+            onClick={() => {
+              haptic("light");
+              playSound("tap");
+            }}
+            className="flex h-10 w-10 items-center justify-center"
+          >
             <IconTile>
               <IoSearchOutline className="h-[20px] w-[20px]" />
             </IconTile>
@@ -126,7 +136,15 @@ export function AppTopbar() {
           {/* Desktop search fallback — the inline pill is off-screen while the
               slot is active, so ⌘K/search still needs a reachable entry point. */}
           <PressIcon className="hidden sm:inline-flex">
-            <Link href="/search" aria-label="Search" className="flex h-10 w-10 items-center justify-center">
+            <Link
+            href="/search"
+            aria-label="Search"
+            onClick={() => {
+              haptic("light");
+              playSound("tap");
+            }}
+            className="flex h-10 w-10 items-center justify-center"
+          >
               <IconTile>
                 <IoSearchOutline className="h-[20px] w-[20px]" />
               </IconTile>

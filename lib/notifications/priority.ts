@@ -32,6 +32,10 @@ const PRIORITY_BY_TYPE: Partial<Record<NotificationType, PushPriority>> = {
   security_2fa: "critical",
   security_suspicious: "critical",
   security_recovery: "critical",
+  security_2fa_disabled: "critical",
+  security_recovery_used: "critical",
+  security_passkey_enrolled: "critical",
+  security_passkey_removed: "critical",
   payment_successful: "critical",
   subscription_activated: "critical",
 

@@ -45,6 +45,7 @@ export function PasswordEditor() {
     try {
       const { error } = await createClient().auth.updateUser({ password });
       if (error) throw error;
+      fetch("/api/v1/app/security/password-changed", { method: "POST" }).catch(() => {});
       setSaved(true);
       setPassword("");
       setConfirm("");

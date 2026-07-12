@@ -6,6 +6,7 @@ import Link from "next/link";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { OtpInput } from "@/features/auth/otp-input";
+import { needsMfaStepUp } from "@/lib/auth/mfa";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -136,9 +137,14 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
       setBusy(true);
       setError(null);
       try {
-        const { error } = await createClient().auth.signInWithPassword({ email: target, password: pw });
+        const supabase = createClient();
+        const { error } = await supabase.auth.signInWithPassword({ email: target, password: pw });
         if (error) {
           setError("Incorrect email or password — or use a sign-in code instead.");
+          return;
+        }
+        if (await needsMfaStepUp(supabase)) {
+          window.location.assign(`/login/mfa-challenge?next=${encodeURIComponent(next)}`);
           return;
         }
         window.location.assign(next);
@@ -185,8 +191,14 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
       }
       setVerified(true);
       // A reset lands on Account → Password (verified session) to set the new
-      // one; a normal sign-in goes straight in.
-      window.location.assign(resetting ? "/account?setPassword=1#password" : next);
+      // one; a normal sign-in goes straight in. Either way, an account with a
+      // verified 2FA factor clears the step-up challenge first.
+      const dest = resetting ? "/account?setPassword=1#password" : next;
+      if (await needsMfaStepUp(supabase)) {
+        window.location.assign(`/login/mfa-challenge?next=${encodeURIComponent(dest)}`);
+        return;
+      }
+      window.location.assign(dest);
     } catch {
       setError("Verification failed — check your connection and try again.");
       setShakeKey((k) => k + 1);

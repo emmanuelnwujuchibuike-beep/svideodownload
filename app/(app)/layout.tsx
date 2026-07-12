@@ -7,6 +7,7 @@ import { DeviceCheck } from "@/features/app-shell/device-check";
 import { FloatingMessages } from "@/features/app-shell/floating-messages";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { OfflineQueueSync } from "@/features/app-shell/offline-queue-sync";
+import { PinLockGate } from "@/features/account/pin-lock-gate";
 import { AutoAwayTracker, PresenceTracker } from "@/features/friends/use-presence";
 import { NotificationLiveToast } from "@/features/notifications/live-toast";
 import { InboxRealtimeTracker } from "@/features/social/inbox";
@@ -56,6 +57,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <OfflineQueueSync />
       {/* Once-per-browser-session "new device" security check. */}
       <DeviceCheck />
+      {/* App-level quick-lock PIN — gates /messages and /account/security only. */}
+      <PinLockGate />
     </div>
   );
 }

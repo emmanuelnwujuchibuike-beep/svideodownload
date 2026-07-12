@@ -27,21 +27,24 @@ import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { cn } from "@/lib/utils";
 
 /**
- * Floating pill bottom navigation — rebuilt 2026-07-12 to match the owner's
- * mockup FAITHFULLY (see [[feedback-never-simplify-instructions]]): inactive
- * tabs are plain, muted outline icons with a label (no badge tiles down
- * here); the ACTIVE tab's icon rides a raised gradient circle that pops
- * above the pill's top edge on a soft glow; the Create button is the
- * mockup's gradient circle. Destinations are this app's real ones (the
- * mockup's placeholder "Market"→Friends, "Save"→Chats per the owner's
- * explicit ask). Every tab tap fires the shared haptic + the soft nav "tap"
- * tone (owner ask: "add haptic sound in webapp nav buttons").
+ * Floating pill bottom navigation. Inactive tabs are plain, muted outline
+ * icons with a label; the ACTIVE tab swaps to its solid glyph in the brand
+ * blue (`text-primary`) — a flat inline color change, Facebook/Snapchat
+ * style, corrected 2026-07-12 from an earlier raised-circle-with-glow-halo
+ * treatment the owner found sat "too far up" and read as immature. Only a
+ * couple of px of spring-animated lift remain (see NavLift) — never a
+ * floating badge. The Create button is the one deliberately different
+ * element: a permanently-raised gradient circle, untouched by this
+ * correction. Destinations are this app's real ones (the mockup's
+ * placeholder "Market"→Friends, "Save"→Chats per the owner's explicit ask).
+ * Every tab tap fires the shared haptic + the soft nav "tap" tone.
  *
- * Perf: the glow/circle are STATIC (no idle animation); only the lift spring
+ * Perf: no idle animation anywhere in this bar — only the micro-lift spring
  * and PressIcon's tap spring ever animate, both input-driven. The pill hugs
- * the bottom with `max(safe-area, 8px)` — on iOS standalone that's exactly
- * the home-indicator inset (previously safe-area PLUS extra padding, which
- * made the whole bar float visibly too high in the installed app).
+ * the bottom with `max(safe-area − 10px, 2px)` — on iOS standalone that's
+ * the home-indicator inset; a plain browser tab now sits almost flush with
+ * the viewport edge (owner: "bring it down more to fit well on webapp like
+ * tiktok").
  */
 export function MobileNav() {
   const pathname = usePathname();
@@ -70,13 +73,12 @@ export function MobileNav() {
   }, [router, profileHref]);
 
   return (
-    // Safe-area handling (owner: "make the bottom nav go down to fit the
-    // webapp perfectly"): the pill deliberately tucks INTO the home-indicator
-    // inset — max(inset − 10px, 6px) — like the mockup, where the indicator
-    // overlaps just below the labels, instead of stacking padding on top of
-    // the inset (which made the whole bar float visibly too high in the
-    // installed app). Browser tabs (inset 0) get a slim 6px edge gap.
-    <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(calc(env(safe-area-inset-bottom)-10px),0.375rem)] lg:hidden">
+    // Safe-area handling (owner: "bring the bottom nav down more to fit well
+    // on webapp like tiktok"): the pill tucks INTO the home-indicator inset —
+    // max(inset − 10px, 2px) — on a notched/installed device the indicator
+    // overlaps just below the labels; a plain browser tab (inset 0) now sits
+    // almost flush with the viewport edge instead of leaving a visible gap.
+    <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(calc(env(safe-area-inset-bottom)-10px),0.125rem)] lg:hidden">
       <nav
         aria-label="Primary"
         // backdrop-blur-lg (not -2xl): this bar sits over scrolling content on
@@ -120,7 +122,9 @@ export function MobileNav() {
           onWarm={router.prefetch}
         />
 
-        {/* Profile (avatar-in-circle, same raised treatment when active) */}
+        {/* Profile (avatar-in-circle) — active state is now a colored ring
+            accent on the same tile, not a different fill entirely, matching
+            the inline-color-change treatment the other tabs use. */}
         <Link
           href={profileHref}
           onPointerDown={() => router.prefetch(profileHref)}
@@ -134,15 +138,15 @@ export function MobileNav() {
             <PressIcon active={profileActive}>
               <span
                 className={cn(
-                  "flex items-center justify-center rounded-full transition",
-                  profileActive ? "h-6 w-6 bg-white/90 text-[hsl(var(--brand-purple))]" : "bg-brand-tile h-6 w-6 text-white",
+                  "bg-brand-tile flex h-6 w-6 items-center justify-center rounded-full text-white transition",
+                  profileActive && "ring-2 ring-primary ring-offset-1 ring-offset-background",
                 )}
               >
                 <FrenzPersonSolid className="h-3.5 w-3.5" />
               </span>
             </PressIcon>
           </NavLift>
-          <span className={cn("text-[10px] font-medium transition-colors", profileActive ? "text-foreground" : "text-muted-foreground")}>Profile</span>
+          <span className={cn("text-[10px] font-medium transition-colors", profileActive ? "text-primary" : "text-muted-foreground")}>Profile</span>
         </Link>
       </nav>
     </div>
@@ -150,25 +154,23 @@ export function MobileNav() {
 }
 
 /**
- * The mockup's raised active state: the icon sits inside a gradient circle
- * that lifts above the pill's top edge on a static glow halo. Inactive
- * children render as-is (plain muted icon). Lift is spring-animated on
- * activation only — zero idle animation cost.
+ * Active state, corrected (owner: "too far up — make it an inline icon
+ * color change just like facebook and snapchat nav hover so it looks
+ * matured"): the raised gradient-circle-with-glow-halo this used to be is
+ * gone. Active now reads purely as a color change (outline → solid glyph,
+ * muted gray → brand blue) with only a couple of pixels of lift — "inline,
+ * or a bit above the nav container line," never a floating badge. Same
+ * spring-animated micro-lift + PressIcon's tap scale either way, so the
+ * motion still feels alive even though there's no more halo.
  */
 function NavLift({ active, children }: { active: boolean; children: ReactNode }) {
   const reduceMotion = useReducedMotion();
   return (
     <motion.span
       className="relative flex h-8 w-8 items-center justify-center"
-      animate={reduceMotion ? undefined : { y: active ? -16 : 0 }}
+      animate={reduceMotion ? undefined : { y: active ? -2 : 0 }}
       transition={reduceMotion ? { duration: 0 } : springs.bounce}
     >
-      {active ? (
-        <>
-          <span aria-hidden className="bg-brand pointer-events-none absolute -inset-3 -z-20 rounded-full opacity-35 blur-lg" />
-          <span aria-hidden className="bg-brand absolute -inset-2.5 -z-10 rounded-full shadow-lg shadow-violet-500/40 ring-[3px] ring-card/80" />
-        </>
-      ) : null}
       {children}
     </motion.span>
   );
@@ -204,7 +206,7 @@ function NavTab({
     >
       <NavLift active={active}>
         <PressIcon active={active} className="relative">
-          <Glyph className={cn("h-[22px] w-[22px] transition-colors", active ? "text-white" : "text-muted-foreground")} />
+          <Glyph className={cn("h-[22px] w-[22px] transition-colors", active ? "text-primary" : "text-muted-foreground")} />
           {badge > 0 ? (
             <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-card">
               {badge > 9 ? "9+" : badge}
@@ -212,7 +214,7 @@ function NavTab({
           ) : null}
         </PressIcon>
       </NavLift>
-      <span className={cn("text-[10px] font-medium transition-colors", active ? "text-foreground" : "text-muted-foreground")}>{label}</span>
+      <span className={cn("text-[10px] font-medium transition-colors", active ? "text-primary" : "text-muted-foreground")}>{label}</span>
     </Link>
   );
 }

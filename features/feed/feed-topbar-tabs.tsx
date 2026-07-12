@@ -10,6 +10,8 @@ import {
   FrenzSparkleOutline,
   FrenzSparkleSolid,
 } from "@/components/icons/frenz-icons";
+import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { springs } from "@/lib/motion/springs";
 import type { HomeFeedSort } from "@/lib/social/home-feed";
 import { cn } from "@/lib/utils";
@@ -58,7 +60,14 @@ export function FeedTopbarTabs({
           <motion.button
             key={t.key}
             type="button"
-            onClick={() => onSegment(t.key)}
+            onClick={() => {
+              // Same shared tick as the bottom nav (owner ask) — the top nav's
+              // tabs are a navigation-equivalent action, so they should feel
+              // like one.
+              haptic("light");
+              playSound("tap");
+              onSegment(t.key);
+            }}
             onPointerDown={isReels ? onReelsPreload : undefined}
             aria-label={t.label}
             aria-pressed={active}

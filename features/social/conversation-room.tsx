@@ -22,6 +22,7 @@ import {
   SmilePlus,
   Star,
   Trash2,
+  Wifi,
   WifiOff,
   X,
 } from "lucide-react";
@@ -50,7 +51,8 @@ import { readImageDimensions, readVideoMetadata } from "@/lib/media/message-atta
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";
-import { MESSAGE_REACTIONS, parseMentionedHandles } from "@/lib/social/message-meta";
+import { useNetworkStatus } from "@/lib/pwa/use-network-status";
+import { MESSAGE_REACTIONS } from "@/lib/social/message-meta";
 import {
   attachmentKindForMime,
   extForFilename,
@@ -188,10 +190,29 @@ export function ConversationRoom({
   const [mentionAnchor, setMentionAnchor] = useState<number | null>(null);
   const [reactingId, setReactingId] = useState<string | null>(null);
   const [forwardingId, setForwardingId] = useState<string | null>(null);
-  // "connected" only after the FIRST successful subscribe — starts
-  // "connecting" so a slow initial handshake doesn't briefly flash
-  // "Reconnecting…" (that copy implies a prior connection existed).
-  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "reconnecting">("connecting");
+  // Owner (2026-07-12): the old Supabase-channel-status banner ("Connecting…"/
+  // "Reconnecting…") fired on brief realtime hiccups that had nothing to do
+  // with the user's actual network — a backend blip, not a real outage —
+  // and read as unprofessional flapping. Now sourced from the REAL browser
+  // online/offline signal instead: a persistent "You're offline" while
+  // actually disconnected, and a brief "Back online" confirmation on the
+  // real reconnect, never anything in between.
+  const { online } = useNetworkStatus();
+  const wasOffline = useRef(false);
+  const [showBackOnline, setShowBackOnline] = useState(false);
+  useEffect(() => {
+    if (!online) {
+      wasOffline.current = true;
+      setShowBackOnline(false);
+      return;
+    }
+    if (wasOffline.current) {
+      wasOffline.current = false;
+      setShowBackOnline(true);
+      const t = setTimeout(() => setShowBackOnline(false), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [online]);
   const [queuedIds, setQueuedIds] = useState<Set<string>>(new Set());
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -368,9 +389,11 @@ export function ConversationRoom({
         if (seen.current.has(m.id)) return prev;
         if (!m.mine) {
           welcomedIds.current.add(m.id);
-          const mentioned = viewerHandle ? parseMentionedHandles(m.body).includes(viewerHandle.toLowerCase()) : false;
-          playSound(mentioned ? "mention" : "message");
-          haptic(mentioned ? "selection" : "light");
+          // Same tick as the bottom nav (owner ask) — receiving a message
+          // while actively in the thread should feel identical to sending
+          // one, not a heavier/distinct alert tone.
+          playSound("tap");
+          haptic("light");
         }
         // My own realtime echo reconciles with the optimistic bubble I already
         // showed (same body, temp id) instead of appending a duplicate.
@@ -387,7 +410,7 @@ export function ConversationRoom({
         return [...prev, m];
       });
     },
-    [viewerHandle],
+    [],
   );
 
   // Auto-scroll to the newest message — also re-runs when the on-screen
@@ -588,29 +611,22 @@ export function ConversationRoom({
     // reproducing the exact "stuck" bug this was meant to fix.
     function onSubscribeStatus(status: string) {
       if (status === "SUBSCRIBED") {
-        setConnectionStatus("connected");
         // A RE-subscribe means the socket dropped at some point — catch up
         // on whatever the live stream missed while it was down.
         if (everSubscribed) void resync();
         everSubscribed = true;
         firstAttemptFailures = 0;
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-        // Only announce "Reconnecting…" if we'd actually connected before —
-        // a slow FIRST handshake should stay "connecting", not flash a
-        // banner implying a prior connection just broke.
-        if (everSubscribed) {
-          setConnectionStatus("reconnecting");
-        } else {
-          // BUT a first attempt that keeps failing (bad RLS grant, a
-          // transient outage right at page load) used to sit silently in
-          // "connecting" forever — Supabase doesn't auto-retry a channel
-          // past this point, so nothing ever recovered it on its own. Retry
-          // the SAME channel (re-registering .on() handlers would double
-          // them; only .subscribe() itself is safe to call again) with a
-          // short backoff, and surface the same "Reconnecting…" banner once
-          // it's failed enough times to no longer look like a fluke.
+        if (!everSubscribed) {
+          // A first attempt that keeps failing (bad RLS grant, a transient
+          // outage right at page load) used to sit silently in "connecting"
+          // forever — Supabase doesn't auto-retry a channel past this point,
+          // so nothing ever recovered it on its own. Retry the SAME channel
+          // (re-registering .on() handlers would double them; only
+          // .subscribe() itself is safe to call again) with a short backoff.
+          // No banner fires from this anymore — see the real online/offline
+          // tracking above — it just quietly keeps trying.
           firstAttemptFailures += 1;
-          if (firstAttemptFailures >= 3) setConnectionStatus("reconnecting");
           if (!cancelled) {
             const delay = Math.min(1000 * firstAttemptFailures, 5000);
             window.setTimeout(() => {
@@ -738,7 +754,10 @@ export function ConversationRoom({
     // wouldn't be visible to a submit() called right after setting it.
     const attachments = overrideAttachments ?? pendingAttachments;
     if ((!text && attachments.length === 0) || busy) return;
-    haptic("selection");
+    // Same tick as the bottom nav (owner ask) — sending a message should
+    // feel like the same physical "tap" as everything else in the app.
+    haptic("light");
+    playSound("tap");
     setBusy(true);
     clearTyping();
     setMentionQuery(null);
@@ -1045,10 +1064,15 @@ export function ConversationRoom({
 
   return (
     <>
-      {connectionStatus === "reconnecting" ? (
+      {!online ? (
         <div className="flex items-center justify-center gap-1.5 bg-amber-500/15 px-4 py-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
           <WifiOff className="h-3.5 w-3.5" />
-          Reconnecting…
+          You&apos;re offline
+        </div>
+      ) : showBackOnline ? (
+        <div className="flex items-center justify-center gap-1.5 bg-emerald-500/15 px-4 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+          <Wifi className="h-3.5 w-3.5" />
+          Back online
         </div>
       ) : null}
 

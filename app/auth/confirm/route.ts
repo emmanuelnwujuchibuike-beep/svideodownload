@@ -1,6 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+import { needsMfaStepUp } from "@/lib/auth/mfa";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -28,6 +29,9 @@ export async function GET(request: Request) {
       token_hash: tokenHash,
     });
     if (!error) {
+      if (await needsMfaStepUp(supabase)) {
+        return NextResponse.redirect(`${origin}/login/mfa-challenge?next=${encodeURIComponent(next)}`);
+      }
       const res = NextResponse.redirect(`${origin}${next}`);
       // Read once by boot-splash.tsx's inline script, then cleared — forces
       // the colored boot logo to show on this one load even if this browser

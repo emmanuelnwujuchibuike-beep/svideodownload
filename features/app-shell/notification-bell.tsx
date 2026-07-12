@@ -13,6 +13,8 @@ import {
 } from "@/features/notifications/data";
 import { hrefFor, iconFor, tintFor, timeAgo, verbFor } from "@/features/notifications/meta";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
+import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { categoryForType } from "@/lib/social/notifications";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -87,6 +89,8 @@ export function NotificationBell() {
   }, []);
 
   const toggle = async () => {
+    haptic("light");
+    playSound("tap");
     const next = !open;
     setOpen(next);
     if (next && unread > 0) {

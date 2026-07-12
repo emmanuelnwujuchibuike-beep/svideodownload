@@ -77,6 +77,10 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   security_2fa: ShieldAlert,
   security_suspicious: ShieldAlert,
   security_recovery: ShieldAlert,
+  security_2fa_disabled: ShieldAlert,
+  security_recovery_used: ShieldAlert,
+  security_passkey_enrolled: ShieldAlert,
+  security_passkey_removed: ShieldAlert,
   admin_broadcast: Megaphone,
   post_under_review: ShieldAlert,
 };
@@ -198,6 +202,14 @@ export function verbFor(type: NotificationType): string {
       return "Suspicious activity detected";
     case "security_recovery":
       return "Recovery email changed";
+    case "security_2fa_disabled":
+      return "Two-factor authentication turned off";
+    case "security_recovery_used":
+      return "A recovery code was used on your account";
+    case "security_passkey_enrolled":
+      return "A passkey was added to your account";
+    case "security_passkey_removed":
+      return "A passkey was removed from your account";
     case "admin_broadcast":
       return "Frenz announcement";
     case "post_under_review":

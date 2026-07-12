@@ -13,6 +13,27 @@ _Last updated: 2026‑07‑12 (batch 54 — mockup-faithful redesign of the inbo
 
 ---
 
+## 2026‑07‑12 highlights (batch 55 — Premium Messaging V2 Part 11a: real account security — TOTP 2FA, recovery codes, WebAuthn passkeys, a quick-lock PIN, device trust/naming, and a security audit log)
+
+Owner dropped a very large "Security, Privacy, Trust, Safety & Moderation Platform" spec (Part 11). Given the size — full end-to-end encryption of every message/call type, MFA/passkeys, a moderation pipeline with risk-scoring and appeals, parental controls, encrypted backups, and two "exclusive feature" dashboards, each individually a substantial feature — it was audited then scoped into sub-parts with the owner's sign-off before writing any code (11a: account security/devices, shipped this round; 11b: message privacy + a real Secret Chats E2EE mode; 11c: moderation pipeline + Privacy Dashboard + Trust Center, both queued next).
+
+A fresh codebase audit found real, extendable primitives already in place (email-OTP+password+Google auth, a working session list/revoke system, `privacy_settings`'s self-owned-row pattern, `blocks`/`muted_creators`, a `reports` table with a 3-report auto-hide trigger) but **zero** MFA/passkey/encryption/audit-log infrastructure anywhere — confirmed by grep, not assumed.
+
+**Shipped for real, migrations `0053`–`0059` to apply:**
+- **TOTP two-factor authentication** via Supabase's own native `auth.mfa` API (no new library) — enroll/verify/disable UI, and an MFA-challenge step (`/login/mfa-challenge`) now sits in front of every login path (OAuth/magic-link callback, the box-code flow, and password sign-in) for any account that enrolls. Zero effect on accounts that don't.
+- **Recovery codes**, scoped deliberately narrowly per the owner's own constraint: a code can only unstick an *already-signed-in* session's 2FA gate (via Supabase's own admin factor-removal API), never mint a session from scratch — no custom auth bypass was built.
+- **WebAuthn passkeys** (`@simplewebauthn/server`+`browser`, 2 new deps) as a real Face ID/Touch ID/Windows Hello **step-up verification gate** for sensitive actions (recovery-code regeneration, disabling 2FA) — deliberately NOT a passwordless-login replacement, since Supabase Auth has no native WebAuthn factor type and minting a session from a custom-verified assertion would need a bespoke, riskier path.
+- **App-level quick-lock PIN** — a full-screen keypad gate on `/messages` and `/account/security` after an idle timeout, server-side lockout after 5 failed attempts.
+- **Device naming + "trusted device"** layered onto the existing session list without altering Supabase's own `auth.sessions` table.
+- **A generic, append-only `security_audit_log`** (login, device-added, MFA/passkey enroll+remove, session revoke, password change, recovery-code use/failure, PIN lockout) — built with an unconstrained `event_type` specifically so the next round (moderation pipeline) can extend it with zero new migration.
+- New `/account/security` page consolidating all of the above; a real "Recent activity" list reads straight from the audit log.
+
+A genuine `bytea`-serialization bug (Buffer objects don't survive supabase-js's JSON encoding into a `bytea` column — PostgREST expects/returns hex-encoded `\x...` strings) was caught and fixed during verification, before it ever shipped, via `lib/security/bytea.ts`'s `toBytea`/`fromBytea` helpers — would otherwise have silently broken every PIN check and passkey verification in production while looking correct in code review.
+
+Verified: `tsc --noEmit`, `next lint`, `next build` (152 routes, including all new ones), and the full 124-test vitest suite all clean.
+
+---
+
 ## 2026‑07‑12 highlights (batch 54 — mockup-faithful display rebuild + a critical database-policy bug that had silently broken all live messaging)
 
 Owner rejected the previous nav/chat pass as not following the supplied mockups, reported eight more real problems (typing/haptics dead, reactions send no push, only the admin account receives pushes, can't accept requests or follow back, a security alert on every app entry, the colorful loader replaying when returning Home, messages refresh still stuck on a loader, theme flashing the wrong mode for a second on entry), and asked for a full production-grade startup audit before fixing the loader class of bugs. New standing rule saved: **never simplify or drop anything from an owner example or instruction.**

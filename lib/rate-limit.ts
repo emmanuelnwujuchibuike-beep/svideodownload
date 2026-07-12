@@ -94,6 +94,22 @@ export const trackLimiter: Limiter = buildLimiter(
   Number(process.env.RATE_LIMIT_TRACK_PER_MIN || 120),
 );
 
+// Part 11a — account security. All strict: brute-force resistance matters
+// far more than convenience for PIN/recovery-code/passkey verification.
+export const securityEventLimiter: Limiter = buildLimiter(
+  Number(process.env.RATE_LIMIT_SECURITY_EVENT_PER_MIN || 20),
+);
+export const recoveryCodeLimiter: Limiter = buildLimiter(
+  Number(process.env.RATE_LIMIT_RECOVERY_CODE_PER_MIN || 5),
+);
+export const pinLimiter: Limiter = buildLimiter(Number(process.env.RATE_LIMIT_PIN_PER_MIN || 8));
+export const passkeyLimiter: Limiter = buildLimiter(
+  Number(process.env.RATE_LIMIT_PASSKEY_PER_MIN || 10),
+);
+export const deviceLimiter: Limiter = buildLimiter(
+  Number(process.env.RATE_LIMIT_DEVICE_PER_MIN || 20),
+);
+
 /**
  * Per-day counter for enforcing daily caps (downloads per plan). Uses a single
  * Redis INCR keyed by UTC day so the cap is shared across serverless instances.

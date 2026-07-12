@@ -324,9 +324,12 @@ function FeedPostCardImpl({
       }}
       // Warm this post's comments on hover so opening the sheet is instant.
       onPointerEnter={() => prefetchPostComments(item.id)}
-      // Mature, professional card: quiet hairline border + soft depth, no
-      // decorative color bars — the content is the color (owner spec).
-      className="group relative cv-auto overflow-hidden rounded-3xl border border-border/70 bg-card shadow-soft ring-1 ring-inset ring-white/[0.04] transition-shadow duration-300 hover:shadow-elevated"
+      // Facebook-style full-bleed card (owner spec): no bordered "box" framing
+      // each post — just the feed's own background plus a small, static
+      // premium shadow for a 3D lift. A plain box-shadow (not backdrop-blur
+      // or a hover-triggered repaint) is compositor-cheap, so this keeps the
+      // performance rule intact even rendered dozens of times per scroll.
+      className="group relative cv-auto overflow-hidden rounded-xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_14px_-4px_rgba(0,0,0,0.10)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.25),0_4px_14px_-4px_rgba(0,0,0,0.45)]"
     >
       {/* Repost discovery — lightweight "@x reposted" attribution when someone you
           follow reposted this, plus their recommendation caption when they wrote

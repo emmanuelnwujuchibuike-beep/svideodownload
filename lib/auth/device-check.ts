@@ -78,13 +78,20 @@ export function shouldAlertForNewDevice(rows: SessionRow[], currentUserAgent: st
  * Never throws — a failure here must NEVER be allowed to look like (or
  * cause) an auth problem.
  */
-export async function checkNewDevice(userId: string, currentUserAgent: string | null): Promise<boolean> {
+export async function checkNewDevice(
+  userId: string,
+  currentUserAgent: string | null,
+  precomputedRows?: SessionRow[],
+): Promise<boolean> {
   if (!currentUserAgent) return false;
   try {
     const db = createAdminClient();
-    const { data, error } = await db.rpc("list_user_sessions", { p_user_id: userId });
-    if (error) return false;
-    const rows = (data ?? []) as SessionRow[];
+    let rows = precomputedRows;
+    if (!rows) {
+      const { data, error } = await db.rpc("list_user_sessions", { p_user_id: userId });
+      if (error) return false;
+      rows = (data ?? []) as SessionRow[];
+    }
     if (!shouldAlertForNewDevice(rows, currentUserAgent)) return false;
 
     // DB-side dedupe on top of the pure check: within the recent-login
@@ -112,7 +119,7 @@ export async function checkNewDevice(userId: string, currentUserAgent: string | 
       sendPushToUser(userId, {
         title: "New device signed in",
         body: `A sign-in from ${label} was detected. Wasn't you? Review your active sessions.`,
-        url: "/account#sessions",
+        url: "/account/security#sessions",
         tag: "security-new-device",
       }),
     );

@@ -1,6 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+import { needsMfaStepUp } from "@/lib/auth/mfa";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -28,6 +29,12 @@ export async function GET(request: Request) {
       ? await supabase.auth.exchangeCodeForSession(code)
       : await supabase.auth.verifyOtp({ type: type!, token_hash: tokenHash! });
     if (!error) {
+      // MFA step-up gate (Part 11a): accounts with a verified 2FA factor
+      // land on the code challenge instead of `next` until they clear it.
+      // Accounts without MFA enrolled are completely unaffected.
+      if (await needsMfaStepUp(supabase)) {
+        return NextResponse.redirect(`${origin}/login/mfa-challenge?next=${encodeURIComponent(next)}`);
+      }
       const res = NextResponse.redirect(`${origin}${next}`);
       // Read once by boot-splash.tsx's inline script, then cleared — forces
       // the colored boot logo to show on this one load even if this browser

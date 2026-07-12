@@ -9,7 +9,6 @@ import { ApiKeys } from "@/features/api/api-keys";
 import { ManageBillingButton } from "@/features/monetization/manage-billing-button";
 import { UserList } from "@/components/social/user-list";
 import { ProfileEditor } from "@/features/social/profile-editor";
-import { ActiveSessions } from "@/features/account/active-sessions";
 import { HomeModulesEditor } from "@/features/account/home-modules-editor";
 import { NotificationSettingsEditor } from "@/features/account/notification-settings-editor";
 import { PasswordEditor } from "@/features/account/password-editor";
@@ -186,8 +185,25 @@ export default async function AccountPage() {
             {/* Optional password (second way in + what "Forgot password?" resets) */}
             <PasswordEditor />
 
-            {/* Active sessions / device management */}
-            <ActiveSessions />
+            {/* Two-factor auth, passkeys, PIN, active sessions, security activity */}
+            <div className="border-b border-border/60 p-6 sm:p-8">
+              <Link
+                href="/account/security"
+                className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-4 transition hover:bg-secondary/40"
+              >
+                <span className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
+                    <ShieldCheck className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold">Security</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Two-factor authentication, passkeys, devices &amp; activity
+                    </span>
+                  </span>
+                </span>
+              </Link>
+            </div>
 
             {/* Blocked accounts (only shown when there are any) */}
             {blocked.length > 0 ? (

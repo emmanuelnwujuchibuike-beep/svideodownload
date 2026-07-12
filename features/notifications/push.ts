@@ -126,12 +126,29 @@ export async function enablePush(): Promise<PushState> {
  * granted: re-subscribes if the browser dropped it and re-POSTs so the server
  * row is re-homed to the current account (or restored after being pruned by a
  * failed send). Safe to call on every app launch — throttled per session.
+ *
+ * CROSS-ACCOUNT PUSH LEAK (2026-07-12): this used to throttle on a single
+ * global `sessionStorage` flag with no user in it at all. `/api/push/subscribe`
+ * upserts on the endpoint's unique conflict and re-homes that row's `user_id`
+ * to whoever calls it — that's the ONLY mechanism that moves a device's
+ * subscription from one account to another on a shared browser. But the old
+ * flag stayed "1" across a sign-out/sign-in in the SAME TAB (`sessionStorage`
+ * isn't cleared by `supabase.auth.signOut()`), so switching accounts without
+ * closing the tab made this function silently no-op for the new account —
+ * the subscribe call that would have re-homed the row never fired again, so
+ * the row stayed pointed at whichever account synced first in that tab
+ * forever. Every future push to THAT account kept arriving on this device
+ * even after signing into someone else — indistinguishable from "notifications
+ * aren't scoped to the signed-in account." Keying the throttle by userId (and
+ * re-syncing whenever the current user differs from the last one synced in
+ * this tab) makes every account switch re-home the row to whoever's actually
+ * signed in now, while still not spamming re-subscribes for the same user.
  */
-export async function syncPush(): Promise<void> {
+export async function syncPush(userId?: string | null): Promise<void> {
   if (!pushSupported() || Notification.permission !== "granted") return;
-  const KEY = "frenz:push-synced";
+  const KEY = "frenz:push-synced-uid";
   try {
-    if (sessionStorage.getItem(KEY) === "1") return;
+    if (userId && sessionStorage.getItem(KEY) === userId) return;
   } catch {
     /* ignore */
   }
@@ -150,7 +167,7 @@ export async function syncPush(): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
     });
-    if (res.ok) sessionStorage.setItem(KEY, "1");
+    if (res.ok && userId) sessionStorage.setItem(KEY, userId);
   } catch {
     /* best-effort — the enable button remains the explicit path */
   }

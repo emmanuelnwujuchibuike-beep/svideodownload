@@ -19,6 +19,8 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.2",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "@upstash/ratelimit": "^2.0.3",

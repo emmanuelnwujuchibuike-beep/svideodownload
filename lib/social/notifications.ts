@@ -53,6 +53,10 @@ export type NotificationType =
   | "security_2fa"
   | "security_suspicious"
   | "security_recovery"
+  | "security_2fa_disabled"
+  | "security_recovery_used"
+  | "security_passkey_enrolled"
+  | "security_passkey_removed"
   | "system"
   | "admin_broadcast"
   | "post_under_review";
@@ -112,6 +116,10 @@ export const CATEGORY_BY_TYPE: Partial<Record<NotificationType, NotificationCate
   security_2fa: "security",
   security_suspicious: "security",
   security_recovery: "security",
+  security_2fa_disabled: "security",
+  security_recovery_used: "security",
+  security_passkey_enrolled: "security",
+  security_passkey_removed: "security",
   post_under_review: "system",
 };
 

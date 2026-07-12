@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Laptop, LogOut, Loader2, Monitor, ShieldCheck, Smartphone, Tablet } from "lucide-react";
+import { AlertTriangle, Check, Laptop, LogOut, Loader2, Monitor, Pencil, ShieldCheck, Smartphone, Tablet, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { timeAgo } from "@/features/notifications/meta";
@@ -15,6 +15,8 @@ interface SessionItem {
   lastActiveAt: string;
   device: { label: string; icon: DeviceIcon };
   isCurrent: boolean;
+  isTrusted: boolean;
+  deviceRowId: string | null;
 }
 
 const ICONS: Record<DeviceIcon, typeof Monitor> = {
@@ -24,11 +26,14 @@ const ICONS: Record<DeviceIcon, typeof Monitor> = {
   desktop: Monitor,
 };
 
-/** Active-devices list + per-device / bulk remote sign-out (Account page). */
+/** Active-devices list + per-device / bulk remote sign-out, rename, and
+ *  "trusted device" toggle (Account → Security page — Part 11a). */
 export function ActiveSessions() {
   const [sessions, setSessions] = useState<SessionItem[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [pending, setPending] = useState<string | null>(null); // session id, or "others"
+  const [renaming, setRenaming] = useState<string | null>(null); // deviceRowId
+  const [renameValue, setRenameValue] = useState("");
 
   const load = () => {
     setLoadError(false);
@@ -85,6 +90,62 @@ export function ActiveSessions() {
     }
   };
 
+  const toggleTrusted = async (s: SessionItem) => {
+    if (!s.deviceRowId) return;
+    setPending(s.id);
+    try {
+      const res = await fetch(`/api/v1/app/devices/${s.deviceRowId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ isTrusted: !s.isTrusted }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message);
+      setSessions((prev) =>
+        prev ? prev.map((row) => (row.id === s.id ? { ...row, isTrusted: json.data.device.isTrusted } : row)) : prev,
+      );
+    } catch {
+      toast("Couldn't update that device. Try again.", "error");
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const startRename = (s: SessionItem) => {
+    if (!s.deviceRowId) return;
+    setRenaming(s.deviceRowId);
+    setRenameValue(s.device.label);
+  };
+
+  const saveRename = async (s: SessionItem) => {
+    if (!s.deviceRowId) return;
+    const label = renameValue.trim();
+    if (!label) {
+      setRenaming(null);
+      return;
+    }
+    setPending(s.id);
+    try {
+      const res = await fetch(`/api/v1/app/devices/${s.deviceRowId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message);
+      setSessions((prev) =>
+        prev
+          ? prev.map((row) => (row.id === s.id ? { ...row, device: { ...row.device, label: json.data.device.label } } : row))
+          : prev,
+      );
+    } catch {
+      toast("Couldn't rename that device. Try again.", "error");
+    } finally {
+      setPending(null);
+      setRenaming(null);
+    }
+  };
+
   return (
     <div className="border-b border-border/60 p-6 sm:p-8">
       <div className="flex items-center justify-between gap-3">
@@ -103,7 +164,7 @@ export function ActiveSessions() {
         ) : null}
       </div>
       <p className="mt-1 max-w-md text-sm text-muted-foreground">
-        Devices currently signed in to your account.
+        Devices currently signed in to your account. Mark a device trusted to recognize it later.
       </p>
 
       <div className="mt-4 space-y-2">
@@ -121,6 +182,7 @@ export function ActiveSessions() {
           sessions.map((s) => {
             const Icon = ICONS[s.device.icon];
             const isPending = pending === s.id;
+            const isRenaming = renaming === s.deviceRowId && !!s.deviceRowId;
             return (
               <div
                 key={s.id}
@@ -133,16 +195,63 @@ export function ActiveSessions() {
                   <Icon className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 text-sm font-medium">
-                    {s.device.label}
-                    {s.isCurrent ? (
-                      <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-500">
-                        This device
-                      </span>
-                    ) : null}
-                  </p>
+                  {isRenaming ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void saveRename(s);
+                          if (e.key === "Escape") setRenaming(null);
+                        }}
+                        maxLength={60}
+                        className="h-7 min-w-0 flex-1 rounded-lg bg-background px-2 text-sm outline-none ring-1 ring-inset ring-primary/50"
+                      />
+                      <button type="button" onClick={() => void saveRename(s)} aria-label="Save name" className="text-emerald-500">
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button type="button" onClick={() => setRenaming(null)} aria-label="Cancel" className="text-muted-foreground">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="flex items-center gap-2 text-sm font-medium">
+                      <span className="truncate">{s.device.label}</span>
+                      {s.isCurrent ? (
+                        <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-500">
+                          This device
+                        </span>
+                      ) : null}
+                      {s.isTrusted ? (
+                        <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                          Trusted
+                        </span>
+                      ) : null}
+                      {s.deviceRowId ? (
+                        <button
+                          type="button"
+                          onClick={() => startRename(s)}
+                          aria-label={`Rename ${s.device.label}`}
+                          className="text-muted-foreground/60 transition hover:text-foreground"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      ) : null}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground">Active {timeAgo(s.lastActiveAt)} ago</p>
                 </div>
+                {s.deviceRowId ? (
+                  <button
+                    type="button"
+                    onClick={() => void toggleTrusted(s)}
+                    disabled={pending !== null}
+                    className="text-xs font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+                  >
+                    {s.isTrusted ? "Untrust" : "Trust"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => revoke(s.id, s.isCurrent)}

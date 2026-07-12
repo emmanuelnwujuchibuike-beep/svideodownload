@@ -2,9 +2,10 @@ import { bearer, getSessionUser } from "@/lib/api/authenticate";
 import { corsPreflight } from "@/lib/api/cors";
 import { noStore } from "@/lib/api/edge-cache";
 import { fail, ok } from "@/lib/api/respond";
-import { parseDevice } from "@/lib/auth/device-label";
 import { decodeSessionId } from "@/lib/auth/session-jwt";
+import { mergeSessionsWithDevices } from "@/lib/auth/devices";
 import { cacheDelete, getCached } from "@/lib/cache";
+import { writeAuditLog } from "@/lib/security/audit-log";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -53,16 +54,9 @@ export async function GET(request: Request) {
   const token = await currentAccessToken(request);
   const currentSessionId = token ? decodeSessionId(token) : null;
 
-  const sessions = rows.map((row) => {
-    const { label, icon } = parseDevice(row.user_agent);
-    return {
-      id: row.id,
-      createdAt: row.created_at,
-      lastActiveAt: row.updated_at ?? row.created_at,
-      device: { label, icon },
-      isCurrent: row.id === currentSessionId,
-    };
-  });
+  // Left-joins in device naming/trust (migration 0054) — see
+  // lib/auth/devices.ts for why this can't be a SQL join.
+  const sessions = await mergeSessionsWithDevices(user.id, rows, currentSessionId);
 
   return noStore(ok({ sessions }));
 }
@@ -76,12 +70,27 @@ export async function DELETE(request: Request) {
   const currentSessionId = token ? decodeSessionId(token) : null;
   if (!currentSessionId) return fail("bad_request", "Couldn't identify this device's session.");
 
-  const { data, error } = await createAdminClient().rpc("revoke_other_user_sessions", {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("revoke_other_user_sessions", {
     p_user_id: user.id,
     p_keep_session_id: currentSessionId,
   });
   if (error) return fail("internal");
 
+  // Matches the single-session DELETE route: trust survives a "sign out
+  // other devices," only the now-stale session pointer is cleared.
+  await admin
+    .from("trusted_devices")
+    .update({ current_session_id: null })
+    .eq("user_id", user.id)
+    .neq("current_session_id", currentSessionId);
+
   await cacheDelete(cacheKey(user.id));
+  await writeAuditLog({
+    userId: user.id,
+    eventType: "session_revoked",
+    request,
+    metadata: { scope: "others", count: (data as number | null) ?? 0 },
+  });
   return noStore(ok({ revoked: (data as number | null) ?? 0 }));
 }

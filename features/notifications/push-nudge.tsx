@@ -67,9 +67,13 @@ export function PushNudge() {
       return () => clearTimeout(t);
     }
 
-    // Permission already granted → no UI needed, just keep the server row alive.
+    // Permission already granted → no UI needed, just keep the server row
+    // alive AND correctly homed to whichever account is signed in right now
+    // (syncPush re-syncs whenever `user.id` differs from the last account
+    // synced in this tab — see syncPush's own comment for the account-switch
+    // push leak this fixes).
     if (Notification.permission === "granted") {
-      void syncPush();
+      void syncPush(user.id);
       return;
     }
     // iOS browser tab: push only works from the installed app — the install

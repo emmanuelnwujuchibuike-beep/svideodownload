@@ -5,6 +5,8 @@ import { IoPersonAddOutline } from "react-icons/io5";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,6 +26,10 @@ export function SuggestionsLauncher({
 }) {
   const router = useRouter();
   const warm = () => router.prefetch("/friends/discover");
+  const tap = () => {
+    haptic("light");
+    playSound("tap");
+  };
 
   if (variant === "icon") {
     return (
@@ -31,6 +37,7 @@ export function SuggestionsLauncher({
         href="/friends/discover"
         onPointerEnter={warm}
         onPointerDown={warm}
+        onClick={tap}
         aria-label="Add friends"
         title="Add friends"
         className={cn(
@@ -48,6 +55,7 @@ export function SuggestionsLauncher({
       href="/friends/discover"
       onPointerEnter={warm}
       onPointerDown={warm}
+      onClick={tap}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/70 px-3.5 py-2 text-sm font-semibold text-foreground shadow-soft backdrop-blur transition hover:border-primary/40 active:scale-95",
         className,

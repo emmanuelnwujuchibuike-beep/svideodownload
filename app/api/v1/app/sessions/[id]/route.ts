@@ -3,6 +3,7 @@ import { corsPreflight } from "@/lib/api/cors";
 import { noStore } from "@/lib/api/edge-cache";
 import { fail, ok } from "@/lib/api/respond";
 import { cacheDelete } from "@/lib/cache";
+import { writeAuditLog } from "@/lib/security/audit-log";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -30,6 +31,16 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (error) return fail("internal");
   if (!data) return fail("not_found", "That session is already signed out.");
 
+  // Trust survives a "sign this device out" — the user will likely sign
+  // back in on the same physical device — only the stale session pointer
+  // is cleared, never the trusted_devices row itself.
+  await createAdminClient()
+    .from("trusted_devices")
+    .update({ current_session_id: null })
+    .eq("user_id", user.id)
+    .eq("current_session_id", id);
+
   await cacheDelete(`sessions:${user.id}`);
+  await writeAuditLog({ userId: user.id, eventType: "session_revoked", request, metadata: { scope: "one", sessionId: id } });
   return noStore(ok({ revoked: true }));
 }

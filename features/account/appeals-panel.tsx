@@ -100,7 +100,10 @@ export function AppealsPanel() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setOpenFor(openFor === key ? null : key)}
+                      onClick={() => {
+                        setOpenFor(openFor === key ? null : key);
+                        setMessage("");
+                      }}
                       className="shrink-0 rounded-lg border border-border px-2.5 py-1 text-xs font-medium transition hover:bg-secondary"
                     >
                       Appeal

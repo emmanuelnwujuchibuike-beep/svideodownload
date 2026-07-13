@@ -16,8 +16,6 @@ export interface AppealItem {
   adminNote: string | null;
   createdAt: string;
   resolvedAt: string | null;
-  // Enriched for display.
-  title: string;
 }
 
 /** Own actioned content the viewer could appeal — a post/comment they own that's currently hidden/removed, or their own account if suspended. */
@@ -58,9 +56,11 @@ export async function listAppealableItems(viewerId: string): Promise<AppealableI
 export async function listOwnAppeals(viewerId: string): Promise<AppealItem[]> {
   if (!hasSupabase) return [];
   const db = createAdminClient();
+  // admin_note is deliberately NOT selected here — the admin queue's "note
+  // (visible only to you)" must never reach the user it's about.
   const { data } = await db
     .from("moderation_appeals")
-    .select("id, target_type, target_id, message, status, admin_note, created_at, resolved_at")
+    .select("id, target_type, target_id, message, status, created_at, resolved_at")
     .eq("user_id", viewerId)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -70,10 +70,9 @@ export async function listOwnAppeals(viewerId: string): Promise<AppealItem[]> {
     targetId: r.target_id as string,
     message: r.message as string,
     status: r.status as AppealItem["status"],
-    adminNote: (r.admin_note as string | null) ?? null,
+    adminNote: null,
     createdAt: r.created_at as string,
     resolvedAt: (r.resolved_at as string | null) ?? null,
-    title: `${r.target_type}`,
   }));
 }
 
@@ -121,15 +120,35 @@ export async function resolveAppeal(
 ): Promise<{ ok: boolean }> {
   if (!hasSupabase) return { ok: false };
   const db = createAdminClient();
-  const { data: appeal } = await db.from("moderation_appeals").select("user_id, target_type, target_id, status").eq("id", appealId).maybeSingle();
-  if (!appeal || appeal.status !== "pending") return { ok: false };
+
+  // Claim the appeal atomically — scoped by status="pending" so two admins
+  // (or a duplicate/retried request) resolving the same appeal at once can't
+  // both proceed; only the request that actually flips pending->resolved
+  // gets a row back.
+  const { data: appeal } = await db
+    .from("moderation_appeals")
+    .update({ status: resolution, admin_note: adminNote, resolved_by: adminId, resolved_at: new Date().toISOString() })
+    .eq("id", appealId)
+    .eq("status", "pending")
+    .select("user_id, target_type, target_id")
+    .maybeSingle();
+  if (!appeal) return { ok: false };
 
   if (resolution === "overturned") {
     const action = appeal.target_type === "user" ? "unsuspend" : "restore";
     await moderate(appeal.target_type as TargetType, appeal.target_id as string, action, adminId);
+    // moderate()'s own report-resolution only touches reports still "open",
+    // since it's written for the fresh-report case — the reports that led to
+    // THIS appeal are already "actioned". Flip them back so the reporter's
+    // Trust Center reflects the reversal instead of permanently showing
+    // "Action taken" for a decision that was overturned.
+    await db
+      .from("reports")
+      .update({ status: "dismissed" })
+      .eq("target_type", appeal.target_type)
+      .eq("target_id", appeal.target_id)
+      .eq("status", "actioned");
   }
-
-  await db.from("moderation_appeals").update({ status: resolution, admin_note: adminNote, resolved_by: adminId, resolved_at: new Date().toISOString() }).eq("id", appealId);
 
   await writeAuditLog({
     userId: appeal.user_id as string,
@@ -182,7 +201,6 @@ export async function listPendingAppeals(): Promise<PendingAppeal[]> {
     adminNote: (r.admin_note as string | null) ?? null,
     createdAt: r.created_at as string,
     resolvedAt: (r.resolved_at as string | null) ?? null,
-    title: `${r.target_type}`,
     userHandle: handleById.get(r.user_id as string) ?? null,
   }));
 }

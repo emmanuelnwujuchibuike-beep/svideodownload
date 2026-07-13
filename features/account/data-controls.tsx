@@ -52,7 +52,7 @@ export function DataControls() {
       const json = await res.json();
       if (!res.ok) throw new Error();
       setRequestedAt(json.requestedAt);
-      setPurgesAt(new Date(Date.now() + json.purgesInDays * 864e5).toISOString());
+      setPurgesAt(json.purgesAt);
       setConfirmOpen(false);
       setConfirmText("");
       toast("Account deletion requested.", "success");

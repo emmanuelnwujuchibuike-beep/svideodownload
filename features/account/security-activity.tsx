@@ -32,6 +32,11 @@ const LABELS: Record<string, string> = {
   device_renamed: "A device was renamed",
   device_trust_changed: "A device's trusted status changed",
   device_forgotten: "A device was forgotten",
+  moderation_action: "A moderation action was taken on your content",
+  appeal_submitted: "You submitted an appeal",
+  appeal_resolved: "Your appeal was resolved",
+  account_deletion_requested: "Account deletion requested",
+  account_deletion_cancelled: "Account deletion request cancelled",
 };
 
 /** Read-only recent security activity — Account → Security. Sources the

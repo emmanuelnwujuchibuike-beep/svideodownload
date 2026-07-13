@@ -30,10 +30,14 @@ const SYSTEM_PROMPT = `You are a content moderation classifier for a social app.
 
 function parseAssessment(text: string): RiskAssessment | null {
   try {
-    // Models occasionally wrap JSON in a code fence despite instructions —
-    // strip one if present rather than failing the whole assessment.
-    const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
-    const parsed = JSON.parse(cleaned) as Partial<RiskAssessment>;
+    // Models occasionally wrap JSON in a code fence, or add a sentence of
+    // preamble before it, despite instructions — extract the outermost
+    // {...} object rather than only stripping a fence anchored at the very
+    // start (which misses anything preceding it).
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) return null;
+    const parsed = JSON.parse(text.slice(start, end + 1)) as Partial<RiskAssessment>;
     if (!parsed.category || !CATEGORIES.includes(parsed.category as RiskCategory)) return null;
     const severity = Math.round(Number(parsed.severity));
     if (!Number.isFinite(severity) || severity < 0 || severity > 100) return null;

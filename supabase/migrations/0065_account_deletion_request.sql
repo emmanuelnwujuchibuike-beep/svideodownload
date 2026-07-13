@@ -2,9 +2,10 @@
 -- Frenzsave · Premium Messaging V2 Part 11c: Privacy Dashboard's "Delete my
 -- account" — a REQUEST with a grace period (industry-standard pattern,
 -- mirrors how Instagram/Discord/etc. handle this), not an immediate
--- irreversible delete from a single API call. Signing back in during the
--- grace period cancels the request automatically (see /api/account/delete
--- route). A cron purges accounts whose grace period has elapsed.
+-- irreversible delete from a single API call. Only the explicit "Cancel
+-- deletion" button (DELETE /api/account/delete) clears the request — merely
+-- signing back in during the grace period does NOT cancel it. A cron purges
+-- accounts whose grace period has elapsed.
 
 alter table public.profiles add column if not exists deletion_requested_at timestamptz;
 

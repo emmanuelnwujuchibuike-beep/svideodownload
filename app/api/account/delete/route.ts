@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 
+import { ACCOUNT_DELETION_GRACE_DAYS } from "@/lib/account/deletion";
 import { writeAuditLog } from "@/lib/security/audit-log";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const GRACE_DAYS = 30;
 
 /** GET — whether a deletion is currently requested, and when it'd actually purge. */
 export async function GET() {
@@ -19,7 +18,7 @@ export async function GET() {
 
   const { data } = await supabase.from("profiles").select("deletion_requested_at").eq("id", user.id).maybeSingle();
   const requestedAt = data?.deletion_requested_at as string | null;
-  const purgesAt = requestedAt ? new Date(new Date(requestedAt).getTime() + GRACE_DAYS * 864e5).toISOString() : null;
+  const purgesAt = requestedAt ? new Date(new Date(requestedAt).getTime() + ACCOUNT_DELETION_GRACE_DAYS * 864e5).toISOString() : null;
   return NextResponse.json({ requestedAt, purgesAt });
 }
 
@@ -36,7 +35,8 @@ export async function POST(request: Request) {
   if (error) return NextResponse.json({ error: "Couldn't request deletion." }, { status: 500 });
 
   await writeAuditLog({ userId: user.id, eventType: "account_deletion_requested", request });
-  return NextResponse.json({ ok: true, requestedAt: now, purgesInDays: GRACE_DAYS });
+  const purgesAt = new Date(new Date(now).getTime() + ACCOUNT_DELETION_GRACE_DAYS * 864e5).toISOString();
+  return NextResponse.json({ ok: true, requestedAt: now, purgesAt });
 }
 
 /** DELETE — cancel a pending deletion request. */

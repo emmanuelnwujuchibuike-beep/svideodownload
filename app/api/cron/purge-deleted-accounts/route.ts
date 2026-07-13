@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 
+import { ACCOUNT_DELETION_GRACE_DAYS } from "@/lib/account/deletion";
 import { getAdminUser } from "@/lib/admin/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const GRACE_DAYS = 30;
 
 /**
  * Purges accounts whose deletion grace period (30 days from request, set by
@@ -28,13 +27,20 @@ async function run(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const db = createAdminClient();
-  const cutoff = new Date(Date.now() - GRACE_DAYS * 864e5).toISOString();
+  const cutoff = new Date(Date.now() - ACCOUNT_DELETION_GRACE_DAYS * 864e5).toISOString();
 
   const { data: due, error } = await db.from("profiles").select("id").not("deletion_requested_at", "is", null).lt("deletion_requested_at", cutoff);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
   let purged = 0;
   for (const row of (due ?? []) as { id: string }[]) {
+    // Re-check right before deleting — a run can take a while over a large
+    // backlog, and a user cancelling (DELETE /api/account/delete, which just
+    // nulls deletion_requested_at) between the SELECT above and this row's
+    // turn must not still result in a purge.
+    const { data: current } = await db.from("profiles").select("deletion_requested_at").eq("id", row.id).maybeSingle();
+    if (!current?.deletion_requested_at || (current.deletion_requested_at as string) >= cutoff) continue;
+
     const { error: delErr } = await db.auth.admin.deleteUser(row.id);
     if (!delErr) purged += 1;
   }

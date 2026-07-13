@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   Check,
@@ -1413,16 +1413,30 @@ export function ConversationRoom({
         </div>
       ) : null}
 
-      {typingNames.length > 0 ? (
-        <div className="flex items-center gap-1.5 border-t border-border/60 bg-secondary/20 px-4 py-1.5 text-xs text-muted-foreground">
-          <span className="flex gap-0.5" aria-hidden>
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" />
-          </span>
-          {typingLabel(typingNames)}
-        </div>
-      ) : null}
+      {/* Height-animated (not a hard conditional mount) so it fades smoothly
+          in/out instead of snapping the composer up/down — spec: "No layout
+          jumping. Reserve space below the message list." */}
+      <AnimatePresence initial={false}>
+        {typingNames.length > 0 ? (
+          <motion.div
+            key="typing"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="overflow-hidden border-t border-border/60 bg-secondary/20"
+          >
+            <div className="flex items-center gap-1.5 px-4 py-1.5 text-xs text-muted-foreground">
+              <span className="flex gap-0.5" aria-hidden>
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" />
+              </span>
+              {typingLabel(typingNames)}
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {mentionMatches.length > 0 ? (
         <div className="glass-strong mx-3 mb-1 overflow-hidden rounded-2xl py-1">

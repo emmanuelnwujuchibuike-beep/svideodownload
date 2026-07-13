@@ -6,7 +6,7 @@ import type { Category } from "./categories";
 import { fetchReactionRows } from "./engagement";
 import { getTrendingSettings } from "./feed";
 import { getHomePreferences, type HomePreferences } from "./home-preferences";
-import type { MediaKind } from "./posts";
+import { canSeePost, type MediaKind, type Visibility } from "./posts";
 import { followedReposters, repostCounts, viewerReposts } from "./reposts";
 
 /**
@@ -178,9 +178,14 @@ export function rankForYou(
 
 /**
  * A single feed item by post id, in the exact `FeedItem` shape the reel deck
- * expects — used to deep-link straight into `/reels?start=<id>` (e.g. tapping a
- * video from the home feed or the trending rail) without waiting on the full
- * paginated query. Returns null for anything private, missing, or non-video.
+ * (and, more generally, any instant client-side viewer) expects — used to
+ * deep-link straight into `/reels?start=<id>` (video, unchanged) AND to open
+ * a post tapped from a grid (Explore/Profile/Search/Saved — `components/
+ * social/post-grid.tsx`) without a full-page `/p/[id]` navigation, of any
+ * media kind. Visibility uses the same `canSeePost` rule as the real post
+ * page (owner/follower/public), not a public-only gate — a private post the
+ * viewer is genuinely allowed to see (their own, or a followed friend's
+ * followers-only post) must still open instantly from their own grid.
  */
 export async function getFeedItemById(id: string, viewerId: string | null): Promise<FeedItem | null> {
   if (!hasSupabase) return null;
@@ -188,7 +193,7 @@ export async function getFeedItemById(id: string, viewerId: string | null): Prom
     const db = createAdminClient();
     const { data } = await db.from("posts").select(SELECT).eq("id", id).maybeSingle();
     const row = data as Row | null;
-    if (!row || row.status !== "published" || row.visibility !== "public" || row.media_kind !== "video") return null;
+    if (!row || !(await canSeePost(db, { ...row, visibility: row.visibility as Visibility }, viewerId))) return null;
 
     const { data: prof } = await db
       .from("profiles")
@@ -237,6 +242,24 @@ export async function getFeedItemById(id: string, viewerId: string | null): Prom
       /* polls not migrated — leave hasPoll false */
     }
 
+    // Album items (carousels/reel albums) — same query as getHomeFeed's batch
+    // fetch, just scoped to this one id, so a grid-tile open renders every
+    // slide instead of only the cover.
+    let mediaItems: FeedItem["mediaItems"];
+    try {
+      const { data: mediaRows } = await db
+        .from("post_media")
+        .select("media_kind, media_url, thumbnail_url, media_width, media_height")
+        .eq("post_id", id)
+        .order("idx", { ascending: true });
+      const arr = ((mediaRows ?? []) as { media_kind: "image" | "video"; media_url: string; thumbnail_url: string | null; media_width: number | null; media_height: number | null }[]).map(
+        (r) => ({ url: r.media_url, kind: r.media_kind, thumbnailUrl: r.thumbnail_url, width: r.media_width, height: r.media_height }),
+      );
+      if (arr.length > 1) mediaItems = arr;
+    } catch {
+      /* post_media not migrated */
+    }
+
     return {
       id: row.id,
       title: row.title,
@@ -274,6 +297,7 @@ export async function getFeedItemById(id: string, viewerId: string | null): Prom
       hasPoll,
       viewerReposted: (await viewerReposts([id], viewerId)).has(id),
       repostsCount: (await repostCounts([id])).get(id) ?? 0,
+      mediaItems,
     };
   } catch {
     return null;

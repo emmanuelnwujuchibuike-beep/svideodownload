@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { IconTile } from "@/components/icons/icon-tile";
-import { GLASS_TILE } from "@/features/app-shell/topbar-glass";
 import { mutate, revalidate, useQuery } from "@/features/data";
 import {
   NOTIF_KEY as KEY,
@@ -20,7 +19,7 @@ import { categoryForType } from "@/lib/social/notifications";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-export function NotificationBell({ glass = false }: { glass?: boolean }) {
+export function NotificationBell() {
   // Cached-first: the bell shows last-known notifications instantly on every page
   // (it lives in the topbar app-wide) and revalidates in the background + on focus.
   const { data } = useQuery<NotifData>(KEY, loadNotifications);
@@ -114,7 +113,7 @@ export function NotificationBell({ glass = false }: { glass?: boolean }) {
         aria-expanded={open}
         className="relative inline-flex h-10 w-10 items-center justify-center"
       >
-        <IconTile tint={unread > 0 ? "brand" : "neutral"} className={glass && unread === 0 ? GLASS_TILE : undefined}>
+        <IconTile tint={unread > 0 ? "brand" : "neutral"}>
           {unread > 0 ? <IoNotifications className="h-[21px] w-[21px]" /> : <IoNotificationsOutline className="h-[21px] w-[21px]" />}
         </IconTile>
         {unread > 0 ? (

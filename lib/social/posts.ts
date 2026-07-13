@@ -195,7 +195,7 @@ export interface PublicPost extends PostRow {
 }
 
 /** Can `viewerId` see a post of this `visibility` by `publisherId`? */
-async function canSeePost(
+export async function canSeePost(
   db: ReturnType<typeof createAdminClient>,
   post: { publisher_id: string; visibility: Visibility; status: string },
   viewerId: string | null,

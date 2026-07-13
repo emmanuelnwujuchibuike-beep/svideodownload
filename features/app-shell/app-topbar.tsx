@@ -13,7 +13,6 @@ import { isTopbarLocked, setTopbarHidden, useTopbarLocked } from "@/features/app
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { openUpload } from "@/features/create/upload-store";
 import { UserMenu } from "@/features/auth/user-menu";
-import { GLASS_CIRCLE, GLASS_TILE } from "@/features/app-shell/topbar-glass";
 import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -30,10 +29,6 @@ export function AppTopbar() {
   // other route keeps it. Thread pages already cover it with their own
   // full-screen overlay, so only the index needs this.
   const onMessagesIndex = pathname === "/messages";
-  // Owner mockup: Home's top nav sits on its own colored gradient wash, not
-  // the app-wide neutral glass bar every other page uses — scoped to Home
-  // specifically so nothing else changes.
-  const onHome = pathname === "/home";
   const inputRef = useRef<HTMLInputElement | null>(null);
   // The feed lifts its For You/Following/Reels control up here (owner spec)
   // — every other page's search bar is untouched, since only the feed ever
@@ -105,9 +100,12 @@ export function AppTopbar() {
         // (zero in a normal browser tab, so nothing changes there).
         "sticky top-0 z-30 flex items-center gap-2 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl transition-transform duration-300 will-change-transform",
         "h-[calc(4rem+env(safe-area-inset-top))]",
-        onHome
-          ? "border-b border-white/[0.06] bg-[linear-gradient(135deg,hsl(234_55%_14%),hsl(255_60%_22%)_55%,hsl(265_65%_26%))]"
-          : "border-b border-border/20 bg-background/60",
+        // Owner correction (2026-07-13): the top nav must track the SYSTEM
+        // theme like every other surface — white in light mode, blending
+        // into the app's own dark background in dark mode ("the top edge
+        // look full screen") — not a fixed colored gradient wash regardless
+        // of theme. Reverted from an earlier Home-only gradient treatment.
+        "border-b border-border/20 bg-background/60",
         hidden ? "-translate-y-full lg:translate-y-0" : "translate-y-0",
         onMessagesIndex && "hidden lg:flex",
       )}
@@ -126,13 +124,13 @@ export function AppTopbar() {
             }}
             className="flex h-10 w-10 items-center justify-center"
           >
-            <IconTile className={onHome ? GLASS_TILE : undefined}>
+            <IconTile>
               <IoSearchOutline className="h-[20px] w-[20px]" />
             </IconTile>
           </Link>
         </PressIcon>
         {/* Add friends — single top-nav icon */}
-        <SuggestionsLauncher className={onHome ? GLASS_CIRCLE : undefined} />
+        <SuggestionsLauncher />
       </div>
 
       {center ? (
@@ -153,7 +151,7 @@ export function AppTopbar() {
             }}
             className="flex h-10 w-10 items-center justify-center"
           >
-              <IconTile className={onHome ? GLASS_TILE : undefined}>
+              <IconTile>
                 <IoSearchOutline className="h-[20px] w-[20px]" />
               </IconTile>
             </Link>
@@ -206,7 +204,7 @@ export function AppTopbar() {
             in the center slot — adding separate Friends/Reels icons here
             duplicated them and pushed this bell off-screen. */}
         <span className="lg:hidden">
-          <NotificationBell glass={onHome} />
+          <NotificationBell />
         </span>
 
         <div className="hidden sm:block">

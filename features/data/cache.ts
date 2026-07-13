@@ -149,7 +149,20 @@ export function ensureGlobalRevalidation(): void {
   // found chasing a "messages page stuck loading, only after the iOS
   // back-gesture" report.
   window.addEventListener("pageshow", (e) => {
-    if (e.persisted) revalidateAllMounted();
+    if (!e.persisted) return;
+    // A fetch that was still in-flight at the exact moment the page froze
+    // dies with the frozen document — its underlying connection never
+    // settles, orphaning the recorded `promise` forever. `revalidate()`
+    // dedupes against `cur.promise` unconditionally (by design, for the
+    // normal case), so without this, every future call for that key —
+    // including the very `revalidateAllMounted()` below — just hands back
+    // the same permanently-pending promise instead of ever fetching again.
+    // Found chasing an admin-only "stuck loading after iOS swipe-back"
+    // report whose root cause was a sibling bug (a `verifying` flag gated
+    // on an in-flight fetch's `finally`, same failure family) — this closes
+    // the equivalent gap in the shared cache every other query relies on.
+    for (const entry of cache.values()) entry.promise = undefined;
+    revalidateAllMounted();
   });
   void import("@/lib/observability/memory-pressure").then(({ onMemoryPressure }) => onMemoryPressure(pruneInactive));
 }

@@ -77,7 +77,21 @@ const JS = `(function(){var el=document.getElementById('frenz-boot');if(!el)retu
 // set. A live OS change while the app is open is still applied immediately
 // (matching the owner's ask), via this script's own matchMedia listener —
 // checked against `frenz-theme-mode`, not next-themes' key.
-const THEME_JS = `(function(){var CACHE='frenz-resolved-theme';var MODE='frenz-theme-mode';var mq=window.matchMedia('(prefers-color-scheme: dark)');function mode(){try{return localStorage.getItem(MODE)||'system'}catch(e){return 'system'}}function cached(){try{return localStorage.getItem(CACHE)}catch(e){return null}}function remember(v){try{localStorage.setItem(CACHE,v)}catch(e){}}function syncNextThemes(v){try{localStorage.setItem('theme',v)}catch(e){}}function set(dark){document.documentElement.classList.toggle('dark',dark)}function resolveSystem(){var c=cached();if(c)return c;return mq.matches?'dark':'light'}function boot(){var m=mode();var resolved=(m==='light'||m==='dark')?m:resolveSystem();set(resolved==='dark');remember(resolved);syncNextThemes(resolved)}boot();function onSystemChange(){if(mode()!=='system')return;var resolved=mq.matches?'dark':'light';set(resolved==='dark');remember(resolved);syncNextThemes(resolved)}try{if(mq.addEventListener)mq.addEventListener('change',onSystemChange);else if(mq.addListener)mq.addListener(onSystemChange)}catch(e){}window.addEventListener('pageshow',boot)})();`;
+//
+// Self-heal addendum (owner: "the previously saved theme in local storage
+// doesnt clear so it can automatically switch to the current system theme
+// when opening the webapp"): a pure cache-first read can never notice the
+// OS theme changed while the app was fully CLOSED (not just backgrounded) —
+// there's no 'change' event to fire for a transition nothing was listening
+// for. So in system mode, after painting the cache instantly, boot() also
+// re-checks the live `matchMedia` answer a beat later (a short setTimeout,
+// not blocking the first paint) and corrects + re-saves if it disagrees.
+// The delay matters: it's specifically to dodge the WKWebView-stale-
+// immediately-after-resume window this whole rewrite exists to avoid — by
+// the time the timeout fires, the OS has had a moment to "self-correct" per
+// the platform quirk this file's history describes, so the check reads the
+// REAL current value instead of the same transient stale one.
+const THEME_JS = `(function(){var CACHE='frenz-resolved-theme';var MODE='frenz-theme-mode';var mq=window.matchMedia('(prefers-color-scheme: dark)');function mode(){try{return localStorage.getItem(MODE)||'system'}catch(e){return 'system'}}function cached(){try{return localStorage.getItem(CACHE)}catch(e){return null}}function remember(v){try{localStorage.setItem(CACHE,v)}catch(e){}}function syncNextThemes(v){try{localStorage.setItem('theme',v)}catch(e){}}function set(dark){document.documentElement.classList.toggle('dark',dark)}function resolveSystem(){var c=cached();if(c)return c;return mq.matches?'dark':'light'}function apply(v){set(v==='dark');remember(v);syncNextThemes(v)}function boot(){var m=mode();if(m==='light'||m==='dark'){apply(m);return}var resolved=resolveSystem();apply(resolved);setTimeout(function(){if(mode()!=='system')return;var live=mq.matches?'dark':'light';if(live!==resolved)apply(live)},60)}boot();function onSystemChange(){if(mode()!=='system')return;apply(mq.matches?'dark':'light')}try{if(mq.addEventListener)mq.addEventListener('change',onSystemChange);else if(mq.addListener)mq.addListener(onSystemChange)}catch(e){}window.addEventListener('pageshow',boot)})();`;
 
 export function BootSplash() {
   return (

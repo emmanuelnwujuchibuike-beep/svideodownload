@@ -47,6 +47,10 @@ export function useTypingIndicator(
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const joinedRef = useRef(false);
+  // Whether WE'RE currently broadcast as typing — lets notifyTyping() only
+  // actually send the `typing:true` track call once per burst (the first
+  // keystroke), instead of on every single keypress.
+  const isTypingRef = useRef(false);
   // The latest state we WANT tracked — flushed on join, so a keystroke that
   // raced the initial subscribe still lands instead of silently dropping.
   const desiredRef = useRef<TypingPayload | null>(null);
@@ -93,10 +97,27 @@ export function useTypingIndicator(
     // event fires) — a periodic re-check clears it once STALE_MS passes.
     const staleCheck = setInterval(recompute, 2_000);
 
+    // Stop broadcasting the instant the tab is backgrounded/app is suspended
+    // — don't wait out the idle timer (which still fires, just not
+    // necessarily right away if the browser throttles a backgrounded
+    // tab's timers).
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden" && isTypingRef.current) {
+        if (clearTimer.current) clearTimeout(clearTimer.current);
+        isTypingRef.current = false;
+        const payload: TypingPayload = { typing: false, at: Date.now(), name: viewerNameRef.current };
+        desiredRef.current = payload;
+        if (joinedRef.current) void channel.track(payload);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
       clearInterval(staleCheck);
+      document.removeEventListener("visibilitychange", onVisibility);
       if (clearTimer.current) clearTimeout(clearTimer.current);
       desiredRef.current = null;
+      isTypingRef.current = false;
       // removeChannel — the browser client is a shared singleton
       // (lib/supabase/client.ts), and this hook mounts/tears down with every
       // thread visit, so a leaked channel here compounded exactly the same
@@ -113,17 +134,31 @@ export function useTypingIndicator(
     if (channel && joinedRef.current) void channel.track(payload);
   }, []);
 
-  /** Call on every composer keystroke — debounced, auto-clears after idle. No-ops entirely when the viewer has turned off "show when I'm typing". */
+  /**
+   * Call on every composer keystroke. Only actually BROADCASTS on the first
+   * keystroke of a typing burst (`isTypingRef` gates repeat calls) — every
+   * following keystroke just resets the idle timer, so a fast typist doesn't
+   * flood Realtime with a track() per keypress. Auto-clears after
+   * IDLE_CLEAR_MS of no further keystrokes. No-ops entirely when the viewer
+   * has turned off "show when I'm typing".
+   */
   const notifyTyping = useCallback(() => {
     if (!broadcastEnabled) return;
-    trackState(true);
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      trackState(true);
+    }
     if (clearTimer.current) clearTimeout(clearTimer.current);
-    clearTimer.current = setTimeout(() => trackState(false), IDLE_CLEAR_MS);
+    clearTimer.current = setTimeout(() => {
+      isTypingRef.current = false;
+      trackState(false);
+    }, IDLE_CLEAR_MS);
   }, [broadcastEnabled, trackState]);
 
-  /** Call immediately on send — no need to wait out the idle timer. */
+  /** Call immediately on send/input-cleared/conversation-change — no need to wait out the idle timer. */
   const clearTyping = useCallback(() => {
     if (clearTimer.current) clearTimeout(clearTimer.current);
+    isTypingRef.current = false;
     trackState(false);
   }, [trackState]);
 

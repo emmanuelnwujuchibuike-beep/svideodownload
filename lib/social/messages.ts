@@ -1,10 +1,10 @@
 import { after } from "next/server";
 
-import { GROUP_TITLE_MAX, MAX_GROUP_MEMBERS, parseMentionedHandles } from "@/lib/social/message-meta";
+import { CONVERSATION_THEMES, GROUP_TITLE_MAX, MAX_GROUP_MEMBERS, parseMentionedHandles, type ConversationTheme } from "@/lib/social/message-meta";
 import { MAX_ATTACHMENTS_PER_MESSAGE, type AttachmentKind } from "@/lib/social/message-media";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export { GROUP_TITLE_MAX, MAX_GROUP_MEMBERS };
+export { CONVERSATION_THEMES, GROUP_TITLE_MAX, MAX_GROUP_MEMBERS, type ConversationTheme };
 
 /**
  * Direct + group messaging. Direct conversations are keyed by a canonical
@@ -491,6 +491,116 @@ export async function setDisappearAfterSeconds(
   }
 }
 
+/** Chat Themes — shared per-conversation (like disappearing messages, not a
+ *  per-viewer preference): any active member can set it, no owner/admin gate
+ *  — purely cosmetic, low-risk, unlike group rename/permissions. */
+export async function setConversationTheme(
+  conversationId: string,
+  actorId: string,
+  theme: ConversationTheme | null,
+): Promise<{ ok: boolean }> {
+  try {
+    const db = createAdminClient();
+    const role = await memberRole(db, conversationId, actorId);
+    if (!role) return { ok: false };
+    const { error } = await db.from("conversations").update({ theme }).eq("id", conversationId);
+    return { ok: !error };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
+ * In-chat polls (inbox mockup completion) — creates the parent message (an
+ * empty-body, metadata-tagged row, same shape a location/contact share
+ * uses) then the poll row referencing it. Server-side only (mirrors
+ * `message_attachments`'s D1 rule) — only VOTES are client-direct, for
+ * low-latency tapping (see migration 0071's RLS).
+ */
+export async function createPoll(
+  senderId: string,
+  conversationId: string,
+  question: string,
+  options: string[],
+): Promise<{ ok: true; messageId: string; pollId: string } | { ok: false }> {
+  try {
+    const sent = await sendMessage(senderId, conversationId, "", { metadata: { kind: "poll" } });
+    if (!sent.ok) return { ok: false };
+    const db = createAdminClient();
+    const { data: poll, error } = await db
+      .from("message_polls")
+      .insert({ message_id: sent.id, conversation_id: conversationId, question, options, created_by: senderId })
+      .select("id")
+      .single();
+    if (error || !poll) return { ok: false };
+    // The bubble needs the poll's own id to fetch/vote — carried in the
+    // parent message's metadata (set here, after the poll exists, since the
+    // poll row itself needs the message's id first — see the insert above).
+    await db.from("messages").update({ metadata: { kind: "poll", pollId: poll.id } }).eq("id", sent.id);
+    return { ok: true, messageId: sent.id, pollId: poll.id as string };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export interface PollResults {
+  id: string;
+  question: string;
+  options: string[];
+  votesByOption: number[];
+  totalVotes: number;
+  viewerOptionIndex: number | null;
+}
+
+/** Poll question/options + live tally + the viewer's own vote (if any). Only
+ *  a member of the poll's OWN conversation may read it — this uses the
+ *  service-role client (bypasses RLS), so the membership check has to be
+ *  explicit here, same as every other admin-client read in this file. */
+export async function getPollResults(pollId: string, viewerId: string): Promise<PollResults | null> {
+  try {
+    const db = createAdminClient();
+    const { data: poll } = await db.from("message_polls").select("id, question, options, conversation_id").eq("id", pollId).maybeSingle();
+    if (!poll) return null;
+    const role = await memberRole(db, poll.conversation_id as string, viewerId);
+    if (!role) return null;
+    const options = poll.options as string[];
+    const { data: votes } = await db.from("message_poll_votes").select("user_id, option_index").eq("poll_id", pollId);
+    const rows = (votes ?? []) as { user_id: string; option_index: number }[];
+    const votesByOption = new Array(options.length).fill(0) as number[];
+    for (const v of rows) if (v.option_index >= 0 && v.option_index < options.length) votesByOption[v.option_index]!++;
+    const mine = rows.find((v) => v.user_id === viewerId);
+    return {
+      id: poll.id as string,
+      question: poll.question as string,
+      options,
+      votesByOption,
+      totalVotes: rows.length,
+      viewerOptionIndex: mine ? mine.option_index : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Cast/change the viewer's vote (member of the poll's conversation only). */
+export async function votePoll(pollId: string, viewerId: string, optionIndex: number): Promise<{ ok: boolean }> {
+  try {
+    const db = createAdminClient();
+    const { data: poll } = await db.from("message_polls").select("conversation_id, options").eq("id", pollId).maybeSingle();
+    if (!poll) return { ok: false };
+    const options = poll.options as string[];
+    if (optionIndex < 0 || optionIndex >= options.length) return { ok: false };
+    const role = await memberRole(db, poll.conversation_id as string, viewerId);
+    if (!role) return { ok: false };
+    const { error } = await db
+      .from("message_poll_votes")
+      .upsert({ poll_id: pollId, conversation_id: poll.conversation_id, user_id: viewerId, option_index: optionIndex }, { onConflict: "poll_id,user_id" });
+    return { ok: !error };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /**
  * Demote-then-promote as ONE atomic transaction (a `security definer` SQL
  * function, see migration 0041) rather than two separate JS-orchestrated
@@ -542,14 +652,19 @@ export async function setMemberRole(
 export async function setConversationPrefs(
   userId: string,
   conversationId: string,
-  patch: Partial<{ muted: boolean; archived: boolean; pinned: boolean }>,
+  patch: Partial<{ muted: boolean; archived: boolean; pinned: boolean; hidden: boolean }>,
 ): Promise<{ ok: boolean }> {
   try {
     const db = createAdminClient();
-    const clean: Record<string, boolean> = {};
+    const clean: Record<string, boolean | string | null> = {};
     if (typeof patch.muted === "boolean") clean.muted = patch.muted;
     if (typeof patch.archived === "boolean") clean.archived = patch.archived;
     if (typeof patch.pinned === "boolean") clean.pinned = patch.pinned;
+    // Per-user "Delete conversation" (swipe action) — a soft hide, not a
+    // destructive delete of shared data. `hidden_at` reset to null un-hides;
+    // `listConversations` auto-reveals it again anyway once new activity
+    // lands, but an explicit un-hide (if ever exposed) should work too.
+    if (typeof patch.hidden === "boolean") clean.hidden_at = patch.hidden ? new Date().toISOString() : null;
     if (Object.keys(clean).length === 0) return { ok: true };
     const { error } = await db
       .from("conversation_members")
@@ -646,6 +761,10 @@ export interface SendMessageOptions {
    *  `body` must already be base64 ciphertext when this is set. Never
    *  generated/interpreted server-side; this function just stores it. */
   encryptionIv?: string;
+  /** Location/Contact share payload (inbox mockup completion) — neither fits
+   *  `message_attachments` (media-file-shaped), so a small structured JSON
+   *  column instead. See migration 0070's header for the exact shapes. */
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -669,7 +788,7 @@ export async function sendMessage(
   // separate code path, keeps this one length guard correct for both.
   const maxLen = options.encryptionIv ? 2800 : 2000;
   if (text.length > maxLen) return { ok: false };
-  if (!text && attachments.length === 0) return { ok: false }; // attachment-only sends are valid; a truly empty send isn't
+  if (!text && attachments.length === 0 && !options.metadata) return { ok: false }; // attachment-only / location-only / contact-only sends are valid; a truly empty send isn't
   try {
     const db = createAdminClient();
     const { data: conv } = await db
@@ -745,6 +864,7 @@ export async function sendMessage(
         client_sent_at: options.clientSentAt ?? null,
         forwarded_from_id: forwardedFrom,
         encryption_iv: options.encryptionIv ?? null,
+        metadata: options.metadata ?? null,
       })
       .select("id")
       .single();
@@ -992,11 +1112,11 @@ export async function listConversations(userId: string): Promise<ConversationSum
     const db = createAdminClient();
     const { data: memberships } = await db
       .from("conversation_members")
-      .select("conversation_id, muted, archived, pinned")
+      .select("conversation_id, muted, archived, pinned, hidden_at")
       .eq("user_id", userId)
       .is("left_at", null)
       .limit(200);
-    const mrows = (memberships ?? []) as { conversation_id: string; muted: boolean; archived: boolean; pinned: boolean }[];
+    const mrows = (memberships ?? []) as { conversation_id: string; muted: boolean; archived: boolean; pinned: boolean; hidden_at: string | null }[];
     if (mrows.length === 0) return [];
     const convIds = mrows.map((m) => m.conversation_id);
     const prefByConv = new Map(mrows.map((m) => [m.conversation_id, m]));
@@ -1106,6 +1226,11 @@ export async function listConversations(userId: string): Promise<ConversationSum
     const out: ConversationSummary[] = [];
     for (const c of convs) {
       const pref = prefByConv.get(c.id);
+      // A hidden conversation ("Delete" from the swipe actions) auto-reappears
+      // the instant new activity lands — checked here as "does the LATEST
+      // message post-date the hide" rather than a one-way flag, so nothing
+      // ever gets silently and permanently lost the way a real delete would.
+      if (pref?.hidden_at && new Date(pref.hidden_at) >= new Date(c.last_message_at)) continue;
       if (c.type === "direct") {
         const otherId = c.user_low === userId ? c.user_high : c.user_low;
         const p = otherId ? profById.get(otherId) : null;
@@ -1356,6 +1481,9 @@ export interface MessageItem {
   pinned: boolean;
   reactions: MessageReactionSummary[];
   attachments: MessageAttachment[];
+  /** Location/Contact share payload — see migration 0070's header. Null for
+   *  every ordinary text/media message. */
+  metadata: Record<string, unknown> | null;
 }
 
 export interface ConversationView {
@@ -1372,6 +1500,8 @@ export interface ConversationView {
   onlyAdminsCanSend: boolean;
   /** Disappearing messages (Part 11b) — null means off. */
   disappearAfterSeconds: number | null;
+  /** Chat Themes (inbox mockup completion) — null means the app default look. */
+  theme: ConversationTheme | null;
   /** Part 11b — viewer's OWN "show when I'm typing" preference; gates whether ConversationRoom broadcasts typing state at all (see use-typing.ts). */
   viewerTypingIndicatorsEnabled: boolean;
   messages: MessageItem[];
@@ -1391,6 +1521,7 @@ interface RawMessageRow {
   deleted_at: string | null;
   pinned: boolean;
   encryption_iv: string | null;
+  metadata: Record<string, unknown> | null;
 }
 
 /**
@@ -1415,7 +1546,7 @@ export async function getConversation(
     const db = createAdminClient();
     const { data: conv } = await db
       .from("conversations")
-      .select("id, type, title, avatar_url, user_low, user_high, only_admins_can_send, disappear_after_seconds")
+      .select("id, type, title, avatar_url, user_low, user_high, only_admins_can_send, disappear_after_seconds, theme")
       .eq("id", conversationId)
       .maybeSingle();
     if (!conv) return null;
@@ -1495,7 +1626,7 @@ export async function getConversation(
     // instead could silently skip it.
     const queryStartedAt = new Date().toISOString();
     const MESSAGE_COLUMNS =
-      "id, sender_id, body, created_at, delivered_at, read_at, reply_to_id, edited_at, deleted_at, pinned, encryption_iv";
+      "id, sender_id, body, created_at, delivered_at, read_at, reply_to_id, edited_at, deleted_at, pinned, encryption_iv, metadata";
     let rows: RawMessageRow[];
     if (sinceUpdatedAt) {
       // Delta path — small, order doesn't matter (the client merges by id
@@ -1590,6 +1721,7 @@ export async function getConversation(
         pinned: m.pinned,
         reactions: reactionsByMsg.get(m.id) ?? [],
         attachments: m.deleted_at ? [] : (attachmentsByMsg.get(m.id) ?? []),
+        metadata: m.deleted_at ? null : m.metadata,
       };
     });
 
@@ -1605,6 +1737,7 @@ export async function getConversation(
       viewerRole: (myMembership.role as MemberRole) ?? null,
       onlyAdminsCanSend: (conv.only_admins_can_send as boolean | null) ?? false,
       disappearAfterSeconds: (conv.disappear_after_seconds as number | null) ?? null,
+      theme: (conv.theme as ConversationTheme | null) ?? null,
       viewerTypingIndicatorsEnabled: (viewerPriv?.typing_indicators_enabled as boolean | null) ?? true,
       messages,
       syncedAt: queryStartedAt,

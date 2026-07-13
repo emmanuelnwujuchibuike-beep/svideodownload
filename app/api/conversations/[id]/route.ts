@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { GROUP_TITLE_MAX, renameGroup, setDisappearAfterSeconds, setGroupAvatar, setGroupSendPermission } from "@/lib/social/messages";
+import {
+  CONVERSATION_THEMES,
+  GROUP_TITLE_MAX,
+  renameGroup,
+  setConversationTheme,
+  setDisappearAfterSeconds,
+  setGroupAvatar,
+  setGroupSendPermission,
+} from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -14,6 +22,8 @@ const schema = z.object({
   onlyAdminsCanSend: z.boolean().optional(),
   /** Disappearing messages (Part 11b) — null/omit-with-explicit-null turns it off. */
   disappearAfterSeconds: z.number().int().positive().nullable().optional(),
+  /** Chat Themes (inbox mockup completion) — null turns it off (app default). */
+  theme: z.enum(CONVERSATION_THEMES).nullable().optional(),
 });
 
 /** PATCH /api/conversations/[id] — rename/re-avatar/send-permission a group (owner/admin only). */
@@ -39,7 +49,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     parsed.data.title === undefined &&
     parsed.data.avatarUrl === undefined &&
     parsed.data.onlyAdminsCanSend === undefined &&
-    parsed.data.disappearAfterSeconds === undefined
+    parsed.data.disappearAfterSeconds === undefined &&
+    parsed.data.theme === undefined
   ) {
     return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
   }
@@ -59,6 +70,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (parsed.data.disappearAfterSeconds !== undefined) {
     const res = await setDisappearAfterSeconds(id, user.id, parsed.data.disappearAfterSeconds);
     if (!res.ok) return NextResponse.json({ error: "Couldn't update disappearing messages." }, { status: 403 });
+  }
+  if (parsed.data.theme !== undefined) {
+    const res = await setConversationTheme(id, user.id, parsed.data.theme);
+    if (!res.ok) return NextResponse.json({ error: "Couldn't update the chat theme." }, { status: 403 });
   }
   return NextResponse.json({ ok: true });
 }

@@ -68,6 +68,24 @@ const attachmentSchema = z
   .refine((a) => a.sizeBytes === undefined || a.sizeBytes <= MAX_SIZE_BYTES[a.mediaKind], { message: "File too large." })
   .refine((a) => a.mimeType === undefined || ALLOWED_MIME[a.mediaKind].includes(a.mimeType), { message: "Unsupported file type." });
 
+// Location/Contact share (inbox mockup completion) — a small structured
+// payload, not a file, stored in `messages.metadata` (migration 0070).
+const metadataSchema = z.union([
+  z.object({
+    kind: z.literal("location"),
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    label: z.string().max(200).nullable(),
+  }),
+  z.object({
+    kind: z.literal("contact"),
+    friendId: z.string().uuid(),
+    displayName: z.string().max(120),
+    handle: z.string().max(60),
+    avatarUrl: z.string().url().nullable(),
+  }),
+]);
+
 const schema = z
   .object({
     conversationId: z.string().uuid(),
@@ -84,8 +102,11 @@ const schema = z
     clientSentAt: z.string().datetime().optional(),
     // Secret Chats only (Part 11b) — the AES-GCM nonce for `body`.
     encryptionIv: z.string().max(64).optional(),
+    metadata: metadataSchema.optional(),
   })
-  .refine((v) => v.body.trim().length > 0 || (v.attachments?.length ?? 0) > 0, { message: "Write a message or attach something." });
+  .refine((v) => v.body.trim().length > 0 || (v.attachments?.length ?? 0) > 0 || !!v.metadata, {
+    message: "Write a message or attach something.",
+  });
 
 /** POST /api/messages — send a message in a conversation (direct or group). */
 export async function POST(request: Request) {
@@ -113,6 +134,7 @@ export async function POST(request: Request) {
     clientSentAt: parsed.data.clientSentAt,
     attachments: parsed.data.attachments as AttachmentInput[] | undefined,
     encryptionIv: parsed.data.encryptionIv,
+    metadata: parsed.data.metadata,
   });
   if (!res.ok) {
     const message = res.reason === "admins_only" ? "Only admins can send messages in this group." : "Couldn't send (blocked or unavailable).";
@@ -130,7 +152,7 @@ export async function POST(request: Request) {
     // the same warm instance (anywhere from seconds to minutes later, or
     // never). This is the real cause behind "push notifications arrive
     // minutes late" — found 2026-07-12.
-    after(() => notifyMembers(user.id, parsed.data.conversationId, parsed.data.body, parsed.data.attachments));
+    after(() => notifyMembers(user.id, parsed.data.conversationId, parsed.data.body, parsed.data.attachments, parsed.data.metadata));
   }
 
   return NextResponse.json({ ok: true, id: res.id, duplicate: res.duplicate ?? false });
@@ -153,9 +175,15 @@ export async function POST(request: Request) {
  * REPLACEMENT say something truthful about the burst, not just show
  * whichever message happened to be last).
  */
-/** A push preview needs SOME text even for an attachment-only send. */
-function previewFor(body: string, attachments: AttachmentInput[] | undefined): string {
+/** A push preview needs SOME text even for an attachment-only/location/contact send. */
+function previewFor(
+  body: string,
+  attachments: AttachmentInput[] | undefined,
+  metadata?: z.infer<typeof metadataSchema>,
+): string {
   const text = body.length > 140 ? `${body.slice(0, 140)}…` : body;
+  if (metadata?.kind === "location") return "📍 Location";
+  if (metadata?.kind === "contact") return `👤 Contact: ${metadata.displayName}`;
   if (!attachments || attachments.length === 0) return text;
   const kind = attachments[0]!.mediaKind;
   const label =
@@ -171,7 +199,13 @@ function previewFor(body: string, attachments: AttachmentInput[] | undefined): s
   return text ? `${label} · ${text}` : label;
 }
 
-async function notifyMembers(senderId: string, conversationId: string, body: string, attachments?: AttachmentInput[]): Promise<void> {
+async function notifyMembers(
+  senderId: string,
+  conversationId: string,
+  body: string,
+  attachments?: AttachmentInput[],
+  metadata?: z.infer<typeof metadataSchema>,
+): Promise<void> {
   try {
     const db = createAdminClient();
     const [{ data: conv }, { data: memberRows }, { data: sender }, { count: burstCount }] = await Promise.all([
@@ -209,7 +243,7 @@ async function notifyMembers(senderId: string, conversationId: string, body: str
     // notification would look broken (and defeat the whole point of
     // encrypting it). Always a generic label here, regardless of the
     // recipient's own "hide preview" notification setting.
-    const preview = isSecret ? "New encrypted message" : isBurst ? `${burstCount} new messages` : previewFor(body, attachments);
+    const preview = isSecret ? "New encrypted message" : isBurst ? `${burstCount} new messages` : previewFor(body, attachments, metadata);
 
     await Promise.all(
       recipientIds.map((recipientId) => {

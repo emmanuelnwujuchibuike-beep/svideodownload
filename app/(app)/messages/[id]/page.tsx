@@ -7,6 +7,7 @@ import { ConversationRoom } from "@/features/social/conversation-room";
 import { ThreadHeader } from "@/features/social/thread-header";
 import { isPinLocked } from "@/lib/security/pin-gate";
 import { getConversation, type ConversationView } from "@/lib/social/messages";
+import { getActiveStories, type StoryGroup } from "@/lib/social/stories";
 import { createClient, getUserBounded } from "@/lib/supabase/server";
 import { withTimeout } from "@/lib/utils";
 
@@ -93,6 +94,17 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   const { data: viewerProfile } = await supabase.from("profiles").select("display_name, handle").eq("id", user.id).maybeSingle();
   const viewerName = (viewerProfile?.display_name as string) || (viewerProfile?.handle ? `@${viewerProfile.handle as string}` : "You");
 
+  // Stories row embedded at the top of the thread (owner mockup) — direct
+  // threads only, matching what the mockup itself shows (a single "Name · N
+  // stories" strip); a group's several members each having stories is a
+  // meaningfully different display this round didn't scope in. Best-effort:
+  // a failed stories fetch just means no strip, never blocks the thread.
+  let otherStoryGroup: StoryGroup | null = null;
+  if (convo.type === "direct" && convo.other) {
+    const groups = await getActiveStories(user.id).catch(() => []);
+    otherStoryGroup = groups.find((g) => g.userId === convo.other!.id) ?? null;
+  }
+
   return (
     // Mobile: a true full-viewport overlay — covers the persistent app
     // topbar AND bottom nav (z-50, above MobileNav's z-40) so an open thread
@@ -112,9 +124,12 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         viewerRole={convo.viewerRole}
         other={convo.other}
         onlyAdminsCanSend={convo.onlyAdminsCanSend}
+        initialTheme={convo.theme}
+        initialDisappearAfterSeconds={convo.disappearAfterSeconds}
       />
 
       <ConversationRoom
+        theme={convo.theme}
         conversationId={convo.id}
         viewerId={user.id}
         viewerName={viewerName}
@@ -127,6 +142,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         onlyAdminsCanSend={convo.onlyAdminsCanSend}
         otherName={convo.other?.displayName ?? null}
         viewerTypingIndicatorsEnabled={convo.viewerTypingIndicatorsEnabled}
+        otherStoryGroup={otherStoryGroup}
       />
     </div>
   );

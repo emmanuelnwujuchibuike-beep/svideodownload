@@ -15,11 +15,26 @@ import { cn } from "@/lib/utils";
  * correction (2026-07-11): brand color back, as the "dark premium"
  * `.bg-brand-tile` gradient (globals.css), fixed white icon.
  */
-export function ModuleIconBadge({ icon: Icon, className }: { icon: ComponentType<{ className?: string }>; className?: string }) {
+// `tone="vivid"` swaps in the brighter, fully-lit `.bg-brand` gradient for the
+// one spot (Continue Watching, matching an owner mockup) that explicitly
+// calls for it — everything else stays on the default dark-premium tile.
+// `.bg-brand`/`.bg-brand-tile` are plain custom classes with no shared
+// tailwind-merge group, so picking one via ternary (not layering both
+// through `cn`) is what actually avoids a stylesheet-order collision.
+export function ModuleIconBadge({
+  icon: Icon,
+  tone = "brand",
+  className,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  tone?: "brand" | "vivid";
+  className?: string;
+}) {
   return (
     <span
       className={cn(
-        "relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-brand-tile shadow-[0_3px_10px_-2px] shadow-[hsl(var(--brand-purple)/0.45)] ring-1 ring-inset ring-white/10",
+        "relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl shadow-[0_3px_10px_-2px] shadow-[hsl(var(--brand-purple)/0.45)] ring-1 ring-inset ring-white/10",
+        tone === "vivid" ? "bg-brand" : "bg-brand-tile",
         className,
       )}
     >

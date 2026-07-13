@@ -5,12 +5,14 @@ import {
   AlertTriangle,
   Check,
   CheckCheck,
+  ChevronRight,
   Clock,
   File as FileIcon,
   Forward,
   Image as ImageIcon,
   Loader2,
   Lock,
+  MapPin,
   Mic,
   MoreHorizontal,
   Paperclip,
@@ -26,16 +28,23 @@ import {
   WifiOff,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { RichText } from "@/components/social/rich-text";
 import { revalidate } from "@/features/data";
+import { ContactPickerSheet } from "@/features/social/contact-picker-sheet";
+import { DocumentAttachmentCard } from "@/features/social/document-attachment-card";
+import { EmojiPickerButton } from "@/features/social/emoji-picker-button";
 import { ForwardSheet } from "@/features/social/forward-sheet";
 import { INBOX_KEY, loadInbox } from "@/features/social/inbox";
 import { MediaComposerSheet } from "@/features/social/media-composer-sheet";
 import { extractSharedPost, MessagePostEmbed } from "@/features/social/message-post-embed";
+import { PollBubble } from "@/features/social/poll-bubble";
+import { PollComposerSheet } from "@/features/social/poll-composer-sheet";
+import { StoryViewer } from "@/features/app-shell/dashboard/stories-row";
 import { useTypingIndicator } from "@/features/social/use-typing";
 import { VoiceMessage, VideoComment } from "@/features/social/comment-media";
 import { VoiceRecorder } from "@/features/social/voice-recorder";
@@ -62,7 +71,8 @@ import {
   MAX_SIZE_BYTES,
   type AttachmentKind,
 } from "@/lib/social/message-media";
-import type { AttachmentInput, ConversationMember, ConversationType, MemberRole, MessageAttachment, MessageItem } from "@/lib/social/messages";
+import type { AttachmentInput, ConversationMember, ConversationTheme, ConversationType, MemberRole, MessageAttachment, MessageItem } from "@/lib/social/messages";
+import type { StoryGroup } from "@/lib/social/stories";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { useVisualViewport } from "@/lib/pwa/use-visual-viewport";
 import { createClient } from "@/lib/supabase/client";
@@ -71,6 +81,24 @@ import { toast } from "@/features/ui/toast";
 
 const COMPOSER_MAX_HEIGHT = 128;
 const DRAFT_PREFIX = "frenz-draft:";
+
+/** Chat Themes (inbox mockup completion) — each drives BOTH an accent color
+ *  (sent bubbles, send button) AND a matching background wash, per owner's
+ *  explicit choice (the mockup itself only shows the color swatches). */
+const THEME_BUBBLE_CLASS: Record<ConversationTheme, string> = {
+  blue: "bg-gradient-to-br from-blue-500 to-blue-600",
+  pink: "bg-gradient-to-br from-pink-500 to-rose-600",
+  green: "bg-gradient-to-br from-emerald-500 to-green-600",
+  orange: "bg-gradient-to-br from-orange-500 to-amber-600",
+  purple: "bg-gradient-to-br from-violet-500 to-purple-600",
+};
+const THEME_WASH_CLASS: Record<ConversationTheme, string> = {
+  blue: "bg-blue-500/[0.05] dark:bg-blue-400/[0.06]",
+  pink: "bg-pink-500/[0.05] dark:bg-pink-400/[0.06]",
+  green: "bg-emerald-500/[0.05] dark:bg-emerald-400/[0.06]",
+  orange: "bg-orange-500/[0.05] dark:bg-orange-400/[0.06]",
+  purple: "bg-violet-500/[0.05] dark:bg-violet-400/[0.06]",
+};
 
 function draftKey(conversationId: string): string {
   return `${DRAFT_PREFIX}${conversationId}`;
@@ -87,6 +115,7 @@ interface RawMessage {
   edited_at: string | null;
   deleted_at: string | null;
   pinned: boolean;
+  metadata: Record<string, unknown> | null;
 }
 
 function receiptLabel(m: MessageItem): { label: string; read: boolean; delivered: boolean; at: string } {
@@ -140,6 +169,8 @@ export function ConversationRoom({
   onlyAdminsCanSend = false,
   otherName = null,
   viewerTypingIndicatorsEnabled = true,
+  theme = null,
+  otherStoryGroup = null,
 }: {
   conversationId: string;
   viewerId: string;
@@ -156,6 +187,12 @@ export function ConversationRoom({
   otherName?: string | null;
   /** Part 11b privacy toggle — the VIEWER's own "show when I'm typing" choice; false mutes OUR OWN outbound typing broadcast only (receiving others' typing is unaffected). */
   viewerTypingIndicatorsEnabled?: boolean;
+  /** Chat Themes (inbox mockup completion) — null is the app default look. */
+  theme?: ConversationTheme | null;
+  /** The other party's active stories (direct threads only) — the mockup's
+   *  "Name · N stories" strip at the top of the thread. Null when they have
+   *  none active, or this isn't a direct thread. */
+  otherStoryGroup?: StoryGroup | null;
 }) {
   const [messages, setMessages] = useState<MessageItem[]>(initial);
   const [body, setBody] = useState("");
@@ -170,6 +207,15 @@ export function ConversationRoom({
   const [uploadingCount, setUploadingCount] = useState(0);
   const [recordingVoice, setRecordingVoice] = useState(false);
   const [mediaSheetOpen, setMediaSheetOpen] = useState(false);
+  const [contactPickerOpen, setContactPickerOpen] = useState(false);
+  const [pollComposerOpen, setPollComposerOpen] = useState(false);
+  const [storyViewerOpen, setStoryViewerOpen] = useState(false);
+  // Voice hold-to-record gesture (owner mockup: press-and-hold the mic,
+  // slide left to cancel or up to lock) — null means "no hold gesture in
+  // progress," which is also the state for a plain tap (see mic button's
+  // onClick below), so VoiceRecorder's tap-to-open behavior is unchanged.
+  const [holdGesture, setHoldGesture] = useState<{ dragX: number; dragY: number; canceled: boolean; locked: boolean } | null>(null);
+  const [autoStopAndSend, setAutoStopAndSend] = useState(false);
   const [viewingImage, setViewingImage] = useState<{ url: string; alt: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [replyingTo, setReplyingTo] = useState<MessageItem | null>(null);
@@ -220,6 +266,10 @@ export function ConversationRoom({
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const micHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const micHoldStartRef = useRef<{ x: number; y: number } | null>(null);
+  const micHoldEngagedRef = useRef(false);
+  const micPointerHandledRef = useRef(false);
   const seen = useRef(new Set(initial.map((m) => m.id)));
   const bubbleRefs = useRef(new Map<string, HTMLDivElement>());
   const messagesRef = useRef<MessageItem[]>(initial);
@@ -304,6 +354,7 @@ export function ConversationRoom({
             pinned: false,
             reactions: [],
             attachments: [], // the offline queue is text-only — see submit()'s own note
+            metadata: null,
           }));
           for (const m of seeded) seen.current.add(m.id);
           return [...prev, ...seeded];
@@ -549,6 +600,7 @@ export function ConversationRoom({
             // triggers a resync() shortly after to pick them up, same
             // pattern as reactions arriving on an existing message.
             attachments: [],
+            metadata: r.metadata ?? null,
           });
           void revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
         },
@@ -832,6 +884,7 @@ export function ConversationRoom({
         pinned: false,
         reactions: [],
         attachments: optimisticAttachments,
+        metadata: null,
       },
     ]);
     setBody("");
@@ -883,6 +936,177 @@ export function ConversationRoom({
     } finally {
       setBusy(false);
     }
+  };
+
+  // Location/Contact shares (inbox mockup completion) — a small structured
+  // payload, not text/a file, so this bypasses submit()'s body/attachment/
+  // offline-queue machinery entirely rather than shoehorning a fake body
+  // string through it. No offline-queue support (matching attachments) —
+  // a location/contact share made offline just fails with a toast; retrying
+  // a stale GPS fix later isn't meaningfully "the same" send anyway.
+  const sendMetadataMessage = async (metadata: Record<string, unknown>) => {
+    haptic("light");
+    playSound("tap");
+    const clientId = crypto.randomUUID();
+    const optimisticId = `optimistic-${clientId}`;
+    const clientSentAt = new Date().toISOString();
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: optimisticId,
+        body: "",
+        createdAt: clientSentAt,
+        mine: true,
+        senderId: viewerId,
+        encryptionIv: null,
+        deliveredAt: null,
+        readAt: null,
+        replyTo: null,
+        editedAt: null,
+        deletedAt: null,
+        pinned: false,
+        reactions: [],
+        attachments: [],
+        metadata,
+      },
+    ]);
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId, clientId, clientSentAt, metadata }),
+      });
+      if (!res.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        toast("Couldn't send that.", "error");
+      }
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      toast("Couldn't send that — check your connection.", "error");
+    }
+  };
+
+  // Location share — real browser Geolocation, reverse-geocoded via OSM's
+  // free Nominatim API for a human label (no paid map API key needed). A
+  // failed/denied geolocation call or geocode just falls back to raw
+  // coordinates rather than blocking the share entirely.
+  const handleShareLocation = () => {
+    if (!("geolocation" in navigator)) {
+      toast("Location isn't available on this device.", "error");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        let label: string | null = null;
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`, {
+            headers: { Accept: "application/json" },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            label = (data?.display_name as string | undefined)?.split(",").slice(0, 2).join(",").trim() || null;
+          }
+        } catch {
+          /* falls back to null label — the bubble shows "Shared location" instead */
+        }
+        void sendMetadataMessage({ kind: "location", lat, lng, label });
+      },
+      () => toast("Couldn't get your location — check permissions.", "error"),
+      { enableHighAccuracy: false, timeout: 10_000 },
+    );
+  };
+
+  const handlePickContact = (person: { id: string; handle: string; displayName: string; avatarUrl: string | null }) => {
+    setContactPickerOpen(false);
+    void sendMetadataMessage({ kind: "contact", friendId: person.id, displayName: person.displayName, handle: person.handle, avatarUrl: person.avatarUrl });
+  };
+
+  // Voice hold-to-record gesture. A genuine hold only COMMITS after
+  // MIC_HOLD_COMMIT_MS of continued pressure — a quick tap/click never
+  // reaches this path at all, falling straight through to the mic button's
+  // own onClick (unchanged, exactly today's tap-to-open behavior).
+  //
+  // The move/up listeners are registered ONCE for the component's whole
+  // lifetime (empty-deps effect below) rather than dynamically added on
+  // pointerdown and removed on pointerup — this component re-renders often
+  // (new messages, typing state, etc.), and a dynamically-added listener
+  // closes over THAT render's function identity; if a re-render happened
+  // mid-gesture, a later `removeEventListener` call using a NEWER render's
+  // function reference would silently fail to match what's actually
+  // registered, leaking the listener. Registering once and gating all the
+  // real logic on `micHoldStartRef`/`micHoldEngagedRef` (refs, so always
+  // current regardless of which render's closure is asking) sidesteps the
+  // whole reference-equality problem.
+  const holdGestureRef = useRef(holdGesture);
+  useEffect(() => {
+    holdGestureRef.current = holdGesture;
+  }, [holdGesture]);
+
+  const endMicHold = (outcome: "tap" | "send" | "handled") => {
+    if (micHoldTimerRef.current) {
+      clearTimeout(micHoldTimerRef.current);
+      micHoldTimerRef.current = null;
+    }
+    if (outcome === "send") setAutoStopAndSend(true);
+    if (outcome !== "tap") {
+      micPointerHandledRef.current = true;
+      // The synthetic `click` that follows this same pointer interaction
+      // fires on the next tick — clear the guard right after so a LATER,
+      // genuine keyboard (Enter/Space) activation isn't silently swallowed.
+      setTimeout(() => {
+        micPointerHandledRef.current = false;
+      }, 0);
+    }
+    micHoldEngagedRef.current = false;
+    micHoldStartRef.current = null;
+  };
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const start = micHoldStartRef.current;
+      if (!start || !micHoldEngagedRef.current) return;
+      const dragX = e.clientX - start.x;
+      const dragY = e.clientY - start.y;
+      setHoldGesture((prev) => {
+        if (prev?.canceled || prev?.locked) return prev;
+        return { dragX, dragY, canceled: dragX < -MIC_CANCEL_PX, locked: -dragY > MIC_LOCK_PX };
+      });
+    };
+    const onUp = () => {
+      if (!micHoldStartRef.current) return; // no gesture in progress — ignore
+      if (!micHoldEngagedRef.current) {
+        // The commit timer never fired — a plain tap/click. Let the mic
+        // button's own onClick handle it exactly as before this feature
+        // existed; don't set holdGesture at all.
+        endMicHold("tap");
+        return;
+      }
+      const current = holdGestureRef.current;
+      if (current?.canceled || current?.locked) endMicHold("handled");
+      else endMicHold("send"); // released clean — auto-send the short clip
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      if (micHoldTimerRef.current) clearTimeout(micHoldTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onMicPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    micHoldStartRef.current = { x: e.clientX, y: e.clientY };
+    micHoldEngagedRef.current = false;
+    micHoldTimerRef.current = setTimeout(() => {
+      micHoldEngagedRef.current = true;
+      setRecordingVoice(true);
+      setAutoStopAndSend(false);
+      setHoldGesture({ dragX: 0, dragY: 0, canceled: false, locked: false });
+      haptic("selection");
+    }, MIC_HOLD_COMMIT_MS);
   };
 
   // Uploads happen the moment a file is picked (not deferred to Send) — the
@@ -959,6 +1183,8 @@ export function ConversationRoom({
   // Voice notes send immediately — see the state comment above.
   const handleVoiceRecorded = async (result: { url: string; durationMs: number; waveform: number[] }) => {
     setRecordingVoice(false);
+    setHoldGesture(null);
+    setAutoStopAndSend(false);
     await submit(undefined, [{ mediaKind: "audio", mediaUrl: result.url, durationMs: result.durationMs, waveform: result.waveform, mimeType: "audio/webm" }]);
   };
 
@@ -1112,8 +1338,41 @@ export function ConversationRoom({
           // drifting away from the bubble it belongs to.
           if (openMenuId) setOpenMenuId(null);
         }}
-        className="flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto p-4"
+        className={cn("flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto p-4", theme && THEME_WASH_CLASS[theme])}
       >
+        {otherStoryGroup ? (
+          <button
+            type="button"
+            onClick={() => setStoryViewerOpen(true)}
+            className="glass mb-2 flex w-full items-center gap-2.5 rounded-2xl p-2.5 text-left transition hover:bg-secondary/40"
+          >
+            <span className="rounded-full bg-brand p-0.5">
+              <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-background p-0.5">
+                {otherStoryGroup.stories[0]?.mediaKind === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={otherStoryGroup.stories[0].mediaUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                ) : otherStoryGroup.stories[0]?.mediaKind === "video" ? (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption
+                  <video src={`${otherStoryGroup.stories[0].mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-full w-full rounded-full object-cover" />
+                ) : otherStoryGroup.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={otherStoryGroup.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white">
+                    {otherStoryGroup.displayName.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </span>
+            </span>
+            <span className="min-w-0 flex-1 text-sm font-semibold">
+              {otherStoryGroup.displayName} · {otherStoryGroup.stories.length} {otherStoryGroup.stories.length === 1 ? "story" : "stories"}
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </button>
+        ) : null}
+        {storyViewerOpen && otherStoryGroup ? (
+          <StoryViewer groups={[otherStoryGroup]} startGroup={0} onClose={() => setStoryViewerOpen(false)} />
+        ) : null}
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 py-10 text-center">
             <span className="bg-brand brand-glow flex h-14 w-14 items-center justify-center rounded-full">
@@ -1142,6 +1401,12 @@ export function ConversationRoom({
             // attachments stay in the normal padded card layout since
             // they're compact rows, not full-bleed media.
             const hasMediaAttachment = m.attachments.some((a) => a.kind === "image" || a.kind === "video");
+            const locationMeta = !deleted && m.metadata?.kind === "location" ? (m.metadata as { lat: number; lng: number; label: string | null }) : null;
+            const contactMeta =
+              !deleted && m.metadata?.kind === "contact"
+                ? (m.metadata as { friendId: string; displayName: string; handle: string; avatarUrl: string | null })
+                : null;
+            const pollMeta = !deleted && m.metadata?.kind === "poll" ? (m.metadata as { pollId: string }) : null;
             const canEdit = m.mine && !deleted && !m.id.startsWith("optimistic-");
             const canDelete = m.mine && !deleted && !m.id.startsWith("optimistic-");
             const canAct = !deleted && !m.id.startsWith("optimistic-");
@@ -1175,7 +1440,7 @@ export function ConversationRoom({
                       deleted
                         ? "border border-dashed border-border/60 bg-transparent"
                         : m.mine
-                          ? "bg-brand rounded-br-xl text-white shadow-md shadow-violet-500/20"
+                          ? cn(theme ? THEME_BUBBLE_CLASS[theme] : "bg-brand", "rounded-br-xl text-white shadow-md shadow-violet-500/20")
                           : "glass rounded-bl-xl text-foreground shadow-sm",
                       m.mine && m.id.startsWith("optimistic-") && "animate-scale-in",
                       m.id === highlightedId && "ring-2 ring-offset-2 ring-offset-background ring-amber-400 transition-shadow duration-500",
@@ -1198,6 +1463,46 @@ export function ConversationRoom({
                             {m.replyTo.deleted ? "Deleted message" : m.replyTo.body || "Message"}
                           </button>
                         ) : null}
+                        {locationMeta ? (
+                          <a
+                            href={`https://www.openstreetmap.org/?mlat=${locationMeta.lat}&mlon=${locationMeta.lng}#map=16/${locationMeta.lat}/${locationMeta.lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={cn(
+                              "flex items-center gap-2.5 rounded-2xl border px-3 py-2.5",
+                              m.mine ? "border-white/20 bg-white/10" : "border-border/50 bg-secondary/30",
+                            )}
+                          >
+                            <MapPin className="h-6 w-6 shrink-0 opacity-80" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-semibold">{locationMeta.label || "Shared location"}</span>
+                              <span className="block text-[11px] opacity-70">View on map</span>
+                            </span>
+                          </a>
+                        ) : contactMeta ? (
+                          <Link
+                            href={`/u/${contactMeta.handle}`}
+                            className={cn(
+                              "flex items-center gap-2.5 rounded-2xl border px-3 py-2.5",
+                              m.mine ? "border-white/20 bg-white/10" : "border-border/50 bg-secondary/30",
+                            )}
+                          >
+                            {contactMeta.avatarUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={contactMeta.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+                            ) : (
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white">
+                                {contactMeta.displayName.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-semibold">{contactMeta.displayName}</span>
+                              <span className="block text-[11px] opacity-70">@{contactMeta.handle} · View contact</span>
+                            </span>
+                          </Link>
+                        ) : pollMeta ? (
+                          <PollBubble pollId={pollMeta.pollId} mine={m.mine} />
+                        ) : null}
                         {m.attachments.length > 0 ? (
                           <div className={cn("flex flex-col gap-1.5", hasMediaAttachment ? "" : "px-0", m.body && "mb-1.5")}>
                             {m.attachments.map((att) =>
@@ -1216,22 +1521,7 @@ export function ConversationRoom({
                               ) : att.kind === "audio" ? (
                                 <VoiceMessage key={att.id} url={att.url} durationMs={att.durationMs} waveform={att.waveform} />
                               ) : (
-                                <a
-                                  key={att.id}
-                                  href={att.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={cn(
-                                    "mt-1.5 flex items-center gap-2.5 rounded-2xl border px-3 py-2.5",
-                                    m.mine ? "border-white/20 bg-white/10" : "border-border/50 bg-secondary/30",
-                                  )}
-                                >
-                                  <FileIcon className="h-6 w-6 shrink-0 opacity-80" />
-                                  <span className="min-w-0 flex-1">
-                                    <span className="block truncate text-xs font-semibold">{att.filename ?? "Document"}</span>
-                                    {att.sizeBytes ? <span className="block text-[11px] opacity-70">{formatBytes(att.sizeBytes)}</span> : null}
-                                  </span>
-                                </a>
+                                <DocumentAttachmentCard key={att.id} url={att.url} filename={att.filename} sizeBytes={att.sizeBytes} mine={m.mine} />
                               ),
                             )}
                           </div>
@@ -1504,7 +1794,16 @@ export function ConversationRoom({
         </div>
       ) : recordingVoice ? (
         <div className="border-t border-border/60 bg-card/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3">
-          <VoiceRecorder onRecorded={handleVoiceRecorded} onCancel={() => setRecordingVoice(false)} />
+          <VoiceRecorder
+            onRecorded={handleVoiceRecorded}
+            onCancel={() => {
+              setRecordingVoice(false);
+              setHoldGesture(null);
+              setAutoStopAndSend(false);
+            }}
+            holdGesture={holdGesture}
+            autoStopAndSend={autoStopAndSend}
+          />
         </div>
       ) : (
         // Composer, rebuilt to the owner's mockup: a glass attach circle, ONE
@@ -1552,6 +1851,19 @@ export function ConversationRoom({
               style={{ maxHeight: COMPOSER_MAX_HEIGHT }}
               className="max-h-32 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2.5 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/60"
             />
+            <EmojiPickerButton
+              onPick={(emoji) => {
+                const caret = textareaRef.current?.selectionStart ?? body.length;
+                const next = `${body.slice(0, caret)}${emoji}${body.slice(caret)}`;
+                setBody(next);
+                if (next.trim()) notifyTyping();
+                requestAnimationFrame(() => {
+                  const pos = caret + emoji.length;
+                  textareaRef.current?.focus();
+                  textareaRef.current?.setSelectionRange(pos, pos);
+                });
+              }}
+            />
             <motion.button
               type="button"
               onClick={() => setMediaSheetOpen(true)}
@@ -1564,8 +1876,15 @@ export function ConversationRoom({
             </motion.button>
             <motion.button
               type="button"
-              onClick={() => setRecordingVoice(true)}
-              aria-label="Record voice message"
+              onPointerDown={onMicPointerDown}
+              onClick={() => {
+                // A genuine hold (tracked via pointer events above) already
+                // handled everything by the time this synthetic click fires
+                // — only a plain tap/keyboard activation reaches here.
+                if (micPointerHandledRef.current) return;
+                setRecordingVoice(true);
+              }}
+              aria-label="Record voice message — tap to open, hold to record"
               whileTap={{ scale: 0.85 }}
               transition={springs.press}
               className="flex h-11 w-9 shrink-0 items-center justify-center text-muted-foreground transition hover:text-foreground"
@@ -1579,14 +1898,28 @@ export function ConversationRoom({
             aria-label="Send"
             whileTap={{ scale: 0.88 }}
             transition={springs.press}
-            className="bg-brand flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-violet-500/30 transition hover:opacity-95 disabled:opacity-40"
+            className={cn(theme ? THEME_BUBBLE_CLASS[theme] : "bg-brand", "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-violet-500/30 transition hover:opacity-95 disabled:opacity-40")}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 -translate-x-px" />}
           </motion.button>
         </form>
       )}
 
-      <MediaComposerSheet open={mediaSheetOpen} onClose={() => setMediaSheetOpen(false)} onFilesPicked={handleFilesPicked} />
+      <MediaComposerSheet
+        open={mediaSheetOpen}
+        onClose={() => setMediaSheetOpen(false)}
+        onFilesPicked={handleFilesPicked}
+        onShareLocation={handleShareLocation}
+        onOpenContactPicker={() => setContactPickerOpen(true)}
+        onOpenPollComposer={() => setPollComposerOpen(true)}
+      />
+      <ContactPickerSheet open={contactPickerOpen} onClose={() => setContactPickerOpen(false)} onPick={handlePickContact} />
+      <PollComposerSheet
+        open={pollComposerOpen}
+        onClose={() => setPollComposerOpen(false)}
+        conversationId={conversationId}
+        onCreated={() => void resync()}
+      />
       {viewingImage ? <ImageLightbox src={viewingImage.url} alt={viewingImage.alt} onClose={() => setViewingImage(null)} /> : null}
 
       <ForwardSheet

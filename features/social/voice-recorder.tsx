@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Loader2, Mic, Pause, Play, Send, Trash2 } from "lucide-react";
+import { ChevronLeft, Loader2, Lock, Mic, Pause, Play, Send, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AUDIO_MIME_CANDIDATES, VOICE_MAX_MS, computeAudioPeaks, extForMime, fmtDuration, pickMimeType } from "@/lib/media/comment-recording";
@@ -22,9 +22,23 @@ const LIVE_BARS = 42;
 export function VoiceRecorder({
   onRecorded,
   onCancel,
+  holdGesture = null,
+  autoStopAndSend = false,
 }: {
   onRecorded: (result: { url: string; durationMs: number; waveform: number[] }) => void;
   onCancel: () => void;
+  /** Owner mockup's hold-to-record gesture: the mic button now starts this
+   *  SAME recorder on a press-and-hold (not just a tap), and the parent
+   *  tracks the finger's continued movement (this component's own DOM
+   *  swapped in mid-gesture, so tracking must live in the parent via
+   *  window-level listeners, not element pointer-capture). `null` — the
+   *  default, and every existing tap-to-open call site — renders and
+   *  behaves EXACTLY as before this feature existed. */
+  holdGesture?: { dragX: number; dragY: number; canceled: boolean; locked: boolean } | null;
+  /** Set true the instant a hold gesture is released without crossing the
+   *  cancel/lock thresholds — auto-stops and sends the short clip, matching
+   *  WhatsApp's press-release-send. */
+  autoStopAndSend?: boolean;
 }) {
   const [phase, setPhase] = useState<"starting" | "recording" | "preview" | "uploading" | "error">("starting");
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -51,6 +65,7 @@ export function VoiceRecorder({
   const elapsedMsRef = useRef(0);
   const lastSampleAtRef = useRef(0);
   const previewRef = useRef<HTMLAudioElement | null>(null);
+  const abortingRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -119,7 +134,12 @@ export function VoiceRecorder({
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
-      recorder.onstop = () => void finish();
+      recorder.onstop = () => {
+        // An explicit hold-gesture cancel skips finish()/preview entirely —
+        // there's nothing to preview, the whole point is "never happened."
+        if (abortingRef.current) return;
+        void finish();
+      };
       recorderRef.current = recorder;
       recorder.start(250);
 
@@ -193,6 +213,31 @@ export function VoiceRecorder({
     }
   };
 
+  // Hold-gesture cancel: the finger slid past the cancel threshold while
+  // still down — abort immediately, no preview/upload, matching "never
+  // happened." Guarded so it only fires once per gesture.
+  useEffect(() => {
+    if (!holdGesture?.canceled || phase !== "recording") return;
+    abortingRef.current = true;
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    stopStream();
+    onCancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holdGesture?.canceled, phase]);
+
+  // Hold-gesture release without cancel/lock: stop now, then auto-send the
+  // instant finish() lands the preview — the owner mockup's press-release-
+  // send, no manual tap needed for a short clip.
+  useEffect(() => {
+    if (!autoStopAndSend) return;
+    if (phase === "recording") stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStopAndSend, phase]);
+  useEffect(() => {
+    if (autoStopAndSend && phase === "preview") void send();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStopAndSend, phase]);
+
   if (phase === "error") {
     return (
       <div className="flex items-center gap-3 rounded-3xl border border-rose-500/30 bg-rose-500/[0.06] px-4 py-3 text-sm text-rose-500">
@@ -241,6 +286,41 @@ export function VoiceRecorder({
           {phase === "uploading" ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
         </motion.button>
         {err ? <span className="text-xs text-rose-500">{err}</span> : null}
+      </motion.div>
+    );
+  }
+
+  // Hold-gesture in progress (owner mockup: press-and-hold the mic, slide
+  // left to cancel or up to lock) — replaces the normal Trash/Stop controls
+  // with a live "slide to cancel" bar while the finger is still down and
+  // neither threshold has been crossed yet. A plain tap never sets
+  // `holdGesture` at all, so it never reaches this branch.
+  if (holdGesture && !holdGesture.locked && !holdGesture.canceled && (phase === "starting" || phase === "recording")) {
+    const lockProgress = Math.min(1, Math.max(0, -holdGesture.dragY / 80));
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} className="relative flex items-center gap-2 rounded-3xl border border-border/60 bg-card/70 p-2 shadow-soft backdrop-blur-xl">
+        <span
+          aria-hidden
+          className={cn(
+            "absolute -top-11 right-2 flex h-9 w-9 items-center justify-center rounded-full shadow-md transition-colors",
+            lockProgress > 0.9 ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white" : "bg-secondary text-muted-foreground",
+          )}
+          style={{ transform: `translateY(${-lockProgress * 6}px)` }}
+        >
+          <Lock className="h-4 w-4" />
+        </span>
+        <span className="relative flex h-2.5 w-2.5 shrink-0">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500/60" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
+        </span>
+        <span className="shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground">{fmtDuration(elapsedMs)}</span>
+        <span
+          aria-hidden
+          className="flex flex-1 items-center justify-center gap-1 text-xs font-medium text-muted-foreground"
+          style={{ transform: `translateX(${Math.min(0, holdGesture.dragX)}px)`, opacity: Math.max(0.3, 1 - Math.abs(holdGesture.dragX) / 140) }}
+        >
+          <ChevronLeft className="h-3.5 w-3.5" /> Slide to cancel
+        </span>
       </motion.div>
     );
   }

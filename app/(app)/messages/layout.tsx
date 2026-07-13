@@ -21,6 +21,7 @@ const LOAD_TIMEOUT_MS = 8000;
 export default async function MessagesLayout({ children }: { children: ReactNode }) {
   let conversations: Awaited<ReturnType<typeof listConversations>> = [];
   let requests: FriendRequestItem[] = [];
+  let viewerId = "";
   try {
     const supabase = await createClient();
     // Time-boxed auth + time-boxed queries (docs/STARTUP_AUDIT.md) — a stuck
@@ -29,6 +30,7 @@ export default async function MessagesLayout({ children }: { children: ReactNode
     // imperfect, page) rather than never resolving at all.
     const auth = await getUserBounded(supabase);
     if (auth.kind === "user") {
+      viewerId = auth.user.id;
       [conversations, requests] = await Promise.all([
         withTimeout(listConversations(auth.user.id), LOAD_TIMEOUT_MS, []),
         withTimeout(listIncomingFriendRequests(auth.user.id), LOAD_TIMEOUT_MS, []),
@@ -54,7 +56,7 @@ export default async function MessagesLayout({ children }: { children: ReactNode
           Messages
           <InboxHeaderActions />
         </h1>
-        <ConversationList initial={conversations} variant="pane" initialRequests={requests} />
+        <ConversationList initial={conversations} variant="pane" initialRequests={requests} viewerId={viewerId} />
       </aside>
 
       {/* Thread / index panel */}

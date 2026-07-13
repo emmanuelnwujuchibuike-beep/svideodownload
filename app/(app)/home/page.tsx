@@ -51,15 +51,7 @@ export default async function HomePage() {
   // Mode. Best-effort: defaults (today's exact hardcoded order, nothing
   // hidden) if the table's unmigrated or the row doesn't exist yet.
   const prefs = await getHomePreferences(viewerId);
-  // Continue Watching manages its own visibility client-side (an inline
-  // switch, not just the account Home Modules Editor's Eye/EyeOff), so it
-  // stays in the render list even when "hidden" — the component itself reads
-  // `initialHidden` and shows a collapsed header+switch instead of being
-  // unmounted entirely. Without this, hiding it here meant the module never
-  // rendered on the NEXT full page load, so its switch had no persisted state
-  // to read from and always came back showing "on" — the exact "resets when I
-  // leave and come back" bug the owner reported.
-  const visibleModules = prefs.moduleOrder.filter((k) => !prefs.hiddenModules.includes(k) || k === "continue_watching");
+  const visibleModules = prefs.moduleOrder.filter((k) => !prefs.hiddenModules.includes(k));
 
   return (
     <AppContent
@@ -83,7 +75,6 @@ export default async function HomePage() {
           renderModule(key, {
             viewerId,
             profile: { avatarUrl: profile.avatarUrl, displayName: profile.displayName, handle },
-            hiddenModules: prefs.hiddenModules,
           }),
         )}
 
@@ -104,7 +95,6 @@ function renderModule(
   ctx: {
     viewerId: string;
     profile: { avatarUrl: string | null; displayName: string; handle: string };
-    hiddenModules: HomeModuleKey[];
   },
 ) {
   switch (key) {
@@ -135,7 +125,7 @@ function renderModule(
       // Client-only, no server data dependency (reads live download/history
       // state) — renders nothing when there's nothing to resume, so it never
       // needs a Suspense boundary or a skeleton.
-      return <ContinueWatching key={key} initialHidden={ctx.hiddenModules.includes("continue_watching")} />;
+      return <ContinueWatching key={key} />;
   }
 }
 

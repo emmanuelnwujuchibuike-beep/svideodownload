@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Camera, File as FileIcon, Images, Music, X } from "lucide-react";
+import { BarChart3, Camera, File as FileIcon, Images, MapPin, Music, User, Video as VideoIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -9,33 +9,37 @@ import { springs } from "@/lib/motion/springs";
 import { ALLOWED_MIME } from "@/lib/social/message-media";
 
 /**
- * The "+" attachment picker — Camera / Gallery / Document / Audio, the real,
- * buildable slice of the spec's much larger composer (Cloud/Life Memories/
- * Moments/Events/Contacts/Location/Polls/AI content all need infrastructure
- * this app doesn't have — see docs/PROJECT_NOTES.md's Part 5 entry). Camera
- * vs Gallery are genuinely distinct here (not just two labels on the same
- * picker): Camera sets `capture` so mobile browsers open the camera directly
- * instead of the file/photo library.
- *
- * Audio (2026-07-12): the send/render pipeline already fully supported an
- * "audio" attachment kind — VoiceRecorder's recorded notes use it, and
- * ALLOWED_MIME.audio already allowlists mp3/m4a/wav/ogg — but this sheet
- * never offered a way to pick an EXISTING audio file from the device, only
- * record a fresh one. "Owner: couldn't see audio/music/download in chat."
+ * The "+" attachment picker — Camera / Gallery / Video / Document / Audio /
+ * Location / Contact / Poll (owner mockup completion; previously just
+ * Camera/Gallery/Document/Audio — see docs/PROJECT_NOTES.md's Part 5 entry
+ * for what's still genuinely out of reach: Cloud/Life Memories/Moments/
+ * Events/AI content need infrastructure this app doesn't have). Camera vs
+ * Gallery are genuinely distinct (not just two labels on the same picker):
+ * Camera sets `capture` so mobile browsers open the camera directly instead
+ * of the file/photo library. Video is the same Gallery input, filtered to
+ * `video/*` — a dedicated tile since the mockup shows one, even though
+ * Gallery already accepted video files.
  */
 export function MediaComposerSheet({
   open,
   onClose,
   onFilesPicked,
+  onShareLocation,
+  onOpenContactPicker,
+  onOpenPollComposer,
 }: {
   open: boolean;
   onClose: () => void;
   onFilesPicked: (files: File[], kind: "image" | "video" | "document" | "audio") => void;
+  onShareLocation: () => void;
+  onOpenContactPicker: () => void;
+  onOpenPollComposer: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const cameraRef = useRef<HTMLInputElement | null>(null);
   const galleryRef = useRef<HTMLInputElement | null>(null);
+  const videoRef = useRef<HTMLInputElement | null>(null);
   const documentRef = useRef<HTMLInputElement | null>(null);
   const audioRef = useRef<HTMLInputElement | null>(null);
 
@@ -86,8 +90,33 @@ export function MediaComposerSheet({
             <div className="grid grid-cols-4 gap-3 px-5 pb-6 pt-2">
               <PickerButton icon={Camera} label="Camera" onClick={() => cameraRef.current?.click()} />
               <PickerButton icon={Images} label="Gallery" onClick={() => galleryRef.current?.click()} />
+              <PickerButton icon={VideoIcon} label="Video" onClick={() => videoRef.current?.click()} />
               <PickerButton icon={FileIcon} label="Document" onClick={() => documentRef.current?.click()} />
               <PickerButton icon={Music} label="Audio" onClick={() => audioRef.current?.click()} />
+              <PickerButton
+                icon={MapPin}
+                label="Location"
+                onClick={() => {
+                  onClose();
+                  onShareLocation();
+                }}
+              />
+              <PickerButton
+                icon={User}
+                label="Contact"
+                onClick={() => {
+                  onClose();
+                  onOpenContactPicker();
+                }}
+              />
+              <PickerButton
+                icon={BarChart3}
+                label="Poll"
+                onClick={() => {
+                  onClose();
+                  onOpenPollComposer();
+                }}
+              />
             </div>
 
             {/* capture="environment" is what actually distinguishes Camera from
@@ -102,6 +131,17 @@ export function MediaComposerSheet({
               onChange={(e) => pick(e.target.files)}
             />
             <input ref={galleryRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={(e) => pick(e.target.files)} />
+            <input
+              ref={videoRef}
+              type="file"
+              accept="video/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) onFilesPicked(Array.from(e.target.files), "video");
+                onClose();
+              }}
+            />
             <input
               ref={documentRef}
               type="file"

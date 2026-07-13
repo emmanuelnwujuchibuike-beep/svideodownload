@@ -48,6 +48,7 @@ export default async function MessagesPage() {
   // skeleton forever — nothing timed it out, so Next had nothing to fall
   // back to. Racing it means the WORST case is now "shows a retry prompt
   // after 8s", never "stuck indefinitely".
+  const viewerId = auth.kind === "user" ? auth.user.id : "";
   const [result, requests] =
     auth.kind === "timeout"
       ? [{ ok: false as const, conversations: [] }, []]
@@ -80,7 +81,7 @@ export default async function MessagesPage() {
             </Link>
           </div>
         ) : (
-          <ConversationList initial={conversations} initialRequests={requests} />
+          <ConversationList initial={conversations} initialRequests={requests} viewerId={viewerId} />
         )}
       </div>
 

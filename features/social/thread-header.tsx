@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, BadgeCheck, Phone, Video } from "lucide-react";
+import { ArrowLeft, BadgeCheck, MoreHorizontal, Phone, Video } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -8,9 +8,10 @@ import { usePresence } from "@/features/friends/use-presence";
 import { GroupAvatarStack } from "@/features/social/group-avatar-stack";
 import { PresenceBadge } from "@/features/social/presence-badge";
 import { ThreadHeaderMenu } from "@/features/social/thread-header-menu";
+import { ThreadOptionsSheet } from "@/features/social/thread-options-sheet";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
-import type { ConversationMember, ConversationType, MemberRole, OtherUser } from "@/lib/social/messages";
+import type { ConversationMember, ConversationTheme, ConversationType, MemberRole, OtherUser } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -31,6 +32,8 @@ export function ThreadHeader({
   viewerRole,
   other,
   onlyAdminsCanSend = false,
+  initialTheme = null,
+  initialDisappearAfterSeconds = null,
 }: {
   conversationId: string;
   viewerId: string;
@@ -41,12 +44,15 @@ export function ThreadHeader({
   viewerRole: MemberRole | null;
   other: OtherUser | null;
   onlyAdminsCanSend?: boolean;
+  initialTheme?: ConversationTheme | null;
+  initialDisappearAfterSeconds?: number | null;
 }) {
   const [title, setTitle] = useState(initialTitle);
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
   const [memberCount, setMemberCount] = useState(initialMembers.length);
   const [members, setMembers] = useState(initialMembers);
   const otherOnline = usePresence().has(other?.id ?? "");
+  const [optionsOpen, setOptionsOpen] = useState(false);
 
   useEffect(() => {
     if (type !== "group") return;
@@ -169,6 +175,25 @@ export function ThreadHeader({
           >
             <Video className="h-[17px] w-[17px]" />
           </button>
+          <button
+            type="button"
+            aria-label="Conversation options"
+            onClick={() => {
+              haptic("light");
+              setOptionsOpen(true);
+            }}
+            className="glass flex h-9 w-9 items-center justify-center rounded-full text-foreground/80 transition hover:text-foreground"
+          >
+            <MoreHorizontal className="h-[18px] w-[18px]" />
+          </button>
+          <ThreadOptionsSheet
+            conversationId={conversationId}
+            otherHandle={other.handle}
+            initialTheme={initialTheme}
+            initialDisappearAfterSeconds={initialDisappearAfterSeconds}
+            open={optionsOpen}
+            onClose={() => setOptionsOpen(false)}
+          />
         </span>
       ) : null}
 

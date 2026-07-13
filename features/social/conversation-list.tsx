@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { BadgeCheck, BellOff, Check, Loader2, MoreHorizontal, Pin, Search, X } from "lucide-react";
+import { Archive as ArchiveIcon, BadgeCheck, BellOff, Check, Loader2, MoreHorizontal, Pin, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -11,6 +11,7 @@ import { mutate, useQuery } from "@/features/data";
 import { usePresence } from "@/features/friends/use-presence";
 import { GroupAvatarStack } from "@/features/social/group-avatar-stack";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
+import { useTypingIndicator } from "@/features/social/use-typing";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import type { FriendRequestItem } from "@/lib/social/friends";
@@ -29,7 +30,7 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-async function setPrefs(conversationId: string, patch: Partial<{ muted: boolean; archived: boolean; pinned: boolean }>): Promise<boolean> {
+async function setPrefs(conversationId: string, patch: Partial<{ muted: boolean; archived: boolean; pinned: boolean; hidden: boolean }>): Promise<boolean> {
   try {
     const res = await fetch(`/api/conversations/${conversationId}/me`, {
       method: "PATCH",
@@ -42,7 +43,7 @@ async function setPrefs(conversationId: string, patch: Partial<{ muted: boolean;
   }
 }
 
-type InboxTab = "all" | "unread" | "groups" | "requests";
+type InboxTab = "all" | "unread" | "groups" | "requests" | "channels";
 
 /**
  * Realtime inbox — seeded server-side (instant paint), then live-updated via the
@@ -60,10 +61,15 @@ export function ConversationList({
   initial,
   variant = "page",
   initialRequests = [],
+  viewerId,
 }: {
   initial: ConversationSummary[];
   variant?: "page" | "pane";
   initialRequests?: FriendRequestItem[];
+  /** Owner ask: show "Typing…" on a row without opening the thread. Only
+   *  used to skip our own presence key and to cap how many rows subscribe
+   *  (below) — the list never broadcasts its own typing state. */
+  viewerId: string;
 }) {
   // Live updates come from InboxRealtimeTracker (mounted once in the app
   // shell) revalidating this same shared cache — no second subscription here.
@@ -136,6 +142,10 @@ export function ConversationList({
 
   const visible = useMemo(() => {
     const query = q.trim().toLowerCase();
+    // Channels aren't a real feature yet (owner-scoped: coming soon) — no
+    // conversation is ever a channel, so this tab always shows the empty
+    // state below rather than silently falling through to "All".
+    if (tab === "channels" && !showArchived) return [];
     let base = conversations.filter((c) => (showArchived ? c.archived : !c.archived));
     if (!showArchived) {
       if (tab === "unread") base = base.filter((c) => c.unread);
@@ -150,7 +160,14 @@ export function ConversationList({
   }, [conversations, q, showArchived, tab]);
 
   const pinned = useMemo(() => visible.filter((c) => c.pinned), [visible]);
-  const recent = useMemo(() => visible.filter((c) => !c.pinned), [visible]);
+  // Owner mockup: pinned conversations get their OWN compact avatar-strip
+  // shortcut row up top, but still appear with full detail (preview, unread,
+  // typing) in the list below — unlike the previous "hide pinned from the
+  // rest of the list" behavior, nothing here disappears once pinned.
+  const recent = visible;
+  const [showAllPinned, setShowAllPinned] = useState(false);
+  const PINNED_STRIP_CAP = 6;
+  const pinnedStrip = showAllPinned ? pinned : pinned.slice(0, PINNED_STRIP_CAP);
 
   const pane = variant === "pane";
 
@@ -182,6 +199,19 @@ export function ConversationList({
           : EMPTY_INBOX,
       );
     }
+  };
+
+  // Swipe action "Delete" — a per-user hide (see the `hidden_at` migration
+  // comment), not a destructive delete of shared data. Removed from the local
+  // cache immediately (unlike mute/archive, a hidden row shouldn't linger in
+  // ANY current view) and restored on failure.
+  const deleteConversation = async (id: string) => {
+    if (!window.confirm("Delete this conversation? It'll come back if there's new activity.")) return;
+    haptic("selection");
+    const snapshot = conversations;
+    mutate<Inbox>(INBOX_KEY, (prev) => (prev ? { ...prev, conversations: prev.conversations.filter((c) => c.id !== id) } : EMPTY_INBOX));
+    const ok = await setPrefs(id, { hidden: true });
+    if (!ok) mutate<Inbox>(INBOX_KEY, (prev) => (prev ? { ...prev, conversations: snapshot } : EMPTY_INBOX));
   };
 
   const respondToRequest = async (req: FriendRequestItem, action: "accept" | "decline") => {
@@ -218,6 +248,9 @@ export function ConversationList({
     { id: "unread", label: "Unread", badge: unreadCount },
     { id: "groups", label: "Groups", badge: groupCount },
     { id: "requests", label: "Requests", badge: requests.length },
+    // Owner-scoped: a real tab in the filter row (matching the mockup) backed
+    // by a "coming soon" empty state — not a new broadcast-room feature yet.
+    { id: "channels", label: "Channels", badge: 0 },
   ];
 
   return (
@@ -337,25 +370,60 @@ export function ConversationList({
         </ul>
       ) : (
         <ul className={cn("space-y-0.5", pane && "min-h-0 flex-1 overflow-y-auto px-2 pb-3")}>
-          {pinned.map((c) => (
-            <ConversationRow
-              key={c.id}
-              c={c}
-              active={pane && pathname === `/messages/${c.id}`}
-              onlineSet={online}
-              pinnedCard
-              openMenuId={openMenuId}
-              menuPos={menuPos}
-              onOpenMenu={openRowMenu}
-              onCloseMenu={() => setOpenMenuId(null)}
-              onUpdatePref={updatePref}
-              menuWidth={ROW_MENU_WIDTH}
-            />
-          ))}
-          {pinned.length > 0 && recent.length > 0 ? (
-            <li className="px-3 pb-1 pt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">Recent</li>
+          {pinned.length > 0 ? (
+            <li className={cn(pane && "px-1")}>
+              <div className="mb-2 flex items-center justify-between px-2 pt-1">
+                <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
+                  <Pin className="h-3 w-3" /> Pinned
+                </span>
+                {pinned.length > PINNED_STRIP_CAP ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllPinned((v) => !v)}
+                    className="text-xs font-semibold text-primary"
+                  >
+                    {showAllPinned ? "Show less" : "View all"}
+                  </button>
+                ) : null}
+              </div>
+              <div className="-mx-1 mb-1 flex gap-3 overflow-x-auto px-3 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {pinnedStrip.map((c) => {
+                  const isGroup = c.type === "group";
+                  const name = isGroup ? c.title ?? "Group chat" : c.other!.displayName;
+                  const isOnline = !isGroup && online.has(c.other!.id);
+                  return (
+                    <Link
+                      key={c.id}
+                      href={`/messages/${c.id}`}
+                      onClick={() => haptic("light")}
+                      className="flex w-16 shrink-0 flex-col items-center gap-1"
+                    >
+                      <span className="relative">
+                        {c.avatarUrl || (!isGroup && c.other!.avatarUrl) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={(isGroup ? c.avatarUrl : c.other!.avatarUrl) ?? undefined}
+                            alt=""
+                            className="h-14 w-14 rounded-full object-cover ring-2 ring-violet-500/40"
+                          />
+                        ) : (
+                          <span className="bg-brand flex h-14 w-14 items-center justify-center rounded-full text-base font-bold text-white ring-2 ring-violet-500/40">
+                            {name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                        {isOnline ? <span aria-label="Online" className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-background" /> : null}
+                      </span>
+                      <span className="w-full truncate text-center text-xs font-medium text-muted-foreground">{name}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </li>
           ) : null}
-          {recent.map((c) => (
+          {pinned.length > 0 && recent.length > 0 ? (
+            <li className="px-3 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">Recent</li>
+          ) : null}
+          {recent.map((c, i) => (
             <ConversationRow
               key={c.id}
               c={c}
@@ -364,8 +432,14 @@ export function ConversationList({
               openMenuId={openMenuId}
               menuPos={menuPos}
               onOpenMenu={openRowMenu}
+              viewerId={viewerId}
+              // Capped like the route-prefetch effect above — a very long
+              // inbox shouldn't open dozens of realtime channels at once just
+              // for rows the viewer isn't even looking at.
+              subscribeTyping={i < 25}
               onCloseMenu={() => setOpenMenuId(null)}
               onUpdatePref={updatePref}
+              onDelete={deleteConversation}
               menuWidth={ROW_MENU_WIDTH}
             />
           ))}
@@ -375,11 +449,13 @@ export function ConversationList({
                 ? `No chats match "${q}".`
                 : showArchived
                   ? "No archived chats."
-                  : tab === "unread"
-                    ? "You're all caught up."
-                    : tab === "groups"
-                      ? "No group chats yet."
-                      : "No conversations here yet."}
+                  : tab === "channels"
+                    ? "Channels are coming soon."
+                    : tab === "unread"
+                      ? "You're all caught up."
+                      : tab === "groups"
+                        ? "No group chats yet."
+                        : "No conversations here yet."}
             </li>
           ) : null}
         </ul>
@@ -388,40 +464,106 @@ export function ConversationList({
   );
 }
 
+const SWIPE_STRIP_WIDTH = 152;
+
 function ConversationRow({
   c,
   active,
   onlineSet,
-  pinnedCard = false,
   openMenuId,
   menuPos,
   onOpenMenu,
   onCloseMenu,
   onUpdatePref,
+  onDelete,
   menuWidth,
+  viewerId,
+  subscribeTyping,
 }: {
   c: ConversationSummary;
   active: boolean;
   onlineSet: Set<string>;
-  pinnedCard?: boolean;
   openMenuId: string | null;
   menuPos: { top: number; left: number } | null;
   onOpenMenu: (id: string, e: React.MouseEvent<HTMLButtonElement>) => void;
   onCloseMenu: () => void;
   onUpdatePref: (id: string, patch: Partial<{ muted: boolean; archived: boolean; pinned: boolean }>) => void;
+  onDelete: (id: string) => void;
   menuWidth: number;
+  viewerId: string;
+  subscribeTyping: boolean;
 }) {
   const isGroup = c.type === "group";
   const isOnline = !isGroup && onlineSet.has(c.other!.id);
   const name = isGroup ? c.title ?? "Group chat" : c.other!.displayName;
+  // Owner ask: "see when a user is typing from outside [the open thread]" —
+  // read-only (broadcastEnabled=false: this row never has a composer, so it
+  // must never emit its own typing:true) use of the SAME hook the open thread
+  // already relies on. `subscribeTyping` (capped upstream) avoids opening a
+  // realtime channel per row for a very long inbox.
+  const { typingNames } = useTypingIndicator(subscribeTyping ? c.id : "", viewerId, "", false);
+  const isTyping = subscribeTyping && typingNames.length > 0;
+  // Swipe-to-reveal More/Archive/Delete (owner mockup) — a drag gesture
+  // alongside (not replacing) the existing "…" button, since a mockup's
+  // swipe affordance isn't always discoverable and the tap target already
+  // works. Only one row's strip open at a time isn't enforced (each row
+  // manages its own) — acceptable, since dragging a second row while another
+  // is open just closes the first on its own next interaction.
+  const [swipeOpen, setSwipeOpen] = useState(false);
   return (
-    <li className="flex items-center">
+    <li className="relative flex items-center overflow-hidden rounded-2xl">
+      {/* Revealed strip — sits BEHIND the row, only visible once dragged/opened. */}
+      <div className="absolute inset-y-0 right-0 flex items-center gap-1.5 pr-1" style={{ width: SWIPE_STRIP_WIDTH }}>
+        <button
+          type="button"
+          onClick={(e) => {
+            setSwipeOpen(false);
+            onOpenMenu(c.id, e);
+          }}
+          className="flex h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl bg-secondary text-[11px] font-semibold text-foreground"
+        >
+          <MoreHorizontal className="h-4 w-4" /> More
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setSwipeOpen(false);
+            onUpdatePref(c.id, { archived: !c.archived });
+          }}
+          className="flex h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl bg-blue-600 text-[11px] font-semibold text-white"
+        >
+          <ArchiveIcon className="h-4 w-4" /> {c.archived ? "Unarchive" : "Archive"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setSwipeOpen(false);
+            onDelete(c.id);
+          }}
+          className="flex h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl bg-red-600 text-[11px] font-semibold text-white"
+        >
+          <Trash2 className="h-4 w-4" /> Delete
+        </button>
+      </div>
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: -SWIPE_STRIP_WIDTH, right: 0 }}
+        dragElastic={0.06}
+        dragMomentum={false}
+        animate={{ x: swipeOpen ? -SWIPE_STRIP_WIDTH : 0 }}
+        transition={springs.sheet}
+        onDragEnd={(_, info) => {
+          const shouldOpen = info.offset.x < -SWIPE_STRIP_WIDTH / 2 || info.velocity.x < -400;
+          setSwipeOpen(shouldOpen);
+          if (shouldOpen) haptic("light");
+        }}
+        className="relative z-10 flex w-full items-center bg-background"
+      >
       <Link
         href={`/messages/${c.id}`}
         onClick={() => haptic("light")}
         className={cn(
           "flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-3 transition",
-          pinnedCard && !active && "glass",
           active
             ? "bg-gradient-to-r from-blue-500/[0.10] to-violet-500/[0.10] ring-1 ring-inset ring-violet-500/25"
             : "hover:bg-secondary/40",
@@ -474,10 +616,21 @@ function ConversationRow({
             {!isGroup && c.other!.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
             {c.muted ? <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" /> : null}
           </div>
-          <p className={cn("mt-0.5 flex items-center gap-1 truncate text-sm", c.unread ? "text-foreground" : "text-muted-foreground")}>
-            {c.fromMe ? <Check className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="You sent" /> : null}
-            <span className="truncate">{c.lastBody ?? "…"}</span>
-          </p>
+          {isTyping ? (
+            <p className="mt-0.5 flex items-center gap-1 truncate text-sm font-medium text-violet-500 dark:text-violet-300">
+              <span className="truncate">Typing…</span>
+              <span className="flex items-center gap-0.5" aria-hidden>
+                <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:-0.2s]" />
+                <span className="h-1 w-1 animate-bounce rounded-full bg-current" />
+                <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:0.2s]" />
+              </span>
+            </p>
+          ) : (
+            <p className={cn("mt-0.5 flex items-center gap-1 truncate text-sm", c.unread ? "text-foreground" : "text-muted-foreground")}>
+              {c.fromMe ? <Check className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="You sent" /> : null}
+              <span className="truncate">{c.lastBody ?? "…"}</span>
+            </p>
+          )}
         </div>
         <span className="flex shrink-0 flex-col items-end gap-1.5 self-stretch py-0.5">
           <span className={cn("text-xs", c.unread ? "font-semibold text-violet-500 dark:text-violet-300" : "text-muted-foreground")}>{timeAgo(c.lastAt)}</span>
@@ -541,6 +694,7 @@ function ConversationRow({
             )
           : null}
       </div>
+      </motion.div>
     </li>
   );
 }

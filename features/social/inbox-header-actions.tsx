@@ -5,6 +5,8 @@ import { Lock, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { UserMenu } from "@/features/auth/user-menu";
+import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
 import { CreateGroupLauncher } from "@/features/social/create-group-launcher";
 import { MessageSearchLauncher } from "@/features/social/message-search-launcher";
 import { NotificationSettingsPicker } from "@/features/social/notification-settings-picker";
@@ -50,6 +52,8 @@ export function InboxHeaderActions() {
           </Link>
         </motion.span>
       ) : null}
+      {/* Owner mockup's top-right cluster: add-friends, compose, "…", avatar. */}
+      <SuggestionsLauncher className={CIRCLE} />
       <CreateGroupLauncher className={CIRCLE} />
       <motion.button
         type="button"
@@ -65,6 +69,7 @@ export function InboxHeaderActions() {
       >
         <MoreHorizontal className="h-[18px] w-[18px]" />
       </motion.button>
+      <UserMenu />
     </span>
   );
 }

@@ -14,6 +14,18 @@ export const MAX_GROUP_MEMBERS = 50;
 export const GROUP_TITLE_MAX = 80;
 
 /**
+ * Chat Themes (inbox mockup completion) — same client-safe reasoning as the
+ * group limits above: `ThreadOptionsSheet` (a "use client" component) needs
+ * the real `CONVERSATION_THEMES` array at runtime, not just the type, and
+ * importing it from lib/social/messages.ts would drag that server-only
+ * module's `next/server` `after()` import into the client bundle (a real
+ * production-build failure, caught building this feature — confirmed via
+ * `next build`, not assumed).
+ */
+export const CONVERSATION_THEMES = ["blue", "pink", "green", "orange", "purple"] as const;
+export type ConversationTheme = (typeof CONVERSATION_THEMES)[number];
+
+/**
  * @handle mention detection — the SAME character class/shape as the existing
  * comment-mention trigger (migration 0037's `notify_on_comment_mention`) and
  * `components/social/rich-text.tsx`'s render-time linkifier, so a mention

@@ -1,11 +1,10 @@
 "use client";
 
-import { Clock, Play } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { ChevronRight, Clock, Play } from "lucide-react";
+import Link from "next/link";
+import { useEffect } from "react";
 
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
-import { Switch } from "@/components/ui/switch";
 import { hasMedia, mediaKey, warmMediaCache } from "@/features/downloads/local-media";
 import { openPlayerQueue } from "@/features/downloads/player-store";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
@@ -16,48 +15,14 @@ import type { DownloadRecord } from "@/types";
 
 /**
  * "Continue Watching" — live download tasks (real progress) + recent
- * downloads. Carries its own on/off switch (owner ask): tapping it off
- * collapses the rail immediately and persists via `hideModule` — a surgical,
- * race-safe PATCH (see /api/home-preferences) rather than resending a
- * client-computed full `hiddenModules` array, which could clobber a
- * concurrent change made from Friend Activity's own switch or the account
- * Home Modules Editor. Turning it back on works the same way in reverse, so
- * this never needs a trip to Settings unlike a one-way dismiss would.
- *
- * Fixes a real "the switch resets when I leave and come back" bug, which had
- * TWO separate causes: (1) this component always started its local `on`
- * state at `true`, completely ignoring whatever was actually persisted —
- * fixed by seeding it from `initialHidden`, threaded down from
- * `getHomePreferences` via `app/(app)/home/page.tsx`. (2) even with that
- * fixed, Next's client Router Cache (`staleTimes.dynamic`, several HOURS —
- * see [[loading-architecture]]) can reuse an already-fetched `/home` RSC
- * tree on a plain client-side navigation back to Home, without ever
- * re-running the server component that would compute the correct
- * `initialHidden` — so a toggle made in one visit could still appear to
- * "not have stuck" on the very next visit within that window. Fixed by
- * calling `router.refresh()` right after a successful PATCH, which
- * invalidates that cache entry so the NEXT visit to Home (even a plain
- * client-side one) fetches fresh server data — without disrupting this
- * component's own already-mounted local state (`router.refresh()`
- * reconciles new props into the existing tree, it doesn't remount).
+ * downloads. Hiding this module from Home is handled the same way as every
+ * other optional section (Stories, Trending Reels) — the Home Modules Editor
+ * in account settings — rather than an inline switch here, so it no longer
+ * needs to stay mounted-but-collapsed when hidden.
  */
-export function ContinueWatching({ initialHidden = false }: { initialHidden?: boolean }) {
+export function ContinueWatching() {
   const { tasks } = useDownloadManager();
   const { items } = useHistory();
-  const [on, setOn] = useState(!initialHidden);
-  const router = useRouter();
-
-  const toggle = () => {
-    const next = !on;
-    setOn(next);
-    fetch("/api/home-preferences", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next ? { showModule: "continue_watching" } : { hideModule: "continue_watching" }),
-    })
-      .then(() => router.refresh())
-      .catch(() => {});
-  };
 
   const active = tasks.filter((t) => t.status === "downloading" || t.status === "paused");
   const recent = items.filter((r) => r.kind === "video").slice(0, 6);
@@ -97,12 +62,20 @@ export function ContinueWatching({ initialHidden = false }: { initialHidden?: bo
   return (
     <section>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-base font-bold text-foreground">
-          <ModuleIconBadge icon={Clock} /> Continue Watching
-        </h2>
-        <Switch checked={on} onChange={toggle} label="Show Continue Watching on Home" />
+        <div className="flex items-center gap-2.5">
+          <ModuleIconBadge icon={Clock} tone="vivid" className="h-9 w-9 rounded-2xl" />
+          <div>
+            <h2 className="text-base font-bold leading-tight text-foreground">Continue Watching</h2>
+            <p className="text-xs text-muted-foreground">Pick up where you left off</p>
+          </div>
+        </div>
+        <Link
+          href="/downloads"
+          className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 py-1.5 pl-3 pr-2 text-sm font-semibold text-primary transition hover:bg-primary/15"
+        >
+          View All <ChevronRight className="h-4 w-4" />
+        </Link>
       </div>
-      {!on ? null : (
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {active.map((t) => {
           const pct = t.totalBytes > 0 ? Math.min(100, Math.round((t.receivedBytes / t.totalBytes) * 100)) : 0;
@@ -147,7 +120,6 @@ export function ContinueWatching({ initialHidden = false }: { initialHidden?: bo
           );
         })}
       </div>
-      )}
     </section>
   );
 }

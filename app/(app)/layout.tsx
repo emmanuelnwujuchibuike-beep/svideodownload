@@ -57,7 +57,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <OfflineQueueSync />
       {/* Once-per-browser-session "new device" security check. */}
       <DeviceCheck />
-      {/* App-level quick-lock PIN — gates /messages and /account/security only. */}
+      {/* App-level quick-lock PIN — gates Secret Chats and /account/security only. */}
       <PinLockGate />
     </div>
   );

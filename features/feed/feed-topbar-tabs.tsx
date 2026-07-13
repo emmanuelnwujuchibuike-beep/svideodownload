@@ -10,7 +10,6 @@ import {
   FrenzSparkleOutline,
   FrenzSparkleSolid,
 } from "@/components/icons/frenz-icons";
-import { NavDot } from "@/components/icons/nav-dot";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { springs } from "@/lib/motion/springs";
@@ -36,11 +35,12 @@ const TABS: {
  * mockup: the active tab ("For You" by default) expands into a vivid
  * blue→purple brand-gradient pill (white icon+label), the others collapse to
  * a plain circular chip — the same flat gray look as the search/add-friend
- * icons either side of this row — each carrying a small brand-purple accent
- * dot, so all six top-nav icons read as one consistent row. "Reels" never
- * carries the active state itself (tapping it opens the deck / navigates
- * away rather than selecting a persistent tab — `sort` never becomes
- * "recent"), so it always renders as that same plain chip+dot.
+ * icons either side of this row. Owner correction (2026-07-13): the small
+ * brand-purple accent dot every inactive chip used to carry is removed —
+ * "remove the purple dots from the top nav". "Reels" never carries the
+ * active state itself (tapping it opens the deck / navigates away rather
+ * than selecting a persistent tab — `sort` never becomes "recent"), so it
+ * always renders as that same plain chip.
  */
 export function FeedTopbarTabs({
   sort,
@@ -93,7 +93,6 @@ export function FeedTopbarTabs({
               <Icon className={active ? "h-[18px] w-[18px]" : "h-5 w-5"} />
             </PressIcon>
             {active ? <span className="whitespace-nowrap">{t.label}</span> : null}
-            {!active ? <NavDot /> : null}
           </motion.button>
         );
       })}

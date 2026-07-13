@@ -1,17 +1,21 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Delete, Lock } from "lucide-react";
+import { Delete, Loader2, Lock } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 
-/** Paths this quick-lock gate protects — messages + the new security
- *  settings page (the two surfaces named in the owner's spec). */
-const GATED_PREFIXES = ["/messages", "/account/security"];
+/** Paths this quick-lock gate protects. Owner correction (2026-07-13): this
+ *  used to include the bare "/messages" prefix, gating the WHOLE inbox and
+ *  every normal chat behind the account PIN — Secret Chats is the surface
+ *  that's actually meant to need a PIN each visit; general chat should open
+ *  straight in, same as before this feature ever shipped. Only the
+ *  dedicated Secret Chats route and the security settings page still gate. */
+const GATED_PREFIXES = ["/messages/secret", "/account/security"];
 
 const LAST_ACTIVE_KEY = "frenz:pin-last-active";
 const UNLOCKED_KEY = "frenz:pin-unlocked-until-lock"; // cleared on real idle, not on nav
@@ -54,6 +58,8 @@ export function PinLockGate() {
   // owner their correct PIN was "incorrect" — see submit()'s timeout comment.
   const [connError, setConnError] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+  const [isRefreshPending, startRefresh] = useTransition();
   const checkedIdleOnce = useRef(false);
 
   useEffect(() => setMounted(true), []);
@@ -66,6 +72,17 @@ export function PinLockGate() {
     // time-boxed every other startup call. Left un-timeboxed, a hung request
     // just means hasPin never flips true, which fails safe (no gate shown) —
     // but that's still a silent hang worth bounding like everything else.
+    //
+    // Re-attempted on every path change while still unconfirmed (`hasPin`
+    // deps below) rather than the original once-ever-per-session check: a
+    // single transient failure (cold serverless start, a brief network blip
+    // right as the app loaded) used to disable this gate's own keypad for the
+    // ENTIRE rest of the session, while the SSR side (lib/security/pin-gate.ts)
+    // kept correctly rendering the locked placeholder forever — the real
+    // cause of "gets stuck sometimes without an input to write pin." Once
+    // confirmed true, never re-checked again — turning a PIN OFF entirely is
+    // rare enough that a hard refresh covering it is an acceptable gap.
+    if (hasPin) return;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 6000);
     fetch("/api/v1/app/security/pin/status", { signal: controller.signal })
@@ -83,7 +100,7 @@ export function PinLockGate() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, []);
+  }, [hasPin, pathname]);
 
   // Idle tracking — a real elapsed-time check, not a per-nav reset, so
   // switching pages inside the app never itself triggers a lock.
@@ -132,6 +149,17 @@ export function PinLockGate() {
     }
   }, [hasPin, pathname]);
 
+  // Dismiss the "Unlocking…" transitional state (see submit()) the moment
+  // router.refresh()'s transition actually finishes, not a fixed delay —
+  // isRefreshPending flips false once the refreshed Server Component payload
+  // has committed.
+  useEffect(() => {
+    if (unlocking && !isRefreshPending) {
+      setLocked(false);
+      setUnlocking(false);
+    }
+  }, [unlocking, isRefreshPending]);
+
   // bfcache restore (iOS Safari edge-swipe "back", most other browsers'
   // back/forward too) resumes this component's React state EXACTLY as it was
   // frozen — no effect re-runs, no re-render, since it's the same JS heap
@@ -161,6 +189,7 @@ export function PinLockGate() {
     const onPageShow = (e: PageTransitionEvent) => {
       if (!e.persisted) return;
       setVerifying(false);
+      setUnlocking(false);
       setError(false);
       setConnError(false);
       setDigits("");
@@ -206,13 +235,24 @@ export function PinLockGate() {
         } catch {
           /* ignore */
         }
-        setLocked(false);
         setDigits("");
         // The verify route also issued a server-side pin-unlock step-up
         // cookie — refresh so the current page's Server Component (which may
         // have rendered a locked placeholder instead of real content, see
         // lib/security/pin-gate.ts) re-renders now that it's present.
-        router.refresh();
+        //
+        // Owner report: "even if i enter the pin, the enter pin page takes
+        // time to go away." The keypad used to vanish (`setLocked(false)`)
+        // the INSTANT the PIN verified, exposing whatever stale placeholder
+        // the server had rendered underneath for however long router.refresh()
+        // took to land — a correct unlock that visually looked broken. Now
+        // the overlay stays up showing an explicit "Unlocking…" state through
+        // that gap, driven by useTransition so it dismisses the moment the
+        // real content is actually ready, not a beat before.
+        setUnlocking(true);
+        startRefresh(() => {
+          router.refresh();
+        });
       } else {
         setError(true);
         setDigits("");
@@ -260,8 +300,17 @@ export function PinLockGate() {
         className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-background/98 px-6 backdrop-blur-xl"
         role="dialog"
         aria-modal="true"
-        aria-label="Enter your PIN to continue"
+        aria-label={unlocking ? "Unlocking" : "Enter your PIN to continue"}
       >
+        {unlocking ? (
+          <>
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </span>
+            <p className="mt-4 text-sm font-medium text-muted-foreground">Unlocking…</p>
+          </>
+        ) : (
+          <>
         <Lock className="h-8 w-8 text-muted-foreground" />
         <h1 className="mt-4 text-lg font-semibold">Enter your PIN</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -312,6 +361,8 @@ export function PinLockGate() {
             ),
           )}
         </div>
+          </>
+        )}
       </motion.div>
     </AnimatePresence>,
     document.body,

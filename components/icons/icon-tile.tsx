@@ -13,7 +13,10 @@ import { cn } from "@/lib/utils";
  * means something. Owner correction (2026-07-10): `brand` used to be the
  * blue→violet gradient — reported as "too much purple splashing" — now a
  * solid `foreground` tile (dark in light mode, white in dark mode) instead,
- * matching `NavIconBadge`'s identical correction.
+ * matching `NavIconBadge`'s identical correction. Owner correction
+ * (2026-07-13): the bell no longer switches to `brand` while unread — its
+ * mockup's unread state is only the small red count badge, the icon tile
+ * itself stays neutral regardless (see `NotificationBell`).
  */
 export function IconTile({
   children,

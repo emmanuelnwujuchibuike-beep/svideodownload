@@ -113,7 +113,10 @@ export function NotificationBell() {
         aria-expanded={open}
         className="relative inline-flex h-10 w-10 items-center justify-center"
       >
-        <IconTile tint={unread > 0 ? "brand" : "neutral"}>
+        {/* Owner correction (2026-07-13): unread used to also swap this tile
+            to the dark brand tint — the mockup's own unread state is just the
+            red count badge below, the bell icon itself never changes color. */}
+        <IconTile>
           {unread > 0 ? <IoNotifications className="h-[21px] w-[21px]" /> : <IoNotificationsOutline className="h-[21px] w-[21px]" />}
         </IconTile>
         {unread > 0 ? (

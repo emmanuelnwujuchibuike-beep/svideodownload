@@ -1,11 +1,10 @@
-import { Lock, MessageCircle, RefreshCw } from "lucide-react";
+import { MessageCircle, RefreshCw } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ConversationList } from "@/features/social/conversation-list";
 import { InboxHeaderActions } from "@/features/social/inbox-header-actions";
-import { isPinLocked } from "@/lib/security/pin-gate";
 import { listIncomingFriendRequests, type FriendRequestItem } from "@/lib/social/friends";
 import { listConversations, type ConversationSummary } from "@/lib/social/messages";
 import { createClient, getUserBounded } from "@/lib/supabase/server";
@@ -36,13 +35,6 @@ export default async function MessagesPage() {
   // Retry state as a slow query below; only a real "no session" redirects.
   const auth = await getUserBounded(supabase);
   if (auth.kind === "signed-out") redirect("/login?next=/messages");
-
-  // A client-only PIN lock still shipped real message previews in the
-  // initial HTML before the overlay ever painted — see lib/security/pin-gate.ts.
-  // Skip the real fetch entirely rather than fetch-then-discard.
-  if (auth.kind === "user" && (await isPinLocked(auth.user.id))) {
-    return <LockedPlaceholder />;
-  }
 
   // A stuck/slow query here used to leave the whole inbox on its loading
   // skeleton forever — nothing timed it out, so Next had nothing to fall
@@ -96,20 +88,5 @@ export default async function MessagesPage() {
         </p>
       </div>
     </>
-  );
-}
-
-/** Rendered instead of real conversation data when the account has a PIN
- *  set and hasn't cleared the step-up yet — the client PinLockGate overlay
- *  renders the actual unlock UI on top of this. */
-function LockedPlaceholder() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-        <Lock className="h-6 w-6" />
-      </span>
-      <p className="text-sm font-semibold">Messages locked</p>
-      <p className="max-w-xs text-sm text-muted-foreground">Enter your PIN to view your messages.</p>
-    </div>
   );
 }

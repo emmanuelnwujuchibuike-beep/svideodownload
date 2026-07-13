@@ -14,11 +14,21 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * entirely and render a locked placeholder instead.
  */
 export async function isPinLocked(userId: string): Promise<boolean> {
-  const { data } = await createAdminClient()
-    .from("security_pin")
-    .select("user_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (!data) return false; // no PIN set — never locked, zero behavior change
-  return !(await hasValidStepUp(userId, "pin-unlock"));
+  // Fails OPEN (not locked) on any unexpected error rather than throwing —
+  // this runs on every gated Server Component render, so an unhandled
+  // exception here (a transient DB hiccup, a cold-start timeout) crashed the
+  // whole page to the generic error boundary instead of just showing content
+  // a beat later. Same "stalled check degrades to not-locked" contract the
+  // client PinLockGate already documents for its own status fetch.
+  try {
+    const { data } = await createAdminClient()
+      .from("security_pin")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!data) return false; // no PIN set — never locked, zero behavior change
+    return !(await hasValidStepUp(userId, "pin-unlock"));
+  } catch {
+    return false;
+  }
 }

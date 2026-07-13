@@ -1,11 +1,10 @@
-import { Lock, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { ConversationRoom } from "@/features/social/conversation-room";
 import { ThreadHeader } from "@/features/social/thread-header";
-import { isPinLocked } from "@/lib/security/pin-gate";
 import { getConversation, type ConversationView } from "@/lib/social/messages";
 import { getActiveStories, type StoryGroup } from "@/lib/social/stories";
 import { createClient, getUserBounded } from "@/lib/supabase/server";
@@ -51,21 +50,6 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     );
   }
   const user = auth.user;
-
-  // See lib/security/pin-gate.ts — a client-only PIN lock still shipped the
-  // real conversation content in the initial HTML before the overlay ever
-  // painted. Skip the real fetch entirely rather than fetch-then-discard.
-  if (await isPinLocked(user.id)) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-          <Lock className="h-6 w-6" />
-        </span>
-        <p className="text-sm font-semibold">Conversation locked</p>
-        <p className="max-w-xs text-sm text-muted-foreground">Enter your PIN to view this conversation.</p>
-      </div>
-    );
-  }
 
   // A stuck/slow query here used to leave the whole thread — including its
   // header and composer — on the loading skeleton forever, with no way back

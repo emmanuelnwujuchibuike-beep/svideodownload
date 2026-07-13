@@ -18,8 +18,12 @@ export const metadata: Metadata = {
  * /messages — "Hidden Chat" (spec) means it's reached by deliberate
  * navigation, not visible in the normal inbox at all (listConversations()
  * excludes type='secret' server-side, not just in this page's UI).
- * SSR-gated the same way /messages itself is (see lib/security/pin-gate.ts)
- * — real content never ships in the HTML while locked.
+ * SSR-gated via lib/security/pin-gate.ts — real content never ships in the
+ * HTML while locked. Deliberately the ONLY messaging surface still behind
+ * the account PIN (owner correction 2026-07-13): general /messages used to
+ * share this same gate, requiring a PIN just to open normal chats — now
+ * scoped to Secret Chats + /account/security only (see GATED_PREFIXES in
+ * features/account/pin-lock-gate.tsx).
  */
 export default async function SecretChatsPage() {
   const supabase = await createClient();

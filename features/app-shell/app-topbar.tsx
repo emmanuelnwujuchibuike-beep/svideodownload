@@ -7,7 +7,6 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import { IconTile } from "@/components/icons/icon-tile";
-import { NavDot } from "@/components/icons/nav-dot";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { isTopbarLocked, setTopbarHidden, useTopbarLocked } from "@/features/app-shell/topbar-visibility";
@@ -30,10 +29,6 @@ export function AppTopbar() {
   // other route keeps it. Thread pages already cover it with their own
   // full-screen overlay, so only the index needs this.
   const onMessagesIndex = pathname === "/messages";
-  // Home's mobile nav floats as a single rounded card (owner mockup) — every
-  // other route (and Home itself at sm+, where the inline search bar takes
-  // over) keeps the plain edge-to-edge bar unchanged.
-  const isHome = pathname === "/home";
   const inputRef = useRef<HTMLInputElement | null>(null);
   // The feed lifts its For You/Following/Reels control up here (owner spec)
   // — every other page's search bar is untouched, since only the feed ever
@@ -109,11 +104,11 @@ export function AppTopbar() {
         // theme like every other surface — white in light mode, blending
         // into the app's own dark background in dark mode ("the top edge
         // look full screen") — not a fixed colored gradient wash regardless
-        // of theme. Reverted from an earlier Home-only gradient treatment.
-        // Still applies as-is on every route except Home's mobile card below.
-        isHome
-          ? "mx-3 mt-2 rounded-[28px] bg-card px-3 shadow-elevated sm:mx-0 sm:mt-0 sm:rounded-none sm:border-b sm:border-border/20 sm:bg-background/60 sm:px-4 sm:shadow-none"
-          : "border-b border-border/20 bg-background/60",
+        // of theme. Full-width edge-to-edge on every route, including Home
+        // (owner correction, same date: the earlier floating rounded card
+        // with side margins is gone — "make the top nav width full, and no
+        // border radius at the side edges... fix at the top 0").
+        "border-b border-border/20 bg-background/60",
         hidden ? "-translate-y-full lg:translate-y-0" : "translate-y-0",
         onMessagesIndex && "hidden lg:flex",
       )}
@@ -136,12 +131,10 @@ export function AppTopbar() {
               <IoSearchOutline className="h-[20px] w-[20px]" />
             </IconTile>
           </Link>
-          {isHome ? <NavDot /> : null}
         </PressIcon>
         {/* Add friends — single top-nav icon */}
         <span className="relative">
           <SuggestionsLauncher />
-          {isHome ? <NavDot /> : null}
         </span>
       </div>
 

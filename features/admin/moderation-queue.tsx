@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, ShieldAlert } from "lucide-react";
+import { Loader2, ShieldAlert, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -9,6 +9,12 @@ import type { ModAction, ReportedTarget } from "@/lib/social/moderation";
 import { cn } from "@/lib/utils";
 
 const TYPE_LABEL = { post: "Post", comment: "Comment", user: "User" } as const;
+
+function severityTint(severity: number): string {
+  if (severity >= 70) return "bg-red-500/15 text-red-500";
+  if (severity >= 35) return "bg-amber-500/15 text-amber-500";
+  return "bg-emerald-500/15 text-emerald-500";
+}
 
 export function ModerationQueue({ targets }: { targets: ReportedTarget[] }) {
   const router = useRouter();
@@ -88,6 +94,17 @@ export function ModerationQueue({ targets }: { targets: ReportedTarget[] }) {
                 <p className="truncate text-xs text-muted-foreground">
                   {t.sublabel ? `${t.sublabel} · ` : ""}{t.reasons.join(", ")}
                 </p>
+                {t.aiAssessment ? (
+                  <p className="mt-1.5 flex items-start gap-1.5 text-xs">
+                    <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-violet-500" />
+                    <span>
+                      <span className={cn("mr-1.5 rounded-full px-1.5 py-0.5 font-semibold", severityTint(t.aiAssessment.severity))}>
+                        {t.aiAssessment.category} · {t.aiAssessment.severity}/100
+                      </span>
+                      <span className="text-muted-foreground">{t.aiAssessment.rationale}</span>
+                    </span>
+                  </p>
+                ) : null}
               </div>
 
               <div className="flex flex-wrap gap-1.5">

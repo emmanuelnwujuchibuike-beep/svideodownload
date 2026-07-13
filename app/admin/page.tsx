@@ -37,8 +37,10 @@ import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
 import { PricingEditor } from "@/features/admin/pricing-editor";
 import { ModerationQueue } from "@/features/admin/moderation-queue";
+import { AppealsQueue } from "@/features/admin/appeals-queue";
 import { PushDeliveryMonitor } from "@/features/admin/push-delivery-monitor";
 import { TrendingEditor } from "@/features/admin/trending-editor";
+import { listPendingAppeals } from "@/lib/social/appeals";
 import { listBroadcasts } from "@/lib/social/broadcasts";
 import { getTrendingSettings } from "@/lib/social/feed";
 import { fetchMessagingStats } from "@/lib/social/messaging-stats";
@@ -106,6 +108,7 @@ export default async function AdminPage() {
     messagingStats,
     pushDeliveryStats,
     broadcasts,
+    pendingAppeals,
   ] = await Promise.all([
     fetchProxyUsage(),
     fetchDownloadStats(),
@@ -123,6 +126,7 @@ export default async function AdminPage() {
     fetchMessagingStats(),
     fetchPushDeliveryStats(),
     listBroadcasts(),
+    listPendingAppeals(),
   ]);
   // Fire the proxy-budget alert if we've crossed 90% (deduped to once/day).
   await maybeAlertProxyBudget(proxy);
@@ -267,6 +271,7 @@ export default async function AdminPage() {
         {/* Monetization controls + managers + analytics */}
         <MonetizationSettings settings={monetization} />
         <ModerationQueue targets={reportedTargets} />
+        <AppealsQueue appeals={pendingAppeals} />
         <MessagingMonitor stats={messagingStats} />
         <PushDeliveryMonitor stats={pushDeliveryStats} />
         <BroadcastComposer initialBroadcasts={broadcasts} />

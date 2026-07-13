@@ -1,3 +1,4 @@
+import { writeAuditLog } from "@/lib/security/audit-log";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -20,6 +21,8 @@ export interface ReportedTarget {
   sublabel: string | null;
   handle: string | null; // creator/author/user handle for a profile link
   currentStatus: string | null;
+  /** Part 11c — Claude's best-effort read on the reported content, null until scored (or for "user" targets, never scored). */
+  aiAssessment: { category: string; severity: number; rationale: string } | null;
 }
 
 interface ReportRow {
@@ -61,6 +64,7 @@ export async function listReportedTargets(limit = 100): Promise<ReportedTarget[]
           sublabel: null,
           handle: null,
           currentStatus: null,
+          aiAssessment: null,
         });
       }
     }
@@ -124,6 +128,25 @@ export async function listReportedTargets(limit = 100): Promise<ReportedTarget[]
         } else g.title = "Deleted user";
       }
     }
+
+    // Part 11c — attach each target's AI risk assessment, if one exists.
+    const { data: assessmentRows } = await db
+      .from("moderation_ai_assessments")
+      .select("target_type, target_id, category, severity, rationale")
+      .in(
+        "target_id",
+        targets.map((t) => t.targetId),
+      );
+    const assessmentByKey = new Map(
+      ((assessmentRows ?? []) as { target_type: TargetType; target_id: string; category: string; severity: number; rationale: string }[]).map((a) => [
+        `${a.target_type}:${a.target_id}`,
+        { category: a.category, severity: a.severity, rationale: a.rationale },
+      ]),
+    );
+    for (const g of targets) {
+      g.aiAssessment = assessmentByKey.get(`${g.targetType}:${g.targetId}`) ?? null;
+    }
+
     return targets;
   } catch {
     return [];
@@ -142,9 +165,24 @@ export async function moderate(
   targetType: TargetType,
   targetId: string,
   action: ModAction,
+  /** Part 11c — the admin performing this action, for the audit log. */
+  adminId?: string,
 ): Promise<{ ok: boolean }> {
   if (!hasSupabase) return { ok: false };
   const db = createAdminClient();
+
+  // Resolve the content owner BEFORE acting — this is who the audit log
+  // entry is about (`user_id`), distinct from `adminId` (`actor_user_id`).
+  let ownerId: string | null = null;
+  if (targetType === "post") {
+    const { data } = await db.from("posts").select("publisher_id").eq("id", targetId).maybeSingle();
+    ownerId = (data?.publisher_id as string | undefined) ?? null;
+  } else if (targetType === "comment") {
+    const { data } = await db.from("post_comments").select("author_id").eq("id", targetId).maybeSingle();
+    ownerId = (data?.author_id as string | undefined) ?? null;
+  } else {
+    ownerId = targetId;
+  }
 
   // 1) Apply the content/account action. NOTE: "dismiss" also un-hides content
   // that was AUTO-hidden by the report trigger (under_review/hidden) — scoped by
@@ -173,5 +211,52 @@ export async function moderate(
     .eq("target_id", targetId)
     .eq("status", "open");
 
+  // 3) Append-only accountability trail — every moderation action, who did
+  // it, and to what, readable by the affected user's own Privacy Dashboard
+  // (security_audit_log's RLS already lets `user_id` read their own rows).
+  if (ownerId && adminId) {
+    await writeAuditLog({
+      userId: ownerId,
+      actorUserId: adminId,
+      eventType: "moderation_action",
+      targetType,
+      targetId,
+      metadata: { action },
+    });
+  }
+
   return { ok: true };
+}
+
+export interface OwnReport {
+  targetType: TargetType;
+  targetId: string;
+  reason: string;
+  status: "open" | "actioned" | "dismissed";
+  createdAt: string;
+}
+
+/**
+ * Reports the viewer has FILED (not against them) — Friendship Trust
+ * Center's "what happened to what I reported." `reports` has no
+ * reporter-self-read RLS policy (only self-insert + admin-read), so this
+ * goes through the service role, scoped correctly in code, same pattern as
+ * `listOwnAppeals`.
+ */
+export async function listOwnReports(reporterId: string): Promise<OwnReport[]> {
+  if (!hasSupabase) return [];
+  const db = createAdminClient();
+  const { data } = await db
+    .from("reports")
+    .select("target_type, target_id, reason, status, created_at")
+    .eq("reporter_id", reporterId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    targetType: r.target_type as TargetType,
+    targetId: r.target_id as string,
+    reason: r.reason as string,
+    status: r.status as OwnReport["status"],
+    createdAt: r.created_at as string,
+  }));
 }

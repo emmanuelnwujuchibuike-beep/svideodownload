@@ -33,7 +33,12 @@ export type SecurityAuditEventType =
   | "pin_lockout"
   | "device_renamed"
   | "device_trust_changed"
-  | "device_forgotten";
+  | "device_forgotten"
+  | "moderation_action"
+  | "appeal_submitted"
+  | "appeal_resolved"
+  | "account_deletion_requested"
+  | "account_deletion_cancelled";
 
 function hashIp(ip: string): string | null {
   const secret = process.env.AUDIT_IP_HASH_SECRET;
@@ -46,14 +51,24 @@ export async function writeAuditLog(params: {
   eventType: SecurityAuditEventType;
   request?: Request;
   metadata?: Record<string, unknown>;
+  /** Part 11c — an admin/moderator acting on `userId`'s content/account, not
+   *  `userId` acting on their own. Defaults to `userId` (self-action), the
+   *  11a behavior every existing call site still gets. */
+  actorUserId?: string;
+  /** Part 11c — the moderated post/comment/account this event is about. */
+  targetType?: "post" | "comment" | "user";
+  targetId?: string;
 }): Promise<void> {
-  const { userId, eventType, request, metadata } = params;
+  const { userId, eventType, request, metadata, actorUserId, targetType, targetId } = params;
   try {
     const ip = request ? clientId(request.headers) : null;
     const db = createAdminClient();
     await db.from("security_audit_log").insert({
       user_id: userId,
+      actor_user_id: actorUserId ?? userId,
       event_type: eventType,
+      target_type: targetType ?? null,
+      target_id: targetId ?? null,
       ip_hash: ip && ip !== "anonymous" ? hashIp(ip) : null,
       user_agent: request?.headers.get("user-agent") ?? null,
       metadata: metadata ?? {},

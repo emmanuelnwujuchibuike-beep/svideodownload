@@ -83,6 +83,7 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   security_passkey_removed: ShieldAlert,
   admin_broadcast: Megaphone,
   post_under_review: ShieldAlert,
+  moderation_appeal_resolved: ShieldAlert,
 };
 
 export function iconFor(type: NotificationType): LucideIcon {
@@ -100,7 +101,7 @@ export function tintFor(category: NotificationCategory, type?: NotificationType)
   if (type === "milestone") return "bg-amber-500/15 text-amber-500";
   // Also worth breaking it for — a post under review needs to read as
   // urgent/actionable, not blend into ordinary system chatter.
-  if (type === "post_under_review") return "bg-rose-500/15 text-rose-500";
+  if (type === "post_under_review" || type === "moderation_appeal_resolved") return "bg-rose-500/15 text-rose-500";
   switch (category) {
     case "premium":
       return "bg-amber-500/15 text-amber-500";
@@ -214,6 +215,8 @@ export function verbFor(type: NotificationType): string {
       return "Frenz announcement";
     case "post_under_review":
       return "Your post was hidden pending review";
+    case "moderation_appeal_resolved":
+      return "Your appeal was reviewed";
     default:
       return "sent you a notification";
   }
@@ -233,7 +236,8 @@ export function isActorType(type: NotificationType): boolean {
     type !== "milestone" &&
     type !== "system" &&
     type !== "admin_broadcast" &&
-    type !== "post_under_review"
+    type !== "post_under_review" &&
+    type !== "moderation_appeal_resolved"
   );
 }
 
@@ -249,6 +253,7 @@ export function hrefFor(n: {
     return `/u/${n.actor.handle}`;
   }
   if ((n.type === "message" || n.type === "message_reaction" || n.type === "message_mention") && n.conversationId) return `/messages/${n.conversationId}`;
+  if (n.type === "moderation_appeal_resolved") return "/account/appeals";
   if (n.postId) return `/p/${n.postId}`;
   return "/notifications";
 }

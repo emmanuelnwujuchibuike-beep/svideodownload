@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { scoreReportedTarget } from "@/lib/moderation/risk-score";
 import { sendPushToUser } from "@/lib/push/web-push";
 import { clientId, trackLimiter } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -80,6 +81,51 @@ export async function POST(request: Request) {
         });
       } catch {
         /* best-effort */
+      }
+    });
+  }
+
+  // Part 11c — moderation pipeline: risk-score the target's TEXT once it's
+  // actually hidden by the report-threshold trigger, so the admin queue
+  // shows an AI-assisted starting point instead of raw text cold. Only
+  // "user" reports are skipped (an account has no single text blob to
+  // classify). Scored once per target (skips if an assessment already
+  // exists) — later reports on the same already-hidden item don't re-spend
+  // an API call for no new information.
+  if (!error && (parsed.data.targetType === "post" || parsed.data.targetType === "comment")) {
+    after(async () => {
+      try {
+        const admin = createAdminClient();
+        const { data: existing } = await admin
+          .from("moderation_ai_assessments")
+          .select("target_type")
+          .eq("target_type", parsed.data.targetType)
+          .eq("target_id", parsed.data.targetId)
+          .maybeSingle();
+        if (existing) return;
+
+        let content = "";
+        if (parsed.data.targetType === "post") {
+          const { data: post } = await admin.from("posts").select("status, title, description").eq("id", parsed.data.targetId).maybeSingle();
+          if (post?.status !== "under_review") return;
+          content = [post.title, post.description].filter(Boolean).join("\n");
+        } else {
+          const { data: comment } = await admin.from("post_comments").select("status, body").eq("id", parsed.data.targetId).maybeSingle();
+          if (comment?.status !== "hidden") return;
+          content = (comment.body as string) ?? "";
+        }
+
+        const { data: openReports } = await admin
+          .from("reports")
+          .select("reason")
+          .eq("target_type", parsed.data.targetType)
+          .eq("target_id", parsed.data.targetId)
+          .eq("status", "open");
+        const reasons = [...new Set(((openReports ?? []) as { reason: string }[]).map((r) => r.reason))];
+
+        await scoreReportedTarget(parsed.data.targetType, parsed.data.targetId, content, reasons);
+      } catch {
+        /* best-effort — the queue just shows no assessment for this target */
       }
     });
   }

@@ -59,7 +59,8 @@ export type NotificationType =
   | "security_passkey_removed"
   | "system"
   | "admin_broadcast"
-  | "post_under_review";
+  | "post_under_review"
+  | "moderation_appeal_resolved";
 
 /** Notification Center tab categories. */
 export type NotificationCategory =
@@ -121,6 +122,7 @@ export const CATEGORY_BY_TYPE: Partial<Record<NotificationType, NotificationCate
   security_passkey_enrolled: "security",
   security_passkey_removed: "security",
   post_under_review: "system",
+  moderation_appeal_resolved: "system",
 };
 
 export function categoryForType(type: NotificationType): NotificationCategory {

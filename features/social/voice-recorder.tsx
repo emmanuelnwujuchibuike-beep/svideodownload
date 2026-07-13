@@ -233,8 +233,18 @@ export function VoiceRecorder({
     if (phase === "recording") stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStopAndSend, phase]);
+  // Guards the auto-send to exactly ONE attempt — without it, a failed
+  // upload sets phase back to "preview" (see send()'s catch), which used to
+  // re-trigger THIS SAME effect (still watching `phase`) and call send()
+  // again, forever: a real infinite retry loop found in review, hammering
+  // uploadPostMedia with no way for the user to back out. A failure now
+  // falls through to the normal preview controls (manual Send/Trash) instead.
+  const autoSendAttemptedRef = useRef(false);
   useEffect(() => {
-    if (autoStopAndSend && phase === "preview") void send();
+    if (autoStopAndSend && phase === "preview" && !autoSendAttemptedRef.current) {
+      autoSendAttemptedRef.current = true;
+      void send();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStopAndSend, phase]);
 

@@ -53,14 +53,17 @@ export function EmojiPickerButton({ onPick }: { onPick: (emoji: string) => void 
       {mounted && open && pos
         ? createPortal(
             <AnimatePresence>
-              <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-[110] cursor-default" />
+              {/* z-40/z-50 — the app's established anchored-panel pair (see
+                  useAnchoredPanel's doc comment), deliberately below the
+                  Toaster's z-[100] so a toast is never hidden behind this. */}
+              <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
               <motion.div
                 initial={{ opacity: 0, y: 8, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.96 }}
                 transition={springs.bounce}
                 style={{ bottom: pos.bottom, left: pos.left }}
-                className="glass-strong fixed z-[120] grid w-[280px] grid-cols-8 gap-0.5 rounded-2xl p-2 shadow-elevated"
+                className="glass-strong fixed z-50 grid w-[280px] grid-cols-8 gap-0.5 rounded-2xl p-2 shadow-elevated"
               >
                 {EMOJI.map((e, i) => (
                   <button

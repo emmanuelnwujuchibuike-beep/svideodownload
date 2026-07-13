@@ -532,7 +532,16 @@ export async function createPoll(
       .insert({ message_id: sent.id, conversation_id: conversationId, question, options, created_by: senderId })
       .select("id")
       .single();
-    if (error || !poll) return { ok: false };
+    if (error || !poll) {
+      // The parent message already landed (and was already broadcast live to
+      // any open thread) before this insert could fail — left as-is, it's a
+      // permanently-broken poll bubble (metadata says "poll", no pollId, no
+      // row to fetch). Soft-delete it the same way a normal message delete
+      // works, so it reads as "This message was deleted" instead of an
+      // unfixable stuck loading skeleton — found in review, not guessed.
+      await db.from("messages").update({ deleted_at: new Date().toISOString() }).eq("id", sent.id);
+      return { ok: false };
+    }
     // The bubble needs the poll's own id to fetch/vote — carried in the
     // parent message's metadata (set here, after the poll exists, since the
     // poll row itself needs the message's id first — see the insert above).
@@ -954,7 +963,7 @@ export async function forwardMessage(
 ): Promise<{ ok: boolean; sent: number }> {
   try {
     const db = createAdminClient();
-    const { data: source } = await db.from("messages").select("body, conversation_id, deleted_at").eq("id", messageId).maybeSingle();
+    const { data: source } = await db.from("messages").select("body, conversation_id, deleted_at, metadata").eq("id", messageId).maybeSingle();
     if (!source || source.deleted_at) return { ok: false, sent: 0 };
 
     // Secret Chats: "No Forwarding" (spec). Ciphertext forwarded into a
@@ -981,10 +990,25 @@ export async function forwardMessage(
       ((targetConvs ?? []) as { id: string; type: string }[]).filter((c) => c.type === "secret").map((c) => c.id),
     );
 
+    // Location/Contact metadata forwards verbatim (re-sharing the same
+    // coordinates/contact into a new conversation is meaningful there). A
+    // Poll does NOT — its vote-tracking row is scoped to the ORIGINAL
+    // conversation's membership (see votePoll/getPollResults), so forwarding
+    // the same pollId into a different conversation would silently 403 for
+    // anyone there who isn't also a member of the source thread. Falling
+    // back to no metadata (same as an ordinary empty-body forward) keeps
+    // this an honest no-op rather than a half-working cross-conversation
+    // reference.
+    const sourceMetadata = source.metadata as Record<string, unknown> | null;
+    const forwardMetadata = sourceMetadata?.kind === "poll" ? undefined : (sourceMetadata ?? undefined);
+
     let sent = 0;
     for (const conversationId of targets) {
       if (secretTargetIds.has(conversationId)) continue; // can't forward plaintext into an encrypted thread
-      const res = await sendMessage(senderId, conversationId, source.body as string, { forwardedFromId: messageId });
+      const res = await sendMessage(senderId, conversationId, source.body as string, {
+        forwardedFromId: messageId,
+        metadata: forwardMetadata,
+      });
       if (res.ok && !res.duplicate) sent += 1;
     }
     return { ok: sent > 0, sent };

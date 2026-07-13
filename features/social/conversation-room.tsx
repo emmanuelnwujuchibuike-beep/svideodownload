@@ -81,6 +81,10 @@ import { toast } from "@/features/ui/toast";
 
 const COMPOSER_MAX_HEIGHT = 128;
 const DRAFT_PREFIX = "frenz-draft:";
+// Voice hold-to-record gesture thresholds (owner mockup).
+const MIC_HOLD_COMMIT_MS = 200;
+const MIC_CANCEL_PX = 80;
+const MIC_LOCK_PX = 80;
 
 /** Chat Themes (inbox mockup completion) — each drives BOTH an accent color
  *  (sent bubbles, send button) AND a matching background wash, per owner's
@@ -195,6 +199,9 @@ export function ConversationRoom({
   otherStoryGroup?: StoryGroup | null;
 }) {
   const [messages, setMessages] = useState<MessageItem[]>(initial);
+  // Chat theme, kept live via the realtime channel below — the initial
+  // `theme` prop only reflects whatever was true at the last server render.
+  const [liveTheme, setLiveTheme] = useState(theme);
   const [body, setBody] = useState("");
   // Staged image/video/document attachments — uploaded the moment they're
   // picked (see the media composer sheet), previewed as chips above the
@@ -626,6 +633,14 @@ export function ConversationRoom({
                     // just before the delete landed stays visible/tappable
                     // on a bubble that's now just "This message was deleted".
                     reactions: r.deleted_at ? [] : m.reactions,
+                    // A poll message is created in TWO writes — an insert
+                    // (metadata: {kind:"poll"}, no id yet) then an update
+                    // once the poll row exists (metadata: {kind:"poll",
+                    // pollId}) — without merging metadata here, a recipient
+                    // who already has the thread open keeps the INSERT's
+                    // pollId-less payload forever, and PollBubble can never
+                    // fetch/vote (root-caused, not guessed).
+                    metadata: r.deleted_at ? null : (r.metadata ?? m.metadata),
                   }
                 : m,
             ),
@@ -659,6 +674,19 @@ export function ConversationRoom({
           // rather than hand-patching a partial payload into state.
           if (reactionDebounce) clearTimeout(reactionDebounce);
           reactionDebounce = setTimeout(() => void resync(), 400);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "conversations", filter: `id=eq.${conversationId}` },
+        (payload) => {
+          // Chat Themes (inbox mockup completion) is a SHARED per-conversation
+          // setting — without this, only the member who changed it (via
+          // ThreadOptionsSheet's own optimistic update) would see the new
+          // bubble/wash colors live; everyone else's already-open thread
+          // stayed on the old theme until they happened to reload.
+          const row = payload.new as { theme?: ConversationTheme | null };
+          if (row.theme !== undefined) setLiveTheme(row.theme);
         },
       )
       .subscribe(onSubscribeStatus);
@@ -1068,10 +1096,22 @@ export function ConversationRoom({
       if (!start || !micHoldEngagedRef.current) return;
       const dragX = e.clientX - start.x;
       const dragY = e.clientY - start.y;
+      const canceled = dragX < -MIC_CANCEL_PX;
+      const locked = -dragY > MIC_LOCK_PX;
       setHoldGesture((prev) => {
         if (prev?.canceled || prev?.locked) return prev;
-        return { dragX, dragY, canceled: dragX < -MIC_CANCEL_PX, locked: -dragY > MIC_LOCK_PX };
+        return { dragX, dragY, canceled, locked };
       });
+      // End the GESTURE TRACKING (refs) the instant a threshold is crossed —
+      // not just on the eventual pointerup. Without this, the finger stays
+      // down for a moment after VoiceRecorder's own effect already reacted
+      // to `canceled`/`locked` (unmounting on cancel, or continuing hands-
+      // free on lock) — real bug found in review: the LATER pointerup then
+      // read a stale, already-null `holdGesture` and misread it as "released
+      // clean," setting `autoStopAndSend = true` with nothing mounted to
+      // consume it — which then fired on the very NEXT plain tap, sending a
+      // blank/instant voice note the user never intended.
+      if ((canceled || locked) && micHoldEngagedRef.current) endMicHold("handled");
     };
     const onUp = () => {
       if (!micHoldStartRef.current) return; // no gesture in progress — ignore
@@ -1338,7 +1378,7 @@ export function ConversationRoom({
           // drifting away from the bubble it belongs to.
           if (openMenuId) setOpenMenuId(null);
         }}
-        className={cn("flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto p-4", theme && THEME_WASH_CLASS[theme])}
+        className={cn("flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto p-4", liveTheme && THEME_WASH_CLASS[liveTheme])}
       >
         {otherStoryGroup ? (
           <button
@@ -1440,7 +1480,7 @@ export function ConversationRoom({
                       deleted
                         ? "border border-dashed border-border/60 bg-transparent"
                         : m.mine
-                          ? cn(theme ? THEME_BUBBLE_CLASS[theme] : "bg-brand", "rounded-br-xl text-white shadow-md shadow-violet-500/20")
+                          ? cn(liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-brand", "rounded-br-xl text-white shadow-md shadow-violet-500/20")
                           : "glass rounded-bl-xl text-foreground shadow-sm",
                       m.mine && m.id.startsWith("optimistic-") && "animate-scale-in",
                       m.id === highlightedId && "ring-2 ring-offset-2 ring-offset-background ring-amber-400 transition-shadow duration-500",
@@ -1898,7 +1938,7 @@ export function ConversationRoom({
             aria-label="Send"
             whileTap={{ scale: 0.88 }}
             transition={springs.press}
-            className={cn(theme ? THEME_BUBBLE_CLASS[theme] : "bg-brand", "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-violet-500/30 transition hover:opacity-95 disabled:opacity-40")}
+            className={cn(liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-brand", "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-violet-500/30 transition hover:opacity-95 disabled:opacity-40")}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 -translate-x-px" />}
           </motion.button>

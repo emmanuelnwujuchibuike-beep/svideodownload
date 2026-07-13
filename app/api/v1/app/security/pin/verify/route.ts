@@ -77,6 +77,14 @@ export async function POST(request: Request) {
   // pages) can gate the actual data they embed in SSR — a client-only lock
   // still let real message content ship in the initial HTML before the
   // overlay ever painted. TTL matches this account's own auto-lock window.
-  await issueStepUp(user.id, "pin-unlock", row.auto_lock_minutes * 60_000);
+  //
+  // issueStepUp throws if STEPUP_SIGNING_SECRET isn't configured — the PIN
+  // itself was already correctly verified above, so this must degrade to a
+  // clean failure rather than crashing with no response body.
+  try {
+    await issueStepUp(user.id, "pin-unlock", row.auto_lock_minutes * 60_000);
+  } catch {
+    return fail("internal");
+  }
   return noStore(ok({ ok: true }));
 }

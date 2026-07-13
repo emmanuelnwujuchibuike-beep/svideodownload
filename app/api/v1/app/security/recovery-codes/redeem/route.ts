@@ -50,7 +50,14 @@ export async function POST(request: Request) {
   if (!parsed.success) return fail("validation_failed");
 
   const db = createAdminClient();
-  const codeHash = hashRecoveryCode(parsed.data.code);
+  // Throws if RECOVERY_CODE_PEPPER isn't configured — degrade to the
+  // standard error envelope instead of crashing with no response body.
+  let codeHash: string;
+  try {
+    codeHash = hashRecoveryCode(parsed.data.code);
+  } catch {
+    return fail("internal");
+  }
 
   const { data: row } = await db
     .from("mfa_recovery_codes")

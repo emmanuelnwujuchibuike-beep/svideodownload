@@ -20,6 +20,18 @@ function isGatedPath(pathname: string): boolean {
   return GATED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+/** Shared by the mount-time idle check and the bfcache pageshow restore below
+ * — both need to clear a stale unlock once the account's configured auto-lock
+ * window has elapsed, not just re-read whatever UNLOCKED_KEY currently says. */
+function checkIdleAndClearUnlock(autoLockMs: number): void {
+  try {
+    const last = Number(sessionStorage.getItem(LAST_ACTIVE_KEY) || 0);
+    if (last && Date.now() - last > autoLockMs) sessionStorage.removeItem(UNLOCKED_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * App-level quick-lock overlay (Part 11a). Mounted once in the app shell
  * (see app/(app)/layout.tsx), portaled to document.body per the standing
@@ -88,25 +100,13 @@ export function PinLockGate() {
 
     if (!checkedIdleOnce.current) {
       checkedIdleOnce.current = true;
-      try {
-        const last = Number(sessionStorage.getItem(LAST_ACTIVE_KEY) || 0);
-        if (last && Date.now() - last > autoLockMs) {
-          sessionStorage.removeItem(UNLOCKED_KEY);
-        }
-      } catch {
-        /* ignore */
-      }
+      checkIdleAndClearUnlock(autoLockMs);
     }
     markActive();
 
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
-      try {
-        const last = Number(sessionStorage.getItem(LAST_ACTIVE_KEY) || 0);
-        if (last && Date.now() - last > autoLockMs) sessionStorage.removeItem(UNLOCKED_KEY);
-      } catch {
-        /* ignore */
-      }
+      checkIdleAndClearUnlock(autoLockMs);
       markActive();
     };
     document.addEventListener("visibilitychange", onVisible);
@@ -149,6 +149,14 @@ export function PinLockGate() {
   // bfcache restore for this SPA (desktop back/forward stays a live
   // client-side popstate nav here, never a freeze/thaw). Re-derive `locked`
   // fresh and drop any stale in-flight/error state on restore.
+  //
+  // Also runs the SAME idle-elapsed check the mount effect does (not just a
+  // raw re-read of UNLOCKED_KEY) — without this, freezing the tab while
+  // unlocked, waiting past the account's configured auto-lock window, then
+  // restoring via gesture-back skipped the ONLY two places that ever clear a
+  // stale unlock (the mount-once check and the visibilitychange handler,
+  // neither of which fires on a bfcache restore), so the gate silently
+  // stayed unlocked forever past its own timeout for exactly this nav path.
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
       if (!e.persisted) return;
@@ -160,6 +168,7 @@ export function PinLockGate() {
         setLocked(false);
         return;
       }
+      if (autoLockMs !== null) checkIdleAndClearUnlock(autoLockMs);
       try {
         setLocked(sessionStorage.getItem(UNLOCKED_KEY) !== "1");
       } catch {
@@ -168,7 +177,7 @@ export function PinLockGate() {
     };
     window.addEventListener("pageshow", onPageShow);
     return () => window.removeEventListener("pageshow", onPageShow);
-  }, [hasPin, pathname]);
+  }, [hasPin, pathname, autoLockMs]);
 
   const submit = async (pin: string) => {
     setVerifying(true);

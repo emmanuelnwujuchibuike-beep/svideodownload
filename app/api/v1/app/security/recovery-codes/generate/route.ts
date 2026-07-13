@@ -44,10 +44,19 @@ export async function POST(request: Request) {
 
   const codes = generateRecoveryCodes(10);
 
+  // hashRecoveryCode throws if RECOVERY_CODE_PEPPER isn't configured — a
+  // missing-env misconfiguration, not a request-shaped error, but it must
+  // still degrade to the standard envelope rather than crashing the route
+  // with no response body at all.
+  let hashedCodes: { user_id: string; code_hash: string }[];
+  try {
+    hashedCodes = codes.map((code) => ({ user_id: user.id, code_hash: hashRecoveryCode(code) }));
+  } catch {
+    return fail("internal");
+  }
+
   await db.from("mfa_recovery_codes").delete().eq("user_id", user.id).is("used_at", null);
-  const { error } = await db
-    .from("mfa_recovery_codes")
-    .insert(codes.map((code) => ({ user_id: user.id, code_hash: hashRecoveryCode(code) })));
+  const { error } = await db.from("mfa_recovery_codes").insert(hashedCodes);
   if (error) return fail("internal");
 
   const now = new Date().toISOString();

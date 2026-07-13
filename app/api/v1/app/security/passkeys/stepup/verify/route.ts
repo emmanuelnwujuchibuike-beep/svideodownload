@@ -97,7 +97,14 @@ export async function POST(request: Request) {
     .update({ counter: newCounter, last_used_at: new Date().toISOString() })
     .eq("id", credRow.id);
 
-  await issueStepUp(user.id, parsed.data.purpose);
+  // issueStepUp throws if STEPUP_SIGNING_SECRET isn't configured — the
+  // WebAuthn ceremony above already genuinely succeeded, so this must
+  // degrade to a clean failure rather than crashing with no response body.
+  try {
+    await issueStepUp(user.id, parsed.data.purpose);
+  } catch {
+    return fail("internal");
+  }
   await writeAuditLog({ userId: user.id, eventType: "stepup_verified", request, metadata: { purpose: parsed.data.purpose } });
 
   return noStore(ok({ ok: true }));

@@ -41,6 +41,21 @@ export function MfaEditor() {
     void refresh();
   }, []);
 
+  // Same bfcache gap fixed in pin-lock-gate.tsx: `busy` gates every button
+  // here through an in-flight fetch (enroll/confirm/disable, the last of
+  // which can also await a WebAuthn passkey step-up ceremony) with no
+  // AbortController timeout. Freezing the tab mid-request (an iOS edge-swipe
+  // "back" gesture) orphans that promise, so restoring via bfcache comes back
+  // with every button permanently disabled and no way to retry. `pageshow`
+  // is the only event that reliably fires on that specific restore path.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setBusy(false);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   const startEnroll = async () => {
     setBusy(true);
     setError(null);

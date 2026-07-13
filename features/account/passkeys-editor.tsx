@@ -39,6 +39,24 @@ export function PasskeysEditor() {
     load();
   }, []);
 
+  // Same bfcache gap fixed in pin-lock-gate.tsx/mfa-editor.tsx: `enrolling`/
+  // `busyId` gate this panel's buttons through an in-flight fetch (register/
+  // remove/rename, the latter two also potentially awaiting a WebAuthn
+  // step-up ceremony) with no timeout. A tab freeze mid-request (iOS
+  // edge-swipe "back") orphans that promise, so a bfcache restore comes back
+  // with a permanently-disabled button. `pageshow` is the only event that
+  // reliably fires on that restore path.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        setEnrolling(false);
+        setBusyId(null);
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   const enroll = async () => {
     setEnrolling(true);
     setError(null);

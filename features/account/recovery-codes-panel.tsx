@@ -33,6 +33,19 @@ export function RecoveryCodesPanel() {
     load();
   }, []);
 
+  // Same bfcache gap fixed in pin-lock-gate.tsx/mfa-editor.tsx/
+  // passkeys-editor.tsx: `busy` gates the generate/regenerate button through
+  // an in-flight fetch that can also await a WebAuthn step-up ceremony, with
+  // no timeout. A tab freeze mid-request (iOS edge-swipe "back") orphans
+  // that promise, so a bfcache restore comes back permanently disabled.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setBusy(false);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   const generate = async () => {
     if (remaining && remaining > 0) {
       if (!confirm("Generating new codes invalidates any existing ones. Continue?")) return;

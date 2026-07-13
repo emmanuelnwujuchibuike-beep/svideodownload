@@ -487,8 +487,11 @@ function FeedPostCardImpl({
           Instagram's large feed previews) so video/photo posts read as the
           hero of the card, not a thumbnail. */}
       {item.mediaItems && item.mediaItems.length > 1 ? (
-        /* Album / carousel — swipeable slides with counter + dots */
-        <div className="mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">
+        /* Album / carousel — swipeable slides with counter + dots. Full
+           card width (owner spec: "the post should fit the full width with
+           the card") — no horizontal inset, no separate rounding; the
+           media touches the same edges the card itself does. */
+        <div className="mb-3 overflow-hidden">
           <MediaCarousel
             items={item.mediaItems}
             onExpandItem={(index) => onOpen(item, false, index)}
@@ -501,7 +504,7 @@ function FeedPostCardImpl({
       ) : item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
         // Big, immersive inline preview: autoplays muted in view, tap → fullscreen
         // reel, press-hold → pause.
-        <div className="relative mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">
+        <div className="relative mb-3 overflow-hidden">
           <FeedVideo
             src={item.mediaUrl}
             streamUid={item.streamUid}
@@ -530,7 +533,7 @@ function FeedPostCardImpl({
         </div>
       ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
         // Image posts behave like videos: full-size, double-tap to like, tap to open.
-        <div className="relative mx-4 mb-3 overflow-hidden rounded-2xl sm:mx-5">
+        <div className="relative mb-3 overflow-hidden">
           <FeedImage
             src={item.mediaUrl || item.thumbnailUrl!}
             alt={item.title}
@@ -551,7 +554,7 @@ function FeedPostCardImpl({
         </div>
       ) : item.mediaKind === "audio" ? (
         <button type="button" onClick={() => onOpen(item)} className="block w-full text-left" aria-label="Play">
-          <div className="mx-4 mb-3 flex items-center gap-3 rounded-xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/15">
+          <div className="mb-3 flex items-center gap-3 bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/15">
             <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white">
               <Music className="h-5 w-5" />
             </span>
@@ -568,7 +571,7 @@ function FeedPostCardImpl({
         </button>
       ) : (
         <button type="button" onClick={() => onOpen(item)} className="block w-full text-left" aria-label="Open">
-          <div className="relative mx-4 mb-3 aspect-video overflow-hidden rounded-xl bg-neutral-900">
+          <div className="relative mb-3 aspect-video overflow-hidden bg-neutral-900">
             {item.thumbnailUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={item.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-300 hover:scale-105" />

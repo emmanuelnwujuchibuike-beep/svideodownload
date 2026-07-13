@@ -62,17 +62,49 @@ export interface DisplayedPresence {
  * invisible is supposed to look like from the outside, and combined with
  * the client never tracking presence when invisible (see the module
  * comment), they read as a perfectly ordinary never-customized user.
+ *
+ * Part 11b: ALSO checks each target's `last_seen_visibility` privacy
+ * setting (migration 0060) — 'everyone' (default) is unchanged from
+ * before; 'friends' requires a `friendships` row with the viewer;
+ * 'nobody' omits the target the same way 'invisible' does. Before this,
+ * ANY signed-in user could query ANY other user's online/last-seen status
+ * with zero relationship gating at all — a real, previously-unfixed gap.
  */
 export async function getDisplayedStatuses(viewerId: string, targetUserIds: string[]): Promise<Map<string, DisplayedPresence>> {
   const out = new Map<string, DisplayedPresence>();
-  const ids = [...new Set(targetUserIds)];
-  if (ids.length === 0) return out;
+  const ids = [...new Set(targetUserIds)].filter((id) => id !== viewerId);
+  const includeSelf = targetUserIds.includes(viewerId);
+  if (ids.length === 0 && !includeSelf) return out;
   try {
     const db = createAdminClient();
-    const { data } = await db.from("user_presence_status").select("user_id, status, updated_at").in("user_id", ids);
-    for (const row of (data ?? []) as { user_id: string; status: string; updated_at: string }[]) {
+    const allIds = includeSelf ? [...ids, viewerId] : ids;
+    const [{ data: statusRows }, { data: privRows }, { data: friendRows }] = await Promise.all([
+      db.from("user_presence_status").select("user_id, status, updated_at").in("user_id", allIds),
+      ids.length
+        ? db.from("privacy_settings").select("user_id, last_seen_visibility").in("user_id", ids)
+        : Promise.resolve({ data: [] as { user_id: string; last_seen_visibility: string }[] }),
+      // All of the VIEWER's friendship rows — cheaper and simpler than a
+      // per-target OR clause, and the viewer's own friend count is small.
+      db.from("friendships").select("user_low, user_high").or(`user_low.eq.${viewerId},user_high.eq.${viewerId}`),
+    ]);
+
+    const visibilityById = new Map(
+      ((privRows ?? []) as { user_id: string; last_seen_visibility: string }[]).map((p) => [p.user_id, p.last_seen_visibility]),
+    );
+    const friendIds = new Set<string>();
+    for (const f of (friendRows ?? []) as { user_low: string; user_high: string }[]) {
+      friendIds.add(f.user_low === viewerId ? f.user_high : f.user_low);
+    }
+
+    for (const row of (statusRows ?? []) as { user_id: string; status: string; updated_at: string }[]) {
       if (!isPresenceStatus(row.status)) continue;
-      if (row.status === "invisible" && row.user_id !== viewerId) continue;
+      const isSelf = row.user_id === viewerId;
+      if (row.status === "invisible" && !isSelf) continue;
+      if (!isSelf) {
+        const visibility = visibilityById.get(row.user_id) ?? "everyone";
+        if (visibility === "nobody") continue;
+        if (visibility === "friends" && !friendIds.has(row.user_id)) continue;
+      }
       out.set(row.user_id, { status: row.status, lastActiveAt: row.updated_at });
     }
   } catch {

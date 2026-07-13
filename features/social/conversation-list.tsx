@@ -3,8 +3,8 @@
 import { motion } from "framer-motion";
 import { BadgeCheck, BellOff, Check, Loader2, MoreHorizontal, Pin, Search, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { mutate, useQuery } from "@/features/data";
@@ -71,6 +71,30 @@ export function ConversationList({
     initialData: { conversations: initial, unread: initial.filter((c) => c.unread).length },
   });
   const conversations = data?.conversations ?? initial;
+  const router = useRouter();
+
+  // Owner ask: "all chats should download automatically... to avoid load
+  // when entering each chat." `router.prefetch()` is Next's own supported
+  // route-prefetch — it's what actually makes a client-side thread
+  // navigation feel instant (warms the route's JS chunk + RSC payload
+  // ahead of the tap). An earlier version of this also ran a second,
+  // separate warm-up (`prefetchAllThreads`) that fetched each thread's
+  // messages into a client cache — removed: nothing ever read that cache
+  // back out (the thread page still does its own server-side fetch per
+  // navigation), so it was pure overhead, AND it silently marked every
+  // other member's messages read/delivered on every inbox load — a real
+  // privacy leak against the read-receipts toggle this same round shipped.
+  // Sorted (not insertion-order) so a live reorder of the SAME conversation
+  // set — new message bumping a thread to the top — doesn't recompute this
+  // key and re-fire the warm-up; only an actual join/leave does. Capped so
+  // a very large inbox can't fire an unbounded prefetch burst.
+  const idsKey = [...conversations.map((c) => c.id)].sort().join(",");
+  useEffect(() => {
+    if (!idsKey) return;
+    for (const id of idsKey.split(",").slice(0, 20)) router.prefetch(`/messages/${id}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- idsKey IS the dependency; conversations/router change identity too often (live badge/order updates)
+  }, [idsKey]);
+
   const pathname = usePathname();
   const online = usePresence();
   const [q, setQ] = useState("");

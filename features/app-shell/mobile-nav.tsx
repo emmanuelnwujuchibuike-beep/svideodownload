@@ -73,18 +73,18 @@ export function MobileNav() {
   }, [router, profileHref]);
 
   return (
-    // Safe-area handling (owner: "bring the bottom nav down more to fit well
-    // on webapp like tiktok"): the pill tucks INTO the home-indicator inset —
-    // max(inset − 10px, 2px) — on a notched/installed device the indicator
-    // overlaps just below the labels; a plain browser tab (inset 0) now sits
-    // almost flush with the viewport edge instead of leaving a visible gap.
-    <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(calc(env(safe-area-inset-bottom)-10px),0.125rem)] lg:hidden">
+    // Safe-area handling (owner, 2nd pass — the first 6px→2px nudge was too
+    // small to actually notice: "bring the bottom nav down more to fit well
+    // on webapp like tiktok"). Now fully flush with the viewport edge on a
+    // plain browser tab (0 gap, was a 6px floor) — the pill still tucks INTO
+    // the home-indicator inset on a notched/installed device the same way.
+    <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(calc(env(safe-area-inset-bottom)-10px),0px)] lg:hidden">
       <nav
         aria-label="Primary"
         // backdrop-blur-lg (not -2xl): this bar sits over scrolling content on
         // every mobile page for the app's whole lifetime — the same perf trim
         // already applied to the feed's sticky segmented control (smart-feed.tsx).
-        className="glass-strong relative mx-auto flex max-w-md items-end justify-around rounded-full px-2 pb-1.5 pt-2 backdrop-blur-lg"
+        className="glass-strong relative mx-auto flex max-w-md items-end justify-around rounded-full px-2 pb-1 pt-2 backdrop-blur-lg"
       >
         <NavTab label="Home" href="/home" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/home"} onWarm={router.prefetch} />
         <NavTab label="Friends" href="/friends" icon={FrenzFriendsOutline} activeIcon={FrenzFriendsSolid} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />

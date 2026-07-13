@@ -13,9 +13,9 @@ export { GROUP_TITLE_MAX, MAX_GROUP_MEMBERS };
  * direct thread is gated by the recipient's messages_policy + blocks;
  * replying in an existing conversation (direct or group) is always allowed
  * for an active member (unless blocked). Group invites are gated by blocks
- * only — being added to a group by someone you know is a different trust
- * action than a cold 1:1 DM (a dedicated "who can add me" privacy setting
- * is a good follow-up, not built here). Reads go through the service role +
+ * PLUS the target's own `group_invite_policy` (0060, Part 11b) — being
+ * added to a group by someone you know is a different trust action than a
+ * cold 1:1 DM, so it has its own, separate control. Reads go through the service role +
  * explicit membership checks; there is still no client UPDATE/DELETE policy
  * on messages/conversations — every mutation funnels through this file.
  */
@@ -26,7 +26,7 @@ const hasSupabase =
 const pair = (a: string, b: string): [string, string] => (a < b ? [a, b] : [b, a]);
 
 type Db = ReturnType<typeof createAdminClient>;
-export type ConversationType = "direct" | "group";
+export type ConversationType = "direct" | "group" | "secret";
 export type MemberRole = "owner" | "admin" | "member";
 
 export interface OtherUser {
@@ -56,6 +56,31 @@ async function bothBlocked(db: Db, a: string, b: string): Promise<boolean> {
     .select("blocker_id", { head: true, count: "exact" })
     .or(`and(blocker_id.eq.${a},blocked_id.eq.${b}),and(blocker_id.eq.${b},blocked_id.eq.${a})`);
   return (count ?? 0) > 0;
+}
+
+async function isFriend(db: Db, a: string, b: string): Promise<boolean> {
+  const [low, high] = pair(a, b);
+  const { count } = await db
+    .from("friendships")
+    .select("user_low", { head: true, count: "exact" })
+    .eq("user_low", low)
+    .eq("user_high", high);
+  return (count ?? 0) > 0;
+}
+
+/** Part 11b: "who can add me to groups" — mirrors canMessage's shape but for
+ *  the group-invite privacy control (0060). Blocks are checked separately
+ *  by the caller (bothBlocked) — this only covers the new policy setting. */
+async function canBeAddedToGroup(db: Db, actorId: string, targetId: string): Promise<boolean> {
+  const { data: priv } = await db
+    .from("privacy_settings")
+    .select("group_invite_policy")
+    .eq("user_id", targetId)
+    .maybeSingle();
+  const policy = (priv?.group_invite_policy as string) ?? "everyone";
+  if (policy === "nobody") return false;
+  if (policy === "friends") return isFriend(db, actorId, targetId);
+  return true;
 }
 
 async function memberRole(db: Db, conversationId: string, userId: string): Promise<MemberRole | null> {
@@ -182,6 +207,82 @@ export async function getOrCreateConversation(
   return { ok: true, id: data.id as string };
 }
 
+/**
+ * Get-or-create a Secret Chat (Part 11b) — 1:1 only, real E2EE (see
+ * migration 0062's header for the crypto model). Gated the same way a
+ * regular DM is (messages_policy + blocks via `canMessage`) — Secret Chats
+ * aren't a way around a "who can message me" restriction, just a more
+ * private mode of an otherwise-normal conversation. Requires BOTH
+ * participants to have already uploaded an encryption public key
+ * (`user_encryption_keys`) — the caller (API route) checks this before
+ * calling, since the client needs to know whether to prompt "generate your
+ * secret-chat key first" rather than getting a generic failure here.
+ */
+export async function getOrCreateSecretConversation(
+  senderId: string,
+  recipientId: string,
+): Promise<{ ok: true; id: string } | { ok: false; reason: string }> {
+  if (!hasSupabase) return { ok: false, reason: "unavailable" };
+  if (senderId === recipientId) return { ok: false, reason: "self" };
+  const db = createAdminClient();
+  const [low, high] = pair(senderId, recipientId);
+
+  const seedMembers = async (conversationId: string) => {
+    await db
+      .from("conversation_members")
+      .upsert(
+        [
+          { conversation_id: conversationId, user_id: low },
+          { conversation_id: conversationId, user_id: high },
+        ],
+        { onConflict: "conversation_id,user_id", ignoreDuplicates: true },
+      );
+  };
+
+  // Check for an existing thread BEFORE gating (mirrors canMessage's own
+  // "can always continue an existing thread" rule) — canMessage only knows
+  // about type="direct" existing threads, so a Secret Chat created while
+  // messaging was allowed must stay reachable even if the recipient later
+  // tightens messages_policy to "off"; otherwise a real, already-established
+  // encrypted conversation silently becomes unreplyable.
+  const { data: existing } = await db
+    .from("conversations")
+    .select("id")
+    .eq("user_low", low)
+    .eq("user_high", high)
+    .eq("type", "secret")
+    .maybeSingle();
+  if (existing) {
+    await seedMembers(existing.id as string);
+    return { ok: true, id: existing.id as string };
+  }
+
+  const gate = await canMessage(senderId, recipientId);
+  if (!gate.ok) return { ok: false, reason: gate.reason };
+
+  const { data, error } = await db
+    .from("conversations")
+    .insert({ user_low: low, user_high: high, type: "secret" })
+    .select("id")
+    .single();
+  if (error) {
+    const { data: again } = await db
+      .from("conversations")
+      .select("id")
+      .eq("user_low", low)
+      .eq("user_high", high)
+      .eq("type", "secret")
+      .maybeSingle();
+    if (again) {
+      await seedMembers(again.id as string);
+      return { ok: true, id: again.id as string };
+    }
+    return { ok: false, reason: "unavailable" };
+  }
+  await seedMembers(data.id as string);
+  return { ok: true, id: data.id as string };
+}
+
 /** Create a group conversation. Creator becomes owner; invites gated by blocks only. */
 export async function createGroupConversation(
   creatorId: string,
@@ -199,6 +300,7 @@ export async function createGroupConversation(
     const db = createAdminClient();
     for (const id of uniqueMembers) {
       if (await bothBlocked(db, creatorId, id)) return { ok: false, reason: "blocked" };
+      if (!(await canBeAddedToGroup(db, creatorId, id))) return { ok: false, reason: "group_invite_restricted" };
     }
 
     const { data: conv, error } = await db
@@ -245,6 +347,7 @@ export async function addGroupMembers(
 
     for (const id of ids) {
       if (await bothBlocked(db, actorId, id)) return { ok: false, reason: "blocked" };
+      if (!(await canBeAddedToGroup(db, actorId, id))) return { ok: false, reason: "group_invite_restricted" };
     }
 
     // Upsert: cleanly re-adds a former (left) member instead of erroring on the PK.
@@ -354,6 +457,34 @@ export async function setGroupSendPermission(
       .update({ only_admins_can_send: onlyAdminsCanSend })
       .eq("id", conversationId)
       .eq("type", "group");
+    return { ok: !error };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
+ * Disappearing messages (Part 11b, migration 0061) — `seconds: null` turns
+ * it off. Any active member may set it for a direct/secret conversation
+ * (matching WhatsApp's 1:1 model); groups require owner/admin, same
+ * precedent as `only_admins_can_send`. Actual deletion is a cron job
+ * (app/api/cron/disappearing-messages), not this function — this only
+ * flips the setting.
+ */
+export async function setDisappearAfterSeconds(
+  conversationId: string,
+  actorId: string,
+  seconds: number | null,
+): Promise<{ ok: boolean; reason?: string }> {
+  if (seconds !== null && (!Number.isFinite(seconds) || seconds <= 0)) return { ok: false, reason: "invalid" };
+  try {
+    const db = createAdminClient();
+    const { data: conv } = await db.from("conversations").select("type").eq("id", conversationId).maybeSingle();
+    if (!conv) return { ok: false, reason: "not_found" };
+    const role = await memberRole(db, conversationId, actorId);
+    if (!role) return { ok: false, reason: "forbidden" };
+    if (conv.type === "group" && role !== "owner" && role !== "admin") return { ok: false, reason: "forbidden" };
+    const { error } = await db.from("conversations").update({ disappear_after_seconds: seconds }).eq("id", conversationId);
     return { ok: !error };
   } catch {
     return { ok: false };
@@ -511,6 +642,10 @@ export interface SendMessageOptions {
   clientSentAt?: string;
   /** Set when this send is a forward of an existing message. */
   forwardedFromId?: string;
+  /** Secret Chats only (Part 11b): the AES-GCM nonce for this message —
+   *  `body` must already be base64 ciphertext when this is set. Never
+   *  generated/interpreted server-side; this function just stores it. */
+  encryptionIv?: string;
 }
 
 /**
@@ -529,7 +664,11 @@ export async function sendMessage(
   if (!hasSupabase) return { ok: false };
   const text = body.trim();
   const attachments = (options.attachments ?? []).slice(0, MAX_ATTACHMENTS_PER_MESSAGE);
-  if (text.length > 2000) return { ok: false };
+  // Base64-encoded AES-GCM ciphertext runs ~33% longer than the plaintext it
+  // came from (plus a fixed 16-byte GCM auth tag) — a higher cap here, not a
+  // separate code path, keeps this one length guard correct for both.
+  const maxLen = options.encryptionIv ? 2800 : 2000;
+  if (text.length > maxLen) return { ok: false };
   if (!text && attachments.length === 0) return { ok: false }; // attachment-only sends are valid; a truly empty send isn't
   try {
     const db = createAdminClient();
@@ -539,6 +678,13 @@ export async function sendMessage(
       .eq("id", conversationId)
       .maybeSingle();
     if (!conv) return { ok: false };
+
+    // Secret Chats: text only in v1 — real client-side media encryption
+    // (encrypt the file before it ever reaches R2) is a real, buildable
+    // extension but out of scope this round; reject rather than silently
+    // uploading an unencrypted attachment into an otherwise-encrypted thread.
+    if (conv.type === "secret" && attachments.length > 0) return { ok: false, reason: "secret_media_unsupported" };
+    if (conv.type === "secret" && !options.encryptionIv) return { ok: false, reason: "secret_requires_encryption" };
 
     const { data: membership } = await db
       .from("conversation_members")
@@ -553,7 +699,7 @@ export async function sendMessage(
       return { ok: false, reason: "admins_only" };
     }
 
-    if (conv.type === "direct") {
+    if (conv.type === "direct" || conv.type === "secret") {
       const other = conv.user_low === senderId ? (conv.user_high as string | null) : (conv.user_low as string | null);
       if (other && (await bothBlocked(db, senderId, other))) return { ok: false };
     }
@@ -598,6 +744,7 @@ export async function sendMessage(
         client_id: options.clientId ?? null,
         client_sent_at: options.clientSentAt ?? null,
         forwarded_from_id: forwardedFrom,
+        encryption_iv: options.encryptionIv ?? null,
       })
       .select("id")
       .single();
@@ -690,6 +837,12 @@ export async function forwardMessage(
     const { data: source } = await db.from("messages").select("body, conversation_id, deleted_at").eq("id", messageId).maybeSingle();
     if (!source || source.deleted_at) return { ok: false, sent: 0 };
 
+    // Secret Chats: "No Forwarding" (spec). Ciphertext forwarded into a
+    // different conversation is meaningless anyway (wrong recipient key),
+    // but block it explicitly rather than silently sending garbage.
+    const { data: sourceConv } = await db.from("conversations").select("type").eq("id", source.conversation_id).maybeSingle();
+    if (sourceConv?.type === "secret") return { ok: false, sent: 0 };
+
     // The forwarder must actually be able to see the source message.
     const { data: sourceMembership } = await db
       .from("conversation_members")
@@ -701,8 +854,16 @@ export async function forwardMessage(
     if (!sourceMembership) return { ok: false, sent: 0 };
 
     const targets = [...new Set(toConversationIds)].slice(0, 20);
+    const { data: targetConvs } = targets.length
+      ? await db.from("conversations").select("id, type").in("id", targets)
+      : { data: [] as { id: string; type: string }[] };
+    const secretTargetIds = new Set(
+      ((targetConvs ?? []) as { id: string; type: string }[]).filter((c) => c.type === "secret").map((c) => c.id),
+    );
+
     let sent = 0;
     for (const conversationId of targets) {
+      if (secretTargetIds.has(conversationId)) continue; // can't forward plaintext into an encrypted thread
       const res = await sendMessage(senderId, conversationId, source.body as string, { forwardedFromId: messageId });
       if (res.ok && !res.duplicate) sent += 1;
     }
@@ -718,10 +879,14 @@ export async function editMessage(userId: string, messageId: string, body: strin
   if (!text || text.length > 2000) return { ok: false, reason: "invalid" };
   try {
     const db = createAdminClient();
-    const { data: msg } = await db.from("messages").select("sender_id, deleted_at").eq("id", messageId).maybeSingle();
+    const { data: msg } = await db.from("messages").select("sender_id, deleted_at, encryption_iv").eq("id", messageId).maybeSingle();
     if (!msg) return { ok: false, reason: "not_found" };
     if (msg.sender_id !== userId) return { ok: false, reason: "forbidden" };
     if (msg.deleted_at) return { ok: false, reason: "deleted" };
+    // Secret Chats: editing would need the client to re-encrypt with a new
+    // nonce (this function only ever takes plaintext) — out of scope for
+    // v1, so a Secret Chat message can be deleted but not edited.
+    if (msg.encryption_iv) return { ok: false, reason: "secret_edit_unsupported" };
     const { error } = await db.from("messages").update({ body: text, edited_at: new Date().toISOString() }).eq("id", messageId);
     return { ok: !error };
   } catch {
@@ -839,7 +1004,11 @@ export async function listConversations(userId: string): Promise<ConversationSum
     const { data: convRows } = await db
       .from("conversations")
       .select("id, type, title, avatar_url, user_low, user_high, last_body, last_sender_id, last_message_at")
-      .in("id", convIds);
+      .in("id", convIds)
+      // Secret Chats (Part 11b) are deliberately excluded from the normal
+      // inbox — they only ever appear behind the separate, PIN/passkey-
+      // gated Secret Chats panel (see listSecretConversations below).
+      .neq("type", "secret");
     const convs = (convRows ?? []) as {
       id: string;
       type: ConversationType;
@@ -993,6 +1162,90 @@ export async function listConversations(userId: string): Promise<ConversationSum
   }
 }
 
+/**
+ * Secret Chats list (Part 11b) — deliberately separate from
+ * `listConversations`, not a filter on it: 1:1 only, no group unread-cursor
+ * complexity, and `lastBody` is ALWAYS null (the server only has
+ * ciphertext — showing raw base64 as a "preview" would look broken, and
+ * decrypting it here would defeat the point). The client shows a generic
+ * "Encrypted message" label instead; opening the thread is what actually
+ * decrypts, using the viewer's own device-local private key.
+ */
+export async function listSecretConversations(userId: string): Promise<ConversationSummary[]> {
+  if (!hasSupabase) return [];
+  try {
+    const db = createAdminClient();
+    const { data: memberships } = await db
+      .from("conversation_members")
+      .select("conversation_id, muted, archived, pinned")
+      .eq("user_id", userId)
+      .is("left_at", null)
+      .limit(200);
+    const mrows = (memberships ?? []) as { conversation_id: string; muted: boolean; archived: boolean; pinned: boolean }[];
+    if (mrows.length === 0) return [];
+    const convIds = mrows.map((m) => m.conversation_id);
+    const prefByConv = new Map(mrows.map((m) => [m.conversation_id, m]));
+
+    const { data: convRows } = await db
+      .from("conversations")
+      .select("id, user_low, user_high, last_sender_id, last_message_at")
+      .in("id", convIds)
+      .eq("type", "secret");
+    const convs = (convRows ?? []) as {
+      id: string;
+      user_low: string | null;
+      user_high: string | null;
+      last_sender_id: string | null;
+      last_message_at: string;
+    }[];
+    if (convs.length === 0) return [];
+
+    const otherIds = convs.map((c) => (c.user_low === userId ? c.user_high : c.user_low)).filter((id): id is string => !!id);
+    const { data: profs } = otherIds.length
+      ? await db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended").in("id", otherIds)
+      : { data: [] as Record<string, unknown>[] };
+    const profById = new Map(((profs ?? []) as Record<string, unknown>[]).map((p) => [p.id as string, p]));
+
+    const out: ConversationSummary[] = [];
+    for (const c of convs) {
+      const otherId = c.user_low === userId ? c.user_high : c.user_low;
+      const p = otherId ? profById.get(otherId) : null;
+      if (!otherId || !p || (p.is_suspended as boolean) || !p.handle) continue;
+      const pref = prefByConv.get(c.id);
+      out.push({
+        id: c.id,
+        type: "secret",
+        title: null,
+        avatarUrl: null,
+        other: {
+          id: otherId,
+          handle: p.handle as string,
+          displayName: (p.display_name as string) || `@${p.handle as string}`,
+          avatarUrl: (p.avatar_url as string) ?? null,
+          isVerified: (p.is_verified as boolean) ?? false,
+        },
+        memberCount: 2,
+        lastBody: null,
+        lastAt: c.last_message_at,
+        fromMe: c.last_sender_id === userId,
+        // No server-visible unread state for secret chats (would need the
+        // same read_at plumbing regular messages have; kept out of v1 scope
+        // — see docs on this round's honest limitations).
+        unread: false,
+        unreadCount: 0,
+        muted: pref?.muted ?? false,
+        archived: pref?.archived ?? false,
+        pinned: pref?.pinned ?? false,
+      });
+    }
+
+    out.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+    return out.slice(0, 50);
+  } catch {
+    return [];
+  }
+}
+
 export interface ReplyPreview {
   id: string;
   body: string;
@@ -1091,6 +1344,9 @@ export interface MessageItem {
   createdAt: string;
   mine: boolean;
   senderId: string;
+  /** Secret Chats only (Part 11b): the AES-GCM nonce needed to decrypt
+   *  `body` client-side. Null for every regular (plaintext) message. */
+  encryptionIv: string | null;
   /** Receipts (for the sender's own messages, direct threads only): when the other side got/read it. */
   deliveredAt: string | null;
   readAt: string | null;
@@ -1114,6 +1370,10 @@ export interface ConversationView {
   viewerRole: MemberRole | null;
   /** Group only — when true, sendMessage() rejects a plain "member" sender. */
   onlyAdminsCanSend: boolean;
+  /** Disappearing messages (Part 11b) — null means off. */
+  disappearAfterSeconds: number | null;
+  /** Part 11b — viewer's OWN "show when I'm typing" preference; gates whether ConversationRoom broadcasts typing state at all (see use-typing.ts). */
+  viewerTypingIndicatorsEnabled: boolean;
   messages: MessageItem[];
   /** Pass this back as `sinceUpdatedAt` on the next call for a delta sync. */
   syncedAt: string;
@@ -1130,6 +1390,7 @@ interface RawMessageRow {
   edited_at: string | null;
   deleted_at: string | null;
   pinned: boolean;
+  encryption_iv: string | null;
 }
 
 /**
@@ -1154,7 +1415,7 @@ export async function getConversation(
     const db = createAdminClient();
     const { data: conv } = await db
       .from("conversations")
-      .select("id, type, title, avatar_url, user_low, user_high, only_admins_can_send")
+      .select("id, type, title, avatar_url, user_low, user_high, only_admins_can_send, disappear_after_seconds")
       .eq("id", conversationId)
       .maybeSingle();
     if (!conv) return null;
@@ -1170,15 +1431,25 @@ export async function getConversation(
 
     let other: OtherUser | null = null;
     let members: ConversationMember[] = [];
+    // Part 11b — "read receipts" toggle: if the OTHER person has disabled
+    // sharing their own read status, messages the viewer sent never show a
+    // "seen" tick (readAt suppressed below). Only meaningful for direct
+    // threads — groups have no per-message read-receipt UI at all.
+    let otherReadReceiptsEnabled = true;
+    // Part 11b — the VIEWER's own "show when I'm typing" toggle (applies to
+    // every conversation type, unlike read receipts which are direct-only) —
+    // fetched once here rather than as a separate client-side round trip
+    // from use-typing.ts, matching how otherReadReceiptsEnabled is sourced.
+    const viewerPrivPromise = db.from("privacy_settings").select("typing_indicators_enabled").eq("user_id", userId).maybeSingle();
 
-    if (conv.type === "direct") {
+    if (conv.type === "direct" || conv.type === "secret") {
       const otherId = conv.user_low === userId ? (conv.user_high as string | null) : (conv.user_low as string | null);
       if (otherId) {
-        const { data: prof } = await db
-          .from("profiles")
-          .select("id, handle, display_name, avatar_url, is_verified")
-          .eq("id", otherId)
-          .maybeSingle();
+        const [{ data: otherPriv }, { data: prof }] = await Promise.all([
+          db.from("privacy_settings").select("read_receipts_enabled").eq("user_id", otherId).maybeSingle(),
+          db.from("profiles").select("id, handle, display_name, avatar_url, is_verified").eq("id", otherId).maybeSingle(),
+        ]);
+        otherReadReceiptsEnabled = otherPriv?.read_receipts_enabled ?? true;
         other = prof
           ? {
               id: prof.id as string,
@@ -1223,7 +1494,8 @@ export async function getConversation(
     // (harmless, idempotent merge on the client); using a later timestamp
     // instead could silently skip it.
     const queryStartedAt = new Date().toISOString();
-    const MESSAGE_COLUMNS = "id, sender_id, body, created_at, delivered_at, read_at, reply_to_id, edited_at, deleted_at, pinned";
+    const MESSAGE_COLUMNS =
+      "id, sender_id, body, created_at, delivered_at, read_at, reply_to_id, edited_at, deleted_at, pinned, encryption_iv";
     let rows: RawMessageRow[];
     if (sinceUpdatedAt) {
       // Delta path — small, order doesn't matter (the client merges by id
@@ -1282,7 +1554,7 @@ export async function getConversation(
     // tear down the function instance — no effect on THIS request/response
     // (already sent), but a real one on the container's next invocation.
     const now = new Date().toISOString();
-    if (conv.type === "direct") {
+    if (conv.type === "direct" || conv.type === "secret") {
       db.from("messages")
         .update({ read_at: now, delivered_at: now })
         .eq("conversation_id", conversationId)
@@ -1299,14 +1571,19 @@ export async function getConversation(
 
     const messages: MessageItem[] = rows.map((m) => {
       const rp = m.reply_to_id ? replyById.get(m.reply_to_id) : null;
+      const mine = m.sender_id === userId;
       return {
         id: m.id,
         body: m.deleted_at ? "" : m.body,
         createdAt: m.created_at,
-        mine: m.sender_id === userId,
+        mine,
         senderId: m.sender_id,
+        encryptionIv: m.deleted_at ? null : m.encryption_iv,
         deliveredAt: m.delivered_at,
-        readAt: m.read_at,
+        // Suppressed (not the real DB value) when this is a message the
+        // viewer SENT and the recipient has turned off sharing their own
+        // read status — see the read_receipts_enabled fetch above.
+        readAt: mine && !otherReadReceiptsEnabled ? null : m.read_at,
         replyTo: rp ? { id: rp.id, body: rp.deleted_at ? "" : rp.body, senderId: rp.sender_id, deleted: !!rp.deleted_at } : null,
         editedAt: m.edited_at,
         deletedAt: m.deleted_at,
@@ -1315,6 +1592,8 @@ export async function getConversation(
         attachments: m.deleted_at ? [] : (attachmentsByMsg.get(m.id) ?? []),
       };
     });
+
+    const { data: viewerPriv } = await viewerPrivPromise;
 
     return {
       id: conversationId,
@@ -1325,6 +1604,8 @@ export async function getConversation(
       members,
       viewerRole: (myMembership.role as MemberRole) ?? null,
       onlyAdminsCanSend: (conv.only_admins_can_send as boolean | null) ?? false,
+      disappearAfterSeconds: (conv.disappear_after_seconds as number | null) ?? null,
+      viewerTypingIndicatorsEnabled: (viewerPriv?.typing_indicators_enabled as boolean | null) ?? true,
       messages,
       syncedAt: queryStartedAt,
     };

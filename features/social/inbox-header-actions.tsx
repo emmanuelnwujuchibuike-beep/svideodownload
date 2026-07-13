@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { MoreHorizontal } from "lucide-react";
+import { Lock, MoreHorizontal } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { CreateGroupLauncher } from "@/features/social/create-group-launcher";
@@ -9,6 +10,7 @@ import { MessageSearchLauncher } from "@/features/social/message-search-launcher
 import { NotificationSettingsPicker } from "@/features/social/notification-settings-picker";
 import { PresenceStatusPicker } from "@/features/social/presence-status-picker";
 import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { springs } from "@/lib/motion/springs";
 
 const CIRCLE = "glass h-10 w-10 rounded-full text-foreground/80 hover:text-foreground";
@@ -34,6 +36,18 @@ export function InboxHeaderActions() {
           <MessageSearchLauncher className={CIRCLE} />
           <PresenceStatusPicker />
           <NotificationSettingsPicker />
+          <Link
+            href="/messages/secret"
+            aria-label="Secret Chats"
+            title="Secret Chats"
+            onClick={() => {
+              haptic("light");
+              playSound("tap");
+            }}
+            className={`flex items-center justify-center ${CIRCLE}`}
+          >
+            <Lock className="h-[18px] w-[18px]" />
+          </Link>
         </motion.span>
       ) : null}
       <CreateGroupLauncher className={CIRCLE} />

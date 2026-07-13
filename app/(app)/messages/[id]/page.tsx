@@ -83,6 +83,12 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     );
   }
   if (!convo) notFound();
+  // Secret Chats are ciphertext-only and only ever decrypted by the dedicated
+  // /messages/secret/[id] room (SecretChatRoom) — this plaintext-assuming
+  // route has no decryption path, so a bookmarked/deep-linked/pushed link
+  // to a secret conversation id must bounce there instead of rendering raw
+  // base64 ciphertext as if it were a normal message body.
+  if (convo.type === "secret") redirect(`/messages/secret/${id}`);
 
   const { data: viewerProfile } = await supabase.from("profiles").select("display_name, handle").eq("id", user.id).maybeSingle();
   const viewerName = (viewerProfile?.display_name as string) || (viewerProfile?.handle ? `@${viewerProfile.handle as string}` : "You");
@@ -120,6 +126,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         viewerRole={convo.viewerRole}
         onlyAdminsCanSend={convo.onlyAdminsCanSend}
         otherName={convo.other?.displayName ?? null}
+        viewerTypingIndicatorsEnabled={convo.viewerTypingIndicatorsEnabled}
       />
     </div>
   );

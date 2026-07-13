@@ -209,6 +209,11 @@ export interface PrivacySettings {
   messages_policy: "everyone" | "followers" | "off";
   allow_indexing: boolean;
   show_in_recommendations: boolean;
+  /** Part 11b — granular message-privacy controls. */
+  read_receipts_enabled: boolean;
+  typing_indicators_enabled: boolean;
+  last_seen_visibility: "everyone" | "friends" | "nobody";
+  group_invite_policy: "everyone" | "friends" | "nobody";
 }
 
 export const DEFAULT_PRIVACY: PrivacySettings = {
@@ -222,6 +227,10 @@ export const DEFAULT_PRIVACY: PrivacySettings = {
   messages_policy: "followers",
   allow_indexing: true,
   show_in_recommendations: true,
+  read_receipts_enabled: true,
+  typing_indicators_enabled: true,
+  last_seen_visibility: "everyone",
+  group_invite_policy: "everyone",
 };
 
 /* ----------------------------- follow lists ----------------------------- */
@@ -407,7 +416,7 @@ export async function getPrivacySettings(userId: string): Promise<PrivacySetting
     const { data } = await db
       .from("privacy_settings")
       .select(
-        "activity_visibility, followers_visibility, reposts_visibility, likes_visibility, saves_visibility, comments_policy, messages_policy, allow_indexing, show_in_recommendations",
+        "activity_visibility, followers_visibility, reposts_visibility, likes_visibility, saves_visibility, comments_policy, messages_policy, allow_indexing, show_in_recommendations, read_receipts_enabled, typing_indicators_enabled, last_seen_visibility, group_invite_policy",
       )
       .eq("user_id", userId)
       .maybeSingle();

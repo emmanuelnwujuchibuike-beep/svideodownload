@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, BellRing, Check, LogIn, Loader2, Settings, X } from "lucide-react";
+import { Bell, Check, LogIn, Loader2, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -21,7 +21,6 @@ import { isIos, isStandalone } from "@/lib/pwa/platform";
  *  - silently repairs the subscription when permission is already granted;
  *  - otherwise shows an Enable banner until push is truly on;
  *  - on iOS browser tabs, defers to the install prompt (push can't work there);
- *  - offers a test notification so delivery is verifiable on the spot;
  *  - snoozes per session on dismiss, stops for good once subscribed;
  *  - explicit dismisses are also counted per device (lib/pwa/decline-tracker)
  *    and after 5 the nudge stops for good on that device until browser
@@ -50,7 +49,6 @@ export function PushNudge() {
   const [phase, setPhase] = useState<Phase>("hidden");
   const [failedMessage, setFailedMessage] = useState<string>("Something went wrong saving this device — check your connection and try again.");
   const [busy, setBusy] = useState(false);
-  const [testState, setTestState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
   const { user, loading } = useUser();
   const pathname = usePathname();
 
@@ -145,17 +143,6 @@ export function PushNudge() {
     }
   };
 
-  const sendTest = async () => {
-    if (testState === "sending") return;
-    setTestState("sending");
-    try {
-      const res = await fetch("/api/push/test", { method: "POST" });
-      setTestState(res.ok ? "sent" : "failed");
-    } catch {
-      setTestState("failed");
-    }
-  };
-
   return (
     <AnimatePresence>
       {phase !== "hidden" ? (
@@ -193,22 +180,11 @@ export function PushNudge() {
                     <div className="mt-2.5 flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={sendTest}
-                        disabled={testState === "sending" || testState === "sent"}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 disabled:opacity-60"
+                        onClick={dismiss}
+                        className="rounded-xl bg-secondary px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary/70"
                       >
-                        {testState === "sending" ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <BellRing className="h-4 w-4" />
-                        )}
-                        {testState === "sent" ? "Test sent — check your notifications" : testState === "failed" ? "Try the test again" : "Send a test notification"}
+                        Done
                       </button>
-                      {testState === "sent" ? (
-                        <button type="button" onClick={dismiss} className="rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground">
-                          Done
-                        </button>
-                      ) : null}
                     </div>
                   </>
                 ) : phase === "denied" ? (

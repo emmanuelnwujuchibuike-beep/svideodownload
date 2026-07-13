@@ -71,7 +71,10 @@ const attachmentSchema = z
 const schema = z
   .object({
     conversationId: z.string().uuid(),
-    body: z.string().trim().max(2000).default(""),
+    // Base64 AES-GCM ciphertext (Secret Chats) runs longer than the 2000-char
+    // plaintext cap — sendMessage() applies the precise per-case limit;
+    // this is just a generous upper bound against abuse.
+    body: z.string().trim().max(2800).default(""),
     replyToId: z.string().uuid().optional(),
     attachments: z.array(attachmentSchema).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
     // Idempotency key: the offline-queue (or a flaky-network retry) can safely
@@ -79,6 +82,8 @@ const schema = z
     // creating a second message.
     clientId: z.string().max(100).optional(),
     clientSentAt: z.string().datetime().optional(),
+    // Secret Chats only (Part 11b) — the AES-GCM nonce for `body`.
+    encryptionIv: z.string().max(64).optional(),
   })
   .refine((v) => v.body.trim().length > 0 || (v.attachments?.length ?? 0) > 0, { message: "Write a message or attach something." });
 
@@ -107,6 +112,7 @@ export async function POST(request: Request) {
     clientId: parsed.data.clientId,
     clientSentAt: parsed.data.clientSentAt,
     attachments: parsed.data.attachments as AttachmentInput[] | undefined,
+    encryptionIv: parsed.data.encryptionIv,
   });
   if (!res.ok) {
     const message = res.reason === "admins_only" ? "Only admins can send messages in this group." : "Couldn't send (blocked or unavailable).";
@@ -196,8 +202,14 @@ async function notifyMembers(senderId: string, conversationId: string, body: str
 
     const name = (sender?.display_name as string) || (sender?.handle ? `@${sender.handle as string}` : "New message");
     const isGroup = conv?.type === "group";
+    const isSecret = conv?.type === "secret";
     const isBurst = (burstCount ?? 0) > 1;
-    const preview = isBurst ? `${burstCount} new messages` : previewFor(body, attachments);
+    // Secret Chats: `body` is ciphertext at this point — the server cannot
+    // decrypt it to build a real preview, and a raw base64 blob in a push
+    // notification would look broken (and defeat the whole point of
+    // encrypting it). Always a generic label here, regardless of the
+    // recipient's own "hide preview" notification setting.
+    const preview = isSecret ? "New encrypted message" : isBurst ? `${burstCount} new messages` : previewFor(body, attachments);
 
     await Promise.all(
       recipientIds.map((recipientId) => {
@@ -209,7 +221,7 @@ async function notifyMembers(senderId: string, conversationId: string, body: str
             title: mentioned ? `${name} mentioned you` : name,
             body: preview,
             genericBody: mentioned ? "You were mentioned" : "New message",
-            url: `/messages/${conversationId}`,
+            url: isSecret ? `/messages/secret/${conversationId}` : `/messages/${conversationId}`,
             icon: (sender?.avatar_url as string | null) ?? undefined,
             tag: `msg:${conversationId}`,
             conversationId,

@@ -36,7 +36,13 @@ interface TypingPayload {
  *     silently lost. Track state is now buffered until `SUBSCRIBED` and
  *     re-sent on every (re)join.
  */
-export function useTypingIndicator(conversationId: string, viewerId: string, viewerName: string) {
+export function useTypingIndicator(
+  conversationId: string,
+  viewerId: string,
+  viewerName: string,
+  /** Part 11b privacy toggle — viewer's own "show when I'm typing" choice. False mutes only OUR OWN outbound `typing:true` broadcast; we still join the channel and see everyone else's typing state normally. */
+  broadcastEnabled = true,
+) {
   const [typingNames, setTypingNames] = useState<string[]>([]);
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -107,12 +113,13 @@ export function useTypingIndicator(conversationId: string, viewerId: string, vie
     if (channel && joinedRef.current) void channel.track(payload);
   }, []);
 
-  /** Call on every composer keystroke — debounced, auto-clears after idle. */
+  /** Call on every composer keystroke — debounced, auto-clears after idle. No-ops entirely when the viewer has turned off "show when I'm typing". */
   const notifyTyping = useCallback(() => {
+    if (!broadcastEnabled) return;
     trackState(true);
     if (clearTimer.current) clearTimeout(clearTimer.current);
     clearTimer.current = setTimeout(() => trackState(false), IDLE_CLEAR_MS);
-  }, [trackState]);
+  }, [broadcastEnabled, trackState]);
 
   /** Call immediately on send — no need to wait out the idle timer. */
   const clearTyping = useCallback(() => {

@@ -77,7 +77,11 @@ export function FeedTopbarTabs({
               "relative flex shrink-0 items-center gap-1.5 rounded-full py-2 font-bold transition-colors",
               active ? "px-3.5 text-[13px] text-white" : "h-9 w-9 justify-center",
               !active && isReels && "text-white",
-              !active && !isReels && "text-foreground/60 hover:text-foreground",
+              // This bar only ever renders on Home's fixed-dark gradient topbar
+              // (see app-topbar.tsx's onHome wash) — a theme-adaptive muted
+              // color would go near-invisible in light mode, so this is a
+              // deliberately fixed light tone, not theme-toggled.
+              !active && !isReels && "text-white/60 hover:text-white",
             )}
           >
             {active ? (

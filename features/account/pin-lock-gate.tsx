@@ -132,6 +132,44 @@ export function PinLockGate() {
     }
   }, [hasPin, pathname]);
 
+  // bfcache restore (iOS Safari edge-swipe "back", most other browsers'
+  // back/forward too) resumes this component's React state EXACTLY as it was
+  // frozen — no effect re-runs, no re-render, since it's the same JS heap
+  // thawed rather than a fresh mount. Every other piece of cross-request
+  // state in this app has a `pageshow`(persisted) handler for this reason
+  // (features/data/cache.ts's ensureGlobalRevalidation, conversation-room.tsx's
+  // bespoke one — see docs/STARTUP_AUDIT.md) but this gate, added afterward
+  // in Part 11a, never got one. Concretely: if the admin was frozen mid
+  // `submit()` (verifying=true, an in-flight fetch whose underlying
+  // connection dies with the frozen page and whose promise then never
+  // resolves) the keypad comes back from bfcache with every digit button
+  // permanently `disabled` and no way to retry — a real "stuck" gate,
+  // admin-only because they're the only account that ever enrolls a PIN,
+  // mobile-only because iOS Safari's gesture-back is what actually exercises
+  // bfcache restore for this SPA (desktop back/forward stays a live
+  // client-side popstate nav here, never a freeze/thaw). Re-derive `locked`
+  // fresh and drop any stale in-flight/error state on restore.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      setVerifying(false);
+      setError(false);
+      setConnError(false);
+      setDigits("");
+      if (!hasPin || !isGatedPath(pathname)) {
+        setLocked(false);
+        return;
+      }
+      try {
+        setLocked(sessionStorage.getItem(UNLOCKED_KEY) !== "1");
+      } catch {
+        setLocked(false);
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [hasPin, pathname]);
+
   const submit = async (pin: string) => {
     setVerifying(true);
     setError(false);

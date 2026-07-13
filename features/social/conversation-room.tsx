@@ -139,6 +139,7 @@ export function ConversationRoom({
   viewerRole = null,
   onlyAdminsCanSend = false,
   otherName = null,
+  viewerTypingIndicatorsEnabled = true,
 }: {
   conversationId: string;
   viewerId: string;
@@ -153,6 +154,8 @@ export function ConversationRoom({
   /** Direct threads: the other party's display name (drives the mockup's
    *  personalized "Message Maya…" composer placeholder). */
   otherName?: string | null;
+  /** Part 11b privacy toggle — the VIEWER's own "show when I'm typing" choice; false mutes OUR OWN outbound typing broadcast only (receiving others' typing is unaffected). */
+  viewerTypingIndicatorsEnabled?: boolean;
 }) {
   const [messages, setMessages] = useState<MessageItem[]>(initial);
   const [body, setBody] = useState("");
@@ -225,7 +228,7 @@ export function ConversationRoom({
     messagesRef.current = messages;
   }, [messages]);
 
-  const { typingNames, notifyTyping, clearTyping } = useTypingIndicator(conversationId, viewerId, viewerName);
+  const { typingNames, notifyTyping, clearTyping } = useTypingIndicator(conversationId, viewerId, viewerName, viewerTypingIndicatorsEnabled);
   // A single soft tick when someone STARTS typing — not per keystroke, and
   // not re-triggered while they keep typing or a second person joins in.
   const wasTypingRef = useRef(false);
@@ -292,6 +295,7 @@ export function ConversationRoom({
             createdAt: i.clientSentAt,
             mine: true,
             senderId: viewerId,
+            encryptionIv: null, // this app's regular (non-Secret-Chat) composer
             deliveredAt: null,
             readAt: null,
             replyTo: i.replyToPreview ?? null,
@@ -528,6 +532,10 @@ export function ConversationRoom({
             createdAt: r.created_at,
             mine: r.sender_id === viewerId,
             senderId: r.sender_id,
+            // This component only ever renders direct/group threads — Secret
+            // Chats (Part 11b) have their own room component and never reach
+            // this realtime handler.
+            encryptionIv: null,
             deliveredAt: r.delivered_at,
             readAt: r.read_at,
             replyTo: parent ? { id: parent.id, body: parent.body, senderId: parent.senderId, deleted: !!parent.deletedAt } : null,
@@ -815,6 +823,7 @@ export function ConversationRoom({
         createdAt: clientSentAt,
         mine: true,
         senderId: viewerId,
+        encryptionIv: null,
         deliveredAt: null,
         readAt: null,
         replyTo,

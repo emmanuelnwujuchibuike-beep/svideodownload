@@ -47,29 +47,37 @@ html.dark #frenz-boot{background:#050816}
 //     itself instead of flashing first (unchanged from before).
 const JS = `(function(){var el=document.getElementById('frenz-boot');if(!el)return;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var alreadyBooted=false;try{alreadyBooted=sessionStorage.getItem('frenz-booted')==='1'}catch(e){}if(!justSignedIn&&alreadyBooted){el.style.display='none';return}try{sessionStorage.setItem('frenz-booted','1')}catch(e){}if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){el.style.display='none';return}}catch(e){}var start=Date.now();function hide(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){el.classList.add('frenz-boot--hide');setTimeout(function(){if(el&&el.parentNode)el.parentNode.removeChild(el)},440)},w)}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',hide)}else{hide()}setTimeout(hide,6000)})();`;
 
-// Must run BEFORE the <style> below is evaluated: resolves the SAME
-// light/dark decision next-themes will make (its own script, injected later
-// wherever <ThemeProvider> sits, hasn't run yet at this point) so the splash
-// paints in the theme the user actually chose — not just the device's raw OS
-// preference. Without this, someone who explicitly picked Light while their
-// phone's OS is in dark mode saw a dark flash on every cold entry, which on
-// iOS is EVERY time the installed app resumes after being backgrounded a
-// while (the OS frequently reloads it rather than truly restoring it).
+// Must run BEFORE the <style> below is evaluated, AND before next-themes'
+// own injected script (rendered later, wherever <ThemeProvider> sits) so the
+// splash paints in the theme the user actually chose — not just the
+// device's raw OS preference.
 //
-// Owner bug (2026-07-12): with theme=SYSTEM, the installed mobile app showed
-// the OPPOSITE theme for 1-2s on entry before snapping to the right one.
-// Cause: iOS WKWebView (standalone PWAs especially) can report a stale
-// `prefers-color-scheme` for the first moments after launch and correct it
-// shortly after — and this script used to read it exactly ONCE (and only
-// ever ADD the dark class, never remove it), so the correction had to wait
-// for next-themes to finish hydrating (the 1-2s = JS bundle time on a
-// phone). Now: `classList.toggle` (corrects both directions) + a matchMedia
-// `change` listener + a `pageshow` re-check, so the class flips the instant
-// WebKit fixes its answer — or the OS theme genuinely changed while the app
-// was backgrounded — without waiting for hydration. localStorage is re-read
-// on every re-apply, so an explicit Light/Dark choice always wins and this
-// never fights next-themes (both compute the identical decision).
-const THEME_JS = `(function(){var mq=window.matchMedia('(prefers-color-scheme: dark)');function apply(){try{var t=localStorage.getItem('theme');var dark=t==='dark'||(t!=='light'&&mq.matches);document.documentElement.classList.toggle('dark',dark)}catch(e){}}apply();try{if(mq.addEventListener)mq.addEventListener('change',apply);else if(mq.addListener)mq.addListener(apply)}catch(e){}window.addEventListener('pageshow',apply)})();`;
+// 2026-07-13 rewrite (owner: the flash "still persists", asked for a
+// different pattern): the PREVIOUS version of this fix read a CACHED
+// last-resolved value from `localStorage['frenz-resolved-theme']` for
+// SYSTEM mode instead of live-querying `prefers-color-scheme` — but that
+// alone turned out not to be enough. next-themes' OWN injected no-flash
+// script (unconditional, no prop to disable it) runs immediately after this
+// one and does: `var r = localStorage.getItem('theme') || 'system'; if
+// (r === 'system') liveQuery()` — so whenever this app's next-themes
+// storage key is empty/"system" (the default, and the common case for
+// every user who's never touched the toggle), next-themes' script ALWAYS
+// re-decides via a fresh live `matchMedia` call and overwrites whatever
+// this script just set, before the first paint — silently undoing this fix
+// for exactly the population it was meant to help.
+//
+// Real fix: this app's actual theme INTENT (light/dark/system) now lives in
+// its OWN key, `frenz-theme-mode` (see lib/theme/theme-mode-client.ts;
+// ThemeToggle reads/writes it, not next-themes' `theme`). Whenever that
+// intent resolves to a concrete light/dark value — including "system",
+// resolved from the cache below — this script ALSO writes that concrete
+// value into next-themes' own `theme` key, so next-themes' script sees
+// "dark"/"light" (never the literal string "system") and takes its
+// no-live-query branch, applying the exact same class this script already
+// set. A live OS change while the app is open is still applied immediately
+// (matching the owner's ask), via this script's own matchMedia listener —
+// checked against `frenz-theme-mode`, not next-themes' key.
+const THEME_JS = `(function(){var CACHE='frenz-resolved-theme';var MODE='frenz-theme-mode';var mq=window.matchMedia('(prefers-color-scheme: dark)');function mode(){try{return localStorage.getItem(MODE)||'system'}catch(e){return 'system'}}function cached(){try{return localStorage.getItem(CACHE)}catch(e){return null}}function remember(v){try{localStorage.setItem(CACHE,v)}catch(e){}}function syncNextThemes(v){try{localStorage.setItem('theme',v)}catch(e){}}function set(dark){document.documentElement.classList.toggle('dark',dark)}function resolveSystem(){var c=cached();if(c)return c;return mq.matches?'dark':'light'}function boot(){var m=mode();var resolved=(m==='light'||m==='dark')?m:resolveSystem();set(resolved==='dark');remember(resolved);syncNextThemes(resolved)}boot();function onSystemChange(){if(mode()!=='system')return;var resolved=mq.matches?'dark':'light';set(resolved==='dark');remember(resolved);syncNextThemes(resolved)}try{if(mq.addEventListener)mq.addEventListener('change',onSystemChange);else if(mq.addListener)mq.addListener(onSystemChange)}catch(e){}window.addEventListener('pageshow',boot)})();`;
 
 export function BootSplash() {
   return (

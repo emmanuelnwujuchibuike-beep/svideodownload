@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { GROUP_TITLE_MAX, renameGroup, setGroupAvatar, setGroupSendPermission } from "@/lib/social/messages";
+import { GROUP_TITLE_MAX, renameGroup, setDisappearAfterSeconds, setGroupAvatar, setGroupSendPermission } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -12,6 +12,8 @@ const schema = z.object({
   title: z.string().trim().min(1).max(GROUP_TITLE_MAX).optional(),
   avatarUrl: z.string().url().nullable().optional(),
   onlyAdminsCanSend: z.boolean().optional(),
+  /** Disappearing messages (Part 11b) — null/omit-with-explicit-null turns it off. */
+  disappearAfterSeconds: z.number().int().positive().nullable().optional(),
 });
 
 /** PATCH /api/conversations/[id] — rename/re-avatar/send-permission a group (owner/admin only). */
@@ -33,7 +35,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   const parsed = schema.safeParse(json);
   if (!parsed.success) return NextResponse.json({ error: "Invalid update." }, { status: 400 });
-  if (parsed.data.title === undefined && parsed.data.avatarUrl === undefined && parsed.data.onlyAdminsCanSend === undefined) {
+  if (
+    parsed.data.title === undefined &&
+    parsed.data.avatarUrl === undefined &&
+    parsed.data.onlyAdminsCanSend === undefined &&
+    parsed.data.disappearAfterSeconds === undefined
+  ) {
     return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
   }
 
@@ -48,6 +55,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (parsed.data.onlyAdminsCanSend !== undefined) {
     const res = await setGroupSendPermission(id, user.id, parsed.data.onlyAdminsCanSend);
     if (!res.ok) return NextResponse.json({ error: "Couldn't update message permissions." }, { status: 403 });
+  }
+  if (parsed.data.disappearAfterSeconds !== undefined) {
+    const res = await setDisappearAfterSeconds(id, user.id, parsed.data.disappearAfterSeconds);
+    if (!res.ok) return NextResponse.json({ error: "Couldn't update disappearing messages." }, { status: 403 });
   }
   return NextResponse.json({ ok: true });
 }

@@ -2,7 +2,9 @@
 
 import { Bell, BellOff } from "lucide-react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
+import { useAnchoredPanel } from "@/features/ui/use-anchored-panel";
 import { haptic } from "@/lib/motion/haptics";
 import {
   ensureSoundPrefsLoaded,
@@ -29,9 +31,9 @@ const ROWS: { key: keyof Omit<SoundPrefs, "masterEnabled">; label: string }[] = 
  * notifications, which always play the platform's own sound.
  */
 export function NotificationSettingsPicker() {
-  const [open, setOpen] = useState(false);
   const [prefs, setPrefs] = useState<SoundPrefs>(getCachedSoundPrefs());
   const [saving, setSaving] = useState(false);
+  const { triggerRef: buttonRef, open, setOpen, mounted, pos: panelPos, toggle: togglePanel } = useAnchoredPanel<HTMLButtonElement>(256);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,11 +69,19 @@ export function NotificationSettingsPicker() {
     }
   };
 
+  // This button lives in the inbox header's expanding tools row, which on
+  // desktop sits inside an `overflow-hidden` + `backdrop-blur-xl` sidebar
+  // (app/(app)/messages/layout.tsx's `<aside>`) and on mobile inside an
+  // `overflow-y-auto` list container — the ancestor combination that already
+  // broke the message-action menu (see conversation-room.tsx's
+  // `toggleMessageMenu` comment) — hence useAnchoredPanel's portal.
+
   return (
     <div className="relative shrink-0">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={togglePanel}
         aria-label="Message sound settings"
         title="Message sound settings"
         className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
@@ -79,26 +89,32 @@ export function NotificationSettingsPicker() {
         {prefs.masterEnabled ? <Bell className="h-[18px] w-[18px]" /> : <BellOff className="h-[18px] w-[18px]" />}
       </button>
 
-      {open ? (
-        <>
-          <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
-          <div className="glass-strong animate-scale-in absolute right-0 top-10 z-50 w-64 overflow-hidden rounded-2xl py-1.5">
-            <div className="flex items-center justify-between px-3.5 py-2">
-              <span className="text-sm font-semibold">Interaction sounds</span>
-              <Toggle checked={prefs.masterEnabled} onChange={(v) => void toggle({ masterEnabled: v })} />
-            </div>
-            <div className={cn("border-t border-border/60 py-1", !prefs.masterEnabled && "pointer-events-none opacity-40")}>
-              {ROWS.map((r) => (
-                <div key={r.key} className="flex items-center justify-between px-3.5 py-1.5">
-                  <span className="text-sm text-muted-foreground">{r.label}</span>
-                  <Toggle checked={prefs[r.key]} onChange={(v) => void toggle({ [r.key]: v })} />
+      {open && mounted && panelPos
+        ? createPortal(
+            <>
+              <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
+              <div
+                className="glass-strong animate-scale-in fixed z-50 w-64 overflow-hidden rounded-2xl py-1.5"
+                style={{ top: panelPos.top, right: panelPos.right }}
+              >
+                <div className="flex items-center justify-between px-3.5 py-2">
+                  <span className="text-sm font-semibold">Interaction sounds</span>
+                  <Toggle checked={prefs.masterEnabled} onChange={(v) => void toggle({ masterEnabled: v })} />
                 </div>
-              ))}
-            </div>
-            <p className="border-t border-border/60 px-3.5 pt-2 text-[11px] text-muted-foreground">Only affects sounds while Frenz is open.</p>
-          </div>
-        </>
-      ) : null}
+                <div className={cn("border-t border-border/60 py-1", !prefs.masterEnabled && "pointer-events-none opacity-40")}>
+                  {ROWS.map((r) => (
+                    <div key={r.key} className="flex items-center justify-between px-3.5 py-1.5">
+                      <span className="text-sm text-muted-foreground">{r.label}</span>
+                      <Toggle checked={prefs[r.key]} onChange={(v) => void toggle({ [r.key]: v })} />
+                    </div>
+                  ))}
+                </div>
+                <p className="border-t border-border/60 px-3.5 pt-2 text-[11px] text-muted-foreground">Only affects sounds while Frenz is open.</p>
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

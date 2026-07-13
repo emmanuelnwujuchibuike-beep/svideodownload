@@ -63,6 +63,10 @@ export function MessagingMonitor({ stats }: { stats: MessagingStats }) {
             <span className="text-muted-foreground">Group</span>
             <span className="font-medium">{formatCompactNumber(stats.conversationsByType.group)}</span>
           </div>
+          <div className="mt-1.5 flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">Secret</span>
+            <span className="font-medium">{formatCompactNumber(stats.conversationsByType.secret)}</span>
+          </div>
           <div className="mt-3 space-y-1.5 border-t border-border/60 pt-3">
             <PresenceRow label="Away" value={stats.presenceCounts.away} dot="bg-amber-400" />
             <PresenceRow label="Busy" value={stats.presenceCounts.busy} dot="bg-rose-500" />

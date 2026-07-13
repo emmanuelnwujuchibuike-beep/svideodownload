@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const vis = z.enum(["public", "followers", "private"]);
 const policy = z.enum(["everyone", "followers", "off"]);
+const relPolicy = z.enum(["everyone", "friends", "nobody"]);
 
 const schema = z.object({
   activity_visibility: vis.optional(),
@@ -19,6 +20,11 @@ const schema = z.object({
   messages_policy: policy.optional(),
   allow_indexing: z.boolean().optional(),
   show_in_recommendations: z.boolean().optional(),
+  // Part 11b
+  read_receipts_enabled: z.boolean().optional(),
+  typing_indicators_enabled: z.boolean().optional(),
+  last_seen_visibility: relPolicy.optional(),
+  group_invite_policy: relPolicy.optional(),
 });
 
 /** PATCH /api/privacy — upsert the signed-in user's privacy settings. */

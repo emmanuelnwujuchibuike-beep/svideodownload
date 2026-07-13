@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Bookmark, Eye, Loader2, MessageSquare, Repeat2, Search, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { Activity, Bookmark, CheckCheck, Clock, Eye, Loader2, MessageSquare, Repeat2, Search, ShieldCheck, Sparkles, UserPlus, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -18,6 +18,11 @@ const POLICY: Choice[] = [
   { value: "everyone", label: "Everyone" },
   { value: "followers", label: "Followers" },
   { value: "off", label: "Off" },
+];
+const REL_POLICY: Choice[] = [
+  { value: "everyone", label: "Everyone" },
+  { value: "friends", label: "Friends" },
+  { value: "nobody", label: "Nobody" },
 ];
 
 export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
@@ -69,6 +74,44 @@ export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
         <SegRow icon={MessageSquare} title="Messages" desc="Who can send you direct messages" value={state.messages_policy} choices={POLICY} onChange={(v) => set("messages_policy", v as PrivacySettings["messages_policy"])} />
         <ToggleRow icon={Search} title="Search engine indexing" desc="Let Google show your profile" on={state.allow_indexing} onToggle={() => set("allow_indexing", !state.allow_indexing)} />
         <ToggleRow icon={Sparkles} title="Recommendations" desc="Show me in suggestions & trending" on={state.show_in_recommendations} onToggle={() => set("show_in_recommendations", !state.show_in_recommendations)} />
+      </div>
+
+      <div className="mb-1 mt-6 flex items-center gap-2">
+        <MessageSquare className="h-5 w-5 text-primary" />
+        <h2 className="text-base font-semibold">Messages</h2>
+      </div>
+      <p className="mb-5 text-xs text-muted-foreground">Fine-grained controls for chats specifically.</p>
+      <div className="space-y-2.5">
+        <ToggleRow
+          icon={CheckCheck}
+          title="Read receipts"
+          desc="Let people see when you've read their messages"
+          on={state.read_receipts_enabled}
+          onToggle={() => set("read_receipts_enabled", !state.read_receipts_enabled)}
+        />
+        <ToggleRow
+          icon={MessageSquare}
+          title="Typing indicators"
+          desc={'Show "typing…" while you\'re writing a reply'}
+          on={state.typing_indicators_enabled}
+          onToggle={() => set("typing_indicators_enabled", !state.typing_indicators_enabled)}
+        />
+        <SegRow
+          icon={Clock}
+          title="Last seen & online"
+          desc="Who can see when you were last active"
+          value={state.last_seen_visibility}
+          choices={REL_POLICY}
+          onChange={(v) => set("last_seen_visibility", v as PrivacySettings["last_seen_visibility"])}
+        />
+        <SegRow
+          icon={UserPlus}
+          title="Group invites"
+          desc="Who can add you to a group chat"
+          value={state.group_invite_policy}
+          choices={REL_POLICY}
+          onChange={(v) => set("group_invite_policy", v as PrivacySettings["group_invite_policy"])}
+        />
       </div>
 
       <div className="mt-6 flex items-center gap-3">

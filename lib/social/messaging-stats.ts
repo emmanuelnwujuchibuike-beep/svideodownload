@@ -17,7 +17,7 @@ export interface MessagingStats {
   failureRate7d: number;
   topFailureReasons: { reason: string; count: number }[];
   presenceCounts: Record<"away" | "busy" | "dnd" | "invisible", number>;
-  conversationsByType: { direct: number; group: number };
+  conversationsByType: { direct: number; group: number; secret: number };
 }
 
 const EMPTY: MessagingStats = {
@@ -29,7 +29,7 @@ const EMPTY: MessagingStats = {
   failureRate7d: 0,
   topFailureReasons: [],
   presenceCounts: { away: 0, busy: 0, dnd: 0, invisible: 0 },
-  conversationsByType: { direct: 0, group: 0 },
+  conversationsByType: { direct: 0, group: 0, secret: 0 },
 };
 
 export async function fetchMessagingStats(): Promise<MessagingStats> {
@@ -82,9 +82,9 @@ export async function fetchMessagingStats(): Promise<MessagingStats> {
       if (r.status in presenceCounts) presenceCounts[r.status] += 1;
     }
 
-    const conversationsByType = { direct: 0, group: 0 };
-    for (const r of (convTypeRows ?? []) as { type: "direct" | "group" }[]) {
-      conversationsByType[r.type] += 1;
+    const conversationsByType = { direct: 0, group: 0, secret: 0 };
+    for (const r of (convTypeRows ?? []) as { type: "direct" | "group" | "secret" }[]) {
+      if (r.type in conversationsByType) conversationsByType[r.type] += 1;
     }
 
     const m7 = messages7d ?? 0;

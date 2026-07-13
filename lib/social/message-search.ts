@@ -99,6 +99,18 @@ async function enrichMessages(db: Db, viewerId: string, messages: RawMessageRow[
 const MAX_RESULTS = 40;
 
 /**
+ * Secret Chats (Part 11b) hold only ciphertext — `body_tsv` over ciphertext
+ * matches nothing meaningful, so excluding them isn't just correctness, it
+ * also makes explicit that these conversations are genuinely not
+ * server-searchable (the whole point of encrypting them).
+ */
+async function excludeSecretConversations(db: Db, conversationIds: string[]): Promise<string[]> {
+  if (conversationIds.length === 0) return [];
+  const { data } = await db.from("conversations").select("id, type").in("id", conversationIds).neq("type", "secret");
+  return ((data ?? []) as { id: string }[]).map((c) => c.id);
+}
+
+/**
  * Full-text search over every message in a conversation the viewer is an
  * active member of. Deliberately recency-ordered, not relevance-ranked —
  * `ts_rank` needs a raw RPC the Supabase JS client doesn't expose over
@@ -116,7 +128,10 @@ export async function searchMessages(viewerId: string, query: string, conversati
       .select("conversation_id")
       .eq("user_id", viewerId)
       .is("left_at", null);
-    const myConversationIds = ((memberRows ?? []) as { conversation_id: string }[]).map((r) => r.conversation_id);
+    const myConversationIds = await excludeSecretConversations(
+      db,
+      ((memberRows ?? []) as { conversation_id: string }[]).map((r) => r.conversation_id),
+    );
     if (myConversationIds.length === 0) return [];
     const scopeIds = conversationId ? myConversationIds.filter((id) => id === conversationId) : myConversationIds;
     if (scopeIds.length === 0) return [];
@@ -161,7 +176,14 @@ export async function listStarredMessages(viewerId: string): Promise<StarredMess
       .from("messages")
       .select("id, conversation_id, sender_id, body, created_at, deleted_at")
       .in("id", ids);
-    const messages = ((msgRows ?? []) as (RawMessageRow & { deleted_at: string | null })[]).filter((m) => !m.deleted_at);
+    const nonSecretConvIds = new Set(
+      await excludeSecretConversations(db, [
+        ...new Set(((msgRows ?? []) as { conversation_id: string }[]).map((m) => m.conversation_id)),
+      ]),
+    );
+    const messages = ((msgRows ?? []) as (RawMessageRow & { deleted_at: string | null })[]).filter(
+      (m) => !m.deleted_at && nonSecretConvIds.has(m.conversation_id),
+    );
 
     const enriched = await enrichMessages(db, viewerId, messages);
     const results: StarredMessageItem[] = enriched.map((m) => ({ ...m, starredAt: starredAtById.get(m.messageId) ?? m.createdAt }));

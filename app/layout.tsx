@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { ThemeCacheSync } from "@/components/theme-cache-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { BootSplash } from "@/features/app-shell/boot-splash";
 import { EdgeSwipeBack } from "@/features/app-shell/edge-swipe-back";
@@ -195,6 +196,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <ThemeCacheSync />
           {/* App-wide reduced-motion: every framer-motion animation anywhere in
               the app (hundreds of hand-authored transitions across dozens of
               files) automatically respects the OS/browser "reduce motion"

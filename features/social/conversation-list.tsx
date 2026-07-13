@@ -435,14 +435,13 @@ export function ConversationList({
               viewerId={viewerId}
               // Capped like the route-prefetch effect above — a very long
               // inbox shouldn't open dozens of realtime channels at once just
-              // for rows the viewer isn't even looking at. Also skipped for
-              // the row of the conversation CURRENTLY OPEN in the desktop
-              // pane (`active`) — its own thread already opens the same
-              // `typing:<id>` presence topic with the same viewer key, and a
-              // second client-side channel object for the identical topic is
-              // both redundant (the open thread already shows live typing)
-              // and an unverified edge case worth just avoiding outright.
-              subscribeTyping={i < 25 && !(pane && pathname === `/messages/${c.id}`)}
+              // for rows the viewer isn't even looking at. Safe for the SAME
+              // conversation to also be observed elsewhere at once (the open
+              // thread, the desktop pane's list mounted alongside the mobile
+              // list) — `useTypingIndicator`'s channel is a shared, ref-
+              // counted singleton per conversationId now (see use-typing.ts),
+              // not one realtime channel per observer.
+              subscribeTyping={i < 25}
               onCloseMenu={() => setOpenMenuId(null)}
               onUpdatePref={updatePref}
               onDelete={deleteConversation}

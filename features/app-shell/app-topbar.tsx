@@ -98,7 +98,7 @@ export function AppTopbar() {
         // pt safe-area: with viewport-fit=cover the installed app draws under
         // the status bar — the bar pads itself clear of the clock/battery
         // (zero in a normal browser tab, so nothing changes there).
-        "sticky top-0 z-30 flex items-center gap-2 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl transition-transform duration-300 will-change-transform",
+        "sticky top-0 z-30 flex items-center gap-2 px-4 pt-[env(safe-area-inset-top)] transition-transform duration-300 will-change-transform",
         "h-[calc(4rem+env(safe-area-inset-top))]",
         // Owner correction (2026-07-13): the top nav must track the SYSTEM
         // theme like every other surface — white in light mode, blending
@@ -107,8 +107,12 @@ export function AppTopbar() {
         // of theme. Full-width edge-to-edge on every route, including Home
         // (owner correction, same date: the earlier floating rounded card
         // with side margins is gone — "make the top nav width full, and no
-        // border radius at the side edges... fix at the top 0").
-        "border-b border-border/20 bg-background/60",
+        // border radius at the side edges... fix at the top 0"). Solid/opaque
+        // `bg-background`, no blur (owner correction, same date: "make the
+        // top nav background pure white and not blured transparent" — the
+        // previous `bg-background/60 backdrop-blur-xl` frosted-glass look let
+        // scrolled content show through instead of a clean solid bar).
+        "border-b border-border/20 bg-background",
         hidden ? "-translate-y-full lg:translate-y-0" : "translate-y-0",
         onMessagesIndex && "hidden lg:flex",
       )}

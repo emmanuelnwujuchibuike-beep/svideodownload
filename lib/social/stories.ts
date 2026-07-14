@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { withTimeout } from "@/lib/utils";
 
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -28,7 +29,7 @@ export type StoryScope = "all" | "friends" | "following";
  * so your story always leads). Returns null for "all" (no restriction). Degrades
  * gracefully — if the friends/follows tables error, the scope simply resolves empty.
  */
-async function audienceForScope(
+async function audienceForScopeUnbounded(
   db: ReturnType<typeof createAdminClient>,
   viewerId: string,
   scope: Exclude<StoryScope, "all">,
@@ -53,6 +54,16 @@ async function audienceForScope(
   return ids;
 }
 
+/** Same real hang risk as `excludedStoryAuthors` below (pre-existing, not
+ *  new today) — closed the same way, at the source, while already here. */
+async function audienceForScope(
+  db: ReturnType<typeof createAdminClient>,
+  viewerId: string,
+  scope: Exclude<StoryScope, "all">,
+): Promise<Set<string>> {
+  return withTimeout(audienceForScopeUnbounded(db, viewerId, scope), 4000, new Set<string>([viewerId]));
+}
+
 /**
  * Every user id blocked-with (either direction) OR status-restricted-with
  * (either direction, migration 0076 `user_restrictions` scope='status') the
@@ -61,7 +72,7 @@ async function audienceForScope(
  * discovery, profile RLS) already filters by `blocks`; Stories never did, so
  * a blocked user could still see and reply to your Stories and vice versa.
  */
-async function excludedStoryAuthors(db: ReturnType<typeof createAdminClient>, viewerId: string): Promise<Set<string>> {
+async function excludedStoryAuthorsUnbounded(db: ReturnType<typeof createAdminClient>, viewerId: string): Promise<Set<string>> {
   const excluded = new Set<string>();
   try {
     const [{ data: blockedByMe }, { data: blockedMe }, { data: restrictedByMe }, { data: restrictedMe }] = await Promise.all([
@@ -78,6 +89,23 @@ async function excludedStoryAuthors(db: ReturnType<typeof createAdminClient>, vi
     /* table missing / error — no exclusions, same fail-open posture as audienceForScope */
   }
   return excluded;
+}
+
+/**
+ * Real bug found 2026-07-14, same day this was added: neither this function
+ * nor its callers (`getActiveStories` on Home's stories rail — every logged-
+ * in user's most common landing page — and `getActiveStoryForUser` on an
+ * open chat thread) were ever time-boxed, despite `getActiveStories`'s own
+ * doc comment already claiming a failed fetch "just means no strip." A
+ * genuine hang (not just an error) in ANY of the 4 queries above — a network
+ * stall, a slow connection — doesn't throw, so the try/catch above can't
+ * help; it just leaves the caller's `await` pending forever, which read live
+ * as "stuck on loading" on both Home and an open thread. `withTimeout` here,
+ * at the source, protects every current AND future caller at once instead of
+ * needing the same fix repeated at every call site.
+ */
+async function excludedStoryAuthors(db: ReturnType<typeof createAdminClient>, viewerId: string): Promise<Set<string>> {
+  return withTimeout(excludedStoryAuthorsUnbounded(db, viewerId), 4000, new Set<string>());
 }
 
 /** Active (non-expired) stories grouped by author, most recent author first.

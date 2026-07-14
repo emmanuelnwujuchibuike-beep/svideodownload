@@ -89,7 +89,17 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   // strip for any contact whose profile visibility isn't literally 'public',
   // which is most real accounts — being in a direct conversation together is
   // already a more intimate context than a public discovery feed).
-  const otherStoryGroup = convo.type === "direct" && convo.other ? await getActiveStoryForUser(convo.other.id, user.id) : null;
+  // `withTimeout` (2026-07-14): this call was "best-effort" only in comment,
+  // never actually time-boxed — a real gap, made more likely to bite after
+  // this same round added 4 MORE Supabase queries into its dependency chain
+  // (excludedStoryAuthors, for the new blocks/status-restriction check). A
+  // slow/hanging query anywhere in that chain hung the WHOLE thread page
+  // indefinitely (a real "stuck on loading" report), since nothing here ever
+  // raced it against a deadline the way `getConversation` above already is.
+  const otherStoryGroup =
+    convo.type === "direct" && convo.other
+      ? await withTimeout(getActiveStoryForUser(convo.other.id, user.id), LOAD_TIMEOUT_MS, null).catch(() => null)
+      : null;
 
   return (
     // Mobile: a true full-viewport overlay — covers the persistent app

@@ -136,10 +136,25 @@ export function RegisterServiceWorker() {
       })
       .catch(() => {});
 
+    // Real bug found 2026-07-14 (owner: reload-loop persists on the iOS
+    // back-gesture, gets stuck showing the boot splash): this used to call
+    // `reloadRespectingCriticalActivity()` directly and UNCONDITIONALLY —
+    // its only "already handled" guard was the in-memory `reloaded` flag
+    // above, which (like the sessionStorage bug fixed earlier the same day)
+    // resets to `false` on every fresh JS context. A standalone PWA cold
+    // restart very often ALSO discovers a newer service worker (deploys land
+    // every few minutes during active development) and fires a genuine
+    // `controllerchange` — with no cross-restart memory, THIS reload path
+    // fired again on every single cold restart even after the
+    // `reloadIfNewDeploy` guard was fixed, since it never went through that
+    // guard at all. Routing it through the same localStorage-guarded
+    // function unifies both reload triggers behind one persistent guard —
+    // worst case this reload lands up to 30s later (`reloadIfNewDeploy`'s
+    // own throttle), never a duplicate.
     const onControllerChange = () => {
       if (reloaded || !hadController) return;
       reloaded = true;
-      reloadRespectingCriticalActivity();
+      void reloadIfNewDeploy();
     };
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
 

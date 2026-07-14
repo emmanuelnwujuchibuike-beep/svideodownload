@@ -31,7 +31,7 @@ const ROWS: { key: keyof Omit<SoundPrefs, "masterEnabled">; label: string; icon:
  * (see lib/notifications/sound-fx.ts) — it has no effect on OS push
  * notifications, which always play the platform's own sound.
  */
-export function NotificationSettingsPicker() {
+export function NotificationSettingsPicker({ onCloseAll }: { onCloseAll?: () => void }) {
   const [prefs, setPrefs] = useState<SoundPrefs>(getCachedSoundPrefs());
   const [saving, setSaving] = useState(false);
   const { triggerRef: buttonRef, open, setOpen, mounted, pos: panelPos, toggle: togglePanel } = useAnchoredPanel<HTMLButtonElement>(256);
@@ -96,7 +96,15 @@ export function NotificationSettingsPicker() {
       {open && mounted && panelPos
         ? createPortal(
             <>
-              <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => {
+                  setOpen(false);
+                  onCloseAll?.();
+                }}
+                className="fixed inset-0 z-40 cursor-default"
+              />
               <div
                 className="animate-scale-in fixed z-50 w-72 overflow-hidden rounded-2xl border border-border/70 bg-card p-1.5 shadow-elevated"
                 style={{ top: panelPos.top, right: panelPos.right }}

@@ -92,8 +92,15 @@ export function InboxHeaderActions() {
                 className="fixed z-50 overflow-hidden rounded-2xl border border-border/70 bg-card p-1.5 shadow-elevated"
               >
                 <MessageSearchLauncher onNavigate={() => setOpen(false)} />
-                <PresenceStatusPicker />
-                <NotificationSettingsPicker />
+                {/* onCloseAll: when either picker's OWN nested popover is open
+                    on top of this dropdown, its backdrop is the topmost
+                    `fixed inset-0` layer and consumes the click first —
+                    without this, tapping the background only closed that
+                    inner popover, leaving this outer dropdown open and
+                    needing a second tap (owner ask: "make the menus...
+                    close when the background is clicked"). */}
+                <PresenceStatusPicker onCloseAll={() => setOpen(false)} />
+                <NotificationSettingsPicker onCloseAll={() => setOpen(false)} />
                 <Link
                   href="/messages/secret"
                   role="menuitem"

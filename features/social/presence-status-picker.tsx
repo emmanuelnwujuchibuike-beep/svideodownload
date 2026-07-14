@@ -27,7 +27,7 @@ const OPTIONS: { value: PresenceStatus; label: string; hint: string; dot: string
  * `use-presence.ts` untrack/retrack from the shared online channel live —
  * this component itself only ever talks to the cache + the API route.
  */
-export function PresenceStatusPicker() {
+export function PresenceStatusPicker({ onCloseAll }: { onCloseAll?: () => void }) {
   const [status, setStatus] = useState<PresenceStatus>(getCachedMyPresenceStatus());
   const [saving, setSaving] = useState(false);
   const { triggerRef: buttonRef, open, setOpen, mounted, pos: panelPos, toggle: togglePanel } = useAnchoredPanel<HTMLButtonElement>(256);
@@ -108,7 +108,15 @@ export function PresenceStatusPicker() {
       {open && mounted && panelPos
         ? createPortal(
             <>
-              <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => {
+                  setOpen(false);
+                  onCloseAll?.();
+                }}
+                className="fixed inset-0 z-40 cursor-default"
+              />
               <div
                 className="animate-scale-in fixed z-50 w-64 overflow-hidden rounded-2xl border border-border/70 bg-card py-1.5 shadow-elevated"
                 style={{ top: panelPos.top, right: panelPos.right }}

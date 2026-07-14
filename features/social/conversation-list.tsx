@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Archive as ArchiveIcon, BadgeCheck, BellOff, Check, Loader2, MoreHorizontal, Pin, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { Archive as ArchiveIcon, BadgeCheck, BarChart3, BellOff, Check, Loader2, MapPin, MoreHorizontal, Pin, Search, SlidersHorizontal, Trash2, User, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -108,6 +108,10 @@ export function ConversationList({
   const [requests, setRequests] = useState<FriendRequestItem[]>(initialRequests);
   const [requestBusyId, setRequestBusyId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  // Owner ask: only one row's swipe-reveal strip open at a time — opening a
+  // new one closes whichever was already open, instead of each row tracking
+  // its own independent swipeOpen state.
+  const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   // Portal-rendered + position computed on open (not a plain `absolute
   // right-2 top-9` sibling): a row near the bottom of the scrollable list
   // had this menu clipped by the list's own overflow — same class of bug,
@@ -469,6 +473,8 @@ export function ConversationList({
               onUpdatePref={updatePref}
               onDelete={deleteConversation}
               menuWidth={ROW_MENU_WIDTH}
+              swipeOpen={swipeOpenId === c.id}
+              onSwipeOpen={(open) => setSwipeOpenId(open ? c.id : null)}
             />
           ))}
           {visible.length === 0 ? (
@@ -507,6 +513,8 @@ function ConversationRow({
   menuWidth,
   viewerId,
   subscribeTyping,
+  swipeOpen,
+  onSwipeOpen,
 }: {
   c: ConversationSummary;
   active: boolean;
@@ -520,6 +528,8 @@ function ConversationRow({
   menuWidth: number;
   viewerId: string;
   subscribeTyping: boolean;
+  swipeOpen: boolean;
+  onSwipeOpen: (open: boolean) => void;
 }) {
   const isGroup = c.type === "group";
   const isOnline = !isGroup && onlineSet.has(c.other!.id);
@@ -534,10 +544,10 @@ function ConversationRow({
   // Swipe-to-reveal More/Archive/Delete (owner mockup) — a drag gesture
   // alongside (not replacing) the existing "…" button, since a mockup's
   // swipe affordance isn't always discoverable and the tap target already
-  // works. Only one row's strip open at a time isn't enforced (each row
-  // manages its own) — acceptable, since dragging a second row while another
-  // is open just closes the first on its own next interaction.
-  const [swipeOpen, setSwipeOpen] = useState(false);
+  // works. `swipeOpen` is owned by the parent list (owner ask: opening one
+  // row's strip must close any other already-open one) — was per-row local
+  // state, so two rows could be swiped open at once.
+  const setSwipeOpen = onSwipeOpen;
   return (
     <li className="relative flex items-center overflow-hidden rounded-2xl">
       {/* Revealed strip — sits BEHIND the row, only visible once dragged/opened. */}
@@ -587,11 +597,16 @@ function ConversationRow({
         }}
         className="relative z-10 flex w-full items-center bg-background"
       >
+      {/* Owner ask: the avatar should sit at the very edge on mobile — was
+          double-inset (the page container's own px-3 PLUS this row's own
+          left padding stacked on top), pushing it noticeably further in than
+          the search bar/tabs above it align to. pl-0 makes the avatar align
+          with everything else's edge instead of sitting an extra 12px in. */}
       <Link
         href={`/messages/${c.id}`}
         onClick={() => haptic("light")}
         className={cn(
-          "flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-3 transition",
+          "flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-3 pl-0 pr-3 transition",
           active
             ? "bg-gradient-to-r from-blue-500/[0.10] to-violet-500/[0.10] ring-1 ring-inset ring-violet-500/25"
             : "hover:bg-secondary/40",
@@ -658,6 +673,15 @@ function ConversationRow({
           ) : (
             <p className={cn("mt-0.5 flex items-center gap-1 truncate text-sm", c.unread ? "text-foreground" : "text-muted-foreground")}>
               {c.fromMe ? <Check className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="You sent" /> : null}
+              {/* A real icon for what kind of message this was — never an
+                  emoji standing in for one (standing app rule). */}
+              {c.lastMessageKind === "location" ? (
+                <MapPin className="h-3.5 w-3.5 shrink-0" />
+              ) : c.lastMessageKind === "contact" ? (
+                <User className="h-3.5 w-3.5 shrink-0" />
+              ) : c.lastMessageKind === "poll" ? (
+                <BarChart3 className="h-3.5 w-3.5 shrink-0" />
+              ) : null}
               <span className="truncate">{c.lastBody ?? "…"}</span>
             </p>
           )}

@@ -46,16 +46,25 @@ export async function GET(request: Request) {
   const limits = (await getPlanLimits())[plan];
   const ctx = buildRequestContext(request, plan);
 
-  // The viewer's profile handle (for "My profile" links). Null until they set one.
+  // The viewer's profile handle + REAL picture (for "My profile" links and
+  // the topbar avatar menu). Null until they set one. `avatar_url` here is
+  // the actual Frenz profile picture — a real bug this route's caller
+  // (UserMenu) had was reading `user_metadata.avatar_url` (the Supabase
+  // AUTH record's own field, only ever set by an OAuth provider like
+  // Google) instead of this one, so an account that uploaded a real profile
+  // picture through account settings still saw a plain letter avatar in the
+  // topbar menu — the two are different columns entirely.
   let handle: string | null = null;
+  let avatarUrl: string | null = null;
   if (userId) {
     try {
       const { data } = await createAdminClient()
         .from("profiles")
-        .select("handle")
+        .select("handle, avatar_url")
         .eq("id", userId)
         .maybeSingle();
       handle = (data?.handle as string | null) ?? null;
+      avatarUrl = (data?.avatar_url as string | null) ?? null;
     } catch {
       /* ignore */
     }
@@ -89,6 +98,7 @@ export async function GET(request: Request) {
       authenticated: !!userId,
       plan,
       handle,
+      avatarUrl,
       isPremium: plan !== "free",
       showAds: limits.ads,
       limits: {

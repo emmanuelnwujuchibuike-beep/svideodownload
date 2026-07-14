@@ -181,21 +181,25 @@ function previewFor(
   attachments: AttachmentInput[] | undefined,
   metadata?: z.infer<typeof metadataSchema>,
 ): string {
+  // No emoji (standing app rule — see [[no-emoji-design]]): a push
+  // notification body is plain OS text with no icon rendering available, so
+  // a clean text label is the correct fallback here, not an emoji standing
+  // in for one.
   const text = body.length > 140 ? `${body.slice(0, 140)}…` : body;
-  if (metadata?.kind === "location") return "📍 Location";
-  if (metadata?.kind === "contact") return `👤 Contact: ${metadata.displayName}`;
+  if (metadata?.kind === "location") return "Location";
+  if (metadata?.kind === "contact") return `Contact: ${metadata.displayName}`;
   if (!attachments || attachments.length === 0) return text;
   const kind = attachments[0]!.mediaKind;
   const label =
     attachments.length > 1
       ? `${attachments.length} attachments`
       : kind === "image"
-        ? "📷 Photo"
+        ? "Photo"
         : kind === "video"
-          ? "🎥 Video"
+          ? "Video"
           : kind === "audio"
-            ? "🎤 Voice message"
-            : `📄 ${attachments[0]!.filename || "File"}`;
+            ? "Voice message"
+            : attachments[0]!.filename || "File";
   return text ? `${label} · ${text}` : label;
 }
 

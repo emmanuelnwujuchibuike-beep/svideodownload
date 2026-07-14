@@ -15,6 +15,8 @@ export interface Entitlements {
   isBusiness: boolean;
   showAds: boolean;
   handle: string | null;
+  /** The real Frenz profile picture (profiles.avatar_url) — NOT the auth record's own user_metadata.avatar_url, which is only ever set by an OAuth provider and can be stale/absent even when a real profile picture is set. */
+  avatarUrl: string | null;
   ready: boolean;
 }
 
@@ -24,6 +26,7 @@ const FREE: Omit<Entitlements, "ready"> = {
   isBusiness: false,
   showAds: true,
   handle: null,
+  avatarUrl: null,
 };
 
 let cache: Omit<Entitlements, "ready"> | null = null;
@@ -50,6 +53,7 @@ export function useEntitlements(): Entitlements {
           isBusiness: plan === "business",
           showAds: d?.showAds ?? true,
           handle: (d?.handle as string | null) ?? null,
+          avatarUrl: (d?.avatarUrl as string | null) ?? null,
         };
       })
       .catch(() => {

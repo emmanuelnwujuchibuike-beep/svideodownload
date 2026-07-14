@@ -102,9 +102,23 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // `()` is an EMPTY allowlist — it blocks the feature for EVERY
+          // origin, including this site's own top-level document, not just
+          // third-party iframes. Real bug found 2026-07-14 (owner report:
+          // "the location says permission error when i try to use it"): this
+          // categorically blocked navigator.geolocation.getCurrentPosition()
+          // site-wide, no matter what the user's actual OS/browser
+          // permission was — there was no way to "fix" it on their end. The
+          // same blanket block also silently broke every getUserMedia() call
+          // in the app: voice-message recording (voice-recorder.tsx) and
+          // comment voice/video replies (lib/media/comment-recording.ts).
+          // `(self)` allows THIS origin to request the permission — the
+          // browser's own permission prompt (and the user's choice) is
+          // untouched either way; this only controls whether the feature can
+          // be requested here AT ALL.
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            value: "camera=(self), microphone=(self), geolocation=(self)",
           },
           {
             key: "Strict-Transport-Security",

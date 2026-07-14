@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { usePresence } from "@/features/friends/use-presence";
+import { cn } from "@/lib/utils";
 
 function lastSeenLabel(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -22,7 +23,18 @@ function lastSeenLabel(iso: string): string {
  * known (never shown for an invisible user — the API route already omits
  * it), falling back to plain @handle.
  */
-export function PresenceBadge({ userId, handle }: { userId: string; handle: string }) {
+export function PresenceBadge({
+  userId,
+  handle,
+  /** Matches the thread header's own forced-light default (owner ask: white,
+   *  WhatsApp-style background) — `text-muted-foreground` is light-toned in
+   *  dark app mode and read as washed-out against a forced-white header. */
+  forceLight = false,
+}: {
+  userId: string;
+  handle: string;
+  forceLight?: boolean;
+}) {
   const online = usePresence().has(userId);
   const [lastSeen, setLastSeen] = useState<string | null>(null);
 
@@ -45,7 +57,7 @@ export function PresenceBadge({ userId, handle }: { userId: string; handle: stri
     return <span className="text-xs font-medium text-emerald-500">Active now</span>;
   }
   return (
-    <span className="block truncate text-xs text-muted-foreground">
+    <span className={cn("block truncate text-xs text-muted-foreground", forceLight && "!text-neutral-500")}>
       {lastSeen ? lastSeenLabel(lastSeen) : `@${handle}`}
     </span>
   );

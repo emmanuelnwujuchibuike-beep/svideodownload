@@ -510,6 +510,24 @@ export async function setConversationTheme(
   }
 }
 
+/** Chat wallpaper (migration 0073) — a custom uploaded background picture,
+ *  same shared-per-conversation / any-member-can-set model as Chat Theme. */
+export async function setConversationWallpaper(
+  conversationId: string,
+  actorId: string,
+  wallpaperUrl: string | null,
+): Promise<{ ok: boolean }> {
+  try {
+    const db = createAdminClient();
+    const role = await memberRole(db, conversationId, actorId);
+    if (!role) return { ok: false };
+    const { error } = await db.from("conversations").update({ wallpaper_url: wallpaperUrl }).eq("id", conversationId);
+    return { ok: !error };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /**
  * In-chat polls (inbox mockup completion) — creates the parent message (an
  * empty-body, metadata-tagged row, same shape a location/contact share
@@ -1093,6 +1111,8 @@ export interface ConversationSummary {
   other: OtherUser | null;
   memberCount: number;
   lastBody: string | null;
+  /** Migration 0074 — lets the inbox row render a real icon (MapPin/User/BarChart3) instead of leaning on an emoji baked into `lastBody`. Null for a plain text/attachment message. */
+  lastMessageKind: "location" | "contact" | "poll" | null;
   lastAt: string;
   fromMe: boolean;
   unread: boolean;
@@ -1165,6 +1185,20 @@ export async function listConversations(userId: string): Promise<ConversationSum
       last_message_at: string;
     }[];
     if (convs.length === 0) return [];
+
+    // Best-effort, separate from the main SELECT above (migration 0074) —
+    // same reasoning as getConversation()'s wallpaper_url fetch: a column
+    // the DB migration hasn't landed yet must never fail the WHOLE inbox
+    // query, just leave this one field null.
+    let kindByConv = new Map<string, "location" | "contact" | "poll" | null>();
+    try {
+      const { data: kindRows } = await db.from("conversations").select("id, last_message_kind").in("id", convIds);
+      kindByConv = new Map(
+        ((kindRows ?? []) as { id: string; last_message_kind: "location" | "contact" | "poll" | null }[]).map((r) => [r.id, r.last_message_kind]),
+      );
+    } catch {
+      /* migration not applied yet — rows just render without the icon */
+    }
 
     const directConvs = convs.filter((c) => c.type === "direct");
     const groupConvs = convs.filter((c) => c.type === "group");
@@ -1273,6 +1307,7 @@ export async function listConversations(userId: string): Promise<ConversationSum
           },
           memberCount: 2,
           lastBody: c.last_body,
+          lastMessageKind: kindByConv.get(c.id) ?? null,
           lastAt: c.last_message_at,
           fromMe: c.last_sender_id === userId,
           unread: (unreadByConv.get(c.id) ?? 0) > 0,
@@ -1290,6 +1325,7 @@ export async function listConversations(userId: string): Promise<ConversationSum
           other: null,
           memberCount: memberCountByGroup.get(c.id) ?? 0,
           lastBody: c.last_body,
+          lastMessageKind: kindByConv.get(c.id) ?? null,
           lastAt: c.last_message_at,
           fromMe: c.last_sender_id === userId,
           unread: (unreadByConv.get(c.id) ?? 0) > 0,
@@ -1375,6 +1411,7 @@ export async function listSecretConversations(userId: string): Promise<Conversat
         },
         memberCount: 2,
         lastBody: null,
+        lastMessageKind: null,
         lastAt: c.last_message_at,
         fromMe: c.last_sender_id === userId,
         // No server-visible unread state for secret chats (would need the
@@ -1526,6 +1563,8 @@ export interface ConversationView {
   disappearAfterSeconds: number | null;
   /** Chat Themes (inbox mockup completion) — null means the app default look. */
   theme: ConversationTheme | null;
+  /** Chat wallpaper (migration 0073) — a custom uploaded background picture, null means none set. */
+  wallpaperUrl: string | null;
   /** Part 11b — viewer's OWN "show when I'm typing" preference; gates whether ConversationRoom broadcasts typing state at all (see use-typing.ts). */
   viewerTypingIndicatorsEnabled: boolean;
   messages: MessageItem[];
@@ -1574,6 +1613,23 @@ export async function getConversation(
       .eq("id", conversationId)
       .maybeSingle();
     if (!conv) return null;
+
+    // Fetched separately from the main SELECT above, deliberately: migration
+    // 0073 (wallpaper_url) may not be applied to the live database the
+    // instant this code deploys (the two happen independently — code ships
+    // on push, the SQL migration is a separate manual step). Folding this
+    // column into the main SELECT means a missing column fails the WHOLE
+    // query, 404ing every single conversation thread until the migration
+    // lands — confirmed by reproducing it locally. A separate, best-effort
+    // query means a not-yet-applied migration only ever costs the wallpaper
+    // feature itself, never breaks messaging as a whole.
+    let wallpaperUrl: string | null = null;
+    try {
+      const { data: wp } = await db.from("conversations").select("wallpaper_url").eq("id", conversationId).maybeSingle();
+      wallpaperUrl = (wp?.wallpaper_url as string | null) ?? null;
+    } catch {
+      /* migration not applied yet — wallpaper feature just stays off */
+    }
 
     const { data: myMembership } = await db
       .from("conversation_members")
@@ -1762,6 +1818,7 @@ export async function getConversation(
       onlyAdminsCanSend: (conv.only_admins_can_send as boolean | null) ?? false,
       disappearAfterSeconds: (conv.disappear_after_seconds as number | null) ?? null,
       theme: (conv.theme as ConversationTheme | null) ?? null,
+      wallpaperUrl,
       viewerTypingIndicatorsEnabled: (viewerPriv?.typing_indicators_enabled as boolean | null) ?? true,
       messages,
       syncedAt: queryStartedAt,

@@ -174,6 +174,7 @@ export function ConversationRoom({
   otherName = null,
   viewerTypingIndicatorsEnabled = true,
   theme = null,
+  wallpaperUrl = null,
   otherStoryGroup = null,
 }: {
   conversationId: string;
@@ -193,6 +194,8 @@ export function ConversationRoom({
   viewerTypingIndicatorsEnabled?: boolean;
   /** Chat Themes (inbox mockup completion) — null is the app default look. */
   theme?: ConversationTheme | null;
+  /** Chat wallpaper (migration 0073) — a custom uploaded background picture; takes precedence over `theme`'s wash. */
+  wallpaperUrl?: string | null;
   /** The other party's active stories (direct threads only) — the mockup's
    *  "Name · N stories" strip at the top of the thread. Null when they have
    *  none active, or this isn't a direct thread. */
@@ -202,6 +205,13 @@ export function ConversationRoom({
   // Chat theme, kept live via the realtime channel below — the initial
   // `theme` prop only reflects whatever was true at the last server render.
   const [liveTheme, setLiveTheme] = useState(theme);
+  const [liveWallpaperUrl, setLiveWallpaperUrl] = useState(wallpaperUrl);
+  // Neither a color theme nor a custom wallpaper is set — the WhatsApp-style
+  // light default (owner ask, 2026-07-14: "make the message page background
+  // color to be white like whatsapp"), regardless of the app's own dark
+  // mode, since a chat surface intentionally keeping a fixed light look is
+  // its own deliberate product choice here, not the app shell's theme.
+  const useLightDefault = !liveTheme && !liveWallpaperUrl;
   const [body, setBody] = useState("");
   // Staged image/video/document attachments — uploaded the moment they're
   // picked (see the media composer sheet), previewed as chips above the
@@ -680,13 +690,15 @@ export function ConversationRoom({
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "conversations", filter: `id=eq.${conversationId}` },
         (payload) => {
-          // Chat Themes (inbox mockup completion) is a SHARED per-conversation
-          // setting — without this, only the member who changed it (via
-          // ThreadOptionsSheet's own optimistic update) would see the new
-          // bubble/wash colors live; everyone else's already-open thread
-          // stayed on the old theme until they happened to reload.
-          const row = payload.new as { theme?: ConversationTheme | null };
+          // Chat Themes / wallpaper (inbox mockup completion) are SHARED
+          // per-conversation settings — without this, only the member who
+          // changed it (via ThreadOptionsSheet's own optimistic update) would
+          // see the new bubble/wash/background live; everyone else's
+          // already-open thread stayed on the old look until they happened
+          // to reload.
+          const row = payload.new as { theme?: ConversationTheme | null; wallpaper_url?: string | null };
           if (row.theme !== undefined) setLiveTheme(row.theme);
+          if (row.wallpaper_url !== undefined) setLiveWallpaperUrl(row.wallpaper_url);
         },
       )
       .subscribe(onSubscribeStatus);
@@ -699,9 +711,19 @@ export function ConversationRoom({
     // reproducing the exact "stuck" bug this was meant to fix.
     function onSubscribeStatus(status: string) {
       if (status === "SUBSCRIBED") {
-        // A RE-subscribe means the socket dropped at some point — catch up
-        // on whatever the live stream missed while it was down.
-        if (everSubscribed) void resync();
+        // Resync on EVERY subscribe, including the first — not just
+        // reconnects. Real bug found 2026-07-14 (owner report: "have to go
+        // back and come back for refresh"): a message sent in the window
+        // between this component mounting (with the SSR-rendered initial
+        // messages) and the channel actually finishing its first `subscribe`
+        // — a real gap, confirmed empirically with two live test accounts —
+        // was NEITHER part of the initial SSR payload NOR caught by the live
+        // stream (which wasn't listening yet), and previously wasn't caught
+        // by this resync either, since it only fired on RE-subscribes. Since
+        // resync() is delta-based (`?since=` the SSR fetch's own timestamp),
+        // calling it on the first subscribe too is cheap and closes the gap
+        // completely rather than narrowing it.
+        void resync();
         everSubscribed = true;
         firstAttemptFailures = 0;
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
@@ -1040,7 +1062,23 @@ export function ConversationRoom({
         }
         void sendMetadataMessage({ kind: "location", lat, lng, label });
       },
-      () => toast("Couldn't get your location — check permissions.", "error"),
+      (err) => {
+        // The three GeolocationPositionError codes mean genuinely different
+        // things — a blanket "check permissions" message was actively
+        // misleading for the other two (a real bug: a site-wide
+        // Permissions-Policy header, not the user's own device/browser
+        // settings, was actually the cause of PERMISSION_DENIED — see
+        // next.config.ts's fix — but even once that's fixed, a real denial,
+        // a signal timeout, and "no fix could be determined" are three
+        // different problems with three different next steps).
+        const message =
+          err.code === err.PERMISSION_DENIED
+            ? "Location access is blocked for this site — enable it in your browser or device settings."
+            : err.code === err.TIMEOUT
+              ? "Location took too long — check your signal and try again."
+              : "Couldn't determine your location right now.";
+        toast(message, "error");
+      },
       { enableHighAccuracy: false, timeout: 10_000 },
     );
   };
@@ -1378,7 +1416,11 @@ export function ConversationRoom({
           // drifting away from the bubble it belongs to.
           if (openMenuId) setOpenMenuId(null);
         }}
-        className={cn("flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto p-4", liveTheme && THEME_WASH_CLASS[liveTheme])}
+        style={liveWallpaperUrl ? { backgroundImage: `url(${liveWallpaperUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+        className={cn(
+          "flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto p-4",
+          liveWallpaperUrl ? "bg-neutral-900" : useLightDefault ? "bg-white" : liveTheme ? THEME_WASH_CLASS[liveTheme] : undefined,
+        )}
       >
         {otherStoryGroup ? (
           <button
@@ -1418,8 +1460,8 @@ export function ConversationRoom({
             <span className="bg-brand brand-glow flex h-14 w-14 items-center justify-center rounded-full">
               <Send className="h-5 w-5 -translate-x-0.5 text-white" />
             </span>
-            <p className="text-sm font-semibold">Say hello</p>
-            <p className="max-w-[220px] text-xs text-muted-foreground">
+            <p className={cn("text-sm font-semibold", (useLightDefault || liveWallpaperUrl) && "text-neutral-900")}>Say hello</p>
+            <p className={cn("max-w-[220px] text-xs text-muted-foreground", (useLightDefault || liveWallpaperUrl) && "!text-neutral-500")}>
               {type === "group" ? "Send the first message to get this group talking." : "Send the first message to start the conversation."}
             </p>
           </div>
@@ -1465,7 +1507,12 @@ export function ConversationRoom({
               >
                 {showDayDivider ? (
                   // The mockup's centered "TODAY" divider between day groups.
-                  <div className="w-full self-stretch py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
+                  <div
+                    className={cn(
+                      "w-full self-stretch py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60",
+                      (useLightDefault || liveWallpaperUrl) && "!text-neutral-500",
+                    )}
+                  >
                     {dayDividerLabel(m.createdAt)}
                   </div>
                 ) : null}
@@ -1481,7 +1528,16 @@ export function ConversationRoom({
                         ? "border border-dashed border-border/60 bg-transparent"
                         : m.mine
                           ? cn(liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-brand", "rounded-br-xl text-white shadow-md shadow-violet-500/20")
-                          : "glass rounded-bl-xl text-foreground shadow-sm",
+                          : // `.dark .glass` is a near-invisible white-on-white
+                            // tint meant for a DARK backdrop — against the
+                            // forced-light default/wallpaper background it
+                            // read as an almost-blank bubble with white-on-
+                            // white text. Explicit always-light colors here
+                            // instead, matching WhatsApp's own received-bubble
+                            // look, regardless of the app's own dark mode.
+                            useLightDefault || liveWallpaperUrl
+                              ? "rounded-bl-xl bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-900/5"
+                              : "glass rounded-bl-xl text-foreground shadow-sm",
                       m.mine && m.id.startsWith("optimistic-") && "animate-scale-in",
                       m.id === highlightedId && "ring-2 ring-offset-2 ring-offset-background ring-amber-400 transition-shadow duration-500",
                     )}
@@ -1853,7 +1909,10 @@ export function ConversationRoom({
         // exactly like the mockup.
         <form
           onSubmit={submit}
-          className="flex items-end gap-2 border-t border-border/60 bg-card/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3"
+          className={cn(
+            "flex items-end gap-2 border-t border-border/60 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3",
+            useLightDefault || liveWallpaperUrl ? "bg-white" : "bg-card/70",
+          )}
         >
           <motion.button
             type="button"
@@ -1861,11 +1920,18 @@ export function ConversationRoom({
             aria-label="Attach"
             whileTap={{ scale: 0.85 }}
             transition={springs.press}
-            className="glass flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:text-foreground"
+            className={cn(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition",
+              useLightDefault || liveWallpaperUrl ? "bg-neutral-100 text-neutral-500 hover:text-neutral-900" : "glass text-muted-foreground hover:text-foreground",
+            )}
           >
             <Paperclip className="h-5 w-5" />
           </motion.button>
-          <div className="glass flex min-w-0 flex-1 items-end rounded-[24px] pl-4 pr-1.5 transition focus-within:ring-2 focus-within:ring-violet-500/25">
+          <div
+            className={cn(
+              "flex min-w-0 flex-1 items-end rounded-[24px] pl-4 pr-1.5 transition focus-within:ring-2 focus-within:ring-violet-500/25",
+              useLightDefault || liveWallpaperUrl ? "bg-neutral-100" : "glass",
+            )}>
             <textarea
               ref={textareaRef}
               value={body}
@@ -1889,7 +1955,10 @@ export function ConversationRoom({
               maxLength={2000}
               rows={1}
               style={{ maxHeight: COMPOSER_MAX_HEIGHT }}
-              className="max-h-32 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2.5 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/60"
+              className={cn(
+                "max-h-32 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2.5 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/60",
+                (useLightDefault || liveWallpaperUrl) && "text-neutral-900",
+              )}
             />
             <EmojiPickerButton
               onPick={(emoji) => {

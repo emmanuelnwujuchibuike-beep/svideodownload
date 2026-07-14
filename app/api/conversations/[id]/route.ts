@@ -6,6 +6,7 @@ import {
   GROUP_TITLE_MAX,
   renameGroup,
   setConversationTheme,
+  setConversationWallpaper,
   setDisappearAfterSeconds,
   setGroupAvatar,
   setGroupSendPermission,
@@ -24,6 +25,8 @@ const schema = z.object({
   disappearAfterSeconds: z.number().int().positive().nullable().optional(),
   /** Chat Themes (inbox mockup completion) — null turns it off (app default). */
   theme: z.enum(CONVERSATION_THEMES).nullable().optional(),
+  /** Chat wallpaper (migration 0073) — null removes the custom background. */
+  wallpaperUrl: z.string().url().nullable().optional(),
 });
 
 /** PATCH /api/conversations/[id] — rename/re-avatar/send-permission a group (owner/admin only). */
@@ -50,7 +53,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     parsed.data.avatarUrl === undefined &&
     parsed.data.onlyAdminsCanSend === undefined &&
     parsed.data.disappearAfterSeconds === undefined &&
-    parsed.data.theme === undefined
+    parsed.data.theme === undefined &&
+    parsed.data.wallpaperUrl === undefined
   ) {
     return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
   }
@@ -74,6 +78,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (parsed.data.theme !== undefined) {
     const res = await setConversationTheme(id, user.id, parsed.data.theme);
     if (!res.ok) return NextResponse.json({ error: "Couldn't update the chat theme." }, { status: 403 });
+  }
+  if (parsed.data.wallpaperUrl !== undefined) {
+    const res = await setConversationWallpaper(id, user.id, parsed.data.wallpaperUrl);
+    if (!res.ok) return NextResponse.json({ error: "Couldn't update the chat wallpaper." }, { status: 403 });
   }
   return NextResponse.json({ ok: true });
 }

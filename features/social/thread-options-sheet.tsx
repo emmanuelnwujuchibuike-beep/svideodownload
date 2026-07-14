@@ -1,16 +1,17 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronRight, Clock, Trash2, User, X } from "lucide-react";
+import { Check, ChevronRight, Clock, Image as ImageIcon, Loader2, Trash2, User, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { CONVERSATION_THEMES, type ConversationTheme } from "@/lib/social/message-meta";
+import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { cn } from "@/lib/utils";
 
 const THEME_SWATCH: Record<ConversationTheme, string> = {
@@ -41,6 +42,7 @@ export function ThreadOptionsSheet({
   conversationId,
   otherHandle,
   initialTheme,
+  initialWallpaperUrl,
   initialDisappearAfterSeconds,
   open,
   onClose,
@@ -48,6 +50,7 @@ export function ThreadOptionsSheet({
   conversationId: string;
   otherHandle: string;
   initialTheme: ConversationTheme | null;
+  initialWallpaperUrl: string | null;
   initialDisappearAfterSeconds: number | null;
   open: boolean;
   onClose: () => void;
@@ -56,6 +59,9 @@ export function ThreadOptionsSheet({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const [theme, setTheme] = useState(initialTheme);
+  const [wallpaperUrl, setWallpaperUrl] = useState(initialWallpaperUrl);
+  const [uploadingWallpaper, setUploadingWallpaper] = useState(false);
+  const wallpaperInputRef = useRef<HTMLInputElement | null>(null);
   const [disappearAfter, setDisappearAfter] = useState(initialDisappearAfterSeconds);
   const [customDays, setCustomDays] = useState("");
   const [showCustom, setShowCustom] = useState(false);
@@ -82,6 +88,30 @@ export function ThreadOptionsSheet({
     haptic("light");
     setTheme(next);
     void patch({ theme: next });
+  };
+
+  const pickWallpaper = () => wallpaperInputRef.current?.click();
+
+  const onWallpaperFile = async (file: File | undefined) => {
+    if (!file) return;
+    haptic("light");
+    setUploadingWallpaper(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const url = await uploadPostMedia({ data: file, kind: "image", ext, contentType: file.type || "image/jpeg" });
+      setWallpaperUrl(url);
+      await patch({ wallpaperUrl: url });
+    } catch {
+      toast("Couldn't upload that picture. Try a smaller image.", "error");
+    } finally {
+      setUploadingWallpaper(false);
+    }
+  };
+
+  const removeWallpaper = () => {
+    haptic("light");
+    setWallpaperUrl(null);
+    void patch({ wallpaperUrl: null });
   };
 
   const applyDisappear = (seconds: number | null) => {
@@ -199,6 +229,64 @@ export function ThreadOptionsSheet({
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  <ImageIcon className="h-3.5 w-3.5" /> Chat wallpaper
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={busy || uploadingWallpaper}
+                    onClick={pickWallpaper}
+                    className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border/60 bg-secondary/30 text-muted-foreground transition hover:bg-secondary/50 disabled:opacity-50"
+                  >
+                    {wallpaperUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={wallpaperUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <ImageIcon className="h-5 w-5" />
+                    )}
+                    {uploadingWallpaper ? (
+                      <span className="absolute inset-0 flex items-center justify-center bg-black/50">
+                        <Loader2 className="h-5 w-5 animate-spin text-white" />
+                      </span>
+                    ) : null}
+                  </button>
+                  <div className="flex flex-1 flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">
+                      {wallpaperUrl ? "Custom picture set for this chat." : "Use a picture as this chat's background."}
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        disabled={busy || uploadingWallpaper}
+                        onClick={pickWallpaper}
+                        className="text-xs font-semibold text-primary disabled:opacity-50"
+                      >
+                        {wallpaperUrl ? "Change" : "Upload"}
+                      </button>
+                      {wallpaperUrl ? (
+                        <button
+                          type="button"
+                          disabled={busy || uploadingWallpaper}
+                          onClick={removeWallpaper}
+                          className="text-xs font-semibold text-red-500 disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+                <input
+                  ref={wallpaperInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => void onWallpaperFile(e.target.files?.[0])}
+                />
               </div>
 
               <div>

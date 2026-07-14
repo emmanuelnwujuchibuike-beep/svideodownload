@@ -13,6 +13,7 @@ import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import type { ConversationMember, ConversationTheme, ConversationType, MemberRole, OtherUser } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
 /**
  * The thread header, lifted out of the server-rendered page so a group
@@ -33,6 +34,7 @@ export function ThreadHeader({
   other,
   onlyAdminsCanSend = false,
   initialTheme = null,
+  initialWallpaperUrl = null,
   initialDisappearAfterSeconds = null,
 }: {
   conversationId: string;
@@ -45,6 +47,7 @@ export function ThreadHeader({
   other: OtherUser | null;
   onlyAdminsCanSend?: boolean;
   initialTheme?: ConversationTheme | null;
+  initialWallpaperUrl?: string | null;
   initialDisappearAfterSeconds?: number | null;
 }) {
   const [title, setTitle] = useState(initialTitle);
@@ -53,6 +56,19 @@ export function ThreadHeader({
   const [members, setMembers] = useState(initialMembers);
   const otherOnline = usePresence().has(other?.id ?? "");
   const [optionsOpen, setOptionsOpen] = useState(false);
+  // Mirrors ConversationRoom's own `useLightDefault` — neither a color theme
+  // nor a custom wallpaper is set, so the header should match the message
+  // area's WhatsApp-style light default instead of the app's own dark mode,
+  // or the two visibly seam at the header/body boundary (found via a real
+  // screenshot, not assumed). Not live-reactive to a theme/wallpaper change
+  // from ANOTHER member's edit the way ConversationRoom's liveTheme is —
+  // this component doesn't track wallpaper_url over its own realtime
+  // channel — but ThreadOptionsSheet's own patch() already calls
+  // router.refresh() on the editing member's OWN client, which re-supplies
+  // fresh initial props here; a stale header for everyone ELSE with the
+  // thread already open is the same class of minor, self-correcting gap
+  // already accepted elsewhere in this codebase.
+  const forceLight = !initialTheme && !initialWallpaperUrl;
 
   useEffect(() => {
     if (type !== "group") return;
@@ -98,7 +114,15 @@ export function ThreadHeader({
     // Owner mockup: the header blends seamlessly into the thread background
     // (same dark surface, no dividing card/border) — was a distinct bordered
     // `bg-card` bar, a visibly different look from the reference image.
-    <div className="relative flex items-center gap-3 bg-background px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-3">
+    // `forceLight` matches it to the message area's WhatsApp-style default
+    // instead — a real screenshot showed a dark header sitting directly
+    // above a forced-light message list otherwise, a visible seam.
+    <div
+      className={cn(
+        "relative flex items-center gap-3 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-3",
+        forceLight ? "bg-white" : "bg-background",
+      )}
+    >
       <div
         aria-hidden
         className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full bg-gradient-to-br from-blue-500/15 to-violet-500/15 blur-2xl"
@@ -108,7 +132,10 @@ export function ThreadHeader({
       <Link
         href="/messages"
         aria-label="Back to messages"
-        className="relative flex h-9 w-9 shrink-0 items-center justify-center text-foreground transition hover:text-foreground/70 lg:hidden"
+        className={cn(
+          "relative flex h-9 w-9 shrink-0 items-center justify-center transition lg:hidden",
+          forceLight ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
+        )}
       >
         <ArrowLeft className="h-5 w-5" />
       </Link>
@@ -121,8 +148,8 @@ export function ThreadHeader({
             <GroupAvatarStack avatars={members.map((m) => ({ avatarUrl: m.avatarUrl, displayName: m.displayName }))} size="lg" />
           )}
           <span className="min-w-0">
-            <span className="block truncate text-sm font-bold">{title ?? "Group chat"}</span>
-            <span className="block text-xs text-muted-foreground">{memberCount} members</span>
+            <span className={cn("block truncate text-sm font-bold", forceLight && "text-neutral-900")}>{title ?? "Group chat"}</span>
+            <span className={cn("block text-xs text-muted-foreground", forceLight && "!text-neutral-500")}>{memberCount} members</span>
           </span>
         </div>
       ) : other ? (
@@ -140,11 +167,11 @@ export function ThreadHeader({
             {otherOnline ? <span aria-hidden className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-card" /> : null}
           </span>
           <span className="min-w-0">
-            <span className="flex items-center gap-1 text-[15px] font-bold">
+            <span className={cn("flex items-center gap-1 text-[15px] font-bold", forceLight && "text-neutral-900")}>
               <span className="truncate">{other.displayName}</span>
               {other.isVerified ? <BadgeCheck className="h-3.5 w-3.5 text-primary" /> : null}
             </span>
-            <PresenceBadge userId={other.id} handle={other.handle} />
+            <PresenceBadge userId={other.id} handle={other.handle} forceLight={forceLight} />
           </span>
         </Link>
       ) : (
@@ -170,7 +197,10 @@ export function ThreadHeader({
               haptic("light");
               toast("Voice calls are coming soon.", "info");
             }}
-            className="flex h-9 w-9 items-center justify-center text-foreground transition hover:text-foreground/70"
+            className={cn(
+              "flex h-9 w-9 items-center justify-center transition",
+              forceLight ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
+            )}
           >
             <Phone className="h-[19px] w-[19px]" />
           </button>
@@ -181,7 +211,10 @@ export function ThreadHeader({
               haptic("light");
               toast("Video calls are coming soon.", "info");
             }}
-            className="flex h-9 w-9 items-center justify-center text-foreground transition hover:text-foreground/70"
+            className={cn(
+              "flex h-9 w-9 items-center justify-center transition",
+              forceLight ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
+            )}
           >
             <Video className="h-5 w-5" />
           </button>
@@ -192,7 +225,10 @@ export function ThreadHeader({
               haptic("light");
               setOptionsOpen(true);
             }}
-            className="flex h-9 w-9 items-center justify-center text-foreground transition hover:text-foreground/70"
+            className={cn(
+              "flex h-9 w-9 items-center justify-center transition",
+              forceLight ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
+            )}
           >
             <MoreVertical className="h-5 w-5" />
           </button>
@@ -200,6 +236,7 @@ export function ThreadHeader({
             conversationId={conversationId}
             otherHandle={other.handle}
             initialTheme={initialTheme}
+            initialWallpaperUrl={initialWallpaperUrl}
             initialDisappearAfterSeconds={initialDisappearAfterSeconds}
             open={optionsOpen}
             onClose={() => setOptionsOpen(false)}

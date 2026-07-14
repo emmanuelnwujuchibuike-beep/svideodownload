@@ -110,11 +110,13 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         other={convo.other}
         onlyAdminsCanSend={convo.onlyAdminsCanSend}
         initialTheme={convo.theme}
+        initialWallpaperUrl={convo.wallpaperUrl}
         initialDisappearAfterSeconds={convo.disappearAfterSeconds}
       />
 
       <ConversationRoom
         theme={convo.theme}
+        wallpaperUrl={convo.wallpaperUrl}
         conversationId={convo.id}
         viewerId={user.id}
         viewerName={viewerName}

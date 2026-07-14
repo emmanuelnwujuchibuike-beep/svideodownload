@@ -99,7 +99,7 @@ export function MessagePostEmbed({ postId, mine }: { postId: string; mine: boole
 
   if (!preview) {
     return (
-      <span className="block w-full max-w-72 overflow-hidden rounded-2xl border border-border/60" aria-hidden>
+      <span className="block w-full max-w-[22rem] overflow-hidden rounded-2xl border border-border/60" aria-hidden>
         <span className="block space-y-1.5 p-2.5">
           <span className="block h-3 w-28 rounded bg-secondary shimmer" />
         </span>
@@ -112,7 +112,7 @@ export function MessagePostEmbed({ postId, mine }: { postId: string; mine: boole
     <Link
       href={`/p/${preview.id}`}
       className={
-        "block w-full max-w-72 overflow-hidden rounded-2xl border transition hover:opacity-95 active:scale-[0.99] " +
+        "block w-full max-w-[22rem] overflow-hidden rounded-2xl border transition hover:opacity-95 active:scale-[0.99] " +
         (mine ? "border-white/25 bg-black/20" : "border-border/60 bg-card")
       }
     >
@@ -142,7 +142,7 @@ export function MessagePostEmbed({ postId, mine }: { postId: string; mine: boole
       {/* Media */}
       {preview.thumbnailUrl ? (
         <span className="relative mt-2 block aspect-[4/3] w-full overflow-hidden bg-neutral-950">
-          <Image src={preview.thumbnailUrl} alt="" fill sizes="288px" className="object-cover" />
+          <Image src={preview.thumbnailUrl} alt="" fill sizes="352px" className="object-cover" />
           {preview.mediaKind === "video" ? (
             <span className="absolute inset-0 flex items-center justify-center">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur">

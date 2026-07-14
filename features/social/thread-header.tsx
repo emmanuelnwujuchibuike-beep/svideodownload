@@ -244,6 +244,9 @@ export function ThreadHeader({
           <ThreadOptionsSheet
             conversationId={conversationId}
             otherHandle={other.handle}
+            otherName={other.displayName}
+            otherAvatarUrl={other.avatarUrl}
+            otherIsVerified={other.isVerified}
             initialTheme={initialTheme}
             initialWallpaperUrl={initialWallpaperUrl}
             initialDisappearAfterSeconds={initialDisappearAfterSeconds}

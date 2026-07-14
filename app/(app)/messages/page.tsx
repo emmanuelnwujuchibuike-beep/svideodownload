@@ -8,6 +8,7 @@ import { InboxHeaderActions } from "@/features/social/inbox-header-actions";
 import { listIncomingFriendRequests, type FriendRequestItem } from "@/lib/social/friends";
 import { listConversations, type ConversationSummary } from "@/lib/social/messages";
 import { createClient, getUserBounded } from "@/lib/supabase/server";
+import { FORCE_LIGHT_VARS } from "@/lib/theme/force-light-vars";
 import { withTimeout } from "@/lib/utils";
 
 type LoadResult = { ok: true; conversations: ConversationSummary[] } | { ok: false; conversations: ConversationSummary[] };
@@ -67,31 +68,53 @@ export default async function MessagesPage() {
           this route's empty space since this container had no background of
           its own. `bg-white` blocks it outright rather than just reducing it,
           matching the same "always white regardless of dark mode" choice
-          already made for the thread itself. */}
-      <div className="flex-1 overflow-y-auto bg-white px-3 pt-4 lg:hidden">
-        <div className="mb-4 flex items-start justify-between gap-2">
-          <div>
-            <h1 className="flex items-center gap-1.5 text-[28px] font-bold tracking-[-0.03em]">
-              Messages
-              {hasUnread ? (
-                <span aria-hidden className="h-2 w-2 rounded-full bg-[hsl(var(--brand-purple))]" />
-              ) : null}
-            </h1>
-            <p className="text-sm text-muted-foreground">Stay connected with the people you care about</p>
+          already made for the thread itself.
+          FORCE_LIGHT_VARS on top — real bug found 2026-07-14 (owner: "display
+          bug when i switch to dark theme in messages, there is a conflict"):
+          `bg-white` alone only fixes the BACKGROUND — every descendant text/
+          icon/badge here still uses text-foreground/text-muted-foreground/
+          bg-secondary/border-border, which are dark-mode-REACTIVE, so in
+          actual dark mode they rendered near-white-on-white (illegible) or
+          picked up a stray dark-mode bg-background from a nested element
+          (the swipe-gesture wrapper in conversation-list.tsx). Overriding the
+          CSS variables themselves fixes every one of those call sites at
+          once instead of hunting each down by hand. */}
+      {/* Outer: full-bleed white + `overflow-hidden` CLIPS the box — nothing
+          behind it (app/layout.tsx's fixed ambient blue→violet gradient) can
+          ever show through, no matter what the scrollable inner does. Inner:
+          the actual `overflow-y-auto` scroller, plus `overscroll-contain` so
+          an iOS rubber-band bounce at the very top/bottom stays inside this
+          box instead of chaining to the page and flashing the gradient behind
+          it (owner-reported: "different color at the bottom when I slide up
+          / top when I slide down" — the classic overscroll bleed-through;
+          owner's own fix request, "overflow-y hidden but still scrollable",
+          is exactly this two-layer clip+scroll split). */}
+      <div className="flex-1 overflow-hidden bg-white lg:hidden" style={FORCE_LIGHT_VARS}>
+        <div className="h-full overflow-y-auto overscroll-y-none px-3 pt-4">
+          <div className="mb-4 flex items-start justify-between gap-2">
+            <div>
+              <h1 className="flex items-center gap-1.5 text-[28px] font-bold tracking-[-0.03em]">
+                Messages
+                {hasUnread ? (
+                  <span aria-hidden className="h-2 w-2 rounded-full bg-[hsl(var(--brand-purple))]" />
+                ) : null}
+              </h1>
+              <p className="text-sm text-muted-foreground">Stay connected with the people you care about</p>
+            </div>
+            <InboxHeaderActions />
           </div>
-          <InboxHeaderActions />
+          {timedOut ? (
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/70 p-10 text-center">
+              <p className="text-sm font-medium">This is taking longer than usual</p>
+              <p className="text-xs text-muted-foreground">Check your connection and try again.</p>
+              <Link href="/messages" className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">
+                <RefreshCw className="h-3.5 w-3.5" /> Retry
+              </Link>
+            </div>
+          ) : (
+            <ConversationList initial={conversations} initialRequests={requests} viewerId={viewerId} />
+          )}
         </div>
-        {timedOut ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/70 p-10 text-center">
-            <p className="text-sm font-medium">This is taking longer than usual</p>
-            <p className="text-xs text-muted-foreground">Check your connection and try again.</p>
-            <Link href="/messages" className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">
-              <RefreshCw className="h-3.5 w-3.5" /> Retry
-            </Link>
-          </div>
-        ) : (
-          <ConversationList initial={conversations} initialRequests={requests} viewerId={viewerId} />
-        )}
       </div>
 
       {/* Desktop: pick-a-conversation state */}

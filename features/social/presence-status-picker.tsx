@@ -9,6 +9,7 @@ import { haptic } from "@/lib/motion/haptics";
 import type { PresenceStatus } from "@/lib/social/presence-status";
 import { ensureMyPresenceStatusLoaded, getCachedMyPresenceStatus, setMyPresenceStatusLocal, subscribeMyPresenceStatus } from "@/lib/social/presence-status-client";
 import { createClient } from "@/lib/supabase/client";
+import { FORCE_LIGHT_VARS } from "@/lib/theme/force-light-vars";
 import { cn } from "@/lib/utils";
 
 const OPTIONS: { value: PresenceStatus; label: string; hint: string; dot: string }[] = [
@@ -27,7 +28,7 @@ const OPTIONS: { value: PresenceStatus; label: string; hint: string; dot: string
  * `use-presence.ts` untrack/retrack from the shared online channel live —
  * this component itself only ever talks to the cache + the API route.
  */
-export function PresenceStatusPicker() {
+export function PresenceStatusPicker({ onNavigate }: { onNavigate?: () => void }) {
   const [status, setStatus] = useState<PresenceStatus>(getCachedMyPresenceStatus());
   const [saving, setSaving] = useState(false);
   const { triggerRef: buttonRef, open, setOpen, mounted, pos: panelPos, toggle: togglePanel } = useAnchoredPanel<HTMLButtonElement>(256);
@@ -90,16 +91,22 @@ export function PresenceStatusPicker() {
       <button
         ref={buttonRef}
         type="button"
-        onClick={togglePanel}
+        role="menuitem"
+        onClick={() => {
+          togglePanel();
+          onNavigate?.();
+        }}
         aria-label={`Status: ${active.label}`}
-        title={`Status: ${active.label}`}
-        className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition hover:bg-secondary"
       >
-        {status === "invisible" ? (
-          <EyeOff className="h-[18px] w-[18px]" />
-        ) : (
-          <span className={cn("h-2.5 w-2.5 rounded-full ring-2 ring-card", active.dot)} />
-        )}
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary/80 text-muted-foreground">
+          {status === "invisible" ? (
+            <EyeOff className="h-4 w-4" />
+          ) : (
+            <span className={cn("h-2.5 w-2.5 rounded-full ring-2 ring-card", active.dot)} />
+          )}
+        </span>
+        Status: {active.label}
       </button>
 
       {open && mounted && panelPos
@@ -107,8 +114,15 @@ export function PresenceStatusPicker() {
             <>
               <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
               <div
-                className="glass-strong animate-scale-in fixed z-50 w-64 overflow-hidden rounded-2xl py-1.5"
-                style={{ top: panelPos.top, right: panelPos.right }}
+                // bg-card + FORCE_LIGHT_VARS, not glass-strong — this panel
+                // only ever anchors from the messages header, which is
+                // always forced light; glass-strong's backdrop-blur samples
+                // whatever's actually behind it (that same light header),
+                // rendering a near-white panel while these unclassed labels
+                // still inherited the page's real (dark-mode) text color —
+                // invisible light-on-white.
+                className="animate-scale-in fixed z-50 w-64 overflow-hidden rounded-2xl border border-border/70 bg-card py-1.5 shadow-elevated"
+                style={{ top: panelPos.top, right: panelPos.right, ...FORCE_LIGHT_VARS }}
               >
                 <p className="px-3.5 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Your status</p>
                 {OPTIONS.map((o) => (

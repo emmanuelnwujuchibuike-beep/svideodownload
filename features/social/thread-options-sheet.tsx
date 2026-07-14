@@ -1,12 +1,13 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronRight, Clock, Image as ImageIcon, Loader2, Trash2, User, X } from "lucide-react";
+import { BadgeCheck, Check, ChevronRight, Clock, Image as ImageIcon, Loader2, Palette, Trash2, User, UserCircle, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
@@ -36,6 +37,27 @@ const SHEET_ITEM_VARIANTS = {
 };
 
 /**
+ * A brand-new service-worker install races `clients.claim()` against
+ * whatever fetch the page happens to be mid-flight on — a well-known browser
+ * quirk, confirmed here directly (blocking service workers in a real test
+ * made the exact same PATCH succeed instantly every time; with the worker
+ * enabled, the very first PATCH after a fresh load threw a raw network
+ * `TypeError` even though the server never saw the request). One immediate
+ * retry costs nothing once the worker has settled (which happens fast: this
+ * fires again before the next paint) and turns a real save into a silent
+ * success instead of "Couldn't save that change."
+ */
+async function patchWithRetry(url: string, body: Record<string, unknown>): Promise<Response> {
+  const send = () =>
+    fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  try {
+    return await send();
+  } catch {
+    return send();
+  }
+}
+
+/**
  * The "…" menu for a DIRECT thread (owner mockup) — groups already have
  * `ThreadHeaderMenu` → `GroupMembersSheet`; this is the direct-thread
  * equivalent: view profile, Chat Theme, Disappearing Messages (+ the new
@@ -47,6 +69,9 @@ const SHEET_ITEM_VARIANTS = {
 export function ThreadOptionsSheet({
   conversationId,
   otherHandle,
+  otherName,
+  otherAvatarUrl,
+  otherIsVerified = false,
   initialTheme,
   initialWallpaperUrl,
   initialDisappearAfterSeconds,
@@ -55,6 +80,9 @@ export function ThreadOptionsSheet({
 }: {
   conversationId: string;
   otherHandle: string;
+  otherName?: string;
+  otherAvatarUrl?: string | null;
+  otherIsVerified?: boolean;
   initialTheme: ConversationTheme | null;
   initialWallpaperUrl: string | null;
   initialDisappearAfterSeconds: number | null;
@@ -91,11 +119,7 @@ export function ThreadOptionsSheet({
   const patch = async (body: Record<string, unknown>) => {
     setBusy(true);
     try {
-      const res = await fetch(`/api/conversations/${conversationId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const res = await patchWithRetry(`/api/conversations/${conversationId}`, body);
       if (!res.ok) toast("Couldn't save that change.", "error");
       else router.refresh();
     } catch {
@@ -200,18 +224,34 @@ export function ThreadOptionsSheet({
             <div className="flex justify-center pb-1 pt-2.5">
               <span aria-hidden className="h-1.5 w-10 rounded-full bg-foreground/15" />
             </div>
-            <div className="flex items-center justify-between px-5 pb-2 pt-1">
-              <h2 className="text-lg font-bold tracking-tight">Conversation options</h2>
-              <motion.button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                whileTap={{ scale: 0.88 }}
-                transition={springs.press}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-muted-foreground transition hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </motion.button>
+            <motion.button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              whileTap={{ scale: 0.88 }}
+              transition={springs.press}
+              className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-secondary/80 text-muted-foreground backdrop-blur transition hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </motion.button>
+
+            {/* Identity hero — WhatsApp/Snapchat contact-info style: the
+                sheet is about THIS person's chat, not a generic settings
+                list, so it leads with who they are, not a plain title bar. */}
+            <div className="flex flex-col items-center gap-2 px-5 pb-5 pt-2 text-center">
+              <span className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-brand-tile shadow-[0_6px_20px_-6px] shadow-[hsl(var(--brand-purple)/0.5)] ring-4 ring-card">
+                {otherAvatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={otherAvatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <UserCircle className="h-9 w-9 text-white/90" strokeWidth={1.5} />
+                )}
+              </span>
+              <span className="flex items-center gap-1 text-base font-bold tracking-tight">
+                {otherName || `@${otherHandle}`}
+                {otherIsVerified ? <BadgeCheck className="h-4 w-4 shrink-0 fill-primary text-primary-foreground" /> : null}
+              </span>
+              <span className="text-xs text-muted-foreground">@{otherHandle}</span>
             </div>
 
             <motion.div
@@ -224,17 +264,19 @@ export function ThreadOptionsSheet({
                 <Link
                   href={`/u/${otherHandle}`}
                   onClick={onClose}
-                  className="flex items-center justify-between rounded-2xl border border-border/60 bg-secondary/20 px-4 py-3.5 text-sm font-semibold transition active:scale-[0.98] hover:bg-secondary/40"
+                  className="flex items-center justify-between rounded-2xl bg-card px-4 py-3.5 text-sm font-semibold shadow-sm ring-1 ring-border/50 transition active:scale-[0.98] hover:bg-secondary/40"
                 >
-                  <span className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-muted-foreground" /> View profile
+                  <span className="flex items-center gap-3">
+                    <ModuleIconBadge icon={User} className="h-9 w-9 rounded-xl" /> View profile
                   </span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </Link>
               </motion.div>
 
-              <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl border border-border/50 bg-secondary/10 p-4">
-                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-muted-foreground">Chat theme</p>
+              <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border/50">
+                <p className="mb-3 flex items-center gap-2.5 text-sm font-semibold">
+                  <ModuleIconBadge icon={Palette} className="h-9 w-9 rounded-xl" /> Chat theme
+                </p>
                 <div className="flex items-center gap-3.5">
                   <motion.button
                     type="button"
@@ -273,9 +315,9 @@ export function ThreadOptionsSheet({
                 </div>
               </motion.div>
 
-              <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl border border-border/50 bg-secondary/10 p-4">
-                <p className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                  <ImageIcon className="h-3.5 w-3.5" /> Chat wallpaper
+              <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border/50">
+                <p className="mb-3 flex items-center gap-2.5 text-sm font-semibold">
+                  <ModuleIconBadge icon={ImageIcon} className="h-9 w-9 rounded-xl" /> Chat wallpaper
                 </p>
                 <div className="flex items-center gap-3.5">
                   <motion.button
@@ -333,9 +375,9 @@ export function ThreadOptionsSheet({
                 />
               </motion.div>
 
-              <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl border border-border/50 bg-secondary/10 p-4">
-                <p className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" /> Disappearing messages
+              <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border/50">
+                <p className="mb-3 flex items-center gap-2.5 text-sm font-semibold">
+                  <ModuleIconBadge icon={Clock} className="h-9 w-9 rounded-xl" /> Disappearing messages
                 </p>
                 {/* Icon-on-top cards in a single row (owner mockup) — was a
                     2-column grid of horizontal pill buttons, a structurally
@@ -407,9 +449,12 @@ export function ThreadOptionsSheet({
                 onClick={() => void deleteConversation()}
                 whileTap={{ scale: 0.98 }}
                 transition={springs.press}
-                className="flex w-full items-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3.5 text-sm font-semibold text-red-500 transition hover:bg-red-500/15"
+                className="flex w-full items-center gap-3 rounded-2xl bg-red-500/10 px-4 py-3.5 text-sm font-semibold text-red-500 shadow-sm ring-1 ring-red-500/20 transition hover:bg-red-500/15"
               >
-                <Trash2 className="h-4 w-4" /> Delete conversation
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500 shadow-[0_3px_10px_-2px] shadow-red-500/40 ring-1 ring-inset ring-white/10">
+                  <Trash2 className="h-4 w-4 text-white" />
+                </span>
+                Delete conversation
               </motion.button>
             </motion.div>
           </motion.div>

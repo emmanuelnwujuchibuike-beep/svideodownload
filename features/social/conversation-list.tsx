@@ -344,7 +344,7 @@ export function ConversationList({
       ) : null}
 
       {tab === "requests" && !showArchived ? (
-        <ul className={cn("space-y-2", pane && "min-h-0 flex-1 overflow-y-auto px-3 pb-3")}>
+        <ul className={cn("space-y-2", pane && "min-h-0 flex-1 overflow-y-auto overscroll-y-none px-3 pb-3")}>
           {requests.map((req) => (
             <li key={req.id} className="glass flex items-center gap-3 rounded-2xl p-3">
               {req.user.avatarUrl ? (
@@ -389,7 +389,7 @@ export function ConversationList({
           ) : null}
         </ul>
       ) : (
-        <ul className={cn("space-y-0.5", pane && "min-h-0 flex-1 overflow-y-auto px-2 pb-3")}>
+        <ul className={cn("space-y-0.5", pane && "min-h-0 flex-1 overflow-y-auto overscroll-y-none px-2 pb-3")}>
           {pinned.length > 0 ? (
             <li className={cn(pane && "px-1")}>
               <div className="mb-2 flex items-center justify-between px-2 pt-1">
@@ -549,7 +549,10 @@ function ConversationRow({
   // state, so two rows could be swiped open at once.
   const setSwipeOpen = onSwipeOpen;
   return (
-    <li className="relative flex items-center overflow-hidden rounded-2xl">
+    // Owner ask: "add a dividers line in the top and bottom of every user
+    // chat... to show separation like whatsapp" — a hairline above and below
+    // each row, on top of (not instead of) the existing rounded-card look.
+    <li className="relative flex items-center overflow-hidden rounded-2xl border-y border-border/40 first:border-t-0">
       {/* Revealed strip — sits BEHIND the row, only visible once dragged/opened. */}
       <div className="absolute inset-y-0 right-0 flex items-center gap-1.5 pr-1" style={{ width: SWIPE_STRIP_WIDTH }}>
         <button

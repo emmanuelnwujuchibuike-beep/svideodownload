@@ -139,11 +139,25 @@ function acquireChannel(conversationId: string, viewerId: string): SharedTyping 
     if (changed) notifyListeners(entry);
   };
 
-  channel
-    .on("presence", { event: "sync" }, onPresenceEvent)
-    .on("presence", { event: "join" }, onPresenceEvent)
-    .on("presence", { event: "leave" }, onPresenceEvent)
-    .subscribe((status) => {
+  channel.on("presence", { event: "sync" }, onPresenceEvent).on("presence", { event: "join" }, onPresenceEvent).on("presence", { event: "leave" }, onPresenceEvent);
+
+  // `private: true` channels enforce Realtime Authorization at JOIN time —
+  // the join request needs a real JWT for `auth.uid()` to resolve inside the
+  // RLS policy (migration 0066). Real bug found 2026-07-14 (owner: "typing
+  // still isn't showing", confirmed via raw websocket-frame capture): this
+  // channel is very often the FIRST one any component opens on a fresh page
+  // load/reconnect, racing ahead of `@supabase/ssr`'s own async session-
+  // bootstrap — its join frame went out with no `access_token` at all, and
+  // the server rejected it outright ("Unauthorized: You do not have
+  // permissions..."), while every sibling (non-private) channel on the same
+  // socket joined fine a beat later once the session had loaded. Every other
+  // channel in this app is non-private, so none of them depend on this
+  // timing — this is the only place it was ever reachable. Awaiting
+  // `getSession()` once (cached instantly on every call after the first)
+  // guarantees the client's realtime auth is populated before this specific
+  // join goes out.
+  void supabase.auth.getSession().then(() => {
+    channel.subscribe((status) => {
       if (status === "SUBSCRIBED") {
         entry.joined = true;
         if (entry.desired) void channel.track(entry.desired);
@@ -151,6 +165,7 @@ function acquireChannel(conversationId: string, viewerId: string): SharedTyping 
         entry.joined = false;
       }
     });
+  });
 
   entry.staleInterval = setInterval(pruneStale, 2_000);
   registry.set(conversationId, entry);

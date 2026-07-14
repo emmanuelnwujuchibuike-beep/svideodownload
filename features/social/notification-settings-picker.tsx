@@ -13,6 +13,7 @@ import {
   subscribeSoundPrefs,
   type SoundPrefs,
 } from "@/lib/social/notification-sound-prefs-client";
+import { FORCE_LIGHT_VARS } from "@/lib/theme/force-light-vars";
 import { cn } from "@/lib/utils";
 
 const ROWS: { key: keyof Omit<SoundPrefs, "masterEnabled">; label: string }[] = [
@@ -30,7 +31,7 @@ const ROWS: { key: keyof Omit<SoundPrefs, "masterEnabled">; label: string }[] = 
  * (see lib/notifications/sound-fx.ts) — it has no effect on OS push
  * notifications, which always play the platform's own sound.
  */
-export function NotificationSettingsPicker() {
+export function NotificationSettingsPicker({ onNavigate }: { onNavigate?: () => void }) {
   const [prefs, setPrefs] = useState<SoundPrefs>(getCachedSoundPrefs());
   const [saving, setSaving] = useState(false);
   const { triggerRef: buttonRef, open, setOpen, mounted, pos: panelPos, toggle: togglePanel } = useAnchoredPanel<HTMLButtonElement>(256);
@@ -81,12 +82,18 @@ export function NotificationSettingsPicker() {
       <button
         ref={buttonRef}
         type="button"
-        onClick={togglePanel}
+        role="menuitem"
+        onClick={() => {
+          togglePanel();
+          onNavigate?.();
+        }}
         aria-label="Message sound settings"
-        title="Message sound settings"
-        className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition hover:bg-secondary"
       >
-        {prefs.masterEnabled ? <Bell className="h-[18px] w-[18px]" /> : <BellOff className="h-[18px] w-[18px]" />}
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary/80 text-muted-foreground">
+          {prefs.masterEnabled ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+        </span>
+        Message sounds
       </button>
 
       {open && mounted && panelPos
@@ -94,8 +101,10 @@ export function NotificationSettingsPicker() {
             <>
               <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
               <div
-                className="glass-strong animate-scale-in fixed z-50 w-64 overflow-hidden rounded-2xl py-1.5"
-                style={{ top: panelPos.top, right: panelPos.right }}
+                // bg-card + FORCE_LIGHT_VARS — see presence-status-picker.tsx's
+                // own comment; same header-anchored panel, same fix.
+                className="animate-scale-in fixed z-50 w-64 overflow-hidden rounded-2xl border border-border/70 bg-card py-1.5 shadow-elevated"
+                style={{ top: panelPos.top, right: panelPos.right, ...FORCE_LIGHT_VARS }}
               >
                 <div className="flex items-center justify-between px-3.5 py-2">
                   <span className="text-sm font-semibold">Interaction sounds</span>

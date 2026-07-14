@@ -1459,7 +1459,7 @@ export function ConversationRoom({
         }}
         style={liveWallpaperUrl ? { backgroundImage: `url(${liveWallpaperUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
         className={cn(
-          "flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto p-4",
+          "flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto overscroll-y-none p-4",
           liveWallpaperUrl ? "bg-neutral-900" : useLightDefault ? "bg-white" : liveTheme ? THEME_WASH_CLASS[liveTheme] : undefined,
         )}
       >

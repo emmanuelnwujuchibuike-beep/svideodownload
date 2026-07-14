@@ -156,7 +156,7 @@ function acquireChannel(conversationId: string, viewerId: string): SharedTyping 
   // `getSession()` once (cached instantly on every call after the first)
   // guarantees the client's realtime auth is populated before this specific
   // join goes out.
-  void supabase.auth.getSession().then(() => {
+  const joinChannel = () => {
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED") {
         entry.joined = true;
@@ -165,7 +165,14 @@ function acquireChannel(conversationId: string, viewerId: string): SharedTyping 
         entry.joined = false;
       }
     });
-  });
+  };
+  // `.catch()` matters here even though nothing awaits this promise: a
+  // rejected `getSession()` (the same real service-worker race described
+  // above) must still fall through to joining — a private channel doesn't
+  // otherwise self-heal, and typing would just silently never work for the
+  // rest of this page's lifetime instead of eventually retrying/erroring
+  // like every other status branch already handles.
+  void supabase.auth.getSession().then(joinChannel).catch(joinChannel);
 
   entry.staleInterval = setInterval(pruneStale, 2_000);
   registry.set(conversationId, entry);

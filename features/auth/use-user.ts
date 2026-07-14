@@ -22,12 +22,28 @@ export function useUser() {
     const supabase = createClient();
     let active = true;
 
-    supabase.auth.getUser().then(({ data }) => {
-      if (active) {
-        setUser(data.user);
-        setLoading(false);
-      }
-    });
+    // Real bug found 2026-07-14 (owner: "message page auto refreshes and
+    // gets stuck in loading... now happening in all accounts"): this had no
+    // `.catch()` — a real, confirmed browser race (a freshly-installed
+    // service worker calling `clients.claim()` mid-fetch) can make this
+    // throw a raw network `TypeError` on the very first load/reload, and
+    // with no `.catch()` the `.then()` above never ran, so `loading` never
+    // left `true`. `useUser()` is consumed by the app-wide header/topbar on
+    // every authenticated page, so this single unhandled rejection could
+    // stall chrome across the whole app. Fails open (not signed-in) rather
+    // than hanging forever; `onAuthStateChange` below still corrects this
+    // moments later if a real session exists.
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (active) {
+          setUser(data.user);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (active) setLoading(false);
+      });
 
     const {
       data: { subscription },

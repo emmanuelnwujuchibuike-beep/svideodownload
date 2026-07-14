@@ -8,7 +8,6 @@ import { InboxHeaderActions } from "@/features/social/inbox-header-actions";
 import { listIncomingFriendRequests, type FriendRequestItem } from "@/lib/social/friends";
 import { listConversations, type ConversationSummary } from "@/lib/social/messages";
 import { createClient, getUserBounded } from "@/lib/supabase/server";
-import { FORCE_LIGHT_VARS } from "@/lib/theme/force-light-vars";
 import { withTimeout } from "@/lib/utils";
 
 type LoadResult = { ok: true; conversations: ConversationSummary[] } | { ok: false; conversations: ConversationSummary[] };
@@ -66,30 +65,27 @@ export default async function MessagesPage() {
           — the root layout's own ambient blue→violet gradient (app/layout.tsx,
           a `fixed -z-10` decoration behind every page) was bleeding through
           this route's empty space since this container had no background of
-          its own. `bg-white` blocks it outright rather than just reducing it,
-          matching the same "always white regardless of dark mode" choice
-          already made for the thread itself.
-          FORCE_LIGHT_VARS on top — real bug found 2026-07-14 (owner: "display
-          bug when i switch to dark theme in messages, there is a conflict"):
-          `bg-white` alone only fixes the BACKGROUND — every descendant text/
-          icon/badge here still uses text-foreground/text-muted-foreground/
-          bg-secondary/border-border, which are dark-mode-REACTIVE, so in
-          actual dark mode they rendered near-white-on-white (illegible) or
-          picked up a stray dark-mode bg-background from a nested element
-          (the swipe-gesture wrapper in conversation-list.tsx). Overriding the
-          CSS variables themselves fixes every one of those call sites at
-          once instead of hunting each down by hand. */}
-      {/* Outer: full-bleed white + `overflow-hidden` CLIPS the box — nothing
-          behind it (app/layout.tsx's fixed ambient blue→violet gradient) can
-          ever show through, no matter what the scrollable inner does. Inner:
-          the actual `overflow-y-auto` scroller, plus `overscroll-contain` so
-          an iOS rubber-band bounce at the very top/bottom stays inside this
-          box instead of chaining to the page and flashing the gradient behind
-          it (owner-reported: "different color at the bottom when I slide up
-          / top when I slide down" — the classic overscroll bleed-through;
-          owner's own fix request, "overflow-y hidden but still scrollable",
-          is exactly this two-layer clip+scroll split). */}
-      <div className="flex-1 overflow-hidden bg-white lg:hidden" style={FORCE_LIGHT_VARS}>
+          its own. `bg-background` (NOT a hardcoded `bg-white`) blocks it
+          outright while still following the app's actual dark/light mode —
+          light mode resolves to white (blocking the gradient, satisfying
+          "white like WhatsApp"), dark mode resolves to the app's real dark
+          background. A hardcoded `bg-white` + a FORCE_LIGHT_VARS override was
+          tried here first and was itself a real bug (owner, 2026-07-14: "the
+          message page doesnt switch to dark mode but the inside chat
+          switched") — the list was left permanently light regardless of
+          system theme while the thread correctly toggled. Once every
+          descendant in this subtree resolves the SAME real theme consistently
+          (nothing forced), the earlier "text invisible in dark mode" issue
+          this was originally trying to solve doesn't recur either — that bug
+          was a MISMATCH between a forced-light ancestor and theme-reactive
+          descendants (e.g. `conversation-list.tsx`'s swipe wrapper's
+          `bg-background`), not dark mode itself.
+          Outer: `overflow-hidden` CLIPS the box — nothing behind it can ever
+          show through, no matter what the scrollable inner does. Inner: the
+          actual `overflow-y-auto` scroller, plus `overscroll-y-none` so an
+          iOS rubber-band bounce at the very top/bottom stays inside this box
+          instead of chaining to the page and flashing the gradient behind it. */}
+      <div className="flex-1 overflow-hidden bg-background lg:hidden">
         <div className="h-full overflow-y-auto overscroll-y-none px-3 pt-4">
           <div className="mb-4 flex items-start justify-between gap-2">
             <div>

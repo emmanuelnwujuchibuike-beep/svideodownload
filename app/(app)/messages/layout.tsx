@@ -7,7 +7,6 @@ import { InboxHeaderActions } from "@/features/social/inbox-header-actions";
 import { listIncomingFriendRequests, type FriendRequestItem } from "@/lib/social/friends";
 import { listConversations } from "@/lib/social/messages";
 import { createClient, getUserBounded } from "@/lib/supabase/server";
-import { FORCE_LIGHT_VARS } from "@/lib/theme/force-light-vars";
 import { withTimeout } from "@/lib/utils";
 
 const LOAD_TIMEOUT_MS = 8000;
@@ -49,16 +48,26 @@ export default async function MessagesLayout({ children }: { children: ReactNode
     // SAME max(inset−10px, 6px) expression the nav itself uses
     // (mobile-nav.tsx), so browser tabs and the installed app (large
     // home-indicator inset) both come out exactly flush.
-    <div className="mx-auto flex h-[calc(100dvh-4.3125rem-max(calc(env(safe-area-inset-bottom)-10px),0.375rem))] w-full max-w-[1600px] gap-4 px-0 pt-[env(safe-area-inset-top)] lg:h-[calc(100dvh-4rem)] lg:px-4 lg:py-4 lg:pt-4">
+    <div
+      // `bg-background lg:bg-transparent` — mobile-only opaque backdrop.
+      // This wrapper's own `pt-[env(safe-area-inset-top)]` padding sits
+      // ABOVE `<main>` (not covered by its `bg-background`), leaving a
+      // transparent strip that exposed app/layout.tsx's fixed ambient
+      // gradient behind it — real bug, still reported after the mobile list
+      // container's own overscroll fix (owner, 2026-07-14: "the light purple
+      // still show in background when i slide down or up"), because that
+      // fix only covered the LIST's own box, not this safe-area gap above
+      // it. Desktop keeps this transparent on purpose — the Glass Split
+      // design's floating rounded cards are meant to show the ambient
+      // gradient in the gaps between/around them.
+      className="mx-auto flex h-[calc(100dvh-4.3125rem-max(calc(env(safe-area-inset-bottom)-10px),0.375rem))] w-full max-w-[1600px] gap-4 bg-background px-0 pt-[env(safe-area-inset-top)] lg:h-[calc(100dvh-4rem)] lg:bg-transparent lg:px-4 lg:py-4 lg:pt-4"
+    >
       {/* Desktop inbox pane — owner ask: white like WhatsApp, not the root
           layout's ambient blue→violet gradient bleeding through a translucent
-          `bg-card/60`. Opaque `bg-white` blocks it outright; FORCE_LIGHT_VARS
-          fixes every descendant text/icon that was still dark-mode-reactive
-          (same conflict as the mobile list — see that file's own comment). */}
-      <aside
-        className="hidden w-[340px] shrink-0 flex-col overflow-hidden rounded-3xl border border-border/70 bg-white shadow-sm lg:flex"
-        style={FORCE_LIGHT_VARS}
-      >
+          `bg-card/60`. `bg-background` (not a hardcoded `bg-white`) blocks it
+          while still following real dark/light mode — see the mobile list
+          page's own comment for why a forced-light override was wrong. */}
+      <aside className="hidden w-[340px] shrink-0 flex-col overflow-hidden rounded-3xl border border-border/70 bg-background shadow-sm lg:flex">
         <h1 className="flex items-center gap-2 px-4 pb-2 pt-4 text-xl font-bold tracking-[-0.02em]">
           <ModuleIconBadge icon={MessageCircle} className="h-8 w-8" />
           Messages
@@ -68,7 +77,7 @@ export default async function MessagesLayout({ children }: { children: ReactNode
       </aside>
 
       {/* Thread / index panel */}
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white lg:rounded-3xl lg:border lg:border-border/70 lg:shadow-sm">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background lg:rounded-3xl lg:border lg:border-border/70 lg:shadow-sm">
         {children}
       </main>
     </div>

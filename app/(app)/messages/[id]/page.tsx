@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { ConversationRoom } from "@/features/social/conversation-room";
+import { ThreadAppearanceProvider } from "@/features/social/thread-appearance-context";
 import { ThreadHeader } from "@/features/social/thread-header";
 import { getConversation, type ConversationView } from "@/lib/social/messages";
 import { getActiveStoryForUser } from "@/lib/social/stories";
@@ -98,7 +99,12 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     // Glass Split layout, where the topbar/sidebar stay visible alongside
     // the inbox pane — that's a dashboard, not a full-screen navigation, so
     // it's deliberately left untouched there.
-    <div className="fixed inset-0 z-50 flex min-h-0 flex-col bg-background lg:static lg:inset-auto lg:z-auto lg:flex-1 lg:bg-transparent">
+    <ThreadAppearanceProvider
+      conversationId={convo.id}
+      initialTheme={convo.theme}
+      initialWallpaperUrl={convo.wallpaperUrl}
+      className="fixed inset-0 z-50 flex min-h-0 flex-col bg-background bg-cover bg-center lg:static lg:inset-auto lg:z-auto lg:flex-1 lg:bg-transparent"
+    >
       <ThreadHeader
         conversationId={convo.id}
         viewerId={user.id}
@@ -109,14 +115,10 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         viewerRole={convo.viewerRole}
         other={convo.other}
         onlyAdminsCanSend={convo.onlyAdminsCanSend}
-        initialTheme={convo.theme}
-        initialWallpaperUrl={convo.wallpaperUrl}
         initialDisappearAfterSeconds={convo.disappearAfterSeconds}
       />
 
       <ConversationRoom
-        theme={convo.theme}
-        wallpaperUrl={convo.wallpaperUrl}
         conversationId={convo.id}
         viewerId={user.id}
         viewerName={viewerName}
@@ -131,6 +133,6 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         viewerTypingIndicatorsEnabled={convo.viewerTypingIndicatorsEnabled}
         otherStoryGroup={otherStoryGroup}
       />
-    </div>
+    </ThreadAppearanceProvider>
   );
 }

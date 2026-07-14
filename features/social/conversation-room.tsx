@@ -45,6 +45,7 @@ import { extractSharedPost, MessagePostEmbed } from "@/features/social/message-p
 import { PollBubble } from "@/features/social/poll-bubble";
 import { PollComposerSheet } from "@/features/social/poll-composer-sheet";
 import { StoryViewer } from "@/features/app-shell/dashboard/stories-row";
+import { useThreadAppearance } from "@/features/social/thread-appearance-context";
 import { useTypingIndicator } from "@/features/social/use-typing";
 import { VoiceMessage, VideoComment } from "@/features/social/comment-media";
 import { VoiceRecorder } from "@/features/social/voice-recorder";
@@ -177,8 +178,6 @@ export function ConversationRoom({
   onlyAdminsCanSend = false,
   otherName = null,
   viewerTypingIndicatorsEnabled = true,
-  theme = null,
-  wallpaperUrl = null,
   otherStoryGroup = null,
 }: {
   conversationId: string;
@@ -196,20 +195,19 @@ export function ConversationRoom({
   otherName?: string | null;
   /** Part 11b privacy toggle — the VIEWER's own "show when I'm typing" choice; false mutes OUR OWN outbound typing broadcast only (receiving others' typing is unaffected). */
   viewerTypingIndicatorsEnabled?: boolean;
-  /** Chat Themes (inbox mockup completion) — null is the app default look. */
-  theme?: ConversationTheme | null;
-  /** Chat wallpaper (migration 0073) — a custom uploaded background picture; takes precedence over `theme`'s wash. */
-  wallpaperUrl?: string | null;
   /** The other party's active stories (direct threads only) — the mockup's
    *  "Name · N stories" strip at the top of the thread. Null when they have
    *  none active, or this isn't a direct thread. */
   otherStoryGroup?: StoryGroup | null;
 }) {
   const [messages, setMessages] = useState<MessageItem[]>(initial);
-  // Chat theme, kept live via the realtime channel below — the initial
-  // `theme` prop only reflects whatever was true at the last server render.
-  const [liveTheme, setLiveTheme] = useState(theme);
-  const [liveWallpaperUrl, setLiveWallpaperUrl] = useState(wallpaperUrl);
+  // Theme/wallpaper now come from the shared ThreadAppearanceProvider (wraps
+  // this component + ThreadHeader together) instead of this component's own
+  // props + its own realtime subscription — see that file's doc comment for
+  // why (the header never saw a live update, and the wallpaper never painted
+  // anywhere near the header/composer, only this component's own message
+  // list box).
+  const { theme: liveTheme, wallpaperUrl: liveWallpaperUrl } = useThreadAppearance();
   // Neither a color theme nor a custom wallpaper is set — the WhatsApp-style
   // light default (owner ask, 2026-07-14: "make the message page background
   // color to be white like whatsapp"), regardless of the app's own dark
@@ -725,21 +723,6 @@ export function ConversationRoom({
           // rather than hand-patching a partial payload into state.
           if (reactionDebounce) clearTimeout(reactionDebounce);
           reactionDebounce = setTimeout(() => void resync(), 400);
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "conversations", filter: `id=eq.${conversationId}` },
-        (payload) => {
-          // Chat Themes / wallpaper (inbox mockup completion) are SHARED
-          // per-conversation settings — without this, only the member who
-          // changed it (via ThreadOptionsSheet's own optimistic update) would
-          // see the new bubble/wash/background live; everyone else's
-          // already-open thread stayed on the old look until they happened
-          // to reload.
-          const row = payload.new as { theme?: ConversationTheme | null; wallpaper_url?: string | null };
-          if (row.theme !== undefined) setLiveTheme(row.theme);
-          if (row.wallpaper_url !== undefined) setLiveWallpaperUrl(row.wallpaper_url);
         },
       )
       .subscribe(onSubscribeStatus);
@@ -1457,10 +1440,15 @@ export function ConversationRoom({
           // drifting away from the bubble it belongs to.
           if (openMenuId) setOpenMenuId(null);
         }}
-        style={liveWallpaperUrl ? { backgroundImage: `url(${liveWallpaperUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
         className={cn(
           "flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto overscroll-y-none p-4",
-          liveWallpaperUrl ? "bg-neutral-900" : useLightDefault ? "bg-white" : liveTheme ? THEME_WASH_CLASS[liveTheme] : undefined,
+          // Owner ask, 2026-07-14: "i want it to save and full screen, top 0
+          // bottom 0 just like chat theme" — the wallpaper image itself now
+          // paints on ThreadAppearanceProvider's shared outer container (see
+          // that file), spanning the header + this list + the composer in
+          // one continuous photo instead of being cropped to just this box.
+          // This box stays transparent so it shows through.
+          liveWallpaperUrl ? "bg-transparent" : useLightDefault ? "bg-white" : liveTheme ? THEME_WASH_CLASS[liveTheme] : undefined,
         )}
       >
         {liveOtherStoryGroup ? (
@@ -1984,7 +1972,11 @@ export function ConversationRoom({
           onSubmit={submit}
           className={cn(
             "flex items-end gap-2 border-t border-border/60 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3",
-            useLightDefault || liveWallpaperUrl ? "bg-white" : "bg-card/70",
+            // Translucent (not solid) over a wallpaper — same "top 0 bottom 0"
+            // full-bleed ask as the message list above: the shared image
+            // painted behind the whole thread shows through here instead of
+            // being cropped off by a solid bar.
+            liveWallpaperUrl ? "bg-white/70" : useLightDefault ? "bg-white" : "bg-card/70",
           )}
         >
           <motion.button

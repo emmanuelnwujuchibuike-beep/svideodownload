@@ -15,7 +15,6 @@ import { PresenceStatusPicker } from "@/features/social/presence-status-picker";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { springs } from "@/lib/motion/springs";
-import { FORCE_LIGHT_VARS } from "@/lib/theme/force-light-vars";
 
 const CIRCLE = "glass h-10 w-10 rounded-full text-foreground/80 hover:text-foreground";
 const MENU_WIDTH = 248;
@@ -85,22 +84,16 @@ export function InboxHeaderActions() {
                 initial={{ opacity: 0, y: -6, scale: 0.97 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={springs.sheet}
-                style={{ top: pos.top, right: pos.right, width: MENU_WIDTH, ...FORCE_LIGHT_VARS }}
-                // `bg-card` (not `glass-strong`) + FORCE_LIGHT_VARS, matching
-                // UserMenu's own dropdown right next to it — this panel
-                // anchors to the messages header, which is ALWAYS forced
-                // white/light regardless of app theme (owner ask: white like
-                // WhatsApp); `glass-strong`'s backdrop-blur samples whatever
-                // is actually behind it, so over that always-light header it
-                // rendered as a near-white frosted panel while its row labels
-                // (no color class of their own) still inherited the PAGE's
-                // real dark-mode text color — invisible light-on-white, the
-                // same inheritance gap FORCE_LIGHT_VARS's own doc explains.
+                style={{ top: pos.top, right: pos.right, width: MENU_WIDTH }}
+                // `bg-card` (not `glass-strong`), matching UserMenu's own
+                // dropdown right next to it — solid and theme-reactive, so
+                // it always matches the (now theme-reactive, not forced-
+                // light) header behind it in both light and dark mode.
                 className="fixed z-50 overflow-hidden rounded-2xl border border-border/70 bg-card p-1.5 shadow-elevated"
               >
                 <MessageSearchLauncher onNavigate={() => setOpen(false)} />
-                <PresenceStatusPicker onNavigate={() => setOpen(false)} />
-                <NotificationSettingsPicker onNavigate={() => setOpen(false)} />
+                <PresenceStatusPicker />
+                <NotificationSettingsPicker />
                 <Link
                   href="/messages/secret"
                   role="menuitem"

@@ -9,7 +9,6 @@ import { haptic } from "@/lib/motion/haptics";
 import type { PresenceStatus } from "@/lib/social/presence-status";
 import { ensureMyPresenceStatusLoaded, getCachedMyPresenceStatus, setMyPresenceStatusLocal, subscribeMyPresenceStatus } from "@/lib/social/presence-status-client";
 import { createClient } from "@/lib/supabase/client";
-import { FORCE_LIGHT_VARS } from "@/lib/theme/force-light-vars";
 import { cn } from "@/lib/utils";
 
 const OPTIONS: { value: PresenceStatus; label: string; hint: string; dot: string }[] = [
@@ -28,7 +27,7 @@ const OPTIONS: { value: PresenceStatus; label: string; hint: string; dot: string
  * `use-presence.ts` untrack/retrack from the shared online channel live —
  * this component itself only ever talks to the cache + the API route.
  */
-export function PresenceStatusPicker({ onNavigate }: { onNavigate?: () => void }) {
+export function PresenceStatusPicker() {
   const [status, setStatus] = useState<PresenceStatus>(getCachedMyPresenceStatus());
   const [saving, setSaving] = useState(false);
   const { triggerRef: buttonRef, open, setOpen, mounted, pos: panelPos, toggle: togglePanel } = useAnchoredPanel<HTMLButtonElement>(256);
@@ -92,10 +91,7 @@ export function PresenceStatusPicker({ onNavigate }: { onNavigate?: () => void }
         ref={buttonRef}
         type="button"
         role="menuitem"
-        onClick={() => {
-          togglePanel();
-          onNavigate?.();
-        }}
+        onClick={togglePanel}
         aria-label={`Status: ${active.label}`}
         className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition hover:bg-secondary"
       >
@@ -114,15 +110,8 @@ export function PresenceStatusPicker({ onNavigate }: { onNavigate?: () => void }
             <>
               <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
               <div
-                // bg-card + FORCE_LIGHT_VARS, not glass-strong — this panel
-                // only ever anchors from the messages header, which is
-                // always forced light; glass-strong's backdrop-blur samples
-                // whatever's actually behind it (that same light header),
-                // rendering a near-white panel while these unclassed labels
-                // still inherited the page's real (dark-mode) text color —
-                // invisible light-on-white.
                 className="animate-scale-in fixed z-50 w-64 overflow-hidden rounded-2xl border border-border/70 bg-card py-1.5 shadow-elevated"
-                style={{ top: panelPos.top, right: panelPos.right, ...FORCE_LIGHT_VARS }}
+                style={{ top: panelPos.top, right: panelPos.right }}
               >
                 <p className="px-3.5 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Your status</p>
                 {OPTIONS.map((o) => (

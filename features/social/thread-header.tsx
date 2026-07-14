@@ -8,11 +8,12 @@ import { usePresence } from "@/features/friends/use-presence";
 import { GroupAvatarStack } from "@/features/social/group-avatar-stack";
 import { PresenceBadge } from "@/features/social/presence-badge";
 import { ThreadHeaderMenu } from "@/features/social/thread-header-menu";
+import { useThreadAppearance } from "@/features/social/thread-appearance-context";
 import { ThreadOptionsSheet } from "@/features/social/thread-options-sheet";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { THEME_HEADER_CLASS } from "@/lib/social/message-meta";
-import type { ConversationMember, ConversationTheme, ConversationType, MemberRole, OtherUser } from "@/lib/social/messages";
+import type { ConversationMember, ConversationType, MemberRole, OtherUser } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -34,8 +35,6 @@ export function ThreadHeader({
   viewerRole,
   other,
   onlyAdminsCanSend = false,
-  initialTheme = null,
-  initialWallpaperUrl = null,
   initialDisappearAfterSeconds = null,
 }: {
   conversationId: string;
@@ -47,8 +46,6 @@ export function ThreadHeader({
   viewerRole: MemberRole | null;
   other: OtherUser | null;
   onlyAdminsCanSend?: boolean;
-  initialTheme?: ConversationTheme | null;
-  initialWallpaperUrl?: string | null;
   initialDisappearAfterSeconds?: number | null;
 }) {
   const [title, setTitle] = useState(initialTitle);
@@ -57,27 +54,27 @@ export function ThreadHeader({
   const [members, setMembers] = useState(initialMembers);
   const otherOnline = usePresence().has(other?.id ?? "");
   const [optionsOpen, setOptionsOpen] = useState(false);
-  // Mirrors ConversationRoom's own `useLightDefault` — neither a color theme
-  // nor a custom wallpaper is set, so the header should match the message
-  // area's WhatsApp-style light default instead of the app's own dark mode,
-  // or the two visibly seam at the header/body boundary (found via a real
-  // screenshot, not assumed). Not live-reactive to a theme/wallpaper change
-  // from ANOTHER member's edit the way ConversationRoom's liveTheme is —
-  // this component doesn't track wallpaper_url over its own realtime
-  // channel — but ThreadOptionsSheet's own patch() already calls
-  // router.refresh() on the editing member's OWN client, which re-supplies
-  // fresh initial props here; a stale header for everyone ELSE with the
-  // thread already open is the same class of minor, self-correcting gap
-  // already accepted elsewhere in this codebase.
-  const forceLight = !initialTheme && !initialWallpaperUrl;
-  // Owner ask: "users can also set the whole message page theme" — a
-  // matching tint on the header too, not just the message area, so a chosen
-  // Chat Theme reads as applied to the whole screen. Not wired to the SAME
-  // live realtime channel ConversationRoom's liveTheme uses (that would mean
-  // a second subscription to the identical topic purely for this) — accepts
-  // the same "reflects the last server render, self-corrects on next visit"
-  // gap already documented for forceLight above.
-  const themeHeaderClass = initialTheme && !initialWallpaperUrl ? THEME_HEADER_CLASS[initialTheme] : null;
+  // Live theme/wallpaper from the shared ThreadAppearanceProvider (wraps this
+  // header + ConversationRoom together) — real bug fixed 2026-07-14: this
+  // used to only ever read the static SSR `initialTheme`/`initialWallpaperUrl`
+  // props, with no live update, AND the wallpaper never painted anywhere near
+  // the header at all (a solid `bg-background`/`bg-white` bar sat on top of
+  // it) — the owner's "full screen, top 0 bottom 0 just like chat theme" ask.
+  // The provider now paints the wallpaper on the shared outer container;
+  // this header just needs to go translucent to let it show through.
+  const { theme: liveTheme, wallpaperUrl: liveWallpaperUrl } = useThreadAppearance();
+  const wallpaperActive = !!liveWallpaperUrl;
+  // Neither a color theme nor a custom wallpaper is set — the WhatsApp-style
+  // light default (owner ask: "make the message page background color to be
+  // white like whatsapp"), regardless of the app's own dark mode, matching
+  // the message area's own `useLightDefault`.
+  const forceLight = !liveTheme && !wallpaperActive;
+  // Text/icon color forces to a readable dark neutral whenever the surface
+  // ISN'T the app's normal theme-reactive background — the plain light
+  // default AND a photo wallpaper both need this; only an active Chat Theme
+  // (whose wash is subtle enough to keep normal theme-aware text) doesn't.
+  const forceDarkText = forceLight || wallpaperActive;
+  const themeHeaderClass = liveTheme && !wallpaperActive ? THEME_HEADER_CLASS[liveTheme] : null;
 
   useEffect(() => {
     if (type !== "group") return;
@@ -129,7 +126,7 @@ export function ThreadHeader({
     <div
       className={cn(
         "relative flex items-center gap-3 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-3",
-        forceLight ? "bg-white" : cn("bg-background", themeHeaderClass),
+        wallpaperActive ? "bg-white/55 backdrop-blur-md" : forceLight ? "bg-white" : cn("bg-background", themeHeaderClass),
       )}
     >
       <div
@@ -143,7 +140,7 @@ export function ThreadHeader({
         aria-label="Back to messages"
         className={cn(
           "relative flex h-9 w-9 shrink-0 items-center justify-center transition lg:hidden",
-          forceLight ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
+          forceDarkText ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
         )}
       >
         <ArrowLeft className="h-5 w-5" />
@@ -157,8 +154,8 @@ export function ThreadHeader({
             <GroupAvatarStack avatars={members.map((m) => ({ avatarUrl: m.avatarUrl, displayName: m.displayName }))} size="lg" />
           )}
           <span className="min-w-0">
-            <span className={cn("block truncate text-sm font-bold", forceLight && "text-neutral-900")}>{title ?? "Group chat"}</span>
-            <span className={cn("block text-xs text-muted-foreground", forceLight && "!text-neutral-500")}>{memberCount} members</span>
+            <span className={cn("block truncate text-sm font-bold", forceDarkText && "text-neutral-900")}>{title ?? "Group chat"}</span>
+            <span className={cn("block text-xs text-muted-foreground", forceDarkText && "!text-neutral-500")}>{memberCount} members</span>
           </span>
         </div>
       ) : other ? (
@@ -176,11 +173,11 @@ export function ThreadHeader({
             {otherOnline ? <span aria-hidden className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-card" /> : null}
           </span>
           <span className="min-w-0">
-            <span className={cn("flex items-center gap-1 text-[15px] font-bold", forceLight && "text-neutral-900")}>
+            <span className={cn("flex items-center gap-1 text-[15px] font-bold", forceDarkText && "text-neutral-900")}>
               <span className="truncate">{other.displayName}</span>
               {other.isVerified ? <BadgeCheck className="h-3.5 w-3.5 text-primary" /> : null}
             </span>
-            <PresenceBadge userId={other.id} handle={other.handle} forceLight={forceLight} />
+            <PresenceBadge userId={other.id} handle={other.handle} forceLight={forceDarkText} />
           </span>
         </Link>
       ) : (
@@ -208,7 +205,7 @@ export function ThreadHeader({
             }}
             className={cn(
               "flex h-9 w-9 items-center justify-center transition",
-              forceLight ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
+              forceDarkText ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
             )}
           >
             <Phone className="h-[19px] w-[19px]" />
@@ -222,7 +219,7 @@ export function ThreadHeader({
             }}
             className={cn(
               "flex h-9 w-9 items-center justify-center transition",
-              forceLight ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
+              forceDarkText ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
             )}
           >
             <Video className="h-5 w-5" />
@@ -236,7 +233,7 @@ export function ThreadHeader({
             }}
             className={cn(
               "flex h-9 w-9 items-center justify-center transition",
-              forceLight ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
+              forceDarkText ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
             )}
           >
             <MoreVertical className="h-5 w-5" />
@@ -247,8 +244,8 @@ export function ThreadHeader({
             otherName={other.displayName}
             otherAvatarUrl={other.avatarUrl}
             otherIsVerified={other.isVerified}
-            initialTheme={initialTheme}
-            initialWallpaperUrl={initialWallpaperUrl}
+            initialTheme={liveTheme}
+            initialWallpaperUrl={liveWallpaperUrl}
             initialDisappearAfterSeconds={initialDisappearAfterSeconds}
             open={optionsOpen}
             onClose={() => setOptionsOpen(false)}

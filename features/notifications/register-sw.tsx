@@ -53,14 +53,32 @@ async function reloadIfNewDeploy() {
   try {
     const build = await fetchServerBuild();
     lastVersionCheck = Date.now();
-    // Reload once per new build (the sessionStorage guard breaks reload loops
-    // if a CDN ever serves a mixed old/new deployment for a moment).
-    if (build && build !== BAKED_APP_BUILD && sessionStorage.getItem(RELOADED_KEY) !== build) {
-      sessionStorage.setItem(RELOADED_KEY, build);
+    // Reload once per new build (the guard breaks reload loops if a CDN ever
+    // serves a mixed old/new deployment for a moment). `localStorage`, NOT
+    // `sessionStorage` — real bug found 2026-07-14 (owner: "stuck in loading"
+    // on the iOS back-gesture, "only happens on the webapp"/installed PWA).
+    // iOS terminates a backgrounded standalone PWA's WHOLE process for memory
+    // pressure far more aggressively than it does a Safari tab; resuming one
+    // (including via the edge-swipe-back gesture, which can force exactly
+    // this kind of relaunch) is a genuine COLD START — a brand-new JS
+    // context with a brand-new sessionStorage, since sessionStorage is
+    // scoped to that now-dead process/tab session. With deploys landing
+    // every few minutes during active development, `BAKED_APP_BUILD` was
+    // stale on nearly every cold start, so this guard — reset every single
+    // time by sessionStorage's amnesia — never actually remembered "already
+    // reloaded for this build," and every resume reloaded again, which looks
+    // exactly like "stuck in loading" (a perpetual reload, not a hang) and
+    // explains why it was PWA-only: a plain browser tab is not torn down and
+    // relaunched anywhere near this often. `localStorage` is disk-backed per
+    // origin and survives a process kill+relaunch, so this now actually
+    // remembers across a real cold start, while still correctly reloading
+    // again the moment a genuinely newer build is deployed.
+    if (build && build !== BAKED_APP_BUILD && localStorage.getItem(RELOADED_KEY) !== build) {
+      localStorage.setItem(RELOADED_KEY, build);
       reloadRespectingCriticalActivity();
     }
   } catch {
-    /* sessionStorage unavailable (private browsing, quota) — try again next resume */
+    /* localStorage unavailable (private browsing, quota) — try again next resume */
   } finally {
     versionCheckInFlight = false;
   }

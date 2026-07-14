@@ -11,6 +11,7 @@ import { ThreadHeaderMenu } from "@/features/social/thread-header-menu";
 import { ThreadOptionsSheet } from "@/features/social/thread-options-sheet";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
+import { THEME_HEADER_CLASS } from "@/lib/social/message-meta";
 import type { ConversationMember, ConversationTheme, ConversationType, MemberRole, OtherUser } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -69,6 +70,14 @@ export function ThreadHeader({
   // thread already open is the same class of minor, self-correcting gap
   // already accepted elsewhere in this codebase.
   const forceLight = !initialTheme && !initialWallpaperUrl;
+  // Owner ask: "users can also set the whole message page theme" — a
+  // matching tint on the header too, not just the message area, so a chosen
+  // Chat Theme reads as applied to the whole screen. Not wired to the SAME
+  // live realtime channel ConversationRoom's liveTheme uses (that would mean
+  // a second subscription to the identical topic purely for this) — accepts
+  // the same "reflects the last server render, self-corrects on next visit"
+  // gap already documented for forceLight above.
+  const themeHeaderClass = initialTheme && !initialWallpaperUrl ? THEME_HEADER_CLASS[initialTheme] : null;
 
   useEffect(() => {
     if (type !== "group") return;
@@ -120,7 +129,7 @@ export function ThreadHeader({
     <div
       className={cn(
         "relative flex items-center gap-3 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-3",
-        forceLight ? "bg-white" : "bg-background",
+        forceLight ? "bg-white" : cn("bg-background", themeHeaderClass),
       )}
     >
       <div

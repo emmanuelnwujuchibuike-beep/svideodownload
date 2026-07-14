@@ -25,6 +25,15 @@ export function ContactPickerSheet({ open, onClose, onPick }: { open: boolean; o
   useEffect(() => {
     if (open) void loadPeople().then(setPeople);
   }, [open]);
+  // Body-scroll-lock convention (lib/dom/scroll-lock.ts) — was missing here.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
+    return () => {
+      document.body.style.overflowY = prev;
+    };
+  }, [open]);
 
   const filtered = useMemo(() => {
     if (!people) return [];

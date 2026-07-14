@@ -35,6 +35,15 @@ export function PollComposerSheet({
       setOptions(["", ""]);
     }
   }, [open]);
+  // Body-scroll-lock convention (lib/dom/scroll-lock.ts) — was missing here.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
+    return () => {
+      document.body.style.overflowY = prev;
+    };
+  }, [open]);
 
   const submit = async () => {
     const cleanOptions = options.map((o) => o.trim()).filter(Boolean);

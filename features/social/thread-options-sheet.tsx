@@ -29,6 +29,12 @@ const DISAPPEAR_OPTIONS: { label: string; seconds: number | null }[] = [
   { label: "30 days", seconds: 2_592_000 },
 ];
 
+/** Staggered entrance for each section (owner ask: "make the menu... feel alive"). */
+const SHEET_ITEM_VARIANTS = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0 },
+};
+
 /**
  * The "…" menu for a DIRECT thread (owner mockup) — groups already have
  * `ThreadHeaderMenu` → `GroupMembersSheet`; this is the direct-thread
@@ -58,6 +64,21 @@ export function ThreadOptionsSheet({
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  // Owner report: "avoid the page overflowing when the button is clicked" —
+  // this sheet never locked body scroll while open, unlike every other
+  // fullscreen viewer/sheet in the app (see lib/dom/scroll-lock.ts's own doc
+  // comment on the convention) — the thread underneath could still scroll
+  // via touch behind the open sheet, reading as the page "overflowing."
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
+    return () => {
+      document.body.style.overflowY = prev;
+    };
+  }, [open]);
+
   const [theme, setTheme] = useState(initialTheme);
   const [wallpaperUrl, setWallpaperUrl] = useState(initialWallpaperUrl);
   const [uploadingWallpaper, setUploadingWallpaper] = useState(false);
@@ -170,91 +191,114 @@ export function ThreadOptionsSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={springs.sheet}
-            className="glass-strong absolute inset-x-0 bottom-0 mx-auto max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-3xl sm:bottom-6 sm:rounded-3xl"
+            className="glass-strong absolute inset-x-0 bottom-0 mx-auto max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-3xl shadow-[0_-24px_60px_-24px_rgba(0,0,0,0.35)] sm:bottom-6 sm:rounded-3xl"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
-            <div className="flex items-center justify-between px-5 pb-2 pt-4">
-              <h2 className="text-base font-bold tracking-tight">Conversation options</h2>
-              <button
+            {/* Drag handle — the standard "this is a sheet, swipe-adjacent"
+                affordance every premium bottom sheet (WhatsApp/Snapchat/iOS)
+                carries; this one never had it. */}
+            <div className="flex justify-center pb-1 pt-2.5">
+              <span aria-hidden className="h-1.5 w-10 rounded-full bg-foreground/15" />
+            </div>
+            <div className="flex items-center justify-between px-5 pb-2 pt-1">
+              <h2 className="text-lg font-bold tracking-tight">Conversation options</h2>
+              <motion.button
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
+                whileTap={{ scale: 0.88 }}
+                transition={springs.press}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-muted-foreground transition hover:text-foreground"
               >
                 <X className="h-4 w-4" />
-              </button>
+              </motion.button>
             </div>
 
-            <div className="space-y-5 px-5 pb-6 pt-2">
-              <Link
-                href={`/u/${otherHandle}`}
-                onClick={onClose}
-                className="flex items-center justify-between rounded-2xl border border-border/60 bg-secondary/20 px-4 py-3 text-sm font-semibold transition hover:bg-secondary/40"
-              >
-                <span className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" /> View profile
-                </span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </Link>
+            <motion.div
+              className="space-y-3 px-5 pb-6 pt-2"
+              initial="hidden"
+              animate="show"
+              variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
+            >
+              <motion.div variants={SHEET_ITEM_VARIANTS}>
+                <Link
+                  href={`/u/${otherHandle}`}
+                  onClick={onClose}
+                  className="flex items-center justify-between rounded-2xl border border-border/60 bg-secondary/20 px-4 py-3.5 text-sm font-semibold transition active:scale-[0.98] hover:bg-secondary/40"
+                >
+                  <span className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" /> View profile
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </Link>
+              </motion.div>
 
-              <div>
-                <p className="mb-2 text-xs font-semibold text-muted-foreground">Chat theme</p>
-                <div className="flex items-center gap-3">
-                  <button
+              <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl border border-border/50 bg-secondary/10 p-4">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-muted-foreground">Chat theme</p>
+                <div className="flex items-center gap-3.5">
+                  <motion.button
                     type="button"
                     disabled={busy}
                     onClick={() => applyTheme(null)}
                     aria-label="Default theme"
+                    whileTap={{ scale: 0.88 }}
+                    animate={theme === null ? { scale: 1.08 } : { scale: 1 }}
+                    transition={springs.bounce}
                     className={cn(
-                      "flex h-9 w-9 items-center justify-center rounded-full border-2 bg-secondary",
-                      theme === null ? "border-foreground" : "border-transparent",
+                      "relative flex h-11 w-11 items-center justify-center rounded-full bg-secondary ring-2 ring-offset-2 ring-offset-card transition",
+                      theme === null ? "shadow-lg shadow-foreground/20 ring-foreground" : "ring-transparent",
                     )}
                   >
                     {theme === null ? <Check className="h-4 w-4" /> : null}
-                  </button>
+                  </motion.button>
                   {CONVERSATION_THEMES.map((t) => (
-                    <button
+                    <motion.button
                       key={t}
                       type="button"
                       disabled={busy}
                       onClick={() => applyTheme(t)}
                       aria-label={`${t} theme`}
+                      whileTap={{ scale: 0.88 }}
+                      animate={theme === t ? { scale: 1.08 } : { scale: 1 }}
+                      transition={springs.bounce}
                       className={cn(
-                        "flex h-9 w-9 items-center justify-center rounded-full border-2",
+                        "relative flex h-11 w-11 items-center justify-center rounded-full ring-2 ring-offset-2 ring-offset-card transition",
                         THEME_SWATCH[t],
-                        theme === t ? "border-foreground" : "border-transparent",
+                        theme === t ? "shadow-lg shadow-foreground/20 ring-foreground" : "ring-transparent",
                       )}
                     >
                       {theme === t ? <Check className="h-4 w-4 text-white" /> : null}
-                    </button>
+                    </motion.button>
                   ))}
                 </div>
-              </div>
+              </motion.div>
 
-              <div>
-                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl border border-border/50 bg-secondary/10 p-4">
+                <p className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
                   <ImageIcon className="h-3.5 w-3.5" /> Chat wallpaper
                 </p>
-                <div className="flex items-center gap-3">
-                  <button
+                <div className="flex items-center gap-3.5">
+                  <motion.button
                     type="button"
                     disabled={busy || uploadingWallpaper}
                     onClick={pickWallpaper}
-                    className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border/60 bg-secondary/30 text-muted-foreground transition hover:bg-secondary/50 disabled:opacity-50"
+                    whileTap={{ scale: 0.94 }}
+                    transition={springs.press}
+                    className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border/60 bg-secondary/30 text-muted-foreground shadow-sm transition hover:bg-secondary/50 disabled:opacity-50"
                   >
                     {wallpaperUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={wallpaperUrl} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <ImageIcon className="h-5 w-5" />
+                      <ImageIcon className="h-6 w-6" />
                     )}
                     {uploadingWallpaper ? (
                       <span className="absolute inset-0 flex items-center justify-center bg-black/50">
                         <Loader2 className="h-5 w-5 animate-spin text-white" />
                       </span>
                     ) : null}
-                  </button>
-                  <div className="flex flex-1 flex-col gap-1">
+                  </motion.button>
+                  <div className="flex flex-1 flex-col gap-1.5">
                     <span className="text-xs text-muted-foreground">
                       {wallpaperUrl ? "Custom picture set for this chat." : "Use a picture as this chat's background."}
                     </span>
@@ -287,10 +331,10 @@ export function ThreadOptionsSheet({
                   className="hidden"
                   onChange={(e) => void onWallpaperFile(e.target.files?.[0])}
                 />
-              </div>
+              </motion.div>
 
-              <div>
-                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl border border-border/50 bg-secondary/10 p-4">
+                <p className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" /> Disappearing messages
                 </p>
                 {/* Icon-on-top cards in a single row (owner mockup) — was a
@@ -300,35 +344,39 @@ export function ThreadOptionsSheet({
                   {DISAPPEAR_OPTIONS.map((o) => {
                     const active = disappearAfter === o.seconds;
                     return (
-                      <button
+                      <motion.button
                         key={o.label}
                         type="button"
                         disabled={busy}
                         onClick={() => applyDisappear(o.seconds)}
+                        whileTap={{ scale: 0.92 }}
+                        transition={springs.press}
                         className={cn(
                           "flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-center text-[11px] font-medium transition",
-                          active ? "border-transparent bg-primary text-primary-foreground" : "border-border/60 text-muted-foreground hover:bg-secondary/40",
+                          active ? "border-transparent bg-primary text-primary-foreground shadow-md shadow-primary/30" : "border-border/60 text-muted-foreground hover:bg-secondary/40",
                         )}
                       >
                         <Clock className="h-4 w-4" />
                         {o.label}
-                      </button>
+                      </motion.button>
                     );
                   })}
-                  <button
+                  <motion.button
                     type="button"
                     disabled={busy}
                     onClick={() => setShowCustom((v) => !v)}
+                    whileTap={{ scale: 0.92 }}
+                    transition={springs.press}
                     className={cn(
                       "flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-center text-[11px] font-medium transition",
                       showCustom || (disappearAfter !== null && !DISAPPEAR_OPTIONS.some((o) => o.seconds === disappearAfter))
-                        ? "border-transparent bg-primary text-primary-foreground"
+                        ? "border-transparent bg-primary text-primary-foreground shadow-md shadow-primary/30"
                         : "border-border/60 text-muted-foreground hover:bg-secondary/40",
                     )}
                   >
                     <Clock className="h-4 w-4" />
                     Custom
-                  </button>
+                  </motion.button>
                 </div>
                 {showCustom ? (
                   <div className="mt-2 flex items-center gap-2">
@@ -350,17 +398,20 @@ export function ThreadOptionsSheet({
                     </button>
                   </div>
                 ) : null}
-              </div>
+              </motion.div>
 
-              <button
+              <motion.button
+                variants={SHEET_ITEM_VARIANTS}
                 type="button"
                 disabled={busy}
                 onClick={() => void deleteConversation()}
-                className="flex w-full items-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-500 transition hover:bg-red-500/15"
+                whileTap={{ scale: 0.98 }}
+                transition={springs.press}
+                className="flex w-full items-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3.5 text-sm font-semibold text-red-500 transition hover:bg-red-500/15"
               >
                 <Trash2 className="h-4 w-4" /> Delete conversation
-              </button>
-            </div>
+              </motion.button>
+            </motion.div>
           </motion.div>
         </div>
       ) : null}

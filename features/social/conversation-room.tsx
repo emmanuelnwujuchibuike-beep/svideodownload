@@ -96,12 +96,16 @@ const THEME_BUBBLE_CLASS: Record<ConversationTheme, string> = {
   orange: "bg-gradient-to-br from-orange-500 to-amber-600",
   purple: "bg-gradient-to-br from-violet-500 to-purple-600",
 };
+// Owner ask (2026-07-14): "users can also set the whole message page theme"
+// — a 5-6% tint read as barely-there, not like the theme actually applied to
+// the page. Bumped to a genuinely visible wash while staying well clear of
+// text-contrast issues (still a wash behind normal bubbles, not a solid fill).
 const THEME_WASH_CLASS: Record<ConversationTheme, string> = {
-  blue: "bg-blue-500/[0.05] dark:bg-blue-400/[0.06]",
-  pink: "bg-pink-500/[0.05] dark:bg-pink-400/[0.06]",
-  green: "bg-emerald-500/[0.05] dark:bg-emerald-400/[0.06]",
-  orange: "bg-orange-500/[0.05] dark:bg-orange-400/[0.06]",
-  purple: "bg-violet-500/[0.05] dark:bg-violet-400/[0.06]",
+  blue: "bg-blue-500/[0.12] dark:bg-blue-400/[0.14]",
+  pink: "bg-pink-500/[0.12] dark:bg-pink-400/[0.14]",
+  green: "bg-emerald-500/[0.12] dark:bg-emerald-400/[0.14]",
+  orange: "bg-orange-500/[0.12] dark:bg-orange-400/[0.14]",
+  purple: "bg-violet-500/[0.12] dark:bg-violet-400/[0.14]",
 };
 
 function draftKey(conversationId: string): string {
@@ -212,6 +216,43 @@ export function ConversationRoom({
   // mode, since a chat surface intentionally keeping a fixed light look is
   // its own deliberate product choice here, not the app shell's theme.
   const useLightDefault = !liveTheme && !liveWallpaperUrl;
+
+  // Real bug found 2026-07-14 (owner report: "friends stories still doesn't
+  // show"): next.config.ts's `staleTimes.dynamic` is 6 HOURS — a deliberate,
+  // separate choice for instant cross-navigation (see [[loading-architecture]])
+  // — but it means a client-side nav (tapping a conversation row) into a
+  // thread visited within the last 6h serves the Next.js CLIENT ROUTER
+  // CACHE's stale RSC payload, not a fresh one, regardless of this page's own
+  // `force-dynamic` (which only governs the SERVER's behavior on an actual
+  // request — it does nothing for a cache hit that never reaches the
+  // server). `otherStoryGroup` (unlike messages/theme/wallpaper, which are
+  // independently kept live over realtime) is a plain prop with no live-
+  // update path, so it stayed stuck at whatever was true up to 6h ago.
+  // Tried `router.refresh()` first — technically fixed the staleness, but
+  // empirically (real 2-account Playwright repro) it broke the typing
+  // indicator's second burst: a full route refresh's reconciliation, even
+  // without visibly remounting this component, disrupted the shared realtime
+  // channel singleton in use-typing.ts somehow. Given the "always own this
+  // channel" contract that hook depends on, a targeted client-side re-fetch
+  // of JUST the story state is the safer fix — it never touches the route
+  // or this component's own mount lifecycle at all.
+  const [liveOtherStoryGroup, setLiveOtherStoryGroup] = useState(otherStoryGroup);
+  useEffect(() => {
+    setLiveOtherStoryGroup(otherStoryGroup);
+    if (type !== "direct" || !otherName) return;
+    let cancelled = false;
+    fetch(`/api/conversations/${conversationId}/story`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d && "storyGroup" in d) setLiveOtherStoryGroup(d.storyGroup);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- otherStoryGroup/otherName/type intentionally excluded: this refetches once per conversationId, re-seeding from the (possibly stale) prop first
+  }, [conversationId]);
+
   const [body, setBody] = useState("");
   // Staged image/video/document attachments — uploaded the moment they're
   // picked (see the media composer sheet), previewed as chips above the
@@ -1422,7 +1463,7 @@ export function ConversationRoom({
           liveWallpaperUrl ? "bg-neutral-900" : useLightDefault ? "bg-white" : liveTheme ? THEME_WASH_CLASS[liveTheme] : undefined,
         )}
       >
-        {otherStoryGroup ? (
+        {liveOtherStoryGroup ? (
           <button
             type="button"
             onClick={() => setStoryViewerOpen(true)}
@@ -1430,30 +1471,30 @@ export function ConversationRoom({
           >
             <span className="rounded-full bg-brand p-0.5">
               <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-background p-0.5">
-                {otherStoryGroup.stories[0]?.mediaKind === "image" ? (
+                {liveOtherStoryGroup.stories[0]?.mediaKind === "image" ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={otherStoryGroup.stories[0].mediaUrl} alt="" className="h-full w-full rounded-full object-cover" />
-                ) : otherStoryGroup.stories[0]?.mediaKind === "video" ? (
+                  <img src={liveOtherStoryGroup.stories[0].mediaUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                ) : liveOtherStoryGroup.stories[0]?.mediaKind === "video" ? (
                   // eslint-disable-next-line jsx-a11y/media-has-caption
-                  <video src={`${otherStoryGroup.stories[0].mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-full w-full rounded-full object-cover" />
-                ) : otherStoryGroup.avatarUrl ? (
+                  <video src={`${liveOtherStoryGroup.stories[0].mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-full w-full rounded-full object-cover" />
+                ) : liveOtherStoryGroup.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={otherStoryGroup.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                  <img src={liveOtherStoryGroup.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
                 ) : (
                   <span className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white">
-                    {otherStoryGroup.displayName.charAt(0).toUpperCase()}
+                    {liveOtherStoryGroup.displayName.charAt(0).toUpperCase()}
                   </span>
                 )}
               </span>
             </span>
             <span className="min-w-0 flex-1 text-sm font-semibold">
-              {otherStoryGroup.displayName} · {otherStoryGroup.stories.length} {otherStoryGroup.stories.length === 1 ? "story" : "stories"}
+              {liveOtherStoryGroup.displayName} · {liveOtherStoryGroup.stories.length} {liveOtherStoryGroup.stories.length === 1 ? "story" : "stories"}
             </span>
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           </button>
         ) : null}
-        {storyViewerOpen && otherStoryGroup ? (
-          <StoryViewer groups={[otherStoryGroup]} startGroup={0} onClose={() => setStoryViewerOpen(false)} />
+        {storyViewerOpen && liveOtherStoryGroup ? (
+          <StoryViewer groups={[liveOtherStoryGroup]} startGroup={0} onClose={() => setStoryViewerOpen(false)} />
         ) : null}
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 py-10 text-center">
@@ -1489,9 +1530,41 @@ export function ConversationRoom({
                 ? (m.metadata as { friendId: string; displayName: string; handle: string; avatarUrl: string | null })
                 : null;
             const pollMeta = !deleted && m.metadata?.kind === "poll" ? (m.metadata as { pollId: string }) : null;
+            // WhatsApp-style "X turned on/off disappearing messages" notice
+            // (owner ask, 2026-07-14) — a real message row like any other
+            // metadata kind, but rendered as a centered plain-text pill with
+            // no bubble/avatar/mine-vs-theirs distinction, matching the
+            // day-divider's own treatment rather than a normal chat bubble.
+            const systemMeta = !deleted && m.metadata?.kind === "system" ? (m.metadata as { text: string }) : null;
             const canEdit = m.mine && !deleted && !m.id.startsWith("optimistic-");
             const canDelete = m.mine && !deleted && !m.id.startsWith("optimistic-");
             const canAct = !deleted && !m.id.startsWith("optimistic-");
+
+            if (systemMeta) {
+              return (
+                <div key={m.id} className="flex flex-col items-center">
+                  {showDayDivider ? (
+                    <div
+                      className={cn(
+                        "w-full self-stretch py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60",
+                        (useLightDefault || liveWallpaperUrl) && "!text-neutral-500",
+                      )}
+                    >
+                      {dayDividerLabel(m.createdAt)}
+                    </div>
+                  ) : null}
+                  <div
+                    className={cn(
+                      "mx-auto max-w-[85%] rounded-full bg-secondary/60 px-3.5 py-1.5 text-center text-[11px] font-medium text-muted-foreground",
+                      (useLightDefault || liveWallpaperUrl) && "bg-neutral-100 !text-neutral-500",
+                    )}
+                  >
+                    {systemMeta.text}
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div
                 key={m.id}

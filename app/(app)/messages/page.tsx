@@ -61,7 +61,14 @@ export default async function MessagesPage() {
       {/* Mobile inbox — header per the owner's mockup: big bold title + a
           "Stay connected..." subtitle, a small unread dot next to the title,
           and the action-circle cluster on the right. */}
-      <div className="flex-1 overflow-y-auto px-3 pt-4 lg:hidden">
+      {/* Owner ask: messages should be white like WhatsApp, not tinted purple
+          — the root layout's own ambient blue→violet gradient (app/layout.tsx,
+          a `fixed -z-10` decoration behind every page) was bleeding through
+          this route's empty space since this container had no background of
+          its own. `bg-white` blocks it outright rather than just reducing it,
+          matching the same "always white regardless of dark mode" choice
+          already made for the thread itself. */}
+      <div className="flex-1 overflow-y-auto bg-white px-3 pt-4 lg:hidden">
         <div className="mb-4 flex items-start justify-between gap-2">
           <div>
             <h1 className="flex items-center gap-1.5 text-[28px] font-bold tracking-[-0.03em]">

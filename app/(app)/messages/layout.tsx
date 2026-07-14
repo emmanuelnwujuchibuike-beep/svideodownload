@@ -49,8 +49,10 @@ export default async function MessagesLayout({ children }: { children: ReactNode
     // (mobile-nav.tsx), so browser tabs and the installed app (large
     // home-indicator inset) both come out exactly flush.
     <div className="mx-auto flex h-[calc(100dvh-4.3125rem-max(calc(env(safe-area-inset-bottom)-10px),0.375rem))] w-full max-w-[1600px] gap-4 px-0 pt-[env(safe-area-inset-top)] lg:h-[calc(100dvh-4rem)] lg:px-4 lg:py-4 lg:pt-4">
-      {/* Desktop inbox pane */}
-      <aside className="hidden w-[340px] shrink-0 flex-col overflow-hidden rounded-3xl border border-border/70 bg-card/60 shadow-sm backdrop-blur-xl lg:flex">
+      {/* Desktop inbox pane — owner ask: white like WhatsApp, not the root
+          layout's ambient blue→violet gradient bleeding through a translucent
+          `bg-card/60`. Opaque `bg-white` blocks it outright. */}
+      <aside className="hidden w-[340px] shrink-0 flex-col overflow-hidden rounded-3xl border border-border/70 bg-white shadow-sm lg:flex">
         <h1 className="flex items-center gap-2 px-4 pb-2 pt-4 text-xl font-bold tracking-[-0.02em]">
           <ModuleIconBadge icon={MessageCircle} className="h-8 w-8" />
           Messages
@@ -60,7 +62,7 @@ export default async function MessagesLayout({ children }: { children: ReactNode
       </aside>
 
       {/* Thread / index panel */}
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden lg:rounded-3xl lg:border lg:border-border/70 lg:bg-card/40 lg:shadow-sm lg:backdrop-blur-xl">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white lg:rounded-3xl lg:border lg:border-border/70 lg:shadow-sm">
         {children}
       </main>
     </div>

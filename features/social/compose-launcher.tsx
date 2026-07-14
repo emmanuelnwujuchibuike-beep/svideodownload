@@ -29,6 +29,16 @@ export function ComposeLauncher({ className }: { className?: string }) {
   const [query, setQuery] = useState("");
   const router = useRouter();
 
+  // Body-scroll-lock convention (lib/dom/scroll-lock.ts) — was missing here.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
+    return () => {
+      document.body.style.overflowY = prev;
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open || people) return;
     loadPeople()

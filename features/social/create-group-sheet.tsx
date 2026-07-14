@@ -15,6 +15,15 @@ import { GROUP_TITLE_MAX, MAX_GROUP_MEMBERS } from "@/lib/social/message-meta";
 export function CreateGroupSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  // Body-scroll-lock convention (lib/dom/scroll-lock.ts) — was missing here.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
+    return () => {
+      document.body.style.overflowY = prev;
+    };
+  }, [open]);
   const router = useRouter();
   const [people, setPeople] = useState<Person[] | null>(null);
   const [query, setQuery] = useState("");

@@ -37,6 +37,17 @@ export function MediaComposerSheet({
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  // Body-scroll-lock convention (lib/dom/scroll-lock.ts) — was missing here,
+  // same class of "page overflowing behind an open sheet" bug reported for
+  // ThreadOptionsSheet.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
+    return () => {
+      document.body.style.overflowY = prev;
+    };
+  }, [open]);
   const cameraRef = useRef<HTMLInputElement | null>(null);
   const galleryRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLInputElement | null>(null);

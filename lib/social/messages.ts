@@ -471,6 +471,16 @@ export async function setGroupSendPermission(
  * (app/api/cron/disappearing-messages), not this function — this only
  * flips the setting.
  */
+/** "7 days" / "24 hours" / "3 days" — matches WhatsApp's own system-message phrasing. */
+function humanizeDisappearDuration(seconds: number): string {
+  if (seconds % 86_400 === 0) {
+    const days = seconds / 86_400;
+    return days === 1 ? "24 hours" : `${days} days`;
+  }
+  const hours = Math.round(seconds / 3600);
+  return `${hours} hour${hours === 1 ? "" : "s"}`;
+}
+
 export async function setDisappearAfterSeconds(
   conversationId: string,
   actorId: string,
@@ -485,7 +495,28 @@ export async function setDisappearAfterSeconds(
     if (!role) return { ok: false, reason: "forbidden" };
     if (conv.type === "group" && role !== "owner" && role !== "admin") return { ok: false, reason: "forbidden" };
     const { error } = await db.from("conversations").update({ disappear_after_seconds: seconds }).eq("id", conversationId);
-    return { ok: !error };
+    if (error) return { ok: false };
+
+    // WhatsApp-style in-chat system notice (owner ask, 2026-07-14): "let users
+    // receive a notification in chat like whatsapp when a user turns on
+    // disappearing message, showing the period... the user set." A real
+    // message row (metadata.kind === "system"), not a toast — visible to
+    // every member, persists in history, delivered over the SAME realtime
+    // channel every other message already uses. Best-effort: a failure here
+    // never undoes the setting change itself, which already succeeded.
+    try {
+      const { data: actorProf } = await db.from("profiles").select("display_name, handle").eq("id", actorId).maybeSingle();
+      const actorName = (actorProf?.display_name as string | undefined) || (actorProf?.handle ? `@${actorProf.handle as string}` : "Someone");
+      const text =
+        seconds === null
+          ? `${actorName} turned off disappearing messages.`
+          : `${actorName} turned on disappearing messages. New messages will disappear from this chat ${humanizeDisappearDuration(seconds)} after they're sent.`;
+      await sendMessage(actorId, conversationId, "", { metadata: { kind: "system", text } });
+    } catch {
+      /* the setting change itself already succeeded; the notice is best-effort */
+    }
+
+    return { ok: true };
   } catch {
     return { ok: false };
   }

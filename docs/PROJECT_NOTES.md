@@ -13,6 +13,20 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑14 highlights (batch 66 — granular blocking, personal chat appearance, thread reload-on-reopen fixed)
+
+Owner dropped a large multi-part messaging ask: remove a purple gradient bleed shown in a screenshot, instant refresh "when a message or any changes occur," a full premium visual pass, granular blocking (chat/status/calls + a general block), user-settable font size + bubble style/color, and "posts shared in chat / profile images shouldn't reload each time." Scoped via EnterPlanMode + two Explore-agent research passes given the size, grounding every claim in current code rather than trusting memory (which had already drifted stale on one point — see below).
+
+**Real findings, all verified against live code before writing anything:** wallpaper full-bleed and the purple-bleed-above-header fix were BOTH already code-correct as of the previous same-day round (re-verified directly, not assumed — if the owner's new screenshot still shows it, that's very likely a stale/undeployed build, not a live bug); the inbox-list live-update trigger (`sync_conversation_preview()`, migration 0075) already touches `conversation_members.updated_at` on every message change, which the inbox's realtime subscription already listens to — no fix needed. The REAL cause of "posts reload every time chat opens": `/messages/[id]` is `force-dynamic` and refetches the whole conversation server-side on every navigation, even reopening the same thread seconds later, with zero cross-mount memory in `ConversationRoom` (shared-post preview cards were already correctly cached separately, confirmed). A real, previously-unknown gap: full blocks never hid Stories, unlike every other content surface.
+
+**Shipped:** a module-level session-warm thread cache (mirrors `message-post-embed.tsx`'s own cache shape) that paints a reopened thread instantly from the last session's state, then quietly resyncs in the background — kills the reload. Granular blocking — new `user_restrictions` table (migration 0076, `scope in ('messaging','status','calls')`) layered under the existing full block, wired into messaging, Stories visibility (closing the real gap above), and the thread header's placeholder call buttons; a new `BlockOptionsSheet` in the chat "…" menu, which previously had zero block/mute/report entry point at all. Personal chat appearance — new `chat_appearance_preferences` table (migration 0077, per-user, not per-conversation — font size scales all bubble text, bubble color/style personalize the viewer's own sent bubbles only), built on the app's existing stale-while-revalidate cache so a change applies instantly across every open thread with no reload; a new `ChatAppearanceSheet` with a live 2-bubble preview. Plus: inbox header spacing tightened, and inbox rows gained real tap-press feedback (a genuine, verified gap — the primary mobile list surface had none while every other interactive element in the app already does).
+
+**Deliberately scoped out, not silently dropped:** a custom per-conversation Chat Theme color beyond the 5 existing presets (the new personal bubble-color picker already covers most of that need); a full re-skin of already-premium surfaces like the typing indicator and reaction picker, spot-checked and found already at the bar set by 15+ prior polish rounds.
+
+Verified: `tsc`, lint, the full 135-test vitest suite, and a full `next build` (152 routes, both new API routes confirmed compiled) all clean. Not verified live in a browser this round (no authenticated test session set up in this pass) — flagged honestly rather than claimed. Migrations 0076/0077 need the owner to apply, same as every prior round.
+
+---
+
 ## 2026‑07‑14 highlights (batch 65 — root cause of the "stuck in loading" reports: an unhandled auth-promise rejection)
 
 Owner escalated: "the message page auto refresh and gets stuck in loading when i try to go back with the ios back gesture and not the top back button... is now happening in all accounts" — worse than a similar-sounding admin-only bug from 2026-07-12.

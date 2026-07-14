@@ -46,6 +46,7 @@ import { PollBubble } from "@/features/social/poll-bubble";
 import { PollComposerSheet } from "@/features/social/poll-composer-sheet";
 import { StoryViewer } from "@/features/app-shell/dashboard/stories-row";
 import { useThreadAppearance } from "@/features/social/thread-appearance-context";
+import { useChatAppearance } from "@/features/social/use-chat-appearance";
 import { useTypingIndicator } from "@/features/social/use-typing";
 import { VoiceMessage, VideoComment } from "@/features/social/comment-media";
 import { VoiceRecorder } from "@/features/social/voice-recorder";
@@ -62,6 +63,7 @@ import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { useNetworkStatus } from "@/lib/pwa/use-network-status";
+import { BUBBLE_STYLE_SHAPE, FONT_SIZE_TEXT_CLASS } from "@/lib/social/chat-appearance";
 import { MESSAGE_REACTIONS } from "@/lib/social/message-meta";
 import {
   attachmentKindForMime,
@@ -111,6 +113,38 @@ const THEME_WASH_CLASS: Record<ConversationTheme, string> = {
 
 function draftKey(conversationId: string): string {
   return `${DRAFT_PREFIX}${conversationId}`;
+}
+
+/**
+ * Session-warm thread cache (owner ask, 2026-07-14: "posts shared in chat
+ * shouldnt reload each time the chats is opened"). Root cause: this page is
+ * `force-dynamic` and refetches the WHOLE conversation server-side on every
+ * navigation into it — even reopening the same thread seconds later in the
+ * same session — and this component seeds its state fresh from that `initial`
+ * prop on every mount with no memory of what was already loaded. Mirrors
+ * `message-post-embed.tsx`'s own module-level `Map` cache (same tab-lifetime,
+ * no-TTL shape) one level up: instead of caching one shared-post preview per
+ * id, this caches a whole thread's message list per conversation id, capped
+ * to the last MRU `THREAD_CACHE_LIMIT` threads so a long session browsing
+ * many chats doesn't grow this unbounded. `resync()` still runs on every
+ * mount regardless (below) to quietly catch anything that changed while the
+ * thread was cached but not open — this only removes the visible reload,
+ * never the correctness of catching up.
+ */
+interface ThreadCacheEntry {
+  messages: MessageItem[];
+  syncedAt: string;
+}
+const THREAD_CACHE_LIMIT = 10;
+const threadCache = new Map<string, ThreadCacheEntry>();
+
+function cacheThread(conversationId: string, entry: ThreadCacheEntry) {
+  threadCache.delete(conversationId); // re-insert so Map's insertion order tracks MRU
+  threadCache.set(conversationId, entry);
+  if (threadCache.size > THREAD_CACHE_LIMIT) {
+    const oldestKey = threadCache.keys().next().value;
+    if (oldestKey) threadCache.delete(oldestKey);
+  }
 }
 
 interface RawMessage {
@@ -200,7 +234,13 @@ export function ConversationRoom({
    *  none active, or this isn't a direct thread. */
   otherStoryGroup?: StoryGroup | null;
 }) {
-  const [messages, setMessages] = useState<MessageItem[]>(initial);
+  // Reopening a thread visited earlier this session should paint instantly
+  // from whatever was last rendered, not the server's fresh-every-nav
+  // `initial` payload — see the `threadCache` doc comment above. Read once
+  // per mount (this component remounts on every `/messages/[id]` navigation,
+  // same or different id, since the route is force-dynamic).
+  const cachedThread = threadCache.get(conversationId);
+  const [messages, setMessages] = useState<MessageItem[]>(cachedThread?.messages ?? initial);
   // Theme/wallpaper now come from the shared ThreadAppearanceProvider (wraps
   // this component + ThreadHeader together) instead of this component's own
   // props + its own realtime subscription — see that file's doc comment for
@@ -208,6 +248,13 @@ export function ConversationRoom({
   // anywhere near the header/composer, only this component's own message
   // list box).
   const { theme: liveTheme, wallpaperUrl: liveWallpaperUrl } = useThreadAppearance();
+  // Personal (per-viewer) appearance prefs — font size applies to every
+  // bubble's text (both mine + theirs, a legibility preference isn't
+  // sender-specific); bubble style/color apply to MY OWN sent bubbles only,
+  // everywhere, layered UNDER the per-conversation Chat Theme (falls back to
+  // it when no personal color is set) — see lib/social/chat-appearance.ts.
+  const chatAppearance = useChatAppearance();
+  const bubbleShape = BUBBLE_STYLE_SHAPE[chatAppearance.bubbleStyle];
   // Neither a color theme nor a custom wallpaper is set — the WhatsApp-style
   // light default (owner ask, 2026-07-14: "make the message page background
   // color to be white like whatsapp"), regardless of the app's own dark
@@ -326,13 +373,14 @@ export function ConversationRoom({
   const micHoldStartRef = useRef<{ x: number; y: number } | null>(null);
   const micHoldEngagedRef = useRef(false);
   const micPointerHandledRef = useRef(false);
-  const seen = useRef(new Set(initial.map((m) => m.id)));
+  const seen = useRef(new Set((cachedThread?.messages ?? initial).map((m) => m.id)));
   const bubbleRefs = useRef(new Map<string, HTMLDivElement>());
-  const messagesRef = useRef<MessageItem[]>(initial);
-  const lastSyncedAt = useRef(initialSyncedAt);
+  const messagesRef = useRef<MessageItem[]>(cachedThread?.messages ?? initial);
+  const lastSyncedAt = useRef(cachedThread?.syncedAt ?? initialSyncedAt);
   useEffect(() => {
     messagesRef.current = messages;
-  }, [messages]);
+    cacheThread(conversationId, { messages, syncedAt: lastSyncedAt.current });
+  }, [messages, conversationId]);
 
   const { typingNames, notifyTyping, clearTyping } = useTypingIndicator(conversationId, viewerId, viewerName, viewerTypingIndicatorsEnabled);
   // A single soft tick when someone STARTS typing — not per keystroke, and
@@ -1582,13 +1630,27 @@ export function ConversationRoom({
                 ) : null}
                 <div className={cn("flex items-end gap-1", m.mine ? "flex-row-reverse" : "flex-row")}>
                   <div
+                    style={m.mine && !deleted && chatAppearance.bubbleColor ? { backgroundImage: "none", backgroundColor: chatAppearance.bubbleColor } : undefined}
                     className={cn(
-                      "max-w-[80%] overflow-hidden whitespace-pre-wrap break-words rounded-3xl text-sm leading-relaxed",
+                      "max-w-[80%] overflow-hidden whitespace-pre-wrap break-words leading-relaxed",
+                      bubbleShape.base,
+                      FONT_SIZE_TEXT_CLASS[chatAppearance.fontSize],
                       deleted ? "px-4 py-2.5 italic text-muted-foreground" : shared || hasMediaAttachment ? "p-1.5" : "px-4 py-2.5",
                       deleted
                         ? "border border-dashed border-border/60 bg-transparent"
                         : m.mine
-                          ? cn(liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-brand", "rounded-br-xl text-white shadow-md shadow-violet-500/20")
+                          ? cn(
+                              // A personal bubble-color preference (set via the
+                              // `style` prop above, `background-color`) beats
+                              // the conversation theme's gradient class here —
+                              // `bg-brand`/THEME_BUBBLE_CLASS still apply as the
+                              // CSS class (so nothing regresses when no personal
+                              // color is set), but an inline `background-color`
+                              // always wins over a class in CSS specificity.
+                              liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-brand",
+                              bubbleShape.tailMine,
+                              "text-white shadow-md shadow-violet-500/20",
+                            )
                           : // `.dark .glass` is a near-invisible white-on-white
                             // tint meant for a DARK backdrop — against the
                             // forced-light default/wallpaper background it
@@ -1596,9 +1658,12 @@ export function ConversationRoom({
                             // white text. Explicit always-light colors here
                             // instead, matching WhatsApp's own received-bubble
                             // look, regardless of the app's own dark mode.
-                            useLightDefault || liveWallpaperUrl
-                              ? "rounded-bl-xl bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-900/5"
-                              : "glass rounded-bl-xl text-foreground shadow-sm",
+                            cn(
+                              bubbleShape.tailTheirs,
+                              useLightDefault || liveWallpaperUrl
+                                ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-900/5"
+                                : "glass text-foreground shadow-sm",
+                            ),
                       m.mine && m.id.startsWith("optimistic-") && "animate-scale-in",
                       m.id === highlightedId && "ring-2 ring-offset-2 ring-offset-background ring-amber-400 transition-shadow duration-500",
                     )}

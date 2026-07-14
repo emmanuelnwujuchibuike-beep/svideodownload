@@ -89,7 +89,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   // strip for any contact whose profile visibility isn't literally 'public',
   // which is most real accounts — being in a direct conversation together is
   // already a more intimate context than a public discovery feed).
-  const otherStoryGroup = convo.type === "direct" && convo.other ? await getActiveStoryForUser(convo.other.id) : null;
+  const otherStoryGroup = convo.type === "direct" && convo.other ? await getActiveStoryForUser(convo.other.id, user.id) : null;
 
   return (
     // Mobile: a true full-viewport overlay — covers the persistent app

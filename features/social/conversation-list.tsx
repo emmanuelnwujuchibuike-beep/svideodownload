@@ -609,7 +609,13 @@ function ConversationRow({
         href={`/messages/${c.id}`}
         onClick={() => haptic("light")}
         className={cn(
-          "flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-3 pl-0 pr-3 transition",
+          // active:scale — a plain CSS press (not framer's whileTap, this is
+          // a plain <Link>, not a motion component) so every row gives real
+          // tactile feedback on tap, matching the tap-feedback standard every
+          // other interactive surface in this app already has (owner ask,
+          // 2026-07-14: "premium, lively" — a row with zero press feedback on
+          // the PRIMARY mobile surface of this feature was a real gap).
+          "flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-3 pl-0 pr-3 transition active:scale-[0.98]",
           active
             ? "bg-gradient-to-r from-blue-500/[0.10] to-violet-500/[0.10] ring-1 ring-inset ring-violet-500/25"
             : "hover:bg-secondary/40",

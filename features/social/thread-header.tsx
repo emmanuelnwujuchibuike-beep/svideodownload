@@ -54,6 +54,27 @@ export function ThreadHeader({
   const [members, setMembers] = useState(initialMembers);
   const otherOnline = usePresence().has(other?.id ?? "");
   const [optionsOpen, setOptionsOpen] = useState(false);
+  // Granular blocking (owner ask, 2026-07-14): calls aren't built yet, but a
+  // "block this person from calling me" restriction should still visibly do
+  // something today — hides the placeholder Phone/Video buttons entirely
+  // (not just disables them) when either party has blocked or calls-
+  // restricted the other, and future-proofs the buttons for when calls ship
+  // for real. Bidirectional by design (`callsUnavailable` from the API), not
+  // just the viewer's own toggle — see app/api/block/[id]/route.ts.
+  const [callsUnavailable, setCallsUnavailable] = useState(false);
+  useEffect(() => {
+    if (type !== "direct" || !other) return;
+    let cancelled = false;
+    fetch(`/api/block/${other.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d) setCallsUnavailable(!!d.callsUnavailable);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [type, other]);
   // Live theme/wallpaper from the shared ThreadAppearanceProvider (wraps this
   // header + ConversationRoom together) — real bug fixed 2026-07-14: this
   // used to only ever read the static SSR `initialTheme`/`initialWallpaperUrl`
@@ -196,34 +217,38 @@ export function ThreadHeader({
         // style." Vertical-dots glyph (MoreVertical), not horizontal, to
         // match the reference image exactly.
         <span className="relative ml-auto flex shrink-0 items-center gap-3.5">
-          <button
-            type="button"
-            aria-label="Voice call"
-            onClick={() => {
-              haptic("light");
-              toast("Voice calls are coming soon.", "info");
-            }}
-            className={cn(
-              "flex h-9 w-9 items-center justify-center transition",
-              forceDarkText ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
-            )}
-          >
-            <Phone className="h-[19px] w-[19px]" />
-          </button>
-          <button
-            type="button"
-            aria-label="Video call"
-            onClick={() => {
-              haptic("light");
-              toast("Video calls are coming soon.", "info");
-            }}
-            className={cn(
-              "flex h-9 w-9 items-center justify-center transition",
-              forceDarkText ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
-            )}
-          >
-            <Video className="h-5 w-5" />
-          </button>
+          {!callsUnavailable ? (
+            <>
+              <button
+                type="button"
+                aria-label="Voice call"
+                onClick={() => {
+                  haptic("light");
+                  toast("Voice calls are coming soon.", "info");
+                }}
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center transition",
+                  forceDarkText ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
+                )}
+              >
+                <Phone className="h-[19px] w-[19px]" />
+              </button>
+              <button
+                type="button"
+                aria-label="Video call"
+                onClick={() => {
+                  haptic("light");
+                  toast("Video calls are coming soon.", "info");
+                }}
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center transition",
+                  forceDarkText ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
+                )}
+              >
+                <Video className="h-5 w-5" />
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
             aria-label="Conversation options"
@@ -240,6 +265,7 @@ export function ThreadHeader({
           </button>
           <ThreadOptionsSheet
             conversationId={conversationId}
+            otherUserId={other.id}
             otherHandle={other.handle}
             otherName={other.displayName}
             otherAvatarUrl={other.avatarUrl}

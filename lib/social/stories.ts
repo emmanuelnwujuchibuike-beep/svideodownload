@@ -53,6 +53,33 @@ async function audienceForScope(
   return ids;
 }
 
+/**
+ * Every user id blocked-with (either direction) OR status-restricted-with
+ * (either direction, migration 0076 `user_restrictions` scope='status') the
+ * viewer — used to hide Stories from/to blocked or status-restricted people.
+ * Real gap fixed 2026-07-14: every other content surface (feed, comments,
+ * discovery, profile RLS) already filters by `blocks`; Stories never did, so
+ * a blocked user could still see and reply to your Stories and vice versa.
+ */
+async function excludedStoryAuthors(db: ReturnType<typeof createAdminClient>, viewerId: string): Promise<Set<string>> {
+  const excluded = new Set<string>();
+  try {
+    const [{ data: blockedByMe }, { data: blockedMe }, { data: restrictedByMe }, { data: restrictedMe }] = await Promise.all([
+      db.from("blocks").select("blocked_id").eq("blocker_id", viewerId),
+      db.from("blocks").select("blocker_id").eq("blocked_id", viewerId),
+      db.from("user_restrictions").select("restricted_id").eq("restrictor_id", viewerId).eq("scope", "status"),
+      db.from("user_restrictions").select("restrictor_id").eq("restricted_id", viewerId).eq("scope", "status"),
+    ]);
+    for (const r of (blockedByMe ?? []) as { blocked_id: string }[]) excluded.add(r.blocked_id);
+    for (const r of (blockedMe ?? []) as { blocker_id: string }[]) excluded.add(r.blocker_id);
+    for (const r of (restrictedByMe ?? []) as { restricted_id: string }[]) excluded.add(r.restricted_id);
+    for (const r of (restrictedMe ?? []) as { restrictor_id: string }[]) excluded.add(r.restrictor_id);
+  } catch {
+    /* table missing / error — no exclusions, same fail-open posture as audienceForScope */
+  }
+  return excluded;
+}
+
 /** Active (non-expired) stories grouped by author, most recent author first.
  *  Public profiles only; the viewer's own group is surfaced first when present.
  *  `scope` narrows to just friends or people you follow (signed-in viewers). */
@@ -67,6 +94,7 @@ export async function getActiveStories(
 
     // Resolve the allowed author set for scoped feeds up front.
     const audience = viewerId && scope !== "all" ? await audienceForScope(db, viewerId, scope) : null;
+    const excluded = viewerId ? await excludedStoryAuthors(db, viewerId) : new Set<string>();
 
     const { data } = await db
       .from("stories")
@@ -76,6 +104,7 @@ export async function getActiveStories(
       .limit(200);
     let rows = (data as { id: string; user_id: string; media_url: string; media_kind: "image" | "video"; caption: string | null; created_at: string }[]) ?? [];
     if (audience) rows = rows.filter((r) => audience.has(r.user_id));
+    if (excluded.size > 0) rows = rows.filter((r) => !excluded.has(r.user_id));
     if (rows.length === 0) return [];
 
     const userIds = [...new Set(rows.map((r) => r.user_id))];
@@ -127,11 +156,21 @@ export async function getActiveStories(
  * together at this point, a strictly more intimate context than "anyone
  * browsing the app," so gating on general profile visibility here was wrong.
  * Confirmed by reading `getActiveStories`'s own doc comment, not assumed.
+ *
+ * `viewerId` (added 2026-07-14 alongside the blocking pass): when given,
+ * hides the strip entirely if either party has blocked or status-restricted
+ * the other — the same gap `getActiveStories` had, closed there via
+ * `excludedStoryAuthors`. Optional (not `null`-defaulted) because a couple of
+ * call sites don't yet have a viewer in scope; those keep today's behavior.
  */
-export async function getActiveStoryForUser(userId: string): Promise<StoryGroup | null> {
+export async function getActiveStoryForUser(userId: string, viewerId?: string | null): Promise<StoryGroup | null> {
   if (!hasSupabase) return null;
   try {
     const db = createAdminClient();
+    if (viewerId && viewerId !== userId) {
+      const excluded = await excludedStoryAuthors(db, viewerId);
+      if (excluded.has(userId)) return null;
+    }
     const { data } = await db
       .from("stories")
       .select("id, user_id, media_url, media_kind, caption, created_at")

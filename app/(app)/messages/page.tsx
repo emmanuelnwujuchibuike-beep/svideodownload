@@ -86,10 +86,13 @@ export default async function MessagesPage() {
           iOS rubber-band bounce at the very top/bottom stays inside this box
           instead of chaining to the page and flashing the gradient behind it. */}
       <div className="flex-1 overflow-hidden bg-background lg:hidden">
-        <div className="h-full overflow-y-auto overscroll-y-none px-3 pt-4">
-          <div className="mb-4 flex items-start justify-between gap-2">
+        <div className="h-full overflow-y-auto overscroll-y-none px-3 pt-2.5">
+          {/* Tightened 2026-07-14 (owner: header felt loose, wanted a denser
+              Snapchat-style top section) — pt-4→pt-2.5, mb-4→mb-2.5, dropped
+              the subtitle's own top gap by tightening the h1/p pairing. */}
+          <div className="mb-2.5 flex items-start justify-between gap-2">
             <div>
-              <h1 className="flex items-center gap-1.5 text-[28px] font-bold tracking-[-0.03em]">
+              <h1 className="flex items-center gap-1.5 text-[28px] font-bold leading-tight tracking-[-0.03em]">
                 Messages
                 {hasUnread ? (
                   <span aria-hidden className="h-2 w-2 rounded-full bg-[hsl(var(--brand-purple))]" />

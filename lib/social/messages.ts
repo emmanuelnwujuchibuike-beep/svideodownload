@@ -50,12 +50,27 @@ export type MessageGate =
   | { ok: true }
   | { ok: false; reason: "self" | "blocked" | "off" | "followers" | "unavailable" };
 
+/**
+ * Full block (either direction) OR a granular "messaging" restriction
+ * (either direction, migration 0076) between the pair — every call site here
+ * is a messaging gate (start/continue a DM, group add/invite, actual send),
+ * so a scoped "block them from chatting with me" (owner ask, 2026-07-14)
+ * belongs in the same check as a full block, not a separate one callers
+ * would have to remember to also add.
+ */
 async function bothBlocked(db: Db, a: string, b: string): Promise<boolean> {
-  const { count } = await db
-    .from("blocks")
-    .select("blocker_id", { head: true, count: "exact" })
-    .or(`and(blocker_id.eq.${a},blocked_id.eq.${b}),and(blocker_id.eq.${b},blocked_id.eq.${a})`);
-  return (count ?? 0) > 0;
+  const [{ count: blockCount }, { count: restrictionCount }] = await Promise.all([
+    db
+      .from("blocks")
+      .select("blocker_id", { head: true, count: "exact" })
+      .or(`and(blocker_id.eq.${a},blocked_id.eq.${b}),and(blocker_id.eq.${b},blocked_id.eq.${a})`),
+    db
+      .from("user_restrictions")
+      .select("restrictor_id", { head: true, count: "exact" })
+      .eq("scope", "messaging")
+      .or(`and(restrictor_id.eq.${a},restricted_id.eq.${b}),and(restrictor_id.eq.${b},restricted_id.eq.${a})`),
+  ]);
+  return (blockCount ?? 0) > 0 || (restrictionCount ?? 0) > 0;
 }
 
 async function isFriend(db: Db, a: string, b: string): Promise<boolean> {

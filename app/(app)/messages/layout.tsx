@@ -51,15 +51,14 @@ export default async function MessagesLayout({ children }: { children: ReactNode
     <div
       // `bg-background lg:bg-transparent` — mobile-only opaque backdrop.
       // This wrapper's own `pt-[env(safe-area-inset-top)]` padding sits
-      // ABOVE `<main>` (not covered by its `bg-background`), leaving a
-      // transparent strip that exposed app/layout.tsx's fixed ambient
-      // gradient behind it — real bug, still reported after the mobile list
-      // container's own overscroll fix (owner, 2026-07-14: "the light purple
-      // still show in background when i slide down or up"), because that
-      // fix only covered the LIST's own box, not this safe-area gap above
-      // it. Desktop keeps this transparent on purpose — the Glass Split
-      // design's floating rounded cards are meant to show the ambient
-      // gradient in the gaps between/around them.
+      // ABOVE `<main>`, so without its own background it was a transparent
+      // strip exposing app/layout.tsx's fixed ambient gradient behind it —
+      // the mobile list container's own overscroll fix never covered this
+      // gap since it's a sibling box, not a descendant of the list's own
+      // scroller. `bg-background` here closes it the same way the list page
+      // itself already closes its own. Desktop keeps this transparent on
+      // purpose — the Glass Split design's floating rounded cards are meant
+      // to show the ambient gradient in the gaps between/around them.
       className="mx-auto flex h-[calc(100dvh-4.3125rem-max(calc(env(safe-area-inset-bottom)-10px),0.375rem))] w-full max-w-[1600px] gap-4 bg-background px-0 pt-[env(safe-area-inset-top)] lg:h-[calc(100dvh-4rem)] lg:bg-transparent lg:px-4 lg:py-4 lg:pt-4"
     >
       {/* Desktop inbox pane — owner ask: white like WhatsApp, not the root

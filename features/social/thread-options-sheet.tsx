@@ -1,13 +1,15 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { BadgeCheck, Check, ChevronRight, Clock, Image as ImageIcon, Loader2, Palette, Trash2, User, UserCircle, X } from "lucide-react";
+import { BadgeCheck, Check, ChevronRight, Clock, Image as ImageIcon, Loader2, Palette, ShieldBan, Sparkles, Trash2, User, UserCircle, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
+import { BlockOptionsSheet } from "@/features/social/block-options-sheet";
+import { ChatAppearanceSheet } from "@/features/social/chat-appearance-sheet";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
@@ -68,6 +70,7 @@ async function patchWithRetry(url: string, body: Record<string, unknown>): Promi
  */
 export function ThreadOptionsSheet({
   conversationId,
+  otherUserId,
   otherHandle,
   otherName,
   otherAvatarUrl,
@@ -79,6 +82,10 @@ export function ThreadOptionsSheet({
   onClose,
 }: {
   conversationId: string;
+  /** Present for direct/secret threads — gates the Block/restrict + Chat
+   *  appearance rows (blocking is a 1:1 relationship; group threads use
+   *  ThreadHeaderMenu instead, which doesn't render this sheet at all). */
+  otherUserId?: string;
   otherHandle: string;
   otherName?: string;
   otherAvatarUrl?: string | null;
@@ -115,6 +122,8 @@ export function ThreadOptionsSheet({
   const [customDays, setCustomDays] = useState("");
   const [showCustom, setShowCustom] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [blockSheetOpen, setBlockSheetOpen] = useState(false);
+  const [appearanceSheetOpen, setAppearanceSheetOpen] = useState(false);
 
   const patch = async (body: Record<string, unknown>) => {
     setBusy(true);
@@ -375,6 +384,30 @@ export function ThreadOptionsSheet({
                 />
               </motion.div>
 
+              {/* Personal appearance (owner ask, 2026-07-14: font size + bubble
+                  style/color) — deliberately a separate row from "Chat theme"
+                  above: theme/wallpaper are per-CONVERSATION (shared, both
+                  participants see the same thing); font size/bubble style are
+                  per-VIEWER, apply across every chat, and only change what
+                  YOU see. Opens ChatAppearanceSheet, which also owns the new
+                  custom-color option for both this and the theme swatches
+                  above (same color-picker control, reused). */}
+              <motion.div variants={SHEET_ITEM_VARIANTS}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    setAppearanceSheetOpen(true);
+                  }}
+                  className="flex w-full items-center justify-between rounded-2xl bg-card px-4 py-3.5 text-sm font-semibold shadow-sm ring-1 ring-border/50 transition active:scale-[0.98] hover:bg-secondary/40"
+                >
+                  <span className="flex items-center gap-3">
+                    <ModuleIconBadge icon={Sparkles} tone="vivid" className="h-9 w-9 rounded-xl" /> Font size & bubble style
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </motion.div>
+
               <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border/50">
                 <p className="mb-3 flex items-center gap-2.5 text-sm font-semibold">
                   <ModuleIconBadge icon={Clock} tone="vivid" className="h-9 w-9 rounded-xl" /> Disappearing messages
@@ -442,6 +475,24 @@ export function ThreadOptionsSheet({
                 ) : null}
               </motion.div>
 
+              {otherUserId ? (
+                <motion.button
+                  variants={SHEET_ITEM_VARIANTS}
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    setBlockSheetOpen(true);
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={springs.press}
+                  className="flex w-full items-center gap-3 rounded-2xl bg-card px-4 py-3.5 text-sm font-semibold shadow-sm ring-1 ring-border/50 transition hover:bg-secondary/40"
+                >
+                  <ModuleIconBadge icon={ShieldBan} tone="vivid" className="h-9 w-9 rounded-xl" />
+                  Block or restrict
+                  <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+                </motion.button>
+              ) : null}
+
               <motion.button
                 variants={SHEET_ITEM_VARIANTS}
                 type="button"
@@ -460,6 +511,16 @@ export function ThreadOptionsSheet({
           </motion.div>
         </div>
       ) : null}
+      {otherUserId ? (
+        <BlockOptionsSheet
+          open={blockSheetOpen}
+          onClose={() => setBlockSheetOpen(false)}
+          otherUserId={otherUserId}
+          otherHandle={otherHandle}
+          otherName={otherName}
+        />
+      ) : null}
+      <ChatAppearanceSheet open={appearanceSheetOpen} onClose={() => setAppearanceSheetOpen(false)} />
     </AnimatePresence>,
     document.body,
   );

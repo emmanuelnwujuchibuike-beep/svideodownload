@@ -36,6 +36,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const convo = await getConversation(id, user.id);
   if (!convo || convo.type !== "direct" || !convo.other) return NextResponse.json({ storyGroup: null });
 
-  const storyGroup = await getActiveStoryForUser(convo.other.id).catch(() => null);
+  const storyGroup = await getActiveStoryForUser(convo.other.id, user.id).catch(() => null);
   return NextResponse.json({ storyGroup });
 }

@@ -13,6 +13,22 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑14 highlights (batch 65 — root cause of the "stuck in loading" reports: an unhandled auth-promise rejection)
+
+Owner escalated: "the message page auto refresh and gets stuck in loading when i try to go back with the ios back gesture and not the top back button... is now happening in all accounts" — worse than a similar-sounding admin-only bug from 2026-07-12.
+
+`features/auth/use-user.ts`'s `useUser()` hook — which backs the app-wide header/topbar's UserMenu on every authenticated page — called `supabase.auth.getUser().then(...)` with no `.catch()`. Batch 63 had already found and confirmed a real browser race earlier the same day: a freshly-installed service worker calling `clients.claim()` mid-fetch can make an in-flight `fetch()` throw a raw network error even though the server never saw the request. When `getUser()` hits that exact race, the promise rejects — and with no `.catch()`, the `.then()` callback simply never runs, so the hook's `loading` state (initialized `true`) never clears. No error, no retry, no timeout — just permanently stuck.
+
+An Explore-agent audit of the entire codebase for the identical shape (a bare `.then()` off `.auth.getUser()`/`.auth.getSession()` gating a loading-type boolean, with no `.catch()`) found this was the only site with the exact fault — not a repeated mistake elsewhere. Fixed by failing open (treats the failure as "not signed in" for that render, which self-corrects moments later via the same effect's `onAuthStateChange` listener) instead of hanging forever. Also hardened the `getSession()` call added to `use-typing.ts` earlier the same day with the identical fallback, since it had the same missing-`.catch()` shape (though it doesn't gate a visible loading state, so it wasn't reproducing this exact symptom — just a latent version of the same class of bug).
+
+Verified concretely rather than by inspection alone: used Playwright's request interception to forcibly abort the real `auth/v1/user` network call (reproducing the exact rejection on demand instead of hoping to hit the timing window), and confirmed the UserMenu's loading skeleton cleared and the real avatar rendered — before the fix, that same forced failure would have left it spinning forever, by basic Promise semantics.
+
+Not independently re-verified: the specific iOS edge-swipe-vs-button distinction, and "now happening in all accounts" vs. previously narrower — no real iOS device or standalone-PWA lifecycle is available to this session's tooling. This fix closes one concrete, confirmed mechanism that produces the reported symptom; it may or may not be the entire explanation.
+
+`tsc` clean, full 135-test vitest suite, a full `next build`. Commit `4c40d3f`, pushed, deployed via `vercel --prod`, confirmed live via the build-stamp endpoint.
+
+---
+
 ## 2026‑07‑14 highlights (batch 64 — same-day follow-up: dark-mode list regression reverted, wallpaper made full-bleed, sound-modal open bug fixed)
 
 Owner caught a real regression from batch 63 within minutes of it shipping: "the message page doesnt switch to dark mode but the inside chat switched." Batch 63's `FORCE_LIGHT_VARS` fix had over-corrected — the original ask was about the chat THREAD's default background, not locking the whole inbox LIST to light mode forever. Reverted: removed the forced-light override from the list (mobile page, desktop pane, and the header's own dropdown/popovers, which had been forced light to match), swapped hardcoded `bg-white` for theme-reactive `bg-background` everywhere in that subtree. Once everything in the list consistently follows the SAME real theme, the original "text invisible in dark mode" bug doesn't come back either — it was only ever a mismatch between a forced-light ancestor and theme-reactive descendants.

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Archive as ArchiveIcon, BadgeCheck, BellOff, Check, Loader2, MoreHorizontal, Pin, Search, Trash2, X } from "lucide-react";
+import { Archive as ArchiveIcon, BadgeCheck, BellOff, Check, Loader2, MoreHorizontal, Pin, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -255,17 +255,33 @@ export function ConversationList({
 
   return (
     <div className={cn(pane && "flex min-h-0 flex-1 flex-col")}>
-      {/* Search — the mockup's full-width glass pill */}
+      {/* Search — the mockup's full-width glass pill, with a trailing filter
+          icon that jumps to Archived (the one filter view not already a tab). */}
       <label className={cn("relative block", pane ? "mx-3 mb-2" : "mb-3")}>
         <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search messages"
+          placeholder="Search messages, users, groups…"
           aria-label="Search conversations"
-          className="glass w-full rounded-full py-2.5 pl-11 pr-4 text-sm outline-none transition placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-violet-500/30"
+          className="glass w-full rounded-full py-2.5 pl-11 pr-11 text-sm outline-none transition placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-violet-500/30"
         />
+        <button
+          type="button"
+          onClick={() => {
+            haptic("light");
+            setShowArchived((v) => !v);
+          }}
+          aria-label={showArchived ? "Show all chats" : "Show archived chats"}
+          aria-pressed={showArchived}
+          className={cn(
+            "absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full transition",
+            showArchived ? "text-primary" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+        </button>
       </label>
 
       {/* Filter tabs — All / Unread / Groups / Requests with live counts */}
@@ -399,18 +415,25 @@ export function ConversationList({
                       className="flex w-16 shrink-0 flex-col items-center gap-1"
                     >
                       <span className="relative">
-                        {c.avatarUrl || (!isGroup && c.other!.avatarUrl) ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={(isGroup ? c.avatarUrl : c.other!.avatarUrl) ?? undefined}
-                            alt=""
-                            className="h-14 w-14 rounded-full object-cover ring-2 ring-violet-500/40"
-                          />
-                        ) : (
-                          <span className="bg-brand flex h-14 w-14 items-center justify-center rounded-full text-base font-bold text-white ring-2 ring-violet-500/40">
-                            {name.charAt(0).toUpperCase()}
-                          </span>
-                        )}
+                        {/* Vivid gradient ring (owner mockup) — a padded gradient
+                            wrapper, not a thin `ring-*` outline, so it actually
+                            reads as a distinct colored border like the mockup's
+                            story-style rings, matching the same `bg-brand` ring
+                            trick stories-row.tsx already uses. */}
+                        <span className="bg-brand block rounded-full p-[2.5px]">
+                          {c.avatarUrl || (!isGroup && c.other!.avatarUrl) ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={(isGroup ? c.avatarUrl : c.other!.avatarUrl) ?? undefined}
+                              alt=""
+                              className="h-14 w-14 rounded-full object-cover ring-2 ring-card"
+                            />
+                          ) : (
+                            <span className="bg-brand flex h-14 w-14 items-center justify-center rounded-full text-base font-bold text-white ring-2 ring-card">
+                              {name.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </span>
                         {isOnline ? <span aria-label="Online" className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-background" /> : null}
                       </span>
                       <span className="w-full truncate text-center text-xs font-medium text-muted-foreground">{name}</span>
@@ -574,40 +597,42 @@ function ConversationRow({
             : "hover:bg-secondary/40",
         )}
       >
+        {/* Left-edge unread dot (owner mockup) — a small bullet ahead of the
+            avatar on every row, distinct from the unread-count badge on the
+            right; purple while unread, a quiet gray dot otherwise so read
+            rows still align instead of the row visibly shifting. */}
+        <span
+          aria-hidden
+          className={cn("h-1.5 w-1.5 shrink-0 rounded-full", c.unread ? "bg-[hsl(var(--brand-purple))]" : "bg-transparent")}
+        />
         <span className="relative shrink-0">
-          {isGroup ? (
-            c.avatarUrl ? (
+          {/* Vivid gradient ring (owner mockup) — a padded `bg-brand` wrapper,
+              not a thin `ring-*` outline, so every avatar in the list reads as
+              distinctly bordered like the mockup, matching the same trick
+              used on the pinned strip above and stories-row.tsx elsewhere. */}
+          <span className="bg-brand block rounded-full p-[2.5px]">
+            {isGroup ? (
+              c.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={c.avatarUrl} alt="" className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-card" />
+              ) : (
+                // The inbox list doesn't fetch per-member avatars (would add a
+                // query per group just for this) — a group without a custom
+                // photo falls back to the stack placeholder; the real
+                // overlapping-avatars rendering lives in the thread header.
+                <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-brand-tile ring-2 ring-card">
+                  <GroupAvatarStack avatars={[]} />
+                </span>
+              )
+            ) : c.other!.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={c.avatarUrl} alt="" className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-violet-500/30 ring-offset-2 ring-offset-background" />
+              <img src={c.other!.avatarUrl} alt="" className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-card" />
             ) : (
-              // The inbox list doesn't fetch per-member avatars (would add a
-              // query per group just for this) — a group without a custom
-              // photo falls back to the stack placeholder; the real
-              // overlapping-avatars rendering lives in the thread header.
-              <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-brand-tile ring-2 ring-violet-500/30 ring-offset-2 ring-offset-background">
-                <GroupAvatarStack avatars={[]} />
+              <span className="bg-brand flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white ring-2 ring-card">
+                {name.charAt(0).toUpperCase()}
               </span>
-            )
-          ) : c.other!.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={c.other!.avatarUrl}
-              alt=""
-              className={cn(
-                "h-[52px] w-[52px] rounded-full object-cover ring-2 ring-offset-2 ring-offset-background",
-                c.unread ? "ring-violet-500/60" : "ring-violet-500/25",
-              )}
-            />
-          ) : (
-            <span
-              className={cn(
-                "bg-brand flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white ring-2 ring-offset-2 ring-offset-background",
-                c.unread ? "ring-violet-500/60" : "ring-violet-500/25",
-              )}
-            >
-              {name.charAt(0).toUpperCase()}
-            </span>
-          )}
+            )}
+          </span>
           {isOnline ? (
             <span aria-label="Online" className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center">
               <span className="absolute h-full w-full animate-ping rounded-full bg-emerald-400/60 motion-reduce:hidden" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, BadgeCheck, MoreHorizontal, Phone, Video } from "lucide-react";
+import { ArrowLeft, BadgeCheck, MoreVertical, Phone, Video } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -95,17 +95,22 @@ export function ThreadHeader({
   }, [conversationId, type]);
 
   return (
-    <div className="relative flex items-center gap-3 border-b border-border/60 bg-card/70 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] backdrop-blur-xl lg:pt-3">
+    // Owner mockup: the header blends seamlessly into the thread background
+    // (same dark surface, no dividing card/border) — was a distinct bordered
+    // `bg-card` bar, a visibly different look from the reference image.
+    <div className="relative flex items-center gap-3 bg-background px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-3">
       <div
         aria-hidden
         className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full bg-gradient-to-br from-blue-500/15 to-violet-500/15 blur-2xl"
       />
+      {/* Owner mockup: a plain icon, no glass/circle chrome around it — was a
+          bordered translucent chip, reported "old low class chat top menu". */}
       <Link
         href="/messages"
         aria-label="Back to messages"
-        className="glass relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground/80 transition hover:text-foreground lg:hidden"
+        className="relative flex h-9 w-9 shrink-0 items-center justify-center text-foreground transition hover:text-foreground/70 lg:hidden"
       >
-        <ArrowLeft className="h-[18px] w-[18px]" />
+        <ArrowLeft className="h-5 w-5" />
       </Link>
       {type === "group" ? (
         <div className="relative flex min-w-0 flex-1 items-center gap-2.5">
@@ -125,9 +130,9 @@ export function ThreadHeader({
           <span className="relative shrink-0">
             {other.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={other.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover ring-2 ring-violet-500/40" />
+              <img src={other.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
             ) : (
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-sm font-bold text-white ring-2 ring-violet-500/40">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-sm font-bold text-white">
                 {other.displayName.charAt(0).toUpperCase()}
               </span>
             )}
@@ -152,7 +157,12 @@ export function ThreadHeader({
           and the buttons keep the mockup's layout ready for the real
           feature. Direct threads only, like the mockup. */}
       {type === "direct" && other ? (
-        <span className="relative ml-auto flex shrink-0 items-center gap-1.5">
+        // Owner mockup: plain icons with no glass/circle chrome, matching the
+        // back arrow above — was every icon in its own bordered translucent
+        // chip, reported "old low class chat top menu, use exactly the image
+        // style." Vertical-dots glyph (MoreVertical), not horizontal, to
+        // match the reference image exactly.
+        <span className="relative ml-auto flex shrink-0 items-center gap-3.5">
           <button
             type="button"
             aria-label="Voice call"
@@ -160,9 +170,9 @@ export function ThreadHeader({
               haptic("light");
               toast("Voice calls are coming soon.", "info");
             }}
-            className="glass flex h-9 w-9 items-center justify-center rounded-full text-foreground/80 transition hover:text-foreground"
+            className="flex h-9 w-9 items-center justify-center text-foreground transition hover:text-foreground/70"
           >
-            <Phone className="h-[16px] w-[16px]" />
+            <Phone className="h-[19px] w-[19px]" />
           </button>
           <button
             type="button"
@@ -171,9 +181,9 @@ export function ThreadHeader({
               haptic("light");
               toast("Video calls are coming soon.", "info");
             }}
-            className="glass flex h-9 w-9 items-center justify-center rounded-full text-foreground/80 transition hover:text-foreground"
+            className="flex h-9 w-9 items-center justify-center text-foreground transition hover:text-foreground/70"
           >
-            <Video className="h-[17px] w-[17px]" />
+            <Video className="h-5 w-5" />
           </button>
           <button
             type="button"
@@ -182,9 +192,9 @@ export function ThreadHeader({
               haptic("light");
               setOptionsOpen(true);
             }}
-            className="glass flex h-9 w-9 items-center justify-center rounded-full text-foreground/80 transition hover:text-foreground"
+            className="flex h-9 w-9 items-center justify-center text-foreground transition hover:text-foreground/70"
           >
-            <MoreHorizontal className="h-[18px] w-[18px]" />
+            <MoreVertical className="h-5 w-5" />
           </button>
           <ThreadOptionsSheet
             conversationId={conversationId}

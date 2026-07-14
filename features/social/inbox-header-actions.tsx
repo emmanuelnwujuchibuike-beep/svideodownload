@@ -7,7 +7,7 @@ import { useState } from "react";
 
 import { UserMenu } from "@/features/auth/user-menu";
 import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
-import { CreateGroupLauncher } from "@/features/social/create-group-launcher";
+import { ComposeLauncher } from "@/features/social/compose-launcher";
 import { MessageSearchLauncher } from "@/features/social/message-search-launcher";
 import { NotificationSettingsPicker } from "@/features/social/notification-settings-picker";
 import { PresenceStatusPicker } from "@/features/social/presence-status-picker";
@@ -52,9 +52,12 @@ export function InboxHeaderActions() {
           </Link>
         </motion.span>
       ) : null}
-      {/* Owner mockup's top-right cluster: add-friends, compose, "…", avatar. */}
+      {/* Owner mockup's top-right cluster: add-friends, compose, avatar.
+          "New group" moved inside the compose sheet (see ComposeLauncher)
+          rather than keeping its own dedicated icon, so the header matches
+          the mockup's 3-icon cluster without dropping the feature. */}
       <SuggestionsLauncher className={CIRCLE} />
-      <CreateGroupLauncher className={CIRCLE} />
+      <ComposeLauncher className={CIRCLE} />
       <motion.button
         type="button"
         aria-label={expanded ? "Hide tools" : "More tools"}

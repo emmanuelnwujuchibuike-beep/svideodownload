@@ -205,35 +205,41 @@ export function ThreadOptionsSheet({
                 <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" /> Disappearing messages
                 </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {DISAPPEAR_OPTIONS.map((o) => (
-                    <button
-                      key={o.label}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => applyDisappear(o.seconds)}
-                      className={cn(
-                        "flex items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium transition",
-                        disappearAfter === o.seconds ? "border-primary bg-primary/10 text-primary" : "border-border/60 hover:bg-secondary/40",
-                      )}
-                    >
-                      {o.label}
-                      {disappearAfter === o.seconds ? <Check className="h-3.5 w-3.5" /> : null}
-                    </button>
-                  ))}
+                {/* Icon-on-top cards in a single row (owner mockup) — was a
+                    2-column grid of horizontal pill buttons, a structurally
+                    different layout from the reference image. */}
+                <div className="grid grid-cols-5 gap-1.5">
+                  {DISAPPEAR_OPTIONS.map((o) => {
+                    const active = disappearAfter === o.seconds;
+                    return (
+                      <button
+                        key={o.label}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => applyDisappear(o.seconds)}
+                        className={cn(
+                          "flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-center text-[11px] font-medium transition",
+                          active ? "border-transparent bg-primary text-primary-foreground" : "border-border/60 text-muted-foreground hover:bg-secondary/40",
+                        )}
+                      >
+                        <Clock className="h-4 w-4" />
+                        {o.label}
+                      </button>
+                    );
+                  })}
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => setShowCustom((v) => !v)}
                     className={cn(
-                      "flex items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium transition",
+                      "flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-center text-[11px] font-medium transition",
                       showCustom || (disappearAfter !== null && !DISAPPEAR_OPTIONS.some((o) => o.seconds === disappearAfter))
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border/60 hover:bg-secondary/40",
+                        ? "border-transparent bg-primary text-primary-foreground"
+                        : "border-border/60 text-muted-foreground hover:bg-secondary/40",
                     )}
                   >
+                    <Clock className="h-4 w-4" />
                     Custom
-                    {disappearAfter !== null && !DISAPPEAR_OPTIONS.some((o) => o.seconds === disappearAfter) ? <Check className="h-3.5 w-3.5" /> : null}
                   </button>
                 </div>
                 {showCustom ? (

@@ -114,3 +114,50 @@ export async function getActiveStories(
     return [];
   }
 }
+
+/**
+ * A single person's active stories, for the "N stories" strip embedded at the
+ * top of a DIRECT message thread (owner mockup) — deliberately NOT
+ * `getActiveStories()` with a narrow scope. That function is documented
+ * "public profiles only": it hides a story from anyone whose profile
+ * visibility isn't literally `'public'`, which is the right call for a
+ * discovery-style feed (Home's stories reel) but silently broke the mockup's
+ * in-thread strip for the (likely majority of) accounts that keep their
+ * profile non-public — the two people are ALREADY in a direct conversation
+ * together at this point, a strictly more intimate context than "anyone
+ * browsing the app," so gating on general profile visibility here was wrong.
+ * Confirmed by reading `getActiveStories`'s own doc comment, not assumed.
+ */
+export async function getActiveStoryForUser(userId: string): Promise<StoryGroup | null> {
+  if (!hasSupabase) return null;
+  try {
+    const db = createAdminClient();
+    const { data } = await db
+      .from("stories")
+      .select("id, user_id, media_url, media_kind, caption, created_at")
+      .eq("user_id", userId)
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(50);
+    const rows = (data as { id: string; user_id: string; media_url: string; media_kind: "image" | "video"; caption: string | null; created_at: string }[]) ?? [];
+    if (rows.length === 0) return null;
+
+    const { data: prof } = await db
+      .from("profiles")
+      .select("handle, display_name, avatar_url, is_verified, is_suspended")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!prof || !prof.handle || prof.is_suspended) return null;
+
+    return {
+      userId,
+      handle: prof.handle as string,
+      displayName: (prof.display_name as string) || `@${prof.handle as string}`,
+      avatarUrl: (prof.avatar_url as string) ?? null,
+      isVerified: (prof.is_verified as boolean) ?? false,
+      stories: rows.map((r) => ({ id: r.id, mediaUrl: r.media_url, mediaKind: r.media_kind, caption: r.caption, createdAt: r.created_at })),
+    };
+  } catch {
+    return null;
+  }
+}

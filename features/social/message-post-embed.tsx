@@ -1,16 +1,28 @@
 "use client";
 
-import { BadgeCheck, Play } from "lucide-react";
+import { BadgeCheck, Heart, MessageCircle, Play } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { timeAgo } from "@/features/notifications/meta";
+
 /**
  * Rich preview card for a post shared into a chat (the Share sheet sends the
- * /p/<id> link). Shows the original creator, cover and caption; tapping opens
- * the post. Privacy-safe: the preview endpoint 404s for viewers who can't see
- * the post, in which case we render a quiet "post unavailable" chip instead of
- * leaking anything. Previews are module-cached so long threads stay cheap.
+ * /p/<id> link). Shows the original creator, caption, cover and engagement
+ * counts; tapping opens the post. Privacy-safe: the preview endpoint 404s for
+ * viewers who can't see the post, in which case we render a quiet "post
+ * unavailable" chip instead of leaking anything. Previews are module-cached
+ * so long threads stay cheap.
+ *
+ * Layout order matches the owner's mockup exactly (publisher row, then
+ * caption, then media, then engagement counts, then a "View post" link) —
+ * the previous version put the thumbnail first and the publisher/caption
+ * below it, the reverse of the reference image. Counts use the app's own
+ * icon language (Heart/MessageCircle), not literal emoji reactions like the
+ * mockup's raw pixels show — this codebase has a standing "no emoji in
+ * product UI" rule (see [[no-emoji-design]]) that outranks pixel-matching a
+ * mockup's illustrative emoji.
  */
 
 export interface SharedPostPreview {
@@ -19,6 +31,8 @@ export interface SharedPostPreview {
   mediaKind: string;
   thumbnailUrl: string | null;
   createdAt: string;
+  likesCount: number;
+  commentsCount: number;
   publisher: { handle: string; displayName: string; avatarUrl: string | null; isVerified: boolean };
 }
 
@@ -55,6 +69,12 @@ export function extractSharedPost(body: string): { postId: string; text: string 
   return { postId: m[1]!, text: body.replace(m[0], "").trim() };
 }
 
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}K`;
+  return String(n);
+}
+
 export function MessagePostEmbed({ postId, mine }: { postId: string; mine: boolean }) {
   const [preview, setPreview] = useState<SharedPostPreview | "unavailable" | null>(() => cache.get(postId) ?? null);
 
@@ -79,12 +99,11 @@ export function MessagePostEmbed({ postId, mine }: { postId: string; mine: boole
 
   if (!preview) {
     return (
-      <span className="block w-full max-w-60 overflow-hidden rounded-2xl border border-border/60" aria-hidden>
-        <span className="block aspect-[4/3] w-full bg-secondary shimmer" />
+      <span className="block w-full max-w-72 overflow-hidden rounded-2xl border border-border/60" aria-hidden>
         <span className="block space-y-1.5 p-2.5">
           <span className="block h-3 w-28 rounded bg-secondary shimmer" />
-          <span className="block h-2.5 w-40 rounded bg-secondary shimmer" />
         </span>
+        <span className="block aspect-[4/3] w-full bg-secondary shimmer" />
       </span>
     );
   }
@@ -93,13 +112,37 @@ export function MessagePostEmbed({ postId, mine }: { postId: string; mine: boole
     <Link
       href={`/p/${preview.id}`}
       className={
-        "block w-full max-w-60 overflow-hidden rounded-2xl border transition hover:opacity-95 active:scale-[0.99] " +
+        "block w-full max-w-72 overflow-hidden rounded-2xl border transition hover:opacity-95 active:scale-[0.99] " +
         (mine ? "border-white/25 bg-black/20" : "border-border/60 bg-card")
       }
     >
+      {/* Publisher row */}
+      <span className="flex items-center gap-1.5 px-2.5 pt-2.5">
+        {preview.publisher.avatarUrl ? (
+          <Image src={preview.publisher.avatarUrl} alt="" width={20} height={20} className="h-5 w-5 rounded-full object-cover" />
+        ) : (
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-[10px] font-bold text-white">
+            {preview.publisher.displayName.charAt(0).toUpperCase()}
+          </span>
+        )}
+        <span className={"truncate text-xs font-semibold " + (mine ? "text-white" : "text-foreground")}>
+          {preview.publisher.displayName}
+        </span>
+        {preview.publisher.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-sky-400" /> : null}
+        <span className={"shrink-0 truncate text-xs " + (mine ? "text-white/60" : "text-muted-foreground")}>
+          @{preview.publisher.handle} · {timeAgo(preview.createdAt)}
+        </span>
+      </span>
+
+      {/* Caption */}
+      {preview.title ? (
+        <span className={"mt-1 block px-2.5 text-xs leading-snug " + (mine ? "text-white/90" : "text-foreground")}>{preview.title}</span>
+      ) : null}
+
+      {/* Media */}
       {preview.thumbnailUrl ? (
-        <span className="relative block aspect-[4/3] w-full overflow-hidden bg-neutral-950">
-          <Image src={preview.thumbnailUrl} alt="" fill sizes="240px" className="object-cover" />
+        <span className="relative mt-2 block aspect-[4/3] w-full overflow-hidden bg-neutral-950">
+          <Image src={preview.thumbnailUrl} alt="" fill sizes="288px" className="object-cover" />
           {preview.mediaKind === "video" ? (
             <span className="absolute inset-0 flex items-center justify-center">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur">
@@ -109,25 +152,18 @@ export function MessagePostEmbed({ postId, mine }: { postId: string; mine: boole
           ) : null}
         </span>
       ) : null}
-      <span className="block p-2.5">
-        <span className="flex items-center gap-1.5">
-          {preview.publisher.avatarUrl ? (
-            <Image src={preview.publisher.avatarUrl} alt="" width={18} height={18} className="h-[18px] w-[18px] rounded-full object-cover" />
-          ) : (
-            <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-[9px] font-bold text-white">
-              {preview.publisher.displayName.charAt(0).toUpperCase()}
-            </span>
-          )}
-          <span className={"truncate text-xs font-semibold " + (mine ? "text-white" : "text-foreground")}>
-            {preview.publisher.displayName}
+
+      {/* Engagement counts + View post */}
+      <span className="flex items-center justify-between px-2.5 py-2">
+        <span className={"flex items-center gap-3 text-xs font-medium " + (mine ? "text-white/80" : "text-muted-foreground")}>
+          <span className="flex items-center gap-1">
+            <Heart className="h-3.5 w-3.5" /> {formatCount(preview.likesCount)}
           </span>
-          {preview.publisher.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-sky-400" /> : null}
+          <span className="flex items-center gap-1">
+            <MessageCircle className="h-3.5 w-3.5" /> {formatCount(preview.commentsCount)}
+          </span>
         </span>
-        {preview.title ? (
-          <span className={"mt-1 line-clamp-2 block text-xs leading-snug " + (mine ? "text-white/85" : "text-muted-foreground")}>
-            {preview.title}
-          </span>
-        ) : null}
+        <span className={"text-xs font-semibold " + (mine ? "text-white" : "text-primary")}>View post</span>
       </span>
     </Link>
   );

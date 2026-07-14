@@ -87,15 +87,19 @@ export function MediaComposerSheet({
               </button>
             </div>
 
+            {/* Order + per-icon tile color matches the owner's mockup exactly:
+                row 1 Gallery/Camera/Video/Audio, row 2 Location/Contact/
+                Document/Poll — was Camera-first with every tile the same
+                blue-violet gradient, a different order and a flatter look. */}
             <div className="grid grid-cols-4 gap-3 px-5 pb-6 pt-2">
-              <PickerButton icon={Camera} label="Camera" onClick={() => cameraRef.current?.click()} />
-              <PickerButton icon={Images} label="Gallery" onClick={() => galleryRef.current?.click()} />
-              <PickerButton icon={VideoIcon} label="Video" onClick={() => videoRef.current?.click()} />
-              <PickerButton icon={FileIcon} label="Document" onClick={() => documentRef.current?.click()} />
-              <PickerButton icon={Music} label="Audio" onClick={() => audioRef.current?.click()} />
+              <PickerButton icon={Images} label="Gallery" tint="from-pink-500 to-fuchsia-600" onClick={() => galleryRef.current?.click()} />
+              <PickerButton icon={Camera} label="Camera" tint="from-blue-500 to-sky-600" onClick={() => cameraRef.current?.click()} />
+              <PickerButton icon={VideoIcon} label="Video" tint="from-violet-500 to-purple-600" onClick={() => videoRef.current?.click()} />
+              <PickerButton icon={Music} label="Audio" tint="from-cyan-500 to-blue-600" onClick={() => audioRef.current?.click()} />
               <PickerButton
                 icon={MapPin}
                 label="Location"
+                tint="from-amber-500 to-orange-600"
                 onClick={() => {
                   onClose();
                   onShareLocation();
@@ -104,14 +108,17 @@ export function MediaComposerSheet({
               <PickerButton
                 icon={User}
                 label="Contact"
+                tint="from-orange-500 to-red-600"
                 onClick={() => {
                   onClose();
                   onOpenContactPicker();
                 }}
               />
+              <PickerButton icon={FileIcon} label="Document" tint="from-rose-500 to-red-600" onClick={() => documentRef.current?.click()} />
               <PickerButton
                 icon={BarChart3}
                 label="Poll"
+                tint="from-violet-500 to-indigo-600"
                 onClick={() => {
                   onClose();
                   onOpenPollComposer();
@@ -172,14 +179,24 @@ export function MediaComposerSheet({
   );
 }
 
-function PickerButton({ icon: Icon, label, onClick }: { icon: typeof Camera; label: string; onClick: () => void }) {
+function PickerButton({
+  icon: Icon,
+  label,
+  tint,
+  onClick,
+}: {
+  icon: typeof Camera;
+  label: string;
+  tint: string;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-secondary/30 py-4 text-xs font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground active:scale-95"
     >
-      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white">
+      <span className={`flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br ${tint} text-white`}>
         <Icon className="h-5 w-5" />
       </span>
       {label}

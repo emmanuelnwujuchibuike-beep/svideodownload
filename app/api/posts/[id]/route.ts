@@ -43,6 +43,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         mediaKind: post.media_kind,
         thumbnailUrl: post.thumbnail_url,
         createdAt: post.created_at,
+        likesCount: post.likes_count,
+        commentsCount: post.comments_count,
         publisher: {
           handle: post.publisher.handle,
           displayName: post.publisher.displayName,

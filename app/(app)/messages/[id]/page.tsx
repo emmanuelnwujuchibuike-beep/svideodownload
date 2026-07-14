@@ -6,7 +6,7 @@ import { notFound, redirect } from "next/navigation";
 import { ConversationRoom } from "@/features/social/conversation-room";
 import { ThreadHeader } from "@/features/social/thread-header";
 import { getConversation, type ConversationView } from "@/lib/social/messages";
-import { getActiveStories, type StoryGroup } from "@/lib/social/stories";
+import { getActiveStoryForUser } from "@/lib/social/stories";
 import { createClient, getUserBounded } from "@/lib/supabase/server";
 import { withTimeout } from "@/lib/utils";
 
@@ -83,11 +83,12 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   // stories" strip); a group's several members each having stories is a
   // meaningfully different display this round didn't scope in. Best-effort:
   // a failed stories fetch just means no strip, never blocks the thread.
-  let otherStoryGroup: StoryGroup | null = null;
-  if (convo.type === "direct" && convo.other) {
-    const groups = await getActiveStories(user.id).catch(() => []);
-    otherStoryGroup = groups.find((g) => g.userId === convo.other!.id) ?? null;
-  }
+  // `getActiveStoryForUser`, NOT `getActiveStories` — the latter is scoped to
+  // "public profiles only" (a real bug found 2026-07-13: it silently hid this
+  // strip for any contact whose profile visibility isn't literally 'public',
+  // which is most real accounts — being in a direct conversation together is
+  // already a more intimate context than a public discovery feed).
+  const otherStoryGroup = convo.type === "direct" && convo.other ? await getActiveStoryForUser(convo.other.id) : null;
 
   return (
     // Mobile: a true full-viewport overlay — covers the persistent app

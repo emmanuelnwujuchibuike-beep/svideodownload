@@ -54,16 +54,26 @@ export default async function MessagesPage() {
         ]);
   const timedOut = !result.ok;
   const { conversations } = result;
+  const hasUnread = conversations.some((c) => c.unread);
 
   return (
     <>
-      {/* Mobile inbox — header per the owner's mockup: big bold title, two
-          glass action circles (compose + "..." with the remaining tools). */}
+      {/* Mobile inbox — header per the owner's mockup: big bold title + a
+          "Stay connected..." subtitle, a small unread dot next to the title,
+          and the action-circle cluster on the right. */}
       <div className="flex-1 overflow-y-auto px-3 pt-4 lg:hidden">
-        <h1 className="mb-4 flex items-center gap-2 text-[28px] font-bold tracking-[-0.03em]">
-          Messages
+        <div className="mb-4 flex items-start justify-between gap-2">
+          <div>
+            <h1 className="flex items-center gap-1.5 text-[28px] font-bold tracking-[-0.03em]">
+              Messages
+              {hasUnread ? (
+                <span aria-hidden className="h-2 w-2 rounded-full bg-[hsl(var(--brand-purple))]" />
+              ) : null}
+            </h1>
+            <p className="text-sm text-muted-foreground">Stay connected with the people you care about</p>
+          </div>
           <InboxHeaderActions />
-        </h1>
+        </div>
         {timedOut ? (
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/70 p-10 text-center">
             <p className="text-sm font-medium">This is taking longer than usual</p>

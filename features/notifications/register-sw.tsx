@@ -73,7 +73,16 @@ async function reloadIfNewDeploy() {
     // origin and survives a process kill+relaunch, so this now actually
     // remembers across a real cold start, while still correctly reloading
     // again the moment a genuinely newer build is deployed.
-    if (build && build !== BAKED_APP_BUILD && localStorage.getItem(RELOADED_KEY) !== build) {
+    // Never force-reload out from under an in-progress sign-in — a stale
+    // bundle during login is harmless (the very next natural check picks it
+    // up once they land on a real page), but a reload mid-flow can land back
+    // on a URL carrying an already-consumed one-time token/code, which then
+    // fails outright and reads exactly like "stuck loading forever" on
+    // login. Deliberately does NOT set the guard here — this build genuinely
+    // hasn't been reloaded for yet, so the next check (after they've
+    // navigated past /login) still needs to catch it.
+    const onAuthPage = location.pathname.startsWith("/login") || location.pathname.startsWith("/auth");
+    if (build && build !== BAKED_APP_BUILD && !onAuthPage && localStorage.getItem(RELOADED_KEY) !== build) {
       localStorage.setItem(RELOADED_KEY, build);
       reloadRespectingCriticalActivity();
     }

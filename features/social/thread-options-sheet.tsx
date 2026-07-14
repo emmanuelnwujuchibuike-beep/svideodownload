@@ -239,7 +239,7 @@ export function ThreadOptionsSheet({
                 sheet is about THIS person's chat, not a generic settings
                 list, so it leads with who they are, not a plain title bar. */}
             <div className="flex flex-col items-center gap-2 px-5 pb-5 pt-2 text-center">
-              <span className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-brand-tile shadow-[0_6px_20px_-6px] shadow-[hsl(var(--brand-purple)/0.5)] ring-4 ring-card">
+              <span className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-brand shadow-[0_6px_20px_-6px] shadow-[hsl(var(--brand-purple)/0.5)] ring-4 ring-card">
                 {otherAvatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={otherAvatarUrl} alt="" className="h-full w-full object-cover" />
@@ -267,7 +267,7 @@ export function ThreadOptionsSheet({
                   className="flex items-center justify-between rounded-2xl bg-card px-4 py-3.5 text-sm font-semibold shadow-sm ring-1 ring-border/50 transition active:scale-[0.98] hover:bg-secondary/40"
                 >
                   <span className="flex items-center gap-3">
-                    <ModuleIconBadge icon={User} className="h-9 w-9 rounded-xl" /> View profile
+                    <ModuleIconBadge icon={User} tone="vivid" className="h-9 w-9 rounded-xl" /> View profile
                   </span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </Link>
@@ -275,7 +275,7 @@ export function ThreadOptionsSheet({
 
               <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border/50">
                 <p className="mb-3 flex items-center gap-2.5 text-sm font-semibold">
-                  <ModuleIconBadge icon={Palette} className="h-9 w-9 rounded-xl" /> Chat theme
+                  <ModuleIconBadge icon={Palette} tone="vivid" className="h-9 w-9 rounded-xl" /> Chat theme
                 </p>
                 <div className="flex items-center gap-3.5">
                   <motion.button
@@ -317,7 +317,7 @@ export function ThreadOptionsSheet({
 
               <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border/50">
                 <p className="mb-3 flex items-center gap-2.5 text-sm font-semibold">
-                  <ModuleIconBadge icon={ImageIcon} className="h-9 w-9 rounded-xl" /> Chat wallpaper
+                  <ModuleIconBadge icon={ImageIcon} tone="vivid" className="h-9 w-9 rounded-xl" /> Chat wallpaper
                 </p>
                 <div className="flex items-center gap-3.5">
                   <motion.button
@@ -377,7 +377,7 @@ export function ThreadOptionsSheet({
 
               <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border/50">
                 <p className="mb-3 flex items-center gap-2.5 text-sm font-semibold">
-                  <ModuleIconBadge icon={Clock} className="h-9 w-9 rounded-xl" /> Disappearing messages
+                  <ModuleIconBadge icon={Clock} tone="vivid" className="h-9 w-9 rounded-xl" /> Disappearing messages
                 </p>
                 {/* Icon-on-top cards in a single row (owner mockup) — was a
                     2-column grid of horizontal pill buttons, a structurally

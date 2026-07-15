@@ -14,6 +14,18 @@ import { withTimeout } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 const LOAD_TIMEOUT_MS = 8000;
+// Deliberately shorter than LOAD_TIMEOUT_MS: this page already chains a
+// bounded auth check (getUserBounded, 6s) + the bounded conversation fetch
+// above before ever reaching the stories fetch below, which is explicitly
+// "best-effort, never blocks the thread" per its own comment there. Giving
+// it the same 8s budget as the CRITICAL conversation fetch meant the
+// page's real worst case (6s + 8s + 8s = 22s) comfortably exceeded even
+// the service worker's own navigation timeout (public/sw/strategies.js),
+// which then replaced this page's own graceful Retry state with a dead-end
+// offline screen instead — a real bug found 2026-07-15. 4s keeps this
+// fetch fast enough to matter for its purpose while shrinking the page's
+// worst case well clear of that outer cutoff.
+const STORY_TIMEOUT_MS = 4000;
 const TIMED_OUT = Symbol("timed-out");
 
 export const metadata: Metadata = {
@@ -98,7 +110,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   // raced it against a deadline the way `getConversation` above already is.
   const otherStoryGroup =
     convo.type === "direct" && convo.other
-      ? await withTimeout(getActiveStoryForUser(convo.other.id, user.id), LOAD_TIMEOUT_MS, null).catch(() => null)
+      ? await withTimeout(getActiveStoryForUser(convo.other.id, user.id), STORY_TIMEOUT_MS, null).catch(() => null)
       : null;
 
   return (

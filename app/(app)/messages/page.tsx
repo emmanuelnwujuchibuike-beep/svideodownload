@@ -86,19 +86,28 @@ export default async function MessagesPage() {
           iOS rubber-band bounce at the very top/bottom stays inside this box
           instead of chaining to the page and flashing the gradient behind it. */}
       <div className="flex-1 overflow-hidden bg-background lg:hidden">
-        <div className="h-full overflow-y-auto overscroll-y-none px-3 pt-2.5">
-          {/* Tightened 2026-07-14 (owner: header felt loose, wanted a denser
-              Snapchat-style top section) — pt-4→pt-2.5, mb-4→mb-2.5, dropped
-              the subtitle's own top gap by tightening the h1/p pairing. */}
-          <div className="mb-2.5 flex items-start justify-between gap-2">
-            <div>
+        <div className="h-full overflow-y-auto overscroll-y-none px-3 pt-3.5">
+          {/* 2026-07-14: tightened pt-4→pt-2.5, mb-4→mb-2.5 for a denser
+              Snapchat-style top section — 2026-07-15 (owner: now reads as
+              too compacted): eased back to pt-3.5/mb-3.5, still noticeably
+              tighter than the original pt-4/mb-4 but with real breathing
+              room restored above the title and before the search bar. */}
+          <div className="mb-3.5 flex items-start justify-between gap-2">
+            {/* 2026-07-15 (owner): the title block should sit a touch off the
+                true edge and the subtitle should read as a distinct, smaller
+                second line — not flush against the title's own left edge —
+                for a "professional" hierarchy; the row content below (avatar,
+                name) goes the OPPOSITE direction, pulled toward the true edge
+                (see conversation-list.tsx), so the two intentionally read as
+                different insets rather than one shared column. */}
+            <div className="pl-1">
               <h1 className="flex items-center gap-1.5 text-[28px] font-bold leading-tight tracking-[-0.03em]">
                 Messages
                 {hasUnread ? (
                   <span aria-hidden className="h-2 w-2 rounded-full bg-[hsl(var(--brand-purple))]" />
                 ) : null}
               </h1>
-              <p className="text-sm text-muted-foreground">Stay connected with the people you care about</p>
+              <p className="mt-1 pl-0.5 text-xs text-muted-foreground">Stay connected with the people you care about</p>
             </div>
             <InboxHeaderActions />
           </div>

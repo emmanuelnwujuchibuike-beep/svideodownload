@@ -59,12 +59,24 @@ SWX.staleWhileRevalidate = async function staleWhileRevalidate(request, cacheNam
 // parallel with SW boot — using it instead of a fresh fetch() shaves the
 // worker's cold-start latency off every navigation.
 //
-// Hard timeout (default 10s): fetch() has no built-in timeout, so a stalled
+// Hard timeout (default 20s): fetch() has no built-in timeout, so a stalled
 // connection (a flaky proxy, a socket that never resolves or rejects) used
 // to leave a navigation hanging indefinitely — the exact "webapp is stuck at
 // loading" symptom, since nothing here would ever fall back to the cached
 // page or the offline screen. Racing a timer forces a decision either way.
-SWX.networkFirst = async function networkFirst(request, { cacheName, preload, offlineFallback, timeoutMs = 10000 }) {
+//
+// 10s → 20s (2026-07-15, real bug): several personalized pages (messages,
+// an open thread) chain more than one server-side timeout of their own —
+// auth + a data fetch, sometimes + a second best-effort fetch — each
+// individually bounded but not bounded as a TOTAL, so their combined worst
+// case comfortably exceeded 10s even though each page has its own graceful
+// "this is taking longer than usual, Retry" state built for exactly that.
+// At 10s this timer routinely won the race, replacing that page's own
+// retry UI with the SW's dead-end offline page instead — for a user who
+// was online the entire time. 20s gives every page's own timeout budget
+// room to actually resolve (and show its own Retry state) before this
+// outer one ever has to step in.
+SWX.networkFirst = async function networkFirst(request, { cacheName, preload, offlineFallback, timeoutMs = 20000 }) {
   try {
     const res = await Promise.race([
       (async () => (preload && (await preload)) || (await fetch(request)))(),

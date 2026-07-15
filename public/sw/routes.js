@@ -19,11 +19,20 @@ SWX.OFFLINE_HTML =
   "p{color:#9ca3af;font-size:.9rem}" +
   "</style></head><body><div><h1>You’re offline</h1>" +
   "<p>Check your connection — Frenz will be right back.</p></div>" +
-  // Auto-recover: this page (served in place of a real navigation) can't
-  // rely on the app's own `online` listeners since none of its JS ever
-  // loaded — reload itself the moment connectivity returns instead of
-  // leaving the user stuck staring at a stale offline screen.
-  '<script>addEventListener("online",()=>location.reload())</script>' +
+  // Auto-recover, two ways. (1) The `online` event — real for a genuine
+  // disconnect. (2) A real bug found 2026-07-15: this page isn't only shown
+  // for an actual dropped connection — `networkFirst`'s own 10s hard
+  // timeout (strategies.js) serves this SAME fallback for a merely SLOW
+  // response (a cold serverless function, a query near its own timeout)
+  // while the device was online the entire time. `online` never fires in
+  // that case — there was no disconnect to recover from — so the tab was
+  // stuck on this dead-end screen indefinitely, reading exactly like the
+  // "stuck on loading" / "PWA shows an old screen" reports. A periodic
+  // retry re-enters the SW fetch handler for a fresh attempt regardless of
+  // which case this was; a real outage just keeps failing fast and re-
+  // showing this page until connectivity actually returns.
+  '<script>addEventListener("online",()=>location.reload());' +
+  "setInterval(()=>location.reload(),5000)</script>" +
   "</body></html>";
 
 function offlineFallback() {

@@ -45,7 +45,23 @@ html.dark #frenz-boot{background:#050816}
 //  3. Landing on /home with no `frenz_welcomed` cookie means the colorful
 //     BrandSplash is about to take over immediately — this skeleton removes
 //     itself instead of flashing first (unchanged from before).
-const JS = `(function(){var el=document.getElementById('frenz-boot');if(!el)return;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var alreadyBooted=false;try{alreadyBooted=sessionStorage.getItem('frenz-booted')==='1'}catch(e){}if(!justSignedIn&&alreadyBooted){el.style.display='none';return}try{sessionStorage.setItem('frenz-booted','1')}catch(e){}if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){el.style.display='none';return}}catch(e){}var start=Date.now();function hide(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){el.classList.add('frenz-boot--hide');setTimeout(function(){if(el&&el.parentNode)el.parentNode.removeChild(el)},440)},w)}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',hide)}else{hide()}setTimeout(hide,6000)})();`;
+// `hide()` re-queries `#frenz-boot` by id EVERY time it actually runs,
+// instead of trusting the `el` reference captured once at the top — a real
+// bug found 2026-07-15: a hydration mismatch ANYWHERE near this node's
+// position in the tree (root layout.tsx renders this alongside the app's
+// ambient background decoration, a handful of provider levels up) makes
+// React discard and regenerate this whole subtree client-side, which
+// creates a BRAND NEW DOM node with the same id. The captured `el` closure
+// still points at the old, now-detached node — every call after that
+// (including the `setTimeout(hide,6000)` failsafe below, which exists
+// specifically to always recover) was silently operating on a node no
+// longer in the document, so the FRESH node React actually rendered was
+// never hidden or removed — a genuine permanent "stuck on the boot splash"
+// with no failsafe catching it, reproduced live on /messages. Re-querying
+// at call time always finds whichever node is currently live, React-
+// generated or original, so this now self-heals regardless of a mismatch's
+// underlying cause.
+const JS = `(function(){var el=document.getElementById('frenz-boot');if(!el)return;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var alreadyBooted=false;try{alreadyBooted=sessionStorage.getItem('frenz-booted')==='1'}catch(e){}if(!justSignedIn&&alreadyBooted){el.style.display='none';return}try{sessionStorage.setItem('frenz-booted','1')}catch(e){}if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){el.style.display='none';return}}catch(e){}var start=Date.now();function hide(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){var live=document.getElementById('frenz-boot');if(!live)return;live.classList.add('frenz-boot--hide');setTimeout(function(){if(live&&live.parentNode)live.parentNode.removeChild(live)},440)},w)}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',hide)}else{hide()}setTimeout(hide,6000)})();`;
 
 // Must run BEFORE the <style> below is evaluated, AND before next-themes'
 // own injected script (rendered later, wherever <ThemeProvider> sits) so the

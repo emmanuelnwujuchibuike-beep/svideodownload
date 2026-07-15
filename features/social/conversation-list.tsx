@@ -389,7 +389,20 @@ export function ConversationList({
           ) : null}
         </ul>
       ) : (
-        <ul className={cn("space-y-0.5", pane && "min-h-0 flex-1 overflow-y-auto overscroll-y-none px-2 pb-3")}>
+        <ul
+          className={cn(
+            // Owner ask (2026-07-15): rows read "tightly packed" — space-y-0.5
+            // (2px) left almost no air between rows. space-y-2 (8px) gives each
+            // row real separation instead of the hairline dividers alone doing
+            // all the work. `-ml-1` (mobile only): pulls the row content 4px
+            // past the page's own 12px gutter, landing the avatar ~8px from the
+            // true screen edge — a further, explicit step past the earlier
+            // pl-0 fix, which only matched the avatar to the search bar/tabs'
+            // OWN inset rather than actually reaching the edge.
+            "space-y-2",
+            pane && "min-h-0 flex-1 overflow-y-auto overscroll-y-none px-2 pb-3",
+          )}
+        >
           {pinned.length > 0 ? (
             <li className={cn(pane && "px-1")}>
               <div className="mb-2 flex items-center justify-between px-2 pt-1">
@@ -594,7 +607,18 @@ function ConversationRow({
         animate={{ x: swipeOpen ? -SWIPE_STRIP_WIDTH : 0 }}
         transition={springs.sheet}
         onDragEnd={(_, info) => {
-          const shouldOpen = info.offset.x < -SWIPE_STRIP_WIDTH / 2 || info.velocity.x < -400;
+          // Raised 2026-07-15 (owner: opening on a "light touch" instead of
+          // only a deliberate hard slide) — `velocity.x < -400` alone used to
+          // open the strip on a quick, SHORT flick (a light, fast tap-drag
+          // with almost no travel), since it was an unconditional OR against
+          // the distance check. Now a fast flick only counts if it's ALSO
+          // covered a real fraction of the strip (not just registered high
+          // velocity over a couple of pixels), and the velocity bar itself is
+          // much higher — a genuinely hard slide (>55% of the strip) still
+          // always opens it regardless of speed.
+          const draggedFar = info.offset.x < -SWIPE_STRIP_WIDTH * 0.55;
+          const firmFlick = info.offset.x < -SWIPE_STRIP_WIDTH * 0.25 && info.velocity.x < -900;
+          const shouldOpen = draggedFar || firmFlick;
           setSwipeOpen(shouldOpen);
           if (shouldOpen) haptic("light");
         }}
@@ -615,7 +639,15 @@ function ConversationRow({
           // other interactive surface in this app already has (owner ask,
           // 2026-07-14: "premium, lively" — a row with zero press feedback on
           // the PRIMARY mobile surface of this feature was a real gap).
-          "flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-3 pl-0 pr-3 transition active:scale-[0.98]",
+          // -ml-2 (2026-07-15, pushed further per owner follow-up: "the
+          // profile header and name" still wasn't far enough left) pulls 8px
+          // past the page's own 12px gutter (px-3), landing the avatar+name
+          // block ~4px from the true screen edge — pl-0 alone only matched
+          // the search bar/tabs' OWN inset, not the actual edge. Deliberately
+          // now MORE left than the header title block above (pl-1 there) —
+          // the two are meant to read as different insets, not one shared
+          // column.
+          "-ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-3.5 pl-0 pr-3 transition active:scale-[0.98]",
           active
             ? "bg-gradient-to-r from-blue-500/[0.10] to-violet-500/[0.10] ring-1 ring-inset ring-violet-500/25"
             : "hover:bg-secondary/40",
@@ -725,7 +757,9 @@ function ConversationRow({
         {openMenuId === c.id && menuPos
           ? createPortal(
               <>
-                <button type="button" aria-label="Close menu" onClick={onCloseMenu} className="fixed inset-0 z-40 cursor-default" />
+                {/* onPointerDown, not onClick — see the same fix + rationale
+                    on the message-bubble menu's backdrop in conversation-room.tsx. */}
+                <button type="button" aria-label="Close menu" onPointerDown={onCloseMenu} className="fixed inset-0 z-40 cursor-default" />
                 <div
                   style={{ top: menuPos.top, left: menuPos.left, width: menuWidth }}
                   className="glass-strong animate-scale-in fixed z-50 overflow-hidden rounded-2xl py-1"

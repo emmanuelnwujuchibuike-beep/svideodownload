@@ -1785,7 +1785,17 @@ export function ConversationRoom({
                               <button
                                 type="button"
                                 aria-label="Close menu"
-                                onClick={() => setOpenMenuId(null)}
+                                // onPointerDown, not onClick (2026-07-15, owner:
+                                // the backdrop wasn't reliably closing this menu
+                                // on tap): a plain `click` on touch only fires
+                                // after touch-end, once the browser's own tap-vs-
+                                // scroll disambiguation resolves — over a
+                                // scrollable message list that resolution can
+                                // swallow the synthetic click entirely, leaving
+                                // the menu open. `pointerdown` fires immediately
+                                // on first contact, before any scroll-gesture
+                                // arbitration, so the backdrop reliably wins.
+                                onPointerDown={() => setOpenMenuId(null)}
                                 className="fixed inset-0 z-40 cursor-default"
                               />
                               <div

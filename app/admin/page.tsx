@@ -37,6 +37,7 @@ import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
 import { PricingEditor } from "@/features/admin/pricing-editor";
 import { ModerationQueue } from "@/features/admin/moderation-queue";
+import { UserModeration } from "@/features/admin/user-moderation";
 import { AppealsQueue } from "@/features/admin/appeals-queue";
 import { PushDeliveryMonitor } from "@/features/admin/push-delivery-monitor";
 import { TrendingEditor } from "@/features/admin/trending-editor";
@@ -271,6 +272,11 @@ export default async function AdminPage() {
         {/* Monetization controls + managers + analytics */}
         <MonetizationSettings settings={monetization} />
         <ModerationQueue targets={reportedTargets} />
+        {/* Sits next to the report queue on purpose: the queue can only act on
+            accounts somebody already REPORTED, which is the wrong constraint
+            for a security hide the admin spots first. Same audited moderate()
+            write path — this only adds reach. */}
+        <UserModeration />
         <AppealsQueue appeals={pendingAppeals} />
         <MessagingMonitor stats={messagingStats} />
         <PushDeliveryMonitor stats={pushDeliveryStats} />

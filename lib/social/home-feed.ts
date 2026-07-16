@@ -169,6 +169,8 @@ export function rankForYou(
       row.likes_count + row.comments_count * 2 + row.shares_count * 3 + row.saves_count * 2 + row.downloads_count * 2;
     const freshness = 40 / (1 + ageHours / 30);
     const interest = row.category && boosted.has(row.category as Category) ? 60 : 0;
+    const createdMs = new Date(row.created_at).getTime();
+    const isBrandNew = now - createdMs < NEW_POST_WINDOW_MS;
     const base = relationship + quality + freshness + interest;
     // Per-refresh reshuffle (owner: "every refresh should reshuffle the feed
     // post arrangement like tiktok"). MULTIPLICATIVE, not additive: it varies a
@@ -177,13 +179,51 @@ export function rankForYou(
     // gets buried and a weak one never rockets to the top — the feed feels
     // alive without the ranking becoming a lottery.
     const score = seed ? base * (1 + (seededUnit(seed, row.id) - 0.5) * SHUFFLE_SPREAD) : base;
-    return { row, score, i };
+    return { row, score, i, createdMs, isBrandNew };
   });
-  // Tiebreak on original (recency) order — equal scores never shuffle
-  // arbitrarily between otherwise-identical requests.
-  scored.sort((a, b) => b.score - a.score || a.i - b.i);
+  scored.sort((a, b) => {
+    // TIER 1 — a brand-new post is always above an older one, and is NOT
+    // jittered (owner: "new post should be at the top when the new post button
+    // is clicked and when is refresh").
+    //
+    // This deliberately overrides scoring AND the shuffle for the window,
+    // because the two asks genuinely conflict: "reshuffle every refresh" and
+    // "the post I just made is at the top" cannot both hold for the same post.
+    // Resolved by scope rather than by fighting over score — the newest posts
+    // pin, everything older reshuffles. That's also what makes the "N new
+    // posts" pill honest: it refreshes, and the thing it promised is visibly
+    // at the top instead of somewhere down the list where the ranker happened
+    // to put it.
+    //
+    // A score-based fix (a big freshness bonus) was the obvious alternative and
+    // is worse: `quality` is unbounded (likes + 2*comments + 3*shares + …), so
+    // any fixed bonus is an arms race a viral old post eventually wins, and the
+    // ±25% jitter perturbs it anyway. A hard tier can't be outbid.
+    if (a.isBrandNew !== b.isBrandNew) return a.isBrandNew ? -1 : 1;
+    // Among brand-new posts: strict recency, newest first. `a.i - b.i` is the
+    // tiebreak for identical timestamps (rows arrive newest-first), so equal
+    // ages keep their original order rather than shuffling arbitrarily.
+    if (a.isBrandNew) return b.createdMs - a.createdMs || a.i - b.i;
+    // TIER 2 — everything else: jittered score, tiebreak on original
+    // (recency) order so equal scores never shuffle arbitrarily between
+    // otherwise-identical requests.
+    return b.score - a.score || a.i - b.i;
+  });
   return scored.map((s) => s.row);
 }
+
+/**
+ * How long a post counts as "brand new" and pins to the top of "for_you".
+ *
+ * 30 minutes is a deliberate compromise between the owner's two asks. Too long
+ * and the top of the feed stops reshuffling (every recent post is pinned, so
+ * the shuffle only ever reaches the tail); too short and a post you made ten
+ * minutes ago has already sunk into the shuffle, which reads as "my post
+ * vanished". At this platform's posting volume most refreshes have zero posts
+ * in this window — so the common case is a full reshuffle, and pinning only
+ * kicks in exactly when there IS something new to show.
+ */
+const NEW_POST_WINDOW_MS = 30 * 60 * 1000;
 
 /** ±25% of each post's own score. Enough to visibly re-order comparable posts
  *  every refresh; far too little to invert a real quality gap. */

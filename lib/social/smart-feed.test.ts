@@ -89,3 +89,44 @@ describe("balanceByKind", () => {
     expect(balanceByKind(items, 2)).toHaveLength(6);
   });
 });
+
+/**
+ * The server pins brand-new posts to the top of "for_you" (rankForYou's
+ * NEW_POST_WINDOW_MS) so the realtime "N new posts" pill is honest — tap it and
+ * the promised post is visibly at position 0. But SmartFeed runs every returned
+ * page through `balanceByKind` before rendering, which REORDERS items. If that
+ * ever moved index 0, it would silently undo the pinning client-side and the
+ * pill would refresh to... the new post somewhere down the list.
+ *
+ * It's safe today by construction (the first iteration has no `lastKind`, so it
+ * always takes idx 0) — but that's incidental to balancing, not a stated
+ * contract. This pins it as one.
+ */
+describe("balanceByKind — must never displace the pinned top post", () => {
+  const item = (id: string, mediaKind: string) =>
+    ({ id, mediaKind }) as unknown as Parameters<typeof balanceByKind>[0][number];
+
+  it("keeps the first item first, even when it starts a same-kind run", () => {
+    const items = [
+      item("brand-new", "video"),
+      item("old-1", "video"),
+      item("old-2", "video"),
+      item("old-3", "image"),
+    ];
+    expect(balanceByKind(items)[0]?.id).toBe("brand-new");
+  });
+
+  it("keeps the first item first regardless of the kind mix", () => {
+    for (const kinds of [["image", "image", "image"], ["video", "image", "video"], ["image", "video", "video"]]) {
+      const items = [item("brand-new", kinds[0]!), item("b", kinds[1]!), item("c", kinds[2]!)];
+      expect(balanceByKind(items)[0]?.id).toBe("brand-new");
+    }
+  });
+
+  it("never drops or duplicates while balancing", () => {
+    const items = Array.from({ length: 12 }, (_, i) => item(`p${i}`, i % 3 === 0 ? "image" : "video"));
+    const out = balanceByKind(items);
+    expect(out).toHaveLength(12);
+    expect(new Set(out.map((i) => i.id)).size).toBe(12);
+  });
+});

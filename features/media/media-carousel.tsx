@@ -61,10 +61,8 @@ export function MediaCarousel({
   const raf = useRef(0);
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
-  const singleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPt = useRef<{ x: number; y: number } | null>(null);
   const moved = useRef(false);
-  useEffect(() => () => { if (singleTimer.current) clearTimeout(singleTimer.current); }, []);
 
   // Sequential/priority loading: an album with many photos was firing N
   // simultaneous image requests the instant it mounted, so the ONE slide
@@ -115,27 +113,24 @@ export function MediaCarousel({
     if (!startPt.current || moved.current) return;
     if (Math.abs(e.clientX - startPt.current.x) > 12 || Math.abs(e.clientY - startPt.current.y) > 12) moved.current = true;
   };
-  // Kept equal to the double-tap detection window — see FeedImage's identical
-  // comment; was 300/280, tightened to 220/220.
+  // 2026-07-15 (owner: opening should be instant, zero wait) — see
+  // FeedImage's identical fix/comment. A tap opens the fullscreen viewer
+  // immediately, no longer held back waiting to see if a second tap
+  // follows; a genuinely fast second tap additionally fires the Wow burst
+  // as a bonus, never gating or delaying the open.
   const DBLTAP_WINDOW = 220;
   const onSlideTap = (i: number, m: CarouselMedia) => () => {
     if (moved.current) return;
     const now = Date.now();
     if (now - lastTap.current < DBLTAP_WINDOW) {
-      // Second tap arrived in time → Wow, not fullscreen.
-      if (singleTimer.current) clearTimeout(singleTimer.current);
       lastTap.current = 0;
       setBurst((b) => b + 1);
       onDoubleTapLike?.();
       return;
     }
-    // Hold the open-fullscreen action briefly in case a second tap follows.
     lastTap.current = now;
-    if (singleTimer.current) clearTimeout(singleTimer.current);
-    singleTimer.current = setTimeout(() => {
-      if (onExpandItem) onExpandItem(i, m);
-      else onExpand?.();
-    }, DBLTAP_WINDOW);
+    if (onExpandItem) onExpandItem(i, m);
+    else onExpand?.();
   };
 
   const onScroll = () => {
@@ -240,16 +235,16 @@ export function MediaCarousel({
                     <div
                       role="button"
                       aria-label="Open photo"
-                      // Subtle press feedback (Part 10) — safe per-slide since
-                      // the Expand/dots/counter controls all live OUTSIDE the
-                      // scroller as siblings, never nested inside a slide.
-                      // cursor-default overrides Tailwind Preflight's
-                      // `[role="button"]{cursor:pointer}` — a mouse-pointer
-                      // hand icon spanning the ENTIRE slide read as "this is
-                      // grabbing my scroll" even though the wheel redirect
-                      // above already made it scroll correctly; a plain arrow
-                      // matches every other (single-media) feed post.
-                      className="absolute inset-0 cursor-default transition-transform duration-150 active:scale-[0.985]"
+                      // No press-scale (2026-07-15, owner: images shouldn't
+                      // move under touch/press-hold) — see FeedImage's
+                      // identical fix. cursor-default overrides Tailwind
+                      // Preflight's `[role="button"]{cursor:pointer}` — a
+                      // mouse-pointer hand icon spanning the ENTIRE slide
+                      // read as "this is grabbing my scroll" even though the
+                      // wheel redirect above already made it scroll
+                      // correctly; a plain arrow matches every other
+                      // (single-media) feed post.
+                      className="absolute inset-0 cursor-default"
                       onPointerDown={onSlidePointerDown}
                       onPointerMove={onSlidePointerMove}
                       onPointerUp={onSlideTap(i, m)}
@@ -375,7 +370,7 @@ function CarouselVideo({
     <div
       role="button"
       aria-label="Watch video"
-      className="absolute inset-0 cursor-default transition-transform duration-150 active:scale-[0.985]"
+      className="absolute inset-0 cursor-default"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

@@ -38,7 +38,6 @@ export function FeedImage({
 }) {
   const hasDims = !!width && !!height && width > 0 && height > 0;
   const lastTap = useRef(0);
-  const singleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPt = useRef<{ x: number; y: number } | null>(null);
   const moved = useRef(false);
   const [burst, setBurst] = useState(0);
@@ -92,34 +91,40 @@ export function FeedImage({
     if (!startPt.current || moved.current) return;
     if (Math.abs(e.clientX - startPt.current.x) > 12 || Math.abs(e.clientY - startPt.current.y) > 12) moved.current = true;
   };
-  // Single-tap-open vs. double-tap-to-Wow disambiguation: DBLTAP_WINDOW and
-  // OPEN_DELAY are kept equal so the open timer can never fire before a
-  // genuine second tap has a chance to cancel it (was 300/280 — tightened to
-  // shave real latency off every single tap without reopening that gap).
+  // 2026-07-15 (owner: opening should be instant, zero wait): a single tap
+  // used to wait out a 220ms window before opening, purely to see whether a
+  // SECOND tap was coming (double-tap-to-Wow) — real, felt latency on every
+  // single open. `ImageViewer` (the full-screen viewer this opens into)
+  // already has its own independent double-tap-to-like once open, so
+  // there's no need to gate the inline thumbnail's open on that disambig
+  // any more: a tap opens immediately, full stop. A genuinely fast second
+  // tap (still tracked below) additionally fires the Wow burst here too —
+  // pure bonus, never blocks or delays the open.
   const DBLTAP_WINDOW = 220;
   const onPointerUp = () => {
     if (moved.current) return;
     const now = Date.now();
     if (now - lastTap.current < DBLTAP_WINDOW) {
-      // Double tap → like.
-      if (singleTimer.current) clearTimeout(singleTimer.current);
       lastTap.current = 0;
       setBurst((b) => b + 1);
       onDoubleTapLike();
       return;
     }
     lastTap.current = now;
-    if (singleTimer.current) clearTimeout(singleTimer.current);
-    singleTimer.current = setTimeout(() => onExpand(), DBLTAP_WINDOW);
+    onExpand();
   };
 
   return (
     <div
       ref={containerRef}
-      // Subtle press feedback (Part 10's "lift on touch" ask) — safe here
-      // since FeedImage has no nested interactive buttons of its own to
-      // double up with (unlike a whole feed card, which has its action bar).
-      className={cn("relative flex items-center justify-center overflow-hidden bg-neutral-950 transition-transform duration-150 active:scale-[0.985]", className)}
+      // No press-scale here (2026-07-15, owner: "the pictures in feed move
+      // when I touch it or press and hold, I want it fixed") — Part 10's
+      // "lift on touch" `active:scale-[0.985]` was a deliberate press-
+      // feedback treatment, but on a large feed photo any scale shift reads
+      // as the image itself shifting/wobbling under a finger, not a subtle
+      // press cue. The image now stays perfectly still through any touch,
+      // press, or press-and-hold.
+      className={cn("relative flex items-center justify-center overflow-hidden bg-neutral-950", className)}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

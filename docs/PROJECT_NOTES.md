@@ -2112,3 +2112,80 @@ best-effort/optional, so none of this gates playback before it's applied.
 
 _This file is intentionally free of secrets. If you're looking for keys/tokens,
 they're in your local `.env.local` (gitignored)._
+
+---
+
+## 2026‑07‑16 — Composer split (Post/Reel/Story), icon flattening, three chat bugs (`93a3b75`)
+
+**Composer split — done.** Owner: *"every create reels, story, and post button
+should open directly to the create reels page, all shouldnt use one global editor
+style sheet, use facebook and instagram combine style sheet."* Post, Reel and
+Story are now three real routes with three separate surfaces:
+
+- `/create/post` — Facebook‑led: light, text‑first. Close + title + Post pill,
+  author row with a Public audience chip, "What's on your mind, {first}?",
+  cover‑first album rail, inline photo editor, FB's "Add to your post" tray.
+- `/create/reel` — Instagram‑led: black, 9:16, `object-contain` (never‑crop).
+  Video‑only and single‑item, **refused at pick time** — any album or non‑video
+  publishes to the feed by product rule, so accepting one and silently
+  redirecting the user's "Reel" would be dishonest.
+- `/create/story` — Instagram‑led: black, single media, IG's "Your story" send
+  chip, 24h framing, block Story Studio entry.
+
+The routes live inside the `(app)` group so the persistent shell stays mounted
+(instant transition); each surface is a `fixed inset-0` layer over the chrome,
+the same pattern message threads use. `features/create/composer-core.ts` shares
+**mechanics only** (validation, object‑URL lifecycle, poster capture, upload,
+publish) — one network contract, zero shared styling. No backend change was
+needed: `/api/stories` already spoke `post|reel|story|both`. All four entry
+points migrated (topbar `+`, nav `+` sheet, home stories rail, `/friends`
+rail); `upload-modal.tsx` + `upload-store.ts` deleted.
+
+**Continue Watching.** The restore chip that "just loads and disappears" was
+real: visibility was a server‑side filter, so the chip could only PATCH and
+remove itself while the section waited for the next Home load. Visibility is
+client‑gated now (`home-modules-store.tsx`) while the server still renders every
+module — instant both ways. A `router.refresh()` would have worked but blows
+away the Router Cache (the "Home reloads on every entry" bug). Migration `0079`
+is a one‑time data repair clearing accidental `continue_watching` hides (3 of 4
+rows had it), guarded by a new `public.schema_repairs` ledger so a re‑run can't
+undo a later deliberate hide.
+
+**Icons.** Owner: *"remove all blue icon back from all pages … whatsapp ios app
+kind of emoji without background color … high icon contrast to be darker."*
+`IconTile` / `ModuleIconBadge` / `NavIconBadge` are now bare full‑contrast
+glyphs — no tile, gradient, gloss, ring or shadow. That covered "all pages" in
+one change. Also stripped the `+` sheet's tinted mockup tiles (incl. the blue
+Download tile — this supersedes the earlier "reproduce the mockup exactly"
+instruction), the compose launcher, and the nav profile fallback. `tint`/`tone`
+props were removed, not ignored. Left alone: the nav's blue active‑tab color and
+the gradient `+` FAB — both explicit prior owner specs, and both foreground/
+button color rather than an icon background.
+
+**Chat, three real bugs.**
+1. *Sent image/video collapsed to a small empty bubble until you left and
+   re‑entered the thread.* Two causes, both required: `append()` replaced the
+   optimistic bubble wholesale with the realtime echo, which carries
+   `attachments: []` by design (attachment rows land in a separate insert),
+   wiping media already on screen; and `resync()`'s change‑detector ignored
+   attachments, so the recovery path fetched them and dropped them with
+   `return prev`. Preserving the optimistic list is safe — staged attachments
+   are uploaded at pick time, so they already hold the final URLs.
+2. *Header not fixed with the keyboard open.* `interactiveWidget:
+   "resizes-content"` shrinks the layout viewport on Android, but iOS shrinks
+   only the VISUAL viewport and scrolls — so a `fixed inset-0` thread is pushed
+   off‑screen. `useKeyboardViewportPin()` re‑anchors to
+   `visualViewport.offsetTop/height` while the keyboard is up.
+3. *Wallpaper scope* — "Both of you" (shared `conversations.wallpaper_url`) vs
+   "Only you" (`chat_appearance_preferences.wallpaper_url`, migration `0080`).
+   Two independent pictures; personal wins, clearing falls back to shared.
+
+**Pending migrations: 0073 (still), 0079, 0080.** All degrade safely if
+unapplied.
+
+**Verification note.** tsc/lint/170 tests/build were all green *and still
+missed three things* that only screenshots caught: a blue camera icon in the new
+Post tray, a blue→violet Story hero, and one surviving `bg-brand-tile` — each
+exactly what the icon pass was meant to remove. Fixed before shipping. Driven
+end‑to‑end in a real browser with a real session: the `+` sheet routes to
+`/create/reel` and `/create/story`, and no tinted icon tiles remain.

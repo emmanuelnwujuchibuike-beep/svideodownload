@@ -49,7 +49,7 @@ import { cn } from "@/lib/utils";
 export function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { handle } = useEntitlements();
+  const { handle, avatarUrl } = useEntitlements();
   // Cached-first: shows the last-known unread count instantly, updates live.
   const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox);
   const unread = inbox?.unread ?? 0;
@@ -124,7 +124,12 @@ export function MobileNav() {
 
         {/* Profile (avatar-in-circle) — active state is now a colored ring
             accent on the same tile, not a different fill entirely, matching
-            the inline-color-change treatment the other tabs use. */}
+            the inline-color-change treatment the other tabs use.
+            2026-07-15 (owner ask): the tab always showed the generic person
+            glyph, never the visitor's own actual profile picture — swapped
+            to the real `profiles.avatar_url` (same source `useEntitlements`
+            already exposes for the topbar) when set, falling back to the
+            plain icon only when there truly isn't one. */}
         <Link
           href={profileHref}
           onPointerDown={() => router.prefetch(profileHref)}
@@ -138,11 +143,17 @@ export function MobileNav() {
             <PressIcon active={profileActive}>
               <span
                 className={cn(
-                  "bg-brand-tile flex h-6 w-6 items-center justify-center rounded-full text-white transition",
+                  "flex h-6 w-6 items-center justify-center rounded-full text-white transition",
+                  avatarUrl ? "overflow-hidden" : "bg-brand-tile",
                   profileActive && "ring-2 ring-primary ring-offset-1 ring-offset-background",
                 )}
               >
-                <FrenzPersonSolid className="h-3.5 w-3.5" />
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <FrenzPersonSolid className="h-3.5 w-3.5" />
+                )}
               </span>
             </PressIcon>
           </NavLift>

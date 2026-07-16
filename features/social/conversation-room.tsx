@@ -39,6 +39,7 @@ import { ContactPickerSheet } from "@/features/social/contact-picker-sheet";
 import { DocumentAttachmentCard } from "@/features/social/document-attachment-card";
 import { EmojiPickerButton } from "@/features/social/emoji-picker-button";
 import { ForwardSheet } from "@/features/social/forward-sheet";
+import { cacheThread, getCachedThread } from "@/features/social/thread-cache";
 import { ReshareSheet } from "@/features/social/reshare-sheet";
 import { INBOX_KEY, loadInbox } from "@/features/social/inbox";
 import { MediaComposerSheet } from "@/features/social/media-composer-sheet";
@@ -134,22 +135,6 @@ function draftKey(conversationId: string): string {
  * thread was cached but not open — this only removes the visible reload,
  * never the correctness of catching up.
  */
-interface ThreadCacheEntry {
-  messages: MessageItem[];
-  syncedAt: string;
-}
-const THREAD_CACHE_LIMIT = 10;
-const threadCache = new Map<string, ThreadCacheEntry>();
-
-function cacheThread(conversationId: string, entry: ThreadCacheEntry) {
-  threadCache.delete(conversationId); // re-insert so Map's insertion order tracks MRU
-  threadCache.set(conversationId, entry);
-  if (threadCache.size > THREAD_CACHE_LIMIT) {
-    const oldestKey = threadCache.keys().next().value;
-    if (oldestKey) threadCache.delete(oldestKey);
-  }
-}
-
 interface RawMessage {
   id: string;
   sender_id: string;
@@ -247,7 +232,7 @@ export function ConversationRoom({
   // `initial` payload — see the `threadCache` doc comment above. Read once
   // per mount (this component remounts on every `/messages/[id]` navigation,
   // same or different id, since the route is force-dynamic).
-  const cachedThread = threadCache.get(conversationId);
+  const cachedThread = getCachedThread(conversationId);
   const [messages, setMessages] = useState<MessageItem[]>(cachedThread?.messages ?? initial);
   // Theme/wallpaper now come from the shared ThreadAppearanceProvider (wraps
   // this component + ThreadHeader together) instead of this component's own

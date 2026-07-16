@@ -9,14 +9,21 @@ import { createPortal } from "react-dom";
 
 import { mutate, useQuery } from "@/features/data";
 import { usePresence } from "@/features/friends/use-presence";
+import { isThreadWarm, warmThread } from "@/features/social/thread-cache";
 import { GroupAvatarStack } from "@/features/social/group-avatar-stack";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { useTypingIndicator } from "@/features/social/use-typing";
 import { haptic } from "@/lib/motion/haptics";
+import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { springs } from "@/lib/motion/springs";
 import type { FriendRequestItem } from "@/lib/social/friends";
 import type { ConversationSummary } from "@/lib/social/messages";
 import { cn } from "@/lib/utils";
+
+/** How many threads the inbox pre-loads, in display order. The room's own
+ *  thread cache holds 10, so warming past this would only evict what it just
+ *  fetched. */
+const WARM_THREAD_LIMIT = 10;
 
 function timeAgo(iso: string): string {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -81,15 +88,17 @@ export function ConversationList({
 
   // Owner ask: "all chats should download automatically... to avoid load
   // when entering each chat." `router.prefetch()` is Next's own supported
-  // route-prefetch — it's what actually makes a client-side thread
-  // navigation feel instant (warms the route's JS chunk + RSC payload
-  // ahead of the tap). An earlier version of this also ran a second,
-  // separate warm-up (`prefetchAllThreads`) that fetched each thread's
-  // messages into a client cache — removed: nothing ever read that cache
-  // back out (the thread page still does its own server-side fetch per
-  // navigation), so it was pure overhead, AND it silently marked every
-  // other member's messages read/delivered on every inbox load — a real
-  // privacy leak against the read-receipts toggle this same round shipped.
+  // route-prefetch — it warms the route's JS chunk + RSC payload ahead of the
+  // tap. The MESSAGES themselves are warmed separately, just below.
+  //
+  // History worth keeping: an earlier `prefetchAllThreads` did the message half
+  // and was DELETED for two reasons — nothing read its cache back out, and it
+  // silently marked every other member's messages read/delivered on every inbox
+  // load, a real privacy leak against the read-receipts toggle. Both are fixed
+  // now, deliberately: the warm-up below writes into the same module cache
+  // `ConversationRoom` actually reads on mount, and it goes through `?peek=1`,
+  // which reads without touching receipts.
+  //
   // Sorted (not insertion-order) so a live reorder of the SAME conversation
   // set — new message bumping a thread to the top — doesn't recompute this
   // key and re-fire the warm-up; only an actual join/leave does. Capped so
@@ -100,6 +109,47 @@ export function ConversationList({
     for (const id of idsKey.split(",").slice(0, 20)) router.prefetch(`/messages/${id}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- idsKey IS the dependency; conversations/router change identity too often (live badge/order updates)
   }, [idsKey]);
+
+  // Message warm-up (owner, 2026-07-16: "chats should load one after the other
+  // from top to bottom immediately the message page is opened to avoid loading
+  // of chats").
+  //
+  // `router.prefetch` above only warms the ROUTE (chunk + RSC payload); the
+  // thread's message list was still fetched on open. This pre-loads the
+  // messages themselves into the SAME module cache `ConversationRoom` reads on
+  // mount, so opening a warmed chat paints in the first frame.
+  //
+  // Three constraints, each load-bearing:
+  //  1. `?peek=1` — reads WITHOUT marking anything read. An earlier warm-up was
+  //     DELETED for exactly this: going through the normal path marked every
+  //     conversation read just from opening the inbox, showing senders a false
+  //     "Seen". See getConversation's `peek` option.
+  //  2. Strictly SEQUENTIAL, in display order — "one after the other from top to
+  //     bottom" is also the right engineering: 20 parallel thread fetches would
+  //     saturate a phone's connection and make the FIRST chat (the one most
+  //     likely to be tapped) slower, not faster.
+  //  3. Skipped on data-saver/2G, and cancelled on unmount — this spends
+  //     bandwidth on chats the user may never open, so it must never cost a
+  //     constrained viewer anything.
+  // The room still resyncs on mount, so a warmed thread is never stale-but-
+  // trusted; warming only removes the visible load.
+  const orderKey = conversations.map((c) => c.id).join(",");
+  useEffect(() => {
+    if (!orderKey || isSlowConnection()) return;
+    let cancelled = false;
+    const ids = orderKey.split(",").slice(0, WARM_THREAD_LIMIT);
+    (async () => {
+      for (const id of ids) {
+        if (cancelled) return;
+        if (isThreadWarm(id)) continue;
+        await warmThread(id);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- orderKey IS the dependency
+  }, [orderKey]);
 
   const pathname = usePathname();
   const online = usePresence();

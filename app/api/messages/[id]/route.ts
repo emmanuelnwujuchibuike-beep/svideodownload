@@ -21,6 +21,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * back, instead of the full last-300 window. The client already holds
  * everything older, so this is the same catch-up guarantee at a fraction of
  * the payload once a thread has any real history.
+ *
+ * `?peek=1` reads the thread WITHOUT marking anything read — for the inbox
+ * warm-up, which pre-loads each chat so opening it is instant. Without this,
+ * warming would mark every conversation read just from opening the inbox and
+ * show the sender a false "Seen" (the exact bug that got the previous warm-up
+ * deleted). Read-marking stays the DEFAULT so nothing else changes behaviour.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,10 +38,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
-  const since = new URL(request.url).searchParams.get("since");
+  const url = new URL(request.url);
+  const since = url.searchParams.get("since");
   const sinceUpdatedAt = since && !Number.isNaN(Date.parse(since)) ? since : undefined;
+  const peek = url.searchParams.get("peek") === "1";
 
-  const view = await getConversation(id, user.id, sinceUpdatedAt);
+  const view = await getConversation(id, user.id, sinceUpdatedAt, { peek });
   if (!view) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
   return NextResponse.json(

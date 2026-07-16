@@ -1658,6 +1658,21 @@ export async function getConversation(
   conversationId: string,
   userId: string,
   sinceUpdatedAt?: string,
+  /**
+   * Reading a thread normally MEANS opening it, so this function marks the
+   * other side's messages read as a side effect (below). `peek: true` reads the
+   * thread WITHOUT making that claim.
+   *
+   * It exists for the inbox warm-up (owner, 2026-07-16: "chats should load one
+   * after the other ... so they warm up immediately the inbox page is opened").
+   * A previous warm-up was deleted precisely because it went through the normal
+   * path and silently marked EVERY conversation read just from opening the
+   * inbox — the sender saw "Seen" on a message the recipient had never looked
+   * at, which defeats the read-receipts toggle. Warming must never be able to
+   * lie about that, so the opt-out is an explicit argument here rather than a
+   * convention the caller is trusted to remember.
+   */
+  options?: { peek?: boolean },
 ): Promise<ConversationView | null> {
   if (!hasSupabase) return null;
   try {
@@ -1854,8 +1869,13 @@ export async function getConversation(
     // it isn't awaited inside the try), and on Vercel's Node runtime that can
     // tear down the function instance — no effect on THIS request/response
     // (already sent), but a real one on the container's next invocation.
+    // `peek` = "read the thread, but don't claim I opened it" (see the option's
+    // note above). Skipping BOTH branches is the whole point: a warm-up must
+    // leave read/delivered state exactly as it found it.
     const now = new Date().toISOString();
-    if (conv.type === "direct" || conv.type === "secret") {
+    if (options?.peek) {
+      /* warm-up read — deliberately no receipt writes */
+    } else if (conv.type === "direct" || conv.type === "secret") {
       db.from("messages")
         .update({ read_at: now, delivered_at: now })
         .eq("conversation_id", conversationId)

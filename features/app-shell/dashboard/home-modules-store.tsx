@@ -61,43 +61,63 @@ export function HomeModulesProvider({
   const [hidden, setHidden] = useState<HomeModuleKey[]>(initialHidden);
   const [pending, setPending] = useState<HomeModuleKey | null>(null);
 
-  // Re-seed ONLY when the server genuinely reports a different value than the
-  // last one we saw from it — never on every render. `initialHidden` is a fresh
-  // array each render, so a naive dependency would re-seed constantly and stomp
-  // the optimistic state a tap just set. This is the same shape as the
-  // version-guard in features/data/cache.ts, which exists because a slow
-  // in-flight fetch resolving after an optimistic write silently reverted it.
+  /**
+   * Keys this session has deliberately toggled. Once a key is in here, no
+   * server payload may ever decide it again for the life of this JS context.
+   *
+   * This exists because of a REAL regression (owner, 2026-07-16: "the switch to
+   * hide continue watching no longer save when i leave the home page"). Leaving
+   * and returning to Home is served from Next's client Router Cache
+   * (staleTimes.dynamic = 6h), and that cached payload still carries the
+   * PRE-toggle `hiddenModules` — it was rendered before the change. A re-seed
+   * that trusts "the server said something different" therefore reads a stale
+   * snapshot as news and undoes the user's own tap, which looks exactly like
+   * "it didn't save" even though the PATCH succeeded.
+   *
+   * The previous implementation of this feature avoided the problem with a
+   * `router.refresh()` after every write — which is precisely what makes Home
+   * re-render on entry, the thing the owner also asked to stop. Tracking local
+   * ownership instead fixes the save WITHOUT re-introducing that reload.
+   */
+  const locallyOwned = useRef<Set<HomeModuleKey>>(new Set());
+
+  // Re-seed from the server only for keys this session hasn't touched — so a
+  // change made elsewhere (the Home Modules Editor, another tab) still lands,
+  // while a key the user just toggled here is never overwritten. Guarded on the
+  // serialized value too: `initialHidden` is a fresh array every render, so a
+  // naive dependency would re-run this constantly.
   const lastFromServer = useRef(initialHidden.join(","));
   useEffect(() => {
     const next = initialHidden.join(",");
-    if (next !== lastFromServer.current) {
-      lastFromServer.current = next;
-      setHidden(initialHidden);
-    }
+    if (next === lastFromServer.current) return;
+    lastFromServer.current = next;
+    setHidden((cur) => {
+      const owned = locallyOwned.current;
+      if (owned.size === 0) return initialHidden;
+      // Server decides every key we don't own; we keep our own.
+      const merged = initialHidden.filter((k) => !owned.has(k));
+      for (const k of cur) if (owned.has(k) && !merged.includes(k)) merged.push(k);
+      return merged;
+    });
   }, [initialHidden]);
 
   const apply = useCallback((key: HomeModuleKey, action: "hide" | "show") => {
+    // This tap is now the authority for this key — see `locallyOwned`.
+    locallyOwned.current.add(key);
     // Optimistic first — this is the whole point: the section appears or
     // disappears on the tap, not after a round-trip.
-    setHidden((prev) => {
-      const next = action === "hide" ? (prev.includes(key) ? prev : [...prev, key]) : prev.filter((k) => k !== key);
-      return next;
-    });
+    setHidden((prev) =>
+      action === "hide" ? (prev.includes(key) ? prev : [...prev, key]) : prev.filter((k) => k !== key),
+    );
     setPending(key);
 
     const body = action === "hide" ? { hideModule: key } : { showModule: key };
     void patch(body)
-      .then(() => {
-        // Keep the server-seed guard in step with what we just persisted, so a
-        // later RSC payload carrying the OLD value can't re-seed over it.
-        setHidden((cur) => {
-          lastFromServer.current = cur.join(",");
-          return cur;
-        });
-      })
       .catch(() => {
-        // Roll back — the section returns to where it was and the control can
+        // The write failed, so this key isn't really ours — release it and roll
+        // back, so the section returns to where it was and the control can
         // simply be tapped again.
+        locallyOwned.current.delete(key);
         setHidden((prev) =>
           action === "hide" ? prev.filter((k) => k !== key) : prev.includes(key) ? prev : [...prev, key],
         );

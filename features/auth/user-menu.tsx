@@ -50,8 +50,22 @@ export function UserMenu() {
     );
   }
 
+  // While auth is still resolving, paint the last-known avatar rather than a
+  // grey pulse (owner, 2026-07-16: "the profile button in message page at the
+  // top ... still reloads on back swiped"). On a relaunched PWA this gate is
+  // hit on every cold start, so the pulse WAS the reload the owner sees.
+  // `realAvatarUrl` is seeded from the identity cache (lib/auth/identity-cache),
+  // so if this browser has ever been signed in it's already here on frame one.
+  // Purely cosmetic: the menu's contents still wait for the real session below,
+  // and a signed-out visitor has no cached identity, so they never see a
+  // stranger's face.
   if (loading) {
-    return <div className="h-9 w-9 animate-pulse rounded-full bg-secondary" />;
+    return realAvatarUrl ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={realAvatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
+    ) : (
+      <div className="h-9 w-9 animate-pulse rounded-full bg-secondary" />
+    );
   }
 
   if (!user) {

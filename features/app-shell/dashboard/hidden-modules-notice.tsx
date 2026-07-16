@@ -1,10 +1,12 @@
 "use client";
 
+import { motion, useReducedMotion } from "framer-motion";
 import { EyeOff, Loader2, Plus } from "lucide-react";
 
 import { useHomeModules } from "@/features/app-shell/dashboard/home-modules-store";
 import { HOME_MODULE_LABELS } from "@/lib/social/home-preferences";
 import { haptic } from "@/lib/motion/haptics";
+import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";
 
 /**
@@ -27,6 +29,7 @@ import { playSound } from "@/lib/notifications/sound-fx";
  */
 export function HiddenModulesNotice() {
   const { hidden, show, pending } = useHomeModules();
+  const reduceMotion = useReducedMotion();
   if (hidden.length === 0) return null;
 
   const restore = (key: (typeof hidden)[number]) => {
@@ -39,25 +42,33 @@ export function HiddenModulesNotice() {
     show(key);
   };
 
+  // Owner (2026-07-16): "remove that a section is hidden text … only leave the
+  // eyes closed and remove the dotted round that points the area, the eyes
+  // close and plus continue watching button is enough." So: no dashed frame, no
+  // explanatory sentence — just the closed eye and the restore chip(s).
   return (
-    <section aria-label="Hidden sections" className="rounded-2xl border border-dashed border-border/70 px-4 py-3">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <EyeOff className="h-3.5 w-3.5" />
-          {hidden.length === 1 ? "A section is hidden" : `${hidden.length} sections are hidden`}
-        </span>
-        {hidden.map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => restore(key)}
-            className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-1 pl-2 pr-2.5 text-xs font-semibold text-primary transition hover:bg-primary/15"
-          >
-            {pending === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-            {HOME_MODULE_LABELS[key]}
-          </button>
-        ))}
-      </div>
+    <section aria-label="Hidden sections" className="flex flex-wrap items-center gap-2">
+      <EyeOff aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
+      {hidden.map((key) => (
+        <motion.button
+          key={key}
+          type="button"
+          onClick={() => restore(key)}
+          whileTap={reduceMotion ? undefined : { scale: 0.94 }}
+          transition={springs.press}
+          // The chip is the only affordance left, so it carries the whole
+          // action in its own label rather than leaning on nearby prose.
+          aria-label={`Show ${HOME_MODULE_LABELS[key]}`}
+          className="inline-flex items-center gap-1.5 rounded-full bg-secondary py-1.5 pl-2.5 pr-3 text-xs font-semibold text-foreground shadow-sm ring-1 ring-border/60 transition-colors hover:bg-secondary/70"
+        >
+          {pending === key ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+          )}
+          {HOME_MODULE_LABELS[key]}
+        </motion.button>
+      ))}
     </section>
   );
 }

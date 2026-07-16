@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { readIdentity, writeIdentity } from "@/lib/auth/identity-cache";
 import type { BillingPlan } from "@/lib/monetization/types";
 
 /**
@@ -36,6 +37,19 @@ export function useEntitlements(): Entitlements {
   const [value, setValue] = useState<Omit<Entitlements, "ready">>(cache ?? FREE);
   const [ready, setReady] = useState<boolean>(cache !== null);
 
+  // Paint the last-known handle/avatar immediately on a COLD start (a relaunched
+  // PWA has an empty module cache, so the profile button otherwise renders a
+  // placeholder until /api/me answers — owner, 2026-07-16: "the bottom nav
+  // profile button still reloads on back swiped"). Identity only: `plan`/
+  // `showAds` stay at the FREE default until the real fetch lands, so a stale
+  // disk value can never hide an ad. `ready` is deliberately NOT set from this —
+  // gating logic still waits for the truth; only the pixels come early.
+  useEffect(() => {
+    if (cache !== null) return;
+    const seed = readIdentity();
+    if (seed) setValue((v) => (v.handle || v.avatarUrl ? v : { ...v, ...seed }));
+  }, []);
+
   useEffect(() => {
     if (cache !== null) {
       setValue(cache);
@@ -55,6 +69,8 @@ export function useEntitlements(): Entitlements {
           handle: (d?.handle as string | null) ?? null,
           avatarUrl: (d?.avatarUrl as string | null) ?? null,
         };
+        // Persist identity for the next cold start's first frame.
+        writeIdentity({ handle: cache.handle, avatarUrl: cache.avatarUrl });
       })
       .catch(() => {
         cache = FREE;

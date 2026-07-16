@@ -1636,11 +1636,16 @@ export function ConversationRoom({
             // A shared post link renders as a rich preview card (creator,
             // cover, caption) with any note above it — never a raw URL.
             const shared = !deleted ? extractSharedPost(m.body) : null;
-            // Image/video attachments go edge-to-edge in the bubble (same
-            // tight p-1.5 treatment as a shared-post embed); voice/document
-            // attachments stay in the normal padded card layout since
-            // they're compact rows, not full-bleed media.
+            // Image/video attachments go edge-to-edge in the bubble.
             const hasMediaAttachment = m.attachments.some((a) => a.kind === "image" || a.kind === "video");
+            // ANY attachment gets the hairline frame (owner, 2026-07-16: "make
+            // the bubble in chat that covers media and voice note and others to
+            // be a tiny line not a fat line"). Voice notes and documents used to
+            // keep the full `px-4 py-2.5` text padding, which drew a thick slab
+            // of bubble around what is already a self-contained card — that's
+            // the "fat line". They're now framed like media: just enough to read
+            // as a bubble, nothing more.
+            const hasAttachmentFrame = !deleted && m.attachments.length > 0;
             const locationMeta = !deleted && m.metadata?.kind === "location" ? (m.metadata as { lat: number; lng: number; label: string | null }) : null;
             const contactMeta =
               !deleted && m.metadata?.kind === "contact"
@@ -1761,7 +1766,9 @@ export function ConversationRoom({
                       // (dashed/transparent — a solid pointer would look wrong).
                       bubbleShape.protrudingTail && !deleted && "relative overflow-visible",
                       bubbleShape.protrudingTail && !deleted && (m.mine ? "chat-bubble-tail-mine" : "chat-bubble-tail-theirs"),
-                      deleted ? "px-4 py-2.5 italic text-muted-foreground" : shared || hasMediaAttachment ? "p-1.5" : "px-4 py-2.5",
+                      // `p-1` (4px), not the old `p-1.5` (6px): a hairline frame
+                      // around media/voice/documents rather than a fat band.
+                      deleted ? "px-4 py-2.5 italic text-muted-foreground" : shared || hasAttachmentFrame ? "p-1" : "px-4 py-2.5",
                       deleted
                         ? "border border-dashed border-border/60 bg-transparent"
                         : m.mine
@@ -1880,10 +1887,16 @@ export function ConversationRoom({
                             <MessagePostEmbed postId={shared.postId} mine={m.mine} />
                           </>
                         ) : m.body ? (
-                          <RichText
-                            text={m.body}
-                            linkClassName={cn("font-semibold underline underline-offset-2", m.mine ? "text-white" : "text-primary")}
-                          />
+                          // A caption sitting under an attachment needs its own
+                          // inset now that the bubble itself is only a hairline
+                          // frame — without this the text would sit 4px off the
+                          // bubble edge.
+                          <span className={cn(hasAttachmentFrame && "block px-2.5 pb-1 pt-0.5")}>
+                            <RichText
+                              text={m.body}
+                              linkClassName={cn("font-semibold underline underline-offset-2", m.mine ? "text-white" : "text-primary")}
+                            />
+                          </span>
                         ) : null}
                       </>
                     )}

@@ -1683,11 +1683,49 @@ export async function getConversation(
   if (!hasSupabase) return null;
   try {
     const db = createAdminClient();
-    const { data: conv } = await db
+
+    // Everything in this block is INDEPENDENT — none of these three lookups
+    // needs another's result — so they go out together rather than one at a
+    // time.
+    //
+    // Measured 2026-07-16: the thread page took 2.3-2.5s to render server-side,
+    // and it was stacked latency, not slow SQL. `getConversation` ran SIX
+    // sequential awaits before the messages query even started; against remote
+    // Supabase each round trip is ~250ms, so the waterfall alone accounted for
+    // most of the wait the owner reports as "it loads every time I enter a
+    // chat". Issuing the independent ones concurrently collapses that.
+    //
+    // The wallpaper/appearance queries below are still SEPARATE from this
+    // conversation SELECT on purpose — see their own notes: folding a column
+    // that a not-yet-applied migration lacks would fail the whole select and
+    // 404 every thread. Running them in parallel keeps that guarantee and
+    // removes the cost.
+    const convQuery = db
       .from("conversations")
       .select("id, type, title, avatar_url, user_low, user_high, only_admins_can_send, disappear_after_seconds, theme")
       .eq("id", conversationId)
       .maybeSingle();
+    const membershipQuery = db
+      .from("conversation_members")
+      .select("role")
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId)
+      .is("left_at", null)
+      .maybeSingle();
+    const wallpaperQuery = db.from("conversations").select("wallpaper_url").eq("id", conversationId).maybeSingle();
+    const appearanceQuery = db
+      .from("chat_appearance_preferences")
+      .select("font_size, bubble_style, bubble_color, wallpaper_url")
+      .eq("user_id", userId)
+      .eq("conversation_id", conversationId)
+      .maybeSingle();
+
+    const [{ data: conv }, membershipRes, wallpaperRes, appearanceRes] = await Promise.all([
+      convQuery,
+      membershipQuery,
+      wallpaperQuery,
+      appearanceQuery,
+    ]);
     if (!conv) return null;
 
     // Fetched separately from the main SELECT above, deliberately: migration
@@ -1699,13 +1737,9 @@ export async function getConversation(
     // lands — confirmed by reproducing it locally. A separate, best-effort
     // query means a not-yet-applied migration only ever costs the wallpaper
     // feature itself, never breaks messaging as a whole.
-    let wallpaperUrl: string | null = null;
-    try {
-      const { data: wp } = await db.from("conversations").select("wallpaper_url").eq("id", conversationId).maybeSingle();
-      wallpaperUrl = (wp?.wallpaper_url as string | null) ?? null;
-    } catch {
-      /* migration not applied yet — wallpaper feature just stays off */
-    }
+    // Issued in the parallel batch above; still its own query (not folded into
+    // the conversation SELECT) for the reason in the comment above.
+    const wallpaperUrl = (wallpaperRes.data?.wallpaper_url as string | null) ?? null;
 
     // The viewer's OWN personal appearance for THIS chat (font style + bubble
     // style/color) — SSR-read so the saved look paints on the first frame,
@@ -1717,16 +1751,12 @@ export async function getConversation(
     // whole thread. Scoped by user_id here since the admin client bypasses RLS.
     let appearance: ChatAppearance = DEFAULT_CHAT_APPEARANCE;
     try {
-      // `wallpaper_url` arrives with migration 0080 (the "Only you" wallpaper
-      // scope). Selected in its own attempt so an unapplied 0080 costs ONLY the
-      // personal wallpaper, not the font/bubble settings that share this row —
-      // supabase-js fails the whole SELECT if any named column is missing.
-      const { data: ap, error } = await db
-        .from("chat_appearance_preferences")
-        .select("font_size, bubble_style, bubble_color, wallpaper_url")
-        .eq("user_id", userId)
-        .eq("conversation_id", conversationId)
-        .maybeSingle();
+      // Issued in the parallel batch above. `wallpaper_url` arrives with
+      // migration 0080 (the "Only you" scope) — if it's ever missing, the retry
+      // below drops it so an unapplied 0080 costs ONLY the personal wallpaper,
+      // not the font/bubble settings that share this row (supabase-js fails the
+      // whole SELECT if any named column is missing).
+      const { data: ap, error } = appearanceRes;
       if (error?.code === "42703") {
         const { data: legacy } = await db
           .from("chat_appearance_preferences")
@@ -1742,13 +1772,8 @@ export async function getConversation(
       /* migration 0078 not applied yet — appearance stays default */
     }
 
-    const { data: myMembership } = await db
-      .from("conversation_members")
-      .select("role")
-      .eq("conversation_id", conversationId)
-      .eq("user_id", userId)
-      .is("left_at", null)
-      .maybeSingle();
+    // Already fetched in the parallel batch at the top of this function.
+    const myMembership = membershipRes.data;
     if (!myMembership) return null;
 
     let other: OtherUser | null = null;

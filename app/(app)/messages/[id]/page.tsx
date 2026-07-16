@@ -64,6 +64,10 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   }
   const user = auth.user;
 
+  // Started BEFORE the conversation await so the two overlap — it depends only
+  // on `user.id`. Not awaited here; see below.
+  const viewerProfilePromise = supabase.from("profiles").select("display_name, handle").eq("id", user.id).maybeSingle();
+
   // A stuck/slow query here used to leave the whole thread — including its
   // header and composer — on the loading skeleton forever, with no way back
   // out short of a hard reload. Racing it turns that into a fast, honest
@@ -88,7 +92,10 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   // base64 ciphertext as if it were a normal message body.
   if (convo.type === "secret") redirect(`/messages/secret/${id}`);
 
-  const { data: viewerProfile } = await supabase.from("profiles").select("display_name, handle").eq("id", user.id).maybeSingle();
+  // Runs alongside the conversation fetch above rather than after it — it only
+  // needs `user.id`. Part of the same 2026-07-16 latency pass: this page was
+  // measured at 2.3-2.5s server-side, almost all of it stacked round trips.
+  const { data: viewerProfile } = await viewerProfilePromise;
   const viewerName = (viewerProfile?.display_name as string) || (viewerProfile?.handle ? `@${viewerProfile.handle as string}` : "You");
 
   // Stories row embedded at the top of the thread (owner mockup) — direct

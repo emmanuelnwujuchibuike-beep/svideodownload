@@ -520,7 +520,7 @@ export function ThreadOptionsSheet({
           otherName={otherName}
         />
       ) : null}
-      <ChatAppearanceSheet open={appearanceSheetOpen} onClose={() => setAppearanceSheetOpen(false)} />
+      <ChatAppearanceSheet conversationId={conversationId} open={appearanceSheetOpen} onClose={() => setAppearanceSheetOpen(false)} />
     </AnimatePresence>,
     document.body,
   );

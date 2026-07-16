@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 
 import { ThemeCacheSync } from "@/components/theme-cache-sync";
 import { ThemeProvider } from "@/components/theme-provider";
-import { BootSplash, ThemeBootScript } from "@/features/app-shell/boot-splash";
+import { BootHead, BootSplash, ThemeBootScript } from "@/features/app-shell/boot-splash";
 import { EdgeSwipeBack } from "@/features/app-shell/edge-swipe-back";
 import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
 import { OfflineBanner } from "@/features/app-shell/offline-banner";
@@ -154,6 +154,11 @@ export default function RootLayout({
             where the empty body flashes the default light background for
             dark users (see boot-splash.tsx's THEME_JS comment). */}
         <ThemeBootScript />
+        {/* Boot-splash STYLE + dismissal DECISION — also in <head>, before
+            first paint, so a streamed force-dynamic page (e.g. /messages)
+            can't paint the F splash and then leave it up for seconds waiting
+            on the hide-script in a later body chunk. See BootHead's comment. */}
+        <BootHead />
         {/* app/apple-icon.png (180x180) already auto-emits the primary
             apple-touch-icon link via Next's file convention — modern iOS
             scales that single image fine. These two are legacy-size

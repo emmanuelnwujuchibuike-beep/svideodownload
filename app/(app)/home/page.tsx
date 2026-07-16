@@ -38,19 +38,29 @@ export default async function HomePage() {
   // the greeting name). Every content rail streams in behind its own Suspense
   // boundary, so the shell + greeting appear instantly instead of waiting on the
   // slowest feed query — the "instant, then fill" feel.
-  const profile = await getHomeProfile(user.id);
+  //
+  // profile, prefs and the cookie store are fetched IN PARALLEL (each only
+  // needs user.id, none depends on another) — they used to run as three
+  // sequential awaits, stacking three round-trips onto the one path that gates
+  // /home's first paint. On a slow connection that stacked latency was a real
+  // part of "home is slow to come up at all" (owner report 2026-07-16). getUser
+  // above must still resolve first (it decides the auth redirect + owns user.id).
+  const viewerId = user.id;
+  const [profile, prefs, cookieStore] = await Promise.all([
+    getHomeProfile(user.id),
+    // Feature 17 Part 13 — the viewer's own Home Module Editor choices
+    // (reorder/hide Stories, Friend Activity, Trending Reels, Continue
+    // Watching) + Quiet Mode. Best-effort: defaults if the table's unmigrated
+    // or the row doesn't exist yet.
+    getHomePreferences(user.id),
+    cookies(),
+  ]);
   if (!profile?.handle) redirect("/welcome");
   const handle = profile.handle; // narrowed to `string` here; `profile.handle`'s own
   // type stays `string | null` inside closures (e.g. the module-order .map()
   // below), so this local binding is what those closures should reference.
 
-  const firstVisit = !(await cookies()).get("frenz_welcomed");
-  const viewerId = user.id;
-  // Feature 17 Part 13 — the viewer's own Home Module Editor choices (reorder/
-  // hide Stories, Friend Activity, Trending Reels, Continue Watching) + Quiet
-  // Mode. Best-effort: defaults (today's exact hardcoded order, nothing
-  // hidden) if the table's unmigrated or the row doesn't exist yet.
-  const prefs = await getHomePreferences(viewerId);
+  const firstVisit = !cookieStore.get("frenz_welcomed");
   const visibleModules = prefs.moduleOrder.filter((k) => !prefs.hiddenModules.includes(k));
 
   return (

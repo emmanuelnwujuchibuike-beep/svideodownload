@@ -391,15 +391,14 @@ export function ConversationList({
       ) : (
         <ul
           className={cn(
-            // Owner ask (2026-07-15): rows read "tightly packed" — space-y-0.5
-            // (2px) left almost no air between rows. space-y-2 (8px) gives each
-            // row real separation instead of the hairline dividers alone doing
-            // all the work. `-ml-1` (mobile only): pulls the row content 4px
-            // past the page's own 12px gutter, landing the avatar ~8px from the
-            // true screen edge — a further, explicit step past the earlier
-            // pl-0 fix, which only matched the avatar to the search bar/tabs'
-            // OWN inset rather than actually reaching the edge.
-            "space-y-2",
+            // Owner ask (2026-07-16): rows should sit "tightly close to each
+            // other, not separated — the line already is enough to separate
+            // them, just like WhatsApp." So NO gap between rows (space-y-0):
+            // adjacent rows butt together and the single hairline divider on
+            // each row (border-b below) does all the separating, exactly like
+            // a WhatsApp/iMessage chat list. (Was space-y-2 / 8px, which read
+            // as detached cards rather than one continuous list.)
+            "space-y-0",
             pane && "min-h-0 flex-1 overflow-y-auto overscroll-y-none px-2 pb-3",
           )}
         >
@@ -562,10 +561,12 @@ function ConversationRow({
   // state, so two rows could be swiped open at once.
   const setSwipeOpen = onSwipeOpen;
   return (
-    // Owner ask: "add a dividers line in the top and bottom of every user
-    // chat... to show separation like whatsapp" — a hairline above and below
-    // each row, on top of (not instead of) the existing rounded-card look.
-    <li className="relative flex items-center overflow-hidden rounded-2xl border-y border-border/40 first:border-t-0">
+    // Owner ask (2026-07-16): rows sit flush like WhatsApp, separated only by
+    // a single hairline BETWEEN them — no per-row rounded card, no gap. One
+    // `border-b` per row (last row omits it) gives exactly one divider line
+    // between adjacent rows instead of the previous stacked top+bottom borders
+    // that a between-row gap forced.
+    <li className="relative flex items-center overflow-hidden border-b border-border/40 last:border-b-0">
       {/* Revealed strip — sits BEHIND the row, only visible once dragged/opened. */}
       <div className="absolute inset-y-0 right-0 flex items-center gap-1.5 pr-1" style={{ width: SWIPE_STRIP_WIDTH }}>
         <button
@@ -647,7 +648,10 @@ function ConversationRow({
           // now MORE left than the header title block above (pl-1 there) —
           // the two are meant to read as different insets, not one shared
           // column.
-          "-ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-3.5 pl-0 pr-3 transition active:scale-[0.98]",
+          // rounded-none (2026-07-16): rows are flush WhatsApp-style now, so
+          // the tap/active highlight fills the full-width row rectangle instead
+          // of a floating rounded card.
+          "-ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-none py-3.5 pl-0 pr-3 transition active:scale-[0.99]",
           active
             ? "bg-gradient-to-r from-blue-500/[0.10] to-violet-500/[0.10] ring-1 ring-inset ring-violet-500/25"
             : "hover:bg-secondary/40",

@@ -63,7 +63,7 @@ import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { useNetworkStatus } from "@/lib/pwa/use-network-status";
-import { BUBBLE_STYLE_SHAPE } from "@/lib/social/chat-appearance";
+import { BUBBLE_STYLE_SHAPE, type ChatAppearance } from "@/lib/social/chat-appearance";
 import { FONT_STYLE_CLASS } from "@/lib/social/chat-fonts";
 import { MESSAGE_REACTIONS } from "@/lib/social/message-meta";
 import {
@@ -214,6 +214,7 @@ export function ConversationRoom({
   otherName = null,
   viewerTypingIndicatorsEnabled = true,
   otherStoryGroup = null,
+  initialAppearance,
 }: {
   conversationId: string;
   viewerId: string;
@@ -221,6 +222,10 @@ export function ConversationRoom({
   viewerHandle?: string | null;
   initial: MessageItem[];
   initialSyncedAt: string;
+  /** SSR-read personal appearance for THIS chat — seeds the first paint so the
+   *  saved bubble style/color/font shows immediately, never a default-blue
+   *  flash-then-switch on every entry (owner report 2026-07-16). */
+  initialAppearance?: ChatAppearance;
   type?: ConversationType;
   members?: ConversationMember[];
   viewerRole?: MemberRole | null;
@@ -249,12 +254,14 @@ export function ConversationRoom({
   // anywhere near the header/composer, only this component's own message
   // list box).
   const { theme: liveTheme, wallpaperUrl: liveWallpaperUrl } = useThreadAppearance();
-  // Personal (per-viewer) appearance prefs — font size applies to every
-  // bubble's text (both mine + theirs, a legibility preference isn't
-  // sender-specific); bubble style/color apply to MY OWN sent bubbles only,
-  // everywhere, layered UNDER the per-conversation Chat Theme (falls back to
-  // it when no personal color is set) — see lib/social/chat-appearance.ts.
-  const chatAppearance = useChatAppearance();
+  // Personal appearance prefs for THIS conversation (owner ask 2026-07-16:
+  // per-chat, not global) — font style applies to every bubble's text (both
+  // mine + theirs, a legibility preference isn't sender-specific); bubble
+  // style/color apply to MY OWN sent bubbles only, layered UNDER the
+  // per-conversation Chat Theme (falls back to it when no personal color is
+  // set) — see lib/social/chat-appearance.ts. Seeded from SSR (initialAppearance)
+  // so the saved look paints on the first frame, no default-blue flash.
+  const chatAppearance = useChatAppearance(conversationId, initialAppearance);
   const bubbleShape = BUBBLE_STYLE_SHAPE[chatAppearance.bubbleStyle];
   // Neither a color theme nor a custom wallpaper is set — the WhatsApp-style
   // light default (owner ask, 2026-07-14: "make the message page background

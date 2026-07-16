@@ -1,5 +1,12 @@
 import { after } from "next/server";
 
+import {
+  DEFAULT_CHAT_APPEARANCE,
+  fromChatAppearanceRow,
+  type ChatAppearance,
+  type ChatAppearanceRow,
+} from "@/lib/social/chat-appearance";
+
 import { CONVERSATION_THEMES, GROUP_TITLE_MAX, MAX_GROUP_MEMBERS, parseMentionedHandles, type ConversationTheme } from "@/lib/social/message-meta";
 import { MAX_ATTACHMENTS_PER_MESSAGE, type AttachmentKind } from "@/lib/social/message-media";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -1611,6 +1618,8 @@ export interface ConversationView {
   theme: ConversationTheme | null;
   /** Chat wallpaper (migration 0073) — a custom uploaded background picture, null means none set. */
   wallpaperUrl: string | null;
+  /** The viewer's OWN personal appearance for this chat (migration 0078) — font style + bubble style/color, per-conversation. */
+  appearance: ChatAppearance;
   /** Part 11b — viewer's OWN "show when I'm typing" preference; gates whether ConversationRoom broadcasts typing state at all (see use-typing.ts). */
   viewerTypingIndicatorsEnabled: boolean;
   messages: MessageItem[];
@@ -1675,6 +1684,27 @@ export async function getConversation(
       wallpaperUrl = (wp?.wallpaper_url as string | null) ?? null;
     } catch {
       /* migration not applied yet — wallpaper feature just stays off */
+    }
+
+    // The viewer's OWN personal appearance for THIS chat (font style + bubble
+    // style/color) — SSR-read so the saved look paints on the first frame,
+    // never a default-blue flash-then-switch every time the thread opens
+    // (owner report 2026-07-16). Best-effort + separate from the main SELECT
+    // for the same reason as wallpaper above: migration 0078 (the per-chat
+    // `conversation_id` column) may not be applied the instant this deploys,
+    // and a missing column must only cost this one feature, never 404 the
+    // whole thread. Scoped by user_id here since the admin client bypasses RLS.
+    let appearance: ChatAppearance = DEFAULT_CHAT_APPEARANCE;
+    try {
+      const { data: ap } = await db
+        .from("chat_appearance_preferences")
+        .select("font_size, bubble_style, bubble_color")
+        .eq("user_id", userId)
+        .eq("conversation_id", conversationId)
+        .maybeSingle();
+      appearance = fromChatAppearanceRow((ap as ChatAppearanceRow | null) ?? null);
+    } catch {
+      /* migration 0078 not applied yet — appearance stays default */
     }
 
     const { data: myMembership } = await db
@@ -1865,6 +1895,7 @@ export async function getConversation(
       disappearAfterSeconds: (conv.disappear_after_seconds as number | null) ?? null,
       theme: (conv.theme as ConversationTheme | null) ?? null,
       wallpaperUrl,
+      appearance,
       viewerTypingIndicatorsEnabled: (viewerPriv?.typing_indicators_enabled as boolean | null) ?? true,
       messages,
       syncedAt: queryStartedAt,

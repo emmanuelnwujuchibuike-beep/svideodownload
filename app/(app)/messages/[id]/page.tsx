@@ -154,6 +154,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         otherName={convo.other?.displayName ?? null}
         viewerTypingIndicatorsEnabled={convo.viewerTypingIndicatorsEnabled}
         otherStoryGroup={otherStoryGroup}
+        initialAppearance={convo.appearance}
       />
     </ThreadAppearanceProvider>
   );

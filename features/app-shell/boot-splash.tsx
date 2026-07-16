@@ -163,19 +163,49 @@ export function ThemeBootScript() {
   return <script dangerouslySetInnerHTML={{ __html: THEME_JS }} />;
 }
 
-export function BootSplash() {
+/**
+ * The splash STYLE + the dismissal DECISION script — now rendered in <head>
+ * (app/layout.tsx), NOT in <body> alongside the splash markup.
+ *
+ * Why (owner report 2026-07-16: "/messages sits on the F loader for seconds
+ * on reload / iOS back-swipe"): the `JS` script hides the splash, and it used
+ * to sit in <body> immediately AFTER the `#frenz-boot` <div>. On a STREAMED
+ * response — which every `force-dynamic` page is, `/messages` included — the
+ * first network chunk can end right between that <div> and this <script>. The
+ * browser then PAINTS the F splash and yields waiting on the network, and the
+ * script that would hide it doesn't run until a later chunk arrives — which,
+ * on a slow personalized page, can be seconds later (after the server's own
+ * data work). That's the exact "stuck on the F loader for seconds" symptom,
+ * and it's the SAME streaming-chunk-boundary bug already fixed for THEME_JS by
+ * moving it to <head>.
+ *
+ * In <head>, the decision runs before ANY first paint (nothing is paintable
+ * while the head parses). For an already-booted reload/back-gesture it adds
+ * `frenz-boot-off` to <html> synchronously, so when the body's `#frenz-boot`
+ * <div> is parsed later the CSS (also here in <head>) has it display:none from
+ * the very first frame — the splash never becomes visible at all. The script
+ * only touches `document.documentElement` + storage/cookies, so it has no
+ * dependency on <body> existing. A genuine cold boot still shows the splash
+ * and fades it on DOMContentLoaded, unchanged.
+ */
+export function BootHead() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
-      <div id="frenz-boot" aria-hidden="true">
-        <span className="frenz-boot__mark">
-          {/* eslint-disable-next-line @next/next/no-img-element -- must render
-              before the JS bundle (next/image) is available */}
-          <img src="/brand/frenz-logo.png" width={152} height={152} alt="" />
-          <span className="frenz-boot__shine" />
-        </span>
-      </div>
       <script dangerouslySetInnerHTML={{ __html: JS }} />
     </>
+  );
+}
+
+export function BootSplash() {
+  return (
+    <div id="frenz-boot" aria-hidden="true">
+      <span className="frenz-boot__mark">
+        {/* eslint-disable-next-line @next/next/no-img-element -- must render
+            before the JS bundle (next/image) is available */}
+        <img src="/brand/frenz-logo.png" width={152} height={152} alt="" />
+        <span className="frenz-boot__shine" />
+      </span>
+    </div>
   );
 }

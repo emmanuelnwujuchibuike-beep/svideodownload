@@ -26,20 +26,27 @@ import { setChatAppearance, useChatAppearance } from "@/features/social/use-chat
 const COLOR_SWATCHES = ["#0A84FF", "#6C4DFF", "#22C55E", "#F97316", "#EC4899", "#14B8A6", "#EF4444", "#64748B"];
 
 /**
- * Personal chat appearance — font size + bubble style/color (owner ask,
- * 2026-07-14: "user can set up text font size and it reflect in both chats,
- * set chat bubble styles and color"). Deliberately per-VIEWER (see
- * lib/social/chat-appearance.ts's doc comment) — applies instantly across
- * every conversation the moment a choice is made, via the shared
- * stale-while-revalidate cache (useChatAppearance/setChatAppearance), not
- * just this one thread. Leads with a live 2-bubble preview so a choice is
- * never made blind.
+ * Personal chat appearance — font style + bubble style/color, scoped to ONE
+ * conversation (owner ask 2026-07-16: "should be only changed in the
+ * particular chat ... not in all chats"). Personal to the viewer (only they
+ * see their own bubble color), but no longer global: a change here applies to
+ * THIS thread alone, via the per-conversation key on the shared
+ * stale-while-revalidate cache (useChatAppearance/setChatAppearance). Leads
+ * with a live 2-bubble preview so a choice is never made blind.
  */
-export function ChatAppearanceSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ChatAppearanceSheet({
+  conversationId,
+  open,
+  onClose,
+}: {
+  conversationId: string;
+  open: boolean;
+  onClose: () => void;
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const appearance = useChatAppearance();
+  const appearance = useChatAppearance(conversationId);
   const colorInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -93,7 +100,7 @@ export function ChatAppearanceSheet({ open, onClose }: { open: boolean; onClose:
             <div className="flex flex-col items-center gap-1 px-5 pb-4 pt-2 text-center">
               <ModuleIconBadge icon={Sparkles} tone="vivid" className="h-12 w-12 rounded-2xl" />
               <p className="mt-1.5 text-base font-bold tracking-tight">Font style & bubble style</p>
-              <p className="text-xs text-muted-foreground">Personal to you — applies across every chat.</p>
+              <p className="text-xs text-muted-foreground">Personal to you — applies to this chat only.</p>
             </div>
 
             {/* Live preview — mirrors conversation-room.tsx's real bubble
@@ -144,7 +151,7 @@ export function ChatAppearanceSheet({ open, onClose }: { open: boolean; onClose:
                         transition={springs.press}
                         onClick={() => {
                           haptic("light");
-                          void setChatAppearance({ fontStyle: style });
+                          void setChatAppearance(conversationId, { fontStyle: style });
                         }}
                         className={cn(
                           "flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-center text-[11px] font-medium transition",
@@ -173,7 +180,7 @@ export function ChatAppearanceSheet({ open, onClose }: { open: boolean; onClose:
                         transition={springs.press}
                         onClick={() => {
                           haptic("light");
-                          void setChatAppearance({ bubbleStyle: style });
+                          void setChatAppearance(conversationId, { bubbleStyle: style });
                         }}
                         className={cn(
                           "flex flex-col items-center gap-2.5 rounded-xl border px-1 py-3 text-center text-[11px] font-medium transition",
@@ -209,7 +216,7 @@ export function ChatAppearanceSheet({ open, onClose }: { open: boolean; onClose:
                     transition={springs.bounce}
                     onClick={() => {
                       haptic("light");
-                      void setChatAppearance({ bubbleColor: null });
+                      void setChatAppearance(conversationId, { bubbleColor: null });
                     }}
                     className={cn(
                       "bg-brand relative flex h-10 w-10 items-center justify-center rounded-full ring-2 ring-offset-2 ring-offset-card transition",
@@ -230,7 +237,7 @@ export function ChatAppearanceSheet({ open, onClose }: { open: boolean; onClose:
                         transition={springs.bounce}
                         onClick={() => {
                           haptic("light");
-                          void setChatAppearance({ bubbleColor: hex });
+                          void setChatAppearance(conversationId, { bubbleColor: hex });
                         }}
                         style={{ backgroundColor: hex }}
                         className={cn(
@@ -259,7 +266,7 @@ export function ChatAppearanceSheet({ open, onClose }: { open: boolean; onClose:
                     type="color"
                     className="sr-only"
                     value={appearance.bubbleColor ?? "#0A84FF"}
-                    onChange={(e) => void setChatAppearance({ bubbleColor: e.target.value })}
+                    onChange={(e) => void setChatAppearance(conversationId, { bubbleColor: e.target.value })}
                   />
                 </div>
               </div>

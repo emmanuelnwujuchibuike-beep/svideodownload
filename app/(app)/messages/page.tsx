@@ -85,7 +85,7 @@ export default async function MessagesPage() {
           actual `overflow-y-auto` scroller, plus `overscroll-y-none` so an
           iOS rubber-band bounce at the very top/bottom stays inside this box
           instead of chaining to the page and flashing the gradient behind it. */}
-      <div className="flex-1 overflow-hidden bg-background lg:hidden">
+      <div className="frenz-inbox-page flex-1 overflow-hidden bg-background lg:hidden">
         <div className="h-full overflow-y-auto overscroll-y-none px-3 pt-3.5">
           {/* 2026-07-14: tightened pt-4→pt-2.5, mb-4→mb-2.5 for a denser
               Snapchat-style top section — 2026-07-15 (owner: now reads as
@@ -126,7 +126,7 @@ export default async function MessagesPage() {
       </div>
 
       {/* Desktop: pick-a-conversation state */}
-      <div className="hidden flex-1 flex-col items-center justify-center gap-3 lg:flex">
+      <div className="frenz-desktop-empty hidden flex-1 flex-col items-center justify-center gap-3 lg:flex">
         <span className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/20 to-violet-500/20">
           <MessageCircle className="h-7 w-7 text-violet-500 dark:text-violet-300" />
         </span>

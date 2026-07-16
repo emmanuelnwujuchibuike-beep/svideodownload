@@ -146,7 +146,7 @@ export function ThreadHeader({
     // above a forced-light message list otherwise, a visible seam.
     <div
       className={cn(
-        "relative flex items-center gap-3 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-3",
+        "frenz-thread-header relative flex items-center gap-3 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-3",
         wallpaperActive ? "bg-white/55 backdrop-blur-md" : forceLight ? "bg-white" : cn("bg-background", themeHeaderClass),
       )}
     >

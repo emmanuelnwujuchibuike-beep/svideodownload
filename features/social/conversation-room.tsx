@@ -1497,7 +1497,7 @@ export function ConversationRoom({
           if (openMenuId) setOpenMenuId(null);
         }}
         className={cn(
-          "flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto overscroll-y-none p-4",
+          "frenz-thread-scroll flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto overscroll-y-none p-4",
           // Owner ask, 2026-07-14: "i want it to save and full screen, top 0
           // bottom 0 just like chat theme" — the wallpaper image itself now
           // paints on ThreadAppearanceProvider's shared outer container (see
@@ -1640,7 +1640,7 @@ export function ConversationRoom({
                   <div
                     style={m.mine && !deleted && chatAppearance.bubbleColor ? { backgroundImage: "none", backgroundColor: chatAppearance.bubbleColor } : undefined}
                     className={cn(
-                      "max-w-[80%] overflow-hidden whitespace-pre-wrap break-words leading-relaxed",
+                      "frenz-message-bubble max-w-[80%] overflow-hidden whitespace-pre-wrap break-words leading-relaxed",
                       bubbleShape.base,
                       FONT_STYLE_CLASS[chatAppearance.fontStyle],
                       // "Speech tail" bubble style: a real protruding pointer
@@ -2070,7 +2070,7 @@ export function ConversationRoom({
         <form
           onSubmit={submit}
           className={cn(
-            "flex items-end gap-2 border-t border-border/60 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3",
+            "frenz-message-composer flex items-end gap-2 border-t border-border/60 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl lg:pb-3",
             // Translucent (not solid) over a wallpaper — same "top 0 bottom 0"
             // full-bleed ask as the message list above: the shared image
             // painted behind the whole thread shows through here instead of

@@ -258,7 +258,7 @@ export function ConversationList({
   ];
 
   return (
-    <div className={cn(pane && "flex min-h-0 flex-1 flex-col")}>
+    <div className={cn("frenz-inbox", pane && "flex min-h-0 flex-1 flex-col")}>
       {/* Search — the mockup's full-width glass pill, with a trailing filter
           icon that jumps to Archived (the one filter view not already a tab). */}
       <label className={cn("relative block", pane ? "mx-3 mb-2" : "mb-3")}>
@@ -651,7 +651,7 @@ function ConversationRow({
           // rounded-none (2026-07-16): rows are flush WhatsApp-style now, so
           // the tap/active highlight fills the full-width row rectangle instead
           // of a floating rounded card.
-          "-ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-none py-3.5 pl-0 pr-3 transition active:scale-[0.99]",
+          "frenz-conversation-row -ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-none py-3.5 pl-0 pr-3 transition active:scale-[0.99]",
           active
             ? "bg-gradient-to-r from-blue-500/[0.10] to-violet-500/[0.10] ring-1 ring-inset ring-violet-500/25"
             : "hover:bg-secondary/40",

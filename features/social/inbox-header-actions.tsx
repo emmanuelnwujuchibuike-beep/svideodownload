@@ -16,7 +16,7 @@ import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { springs } from "@/lib/motion/springs";
 
-const CIRCLE = "glass h-10 w-10 rounded-full text-foreground/80 hover:text-foreground";
+const CIRCLE = "frenz-inbox-action glass h-10 w-10 rounded-full text-foreground/80 hover:text-foreground";
 const MENU_WIDTH = 248;
 
 /**

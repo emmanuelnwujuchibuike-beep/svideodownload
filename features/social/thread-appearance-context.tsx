@@ -74,7 +74,7 @@ export function ThreadAppearanceProvider({
   return (
     <ThreadAppearanceContext.Provider value={{ theme, wallpaperUrl }}>
       <div
-        className={className}
+        className={`frenz-thread ${className ?? ""}`}
         style={wallpaperUrl ? { backgroundImage: `url(${wallpaperUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
       >
         {children}

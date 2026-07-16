@@ -257,6 +257,100 @@
       0 4px 24px hsl(43 96% 56% / 0.12);
   }
 
+  /* Messaging's visual language is deliberately contained to the inbox and
+     thread. It adds depth and tactile hierarchy without depending on message
+     data or client-side state. */
+  .frenz-thread {
+    isolation: isolate;
+    background-image:
+      radial-gradient(circle at 50% -18%, hsl(var(--brand-blue) / 0.08), transparent 34%),
+      linear-gradient(hsl(var(--background)), hsl(var(--background)));
+  }
+  .dark .frenz-thread {
+    background-image:
+      radial-gradient(circle at 50% -18%, hsl(var(--brand-purple) / 0.12), transparent 38%),
+      linear-gradient(hsl(var(--background)), hsl(var(--background)));
+  }
+  .frenz-thread-header {
+    border-bottom: 1px solid hsl(var(--border) / 0.58);
+    box-shadow: 0 10px 30px -28px hsl(230 45% 10% / 0.32);
+    animation: frenz-message-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .frenz-thread-scroll {
+    scrollbar-gutter: stable;
+    background-image: linear-gradient(hsl(var(--background) / 0.16), hsl(var(--background) / 0.16));
+  }
+  .frenz-message-bubble {
+    box-shadow: 0 8px 18px -15px hsl(230 30% 12% / 0.34);
+    transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+  }
+  @media (hover: hover) {
+    .frenz-message-bubble:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 28px -20px hsl(230 30% 12% / 0.46);
+    }
+  }
+  .frenz-message-composer {
+    position: relative;
+    box-shadow: 0 -10px 28px -28px hsl(230 30% 10% / 0.3);
+  }
+  .frenz-message-composer > div {
+    border: 1px solid hsl(var(--border) / 0.55);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.3), 0 5px 14px -12px hsl(230 30% 12% / 0.2);
+  }
+  .dark .frenz-message-composer > div {
+    border-color: hsl(0 0% 100% / 0.08);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.06);
+  }
+  .frenz-inbox-page {
+    background-image: radial-gradient(circle at 100% 0%, hsl(var(--brand-blue) / 0.06), transparent 28%);
+  }
+  .frenz-inbox > label input {
+    border: 1px solid hsl(var(--border) / 0.52);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.25), 0 8px 20px -20px hsl(230 30% 12% / 0.3);
+  }
+  .frenz-inbox-action {
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.22), 0 8px 18px -16px hsl(230 30% 12% / 0.38);
+    transition: transform 180ms ease, box-shadow 180ms ease, color 180ms ease;
+  }
+  .frenz-inbox-action:hover {
+    transform: translateY(-1px);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.3), 0 13px 24px -17px hsl(230 30% 12% / 0.46);
+  }
+  .frenz-conversation-row {
+    position: relative;
+  }
+  .frenz-conversation-row::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    transform: scaleY(0.18);
+    transform-origin: center;
+    border-radius: 0 999px 999px 0;
+    background: linear-gradient(hsl(var(--brand-blue)), hsl(var(--brand-purple)));
+    opacity: 0;
+    transition: transform 180ms ease, opacity 180ms ease;
+  }
+  .frenz-conversation-row:hover::after,
+  .frenz-conversation-row:focus-visible::after {
+    transform: scaleY(0.62);
+    opacity: 0.9;
+  }
+  .frenz-desktop-empty > span {
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.45), 0 22px 46px -26px hsl(var(--brand-purple) / 0.42);
+  }
+  @keyframes frenz-message-enter {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .frenz-thread-header { animation: none; }
+    .frenz-message-bubble,
+    .frenz-inbox-action,
+    .frenz-conversation-row::after { transition: none; }
+  }
+
   /* Shimmer sweep — loading states, hover sweeps */
   .shimmer {
     position: relative;

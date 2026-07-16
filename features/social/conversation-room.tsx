@@ -554,8 +554,15 @@ export function ConversationRoom({
     (m: MessageItem) => {
       setMessages((prev) => {
         if (seen.current.has(m.id)) return prev;
+        // Every newly-arriving message animates in — INCLUDING your own
+        // (owner 2026-07-16). This set used to be populated only for `!m.mine`,
+        // so a message you sent just materialised with no motion at all while
+        // messages you received rose in; the asymmetry is what made sending
+        // feel cheap. The sound/haptic below stay gated on `!m.mine` — you
+        // already got feedback from the send button itself, and double-ticking
+        // your own send would be noise.
+        welcomedIds.current.add(m.id);
         if (!m.mine) {
-          welcomedIds.current.add(m.id);
           // Same tick as the bottom nav (owner ask) — receiving a message
           // while actively in the thread should feel identical to sending
           // one, not a heavier/distinct alert tone.
@@ -568,6 +575,13 @@ export function ConversationRoom({
           const idx = prev.findIndex((x) => x.id.startsWith("optimistic-") && x.body === m.body);
           if (idx !== -1) {
             seen.current.add(m.id);
+            // This is the SAME bubble continuing — it already played its send
+            // animation as the optimistic one. Un-mark it: the swap changes the
+            // React key (`optimistic-<clientId>` -> the real row id), which
+            // remounts the node and would replay the CSS animation, so the
+            // bubble would visibly animate a SECOND time the moment the server
+            // echo landed. Only a genuinely new arrival should animate.
+            welcomedIds.current.delete(m.id);
             const copy = prev.slice();
             copy[idx] = m;
             return copy;
@@ -1011,6 +1025,13 @@ export function ConversationRoom({
       mimeType: a.mimeType ?? null,
       sizeBytes: a.sizeBytes ?? null,
     }));
+    // THE bubble the owner's "animate luxurious… immediately after send" is
+    // about: the optimistic one, painted the instant you hit send. It's added
+    // here by a direct setMessages rather than through `append()`, so it never
+    // entered `welcomedIds` and was the one message in the whole thread that
+    // could never animate — the send felt inert no matter what the keyframes
+    // did.
+    welcomedIds.current.add(optimisticId);
     setMessages((prev) => [
       ...prev,
       {
@@ -1094,6 +1115,10 @@ export function ConversationRoom({
     const clientId = crypto.randomUUID();
     const optimisticId = `optimistic-${clientId}`;
     const clientSentAt = new Date().toISOString();
+    // The other optimistic path (location / contact / poll sends) — animates
+    // identically to a text send, so the thread never has two different
+    // personalities depending on what you sent.
+    welcomedIds.current.add(optimisticId);
     setMessages((prev) => [
       ...prev,
       {
@@ -1638,7 +1663,11 @@ export function ConversationRoom({
                   // silently dependent on a container this file doesn't own.
                   "group flex w-full flex-col",
                   m.mine ? "items-end" : "items-start",
-                  welcomedIds.current.has(m.id) && "animate-fade-up",
+                  // Scales out of its OWN corner — yours from the send button's
+                  // side, theirs from the opposite one (see the keyframes in
+                  // globals.css). Was a plain `animate-fade-up` for received
+                  // messages only.
+                  welcomedIds.current.has(m.id) && (m.mine ? "animate-message-send" : "animate-message-recv"),
                 )}
               >
                 {showDayDivider ? (

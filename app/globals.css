@@ -344,8 +344,47 @@
     from { opacity: 0; transform: translateY(-5px); }
     to { opacity: 1; transform: translateY(0); }
   }
+
+  /* Your OWN message, the instant you send it (owner 2026-07-16: "animate
+     luxurious premium way into the chat immediately after send"). Until now
+     only RECEIVED messages animated — your own simply popped into existence,
+     which is exactly what made sending feel cheap.
+
+     The motion is authored to read as the bubble LAUNCHING out of the
+     composer, not just fading in: it starts low, small and slightly
+     transparent, rises past its resting point with a soft overshoot, and
+     settles. `cubic-bezier(0.16, 1, 0.3, 1)` is the app's existing
+     premium-settle curve (the same one the brand splash uses) — a fast start
+     that decelerates hard, which is what reads as "expensive" rather than
+     springy. Transform + opacity ONLY, so it composites on the GPU and never
+     lands on the main thread mid-scroll.
+
+     `transform-origin` is set per-side by the callers below so the bubble
+     scales out of ITS OWN corner — the side the composer's send button is on —
+     instead of its centre. That detail is most of the effect. */
+  @keyframes frenz-message-send {
+    0%   { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.82); }
+    55%  { opacity: 1; transform: translate3d(0, -2px, 0) scale(1.02); }
+    100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  }
+  .animate-message-send {
+    animation: frenz-message-send 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    transform-origin: bottom right;
+    will-change: transform, opacity;
+  }
+  /* A received message rises out of the other side. */
+  .animate-message-recv {
+    animation: frenz-message-send 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    transform-origin: bottom left;
+    will-change: transform, opacity;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .frenz-thread-header { animation: none; }
+    /* Collapse to a plain fade — never nothing at all, or a new message can
+       appear with no transition to signal that anything arrived. */
+    .animate-message-send,
+    .animate-message-recv { animation: fade-up var(--dur) var(--ease-out) both; }
     .frenz-message-bubble,
     .frenz-inbox-action,
     .frenz-conversation-row::after { transition: none; }

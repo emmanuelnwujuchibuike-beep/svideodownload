@@ -19,6 +19,25 @@ const KEY = "frenz-theme-mode";
 let current: ThemeMode = readInitial();
 const listeners = new Set<(mode: ThemeMode) => void>();
 
+/**
+ * Owner rule CHANGED 2026-07-16: a brand-new visitor now defaults to LIGHT, not
+ * "system". This deliberately REVERSES the previous standing rule ("the default
+ * must stay system"), which existed because a dark-on-reentry bug kept
+ * resurfacing — that bug was really about the boot/cache layers disagreeing, and
+ * a fixed light default actually removes the whole class of it: with no live
+ * `prefers-color-scheme` read in the default path, there's nothing left to
+ * resolve inconsistently.
+ *
+ * This is only the DEFAULT. "System" remains a first-class choice in the theme
+ * toggle, and a visitor who picks it still tracks their OS live.
+ *
+ * There are THREE layers that each independently decide this, and they must
+ * agree or the theme flashes on boot — the exact failure the old rule kept
+ * hitting. All three are set to light:
+ *   1. here (`readInitial`)                — React-side intent
+ *   2. boot-splash.tsx THEME_JS `mode()`   — the pre-paint <head> script
+ *   3. app/layout.tsx `defaultTheme`       — next-themes' own fallback
+ */
 function readInitial(): ThemeMode {
   try {
     const v = localStorage.getItem(KEY);
@@ -26,7 +45,7 @@ function readInitial(): ThemeMode {
   } catch {
     /* storage blocked */
   }
-  return "system";
+  return "light";
 }
 
 export function getCachedThemeMode(): ThemeMode {

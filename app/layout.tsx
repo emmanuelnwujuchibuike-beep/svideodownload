@@ -198,11 +198,16 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-        {/* Owner decision: SYSTEM is the default; the toggle offers
-            light / dark / system and the user's choice is remembered. */}
+        {/* Owner decision, CHANGED 2026-07-16: LIGHT is now the default for a
+            brand-new visitor (was "system"). `enableSystem` deliberately STAYS
+            on — that's what keeps "System" available as a real choice in the
+            toggle for anyone who wants it; it just isn't what you get by
+            default any more. This is one of THREE layers that must agree or the
+            theme flashes on boot — see the note on `readInitial` in
+            lib/theme/theme-mode-client.ts for the other two. */}
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >

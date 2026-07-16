@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
-import { useQuery } from "@/features/data";
+import { mutate, useQuery } from "@/features/data";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { ReshareSheet } from "@/features/social/reshare-sheet";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
+import { fetchStoryGroups, readCachedStories } from "@/lib/social/story-cache";
 import type { StoryGroup } from "@/lib/social/stories";
 import { isGroupSeen, loadSeenMap, markGroupSeen, type SeenMap } from "@/lib/social/story-seen";
 import { cn } from "@/lib/utils";
@@ -31,18 +32,29 @@ export function StoriesRow({
   viewerHandle?: string | null;
 }) {
   const router = useRouter();
-  // Seeded from the server + cached-first: paints instantly, refreshed in background.
-  const { data } = useQuery<StoryGroup[]>(
-    "stories",
-    async () => {
-      const r = await fetch("/api/stories");
-      if (!r.ok) return [];
-      const d = (await r.json()) as { groups: StoryGroup[] };
-      return d.groups ?? [];
-    },
-    { initialData: initialGroups },
-  );
+  // Seeded from the server + cached-first: paints instantly, refreshed in
+  // background. `initialGroups` is only present where the row is server-rendered
+  // (/home, /friends); on the inbox it's client-only, so it falls back to the
+  // last-known rings persisted on disk rather than an empty strip that fills in
+  // seconds later (owner, 2026-07-16 — see lib/social/story-cache.ts). The disk
+  // copy self-expires at 24h, so a stale entry can never paint a phantom ring.
+  const { data } = useQuery<StoryGroup[]>("stories", fetchStoryGroups, { initialData: initialGroups });
   const groups = data ?? [];
+
+  // Disk seed, applied AFTER mount — never during render. This component is
+  // server-rendered, and the server has no localStorage, so reading it in the
+  // render pass would hand React different markup on the client and trip a
+  // hydration mismatch (the same trap the seen/unseen rings below already
+  // document). Seeding in an effect costs one frame instead of the several
+  // SECONDS the network took, which is the whole complaint. Only fills a gap:
+  // if the row is server-seeded (/home, /friends) or the shared cache is
+  // already warm, this does nothing.
+  useEffect(() => {
+    if (initialGroups?.length || groups.length > 0) return;
+    const cached = readCachedStories();
+    if (cached?.length) mutate<StoryGroup[]>("stories", cached);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per mount; the fetch below is the authority from then on
+  }, []);
   const [start, setStart] = useState<number | null>(null);
   const initial = (viewerName ?? "").charAt(0).toUpperCase() || "+";
 

@@ -12,17 +12,10 @@ import {
   useComposerScrollLock,
 } from "@/features/create/composer-core";
 import { revalidate } from "@/features/data";
-import type { StoryGroup } from "@/lib/social/stories";
-
-/** Same key + shape every stories row uses (see StoriesRow) — so revalidating
- *  after a post updates the rings on Home AND the inbox at once, without
- *  refreshing a route. */
-async function fetchStoryGroups(): Promise<StoryGroup[]> {
-  const r = await fetch("/api/stories");
-  if (!r.ok) return [];
-  const d = (await r.json()) as { groups?: StoryGroup[] };
-  return d.groups ?? [];
-}
+// The one shared fetcher for the `stories` key — it also refreshes the on-disk
+// copy, so posting a story updates the rings on Home AND the inbox AND the next
+// cold start, from a single call.
+import { fetchStoryGroups } from "@/lib/social/story-cache";
 import { PhotoEditor } from "@/features/create/photo-editor";
 import { openStudio } from "@/features/create/studio/studio-store";
 import { haptic } from "@/lib/motion/haptics";

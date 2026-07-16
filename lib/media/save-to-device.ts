@@ -49,11 +49,21 @@ export async function saveMediaToDevice({
   filename?: string | null;
 }): Promise<SaveResult> {
   try {
-    const res = await fetch(url, { cache: "no-store" });
+    const ext = extensionFor(url, null, kind);
+    const name = filename?.trim() || `frenz-${Date.now()}.${ext}`;
+
+    // Fetch through OUR OWN origin, never the storage host directly.
+    //
+    // Measured, not assumed (owner report "couldn't save that"):
+    // `media.frenzsave.com` reflects CORS for `https://frenzsave.com` and
+    // `https://www.frenzsave.com` only — a Vercel preview or local dev origin
+    // gets no `access-control-allow-origin` at all, so a direct fetch THROWS
+    // and every save fails there. Same-origin has no preflight and no
+    // per-domain allowlist to keep in sync. See /api/media/download.
+    const proxied = `/api/media/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`;
+    const res = await fetch(proxied, { cache: "no-store" });
     if (!res.ok) return "failed";
     const blob = await res.blob();
-    const ext = extensionFor(url, blob.type || null, kind);
-    const name = filename?.trim() || `frenz-${Date.now()}.${ext}`;
     const file = new File([blob], name, { type: blob.type || (kind === "video" ? "video/mp4" : "image/jpeg") });
 
     // 1. Share sheet — the only path to the iOS Photos library.
@@ -67,7 +77,12 @@ export async function saveMediaToDevice({
         // no, not a failure, and must not fall through to a second attempt
         // that pops a download they didn't ask for.
         if (e instanceof DOMException && e.name === "AbortError") return "cancelled";
-        // Any other share failure: fall through to the download path below.
+        // NotAllowedError lands here and is EXPECTED on iOS: `navigator.share`
+        // must be called inside the user gesture, and the `await fetch` above
+        // has already spent it. There is no way to have both the bytes and the
+        // gesture, so the download path below is the real fallback, not an edge
+        // case — which is exactly why the proxy sets Content-Disposition:
+        // attachment, so that path actually saves instead of navigating.
       }
     }
 

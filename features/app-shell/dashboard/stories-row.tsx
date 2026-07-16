@@ -79,21 +79,21 @@ export function StoriesRow({
         <button
           type="button"
           onClick={() => (ownGroup ? setStart(groups.indexOf(ownGroup)) : router.push("/create/story"))}
-          className="flex w-16 flex-col items-center gap-1.5"
+          className="flex w-[5.1rem] flex-col items-center gap-1.5"
         >
           <span className={cn("relative rounded-full p-0.5", ownGroup ? "bg-brand" : "ring-1 ring-inset ring-border/70")}>
             <span className="block rounded-full bg-background p-0.5">
               {viewerAvatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={viewerAvatarUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+                <img src={viewerAvatarUrl} alt="" className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
               ) : (
-                <span className="flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
+                <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
                   {initial}
                 </span>
               )}
             </span>
-            <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background">
-              <Plus className="h-3.5 w-3.5" />
+            <span className="absolute -bottom-0.5 -right-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background">
+              <Plus className="h-4 w-4" />
             </span>
           </span>
           <span className="text-[11px] font-medium text-muted-foreground">Your Story</span>
@@ -107,7 +107,7 @@ export function StoriesRow({
         const unseen = !isGroupSeen(g, seen);
         return (
           <PressIcon key={g.handle} className="shrink-0">
-            <button type="button" onClick={() => setStart(groups.indexOf(g))} className="flex w-16 flex-col items-center gap-1.5">
+            <button type="button" onClick={() => setStart(groups.indexOf(g))} className="flex w-[5.1rem] flex-col items-center gap-1.5">
               <span
                 className={cn(
                   "rounded-full p-0.5",
@@ -117,21 +117,21 @@ export function StoriesRow({
                 <span className="block overflow-hidden rounded-full bg-background p-0.5">
                   {cover?.mediaKind === "image" ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={cover.mediaUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+                    <img src={cover.mediaUrl} alt="" className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
                   ) : cover?.mediaKind === "video" ? (
                     // eslint-disable-next-line jsx-a11y/media-has-caption
-                    <video src={`${cover.mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+                    <video src={`${cover.mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
                   ) : g.avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={g.avatarUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+                    <img src={g.avatarUrl} alt="" className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
                   ) : (
-                    <span className="flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
+                    <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
                       {g.displayName.charAt(0).toUpperCase()}
                     </span>
                   )}
                 </span>
               </span>
-              <span className={cn("w-16 truncate text-center text-[11px]", unseen ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
+              <span className={cn("w-[5.1rem] truncate text-center text-[11px]", unseen ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
                 {g.displayName.split(" ")[0]}
               </span>
             </button>

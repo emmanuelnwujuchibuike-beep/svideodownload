@@ -1153,6 +1153,10 @@ export async function setMessagePinned(userId: string, messageId: string, pinned
   }
 }
 
+/** Kinds the inbox preview can label. `file` covers documents and anything
+ *  else that isn't image/video/audio. */
+export type LastMessageKind = "location" | "contact" | "poll" | "image" | "video" | "audio" | "file" | null;
+
 export interface ConversationSummary {
   id: string;
   type: ConversationType;
@@ -1164,8 +1168,13 @@ export interface ConversationSummary {
   other: OtherUser | null;
   memberCount: number;
   lastBody: string | null;
-  /** Migration 0074 — lets the inbox row render a real icon (MapPin/User/BarChart3) instead of leaning on an emoji baked into `lastBody`. Null for a plain text/attachment message. */
-  lastMessageKind: "location" | "contact" | "poll" | null;
+  /** What the last message WAS, so the inbox row can render a real icon +
+   *  label instead of a bare tick. Metadata kinds (location/contact/poll) come
+   *  from migration 0074's `last_message_kind`; the media kinds are resolved
+   *  from the newest attachment when the last message carried no text (the
+   *  preview trigger can't see attachments — see listConversations). Null for a
+   *  plain text message, which shows its own text. */
+  lastMessageKind: LastMessageKind;
   lastAt: string;
   fromMe: boolean;
   unread: boolean;
@@ -1243,15 +1252,63 @@ export async function listConversations(userId: string): Promise<ConversationSum
     // same reasoning as getConversation()'s wallpaper_url fetch: a column
     // the DB migration hasn't landed yet must never fail the WHOLE inbox
     // query, just leave this one field null.
-    let kindByConv = new Map<string, "location" | "contact" | "poll" | null>();
+    let kindByConv = new Map<string, LastMessageKind>();
     try {
       const { data: kindRows } = await db.from("conversations").select("id, last_message_kind").in("id", convIds);
       kindByConv = new Map(
-        ((kindRows ?? []) as { id: string; last_message_kind: "location" | "contact" | "poll" | null }[]).map((r) => [r.id, r.last_message_kind]),
+        ((kindRows ?? []) as { id: string; last_message_kind: LastMessageKind }[]).map((r) => [r.id, r.last_message_kind]),
       );
     } catch {
       /* migration not applied yet — rows just render without the icon */
     }
+
+    // Attachment previews (owner, 2026-07-16: "include video when a video is
+    // sent, and image when image is sent, and audio when audio is sent last,
+    // and location when location is sent last, or if is a text chat the first 4
+    // or 3 words").
+    //
+    // `conversations.last_message_kind` only ever carries the METADATA kinds
+    // (location/contact/poll) — it's set by the `sync_conversation_preview()`
+    // trigger, which fires on the message INSERT, and attachment rows land in a
+    // SEPARATE insert straight after. The trigger literally cannot see them.
+    // So an attachment-only message left `last_body` empty and no kind at all,
+    // and the inbox row rendered a bare tick — exactly what the owner's
+    // screenshot shows.
+    //
+    // Resolved here instead of with another trigger: one extra query for the
+    // whole inbox, no schema change, and no second place for the preview to
+    // drift out of sync with the messages table.
+    const attachmentKindByConv = new Map<string, LastMessageKind>();
+    try {
+      const { data: attRows } = await db
+        .from("message_attachments")
+        .select("conversation_id, media_kind, created_at")
+        .in("conversation_id", convIds)
+        .order("created_at", { ascending: false });
+      for (const r of (attRows ?? []) as { conversation_id: string; media_kind: string }[]) {
+        // Rows arrive newest-first, so the first one per conversation is the
+        // most recent attachment — keep it and ignore the rest.
+        if (attachmentKindByConv.has(r.conversation_id)) continue;
+        const k = r.media_kind;
+        attachmentKindByConv.set(
+          r.conversation_id,
+          k === "image" || k === "video" || k === "audio" ? k : "file",
+        );
+      }
+    } catch {
+      /* best-effort — rows just render without the attachment label */
+    }
+
+    /** The kind to SHOW for a row: an explicit metadata kind wins; otherwise, if
+     *  the last message had no text, it was an attachment-only send and the most
+     *  recent attachment is what it was. A last message WITH text keeps its text
+     *  (a captioned photo reads better as its caption). */
+    const previewKindFor = (id: string, lastBody: string | null): LastMessageKind => {
+      const meta = kindByConv.get(id) ?? null;
+      if (meta) return meta;
+      if (lastBody && lastBody.trim()) return null;
+      return attachmentKindByConv.get(id) ?? null;
+    };
 
     const directConvs = convs.filter((c) => c.type === "direct");
     const groupConvs = convs.filter((c) => c.type === "group");
@@ -1360,7 +1417,7 @@ export async function listConversations(userId: string): Promise<ConversationSum
           },
           memberCount: 2,
           lastBody: c.last_body,
-          lastMessageKind: kindByConv.get(c.id) ?? null,
+          lastMessageKind: previewKindFor(c.id, c.last_body),
           lastAt: c.last_message_at,
           fromMe: c.last_sender_id === userId,
           unread: (unreadByConv.get(c.id) ?? 0) > 0,
@@ -1378,7 +1435,7 @@ export async function listConversations(userId: string): Promise<ConversationSum
           other: null,
           memberCount: memberCountByGroup.get(c.id) ?? 0,
           lastBody: c.last_body,
-          lastMessageKind: kindByConv.get(c.id) ?? null,
+          lastMessageKind: previewKindFor(c.id, c.last_body),
           lastAt: c.last_message_at,
           fromMe: c.last_sender_id === userId,
           unread: (unreadByConv.get(c.id) ?? 0) > 0,

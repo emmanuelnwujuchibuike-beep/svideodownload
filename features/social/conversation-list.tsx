@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Archive as ArchiveIcon, BadgeCheck, BarChart3, BellOff, Check, Loader2, MapPin, MoreHorizontal, Pin, Search, SlidersHorizontal, Trash2, User, X } from "lucide-react";
+import { Archive as ArchiveIcon, BadgeCheck, BarChart3, BellOff, Check, FileText, Image as ImageIcon, Loader2, MapPin, Mic, MoreHorizontal, Pin, Search, SlidersHorizontal, Trash2, User, Video as VideoIcon, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -48,6 +48,55 @@ async function setPrefs(conversationId: string, patch: Partial<{ muted: boolean;
   } catch {
     return false;
   }
+}
+
+/**
+ * The inbox preview line (owner, 2026-07-16): "include video when a video is
+ * sent, and image when image is sent, and audio when audio is sent last, and
+ * location when location is sent last, or if is a text chat the first 4 or 3
+ * words of the last chat should show."
+ *
+ * Icons, never emoji — the standing app rule. An attachment-only message used
+ * to leave this line as a bare tick (visible in the owner's screenshot),
+ * because the preview trigger fires on the message insert and attachments land
+ * in a separate one — see listConversations, which resolves the media kind.
+ */
+const PREVIEW_ICON: Record<string, typeof MapPin | null> = {
+  location: MapPin,
+  contact: User,
+  poll: BarChart3,
+  image: ImageIcon,
+  video: VideoIcon,
+  audio: Mic,
+  file: FileText,
+  none: null,
+};
+
+const PREVIEW_LABEL: Record<string, string> = {
+  location: "Location",
+  contact: "Contact",
+  poll: "Poll",
+  image: "Photo",
+  video: "Video",
+  audio: "Audio",
+  file: "Document",
+};
+
+/** Owner: "the first 4 or 3 words of the last chat should show." Four. The row
+ *  already truncates with an ellipsis, so this is about not handing a whole
+ *  paragraph to the list, not a hard character budget. */
+const PREVIEW_WORDS = 4;
+
+function previewText(kind: string | null, body: string | null): string {
+  // A media/metadata message says what it IS. A CAPTIONED one keeps its caption
+  // — the caption is more informative than the word "Photo" — which is why
+  // `previewKindFor` server-side only reports a media kind when the body was
+  // empty.
+  if (kind && PREVIEW_LABEL[kind]) return PREVIEW_LABEL[kind]!;
+  const text = (body ?? "").trim();
+  if (!text) return "…";
+  const words = text.split(/\s+/);
+  return words.length <= PREVIEW_WORDS ? text : `${words.slice(0, PREVIEW_WORDS).join(" ")}…`;
 }
 
 type InboxTab = "all" | "unread" | "groups" | "requests" | "channels";
@@ -768,14 +817,11 @@ function ConversationRow({
               {c.fromMe ? <Check className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="You sent" /> : null}
               {/* A real icon for what kind of message this was — never an
                   emoji standing in for one (standing app rule). */}
-              {c.lastMessageKind === "location" ? (
-                <MapPin className="h-3.5 w-3.5 shrink-0" />
-              ) : c.lastMessageKind === "contact" ? (
-                <User className="h-3.5 w-3.5 shrink-0" />
-              ) : c.lastMessageKind === "poll" ? (
-                <BarChart3 className="h-3.5 w-3.5 shrink-0" />
-              ) : null}
-              <span className="truncate">{c.lastBody ?? "…"}</span>
+              {(() => {
+                const Icon = PREVIEW_ICON[c.lastMessageKind ?? "none"];
+                return Icon ? <Icon className="h-3.5 w-3.5 shrink-0" /> : null;
+              })()}
+              <span className="truncate">{previewText(c.lastMessageKind, c.lastBody)}</span>
             </p>
           )}
         </div>

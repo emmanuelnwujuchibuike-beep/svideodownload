@@ -462,6 +462,13 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         open={sendToChatOpen}
         onClose={() => setSendToChatOpen(false)}
         blob={blobRef.current}
+        // `blobRef` is only populated once this player has fully buffered the
+        // file, so it's null for a download opened from an earlier session (or
+        // if Send is tapped while it's still streaming). That made "Send to
+        // chat" a silent no-op — owner, 2026-07-16. Every completed download
+        // already lives in the local media cache, so hand the sheet a way to
+        // fetch it on demand instead of depending on this ref being warm.
+        resolveBlob={async () => getMedia(mediaKey(rec.url, rec.formatId, rec.kind)).catch(() => null)}
         kind={rec.kind}
         title={rec.title || "Shared media"}
         thumbnailUrl={rec.thumbnail ?? null}

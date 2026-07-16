@@ -58,6 +58,7 @@ export function SendToChatSheet({
   open,
   onClose,
   blob,
+  resolveBlob,
   kind,
   title,
   thumbnailUrl,
@@ -66,6 +67,10 @@ export function SendToChatSheet({
   open: boolean;
   onClose: () => void;
   blob: Blob | null;
+  /** Lazy fallback for when `blob` isn't populated yet (the caller's ref is
+   *  only filled once the player has fully buffered). Resolves from the local
+   *  media cache. See send(). */
+  resolveBlob?: () => Promise<Blob | null>;
   kind: "video" | "audio" | "image";
   title: string;
   thumbnailUrl: string | null;
@@ -117,23 +122,43 @@ export function SendToChatSheet({
   };
 
   const send = async () => {
-    if (selected.size === 0 || sending || !blob) return;
+    if (selected.size === 0 || sending) return;
+
+    // Resolve the bytes HERE rather than trusting the `blob` prop.
+    //
+    // Owner report (2026-07-16): "when I try to send a download to someone on
+    // chat" — nothing happened. This function used to open with
+    // `|| !blob) return;`, a SILENT no-op: the caller passes
+    // `blob={blobRef.current}`, and that ref is only populated once the player
+    // has fully buffered the file. Tap Send before that (or on a download from
+    // an earlier session whose player never streamed it) and the button did
+    // absolutely nothing — no send, no error, no explanation.
+    //
+    // `resolveBlob` falls back to the local media cache (IndexedDB), which is
+    // where every completed download already lives, so the common case now just
+    // works. If the bytes genuinely aren't available we SAY so instead of
+    // failing silently.
     setSending(true);
     try {
+      const data = blob ?? (await resolveBlob?.() ?? null);
+      if (!data) {
+        toast("That file isn't ready yet — open it once, then try again.", "error");
+        return;
+      }
       const ext = kind === "audio" ? "mp3" : kind === "image" ? "jpg" : "mp4";
-      const contentType = blob.type || (kind === "audio" ? "audio/mpeg" : kind === "image" ? "image/jpeg" : "video/mp4");
+      const contentType = data.type || (kind === "audio" ? "audio/mpeg" : kind === "image" ? "image/jpeg" : "video/mp4");
       const mediaUrl = prefetchedPlan
-        ? await uploadWithPlan(prefetchedPlan, blob, contentType).catch(async () => uploadWithPlan(await presignUpload(kind, ext), blob, contentType))
-        : await uploadWithPlan(await presignUpload(kind, ext), blob, contentType);
+        ? await uploadWithPlan(prefetchedPlan, data, contentType).catch(async () => uploadWithPlan(await presignUpload(kind, ext), data, contentType))
+        : await uploadWithPlan(await presignUpload(kind, ext), data, contentType);
 
       let mediaWidth: number | undefined;
       let mediaHeight: number | undefined;
       let durationMs: number | undefined;
       if (kind === "image") {
-        const dims = await readImageDimensions(blob as File);
+        const dims = await readImageDimensions(data as File);
         if (dims) ({ width: mediaWidth, height: mediaHeight } = dims);
       } else if (kind === "video") {
-        const meta = await readVideoMetadata(blob as File);
+        const meta = await readVideoMetadata(data as File);
         if (meta) ({ width: mediaWidth, height: mediaHeight, durationMs } = meta);
       }
 

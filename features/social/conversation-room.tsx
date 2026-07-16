@@ -9,6 +9,7 @@ import {
   Clock,
   File as FileIcon,
   Ban,
+  Download,
   Forward,
   Repeat2,
   Image as ImageIcon,
@@ -42,6 +43,7 @@ import { EmojiPickerButton } from "@/features/social/emoji-picker-button";
 import { ForwardSheet } from "@/features/social/forward-sheet";
 import { cacheThread, getCachedThread } from "@/features/social/thread-cache";
 import { ReshareSheet } from "@/features/social/reshare-sheet";
+import { saveMediaToDevice } from "@/lib/media/save-to-device";
 import { INBOX_KEY, loadInbox } from "@/features/social/inbox";
 import { MediaComposerSheet } from "@/features/social/media-composer-sheet";
 import { extractSharedPost, MessagePostEmbed } from "@/features/social/message-post-embed";
@@ -349,6 +351,17 @@ export function ConversationRoom({
    *  message id. Layered OVER `m.allowReshare` so the menu flips on the tap
    *  rather than waiting for a resync to bring the new value back. */
   const [reshareAllowed, setReshareAllowed] = useState<Record<string, boolean>>({});
+
+  const saveMedia = async (url: string, kind: "image" | "video", filename?: string | null) => {
+    setOpenMenuId(null);
+    haptic("selection");
+    const result = await saveMediaToDevice({ url, kind, filename });
+    // Report what ACTUALLY happened — a dismissed share sheet is not a save,
+    // and claiming "Saved" when the file never landed is worse than silence.
+    if (result === "saved") toast(kind === "video" ? "Video saved" : "Photo saved", "success");
+    else if (result === "failed") toast("Couldn't save that.", "error");
+    /* "shared" (handed to the OS sheet) and "cancelled" speak for themselves */
+  };
 
   const toggleMessageReshare = async (messageId: string, next: boolean) => {
     setOpenMenuId(null);
@@ -2007,6 +2020,20 @@ export function ConversationRoom({
                                   const allowed = reshareAllowed[m.id] ?? m.allowReshare;
                                   return (
                                     <>
+                                      {/* Save to the device's own storage
+                                          (owner, 2026-07-16). Always available
+                                          to anyone who can already SEE the
+                                          media — unlike Reshare, saving is not
+                                          gated on the sender's switch: that
+                                          switch is about republishing to other
+                                          people, and someone looking at a photo
+                                          can screenshot it regardless. Gating
+                                          it would be theatre. */}
+                                      <MenuItem
+                                        icon={Download}
+                                        label="Save to device"
+                                        onClick={() => void saveMedia(media.url, media.kind as "image" | "video", media.filename)}
+                                      />
                                       {/* The SENDER's own switch (owner: "users
                                           who ... sent the media in chat can set
                                           the media to be reshare or not"). Only

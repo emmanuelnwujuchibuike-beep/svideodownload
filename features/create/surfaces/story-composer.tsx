@@ -11,6 +11,18 @@ import {
   useComposerMedia,
   useComposerScrollLock,
 } from "@/features/create/composer-core";
+import { revalidate } from "@/features/data";
+import type { StoryGroup } from "@/lib/social/stories";
+
+/** Same key + shape every stories row uses (see StoriesRow) — so revalidating
+ *  after a post updates the rings on Home AND the inbox at once, without
+ *  refreshing a route. */
+async function fetchStoryGroups(): Promise<StoryGroup[]> {
+  const r = await fetch("/api/stories");
+  if (!r.ok) return [];
+  const d = (await r.json()) as { groups?: StoryGroup[] };
+  return d.groups ?? [];
+}
 import { PhotoEditor } from "@/features/create/photo-editor";
 import { openStudio } from "@/features/create/studio/studio-store";
 import { haptic } from "@/lib/motion/haptics";
@@ -56,13 +68,26 @@ export function StoryComposer({ avatarUrl }: { avatarUrl: string | null }) {
       await publishComposition({ items, caption, destination: "story", onProgress: setBusyText });
       clearDraft();
       setSent(true);
-      router.refresh();
+      // Refresh the STORY RINGS, not the route (owner, 2026-07-16: the share
+      // button "is glitching ... and is stuck on the share story load button").
+      // This used to call `router.refresh()` and then immediately `router.push`
+      // — re-rendering the very page we're leaving, which put the composer
+      // through a re-render mid-transition while it was still showing its
+      // busy state. Revalidating the shared "stories" key instead updates every
+      // stories row (home + inbox) with no RSC churn on a dying route.
+      void revalidate("stories", fetchStoryGroups).catch(() => {});
       // A story has no permalink to share or copy — it lives in the ring for
       // 24h — so this surface confirms and leaves rather than showing the
       // post/reel "Share link" success screen.
       setTimeout(() => router.push("/home"), 900);
     } catch (e) {
       media.setErr(e instanceof Error ? e.message : "Network error.");
+    } finally {
+      // ALWAYS clear the busy state. This was the real "stuck on the share
+      // story load button" bug: the success path never reset `busy`/`busyText`
+      // (there was no `finally`), so if the navigation was slow or never
+      // happened the button sat on "Uploading…" forever, disabled, with no way
+      // back. `sent` still keeps it disabled and reading "Shared" afterwards.
       setBusy(false);
       setBusyText(null);
     }

@@ -69,6 +69,27 @@ export function UserMenu() {
   }
 
   if (!user) {
+    // A signed-in viewer must never be shown "Log in" because of a transient
+    // auth blip (owner, 2026-07-16: "the login button thats in the landing page
+    // flashes on the message page when i enter a chat and come out fast").
+    //
+    // `useUser()` resolves to `{ user: null, loading: false }` in two very
+    // different situations: genuinely signed out, and a getUser() call that
+    // FAILED (its catch clears `loading` without a user — a real, documented
+    // race when a freshly-installed service worker claims the page mid-fetch).
+    // This component can't tell those apart, so it used to render the
+    // signed-out CTA for both, flashing a login button at someone who is very
+    // much logged in.
+    //
+    // The identity cache settles it: if this browser has a cached identity, the
+    // viewer HAS been signed in here, so keep showing their avatar and let the
+    // auth listener correct it. A real sign-out clears that cache (see
+    // use-user's onAuthStateChange), so a genuinely signed-out visitor still
+    // gets the CTA immediately.
+    if (realAvatarUrl) {
+      // eslint-disable-next-line @next/next/no-img-element
+      return <img src={realAvatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />;
+    }
     // Owner (2026-07-16): "change the login button in the landing page to login
     // or create account to access all features". The old "Log in for API" was
     // both narrower than the truth (an account unlocks the whole social app,

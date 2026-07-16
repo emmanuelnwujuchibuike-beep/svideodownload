@@ -472,7 +472,6 @@ export function ConversationList({
                 {pinnedStrip.map((c) => {
                   const isGroup = c.type === "group";
                   const name = isGroup ? c.title ?? "Group chat" : c.other!.displayName;
-                  const isOnline = !isGroup && online.has(c.other!.id);
                   return (
                     <Link
                       key={c.id}
@@ -500,7 +499,6 @@ export function ConversationList({
                             </span>
                           )}
                         </span>
-                        {isOnline ? <span aria-label="Online" className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-background" /> : null}
                       </span>
                       <span className="w-full truncate text-center text-xs font-medium text-muted-foreground">{name}</span>
                     </Link>
@@ -594,7 +592,6 @@ function ConversationRow({
   onSwipeOpen: (open: boolean) => void;
 }) {
   const isGroup = c.type === "group";
-  const isOnline = !isGroup && onlineSet.has(c.other!.id);
   const name = isGroup ? c.title ?? "Group chat" : c.other!.displayName;
   // Owner ask: "see when a user is typing from outside [the open thread]" —
   // read-only (broadcastEnabled=false: this row never has a composer, so it
@@ -750,12 +747,6 @@ function ConversationRow({
               </span>
             )}
           </span>
-          {isOnline ? (
-            <span aria-label="Online" className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center">
-              <span className="absolute h-full w-full animate-ping rounded-full bg-emerald-400/60 motion-reduce:hidden" />
-              <span className="relative h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-background" />
-            </span>
-          ) : null}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">

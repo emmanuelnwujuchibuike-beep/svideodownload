@@ -743,21 +743,17 @@ function ConversationRow({
         </span>
       </Link>
 
-      {/* A flex sibling, not an absolutely-positioned overlay on top of the
-          Link's own timestamp/unread-badge — and deliberately NOT hidden via
-          opacity-0-until-hover, since touch devices have no hover state, which
-          would make mute/pin/archive undiscoverable on mobile. */}
-      <div className="relative shrink-0 pr-2">
-        <motion.button
-          type="button"
-          onClick={(e) => onOpenMenu(c.id, e)}
-          aria-label="Conversation options"
-          whileTap={{ scale: 0.85 }}
-          transition={springs.press}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground/70 transition hover:bg-secondary hover:text-foreground"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </motion.button>
+      {/* Owner (2026-07-16): the per-row "…" button is GONE — "the dotted menu
+          in message should be removed and users should only use the slide left
+          for menu." Swipe-left is now the ONLY per-chat menu, which is what
+          makes the list read cleanly (every row carried a permanent "…" before;
+          see the owner's own screenshot of the inbox).
+          The dropdown itself deliberately STAYS: the swipe strip's own "More"
+          button (above) opens it and anchors it off its own rect, so Pin / Mute
+          / Archive are all still reachable — just behind the gesture rather
+          than a permanent glyph on every row. Removing the dropdown too would
+          have made those three actions unreachable entirely. */}
+      <div className="relative shrink-0">
         {openMenuId === c.id && menuPos
           ? createPortal(
               <>

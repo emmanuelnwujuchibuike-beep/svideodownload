@@ -14,7 +14,6 @@ import {
   Lock,
   MapPin,
   Mic,
-  MoreHorizontal,
   Paperclip,
   Pencil,
   Pin,
@@ -60,6 +59,7 @@ import {
 } from "@/lib/offline/message-queue";
 import { readImageDimensions, readVideoMetadata } from "@/lib/media/message-attachments-client";
 import { haptic } from "@/lib/motion/haptics";
+import { useLongPress } from "@/lib/dom/use-long-press";
 import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { useNetworkStatus } from "@/lib/pwa/use-network-status";
@@ -886,8 +886,12 @@ export function ConversationRoom({
   // position instead of the true viewport — confirmed to push the menu ~600px
   // off-screen on a 1280px-wide desktop window. Portaling to <body> keeps this
   // math correct regardless of any blurred/transformed ancestor.
-  const toggleMessageMenu = (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
-    haptic("light");
+  // Takes the ANCHOR ELEMENT rather than an event (2026-07-16): the trigger is
+  // now a press-and-hold on the bubble itself, not a click on a "⋯" button, and
+  // a long-press has no single React event whose `currentTarget` survives to
+  // fire time. Passing the element keeps the positioning maths below identical
+  // while letting the hold, and desktop's right-click, share one path.
+  const toggleMessageMenu = (id: string, anchor: HTMLElement) => {
     if (openMenuId === id) {
       setOpenMenuId(null);
       return;
@@ -902,7 +906,7 @@ export function ConversationRoom({
     const msg = messages.find((x) => x.id === id);
     const editDelete = msg && msg.mine && !msg.deletedAt && !id.startsWith("optimistic-") ? 2 : 0;
     const menuHeight = (5 + editDelete) * MENU_ITEM_HEIGHT + 12;
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect = anchor.getBoundingClientRect();
     const margin = 8;
     const left = Math.min(Math.max(rect.right - MENU_WIDTH, margin), window.innerWidth - MENU_WIDTH - margin);
     const spaceBelow = window.innerHeight - rect.bottom;
@@ -910,6 +914,16 @@ export function ConversationRoom({
     setMenuPos({ top, left });
     setOpenMenuId(id);
   };
+
+  // ONE hook for every bubble — `useLongPress` can't be called inside the
+  // `messages.map()` below without breaking the rules of hooks, so the held
+  // element carries its own message id (`data-message-id`) and this reads it
+  // back at fire time. The bubble is also the anchor the menu positions
+  // against, which is why the hook hands the element back.
+  const holdBubble = useLongPress((anchor) => {
+    const id = anchor.dataset.messageId;
+    if (id) toggleMessageMenu(id, anchor);
+  });
 
   const onComposerKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // While the @mention dropdown is open, Enter picks the top match instead
@@ -1617,7 +1631,12 @@ export function ConversationRoom({
                   else bubbleRefs.current.delete(m.id);
                 }}
                 className={cn(
-                  "group flex flex-col",
+                  // `w-full` is load-bearing, not cosmetic: it's what makes the
+                  // row's `max-w-[80%]` below resolve against a DEFINITE width
+                  // (see the vertical-text bug note there). Relying on the
+                  // parent's default `align-items: stretch` would leave that
+                  // silently dependent on a container this file doesn't own.
+                  "group flex w-full flex-col",
                   m.mine ? "items-end" : "items-start",
                   welcomedIds.current.has(m.id) && "animate-fade-up",
                 )}
@@ -1636,11 +1655,40 @@ export function ConversationRoom({
                 {type === "group" && !m.mine ? (
                   <span className="mb-0.5 px-1 text-[11px] font-semibold text-muted-foreground">{senderName(m.senderId)}</span>
                 ) : null}
-                <div className={cn("flex items-end gap-1", m.mine ? "flex-row-reverse" : "flex-row")}>
+                {/* The 80% cap lives HERE, on the row — not on the bubble.
+                    Real bug (owner, 2026-07-16): "the bubble text showed
+                    instantly in a vertical line the moment it was typed, when
+                    the message isn't delivered yet." The bubble used to carry
+                    `max-w-[80%]` itself, but its containing block is this row,
+                    which is shrink-to-fit (the column above is `items-end`/
+                    `items-start`). So the bubble's max-width resolved against a
+                    width that itself depended on the bubble — a circular
+                    constraint the browser settles by collapsing toward
+                    min-content, i.e. ONE CHARACTER PER LINE. Messages that
+                    already had a wide receipt line ("Delivered 9:14 AM ✓✓")
+                    were propped open by that sibling and looked fine, which is
+                    exactly why this only ever showed on a just-typed,
+                    not-yet-delivered bubble — the optimistic one has no receipt
+                    yet. This row is a flex item of the full-width message
+                    column, so 80% here resolves against a DEFINITE width and
+                    the bubble simply fills it (`max-w-full`). `min-w-0` keeps
+                    long unbroken URLs wrapping instead of forcing an overflow. */}
+                <div className={cn("flex max-w-[80%] items-end gap-1", m.mine ? "flex-row-reverse" : "flex-row")}>
                   <div
+                    // Press-and-hold target (owner, 2026-07-16). `data-message-id`
+                    // is how the single shared hook above knows WHICH bubble was
+                    // held. Handlers only attach when there are actions to show,
+                    // so a deleted/optimistic bubble stays inert rather than
+                    // opening an empty menu.
+                    data-message-id={m.id}
+                    {...(canAct ? holdBubble : {})}
                     style={m.mine && !deleted && chatAppearance.bubbleColor ? { backgroundImage: "none", backgroundColor: chatAppearance.bubbleColor } : undefined}
                     className={cn(
-                      "frenz-message-bubble max-w-[80%] overflow-hidden whitespace-pre-wrap break-words leading-relaxed",
+                      "frenz-message-bubble min-w-0 max-w-full overflow-hidden whitespace-pre-wrap break-words leading-relaxed",
+                      // A hold must open OUR menu, not iOS's text-selection
+                      // callout — the two race otherwise and the system one
+                      // wins. Copy stays available from the menu itself.
+                      canAct && "select-none [-webkit-touch-callout:none]",
                       bubbleShape.base,
                       FONT_STYLE_CLASS[chatAppearance.fontStyle],
                       // "Speech tail" bubble style: a real protruding pointer
@@ -1779,21 +1827,13 @@ export function ConversationRoom({
                   </div>
 
                   {canAct ? (
-                    // Deliberately NOT opacity-0-until-hover: touch devices have no
-                    // hover state, which would make this whole menu (reply/react/
-                    // edit/delete/pin) undiscoverable on mobile. Visible-but-subtle
-                    // at rest, fuller contrast on hover/focus for desktop polish.
+                    // The "⋯" button that used to live here is GONE (owner,
+                    // 2026-07-16): message actions now open on a PRESS-AND-HOLD
+                    // of the bubble itself (see `hold` above — plus right-click
+                    // on desktop, which the same hook handles). A permanent
+                    // glyph welded to every single bubble was the main thing
+                    // keeping the thread from reading as premium.
                     <div className="relative shrink-0">
-                      <motion.button
-                        type="button"
-                        onClick={(e) => toggleMessageMenu(m.id, e)}
-                        aria-label="Message actions"
-                        whileTap={{ scale: 0.85 }}
-                        transition={springs.press}
-                        className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/60 transition hover:bg-secondary hover:text-foreground"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </motion.button>
                       {openMenuId === m.id && menuPos
                         ? createPortal(
                             <>
@@ -1932,7 +1972,25 @@ export function ConversationRoom({
                       <Clock className="h-3 w-3" /> Waiting to send…
                     </span>
                   ) : r ? (
-                    <span className={cn("flex flex-row items-center gap-1 font-medium", r.read ? "text-primary" : "text-muted-foreground")}>
+                    // Owner receipt spec (2026-07-16), confirmed exactly:
+                    //   Sent      -> ONE grey tick   (left our server, not yet on their device)
+                    //   Delivered -> TWO BLUE ticks  ("when the user is online or just received it")
+                    //   Seen      -> TWO GREEN ticks (they actually opened it)
+                    // Only the colour changes between delivered and seen, so the
+                    // state reads at a glance without counting ticks. Deliberately
+                    // NOT `text-primary` for read (what it used to be): primary IS
+                    // the same blue as delivered, so "delivered" and "seen" were
+                    // literally indistinguishable before.
+                    <span
+                      className={cn(
+                        "flex flex-row items-center gap-1 font-medium",
+                        r.read
+                          ? "text-emerald-500 dark:text-emerald-400"
+                          : r.delivered
+                            ? "text-blue-500 dark:text-blue-400"
+                            : "text-muted-foreground",
+                      )}
+                    >
                       {r.label} {timeLabel(r.at)}
                       {r.delivered ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />}
                     </span>

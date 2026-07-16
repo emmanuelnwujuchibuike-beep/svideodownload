@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import {
@@ -17,7 +17,7 @@ import {
   FrenzPersonSolid,
 } from "@/components/icons/frenz-icons";
 import { useEntitlements } from "@/features/auth/use-entitlements";
-import { openUpload } from "@/features/create/upload-store";
+import { CreateActionSheet } from "@/features/create/create-action-sheet";
 import { useQuery } from "@/features/data";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { haptic } from "@/lib/motion/haptics";
@@ -49,6 +49,7 @@ import { cn } from "@/lib/utils";
 export function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const [createOpen, setCreateOpen] = useState(false);
   const { handle, avatarUrl } = useEntitlements();
   // Cached-first: shows the last-known unread count instantly, updates live.
   const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox);
@@ -91,16 +92,24 @@ export function MobileNav() {
 
         {/* Create — the mockup's signature gradient circle, slightly raised
             out of the pill. (Replaces the earlier dark-squircle treatment to
-            follow the owner's re-sent mockup exactly.) */}
+            follow the owner's re-sent mockup exactly.)
+            2026-07-16: this used to call `openUpload("post")` and jump STRAIGHT
+            into the post composer, which made every other primary action
+            (download, reel, story, live) unreachable from the nav. Per the
+            owner's picked mockup (public/download button menus.jpg, "Option 1
+            — Keep the nav. Use the + button for Download and more."), it now
+            opens the action sheet instead. */}
         <PressIcon className="-mt-5 self-center">
           <button
             type="button"
             onClick={() => {
               haptic("selection");
               playSound("tap");
-              openUpload("post");
+              setCreateOpen(true);
             }}
             aria-label="Create"
+            aria-haspopup="dialog"
+            aria-expanded={createOpen}
             className="group relative flex h-[52px] w-[52px] items-center justify-center"
           >
             <span aria-hidden className="bg-brand absolute inset-0 rounded-full opacity-45 blur-[10px] transition group-active:opacity-70" />
@@ -160,6 +169,13 @@ export function MobileNav() {
           <span className={cn("text-[10px] font-medium transition-colors", profileActive ? "text-primary" : "text-muted-foreground")}>Profile</span>
         </Link>
       </nav>
+
+      {/* The "+" action sheet (owner's picked mockup). Rendered here rather
+          than in AppOverlays because the "+" that opens it lives in this bar
+          and nothing else can open it — so its state has no reason to be
+          global. It portals to <body>, so this bar's own stacking/blur can't
+          trap it. */}
+      <CreateActionSheet open={createOpen} onClose={() => setCreateOpen(false)} />
     </div>
   );
 }

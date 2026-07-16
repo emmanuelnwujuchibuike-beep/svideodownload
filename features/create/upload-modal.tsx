@@ -76,7 +76,15 @@ function ModalInner() {
       return "";
     }
   });
-  const [destination, setDestination] = useState<Destination>(intent === "story" ? "story" : "post");
+  // The "+" action sheet's Create Reel opens the composer already pointed at
+  // Reels, the same way Story always has — without this, `intent === "reel"`
+  // silently fell into the `"post"` default and the sheet's Reel row was
+  // indistinguishable from its Post row. Safe against a mismatched pick:
+  // `fixDestination` re-resolves this the moment media is chosen (Reels
+  // require a video), so choosing an image here still lands on "post".
+  const [destination, setDestination] = useState<Destination>(
+    intent === "story" ? "story" : intent === "reel" ? "reel" : "post",
+  );
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [busyText, setBusyText] = useState<string | null>(null);

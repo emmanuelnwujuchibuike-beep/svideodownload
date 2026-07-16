@@ -1,13 +1,31 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 /**
  * Server-side Supabase client bound to the request cookies. Use in Server
  * Components, Route Handlers and Server Actions. RLS is enforced via the
  * authenticated user's JWT.
+ *
+ * `cache()`-wrapped (2026-07-16, real bug): `/messages` has both a
+ * `layout.tsx` and a `page.tsx` that each independently used to call this and
+ * then `getUserBounded()` for the same request. Two separate client
+ * instances read the SAME (possibly expired) refresh token cookie and each
+ * attempted their own refresh — Supabase rotates refresh tokens (single-use),
+ * so whichever call went first succeeded in-memory (unpersisted — a Server
+ * Component structurally can't write cookies) while the second got a real
+ * `AuthApiError: Invalid Refresh Token: Refresh Token Not Found`. Middleware
+ * normally would refresh once up front, but deliberately skips that for RSC/
+ * soft navigations to non-guarded routes (see middleware.ts's `isRscNav`
+ * bypass) — exactly the path both a plain in-app reopen of Messages and
+ * `EdgeSwipeBack`'s `router.back()` (the iOS swipe-back gesture) take. Since
+ * nothing could ever persist the winning refresh, this repeated identically
+ * on every subsequent request — a genuine "stuck" loop, not a timeout.
+ * `cache()` memoizes this per request, so every caller in the same render
+ * (layout + page) shares ONE client/session instead of racing two.
  */
-export async function createClient() {
+export const createClient = cache(async () => {
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -31,7 +49,7 @@ export async function createClient() {
       },
     },
   );
-}
+});
 
 /**
  * `auth.getUser()` with a hard time-box, for SERVER PAGES on the render
@@ -54,7 +72,19 @@ export async function getUserBounded(
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error("auth timeout")), timeoutMs)),
     ]);
     return result.data.user ? { kind: "user", user: result.data.user } : { kind: "signed-out" };
-  } catch {
-    return { kind: "timeout" };
+  } catch (error) {
+    // Only OUR OWN race-timer rejection means "genuinely slow, try again" —
+    // any other thrown error is Supabase's own `getUser()` failing outright
+    // (2026-07-16, real bug: a real `AuthApiError: Invalid Refresh Token`,
+    // caused by two independent server clients racing to refresh the same
+    // single-use token — see createClient()'s comment above). Lumping that
+    // in with "timeout" rendered an unwinnable "Retry" state: the underlying
+    // session is actually dead, so every retry hit the identical error
+    // forever ("stuck in reload" on /messages). Treating it as signed-out
+    // instead sends the user to a real, working /login.
+    if (error instanceof Error && error.message === "auth timeout") {
+      return { kind: "timeout" };
+    }
+    return { kind: "signed-out" };
   }
 }

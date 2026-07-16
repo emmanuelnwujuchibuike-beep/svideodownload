@@ -25,7 +25,8 @@
 const CSS = `
 #frenz-boot{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:#ffffff;transition:opacity .4s ease}
 html.dark #frenz-boot{background:#050816}
-#frenz-boot.frenz-boot--hide{opacity:0;pointer-events:none}
+html.frenz-boot-out #frenz-boot{opacity:0;pointer-events:none}
+html.frenz-boot-off #frenz-boot{display:none}
 .frenz-boot__mark{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:22%;width:152px;height:152px;animation:frenz-boot-breathe 1.6s ease-in-out infinite}
 .frenz-boot__mark img{display:block;width:100%;height:100%}
 .frenz-boot__shine{position:absolute;inset:0;background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.65) 50%,transparent 60%);transform:translateX(-130%);animation:frenz-boot-shimmer 1.4s ease-in-out infinite}
@@ -34,34 +35,37 @@ html.dark #frenz-boot{background:#050816}
 @media (prefers-reduced-motion:reduce){.frenz-boot__mark,.frenz-boot__shine{animation:none}}
 `;
 
-// Suppression checks run FIRST, synchronously, before this element ever gets
-// a chance to paint:
+// Suppression checks run FIRST, synchronously:
 //  1. A `frenz_just_signed_in` cookie (set by the auth callback routes)
 //     always wins — force-show, clear the cookie, mark this session booted.
 //  2. Otherwise, if this tab session already booted once (sessionStorage),
 //     this is a refresh or a non-Link hard navigation, not a cold start —
-//     hide immediately and let the page's own skeleton carry the loading
+//     dismiss INSTANTLY and let the page's own skeleton carry the loading
 //     state instead.
 //  3. Landing on /home with no `frenz_welcomed` cookie means the colorful
-//     BrandSplash is about to take over immediately — this skeleton removes
-//     itself instead of flashing first (unchanged from before).
-// `hide()` re-queries `#frenz-boot` by id EVERY time it actually runs,
-// instead of trusting the `el` reference captured once at the top — a real
-// bug found 2026-07-15: a hydration mismatch ANYWHERE near this node's
-// position in the tree (root layout.tsx renders this alongside the app's
-// ambient background decoration, a handful of provider levels up) makes
-// React discard and regenerate this whole subtree client-side, which
-// creates a BRAND NEW DOM node with the same id. The captured `el` closure
-// still points at the old, now-detached node — every call after that
-// (including the `setTimeout(hide,6000)` failsafe below, which exists
-// specifically to always recover) was silently operating on a node no
-// longer in the document, so the FRESH node React actually rendered was
-// never hidden or removed — a genuine permanent "stuck on the boot splash"
-// with no failsafe catching it, reproduced live on /messages. Re-querying
-// at call time always finds whichever node is currently live, React-
-// generated or original, so this now self-heals regardless of a mismatch's
-// underlying cause.
-const JS = `(function(){var el=document.getElementById('frenz-boot');if(!el)return;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var alreadyBooted=false;try{alreadyBooted=sessionStorage.getItem('frenz-booted')==='1'}catch(e){}if(!justSignedIn&&alreadyBooted){el.style.display='none';return}try{sessionStorage.setItem('frenz-booted','1')}catch(e){}if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){el.style.display='none';return}}catch(e){}var start=Date.now();function hide(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){var live=document.getElementById('frenz-boot');if(!live)return;live.classList.add('frenz-boot--hide');setTimeout(function(){if(live&&live.parentNode)live.parentNode.removeChild(live)},440)},w)}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',hide)}else{hide()}setTimeout(hide,6000)})();`;
+//     BrandSplash is about to take over immediately — dismiss instantly
+//     instead of flashing first.
+//
+// Dismissal is node-INDEPENDENT — the permanent fix for the long-recurring
+// "stuck on the F loader" reports. Instead of hiding or removing the
+// specific `#frenz-boot` node this script sees at run time, it toggles a
+// class on `<html>` (`frenz-boot-out` to fade, then `frenz-boot-off` to
+// hard-hide), and the CSS above hides ANY `#frenz-boot` node while that
+// class is present. This is what finally closes the bug: /messages triggers
+// a React hydration mismatch near this node's position in the root layout
+// tree, so React discards and regenerates a BRAND-NEW `#frenz-boot` node
+// client-side. Every prior approach operated on ONE node — a captured `el`
+// (fixed 2026-07-14), then a re-query-by-id inside `hide()` (2026-07-15) —
+// but BOTH still left the FAST already-booted reload path (`display='none';
+// return`) never scheduling any hide at all, so the regenerated node stayed
+// visible forever with no failsafe. A class on `<html>` can't be dodged:
+// React never clears the documentElement class (next-themes only
+// adds/removes the `light`/`dark` tokens), the CSS rule matches whichever
+// node is live no matter how many times it's regenerated, and the hard 6s
+// failsafe + the `pageshow` restore-guard both just re-add the class — so
+// recovery is now guaranteed on every path, cold load / reload / back-
+// gesture alike.
+const JS = `(function(){var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var alreadyBooted=false;try{alreadyBooted=sessionStorage.getItem('frenz-booted')==='1'}catch(e){}if(!justSignedIn&&alreadyBooted){instant=true}else{try{sessionStorage.setItem('frenz-booted','1')}catch(e){}if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var fade=function(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',fade)}else{fade()}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
 
 // Must run BEFORE the <style> below is evaluated, AND before next-themes'
 // own injected script (rendered later, wherever <ThemeProvider> sits) so the
@@ -99,15 +103,29 @@ const JS = `(function(){var el=document.getElementById('frenz-boot');if(!el)retu
 // when opening the webapp"): a pure cache-first read can never notice the
 // OS theme changed while the app was fully CLOSED (not just backgrounded) —
 // there's no 'change' event to fire for a transition nothing was listening
-// for. So in system mode, after painting the cache instantly, boot() also
-// re-checks the live `matchMedia` answer a beat later (a short setTimeout,
-// not blocking the first paint) and corrects + re-saves if it disagrees.
-// The delay matters: it's specifically to dodge the WKWebView-stale-
-// immediately-after-resume window this whole rewrite exists to avoid — by
-// the time the timeout fires, the OS has had a moment to "self-correct" per
-// the platform quirk this file's history describes, so the check reads the
-// REAL current value instead of the same transient stale one.
-const THEME_JS = `(function(){var CACHE='frenz-resolved-theme';var MODE='frenz-theme-mode';var mq=window.matchMedia('(prefers-color-scheme: dark)');function mode(){try{return localStorage.getItem(MODE)||'system'}catch(e){return 'system'}}function cached(){try{return localStorage.getItem(CACHE)}catch(e){return null}}function remember(v){try{localStorage.setItem(CACHE,v)}catch(e){}}function syncNextThemes(v){try{localStorage.setItem('theme',v)}catch(e){}}function set(dark){document.documentElement.classList.toggle('dark',dark)}function resolveSystem(){var c=cached();if(c)return c;return mq.matches?'dark':'light'}function apply(v){set(v==='dark');remember(v);syncNextThemes(v)}function boot(){var m=mode();if(m==='light'||m==='dark'){apply(m);return}var resolved=resolveSystem();apply(resolved);setTimeout(function(){if(mode()!=='system')return;var live=mq.matches?'dark':'light';if(live!==resolved)apply(live)},60)}boot();function onSystemChange(){if(mode()!=='system')return;apply(mq.matches?'dark':'light')}try{if(mq.addEventListener)mq.addEventListener('change',onSystemChange);else if(mq.addListener)mq.addListener(onSystemChange)}catch(e){}window.addEventListener('pageshow',boot)})();`;
+// for. So in system mode, after painting the cache instantly, the COLD boot
+// also re-checks the live `matchMedia` answer a beat later (a short
+// setTimeout, not blocking the first paint) and corrects + re-saves if it
+// disagrees.
+//
+// CRITICAL: that live re-check runs ONLY on a genuine cold boot — NEVER on
+// `pageshow`/resume. This is the permanent fix for the recurring "webapp
+// switches to the OPPOSITE theme every time I leave and come back" report.
+// The whole reason this file is cache-first is that WKWebView reports a
+// STALE (often inverted) `prefers-color-scheme` for a moment right after a
+// resume. On the resume path, the frozen cache is already correct and no
+// live read is needed — but the old code ran the re-check on `pageshow`
+// too, so that transient stale read overwrote the correct cached value with
+// its opposite AND re-saved it (poisoning the cache for next time). Because
+// WebKit "self-corrects" a value it merely READ stale without firing a
+// 'change' event, nothing ever undid it — so it flipped and STAYED flipped,
+// every single reentry. `pageshow` now re-applies the cache with the
+// re-check suppressed; a real OS change while the app is open/backgrounded
+// still arrives through the `matchMedia` 'change' listener below, which
+// fires only on an ACTUAL transition, never on a stale read. (The re-check
+// only ever mattered for "OS changed while the app was fully CLOSED", which
+// is a cold start, not a resume — so nothing is lost.)
+const THEME_JS = `(function(){var CACHE='frenz-resolved-theme';var MODE='frenz-theme-mode';var mq=window.matchMedia('(prefers-color-scheme: dark)');function mode(){try{return localStorage.getItem(MODE)||'system'}catch(e){return 'system'}}function cached(){try{return localStorage.getItem(CACHE)}catch(e){return null}}function remember(v){try{localStorage.setItem(CACHE,v)}catch(e){}}function syncNextThemes(v){try{localStorage.setItem('theme',v)}catch(e){}}function set(dark){document.documentElement.classList.toggle('dark',dark)}function resolveSystem(){var c=cached();if(c)return c;return mq.matches?'dark':'light'}function apply(v){set(v==='dark');remember(v);syncNextThemes(v)}function boot(recheck){var m=mode();if(m==='light'||m==='dark'){apply(m);return}var resolved=resolveSystem();apply(resolved);if(recheck){setTimeout(function(){if(mode()!=='system')return;var live=mq.matches?'dark':'light';if(live!==resolved)apply(live)},60)}}boot(true);function onSystemChange(){if(mode()!=='system')return;apply(mq.matches?'dark':'light')}try{if(mq.addEventListener)mq.addEventListener('change',onSystemChange);else if(mq.addListener)mq.addListener(onSystemChange)}catch(e){}window.addEventListener('pageshow',function(){boot(false)})})();`;
 
 export function BootSplash() {
   return (

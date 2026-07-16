@@ -21,7 +21,7 @@ const appBuild = (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 12) || `dev-
  * directives that are cheap to lock down now (object-src, base-uri, frame-src,
  * frame-ancestors, form-action) already are.
  */
-function buildCsp(mode: "enforce" | "report"): string {
+export function buildCsp(mode: "enforce" | "report"): string {
   const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseHost = supabase ? new URL(supabase).host : null;
   const r2 = process.env.R2_PUBLIC_BASE_URL;
@@ -46,6 +46,26 @@ function buildCsp(mode: "enforce" | "report"): string {
     "connect-src": connect,
     "frame-src": frame,
     "form-action": ["'self'"],
+    // ── Ad-revenue-critical. Every directive here exists because it OTHERWISE
+    //    FALLS BACK to `default-src 'self'` and silently breaks ad formats.
+    //    (Owner, 2026-07-16: "make sure the ads revenue and anything related
+    //    from ads is not blocked — cross check twice." Doing exactly that
+    //    turned up two real breakages in the first enforcing policy.)
+    //
+    // font-src: NOT previously specified → fell back to `default-src 'self'`,
+    // which blocks any webfont an injected social-bar/native ad pulls from a
+    // CDN. (The app's OWN fonts are safe either way — next/font/google
+    // self-hosts them under /_next — so nothing local ever surfaced this.)
+    "font-src": ["'self'", "https:", "data:"],
+    // worker-src: falls back to child-src → default-src, which would block
+    // `blob:` workers. Nothing ships one TODAY (no `new Worker` in the repo),
+    // but the batch-ZIP work is planned to, and a future silent break here
+    // would be near-impossible to trace back to this file.
+    "worker-src": ["'self'", "blob:"],
+    // child-src: legacy fallback some engines still consult for nested
+    // browsing contexts. Mirrors frame-src so an old engine can't be the one
+    // thing that blocks an ad frame.
+    "child-src": ["'self'", "https:", "blob:"],
   };
 
   if (mode === "enforce") {
@@ -81,6 +101,36 @@ function buildCsp(mode: "enforce" | "report"): string {
     // real project with real revenue risk, so it is NOT bundled into this pass —
     // the strict list ships as report-only below to gather the evidence first.
     directives["script-src"] = ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:"];
+
+    // ── THE ad-revenue bug in the first enforcing policy (caught 2026-07-16
+    //    by the owner asking to cross-check twice; it would have shipped) ──
+    //
+    // `frame-src` was left at `'self' https://iframe.cloudflarestream.com` —
+    // the value written for the video player, back when this policy could not
+    // block anything because it was report-only. Enforced, it breaks ads:
+    //
+    //   features/monetization/ad-slot.tsx renders every "display" network
+    //   banner inside an isolated `<iframe srcdoc>`. A srcdoc frame INHERITS
+    //   its parent's CSP — so this exact policy applies INSIDE the ad frame.
+    //   Ad networks then nest a further iframe to render the creative, and
+    //   that nested frame's origin (adsterra/propellerads/their CDNs) is not
+    //   in the allowlist → blocked → the banner renders empty and earns
+    //   nothing, with no error the owner would ever see.
+    //
+    // Widened to `https:` so any network's frame loads. Cloudflare Stream stays
+    // covered by the same `https:`. `blob:` is kept for locally-generated
+    // preview frames. `frame-ancestors 'self'` is UNCHANGED and unaffected —
+    // that governs who may frame US (clickjacking), not who we may frame, so
+    // this costs nothing on that axis.
+    directives["frame-src"] = ["'self'", "https:", "blob:"];
+
+    // Third ad breakage found on the same cross-check: `style-src` had no
+    // `https:`, so an ad injecting `<link rel="stylesheet" href="https://…">`
+    // (Adsterra's Social Bar does exactly this) would have had its stylesheet
+    // blocked — the format then renders unstyled or not at all. Costs little
+    // to allow: a stylesheet is not an XSS execution vector the way script is,
+    // and `'unsafe-inline'` is already present regardless.
+    directives["style-src"] = ["'self'", "'unsafe-inline'", "https:"];
   }
 
   const policy = Object.entries(directives)

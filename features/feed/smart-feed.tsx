@@ -296,11 +296,28 @@ export function SmartFeed({
   }, []);
 
   const fetchPage = useCallback(
-    async (s: HomeFeedSort, offset: number, replace: boolean) => {
+    /**
+     * `silent` — fetch and swap content in WITHOUT painting any loading state.
+     *
+     * Owner (2026-07-16): "recheck homepage so it never reloads on every
+     * entry." The cross-page navigation back to Home was already instant (the
+     * 6h `staleTimes.dynamic` serves it from the client Router Cache) — but
+     * "alive on return" then immediately called this with `replace: true`,
+     * which flipped `switching` and repainted the whole feed as loading ON TOP
+     * of the already-restored content. So Home looked like it reloaded on every
+     * entry, even though the navigation itself never did.
+     *
+     * Silent keeps the freshness and drops the flash: the restored content stays
+     * on screen and is replaced only once the new data has actually arrived.
+     * Deliberately NOT applied to a user-initiated refresh (pull-to-refresh /
+     * the new-posts pill) — there the spinner is the acknowledgement that the
+     * tap did something, and removing it would feel broken.
+     */
+    async (s: HomeFeedSort, offset: number, replace: boolean, silent = false) => {
       const isActiveTab = () => s === sortRef.current;
       // Only the tab actually on screen shows loading UI — a background
       // prefetch of the other tab (below) must stay invisible.
-      if (isActiveTab()) {
+      if (isActiveTab() && !silent) {
         if (replace) setSwitching(true);
         else setLoading(true);
         setError(false);
@@ -338,9 +355,13 @@ export function SmartFeed({
         }
         persistContinuity();
       } catch {
-        if (isActiveTab()) setError(true);
+        // A silent refresh must fail silently too: the viewer already has
+        // perfectly good content on screen, and throwing them a full-width
+        // error state because a BACKGROUND refetch blipped would be strictly
+        // worse than showing them slightly older posts. The next return retries.
+        if (isActiveTab() && !silent) setError(true);
       } finally {
-        if (isActiveTab()) {
+        if (isActiveTab() && !silent) {
           setLoading(false);
           setSwitching(false);
         }
@@ -527,7 +548,15 @@ export function SmartFeed({
       if (idleFor < STALE_MS) return;
       if (window.scrollY <= 8) {
         setFreshCount(0);
-        void fetchPage(sortRef.current, 0, true);
+        // SILENT (owner: "homepage should never reload on every entry"). This
+        // is not user-initiated — the viewer just navigated back to Home and
+        // their content is already on screen from the Router Cache. Painting a
+        // loading state over it was the entire "Home reloads every time"
+        // symptom. Note this keeps the CURRENT seed, so nothing reshuffles
+        // under them either: only genuinely new posts appear, and (since
+        // rankForYou pins anything under 30min) they land at the top where
+        // they're visible rather than silently mixed into the middle.
+        void fetchPage(sortRef.current, 0, true, true);
       } else {
         void checkQuietly();
       }

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { publishNotification } from "@/lib/notifications/publish";
 import { bustHomeFeedCache } from "@/lib/social/home-feed";
 import { sendMessage } from "@/lib/social/messages";
 import {
@@ -160,6 +161,53 @@ export interface ReshareInput {
  * re-uploading the bytes — it's already our own object, so a copy would double
  * storage and egress (see the egress-cloudflare-storage notes) for no benefit.
  */
+/**
+ * Tell the original author their media was reshared (owner, 2026-07-16).
+ *
+ * ONE call handles both halves of the owner's rule — "send push notification if
+ * they are not in the app and when they are in the app, dont send a push
+ * notification rather send a premium drop down notification":
+ *   - the `notifications` row makes the in-app drop-down appear (the live toast
+ *     is driven by a realtime insert on that table);
+ *   - the push is dispatched, and the SERVICE WORKER decides whether to display
+ *     it — it suppresses the system notification when any window is visible
+ *     (see public/sw/push.js). That decision has to live there: the server has
+ *     no reliable "is the app open right now" signal, and guessing wrong means
+ *     silently dropping a real notification.
+ *
+ * Never notifies you about your own reshare, and never blocks the reshare
+ * itself — a failed notification must not fail the action the user took.
+ */
+async function notifyAuthorOfReshare(opts: {
+  authorId: string;
+  viewerId: string;
+  destination: ReshareDestination;
+  postId?: string | null;
+}): Promise<void> {
+  if (opts.authorId === opts.viewerId) return;
+  try {
+    const db = createAdminClient();
+    const { data: actor } = await db.from("profiles").select("display_name, handle").eq("id", opts.viewerId).maybeSingle();
+    const name = (actor?.display_name as string) || (actor?.handle ? `@${actor.handle as string}` : "Someone");
+    const where =
+      opts.destination === "story" ? "their story" : opts.destination === "reel" ? "Reels" : opts.destination === "chat" ? "a chat" : "their feed";
+    await publishNotification({
+      userId: opts.authorId,
+      type: "reshare",
+      actorId: opts.viewerId,
+      postId: opts.postId ?? null,
+      push: {
+        title: "Your media was reshared",
+        body: `${name} reshared your media to ${where}.`,
+        genericBody: "Someone reshared your media.",
+        url: opts.postId ? `/p/${opts.postId}` : "/notifications",
+      },
+    });
+  } catch {
+    /* best-effort — never fail the reshare over a notification */
+  }
+}
+
 export async function reshare(input: ReshareInput): Promise<ReshareResult> {
   if (!hasSupabase) return { ok: false, reason: "failed" };
   const { viewerId, source, sourceId, destination, caption } = input;
@@ -188,7 +236,9 @@ export async function reshare(input: ReshareInput): Promise<ReshareResult> {
     const sent = await sendMessage(viewerId, input.conversationId, caption?.trim() ?? "", {
       attachments: [{ mediaKind: resolved.mediaKind, mediaUrl: resolved.mediaUrl, thumbnailUrl: resolved.thumbnailUrl ?? undefined }],
     });
-    return sent.ok ? { ok: true } : { ok: false, reason: "forbidden" };
+    if (!sent.ok) return { ok: false, reason: "forbidden" };
+    await notifyAuthorOfReshare({ authorId: resolved.authorId, viewerId, destination });
+    return { ok: true };
   }
 
   if (destination === "story") {
@@ -219,9 +269,12 @@ export async function reshare(input: ReshareInput): Promise<ReshareResult> {
         })
         .select("id")
         .maybeSingle();
-      return plain ? { ok: true, storyId: plain.id as string } : { ok: false, reason: "failed" };
+      if (!plain) return { ok: false, reason: "failed" };
+      await notifyAuthorOfReshare({ authorId: resolved.authorId, viewerId, destination });
+      return { ok: true, storyId: plain.id as string };
     }
     if (error || !created) return { ok: false, reason: "failed" };
+    await notifyAuthorOfReshare({ authorId: resolved.authorId, viewerId, destination });
     return { ok: true, storyId: created.id as string };
   }
 
@@ -256,6 +309,7 @@ export async function reshare(input: ReshareInput): Promise<ReshareResult> {
   if (!post) return { ok: false, reason: "failed" };
 
   await bustHomeFeedCache(viewerId);
+  await notifyAuthorOfReshare({ authorId: resolved.authorId, viewerId, destination, postId: post.id as string });
   return { ok: true, postId: post.id as string };
 }
 

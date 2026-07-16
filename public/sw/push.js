@@ -33,9 +33,37 @@ self.addEventListener("push", (event) => {
     actions: Array.isArray(data.actions) ? data.actions : undefined,
   };
 
+  // Owner rule (2026-07-16): "send push notification if they are not in the
+  // app and when they are in the app, dont send a push notification rather
+  // send a premium drop down notification."
+  //
+  // This is the only place that decision can honestly be made. The SERVER
+  // can't know whether the app is open right now — there's no live in-app
+  // heartbeat (`user_presence_status.updated_at` only moves on a status change
+  // + connect, so it can be hours stale for someone actively using the app),
+  // and guessing wrong means a real notification is silently dropped. The
+  // service worker CAN see it: if any window client is visible, the app is
+  // open, and the in-app drop-down (NotificationLiveToast, driven by the
+  // realtime `notifications` insert) is already showing this exact event — a
+  // system notification on top would be the same thing twice.
+  //
+  // `visibilityState === "visible"` (not `focused`): a phone with the app
+  // on-screen is what "in the app" means to a user, and a focused-only check
+  // misses plenty of genuinely-open cases.
+  //
+  // The badge still updates either way, and a hidden/backgrounded tab still
+  // gets the real notification — being open somewhere in the background is NOT
+  // "in the app".
+  async function show() {
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const appIsOpen = clients.some((c) => c.visibilityState === "visible");
+    if (appIsOpen) return; // the in-app drop-down owns this one
+    await self.registration.showNotification(title, options);
+  }
+
   event.waitUntil(
     Promise.all([
-      self.registration.showNotification(title, options),
+      show(),
       // Flag the app icon while the app is closed — the page replaces this
       // with the exact unread count the moment it next opens.
       "setAppBadge" in self.navigator ? self.navigator.setAppBadge().catch(() => {}) : Promise.resolve(),

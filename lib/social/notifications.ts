@@ -19,6 +19,9 @@ export type NotificationType =
   | "quote"
   | "repost"
   | "repost_engagement"
+  /** Someone reshared media you published (a story of yours, or media you
+   *  sent them in chat) out to their own feed/reel/story. */
+  | "reshare"
   | "comment_reaction"
   | "share"
   | "save"
@@ -83,6 +86,7 @@ export const CATEGORY_BY_TYPE: Partial<Record<NotificationType, NotificationCate
   quote: "social",
   repost: "social",
   repost_engagement: "social",
+  reshare: "social",
   comment_reaction: "social",
   share: "social",
   save: "social",

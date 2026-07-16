@@ -48,6 +48,7 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   tag: Tag,
   quote: Quote,
   repost: Repeat2,
+  reshare: Repeat2,
   repost_engagement: Repeat2,
   comment_reaction: SmilePlus,
   share: Share2,
@@ -147,6 +148,8 @@ export function verbFor(type: NotificationType): string {
       return "reposted your post";
     case "repost_engagement":
       return "engaged with the post you reposted";
+    case "reshare":
+      return "reshared your media";
     case "comment_reaction":
       return "reacted to your comment";
     case "share":

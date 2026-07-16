@@ -1,5 +1,5 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import type { User } from "@supabase/supabase-js";
+import { isAuthRetryableFetchError, type User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
@@ -61,30 +61,58 @@ export const createClient = cache(async () => {
  * The three outcomes are deliberately DISTINCT so a slow network never
  * masquerades as "signed out": `user` (proceed), `signed-out` (redirect to
  * login), `timeout` (render the page's Retry state — do NOT redirect).
+ *
+ * `cache()`-wrapped: `/messages` renders both a layout (its desktop pane) and a
+ * page, each of which calls this for the SAME request. `getUser()` is a network
+ * round-trip to the auth server EVERY call — it re-validates the JWT rather
+ * than trusting the in-memory session — so sharing one client (above) deduped
+ * the client but NOT the traffic. Memoizing here collapses those two
+ * round-trips into one, on the critical path of every /messages load.
+ *
+ * CLASSIFICATION (2026-07-16, the real "/messages keeps re-logging me in"
+ * bug): `getUser()` does NOT throw auth failures — auth-js catches them and
+ * RETURNS `{ data: { user: null }, error }`, only ever throwing for non-auth
+ * exceptions (see `_getUser`'s catch in @supabase/auth-js's GoTrueClient). The
+ * previous version only looked at `data.user` and never read `error`, so a
+ * transient `AuthRetryableFetchError` — a flaky mobile network, a resuming
+ * device, an upstream blip — arrived as `user: null` and was indistinguishable
+ * from a genuine sign-out. /messages then redirected to /login, whose own
+ * `getUser()` (a moment later, network recovered) found a perfectly valid
+ * session and redirected straight back. That round trip through the login page
+ * IS the owner's "it loads like I'm re-logging in again" — the app really was
+ * navigating to /login and back. Reading `error` is what separates "the auth
+ * server says this session is dead" (sign out, correct) from "we couldn't reach
+ * the auth server" (retry, never sign out).
  */
-export async function getUserBounded(
+export const getUserBounded = cache(async function getUserBounded(
   supabase: Awaited<ReturnType<typeof createClient>>,
   timeoutMs = 6000,
 ): Promise<{ kind: "user"; user: User } | { kind: "signed-out" } | { kind: "timeout" }> {
   try {
-    const result = await Promise.race([
+    const { data, error } = await Promise.race([
       supabase.auth.getUser(),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error("auth timeout")), timeoutMs)),
     ]);
-    return result.data.user ? { kind: "user", user: result.data.user } : { kind: "signed-out" };
-  } catch (error) {
-    // Only OUR OWN race-timer rejection means "genuinely slow, try again" —
-    // any other thrown error is Supabase's own `getUser()` failing outright
-    // (2026-07-16, real bug: a real `AuthApiError: Invalid Refresh Token`,
-    // caused by two independent server clients racing to refresh the same
-    // single-use token — see createClient()'s comment above). Lumping that
-    // in with "timeout" rendered an unwinnable "Retry" state: the underlying
-    // session is actually dead, so every retry hit the identical error
-    // forever ("stuck in reload" on /messages). Treating it as signed-out
-    // instead sends the user to a real, working /login.
-    if (error instanceof Error && error.message === "auth timeout") {
-      return { kind: "timeout" };
-    }
+    if (data.user) return { kind: "user", user: data.user };
+    // Couldn't REACH the auth server (fetch failed / 5xx / aborted). The
+    // session may be perfectly valid — bouncing to /login here is what caused
+    // the login round-trip described above. Render Retry instead; unlike the
+    // dead-session case this is genuinely winnable, since the next attempt runs
+    // once the network is back.
+    if (error && isAuthRetryableFetchError(error)) return { kind: "timeout" };
+    // Any other returned error is the auth server AUTHORITATIVELY rejecting the
+    // session (e.g. `AuthApiError: Invalid Refresh Token`, `AuthSessionMissing`)
+    // — genuinely signed out. Kept as a redirect on purpose: treating it as
+    // "timeout" was itself a real bug, rendering an unwinnable Retry against a
+    // session that can never come back.
     return { kind: "signed-out" };
+  } catch (error) {
+    // Our own race-timer fired: slow, not dead.
+    if (error instanceof Error && error.message === "auth timeout") return { kind: "timeout" };
+    // A THROWN error is by definition not an auth error (auth-js returns those
+    // — see above), so it's an infrastructure/runtime failure. Retry, don't
+    // sign out: this path can't be the dead-session case that required a
+    // redirect, so there's no unwinnable-Retry risk in staying conservative.
+    return { kind: "timeout" };
   }
-}
+});

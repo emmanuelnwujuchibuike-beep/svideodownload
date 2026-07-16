@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { isAdmin } from "@/lib/admin";
 import { CORS_HEADERS } from "@/lib/api/cors";
+import { sessionIsComfortablyFresh } from "@/lib/supabase/session-cookie";
 
 /**
  * Refreshes the Supabase auth session on each request (so access tokens stay
@@ -33,28 +34,46 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  // Soft client navigations (React Server Component fetches, `RSC: 1`) to
-  // non-protected pages: skip the blocking getUser() round-trip so the switch is
-  // instant. Safe because (a) full document loads + every /api call still refresh
-  // the session cookie, and (b) protected pages (/account, /admin) fall through to
-  // the full guard below. This is the main lever for snappy in-app navigation.
-  const isRscNav = request.headers.get("rsc") === "1";
   const needsGuard = path.startsWith("/account") || path.startsWith("/admin");
-  if (isRscNav && !needsGuard) {
-    return NextResponse.next({ request });
-  }
 
   // No Supabase auth cookie → the visitor is definitely signed out. Skip the
   // getUser() network round-trip entirely (the biggest latency on a cold entry).
   // Protected routes still bounce to /login; everything public passes straight
   // through with no auth work — this is what makes first loads fast.
-  const hasAuthCookie = request.cookies.getAll().some((c) => c.name.includes("-auth-token"));
+  const cookies = request.cookies.getAll();
+  const hasAuthCookie = cookies.some((c) => c.name.includes("-auth-token"));
   if (!hasAuthCookie) {
     if (needsGuard) {
       const redirectUrl = new URL("/login", request.url);
       redirectUrl.searchParams.set("next", path);
       return NextResponse.redirect(redirectUrl);
     }
+    return NextResponse.next({ request });
+  }
+
+  // Fast path: the access token is still comfortably valid, so there is nothing
+  // to refresh and no page downstream will try to (the freshness margin is set
+  // above auth-js's own — see sessionIsComfortablyFresh). Skip the round-trip.
+  //
+  // This REPLACES a blanket "skip auth for any RSC navigation" bypass, which was
+  // a real bug (owner, recurring: "the message page keeps reloading like it's
+  // re-logging me in, and the back-swipe sits on the F loader"). That bypass
+  // made middleware skip the session refresh on exactly the paths a soft nav and
+  // EdgeSwipeBack's `router.back()` take — so when the access token HAD expired
+  // (returning to the PWA after an hour away, the common case for a back-swipe),
+  // the refresh fell to the Server Component, which cannot persist the rotated
+  // single-use token. The rotation was burned on every such request, the cookie
+  // kept replaying the dead token, and `getUser()` then failed for real —
+  // surfacing as a bounce through /login, indistinguishable from being logged
+  // out. Keying on the token's ACTUAL expiry instead of the request type is both
+  // safer (a stale token now always refreshes HERE, where cookies can be
+  // written) and faster (a fresh token now skips the round-trip on full document
+  // loads too, which always paid for it before).
+  //
+  // Guarded routes are deliberately excluded: their decision is an authorization
+  // one, so they always verify against the auth server rather than trusting an
+  // unauthenticated cookie hint.
+  if (!needsGuard && sessionIsComfortablyFresh(cookies)) {
     return NextResponse.next({ request });
   }
 

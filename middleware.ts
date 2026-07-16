@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { isAdmin } from "@/lib/admin";
 import { CORS_HEADERS } from "@/lib/api/cors";
+import { SUPABASE_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
 import { sessionIsComfortablyFresh } from "@/lib/supabase/session-cookie";
 
 /**
@@ -84,6 +85,11 @@ export async function middleware(request: NextRequest) {
   if (!url || !anon) return response;
 
   const supabase = createServerClient(url, anon, {
+    // Middleware is the ONLY writer that can persist a rotated refresh token
+    // (see lib/supabase/session-cookie.ts), so it is the single most important
+    // place these flags are correct — it's what re-writes the cookie on every
+    // refresh. Must match the server + browser clients exactly.
+    cookieOptions: SUPABASE_COOKIE_OPTIONS,
     cookies: {
       getAll() {
         return request.cookies.getAll();

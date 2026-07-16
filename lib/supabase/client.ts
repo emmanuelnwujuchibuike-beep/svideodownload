@@ -2,6 +2,8 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 
+import { SUPABASE_COOKIE_OPTIONS } from "./cookie-options";
+
 let client: ReturnType<typeof createBrowserClient> | undefined;
 
 /**
@@ -21,6 +23,12 @@ export function createClient() {
     client = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      // Same flags the server and middleware write with — see
+      // ./cookie-options.ts. This client refreshes the session too, so if it
+      // wrote with different flags (notably a missing `Secure`) it would
+      // silently DOWNGRADE the cookie the server had hardened, on the very
+      // next token refresh.
+      { cookieOptions: SUPABASE_COOKIE_OPTIONS },
     );
   }
   return client;

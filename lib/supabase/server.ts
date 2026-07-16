@@ -3,6 +3,8 @@ import { isAuthRetryableFetchError, type User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
+import { SUPABASE_COOKIE_OPTIONS } from "./cookie-options";
+
 /**
  * Server-side Supabase client bound to the request cookies. Use in Server
  * Components, Route Handlers and Server Actions. RLS is enforced via the
@@ -32,6 +34,12 @@ export const createClient = cache(async () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // Must be IDENTICAL across the server client, middleware and the browser
+      // client. Cookie identity is (name, domain, path) — if two writers
+      // disagree on `path`, the browser keeps BOTH and sends both on every
+      // request, and which one Supabase reads is order-dependent. That failure
+      // looks exactly like a random intermittent sign-out.
+      cookieOptions: SUPABASE_COOKIE_OPTIONS,
       cookies: {
         getAll() {
           return cookieStore.getAll();

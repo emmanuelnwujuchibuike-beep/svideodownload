@@ -21,7 +21,7 @@ const appBuild = (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 12) || `dev-
  * directives that are cheap to lock down now (object-src, base-uri, frame-src,
  * frame-ancestors, form-action) already are.
  */
-function buildCsp(): string {
+function buildCsp(mode: "enforce" | "report"): string {
   const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseHost = supabase ? new URL(supabase).host : null;
   const r2 = process.env.R2_PUBLIC_BASE_URL;
@@ -47,6 +47,41 @@ function buildCsp(): string {
     "frame-src": frame,
     "form-action": ["'self'"],
   };
+
+  if (mode === "enforce") {
+    // ── Why this policy is ENFORCED but script-src stays permissive ──
+    //
+    // Until 2026-07-16 this app shipped CSP as report-only ONLY, which blocks
+    // nothing — it just logs. That left the session cookie (JS-readable by
+    // design; see lib/supabase/cookie-options.ts) with no CSP backstop at all,
+    // and XSS is the one thing that makes a JS-readable cookie worse than an
+    // httpOnly one. So an enforcing policy now ships alongside.
+    //
+    // `script-src` must tolerate third-party script this repo cannot enumerate:
+    // features/monetization/inject.ts executes admin-configured ad markup
+    // (Adsterra/PropellerAds) whose origins aren't knowable at build time, and
+    // those scripts commonly eval(). Enforcing the strict list verbatim would
+    // silently kill ad revenue — the exact reason the whole policy was parked
+    // in report-only. Widening script-src here is an HONEST trade: it admits
+    // script-src currently buys ~nothing, in exchange for actually enforcing
+    // the directives that DO defend credentials today.
+    //
+    // What enforcement genuinely buys, even so:
+    //   form-action 'self'   — injected <form> can't POST a password/OTP to an
+    //                          attacker's origin. Directly on-point for
+    //                          credential theft, and NOT covered by anything else.
+    //   base-uri 'self'      — blocks <base href="//evil"> hijacking every
+    //                          relative script/form URL on the page at once.
+    //   object-src 'none'    — kills plugin/embed injection outright.
+    //   frame-ancestors      — clickjacking (defence-in-depth with X-Frame-Options).
+    //   default-src 'self'   — unexpected fetch/worker destinations.
+    //
+    // Locking script-src properly needs a nonce + 'strict-dynamic' (the ad
+    // loader becomes a nonced script and its children inherit trust). That's a
+    // real project with real revenue risk, so it is NOT bundled into this pass —
+    // the strict list ships as report-only below to gather the evidence first.
+    directives["script-src"] = ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:"];
+  }
 
   const policy = Object.entries(directives)
     .map(([key, values]) => `${key} ${values.join(" ")}`)
@@ -129,7 +164,20 @@ const nextConfig: NextConfig = {
           // popups to open — Supabase's Google sign-in is a full-page redirect
           // anyway, not a popup, so this has no functional effect on that flow.
           { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
-          { key: "Content-Security-Policy-Report-Only", value: buildCsp() },
+          // BOTH headers ship, and they are not redundant — they do different jobs:
+          //  • enforce  — actually blocks. Permissive script-src so the ad system
+          //               keeps working; everything else is real protection TODAY
+          //               (form-action is the one that stops an injected form
+          //               POSTing credentials off-origin).
+          //  • report   — the STRICTER target (script-src without https:/eval).
+          //               Blocks nothing; every violation it logs to
+          //               /api/csp-report is a concrete origin we'd have to
+          //               allow before script-src can be locked down for real.
+          //               This is how we get the evidence the earlier
+          //               "enforcing blindly could break ads" note asked for,
+          //               without gambling revenue to get it.
+          { key: "Content-Security-Policy", value: buildCsp("enforce") },
+          { key: "Content-Security-Policy-Report-Only", value: buildCsp("report") },
         ],
       },
     ];

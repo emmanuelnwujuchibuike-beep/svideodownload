@@ -10,6 +10,10 @@ export interface StoryItem {
   mediaKind: "image" | "video";
   caption: string | null;
   createdAt: string;
+  /** The author's own switch (migration 0081): may other people reshare this
+   *  story to their own story or a private chat? Defaults to true, including
+   *  when 0081 isn't applied yet. */
+  allowReshare: boolean;
 }
 
 export interface StoryGroup {
@@ -124,13 +128,38 @@ export async function getActiveStories(
     const audience = viewerId && scope !== "all" ? await audienceForScope(db, viewerId, scope) : null;
     const excluded = viewerId ? await excludedStoryAuthors(db, viewerId) : new Set<string>();
 
-    const { data } = await db
+    // `allow_reshare` arrives with migration 0081. supabase-js fails the WHOLE
+    // select if any named column is missing, so an unapplied 0081 must not take
+    // the stories row down with it — fall back to the pre-0081 shape and treat
+    // resharing as allowed (the column's own default).
+    type StoryRow = {
+      id: string;
+      user_id: string;
+      media_url: string;
+      media_kind: "image" | "video";
+      caption: string | null;
+      created_at: string;
+      allow_reshare?: boolean | null;
+    };
+    const base = "id, user_id, media_url, media_kind, caption, created_at";
+    const activeAfter = new Date().toISOString();
+    const first = await db
       .from("stories")
-      .select("id, user_id, media_url, media_kind, caption, created_at")
-      .gt("expires_at", new Date().toISOString())
+      .select(`${base}, allow_reshare`)
+      .gt("expires_at", activeAfter)
       .order("created_at", { ascending: false })
       .limit(200);
-    let rows = (data as { id: string; user_id: string; media_url: string; media_kind: "image" | "video"; caption: string | null; created_at: string }[]) ?? [];
+    let data: unknown = first.data;
+    if (first.error?.code === "42703") {
+      const legacy = await db
+        .from("stories")
+        .select(base)
+        .gt("expires_at", activeAfter)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      data = legacy.data;
+    }
+    let rows = (data as StoryRow[] | null) ?? [];
     if (audience) rows = rows.filter((r) => audience.has(r.user_id));
     if (excluded.size > 0) rows = rows.filter((r) => !excluded.has(r.user_id));
     if (rows.length === 0) return [];
@@ -160,7 +189,15 @@ export async function getActiveStories(
         };
         groups.set(r.user_id, g);
       }
-      g.stories.push({ id: r.id, mediaUrl: r.media_url, mediaKind: r.media_kind, caption: r.caption, createdAt: r.created_at });
+      g.stories.push({
+        id: r.id,
+        mediaUrl: r.media_url,
+        mediaKind: r.media_kind,
+        caption: r.caption,
+        createdAt: r.created_at,
+        // Absent column (0081 unapplied) === the column's own default.
+        allowReshare: r.allow_reshare ?? true,
+      });
     }
 
     const list = [...groups.entries()];
@@ -199,14 +236,38 @@ export async function getActiveStoryForUser(userId: string, viewerId?: string | 
       const excluded = await excludedStoryAuthors(db, viewerId);
       if (excluded.has(userId)) return null;
     }
-    const { data } = await db
+    // Same 0081 tolerance as getActiveStories above — a missing `allow_reshare`
+    // must cost only the reshare switch, never the whole strip.
+    type Row = {
+      id: string;
+      user_id: string;
+      media_url: string;
+      media_kind: "image" | "video";
+      caption: string | null;
+      created_at: string;
+      allow_reshare?: boolean | null;
+    };
+    const base = "id, user_id, media_url, media_kind, caption, created_at";
+    const activeAfter = new Date().toISOString();
+    const first = await db
       .from("stories")
-      .select("id, user_id, media_url, media_kind, caption, created_at")
+      .select(`${base}, allow_reshare`)
       .eq("user_id", userId)
-      .gt("expires_at", new Date().toISOString())
+      .gt("expires_at", activeAfter)
       .order("created_at", { ascending: false })
       .limit(50);
-    const rows = (data as { id: string; user_id: string; media_url: string; media_kind: "image" | "video"; caption: string | null; created_at: string }[]) ?? [];
+    let data: unknown = first.data;
+    if (first.error?.code === "42703") {
+      const legacy = await db
+        .from("stories")
+        .select(base)
+        .eq("user_id", userId)
+        .gt("expires_at", activeAfter)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      data = legacy.data;
+    }
+    const rows = (data as Row[] | null) ?? [];
     if (rows.length === 0) return null;
 
     const { data: prof } = await db
@@ -222,7 +283,14 @@ export async function getActiveStoryForUser(userId: string, viewerId?: string | 
       displayName: (prof.display_name as string) || `@${prof.handle as string}`,
       avatarUrl: (prof.avatar_url as string) ?? null,
       isVerified: (prof.is_verified as boolean) ?? false,
-      stories: rows.map((r) => ({ id: r.id, mediaUrl: r.media_url, mediaKind: r.media_kind, caption: r.caption, createdAt: r.created_at })),
+      stories: rows.map((r) => ({
+        id: r.id,
+        mediaUrl: r.media_url,
+        mediaKind: r.media_kind,
+        caption: r.caption,
+        createdAt: r.created_at,
+        allowReshare: r.allow_reshare ?? true,
+      })),
     };
   } catch {
     return null;

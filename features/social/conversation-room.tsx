@@ -9,6 +9,7 @@ import {
   Clock,
   File as FileIcon,
   Forward,
+  Repeat2,
   Image as ImageIcon,
   Loader2,
   Lock,
@@ -38,6 +39,7 @@ import { ContactPickerSheet } from "@/features/social/contact-picker-sheet";
 import { DocumentAttachmentCard } from "@/features/social/document-attachment-card";
 import { EmojiPickerButton } from "@/features/social/emoji-picker-button";
 import { ForwardSheet } from "@/features/social/forward-sheet";
+import { ReshareSheet } from "@/features/social/reshare-sheet";
 import { INBOX_KEY, loadInbox } from "@/features/social/inbox";
 import { MediaComposerSheet } from "@/features/social/media-composer-sheet";
 import { extractSharedPost, MessagePostEmbed } from "@/features/social/message-post-embed";
@@ -350,6 +352,13 @@ export function ConversationRoom({
   const [mentionAnchor, setMentionAnchor] = useState<number | null>(null);
   const [reactingId, setReactingId] = useState<string | null>(null);
   const [forwardingId, setForwardingId] = useState<string | null>(null);
+  /** The chat attachment currently being reshared out to feed/reel/story. */
+  const [resharing, setResharing] = useState<{
+    messageId: string;
+    attachmentId: string;
+    kind: "image" | "video";
+    previewUrl: string | null;
+  } | null>(null);
   // Owner (2026-07-12): the old Supabase-channel-status banner ("Connecting…"/
   // "Reconnecting…") fired on brief realtime hiccups that had nothing to do
   // with the user's actual network — a backend blip, not a real outage —
@@ -1956,6 +1965,35 @@ export function ConversationRoom({
                                   onClick={() => togglePin(m)}
                                 />
                                 <MenuItem icon={Star} label="Star" onClick={() => starMsg(m.id)} />
+                                {/* Reshare media OUT of this chat — to the feed,
+                                    Reels or your story (owner, 2026-07-16).
+                                    Only for real image/video attachments: a text
+                                    message has nothing to reshare, and Reels
+                                    only ever carries a video (the sheet drops
+                                    that row for a photo). The SENDER's
+                                    allow_reshare switch is enforced server-side
+                                    in /api/reshare, so this row appearing never
+                                    means the action is guaranteed — a refusal
+                                    comes back as a toast with the reason. */}
+                                {(() => {
+                                  const media = m.attachments.find((a) => a.kind === "image" || a.kind === "video");
+                                  if (!media || m.deletedAt || m.id.startsWith("optimistic-")) return null;
+                                  return (
+                                    <MenuItem
+                                      icon={Repeat2}
+                                      label="Reshare"
+                                      onClick={() => {
+                                        setOpenMenuId(null);
+                                        setResharing({
+                                          messageId: m.id,
+                                          attachmentId: media.id,
+                                          kind: media.kind as "image" | "video",
+                                          previewUrl: media.kind === "image" ? media.url : (media.thumbnailUrl ?? null),
+                                        });
+                                      }}
+                                    />
+                                  );
+                                })()}
                                 {canEdit ? <MenuItem icon={Pencil} label="Edit" onClick={() => startEdit(m)} /> : null}
                                 {canDelete ? (
                                   <MenuItem icon={Trash2} label="Delete" tone="danger" onClick={() => deleteMsg(m.id)} />
@@ -2328,6 +2366,22 @@ export function ConversationRoom({
         onCreated={() => void resync()}
       />
       {viewingImage ? <ImageLightbox src={viewingImage.url} alt={viewingImage.alt} onClose={() => setViewingImage(null)} /> : null}
+
+      {/* Reshare chat media out to the feed / Reels / your story. Distinct from
+          ForwardSheet below, which sends a message to ANOTHER CHAT — that's a
+          different action with different rules, so they stay separate surfaces
+          (see lib/social/reshare-rules.ts). */}
+      {resharing ? (
+        <ReshareSheet
+          open
+          onClose={() => setResharing(null)}
+          source="message"
+          sourceId={resharing.messageId}
+          attachmentId={resharing.attachmentId}
+          mediaKind={resharing.kind}
+          previewUrl={resharing.previewUrl}
+        />
+      ) : null}
 
       <ForwardSheet
         messageId={forwardingId ?? ""}

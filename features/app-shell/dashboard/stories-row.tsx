@@ -1,12 +1,15 @@
 "use client";
 
-import { Loader2, Plus, Send, Smile, X } from "lucide-react";
+import { Loader2, Plus, Repeat2, Send, Smile, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import { useQuery } from "@/features/data";
 import { useEntitlements } from "@/features/auth/use-entitlements";
+import { ReshareSheet } from "@/features/social/reshare-sheet";
+import { toast } from "@/features/ui/toast";
+import { haptic } from "@/lib/motion/haptics";
 import type { StoryGroup } from "@/lib/social/stories";
 import { isGroupSeen, loadSeenMap, markGroupSeen, type SeenMap } from "@/lib/social/story-seen";
 import { cn } from "@/lib/utils";
@@ -147,12 +150,39 @@ export function StoryViewer({
   const [si, setSi] = useState(0);
   const [pct, setPct] = useState(0);
   const [replying, setReplying] = useState(false);
+  const [resharing, setResharing] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const { handle } = useEntitlements();
 
   const group = groups[gi]!;
   const story = group?.stories[si];
   const isOwn = !!handle && group.handle === handle;
+
+  // The author's own switch (owner, 2026-07-16: "users who made the posts on
+  // stories … can set the media to be reshare or not"). Optimistic, and the
+  // server enforces the real rule regardless of what this shows.
+  const [allowReshare, setAllowReshare] = useState<boolean | null>(null);
+  const effectiveAllow = allowReshare ?? story?.allowReshare ?? true;
+  useEffect(() => setAllowReshare(null), [story?.id]);
+
+  const toggleAllowReshare = async () => {
+    if (!story) return;
+    const next = !effectiveAllow;
+    setAllowReshare(next);
+    haptic("selection");
+    try {
+      const res = await fetch("/api/reshare", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: "story", sourceId: story.id, allowReshare: next }),
+      });
+      if (!res.ok) throw new Error();
+      toast(next ? "Others can reshare this story" : "Resharing turned off for this story", "success");
+    } catch {
+      setAllowReshare(!next); // roll back
+      toast("Couldn't save that.", "error");
+    }
+  };
 
   // Mark the group seen as soon as it's opened (matches how Instagram-style
   // rings behave — opening counts as "seen", not finishing every segment).
@@ -227,7 +257,45 @@ export function StoryViewer({
 
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/95" role="dialog" aria-modal="true">
-      <button type="button" onClick={onClose} aria-label="Close" className="absolute right-4 top-5 z-20 rounded-full bg-white/10 p-2 text-white backdrop-blur"><X className="h-5 w-5" /></button>
+      <div className="absolute right-4 top-5 z-20 flex items-center gap-2">
+        {/* Author: turn resharing on/off for THIS story. Viewer: reshare it —
+            but only when the author allows it (owner, 2026-07-16). The row is
+            hidden rather than disabled when it's off: a greyed-out "Reshare"
+            would advertise an action that will never work. */}
+        {isOwn ? (
+          <button
+            type="button"
+            onClick={() => void toggleAllowReshare()}
+            aria-pressed={effectiveAllow}
+            title={effectiveAllow ? "Resharing is on — tap to turn off" : "Resharing is off — tap to turn on"}
+            className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold text-white backdrop-blur transition hover:bg-white/20"
+          >
+            <Repeat2 className={cn("h-4 w-4", !effectiveAllow && "opacity-40")} />
+            {effectiveAllow ? "Resharing on" : "Resharing off"}
+          </button>
+        ) : effectiveAllow ? (
+          <button
+            type="button"
+            onClick={() => setResharing(true)}
+            aria-label="Reshare this story"
+            className="rounded-full bg-white/10 p-2 text-white backdrop-blur transition hover:bg-white/20"
+          >
+            <Repeat2 className="h-5 w-5" />
+          </button>
+        ) : null}
+        <button type="button" onClick={onClose} aria-label="Close" className="rounded-full bg-white/10 p-2 text-white backdrop-blur"><X className="h-5 w-5" /></button>
+      </div>
+
+      {story ? (
+        <ReshareSheet
+          open={resharing}
+          onClose={() => setResharing(false)}
+          source="story"
+          sourceId={story.id}
+          mediaKind={story.mediaKind}
+          previewUrl={story.mediaKind === "image" ? story.mediaUrl : null}
+        />
+      ) : null}
 
       {/* progress segments (current user's stories) */}
       <div className="absolute inset-x-3 top-3 z-20 flex gap-1">

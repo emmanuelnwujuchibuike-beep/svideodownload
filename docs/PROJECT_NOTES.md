@@ -13,6 +13,16 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑16 highlights (batch 69c — F loader only on FIRST-ever entry; last theme-flash window closed)
+
+Owner follow-up after 69b: the stuck state is gone, but `/messages` still showed the F loader "for too long" on an iOS back-gesture or a browser reload — the ask: those must open INSTANTLY (page skeleton only), and the F loader should appear ONLY when someone newly enters the app with no saved cache (first-ever visit or cleared site data). Also: the theme still flashed, "but more little than before."
+
+**F loader:** the already-booted marker was `sessionStorage` ("once per tab session") — but iOS kills a backgrounded PWA's whole process, so every relaunch/back-gesture arrived with EMPTY sessionStorage, took the show path, and (on a streamed `force-dynamic` page like `/messages`) the loader stayed until `DOMContentLoaded` — i.e. until the server finished rendering, seconds. Switched the marker to `localStorage` (`frenz-booted`), which survives process kills: reloads, back gestures, and PWA relaunches now take the instant branch, where `frenz-boot-off` is added synchronously before first paint — the splash never becomes visible at all. It still shows on a genuinely first-ever entry (or post-clear), and the `frenz_just_signed_in` force-show is unchanged. (Existing users will see the loader exactly once more — the first cold load that sets the new localStorage key.)
+
+**Theme flash:** `THEME_JS` ran in `<body>`. On a streamed response, the first network chunk can end after `</head>` but before that script's bytes — the parser yields on the network and the browser can paint the empty body with the DEFAULT (light) background before `html.dark` is ever set. Moved the script into `<head>` (new `ThemeBootScript` export rendered first in `app/layout.tsx`'s explicit head) — in the head it provably executes before ANY first paint. Empirically proven with a chunked-HTTP test: served `</head>` then delayed the body 1.5s — `html.dark` was already set mid-gap, before a single body byte arrived (impossible under the old placement, where the script itself was in the not-yet-arrived body). Verified placement in the real `next build` output HTML too.
+
+All 9 prior boot/theme scenarios re-pass with the updated code, plus tsc/lint/135 tests/full build clean. Separately: the CI failure email from the 69b push was NOT a push failure — a pre-existing flaky test (`home-feed.test.ts` "ties preserve original order": each row got its own `new Date()`, so rows created across a millisecond boundary genuinely differed in age and rankForYou's continuous freshness term broke the "tie") hit its timing window on run #451 after 450 lucky passes; deflaked with one shared module-level timestamp, verified 10 consecutive runs, CI green again.
+
 ## 2026‑07‑16 highlights (batch 69b — the F-loader-stuck and theme-flip bugs fixed PERMANENTLY, node-independent)
 
 Owner, frustrated that the "stuck on the F loader" (message page reload + back-gesture) and "webapp switches to the opposite theme every time I leave and come back" bugs had each survived several rounds of real fixes, asked to fix both permanently. Found the deeper cause of each — the earlier fixes were correct but incomplete.

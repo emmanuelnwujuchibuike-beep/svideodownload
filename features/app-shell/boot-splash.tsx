@@ -37,11 +37,25 @@ html.frenz-boot-off #frenz-boot{display:none}
 
 // Suppression checks run FIRST, synchronously:
 //  1. A `frenz_just_signed_in` cookie (set by the auth callback routes)
-//     always wins — force-show, clear the cookie, mark this session booted.
-//  2. Otherwise, if this tab session already booted once (sessionStorage),
-//     this is a refresh or a non-Link hard navigation, not a cold start —
-//     dismiss INSTANTLY and let the page's own skeleton carry the loading
-//     state instead.
+//     always wins — force-show, clear the cookie, mark booted.
+//  2. Otherwise, if this BROWSER (localStorage, not sessionStorage) has
+//     ever booted before, dismiss INSTANTLY and let the page's own
+//     skeleton carry the loading state instead. Owner rule (2026-07-16):
+//     the F loader should ONLY show when a user newly enters the app with
+//     no saved cache (first-ever visit, or after clearing site data) — a
+//     reload, an iOS back-gesture, or a PWA relaunch must open instantly.
+//     This was `sessionStorage` before ("once per tab session"), which iOS
+//     defeated: it kills a backgrounded standalone PWA's whole process for
+//     memory pressure (see register-sw.tsx's identical lesson with the
+//     reload guard), and every relaunch/back-gesture-restore then arrived
+//     with a BRAND-NEW empty sessionStorage — so the loader showed on
+//     every single reentry, and on a streamed force-dynamic page like
+//     /messages it stayed up until DOMContentLoaded, i.e. until the SERVER
+//     finished rendering — seconds of F loader on every back-gesture
+//     ("loads for too long before opening"). localStorage survives a
+//     process kill, so those paths now take the instant branch, where
+//     `frenz-boot-off` is added SYNCHRONOUSLY before first paint — the
+//     splash never becomes visible at all.
 //  3. Landing on /home with no `frenz_welcomed` cookie means the colorful
 //     BrandSplash is about to take over immediately — dismiss instantly
 //     instead of flashing first.
@@ -65,12 +79,26 @@ html.frenz-boot-off #frenz-boot{display:none}
 // failsafe + the `pageshow` restore-guard both just re-add the class — so
 // recovery is now guaranteed on every path, cold load / reload / back-
 // gesture alike.
-const JS = `(function(){var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var alreadyBooted=false;try{alreadyBooted=sessionStorage.getItem('frenz-booted')==='1'}catch(e){}if(!justSignedIn&&alreadyBooted){instant=true}else{try{sessionStorage.setItem('frenz-booted','1')}catch(e){}if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var fade=function(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',fade)}else{fade()}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
+const JS = `(function(){var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var alreadyBooted=false;try{alreadyBooted=localStorage.getItem('frenz-booted')==='1'}catch(e){}if(!justSignedIn&&alreadyBooted){instant=true}else{try{localStorage.setItem('frenz-booted','1')}catch(e){}if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var fade=function(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',fade)}else{fade()}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
 
 // Must run BEFORE the <style> below is evaluated, AND before next-themes'
 // own injected script (rendered later, wherever <ThemeProvider> sits) so the
 // splash paints in the theme the user actually chose — not just the
 // device's raw OS preference.
+//
+// Rendered in <head> (app/layout.tsx's ThemeBootScript), NOT in <body> with
+// the splash markup — the last remaining theme-flash window (owner,
+// 2026-07-16: "the theme still flashes but more little than before"). With
+// this script in <body>, a STREAMED response (any force-dynamic page, e.g.
+// /messages) can have its first network chunk end after </head> but before
+// this script's bytes arrive — the parser yields waiting on the network,
+// and the browser may paint that empty body with the DEFAULT (light)
+// background before `html.dark` is ever set: a brief opposite-theme flash
+// for dark users on exactly the slow loads where chunk boundaries land
+// there. In <head>, the script provably executes before ANY first paint
+// (there is nothing paintable yet while the head is parsing), closing the
+// window for good. It only touches documentElement + localStorage, so it
+// has no dependency on <body> existing.
 //
 // 2026-07-13 rewrite (owner: the flash "still persists", asked for a
 // different pattern): the PREVIOUS version of this fix read a CACHED
@@ -127,10 +155,17 @@ const JS = `(function(){var d=document.documentElement;function dismiss(instant)
 // is a cold start, not a resume — so nothing is lost.)
 const THEME_JS = `(function(){var CACHE='frenz-resolved-theme';var MODE='frenz-theme-mode';var mq=window.matchMedia('(prefers-color-scheme: dark)');function mode(){try{return localStorage.getItem(MODE)||'system'}catch(e){return 'system'}}function cached(){try{return localStorage.getItem(CACHE)}catch(e){return null}}function remember(v){try{localStorage.setItem(CACHE,v)}catch(e){}}function syncNextThemes(v){try{localStorage.setItem('theme',v)}catch(e){}}function set(dark){document.documentElement.classList.toggle('dark',dark)}function resolveSystem(){var c=cached();if(c)return c;return mq.matches?'dark':'light'}function apply(v){set(v==='dark');remember(v);syncNextThemes(v)}function boot(recheck){var m=mode();if(m==='light'||m==='dark'){apply(m);return}var resolved=resolveSystem();apply(resolved);if(recheck){setTimeout(function(){if(mode()!=='system')return;var live=mq.matches?'dark':'light';if(live!==resolved)apply(live)},60)}}boot(true);function onSystemChange(){if(mode()!=='system')return;apply(mq.matches?'dark':'light')}try{if(mq.addEventListener)mq.addEventListener('change',onSystemChange);else if(mq.addListener)mq.addListener(onSystemChange)}catch(e){}window.addEventListener('pageshow',function(){boot(false)})})();`;
 
+/** Renders THEME_JS — must live in <head> (see the comment on THEME_JS above
+ *  for why <body> placement left a paint-before-script flash window on
+ *  streamed responses). Rendered by app/layout.tsx inside its explicit
+ *  <head>, before anything else. */
+export function ThemeBootScript() {
+  return <script dangerouslySetInnerHTML={{ __html: THEME_JS }} />;
+}
+
 export function BootSplash() {
   return (
     <>
-      <script dangerouslySetInnerHTML={{ __html: THEME_JS }} />
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div id="frenz-boot" aria-hidden="true">
         <span className="frenz-boot__mark">

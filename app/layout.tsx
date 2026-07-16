@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 
 import { ThemeCacheSync } from "@/components/theme-cache-sync";
 import { ThemeProvider } from "@/components/theme-provider";
-import { BootSplash } from "@/features/app-shell/boot-splash";
+import { BootSplash, ThemeBootScript } from "@/features/app-shell/boot-splash";
 import { EdgeSwipeBack } from "@/features/app-shell/edge-swipe-back";
 import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
 import { OfflineBanner } from "@/features/app-shell/offline-banner";
@@ -149,6 +149,11 @@ export default function RootLayout({
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <head>
+        {/* Theme class MUST be set from <head>, before any first paint — a
+            <body> placement leaves a paint window on streamed responses
+            where the empty body flashes the default light background for
+            dark users (see boot-splash.tsx's THEME_JS comment). */}
+        <ThemeBootScript />
         {/* app/apple-icon.png (180x180) already auto-emits the primary
             apple-touch-icon link via Next's file convention — modern iOS
             scales that single image fine. These two are legacy-size

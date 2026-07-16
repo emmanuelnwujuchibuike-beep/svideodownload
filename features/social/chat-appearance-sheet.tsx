@@ -12,10 +12,10 @@ import {
   BUBBLE_STYLES,
   BUBBLE_STYLE_LABEL,
   BUBBLE_STYLE_SHAPE,
-  FONT_SIZES,
-  FONT_SIZE_LABEL,
-  FONT_SIZE_TEXT_CLASS,
+  FONT_STYLES,
+  FONT_STYLE_LABEL,
 } from "@/lib/social/chat-appearance";
+import { FONT_STYLE_CLASS } from "@/lib/social/chat-fonts";
 import { cn } from "@/lib/utils";
 import { setChatAppearance, useChatAppearance } from "@/features/social/use-chat-appearance";
 
@@ -58,7 +58,7 @@ export function ChatAppearanceSheet({ open, onClose }: { open: boolean; onClose:
   return createPortal(
     <AnimatePresence>
       {open ? (
-        <div className="fixed inset-0 z-[120]" role="dialog" aria-modal="true" aria-label="Font size and bubble style">
+        <div className="fixed inset-0 z-[120]" role="dialog" aria-modal="true" aria-label="Font style and bubble style">
           <motion.button
             type="button"
             aria-label="Close"
@@ -92,24 +92,38 @@ export function ChatAppearanceSheet({ open, onClose }: { open: boolean; onClose:
 
             <div className="flex flex-col items-center gap-1 px-5 pb-4 pt-2 text-center">
               <ModuleIconBadge icon={Sparkles} tone="vivid" className="h-12 w-12 rounded-2xl" />
-              <p className="mt-1.5 text-base font-bold tracking-tight">Font size & bubble style</p>
+              <p className="mt-1.5 text-base font-bold tracking-tight">Font style & bubble style</p>
               <p className="text-xs text-muted-foreground">Personal to you — applies across every chat.</p>
             </div>
 
             {/* Live preview — mirrors conversation-room.tsx's real bubble
-                markup (same rounded/tail classes, same text-size scale) so
-                what's shown here is exactly what a real thread will look
-                like, not an approximation. */}
+                markup (same rounded/tail classes, same font) so what's shown
+                here is exactly what a real thread will look like, not an
+                approximation. */}
             <div className="mx-5 mb-5 space-y-1.5 rounded-2xl bg-secondary/30 p-4">
               <div className="flex flex-col items-start">
-                <div className={cn("glass max-w-[75%] px-4 py-2.5 leading-relaxed text-foreground shadow-sm", shape.base, shape.tailTheirs, FONT_SIZE_TEXT_CLASS[appearance.fontSize])}>
+                <div
+                  className={cn(
+                    "glass max-w-[75%] px-4 py-2.5 leading-relaxed text-foreground shadow-sm",
+                    shape.base,
+                    shape.tailTheirs,
+                    shape.protrudingTail && "relative overflow-visible chat-bubble-tail-theirs",
+                    FONT_STYLE_CLASS[appearance.fontStyle],
+                  )}
+                >
                   Hey! How&apos;s it going? 👋
                 </div>
               </div>
               <div className="flex flex-col items-end">
                 <div
                   style={mineStyle}
-                  className={cn("bg-brand max-w-[75%] px-4 py-2.5 leading-relaxed text-white shadow-md shadow-violet-500/20", shape.base, shape.tailMine, FONT_SIZE_TEXT_CLASS[appearance.fontSize])}
+                  className={cn(
+                    "bg-brand max-w-[75%] px-4 py-2.5 leading-relaxed text-white shadow-md shadow-violet-500/20",
+                    shape.base,
+                    shape.tailMine,
+                    shape.protrudingTail && "relative overflow-visible chat-bubble-tail-mine",
+                    FONT_STYLE_CLASS[appearance.fontStyle],
+                  )}
                 >
                   Doing great, thanks!
                 </div>
@@ -118,27 +132,27 @@ export function ChatAppearanceSheet({ open, onClose }: { open: boolean; onClose:
 
             <div className="space-y-4 px-5 pb-6">
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Font size</p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {FONT_SIZES.map((size) => {
-                    const active = appearance.fontSize === size;
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Font style</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {FONT_STYLES.map((style) => {
+                    const active = appearance.fontStyle === style;
                     return (
                       <motion.button
-                        key={size}
+                        key={style}
                         type="button"
                         whileTap={{ scale: 0.94 }}
                         transition={springs.press}
                         onClick={() => {
                           haptic("light");
-                          void setChatAppearance({ fontSize: size });
+                          void setChatAppearance({ fontStyle: style });
                         }}
                         className={cn(
                           "flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-center text-[11px] font-medium transition",
                           active ? "border-transparent bg-primary text-primary-foreground shadow-md shadow-primary/30" : "border-border/60 text-muted-foreground hover:bg-secondary/40",
                         )}
                       >
-                        <span className={cn("font-bold", FONT_SIZE_TEXT_CLASS[size])}>Aa</span>
-                        {FONT_SIZE_LABEL[size]}
+                        <span className={cn("text-base font-bold", FONT_STYLE_CLASS[style])}>Aa</span>
+                        {FONT_STYLE_LABEL[style]}
                       </motion.button>
                     );
                   })}
@@ -162,11 +176,21 @@ export function ChatAppearanceSheet({ open, onClose }: { open: boolean; onClose:
                           void setChatAppearance({ bubbleStyle: style });
                         }}
                         className={cn(
-                          "flex flex-col items-center gap-2 rounded-xl border px-1 py-2.5 text-center text-[11px] font-medium transition",
+                          "flex flex-col items-center gap-2.5 rounded-xl border px-1 py-3 text-center text-[11px] font-medium transition",
                           active ? "border-primary/60 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:bg-secondary/40",
                         )}
                       >
-                        <span className={cn("h-4 w-8 bg-foreground/70", s.base)} />
+                        {/* Real structural preview — the same base/tail classes
+                            the actual bubble renders with, including a genuine
+                            protruding pointer for "Speech tail" (not just a
+                            rounded bar), so the choice is never a guess. */}
+                        <span
+                          className={cn(
+                            "h-5 w-9 bg-foreground/70",
+                            s.base,
+                            s.protrudingTail && "relative overflow-visible chat-bubble-tail-mine",
+                          )}
+                        />
                         {BUBBLE_STYLE_LABEL[style]}
                       </motion.button>
                     );

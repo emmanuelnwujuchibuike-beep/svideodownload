@@ -63,7 +63,8 @@ import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { useNetworkStatus } from "@/lib/pwa/use-network-status";
-import { BUBBLE_STYLE_SHAPE, FONT_SIZE_TEXT_CLASS } from "@/lib/social/chat-appearance";
+import { BUBBLE_STYLE_SHAPE } from "@/lib/social/chat-appearance";
+import { FONT_STYLE_CLASS } from "@/lib/social/chat-fonts";
 import { MESSAGE_REACTIONS } from "@/lib/social/message-meta";
 import {
   attachmentKindForMime,
@@ -1634,7 +1635,14 @@ export function ConversationRoom({
                     className={cn(
                       "max-w-[80%] overflow-hidden whitespace-pre-wrap break-words leading-relaxed",
                       bubbleShape.base,
-                      FONT_SIZE_TEXT_CLASS[chatAppearance.fontSize],
+                      FONT_STYLE_CLASS[chatAppearance.fontStyle],
+                      // "Speech tail" bubble style: a real protruding pointer
+                      // (see the .chat-bubble-tail-* rules in globals.css),
+                      // not a corner-radius pinch — needs `relative` to anchor
+                      // the pseudo-element, and never on a deleted placeholder
+                      // (dashed/transparent — a solid pointer would look wrong).
+                      bubbleShape.protrudingTail && !deleted && "relative overflow-visible",
+                      bubbleShape.protrudingTail && !deleted && (m.mine ? "chat-bubble-tail-mine" : "chat-bubble-tail-theirs"),
                       deleted ? "px-4 py-2.5 italic text-muted-foreground" : shared || hasMediaAttachment ? "p-1.5" : "px-4 py-2.5",
                       deleted
                         ? "border border-dashed border-border/60 bg-transparent"
@@ -1897,23 +1905,32 @@ export function ConversationRoom({
                 {/* Under-bubble meta, mockup format: "9:14 AM" under every
                     message; my most recent message shows "Seen 9:17 AM ✓"
                     instead (the receipt's own timestamp + a check). */}
-                <span className={cn("mt-0.5 flex items-center gap-1 px-1 text-[10px] text-muted-foreground")} suppressHydrationWarning>
+                {/* Owner ask (2026-07-15): the status here — Sent, then
+                    Delivered, then Seen — must stay laid out the exact same
+                    way at every stage, never a plain inline span at one
+                    stage and a flex row at another (a real risk before: the
+                    very first "no receipt yet" instant had no flex classes
+                    at all, unlike every other branch). `flex-row` is now
+                    explicit (not just `flex`'s own default) on every single
+                    branch so a state change is a pure content swap, never a
+                    layout-direction change. */}
+                <span className={cn("mt-0.5 flex flex-row items-center gap-1 px-1 text-[10px] text-muted-foreground")} suppressHydrationWarning>
                   {m.editedAt && !deleted ? <span>edited ·</span> : null}
                   {isFailed ? (
-                    <span className="flex items-center gap-1 font-medium text-rose-500">
+                    <span className="flex flex-row items-center gap-1 font-medium text-rose-500">
                       <AlertTriangle className="h-3 w-3" /> Failed to send
                     </span>
                   ) : isQueued ? (
-                    <span className="flex items-center gap-1 font-medium text-muted-foreground">
+                    <span className="flex flex-row items-center gap-1 font-medium text-muted-foreground">
                       <Clock className="h-3 w-3" /> Waiting to send…
                     </span>
                   ) : r ? (
-                    <span className={cn("flex items-center gap-1 font-medium", r.read ? "text-primary" : "text-muted-foreground")}>
+                    <span className={cn("flex flex-row items-center gap-1 font-medium", r.read ? "text-primary" : "text-muted-foreground")}>
                       {r.label} {timeLabel(r.at)}
                       {r.delivered ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />}
                     </span>
                   ) : (
-                    <span>{timeLabel(m.createdAt)}</span>
+                    <span className="flex flex-row items-center gap-1">{timeLabel(m.createdAt)}</span>
                   )}
                 </span>
               </div>

@@ -402,7 +402,7 @@ export function ThreadOptionsSheet({
                   className="flex w-full items-center justify-between rounded-2xl bg-card px-4 py-3.5 text-sm font-semibold shadow-sm ring-1 ring-border/50 transition active:scale-[0.98] hover:bg-secondary/40"
                 >
                   <span className="flex items-center gap-3">
-                    <ModuleIconBadge icon={Sparkles} tone="vivid" className="h-9 w-9 rounded-xl" /> Font size & bubble style
+                    <ModuleIconBadge icon={Sparkles} tone="vivid" className="h-9 w-9 rounded-xl" /> Font style & bubble style
                   </span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </button>

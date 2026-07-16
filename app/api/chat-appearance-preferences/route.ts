@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import {
   BUBBLE_STYLES,
-  FONT_SIZES,
+  FONT_STYLES,
   fromChatAppearanceRow,
   isHexColor,
   type ChatAppearanceRow,
@@ -14,14 +14,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const schema = z.object({
-  fontSize: z.enum(FONT_SIZES).optional(),
+  // API/TS field is `fontStyle` (a typeface choice); the underlying DB
+  // column stays `font_size` (see chat-appearance.ts's doc comment) to
+  // avoid a migration.
+  fontStyle: z.enum(FONT_STYLES).optional(),
   bubbleStyle: z.enum(BUBBLE_STYLES).optional(),
   // Explicit `null` clears back to the default (falls back to the
   // conversation theme); omitted leaves whatever's already saved untouched.
   bubbleColor: z.union([z.string().refine(isHexColor, "Invalid color."), z.null()]).optional(),
 });
 
-/** GET /api/chat-appearance-preferences — the signed-in viewer's personal font-size/bubble prefs. */
+/** GET /api/chat-appearance-preferences — the signed-in viewer's personal font-style/bubble prefs. */
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -61,7 +64,7 @@ export async function PATCH(request: Request) {
     .maybeSingle();
   const current = fromChatAppearanceRow(existing as ChatAppearanceRow | null);
   const merged = {
-    fontSize: parsed.data.fontSize ?? current.fontSize,
+    fontStyle: parsed.data.fontStyle ?? current.fontStyle,
     bubbleStyle: parsed.data.bubbleStyle ?? current.bubbleStyle,
     bubbleColor: parsed.data.bubbleColor !== undefined ? parsed.data.bubbleColor : current.bubbleColor,
   };
@@ -69,7 +72,7 @@ export async function PATCH(request: Request) {
   const { error } = await supabase.from("chat_appearance_preferences").upsert(
     {
       user_id: user.id,
-      font_size: merged.fontSize,
+      font_size: merged.fontStyle,
       bubble_style: merged.bubbleStyle,
       bubble_color: merged.bubbleColor,
       updated_at: new Date().toISOString(),

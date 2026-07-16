@@ -22,6 +22,10 @@ export interface CacheEntry<T = unknown> {
   updatedAt: number;
   /** in-flight request, used to dedupe + drive `isValidating`. */
   promise?: Promise<unknown>;
+  /** Bumped on every `mutate()` — lets a slow `revalidate()` fetch that
+   *  started BEFORE a later optimistic write detect, once it finally
+   *  resolves, that it's now stale (see the real race this closes below). */
+  version?: number;
 }
 
 const EMPTY: CacheEntry = Object.freeze({ data: undefined, error: undefined, updatedAt: 0 });
@@ -74,8 +78,22 @@ export function revalidate<T>(key: string, fetcher: () => Promise<T>, dedupeMs =
     return Promise.resolve(cur.data);
   }
 
+  // Real race found 2026-07-15: a fetch started here (e.g. a component's
+  // mount-time GET) can still be in flight when a user fires an optimistic
+  // `mutate()` (a settings toggle, a chat-appearance pick) — this response
+  // then lands AFTER that mutate and silently overwrote it with the older
+  // pre-click value, since it always just blindly wrote `data` on success.
+  // Capturing the version here and comparing it when the fetch resolves
+  // detects exactly that: if a mutate landed in between, this response is
+  // now stale and gets discarded instead of clobbering the newer value.
+  const startVersion = cur?.version ?? 0;
   const promise = fetcher()
     .then((data) => {
+      const latest = cache.get(key) as CacheEntry<T> | undefined;
+      if (latest && (latest.version ?? 0) !== startVersion) {
+        patch(key, { promise: undefined });
+        return latest.data as T;
+      }
       patch(key, { data, error: undefined, updatedAt: Date.now(), promise: undefined });
       return data;
     })
@@ -94,10 +112,18 @@ export function revalidate<T>(key: string, fetcher: () => Promise<T>, dedupeMs =
  * rollback fn that restores the previous value (call it if the server rejects).
  */
 export function mutate<T>(key: string, updater: T | ((prev: T | undefined) => T)): () => void {
-  const prev = (cache.get(key) as CacheEntry<T> | undefined)?.data;
+  const prevEntry = cache.get(key) as CacheEntry<T> | undefined;
+  const prev = prevEntry?.data;
+  const prevVersion = prevEntry?.version ?? 0;
   const next = typeof updater === "function" ? (updater as (p: T | undefined) => T)(prev) : updater;
-  patch(key, { data: next });
-  return () => patch(key, { data: prev });
+  patch(key, { data: next, version: prevVersion + 1 });
+  return () => {
+    // Bump from whatever the version is AT ROLLBACK TIME, not the stale
+    // `prevVersion` this closure captured when the optimistic write
+    // happened — something else may have mutated the same key in between.
+    const atRollback = (cache.get(key) as CacheEntry<T> | undefined)?.version ?? 0;
+    patch(key, { data: prev, version: atRollback + 1 });
+  };
 }
 
 /** Drop a key (e.g. on sign-out). */

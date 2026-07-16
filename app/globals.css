@@ -341,3 +341,30 @@
     font-size: 16px !important;
   }
 }
+
+/* Chat bubble "Speech tail" style (lib/social/chat-appearance.ts
+   BUBBLE_STYLE_SHAPE.tail.protrudingTail) — a real triangular pointer
+   sticking OUT of the bubble's own bottom-outer corner, not another corner-
+   radius variant. `background: inherit` copies whatever the bubble itself
+   is filled with — the theme gradient class, `bg-brand`, a received bubble's
+   plain white/glass fill, or a personal `bubbleColor` override applied as an
+   inline style — so the tail always matches exactly, including gradients.
+   The bubble element these apply to needs `position: relative` (added
+   alongside the class at each call site) for the pseudo-element to anchor to. */
+.chat-bubble-tail-mine::after,
+.chat-bubble-tail-theirs::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  background: inherit;
+}
+.chat-bubble-tail-mine::after {
+  right: -5px;
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+.chat-bubble-tail-theirs::after {
+  left: -5px;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}

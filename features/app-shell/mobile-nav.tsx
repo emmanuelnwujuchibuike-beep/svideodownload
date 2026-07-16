@@ -152,16 +152,24 @@ export function MobileNav() {
             <PressIcon active={profileActive}>
               <span
                 className={cn(
-                  "flex h-6 w-6 items-center justify-center rounded-full text-white transition",
-                  avatarUrl ? "overflow-hidden" : "bg-brand-tile",
-                  profileActive && "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                  "flex h-6 w-6 items-center justify-center rounded-full transition",
+                  // No avatar → the plain person glyph, no colored tile behind
+                  // it (owner, 2026-07-16). It follows the same active/inactive
+                  // contrast as every other tab rather than sitting on a blue
+                  // block that made this one tab look permanently "selected".
+                  avatarUrl
+                    ? "overflow-hidden text-white"
+                    : profileActive
+                      ? "text-primary"
+                      : "text-muted-foreground",
+                  profileActive && avatarUrl && "ring-2 ring-primary ring-offset-1 ring-offset-background",
                 )}
               >
                 {avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <FrenzPersonSolid className="h-3.5 w-3.5" />
+                  <FrenzPersonSolid className="h-[22px] w-[22px]" />
                 )}
               </span>
             </PressIcon>

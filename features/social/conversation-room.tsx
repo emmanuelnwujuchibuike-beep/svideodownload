@@ -583,7 +583,26 @@ export function ConversationRoom({
             // echo landed. Only a genuinely new arrival should animate.
             welcomedIds.current.delete(m.id);
             const copy = prev.slice();
-            copy[idx] = m;
+            // Keep the optimistic bubble's attachments when the echo has none.
+            //
+            // Owner report (2026-07-16): "the image and video sent in chat
+            // disappears and turn to a small chat bubble … it waits for reloads
+            // when I go out of chat and come back that's when it then shows."
+            // This line was the cause. The `messages` INSERT event deliberately
+            // carries `attachments: []` (the rows land in a SEPARATE insert, so
+            // this payload can't know about them yet — see that handler's own
+            // note), and replacing the optimistic bubble wholesale with it threw
+            // away the photo/video that was already on screen, collapsing it to
+            // an empty text bubble a few hundred ms after send.
+            //
+            // Preserving them is safe, not a guess: staged attachments are
+            // UPLOADED at pick time, so `optimisticAttachments` already holds
+            // the same final `mediaUrl`s the server will echo back — they're
+            // permanent URLs, not local blobs, so there's nothing to reconcile.
+            // An echo that DOES carry attachments still wins.
+            copy[idx] = m.attachments.length === 0 && prev[idx]!.attachments.length > 0
+              ? { ...m, attachments: prev[idx]!.attachments }
+              : m;
             return copy;
           }
         }
@@ -638,12 +657,27 @@ export function ConversationRoom({
             cur.editedAt !== m.editedAt ||
             cur.deletedAt !== m.deletedAt ||
             cur.pinned !== m.pinned ||
+            // Attachments arriving is a REAL change. Without this clause the
+            // second half of the "sent image turns into a small bubble" bug
+            // stayed alive even once `append()` stopped wiping them: the
+            // message_attachments INSERT fires this very resync, the delta
+            // faithfully returns the row WITH its attachments — and then this
+            // check, comparing only text/receipt/reaction fields, concluded
+            // "nothing changed" and bailed out with `return prev`, throwing the
+            // fetched attachments away. That's why the media only ever appeared
+            // after leaving and re-entering the chat (a full, non-delta load).
+            cur.attachments.length !== m.attachments.length ||
             cur.reactions.length !== m.reactions.length ||
             cur.reactions.some((r, i) => r.count !== m.reactions[i]?.count || r.mine !== m.reactions[i]?.mine)
           ) {
             changed = true;
           }
-          byId.set(m.id, m);
+          // Never let a delta row blank out attachments we already have. The
+          // delta path does load attachments for the rows it returns, so an
+          // empty list here means "none", but an optimistic bubble mid-flight
+          // (or a row fetched in the window before its attachment insert
+          // committed) must not be downgraded to a text bubble by a merge.
+          byId.set(m.id, m.attachments.length === 0 && cur && cur.attachments.length > 0 ? { ...m, attachments: cur.attachments } : m);
         }
         if (!changed) return prev;
         // Ghost cleanup: drop an optimistic bubble once its real echo has

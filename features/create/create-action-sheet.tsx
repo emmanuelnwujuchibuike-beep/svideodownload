@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
-import { openUpload } from "@/features/create/upload-store";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
@@ -28,11 +27,17 @@ import { cn } from "@/lib/utils";
  * nav") — the only thing that changes is what "+" DOES: it used to open the
  * post composer directly, skipping every other action.
  *
- * Per-row accent colors are the mockup's, not the app's usual brand tile
- * (`bg-brand-tile`): the mockup deliberately color-codes the five actions so
- * they're distinguishable at a glance, and the owner asked for it exactly. They
- * resolve through `/10` tints + a ring so they read correctly in BOTH themes —
- * the mockup is dark-only, but this sheet is not.
+ * Icon treatment, owner correction (2026-07-16): "remove all blue icon back
+ * from all pages, most especially the message, chat, chat option and download,
+ * and all to a whatsapp ios app kind of emoji without background color, and
+ * make the icon have high icon contrast to be darker."
+ *
+ * The mockup color-coded these five rows with tinted tiles (Download was the
+ * blue one named in that correction), and this sheet reproduced them exactly.
+ * That instruction supersedes it: the tiles are gone and each row is now a
+ * bare, full-contrast `text-foreground` glyph, matching every other icon in
+ * the app after the same pass. The mockup's ROWS — order, labels, one-line
+ * hints, sheet shape, grab handle, circular close beneath — are untouched.
  */
 
 type ActionId = "download" | "post" | "reel" | "story" | "live";
@@ -42,46 +47,14 @@ interface Action {
   icon: typeof Download;
   label: string;
   hint: string;
-  /** Mockup accent — [icon color, tile bg, tile ring]. */
-  tone: [string, string, string];
 }
 
 const ACTIONS: Action[] = [
-  {
-    id: "download",
-    icon: Download,
-    label: "Download Video",
-    hint: "Download from any social platform",
-    tone: ["text-blue-500 dark:text-blue-400", "bg-blue-500/10", "ring-blue-500/20"],
-  },
-  {
-    id: "post",
-    icon: SquarePen,
-    label: "Create Post",
-    hint: "Share a post with your friends",
-    tone: ["text-emerald-500 dark:text-emerald-400", "bg-emerald-500/10", "ring-emerald-500/20"],
-  },
-  {
-    id: "reel",
-    icon: Clapperboard,
-    label: "Create Reel",
-    hint: "Record or upload a short video",
-    tone: ["text-violet-500 dark:text-violet-400", "bg-violet-500/10", "ring-violet-500/20"],
-  },
-  {
-    id: "story",
-    icon: Circle,
-    label: "Story",
-    hint: "Share a moment that disappears",
-    tone: ["text-amber-500 dark:text-amber-400", "bg-amber-500/10", "ring-amber-500/20"],
-  },
-  {
-    id: "live",
-    icon: Radio,
-    label: "Go Live",
-    hint: "Go live and connect in real-time",
-    tone: ["text-rose-500 dark:text-rose-400", "bg-rose-500/10", "ring-rose-500/20"],
-  },
+  { id: "download", icon: Download, label: "Download Video", hint: "Download from any social platform" },
+  { id: "post", icon: SquarePen, label: "Create Post", hint: "Share a post with your friends" },
+  { id: "reel", icon: Clapperboard, label: "Create Reel", hint: "Record or upload a short video" },
+  { id: "story", icon: Circle, label: "Story", hint: "Share a moment that disappears" },
+  { id: "live", icon: Radio, label: "Go Live", hint: "Go live and connect in real-time" },
 ];
 
 export function CreateActionSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -106,6 +79,16 @@ export function CreateActionSheet({ open, onClose }: { open: boolean; onClose: (
     };
   }, [open, onClose]);
 
+  // The create surfaces are real routes now, so warm them the moment the sheet
+  // opens — by the time a row is tapped the chunk is already there and it
+  // opens straight into the surface, no navigation wait. Intent is real here
+  // (the sheet is open), so this isn't speculative bandwidth the way an
+  // unconditional prefetch would be.
+  useEffect(() => {
+    if (!open) return;
+    for (const r of ["/create/post", "/create/reel", "/create/story", "/downloads"]) router.prefetch(r);
+  }, [open, router]);
+
   const run = (id: ActionId) => {
     haptic("selection");
     playSound("tap");
@@ -116,14 +99,17 @@ export function CreateActionSheet({ open, onClose }: { open: boolean; onClose: (
         // /home (app/page.tsx), so /downloads is the only entry that works.
         router.push("/downloads");
         return;
+      // Each row opens its OWN create surface (owner, 2026-07-16). Post, Reel
+      // and Story used to all open one shared composer that then had to be
+      // re-steered to the destination the user had already picked here.
       case "post":
-        openUpload("post");
+        router.push("/create/post");
         return;
       case "reel":
-        openUpload("reel");
+        router.push("/create/reel");
         return;
       case "story":
-        openUpload("story");
+        router.push("/create/story");
         return;
       case "live":
         // Owner-confirmed (2026-07-16): "Go Live" is in the mockup but the app
@@ -166,7 +152,6 @@ export function CreateActionSheet({ open, onClose }: { open: boolean; onClose: (
 
               <div className="space-y-2 p-3">
                 {ACTIONS.map((a, i) => {
-                  const [fg, bg, ring] = a.tone;
                   const Icon = a.icon;
                   return (
                     <motion.button
@@ -186,8 +171,8 @@ export function CreateActionSheet({ open, onClose }: { open: boolean; onClose: (
                       }
                       className="flex w-full items-center gap-3.5 rounded-2xl border border-border/50 bg-card/60 p-3 text-left transition-colors hover:bg-secondary/60"
                     >
-                      <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1", bg, ring)}>
-                        <Icon className={cn("h-5 w-5", fg)} strokeWidth={a.id === "story" ? 2.5 : 2} />
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center text-foreground">
+                        <Icon className="h-[22px] w-[22px]" strokeWidth={a.id === "story" ? 2.5 : 2} />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[15px] font-semibold text-foreground">{a.label}</span>

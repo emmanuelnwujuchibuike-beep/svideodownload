@@ -125,6 +125,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
       conversationId={convo.id}
       initialTheme={convo.theme}
       initialWallpaperUrl={convo.wallpaperUrl}
+      initialAppearance={convo.appearance}
       className="fixed inset-0 z-50 flex min-h-0 flex-col bg-background bg-cover bg-center lg:static lg:inset-auto lg:z-auto lg:flex-1 lg:bg-transparent"
     >
       <ThreadHeader

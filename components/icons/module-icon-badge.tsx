@@ -3,43 +3,40 @@ import type { ComponentType } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * The "premium 3D" glass-badge treatment for a Home module's section header
- * icon (Continue Watching / Friend Activity / Trending Reels), and for
- * menu/dropdown rows (account menu, marketing header's drawer) — a tile with
- * a diagonal gloss highlight and a soft shadow, replacing what was either a
- * bare `text-primary` icon with no background at all, or (Trending Reels) a
- * flat single-tone `bg-secondary` tile. Same visual language as
- * `NavIconBadge`'s active state, reused here at a smaller size. Owner
- * correction (2026-07-10): was the blue→violet brand gradient — reported as
- * "too much purple splashing" — became a solid `foreground` tile. Owner
- * correction (2026-07-11): brand color back, as the "dark premium"
- * `.bg-brand-tile` gradient (globals.css), fixed white icon.
+ * A section-header / menu-row icon: a bare, high-contrast glyph.
+ *
+ * Owner correction (2026-07-16): "remove all blue icon back from all pages …
+ * and all to a whatsapp ios app kind of emoji without background color, and
+ * make the icon have high icon contrast to be darker."
+ *
+ * So there is no tile any more — no gradient, no gloss, no ring, no shadow.
+ * This used to paint `.bg-brand-tile` (a dark blue→purple gradient) or, with
+ * `tone="vivid"`, the fully-lit `.bg-brand` sweep, with a small white glyph
+ * sitting on it. That treatment is what the owner is pointing at: on Messages,
+ * the chat options sheet and the account menu, every row icon carried a blue
+ * block behind it.
+ *
+ * What's left is the iOS/WhatsApp convention: the glyph itself, in the
+ * foreground color, at full contrast — near-black in light mode, white in
+ * dark. `text-foreground` (not `/85`, not `text-muted-foreground`) is the
+ * "darker, high contrast" part of the ask and is deliberate.
+ *
+ * The size props still shape the icon's FOOTPRINT (call sites pass e.g.
+ * `h-9 w-9`) so surrounding layout/alignment is unchanged; only the paint is
+ * gone. `iconClassName` overrides the glyph size for the few larger spots.
  */
-// `tone="vivid"` swaps in the brighter, fully-lit `.bg-brand` gradient for the
-// one spot (Continue Watching, matching an owner mockup) that explicitly
-// calls for it — everything else stays on the default dark-premium tile.
-// `.bg-brand`/`.bg-brand-tile` are plain custom classes with no shared
-// tailwind-merge group, so picking one via ternary (not layering both
-// through `cn`) is what actually avoids a stylesheet-order collision.
 export function ModuleIconBadge({
   icon: Icon,
-  tone = "brand",
   className,
+  iconClassName,
 }: {
   icon: ComponentType<{ className?: string }>;
-  tone?: "brand" | "vivid";
   className?: string;
+  iconClassName?: string;
 }) {
   return (
-    <span
-      className={cn(
-        "relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl shadow-[0_3px_10px_-2px] shadow-[hsl(var(--brand-purple)/0.45)] ring-1 ring-inset ring-white/10",
-        tone === "vivid" ? "bg-brand" : "bg-brand-tile",
-        className,
-      )}
-    >
-      <span aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-transparent" />
-      <Icon className="relative h-3.5 w-3.5 text-white drop-shadow-sm" />
+    <span className={cn("relative flex h-7 w-7 shrink-0 items-center justify-center text-foreground", className)}>
+      <Icon className={cn("h-5 w-5", iconClassName)} />
     </span>
   );
 }

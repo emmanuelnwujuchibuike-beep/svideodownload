@@ -1,11 +1,11 @@
 "use client";
 
 import { Loader2, Plus, Send, Smile, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import { useQuery } from "@/features/data";
-import { openUpload } from "@/features/create/upload-store";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import type { StoryGroup } from "@/lib/social/stories";
 import { isGroupSeen, loadSeenMap, markGroupSeen, type SeenMap } from "@/lib/social/story-seen";
@@ -27,6 +27,7 @@ export function StoriesRow({
   viewerName?: string;
   viewerHandle?: string | null;
 }) {
+  const router = useRouter();
   // Seeded from the server + cached-first: paints instantly, refreshed in background.
   const { data } = useQuery<StoryGroup[]>(
     "stories",
@@ -56,12 +57,13 @@ export function StoriesRow({
   return (
     <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {/* Your Story — opens the viewer if you have an active one, otherwise
-          the composer. The ring only appears when there's something to
-          watch; a plain dashed ring would misleadingly suggest live content. */}
+          the dedicated Story surface (owner, 2026-07-16: no shared composer).
+          The ring only appears when there's something to watch; a plain dashed
+          ring would misleadingly suggest live content. */}
       <PressIcon className="shrink-0">
         <button
           type="button"
-          onClick={() => (ownGroup ? setStart(groups.indexOf(ownGroup)) : openUpload("story"))}
+          onClick={() => (ownGroup ? setStart(groups.indexOf(ownGroup)) : router.push("/create/story"))}
           className="flex w-16 flex-col items-center gap-1.5"
         >
           <span className={cn("relative rounded-full p-0.5", ownGroup ? "bg-brand" : "ring-1 ring-inset ring-border/70")}>

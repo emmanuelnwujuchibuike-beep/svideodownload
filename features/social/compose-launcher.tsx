@@ -101,8 +101,11 @@ export function ComposeLauncher({ className }: { className?: string }) {
                   }}
                   className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-border/70 p-3 text-left transition hover:bg-secondary"
                 >
-                  <span className="bg-brand-tile flex h-10 w-10 items-center justify-center rounded-full text-white">
-                    <UsersRound className="h-[18px] w-[18px]" />
+                  {/* No tile behind the glyph (owner, 2026-07-16: icons are
+                      bare, high-contrast, WhatsApp/iOS style — no colored
+                      block). */}
+                  <span className="flex h-10 w-10 items-center justify-center text-foreground">
+                    <UsersRound className="h-[22px] w-[22px]" />
                   </span>
                   <span>
                     <span className="block text-sm font-semibold">New group</span>

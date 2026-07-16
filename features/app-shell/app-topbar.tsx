@@ -11,7 +11,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { isTopbarLocked, setTopbarHidden, useTopbarLocked } from "@/features/app-shell/topbar-visibility";
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
-import { openUpload } from "@/features/create/upload-store";
 import { UserMenu } from "@/features/auth/user-menu";
 import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
 import { haptic } from "@/lib/motion/haptics";
@@ -191,19 +190,21 @@ export function AppTopbar() {
 
       {/* Right action cluster */}
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-        {/* Create / upload — opens the premium composer */}
+        {/* Create — goes straight to the dedicated Post surface (owner,
+            2026-07-16: each create button opens its OWN create page; there is
+            no shared composer to re-steer any more). */}
         <PressIcon className="hidden sm:inline-flex">
-          <button
-            type="button"
-            onClick={() => openUpload("post")}
+          <Link
+            href="/create/post"
+            onPointerDown={() => router.prefetch("/create/post")}
             aria-label="Create a post"
             title="Create"
             className="inline-flex h-11 w-11 items-center justify-center"
           >
-            <IconTile tint="brand">
+            <IconTile>
               <IoCloudUploadOutline className="h-[21px] w-[21px]" />
             </IconTile>
-          </button>
+          </Link>
         </PressIcon>
 
         {/* Notifications — mobile/tablet only (large screens use the sidebar

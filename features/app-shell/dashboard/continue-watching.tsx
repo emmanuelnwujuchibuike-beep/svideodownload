@@ -1,28 +1,38 @@
 "use client";
 
-import { ChevronRight, Clock, Play } from "lucide-react";
+import { ChevronRight, Clock, EyeOff, Play } from "lucide-react";
 import Link from "next/link";
 import { useEffect } from "react";
 
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
+import { useHomeModules } from "@/features/app-shell/dashboard/home-modules-store";
 import { hasMedia, mediaKey, warmMediaCache } from "@/features/downloads/local-media";
 import { openPlayerQueue } from "@/features/downloads/player-store";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
+import { haptic } from "@/lib/motion/haptics";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { formatBytes } from "@/lib/utils";
 import type { DownloadRecord } from "@/types";
 
 /**
  * "Continue Watching" — live download tasks (real progress) + recent
- * downloads. Hiding this module from Home is handled the same way as every
- * other optional section (Stories, Trending Reels) — the Home Modules Editor
- * in account settings — rather than an inline switch here, so it no longer
- * needs to stay mounted-but-collapsed when hidden.
+ * downloads.
+ *
+ * Shown by default (owner, 2026-07-16: "let the continue watching show on
+ * default and make a way users can turn it off"), with its own visible hide
+ * control here on the module. An inline hide switch existed once and was
+ * removed after three of four accounts ended up with this exact module hidden
+ * — but the real defect then was that hiding had NO visible way back, so an
+ * accidental tap was permanent-looking. That's fixed at the root now: hiding
+ * from here drops a labelled restore chip into the same spot in the same
+ * frame, and restoring is equally instant (see home-modules-store.tsx). One tap
+ * out, one tap back.
  */
 export function ContinueWatching() {
   const { tasks } = useDownloadManager();
   const { items } = useHistory();
+  const { hide } = useHomeModules();
 
   const active = tasks.filter((t) => t.status === "downloading" || t.status === "paused");
   const recent = items.filter((r) => r.kind === "video").slice(0, 6);
@@ -63,18 +73,32 @@ export function ContinueWatching() {
     <section>
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <ModuleIconBadge icon={Clock} tone="vivid" className="h-9 w-9 rounded-2xl" />
+          <ModuleIconBadge icon={Clock} className="h-9 w-9 rounded-2xl" />
           <div>
             <h2 className="text-base font-bold leading-tight text-foreground">Continue Watching</h2>
             <p className="text-xs text-muted-foreground">Pick up where you left off</p>
           </div>
         </div>
-        <Link
-          href="/downloads"
-          className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 py-1.5 pl-3 pr-2 text-sm font-semibold text-primary transition hover:bg-primary/15"
-        >
-          View All <ChevronRight className="h-4 w-4" />
-        </Link>
+        <div className="flex shrink-0 items-center gap-1">
+          <Link
+            href="/downloads"
+            className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 py-1.5 pl-3 pr-2 text-sm font-semibold text-primary transition hover:bg-primary/15"
+          >
+            View All <ChevronRight className="h-4 w-4" />
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              haptic("selection");
+              hide("continue_watching");
+            }}
+            aria-label="Hide Continue Watching"
+            title="Hide Continue Watching"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+          >
+            <EyeOff className="h-4 w-4" />
+          </button>
+        </div>
       </div>
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {active.map((t) => {

@@ -3,33 +3,23 @@ import { cloneElement, isValidElement, type ReactElement } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * The nav "3D premium badge" — every destination (active or not) sits on its
- * own tile instead of floating as a bare glyph, so the whole bar reads as a
- * designed icon system rather than a handful of flat line-art icons (the
- * "still looks the same" gap left by an earlier round, which only recolored
- * the ACTIVE icon's strokes via a gradient mask — invisible on the
- * 4-out-of-5 tabs that are inactive at any moment). Active: a solid
- * `foreground`-colored tile (dark in light mode, white in dark mode — a true
- * theme-adaptive invert, never a color) with a diagonal gloss highlight,
- * icon in `background` color. Inactive: a calm neutral glass tile, icon
- * muted. Owner correction (2026-07-10): the earlier version used the brand
- * blue→violet gradient here — reported as "too much purple splashing" across
- * every nav/topbar/module icon at once — replaced with this monochrome
- * dark/white treatment (also the literal TikTok nav look: bold monochrome
- * icon, no colored badge).
+ * A sidebar nav destination icon: a bare, high-contrast glyph.
  *
- * Takes a rendered element (not a component reference) and clones it, the
- * same mechanism `GradientIcon` used — works identically for the custom Frenz
- * icon set (no `color` prop, only `className`) and react-icons/lucide glyphs
- * (both default to `currentColor`), since only `className` is ever touched.
+ * Owner correction (2026-07-16): "remove all blue icon back from all pages …
+ * and all to a whatsapp ios app kind of emoji without background color, and
+ * make the icon have high icon contrast to be darker."
  *
- * Owner correction (2026-07-11): the flat `bg-foreground` invert read as a
- * plain black tile — asked for the brand purple/blue back, specifically a
- * "dark premium" gradient (`.bg-brand-tile`, globals.css) rather than the
- * earlier fully-lit sweep that was originally toned down for "too much
- * purple splashing". The icon stays a fixed white now (not the
- * theme-adaptive `text-background`) since the tile is colored in both
- * themes, not a light/dark invert.
+ * The tile is gone. Active used to be a `.bg-brand-tile` blue→purple block
+ * with a white glyph and a gloss highlight; inactive a neutral glass tile.
+ * Both are now just the glyph, and active/inactive reads purely as icon
+ * CONTRAST — full-strength `text-foreground` when active, `text-muted-
+ * foreground` when not. That's the same inline-color-change vocabulary the
+ * bottom nav already uses, and the iOS/WhatsApp convention: no chrome behind a
+ * tab icon, the icon itself carries the state.
+ *
+ * Still takes a rendered element (not a component reference) and clones it, so
+ * it works for the custom Frenz icon set (className-only) and lucide/
+ * react-icons alike — only `className` is ever touched.
  */
 export function NavIconBadge({
   icon,
@@ -44,24 +34,15 @@ export function NavIconBadge({
 }) {
   const glyph = isValidElement(icon)
     ? cloneElement(icon, {
-        className: cn(active ? "text-white drop-shadow-sm" : "text-muted-foreground", iconClassName),
+        className: cn(
+          "transition-colors duration-200",
+          active ? "text-foreground" : "text-muted-foreground",
+          iconClassName,
+        ),
       })
     : icon;
 
   return (
-    <span
-      className={cn(
-        "relative flex shrink-0 items-center justify-center overflow-hidden rounded-2xl transition-colors duration-200",
-        active
-          ? "bg-brand-tile shadow-[0_4px_14px_-2px] shadow-[hsl(var(--brand-purple)/0.45)] ring-1 ring-inset ring-white/10"
-          : "bg-secondary/60 ring-1 ring-inset ring-border/50",
-        tileClassName,
-      )}
-    >
-      {active ? (
-        <span aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-transparent" />
-      ) : null}
-      <span className="relative flex items-center justify-center">{glyph}</span>
-    </span>
+    <span className={cn("relative flex shrink-0 items-center justify-center", tileClassName)}>{glyph}</span>
   );
 }

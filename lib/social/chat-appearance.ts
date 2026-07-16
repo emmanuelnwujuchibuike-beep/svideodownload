@@ -30,12 +30,32 @@ export interface ChatAppearance {
   bubbleStyle: ChatBubbleStyle;
   /** Hex string for the viewer's own sent bubbles, or null = today's default. */
   bubbleColor: string | null;
+  /** The viewer's PERSONAL wallpaper for this chat ("Only you" scope, migration
+   *  0080), or null = none — in which case the conversation's shared wallpaper
+   *  (`conversations.wallpaper_url`, the "Both of you" scope) shows instead.
+   *  A personal wallpaper always wins over the shared one. */
+  wallpaperUrl: string | null;
 }
 
 export const DEFAULT_CHAT_APPEARANCE: ChatAppearance = {
   fontStyle: "default",
   bubbleStyle: "classic",
   bubbleColor: null,
+  wallpaperUrl: null,
+};
+
+/** Where a chat wallpaper applies (owner ask, 2026-07-16). */
+export const WALLPAPER_SCOPES = ["both", "me"] as const;
+export type WallpaperScope = (typeof WALLPAPER_SCOPES)[number];
+
+export const WALLPAPER_SCOPE_LABEL: Record<WallpaperScope, string> = {
+  both: "Both of you",
+  me: "Only you",
+};
+
+export const WALLPAPER_SCOPE_HINT: Record<WallpaperScope, string> = {
+  both: "You and them both see this background.",
+  me: "Only you see it. They keep their own.",
 };
 
 export function isChatFontStyle(v: unknown): v is ChatFontStyle {
@@ -55,6 +75,8 @@ export interface ChatAppearanceRow {
   font_size: string | null;
   bubble_style: string | null;
   bubble_color: string | null;
+  /** Migration 0080 — may be absent on a row selected before it's applied. */
+  wallpaper_url?: string | null;
 }
 
 /** Pure row→camelCase mapper, shared by the API route (session-scoped client
@@ -66,6 +88,7 @@ export function fromChatAppearanceRow(row: ChatAppearanceRow | null): ChatAppear
     fontStyle: isChatFontStyle(row.font_size) ? row.font_size : DEFAULT_CHAT_APPEARANCE.fontStyle,
     bubbleStyle: isChatBubbleStyle(row.bubble_style) ? row.bubble_style : DEFAULT_CHAT_APPEARANCE.bubbleStyle,
     bubbleColor: isHexColor(row.bubble_color) ? row.bubble_color : null,
+    wallpaperUrl: typeof row.wallpaper_url === "string" && row.wallpaper_url ? row.wallpaper_url : null,
   };
 }
 

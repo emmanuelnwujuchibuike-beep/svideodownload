@@ -2,6 +2,9 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
+import { useChatAppearance } from "@/features/social/use-chat-appearance";
+import { useKeyboardViewportPin } from "@/lib/pwa/use-visual-viewport";
+import type { ChatAppearance } from "@/lib/social/chat-appearance";
 import type { ConversationTheme } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/client";
 
@@ -39,17 +42,37 @@ export function ThreadAppearanceProvider({
   conversationId,
   initialTheme,
   initialWallpaperUrl,
+  initialAppearance,
   className,
   children,
 }: {
   conversationId: string;
   initialTheme: ConversationTheme | null;
+  /** The conversation's SHARED wallpaper — the "Both of you" scope. */
   initialWallpaperUrl: string | null;
+  /** The viewer's personal per-chat appearance, which carries the "Only you"
+   *  wallpaper. Seeded from SSR so the right background paints on frame one. */
+  initialAppearance?: ChatAppearance;
   className?: string;
   children: ReactNode;
 }) {
   const [theme, setTheme] = useState(initialTheme);
-  const [wallpaperUrl, setWallpaperUrl] = useState(initialWallpaperUrl);
+  const [sharedWallpaperUrl, setWallpaperUrl] = useState(initialWallpaperUrl);
+  // The viewer's own "Only you" wallpaper, live via the shared appearance cache
+  // — so choosing one in the options sheet repaints the thread immediately,
+  // with no reload, exactly like the font/bubble settings that share this row.
+  const personal = useChatAppearance(conversationId, initialAppearance);
+  // Owner ask (2026-07-16): a wallpaper can be set for "both chat" or "only
+  // you". A personal one always wins; clearing it falls back to the shared
+  // conversation wallpaper, and clearing both means no wallpaper.
+  const wallpaperUrl = personal.wallpaperUrl ?? sharedWallpaperUrl;
+  // Keeps the thread's header (name / last seen / call buttons) pinned to the
+  // top of the VISIBLE area while the keyboard is open — on iOS a plain
+  // `fixed inset-0` surface is anchored to the layout viewport, which the
+  // keyboard doesn't shrink, so the header gets pushed off-screen the moment
+  // the composer takes focus (owner, 2026-07-16). `null` on desktop and
+  // whenever the keyboard is closed, leaving the CSS untouched.
+  const viewportPin = useKeyboardViewportPin();
 
   useEffect(() => {
     setTheme(initialTheme);
@@ -75,7 +98,12 @@ export function ThreadAppearanceProvider({
     <ThreadAppearanceContext.Provider value={{ theme, wallpaperUrl }}>
       <div
         className={`frenz-thread ${className ?? ""}`}
-        style={wallpaperUrl ? { backgroundImage: `url(${wallpaperUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+        style={{
+          ...(wallpaperUrl
+            ? { backgroundImage: `url(${wallpaperUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
+            : null),
+          ...(viewportPin ?? null),
+        }}
       >
         {children}
       </div>

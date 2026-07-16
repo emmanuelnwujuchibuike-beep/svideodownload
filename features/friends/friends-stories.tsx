@@ -1,11 +1,11 @@
 "use client";
 
 import { Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import { StoryViewer } from "@/features/app-shell/dashboard/stories-row";
-import { openUpload } from "@/features/create/upload-store";
 import { useQuery } from "@/features/data";
 import type { StoryGroup } from "@/lib/social/stories";
 import { isGroupSeen, loadSeenMap, type SeenMap } from "@/lib/social/story-seen";
@@ -40,6 +40,7 @@ export function FriendsStories({
   viewerName?: string;
   viewerHandle?: string | null;
 }) {
+  const router = useRouter();
   const [scope, setScope] = useState<Scope>("friends");
 
   const friends = useQuery<StoryGroup[]>("stories:friends", () => loadScope("friends"), { initialData: initialFriends });
@@ -76,9 +77,9 @@ export function FriendsStories({
       </div>
 
       <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {/* Add your story */}
+        {/* Add your story — the dedicated Story surface (owner, 2026-07-16). */}
         <PressIcon className="shrink-0">
-          <button type="button" onClick={() => openUpload("story")} className="flex w-16 flex-col items-center gap-1.5">
+          <button type="button" onClick={() => router.push("/create/story")} className="flex w-16 flex-col items-center gap-1.5">
             <span className="relative rounded-full p-0.5 ring-1 ring-inset ring-border/70">
               <span className="block rounded-full bg-background p-0.5">
                 {viewerAvatarUrl ? (

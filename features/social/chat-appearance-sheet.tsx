@@ -98,7 +98,7 @@ export function ChatAppearanceSheet({
             </motion.button>
 
             <div className="flex flex-col items-center gap-1 px-5 pb-4 pt-2 text-center">
-              <ModuleIconBadge icon={Sparkles} tone="vivid" className="h-12 w-12 rounded-2xl" />
+              <ModuleIconBadge icon={Sparkles} className="h-12 w-12 rounded-2xl" />
               <p className="mt-1.5 text-base font-bold tracking-tight">Font style & bubble style</p>
               <p className="text-xs text-muted-foreground">Personal to you — applies to this chat only.</p>
             </div>

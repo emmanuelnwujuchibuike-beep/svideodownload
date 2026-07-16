@@ -8,6 +8,7 @@ import { AppContent } from "@/features/app-shell/app-content";
 import { BrandSplash } from "@/features/app-shell/brand-splash";
 import { ContinueWatching } from "@/features/app-shell/dashboard/continue-watching";
 import { HiddenModulesNotice } from "@/features/app-shell/dashboard/hidden-modules-notice";
+import { HomeModuleGate, HomeModulesProvider } from "@/features/app-shell/dashboard/home-modules-store";
 import { HomeRail } from "@/features/app-shell/dashboard/home-rail";
 import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
@@ -63,7 +64,6 @@ export default async function HomePage() {
   // below), so this local binding is what those closures should reference.
 
   const firstVisit = !cookieStore.get("frenz_welcomed");
-  const visibleModules = prefs.moduleOrder.filter((k) => !prefs.hiddenModules.includes(k));
 
   return (
     <AppContent
@@ -81,22 +81,32 @@ export default async function HomePage() {
     >
       {firstVisit ? <BrandSplash /> : null}
       <div className="space-y-6">
-        {/* Home Module Editor order (account settings), optional sections only
-            — the main feed below is never reorderable, it's infinite. */}
-        {visibleModules.map((key) =>
-          renderModule(key, {
-            viewerId,
-            profile: { avatarUrl: profile.avatarUrl, displayName: profile.displayName, handle },
-          }),
-        )}
+        {/* Every optional module is RENDERED here in the viewer's chosen order;
+            whether it's DISPLAYED is decided on the client by HomeModuleGate.
+            That split is deliberate — it's what lets hiding and restoring a
+            section happen instantly on the tap instead of only on the next Home
+            load (owner, 2026-07-16: the restore button "just loads and
+            disappears"). See home-modules-store.tsx. The main feed below is
+            never a module — it's infinite and always renders last. */}
+        <HomeModulesProvider initialHidden={prefs.hiddenModules}>
+          {prefs.moduleOrder.map((key) => (
+            <HomeModuleGate key={key} module={key}>
+              {renderModule(key, {
+                viewerId,
+                profile: { avatarUrl: profile.avatarUrl, displayName: profile.displayName, handle },
+              })}
+            </HomeModuleGate>
+          ))}
 
-        {/* Renders NOTHING unless this viewer has actually hidden something, so
-            it never becomes clutter for the common case. It exists because
-            hiding a module was one accidental tap away with no visible path
-            back — the only route to restore was /account → "Home & feed",
-            buried down a long settings page (owner: "i dont even see the
-            toggle"). Sits where the missing section would have been. */}
-        <HiddenModulesNotice hidden={prefs.hiddenModules} />
+          {/* Renders NOTHING unless this viewer currently has something hidden,
+              so it never becomes clutter for the common case. It exists because
+              hiding a module had no visible path back — the only route to
+              restore was /account → "Home & feed", buried down a long settings
+              page (owner: "i dont even see the toggle"). Sits where the missing
+              section would have been, and now reacts live to a hide made right
+              above it. */}
+          <HiddenModulesNotice />
+        </HomeModulesProvider>
 
         {/* Smart Feed — the intelligent, blended, endless heart of the home
             experience. Rendered last because it never ends. */}

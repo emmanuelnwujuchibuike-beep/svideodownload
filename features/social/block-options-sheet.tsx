@@ -184,7 +184,7 @@ export function BlockOptionsSheet({
                 return (
                   <div key={row.scope} className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3 shadow-sm ring-1 ring-border/50">
                     <span className="flex min-w-0 items-center gap-3">
-                      <ModuleIconBadge icon={Icon} tone={active ? "vivid" : "brand"} className="h-9 w-9 shrink-0 rounded-xl" />
+                      <ModuleIconBadge icon={Icon} className="h-9 w-9 shrink-0 rounded-xl" />
                       <span className="min-w-0">
                         <span className="block text-sm font-semibold">{row.label}</span>
                         <span className="block truncate text-xs text-muted-foreground">{row.hint}</span>

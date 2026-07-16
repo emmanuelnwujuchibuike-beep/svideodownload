@@ -4,7 +4,6 @@ import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { RightRail } from "@/features/app-shell/right-rail";
-import { UploadModal } from "@/features/create/upload-modal";
 import { DownloadPlayer } from "@/features/downloads/download-player";
 import { Toaster } from "@/features/ui/toast";
 import type { HomeProfile } from "@/lib/social/home";
@@ -39,7 +38,6 @@ export function AppShell({
       </div>
 
       <MobileNav />
-      <UploadModal />
       <DownloadPlayer />
       <Toaster />
     </div>

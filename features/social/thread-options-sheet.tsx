@@ -10,9 +10,16 @@ import { createPortal } from "react-dom";
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { BlockOptionsSheet } from "@/features/social/block-options-sheet";
 import { ChatAppearanceSheet } from "@/features/social/chat-appearance-sheet";
+import { setChatAppearance, useChatAppearance } from "@/features/social/use-chat-appearance";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
+import {
+  WALLPAPER_SCOPES,
+  WALLPAPER_SCOPE_HINT,
+  WALLPAPER_SCOPE_LABEL,
+  type WallpaperScope,
+} from "@/lib/social/chat-appearance";
 import { CONVERSATION_THEMES, type ConversationTheme } from "@/lib/social/message-meta";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { cn } from "@/lib/utils";
@@ -115,7 +122,18 @@ export function ThreadOptionsSheet({
   }, [open]);
 
   const [theme, setTheme] = useState(initialTheme);
-  const [wallpaperUrl, setWallpaperUrl] = useState(initialWallpaperUrl);
+  // The SHARED ("Both of you") wallpaper — conversations.wallpaper_url.
+  const [sharedWallpaperUrl, setSharedWallpaperUrl] = useState(initialWallpaperUrl);
+  // The viewer's PERSONAL ("Only you") wallpaper, live from the same
+  // per-conversation appearance row the font/bubble settings use.
+  const appearance = useChatAppearance(conversationId);
+  const personalWallpaperUrl = appearance.wallpaperUrl;
+  // Owner ask (2026-07-16): choose where a wallpaper displays — "both chat and
+  // only you". Defaults to whichever scope already has one set, so reopening
+  // the sheet shows the picture you're actually looking at rather than
+  // silently pointing at the empty scope.
+  const [scope, setScope] = useState<WallpaperScope>(personalWallpaperUrl ? "me" : "both");
+  const wallpaperUrl = scope === "me" ? personalWallpaperUrl : sharedWallpaperUrl;
   const [uploadingWallpaper, setUploadingWallpaper] = useState(false);
   const wallpaperInputRef = useRef<HTMLInputElement | null>(null);
   const [disappearAfter, setDisappearAfter] = useState(initialDisappearAfterSeconds);
@@ -146,6 +164,21 @@ export function ThreadOptionsSheet({
 
   const pickWallpaper = () => wallpaperInputRef.current?.click();
 
+  /** Save a wallpaper (or clear it with `null`) into the CURRENTLY selected
+   *  scope. "Both of you" writes the shared conversation column; "Only you"
+   *  writes the viewer's own per-chat appearance row — the two scopes are
+   *  independent, so setting one never disturbs the other. */
+  const saveWallpaper = async (url: string | null) => {
+    if (scope === "me") {
+      // Optimistic + rolls back itself on failure, and repaints the open thread
+      // immediately through the shared appearance cache.
+      await setChatAppearance(conversationId, { wallpaperUrl: url });
+      return;
+    }
+    setSharedWallpaperUrl(url);
+    await patch({ wallpaperUrl: url });
+  };
+
   const onWallpaperFile = async (file: File | undefined) => {
     if (!file) return;
     haptic("light");
@@ -153,8 +186,7 @@ export function ThreadOptionsSheet({
     try {
       const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
       const url = await uploadPostMedia({ data: file, kind: "image", ext, contentType: file.type || "image/jpeg" });
-      setWallpaperUrl(url);
-      await patch({ wallpaperUrl: url });
+      await saveWallpaper(url);
     } catch {
       toast("Couldn't upload that picture. Try a smaller image.", "error");
     } finally {
@@ -164,8 +196,7 @@ export function ThreadOptionsSheet({
 
   const removeWallpaper = () => {
     haptic("light");
-    setWallpaperUrl(null);
-    void patch({ wallpaperUrl: null });
+    void saveWallpaper(null);
   };
 
   const applyDisappear = (seconds: number | null) => {
@@ -276,7 +307,7 @@ export function ThreadOptionsSheet({
                   className="flex items-center justify-between rounded-2xl bg-card px-4 py-3.5 text-sm font-semibold shadow-sm ring-1 ring-border/50 transition active:scale-[0.98] hover:bg-secondary/40"
                 >
                   <span className="flex items-center gap-3">
-                    <ModuleIconBadge icon={User} tone="vivid" className="h-9 w-9 rounded-xl" /> View profile
+                    <ModuleIconBadge icon={User} className="h-9 w-9 rounded-xl" /> View profile
                   </span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </Link>
@@ -284,7 +315,7 @@ export function ThreadOptionsSheet({
 
               <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border/50">
                 <p className="mb-3 flex items-center gap-2.5 text-sm font-semibold">
-                  <ModuleIconBadge icon={Palette} tone="vivid" className="h-9 w-9 rounded-xl" /> Chat theme
+                  <ModuleIconBadge icon={Palette} className="h-9 w-9 rounded-xl" /> Chat theme
                 </p>
                 <div className="flex items-center gap-3.5">
                   <motion.button
@@ -326,8 +357,41 @@ export function ThreadOptionsSheet({
 
               <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border/50">
                 <p className="mb-3 flex items-center gap-2.5 text-sm font-semibold">
-                  <ModuleIconBadge icon={ImageIcon} tone="vivid" className="h-9 w-9 rounded-xl" /> Chat wallpaper
+                  <ModuleIconBadge icon={ImageIcon} className="h-9 w-9 rounded-xl" /> Chat wallpaper
                 </p>
+
+                {/* Where the wallpaper displays (owner ask, 2026-07-16). The two
+                    scopes are independent pictures, not one picture with a
+                    visibility flag — so switching here swaps which one you're
+                    editing, and the preview/Remove below follow it. */}
+                <div className="mb-3 grid grid-cols-2 gap-2">
+                  {WALLPAPER_SCOPES.map((s) => {
+                    const isActive = scope === s;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => {
+                          haptic("selection");
+                          setScope(s);
+                        }}
+                        aria-pressed={isActive}
+                        className={cn(
+                          "rounded-xl border px-3 py-2.5 text-left transition",
+                          isActive
+                            ? "border-transparent bg-foreground text-background"
+                            : "border-border/60 text-muted-foreground hover:bg-secondary/40",
+                        )}
+                      >
+                        <span className="block text-xs font-bold">{WALLPAPER_SCOPE_LABEL[s]}</span>
+                        <span className={cn("mt-0.5 block text-[10px] leading-tight", isActive ? "text-background/70" : "text-muted-foreground")}>
+                          {WALLPAPER_SCOPE_HINT[s]}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
                 <div className="flex items-center gap-3.5">
                   <motion.button
                     type="button"
@@ -351,7 +415,14 @@ export function ThreadOptionsSheet({
                   </motion.button>
                   <div className="flex flex-1 flex-col gap-1.5">
                     <span className="text-xs text-muted-foreground">
-                      {wallpaperUrl ? "Custom picture set for this chat." : "Use a picture as this chat's background."}
+                      {wallpaperUrl
+                        ? scope === "me"
+                          ? "Your own background for this chat."
+                          : "Shared background — you both see it."
+                        : scope === "me"
+                          ? "Set a background only you can see."
+                          : "Set a background you both see."}
+                      {scope === "both" && personalWallpaperUrl ? " Your own picture is showing instead." : ""}
                     </span>
                     <div className="flex items-center gap-3">
                       <button
@@ -402,7 +473,7 @@ export function ThreadOptionsSheet({
                   className="flex w-full items-center justify-between rounded-2xl bg-card px-4 py-3.5 text-sm font-semibold shadow-sm ring-1 ring-border/50 transition active:scale-[0.98] hover:bg-secondary/40"
                 >
                   <span className="flex items-center gap-3">
-                    <ModuleIconBadge icon={Sparkles} tone="vivid" className="h-9 w-9 rounded-xl" /> Font style & bubble style
+                    <ModuleIconBadge icon={Sparkles} className="h-9 w-9 rounded-xl" /> Font style & bubble style
                   </span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </button>
@@ -410,7 +481,7 @@ export function ThreadOptionsSheet({
 
               <motion.div variants={SHEET_ITEM_VARIANTS} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border/50">
                 <p className="mb-3 flex items-center gap-2.5 text-sm font-semibold">
-                  <ModuleIconBadge icon={Clock} tone="vivid" className="h-9 w-9 rounded-xl" /> Disappearing messages
+                  <ModuleIconBadge icon={Clock} className="h-9 w-9 rounded-xl" /> Disappearing messages
                 </p>
                 {/* Icon-on-top cards in a single row (owner mockup) — was a
                     2-column grid of horizontal pill buttons, a structurally
@@ -487,7 +558,7 @@ export function ThreadOptionsSheet({
                   transition={springs.press}
                   className="flex w-full items-center gap-3 rounded-2xl bg-card px-4 py-3.5 text-sm font-semibold shadow-sm ring-1 ring-border/50 transition hover:bg-secondary/40"
                 >
-                  <ModuleIconBadge icon={ShieldBan} tone="vivid" className="h-9 w-9 rounded-xl" />
+                  <ModuleIconBadge icon={ShieldBan} className="h-9 w-9 rounded-xl" />
                   Block or restrict
                   <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
                 </motion.button>

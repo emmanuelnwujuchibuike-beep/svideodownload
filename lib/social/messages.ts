@@ -1696,13 +1696,27 @@ export async function getConversation(
     // whole thread. Scoped by user_id here since the admin client bypasses RLS.
     let appearance: ChatAppearance = DEFAULT_CHAT_APPEARANCE;
     try {
-      const { data: ap } = await db
+      // `wallpaper_url` arrives with migration 0080 (the "Only you" wallpaper
+      // scope). Selected in its own attempt so an unapplied 0080 costs ONLY the
+      // personal wallpaper, not the font/bubble settings that share this row —
+      // supabase-js fails the whole SELECT if any named column is missing.
+      const { data: ap, error } = await db
         .from("chat_appearance_preferences")
-        .select("font_size, bubble_style, bubble_color")
+        .select("font_size, bubble_style, bubble_color, wallpaper_url")
         .eq("user_id", userId)
         .eq("conversation_id", conversationId)
         .maybeSingle();
-      appearance = fromChatAppearanceRow((ap as ChatAppearanceRow | null) ?? null);
+      if (error?.code === "42703") {
+        const { data: legacy } = await db
+          .from("chat_appearance_preferences")
+          .select("font_size, bubble_style, bubble_color")
+          .eq("user_id", userId)
+          .eq("conversation_id", conversationId)
+          .maybeSingle();
+        appearance = fromChatAppearanceRow((legacy as ChatAppearanceRow | null) ?? null);
+      } else {
+        appearance = fromChatAppearanceRow((ap as ChatAppearanceRow | null) ?? null);
+      }
     } catch {
       /* migration 0078 not applied yet — appearance stays default */
     }

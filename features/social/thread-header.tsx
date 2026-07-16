@@ -146,7 +146,14 @@ export function ThreadHeader({
     // above a forced-light message list otherwise, a visible seam.
     <div
       className={cn(
-        "frenz-thread-header relative flex items-center gap-3 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-3",
+        // `shrink-0` + `z-10`: this header is the first child of the thread's
+        // flex column, with the scrolling message list as its flex-1 sibling.
+        // Without `shrink-0` a tall keyboard-shrunken container can compress
+        // the header itself rather than the list (owner, 2026-07-16: the top
+        // section must stay fixed "even when the placeholder and keyboard is
+        // opened"). The container's re-anchoring to the visual viewport is
+        // handled in ThreadAppearanceProvider — see useKeyboardViewportPin.
+        "frenz-thread-header relative z-10 flex shrink-0 items-center gap-3 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-3",
         wallpaperActive ? "bg-white/55 backdrop-blur-md" : forceLight ? "bg-white" : cn("bg-background", themeHeaderClass),
       )}
     >

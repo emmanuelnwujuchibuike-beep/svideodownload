@@ -27,6 +27,15 @@ const schema = z.object({
   // Explicit `null` clears back to the default (falls back to the
   // conversation theme); omitted leaves whatever's already saved untouched.
   bubbleColor: z.union([z.string().refine(isHexColor, "Invalid color."), z.null()]).optional(),
+  // The "Only you" wallpaper scope (migration 0080). Explicit `null` clears it,
+  // falling back to the conversation's shared wallpaper; omitted leaves it
+  // untouched. Validated the same way as the shared wallpaper on
+  // /api/conversations/[id] — a well-formed URL, no origin allowlist. Lower
+  // risk than the shared one: this row is per-user and RLS-scoped to its owner,
+  // so the only person who can ever see a URL set here is the person who set
+  // it. (Tightening BOTH to a storage-origin allowlist is worth doing, but it
+  // belongs in one pass over both routes, not half-applied here.)
+  wallpaperUrl: z.union([z.string().url().max(2048), z.null()]).optional(),
 });
 
 /** GET /api/chat-appearance-preferences?conversationId=… — the viewer's personal appearance for ONE chat. */
@@ -80,6 +89,7 @@ export async function PATCH(request: Request) {
     fontStyle: parsed.data.fontStyle ?? current.fontStyle,
     bubbleStyle: parsed.data.bubbleStyle ?? current.bubbleStyle,
     bubbleColor: parsed.data.bubbleColor !== undefined ? parsed.data.bubbleColor : current.bubbleColor,
+    wallpaperUrl: parsed.data.wallpaperUrl !== undefined ? parsed.data.wallpaperUrl : current.wallpaperUrl,
   };
 
   const { error } = await supabase.from("chat_appearance_preferences").upsert(
@@ -89,11 +99,34 @@ export async function PATCH(request: Request) {
       font_size: merged.fontStyle,
       bubble_style: merged.bubbleStyle,
       bubble_color: merged.bubbleColor,
+      wallpaper_url: merged.wallpaperUrl,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id,conversation_id" },
   );
-  if (error) return NextResponse.json({ error: "Couldn't save preferences." }, { status: 500 });
+  if (error) {
+    // Migration 0080 (wallpaper_url) may not be applied yet. Rather than fail
+    // the whole save — which would also break the font/bubble settings that
+    // have nothing to do with wallpaper — retry without the new column. Same
+    // "a missing column costs only its own feature" stance the SSR read and
+    // /api/stories' `format` insert already take.
+    if (error.code === "42703") {
+      const { error: retry } = await supabase.from("chat_appearance_preferences").upsert(
+        {
+          user_id: user.id,
+          conversation_id: conversationId,
+          font_size: merged.fontStyle,
+          bubble_style: merged.bubbleStyle,
+          bubble_color: merged.bubbleColor,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,conversation_id" },
+      );
+      if (retry) return NextResponse.json({ error: "Couldn't save preferences." }, { status: 500 });
+      return NextResponse.json({ appearance: { ...merged, wallpaperUrl: null } });
+    }
+    return NextResponse.json({ error: "Couldn't save preferences." }, { status: 500 });
+  }
 
   return NextResponse.json({ appearance: merged });
 }

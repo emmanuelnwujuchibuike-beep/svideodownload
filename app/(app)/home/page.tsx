@@ -7,6 +7,7 @@ import { Suspense } from "react";
 import { AppContent } from "@/features/app-shell/app-content";
 import { BrandSplash } from "@/features/app-shell/brand-splash";
 import { ContinueWatching } from "@/features/app-shell/dashboard/continue-watching";
+import { HiddenModulesNotice } from "@/features/app-shell/dashboard/hidden-modules-notice";
 import { HomeRail } from "@/features/app-shell/dashboard/home-rail";
 import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
@@ -88,6 +89,14 @@ export default async function HomePage() {
             profile: { avatarUrl: profile.avatarUrl, displayName: profile.displayName, handle },
           }),
         )}
+
+        {/* Renders NOTHING unless this viewer has actually hidden something, so
+            it never becomes clutter for the common case. It exists because
+            hiding a module was one accidental tap away with no visible path
+            back — the only route to restore was /account → "Home & feed",
+            buried down a long settings page (owner: "i dont even see the
+            toggle"). Sits where the missing section would have been. */}
+        <HiddenModulesNotice hidden={prefs.hiddenModules} />
 
         {/* Smart Feed — the intelligent, blended, endless heart of the home
             experience. Rendered last because it never ends. */}

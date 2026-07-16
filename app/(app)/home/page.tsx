@@ -19,7 +19,6 @@ import { friendsCount } from "@/lib/social/friends";
 import { getHomeProfile } from "@/lib/social/home";
 import { getHomeFeed } from "@/lib/social/home-feed";
 import { getHomePreferences, type HomeModuleKey } from "@/lib/social/home-preferences";
-import { getActiveStories } from "@/lib/social/stories";
 import { getSuggestedCreators } from "@/lib/social/suggest";
 import { createClient } from "@/lib/supabase/server";
 
@@ -129,15 +128,29 @@ function renderModule(
 ) {
   switch (key) {
     case "stories":
+      // Client-rendered, seeded from the on-disk story cache — NO Suspense and
+      // no server fetch (owner, 2026-07-16: "make the stories in homepage to
+      // not reload on every entry ... it reloads for long").
+      //
+      // This used to await `getActiveStories` inside a <Suspense
+      // fallback={<StoriesSkeleton/>}>, so EVERY server render of /home painted
+      // a row of grey story circles before the real rings arrived. That's the
+      // "reload on every entry", and it was structural: a server-awaited
+      // section cannot paint instantly, no matter how fast the query is.
+      //
+      // The row now behaves exactly like the inbox's: it paints the last-known
+      // rings from localStorage on the first frame and revalidates silently
+      // behind that (see lib/social/story-cache.ts, which self-expires at 24h
+      // so a stale entry can never show a phantom ring). Only a first-ever
+      // visit with an empty disk cache sees an empty strip, and it fills
+      // without a skeleton. Bonus: /home no longer runs this query at all.
       return (
-        <Suspense key={key} fallback={<StoriesSkeleton />}>
-          <StoriesSection
-            viewerId={ctx.viewerId}
-            avatarUrl={ctx.profile.avatarUrl}
-            name={ctx.profile.displayName}
-            handle={ctx.profile.handle}
-          />
-        </Suspense>
+        <StoriesRow
+          key={key}
+          viewerAvatarUrl={ctx.profile.avatarUrl}
+          viewerName={ctx.profile.displayName}
+          viewerHandle={ctx.profile.handle}
+        />
       );
     case "trending_reels":
       // Desktop/tablet only — CSS-hidden on mobile so the skeleton never even
@@ -160,21 +173,6 @@ function renderModule(
 }
 
 /* ── Streamed sections: each awaits only its own slice ─────────────────────── */
-
-async function StoriesSection({
-  viewerId,
-  avatarUrl,
-  name,
-  handle,
-}: {
-  viewerId: string;
-  avatarUrl: string | null;
-  name: string;
-  handle: string;
-}) {
-  const groups = await getActiveStories(viewerId, 24);
-  return <StoriesRow initialGroups={groups} viewerAvatarUrl={avatarUrl} viewerName={name} viewerHandle={handle} />;
-}
 
 async function ReelsSection({ viewerId }: { viewerId: string }) {
   // The home rail previews the Reels product — its own format, not feed posts.
@@ -214,19 +212,6 @@ async function SmartFeedSection({ viewerId, quietMode }: { viewerId: string; qui
 }
 
 /* ── Section skeletons ─────────────────────────────────────────────────────── */
-
-function StoriesSkeleton() {
-  return (
-    <div className="flex gap-4 overflow-hidden" aria-hidden>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
-          <Skeleton className="h-16 w-16 rounded-full" />
-          <Skeleton className="h-2.5 w-12" />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function ReelsSkeleton() {
   return (

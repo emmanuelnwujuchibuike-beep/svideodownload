@@ -1598,6 +1598,10 @@ export interface MessageItem {
   /** Location/Contact share payload — see migration 0070's header. Null for
    *  every ordinary text/media message. */
   metadata: Record<string, unknown> | null;
+  /** The SENDER's switch (migration 0081): may recipients reshare this
+   *  message's media out to a post/reel/story? Defaults to true, including
+   *  when 0081 isn't applied yet. */
+  allowReshare: boolean;
 }
 
 export interface ConversationView {
@@ -1640,6 +1644,8 @@ interface RawMessageRow {
   pinned: boolean;
   encryption_iv: string | null;
   metadata: Record<string, unknown> | null;
+  /** Migration 0081 — absent on a row read before it's applied. */
+  allow_reshare?: boolean | null;
 }
 
 /**
@@ -1812,18 +1818,37 @@ export async function getConversation(
     const queryStartedAt = new Date().toISOString();
     const MESSAGE_COLUMNS =
       "id, sender_id, body, created_at, delivered_at, read_at, reply_to_id, edited_at, deleted_at, pinned, encryption_iv, metadata";
+    // `allow_reshare` arrives with migration 0081 (the sender's "can others
+    // reshare my media" switch). supabase-js fails the WHOLE select if a named
+    // column is missing, so BOTH paths below try it and fall back to the
+    // pre-0081 column list — an unapplied migration must only cost the switch,
+    // never the entire thread. Both paths need this: the delta path is what
+    // every resync/catch-up uses, so covering only the full path would leave
+    // the switch silently broken on exactly the hot path.
+    const WITH_RESHARE = `${MESSAGE_COLUMNS}, allow_reshare`;
     let rows: RawMessageRow[];
     if (sinceUpdatedAt) {
       // Delta path — small, order doesn't matter (the client merges by id
       // into its own already-ordered state), so no need to reverse.
-      const { data: delta } = await db
+      const attempt = await db
         .from("messages")
-        .select(MESSAGE_COLUMNS)
+        .select(WITH_RESHARE)
         .eq("conversation_id", conversationId)
         .gt("updated_at", sinceUpdatedAt)
         .order("created_at", { ascending: true })
         .limit(500);
-      rows = (delta ?? []) as RawMessageRow[];
+      let delta: unknown = attempt.data;
+      if (attempt.error?.code === "42703") {
+        const legacy = await db
+          .from("messages")
+          .select(MESSAGE_COLUMNS)
+          .eq("conversation_id", conversationId)
+          .gt("updated_at", sinceUpdatedAt)
+          .order("created_at", { ascending: true })
+          .limit(500);
+        delta = legacy.data;
+      }
+      rows = (delta as RawMessageRow[] | null) ?? [];
     } else {
       // Full path — most-recent 300, then reversed back to oldest-first for
       // display. A plain ascending order+limit (the pre-existing pre-Part-1
@@ -1832,13 +1857,23 @@ export async function getConversation(
       // behind ancient history. Groups make this materially worse (more
       // senders → faster accumulation), so fixed it here rather than
       // carrying it forward.
-      const { data: msgsDesc } = await db
+      const attempt = await db
         .from("messages")
-        .select(MESSAGE_COLUMNS)
+        .select(WITH_RESHARE)
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
         .limit(300);
-      rows = ((msgsDesc ?? []) as RawMessageRow[]).slice().reverse();
+      let msgsDesc: unknown = attempt.data;
+      if (attempt.error?.code === "42703") {
+        const legacy = await db
+          .from("messages")
+          .select(MESSAGE_COLUMNS)
+          .eq("conversation_id", conversationId)
+          .order("created_at", { ascending: false })
+          .limit(300);
+        msgsDesc = legacy.data;
+      }
+      rows = ((msgsDesc as RawMessageRow[] | null) ?? []).slice().reverse();
     }
 
     const replyIds = [...new Set(rows.map((m) => m.reply_to_id).filter((x): x is string => !!x))];
@@ -1912,6 +1947,8 @@ export async function getConversation(
         reactions: reactionsByMsg.get(m.id) ?? [],
         attachments: m.deleted_at ? [] : (attachmentsByMsg.get(m.id) ?? []),
         metadata: m.deleted_at ? null : m.metadata,
+        // Absent column (0081 unapplied) === the column's own default (true).
+        allowReshare: m.allow_reshare ?? true,
       };
     });
 

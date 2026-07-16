@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Clock,
   File as FileIcon,
+  Ban,
   Forward,
   Repeat2,
   Image as ImageIcon,
@@ -344,6 +345,33 @@ export function ConversationRoom({
     kind: "image" | "video";
     previewUrl: string | null;
   } | null>(null);
+  /** Optimistic overrides for the sender's per-message reshare switch, keyed by
+   *  message id. Layered OVER `m.allowReshare` so the menu flips on the tap
+   *  rather than waiting for a resync to bring the new value back. */
+  const [reshareAllowed, setReshareAllowed] = useState<Record<string, boolean>>({});
+
+  const toggleMessageReshare = async (messageId: string, next: boolean) => {
+    setOpenMenuId(null);
+    setReshareAllowed((prev) => ({ ...prev, [messageId]: next }));
+    haptic("selection");
+    try {
+      const res = await fetch("/api/reshare", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: "message", sourceId: messageId, allowReshare: next }),
+      });
+      if (!res.ok) throw new Error();
+      toast(next ? "Others can reshare this" : "Resharing turned off for this", "success");
+    } catch {
+      // Roll back to whatever the server last told us.
+      setReshareAllowed((prev) => {
+        const copy = { ...prev };
+        delete copy[messageId];
+        return copy;
+      });
+      toast("Couldn't save that.", "error");
+    }
+  };
   // Owner (2026-07-12): the old Supabase-channel-status banner ("Connecting…"/
   // "Reconnecting…") fired on brief realtime hiccups that had nothing to do
   // with the user's actual network — a backend blip, not a real outage —
@@ -461,6 +489,9 @@ export function ConversationRoom({
             reactions: [],
             attachments: [], // the offline queue is text-only — see submit()'s own note
             metadata: null,
+            // Optimistic/offline-queued bubbles are the viewer's OWN, and an author
+            // can always reshare their own media — the switch only gates other people.
+            allowReshare: true,
           }));
           for (const m of seeded) seen.current.add(m.id);
           return [...prev, ...seeded];
@@ -755,6 +786,11 @@ export function ConversationRoom({
             // pattern as reactions arriving on an existing message.
             attachments: [],
             metadata: r.metadata ?? null,
+            // The realtime row doesn't carry it; a resync fills in the real
+            // value moments later. `true` matches the column default, and the
+            // server is the authority on every actual reshare anyway — this
+            // only decides whether the menu row is offered for a beat.
+            allowReshare: (r as RawMessage & { allow_reshare?: boolean | null }).allow_reshare ?? true,
           });
           void revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
         },
@@ -1078,6 +1114,9 @@ export function ConversationRoom({
         reactions: [],
         attachments: optimisticAttachments,
         metadata: null,
+        // Optimistic/offline-queued bubbles are the viewer's OWN, and an author
+        // can always reshare their own media — the switch only gates other people.
+        allowReshare: true,
       },
     ]);
     setBody("");
@@ -1165,6 +1204,8 @@ export function ConversationRoom({
         reactions: [],
         attachments: [],
         metadata,
+        // The viewer's own send — an author can always reshare their own media.
+        allowReshare: true,
       },
     ]);
     try {
@@ -1963,20 +2004,42 @@ export function ConversationRoom({
                                 {(() => {
                                   const media = m.attachments.find((a) => a.kind === "image" || a.kind === "video");
                                   if (!media || m.deletedAt || m.id.startsWith("optimistic-")) return null;
+                                  const allowed = reshareAllowed[m.id] ?? m.allowReshare;
                                   return (
-                                    <MenuItem
-                                      icon={Repeat2}
-                                      label="Reshare"
-                                      onClick={() => {
-                                        setOpenMenuId(null);
-                                        setResharing({
-                                          messageId: m.id,
-                                          attachmentId: media.id,
-                                          kind: media.kind as "image" | "video",
-                                          previewUrl: media.kind === "image" ? media.url : (media.thumbnailUrl ?? null),
-                                        });
-                                      }}
-                                    />
+                                    <>
+                                      {/* The SENDER's own switch (owner: "users
+                                          who ... sent the media in chat can set
+                                          the media to be reshare or not"). Only
+                                          on your own message; the server also
+                                          enforces authorship in its WHERE. */}
+                                      {m.mine ? (
+                                        <MenuItem
+                                          icon={allowed ? Repeat2 : Ban}
+                                          label={allowed ? "Turn off resharing" : "Allow resharing"}
+                                          onClick={() => void toggleMessageReshare(m.id, !allowed)}
+                                        />
+                                      ) : null}
+                                      {/* A recipient only sees Reshare when the
+                                          sender allows it — hidden, not greyed:
+                                          a disabled row would advertise an
+                                          action that can never succeed. The
+                                          sender can always reshare their own. */}
+                                      {m.mine || allowed ? (
+                                        <MenuItem
+                                          icon={Repeat2}
+                                          label="Reshare"
+                                          onClick={() => {
+                                            setOpenMenuId(null);
+                                            setResharing({
+                                              messageId: m.id,
+                                              attachmentId: media.id,
+                                              kind: media.kind as "image" | "video",
+                                              previewUrl: media.kind === "image" ? media.url : (media.thumbnailUrl ?? null),
+                                            });
+                                          }}
+                                        />
+                                      ) : null}
+                                    </>
                                   );
                                 })()}
                                 {canEdit ? <MenuItem icon={Pencil} label="Edit" onClick={() => startEdit(m)} /> : null}

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { MessageCircle } from "lucide-react";
 
 import { InboxHeaderActions } from "@/features/social/inbox-header-actions";
+import { InboxStoriesRow } from "@/features/social/inbox-stories-row";
 import { InboxUnreadDot } from "@/features/social/inbox-unread-dot";
 
 /**
@@ -48,6 +49,11 @@ export function InboxShell({ children }: { children: ReactNode }) {
             </div>
             <InboxHeaderActions />
           </div>
+
+          {/* Part of the SHELL, not the streamed list: it's client-only, so it
+              paints with the header rather than behind the list's skeleton, and
+              it stays identical between loading.tsx and the real page. */}
+          <InboxStoriesRow />
 
           {children}
         </div>

@@ -81,14 +81,26 @@ let lastFeedFetchAt = 0;
  *  overlay), so it's handled as the swipe destination past the last one. */
 const SWIPE_ORDER: HomeFeedSort[] = ["for_you", "following"];
 
+/** A fresh reshuffle token. Same alphabet the API route sanitises to, so it
+ *  always survives the round-trip intact. */
+function newFeedSeed(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+
 export function SmartFeed({
   initialItems,
   initialNextOffset,
+  initialSeed,
   friendCount = 0,
   quietMode = false,
 }: {
   initialItems: FeedItem[];
   initialNextOffset: number | null;
+  /** This refresh's reshuffle token, minted server-side per request (see
+   *  home/page.tsx). Every page request below reuses it so the whole scroll
+   *  agrees on ONE arrangement; a new one is minted only on an explicit
+   *  refresh, which is what re-orders the feed. */
+  initialSeed?: string;
   friendCount?: number;
   /** Feature 17 Part 13's Quiet Mode — suppresses Spark discovery cards and
    *  the "while you were away" catch-up banner; everything else (the real
@@ -99,6 +111,9 @@ export function SmartFeed({
   // Balanced once up front (server-rendered first page never went through
   // fetchPage's balancing below) so content-type mixing is correct from the
   // very first paint, not just after the first client-side page load.
+  // Held in a ref, not state: changing it must NOT re-render on its own — it
+  // only ever changes as part of a refresh that's already re-rendering.
+  const seedRef = useRef<string>(initialSeed ?? newFeedSeed());
   const [items, setItems] = useState<FeedItem[]>(() => balanceByKind(initialItems));
   const [nextOffset, setNextOffset] = useState<number | null>(initialNextOffset);
   const [loading, setLoading] = useState(false);
@@ -295,7 +310,7 @@ export function SmartFeed({
         // the native apps use.
         const data = await getApi().action<{ items: FeedItem[]; nextOffset: number | null }>("/api/home-feed", {
           method: "GET",
-          query: { sort: s, offset, limit: PAGE },
+          query: { sort: s, offset, limit: PAGE, seed: seedRef.current },
         });
         const entry = cacheRef.current![s] ?? { items: [], nextOffset: null, seen: new Set<string>() };
         if (replace) {
@@ -436,6 +451,13 @@ export function SmartFeed({
   const remove = useCallback((id: string) => setItems((prev) => prev.filter((i) => i.id !== id)), []);
 
   const refreshTop = useCallback(() => {
+    // A new token here is what actually re-orders the feed (owner: "every
+    // refresh should reshuffle the feed post arrangement like tiktok"). Only on
+    // an EXPLICIT refresh — pull-to-refresh, or tapping the new-posts pill.
+    // Deliberately NOT on the background auto-refresh (app-visible / reconnect
+    // / re-nav, below): those fire while the viewer is mid-read, and reshuffling
+    // under them would move the post they're looking at.
+    seedRef.current = newFeedSeed();
     setFreshCount(0);
     void fetchPage(sort, 0, true);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });

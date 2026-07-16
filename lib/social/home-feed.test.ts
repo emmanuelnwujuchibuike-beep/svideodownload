@@ -91,3 +91,47 @@ describe("rankForYou", () => {
     expect(ranked[0]?.id).toBe("b");
   });
 });
+
+/**
+ * The per-refresh reshuffle (owner: "every refresh should reshuffle the feed
+ * post arrangement like tiktok"). The property that actually matters here isn't
+ * "it shuffles" — it's that ONE seed yields ONE stable order. The feed is
+ * offset-paginated, so page 2 re-ranks the same candidate set page 1 did; if the
+ * jitter weren't deterministic per (seed, id), pages would disagree and the
+ * viewer would see some posts twice and never see others at all.
+ */
+describe("rankForYou — per-refresh shuffle", () => {
+  const many = () => Array.from({ length: 40 }, (_, i) => makeRow({ id: `p${i}`, likes_count: 50 }));
+
+  it("is deterministic: the same seed always yields the same order", () => {
+    const a = rankForYou(many(), new Set(), undefined, "seed-alpha").map((r) => r.id);
+    const b = rankForYou(many(), new Set(), undefined, "seed-alpha").map((r) => r.id);
+    expect(a).toEqual(b);
+  });
+
+  it("reshuffles between refreshes: different seeds yield different orders", () => {
+    const a = rankForYou(many(), new Set(), undefined, "seed-alpha").map((r) => r.id);
+    const b = rankForYou(many(), new Set(), undefined, "seed-beta").map((r) => r.id);
+    expect(a).not.toEqual(b);
+  });
+
+  it("keeps every post exactly once — shuffling must never drop or duplicate", () => {
+    const ranked = rankForYou(many(), new Set(), undefined, "seed-alpha");
+    expect(ranked).toHaveLength(40);
+    expect(new Set(ranked.map((r) => r.id)).size).toBe(40);
+  });
+
+  it("omitting the seed leaves the existing order untouched", () => {
+    const withoutSeed = rankForYou(many(), new Set(), undefined).map((r) => r.id);
+    const legacy = rankForYou(many(), new Set()).map((r) => r.id);
+    expect(withoutSeed).toEqual(legacy);
+  });
+
+  it("jitter can't invert a real quality gap — a strong post stays on top", () => {
+    // ±25% of each post's own score, so a 10x gap must survive any seed.
+    const rows = [...many(), makeRow({ id: "banger", likes_count: 5000 })];
+    for (const seed of ["s1", "s2", "s3", "s4", "s5", "s6"]) {
+      expect(rankForYou(rows, new Set(), undefined, seed)[0]?.id).toBe("banger");
+    }
+  });
+});

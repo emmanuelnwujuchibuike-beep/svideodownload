@@ -602,23 +602,30 @@ function ConversationRow({
       </div>
       <motion.div
         drag="x"
+        // Third pass at "it opens on a light touch" (owner 2026-07-15, again
+        // 2026-07-16 — and it matters more now that the per-row "…" is gone and
+        // this gesture is the ONLY way in). The previous two passes only ever
+        // tuned the onDragEnd THRESHOLDS, which was treating the symptom: the
+        // drag itself still ENGAGED on any horizontal movement at all, so the
+        // row visibly slid under a fingertip that was only trying to scroll the
+        // list or tap the chat. `dragDirectionLock` is the actual fix — framer
+        // commits the gesture to ONE axis after the first few pixels, so a
+        // vertical scroll (or a near-vertical thumb drag) never moves this row
+        // sideways at all, and a tap moves nothing.
+        dragDirectionLock
         dragConstraints={{ left: -SWIPE_STRIP_WIDTH, right: 0 }}
         dragElastic={0.06}
         dragMomentum={false}
         animate={{ x: swipeOpen ? -SWIPE_STRIP_WIDTH : 0 }}
         transition={springs.sheet}
         onDragEnd={(_, info) => {
-          // Raised 2026-07-15 (owner: opening on a "light touch" instead of
-          // only a deliberate hard slide) — `velocity.x < -400` alone used to
-          // open the strip on a quick, SHORT flick (a light, fast tap-drag
-          // with almost no travel), since it was an unconditional OR against
-          // the distance check. Now a fast flick only counts if it's ALSO
-          // covered a real fraction of the strip (not just registered high
-          // velocity over a couple of pixels), and the velocity bar itself is
-          // much higher — a genuinely hard slide (>55% of the strip) still
-          // always opens it regardless of speed.
-          const draggedFar = info.offset.x < -SWIPE_STRIP_WIDTH * 0.55;
-          const firmFlick = info.offset.x < -SWIPE_STRIP_WIDTH * 0.25 && info.velocity.x < -900;
+          // With engagement fixed above, these only decide "did a real slide go
+          // far enough to latch open" — so they're raised again to demand a
+          // deliberate gesture: ~70% of the strip (was 55%), or a genuinely hard
+          // flick that ALSO covered ~45% (was 25%) at a higher velocity bar.
+          // Anything less springs back closed.
+          const draggedFar = info.offset.x < -SWIPE_STRIP_WIDTH * 0.7;
+          const firmFlick = info.offset.x < -SWIPE_STRIP_WIDTH * 0.45 && info.velocity.x < -1200;
           const shouldOpen = draggedFar || firmFlick;
           setSwipeOpen(shouldOpen);
           if (shouldOpen) haptic("light");

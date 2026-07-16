@@ -157,6 +157,7 @@ export function rankForYou(
   rows: Row[],
   followingIds: Set<string>,
   prefs?: Pick<HomePreferences, "preferFriends" | "boostedCategories">,
+  seed?: string,
 ): Row[] {
   const now = Date.now();
   const relationshipBonus = prefs?.preferFriends ? 220 : 120;
@@ -168,12 +169,45 @@ export function rankForYou(
       row.likes_count + row.comments_count * 2 + row.shares_count * 3 + row.saves_count * 2 + row.downloads_count * 2;
     const freshness = 40 / (1 + ageHours / 30);
     const interest = row.category && boosted.has(row.category as Category) ? 60 : 0;
-    return { row, score: relationship + quality + freshness + interest, i };
+    const base = relationship + quality + freshness + interest;
+    // Per-refresh reshuffle (owner: "every refresh should reshuffle the feed
+    // post arrangement like tiktok"). MULTIPLICATIVE, not additive: it varies a
+    // post's score by ±SHUFFLE_SPREAD/2 of its OWN value, so posts of similar
+    // standing trade places on each refresh while a genuinely strong post never
+    // gets buried and a weak one never rockets to the top — the feed feels
+    // alive without the ranking becoming a lottery.
+    const score = seed ? base * (1 + (seededUnit(seed, row.id) - 0.5) * SHUFFLE_SPREAD) : base;
+    return { row, score, i };
   });
   // Tiebreak on original (recency) order — equal scores never shuffle
   // arbitrarily between otherwise-identical requests.
   scored.sort((a, b) => b.score - a.score || a.i - b.i);
   return scored.map((s) => s.row);
+}
+
+/** ±25% of each post's own score. Enough to visibly re-order comparable posts
+ *  every refresh; far too little to invert a real quality gap. */
+const SHUFFLE_SPREAD = 0.5;
+
+/**
+ * Deterministic (seed, id) → [0,1). FNV-1a; no dependency, no `Math.random`.
+ *
+ * Determinism is the whole point, not an implementation detail: the feed is
+ * OFFSET-paginated, so page 2 re-ranks the same candidate set page 1 did. A
+ * fresh random per call would give each page a different order, which
+ * duplicates some posts across pages and drops others entirely. Keying the
+ * jitter off a seed that's constant for one refresh (and off the post's stable
+ * id) means every page of that refresh agrees on one order, while the next
+ * refresh — a new seed — produces a different one.
+ */
+function seededUnit(seed: string, id: string): number {
+  const s = `${seed}:${id}`;
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967296;
 }
 
 /**
@@ -369,16 +403,27 @@ export async function getHomeFeed(opts: {
   limit?: number;
   /** Which product surface: "feed" (default — excludes reels) or "reel". */
   format?: ContentFormat;
+  /** Reshuffle token for "for_you" (see `rankForYou`'s seeded jitter). ONE
+   *  value per refresh, reused for every page of that refresh — the client
+   *  mints it and passes it back with each page. Omit for a stable order
+   *  (SSR of a non-feed surface, tests, the reels rail). */
+  seed?: string;
 }): Promise<FeedPage> {
   const limit = opts.limit ?? 8;
   const offset = opts.offset ?? 0;
   const sort = opts.sort ?? "for_you";
   const format = opts.format ?? "feed";
+  // Only "for_you" is reshuffled. "recent"/"trending" mean a specific,
+  // promised order — quietly jittering those would just make them wrong.
+  const seed = sort === "for_you" ? opts.seed : undefined;
   if (!hasSupabase) return { items: [], nextOffset: null };
   // Cached briefly per (viewer, sort, format, page) so SSR seeding + client
   // revalidation stay cheap. Feed freshness within 20s is fine.
-  const key = `homefeed:${opts.viewerId ?? "anon"}:${sort}:${format}:${offset}:${limit}`;
-  return getCached(key, 20, () => loadHomeFeed(opts.viewerId, sort, offset, limit, format));
+  // `seed` MUST be part of the key: it changes the returned ORDER, so sharing
+  // one cache entry across seeds would hand a refresh the previous refresh's
+  // arrangement (and, worse, mix orders across pages mid-scroll).
+  const key = `homefeed:${opts.viewerId ?? "anon"}:${sort}:${format}:${offset}:${limit}:${seed ?? "-"}`;
+  return getCached(key, 20, () => loadHomeFeed(opts.viewerId, sort, offset, limit, format, seed));
 }
 
 async function loadHomeFeed(
@@ -387,6 +432,7 @@ async function loadHomeFeed(
   offset: number,
   limit: number,
   format: ContentFormat,
+  seed?: string,
 ): Promise<FeedPage> {
   try {
     const db = createAdminClient();
@@ -453,7 +499,7 @@ async function loadHomeFeed(
         const muted = new Set(prefs.mutedCategories);
         rows = rows.filter((r) => !r.category || !muted.has(r.category as Category));
       }
-      rows = rankForYou(rows, new Set(followingIds), prefs ?? undefined);
+      rows = rankForYou(rows, new Set(followingIds), prefs ?? undefined, seed);
     }
 
     const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];

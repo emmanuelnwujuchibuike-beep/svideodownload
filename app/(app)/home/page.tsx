@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -171,12 +172,25 @@ async function RailSection({ viewerId }: { viewerId: string }) {
 }
 
 async function SmartFeedSection({ viewerId, quietMode }: { viewerId: string; quietMode: boolean }) {
+  // A fresh reshuffle token per REQUEST — this is what makes "every refresh
+  // reshuffles the feed like TikTok" true from the very first painted frame.
+  // Minting it on the client instead would mean SSR always rendered one fixed
+  // order that then visibly re-jumped when the client revalidated. It's handed
+  // to SmartFeed so its own pagination keeps asking for THIS refresh's
+  // arrangement (see rankForYou's note on why page 2 must agree with page 1).
+  const seed = randomUUID().slice(0, 8);
   const [page, friends] = await Promise.all([
-    getHomeFeed({ viewerId, sort: "for_you", offset: 0, limit: 8 }),
+    getHomeFeed({ viewerId, sort: "for_you", offset: 0, limit: 8, seed }),
     friendsCount(viewerId),
   ]);
   return (
-    <SmartFeed initialItems={page.items} initialNextOffset={page.nextOffset} friendCount={friends} quietMode={quietMode} />
+    <SmartFeed
+      initialItems={page.items}
+      initialNextOffset={page.nextOffset}
+      initialSeed={seed}
+      friendCount={friends}
+      quietMode={quietMode}
+    />
   );
 }
 

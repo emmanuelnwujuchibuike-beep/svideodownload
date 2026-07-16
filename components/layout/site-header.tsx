@@ -217,14 +217,23 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
                 </form>
               </>
             ) : (
+              /* Owner (2026-07-16): "change the login button in the landing
+                 page to login or create account to access all features". The
+                 drawer is full-width, so it carries the whole sentence — the
+                 desktop header's button (UserMenu) is width-constrained next to
+                 Go Pro and the theme toggle, so it uses the same wording minus
+                 the trailing clause. */
               <Link
                 href={enabled ? "/login?next=/account" : "/#download"}
                 onClick={() => setOpen(false)}
-                className="mt-2 flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-center text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition hover:shadow-primary/40"
+                className="mt-2 flex flex-col items-center justify-center gap-0.5 rounded-2xl bg-primary px-4 py-3.5 text-center text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition hover:shadow-primary/40"
               >
                 {enabled ? (
                   <>
-                    <KeyRound className="h-5 w-5" /> Log in for API &amp; more
+                    <span className="flex items-center gap-2">
+                      <KeyRound className="h-5 w-5" /> Log in or create account
+                    </span>
+                    <span className="text-xs font-medium text-primary-foreground/80">to access all features</span>
                   </>
                 ) : (
                   "Get Started"

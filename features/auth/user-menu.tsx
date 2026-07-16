@@ -55,13 +55,17 @@ export function UserMenu() {
   }
 
   if (!user) {
+    // Owner (2026-07-16): "change the login button in the landing page to login
+    // or create account to access all features". The old "Log in for API" was
+    // both narrower than the truth (an account unlocks the whole social app,
+    // not just the REST API) and hid the fact that signing up happens through
+    // this same passwordless flow — there is no separate register page.
     return (
       <Link
         href="/login?next=/account"
-        title="Log in to use the REST API and sync your downloads"
         className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
       >
-        <KeyRound className="h-4 w-4" /> Log in for API
+        <KeyRound className="h-4 w-4" /> Log in or create account
       </Link>
     );
   }

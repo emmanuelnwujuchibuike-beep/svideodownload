@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 import { useChatAppearance } from "@/features/social/use-chat-appearance";
-import { useKeyboardViewportPin } from "@/lib/pwa/use-visual-viewport";
+import { useVisualViewportPin } from "@/lib/pwa/use-visual-viewport";
 import type { ChatAppearance } from "@/lib/social/chat-appearance";
 import type { ConversationTheme } from "@/lib/social/messages";
 import { createClient } from "@/lib/supabase/client";
@@ -69,10 +69,10 @@ export function ThreadAppearanceProvider({
   // Keeps the thread's header (name / last seen / call buttons) pinned to the
   // top of the VISIBLE area while the keyboard is open — on iOS a plain
   // `fixed inset-0` surface is anchored to the layout viewport, which the
-  // keyboard doesn't shrink, so the header gets pushed off-screen the moment
-  // the composer takes focus (owner, 2026-07-16). `null` on desktop and
-  // whenever the keyboard is closed, leaving the CSS untouched.
-  const viewportPin = useKeyboardViewportPin();
+  // keyboard doesn't shrink, so the header rides off-screen the moment the
+  // composer takes focus (owner, 2026-07-16, reported twice). Tracks the visual
+  // viewport continuously; a no-op with no keyboard, `null` on desktop.
+  const viewportPin = useVisualViewportPin();
 
   useEffect(() => {
     setTheme(initialTheme);

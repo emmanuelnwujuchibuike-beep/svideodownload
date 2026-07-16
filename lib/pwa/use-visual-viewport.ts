@@ -48,31 +48,46 @@ export interface ViewportPin {
 }
 
 /**
- * Keeps a full-screen `fixed inset-0` surface glued to the part of the screen
- * the user can actually SEE while the on-screen keyboard is open.
+ * Glues a full-screen `fixed inset-0` surface to the part of the screen the
+ * user can actually SEE — the visual viewport — instead of the layout viewport.
  *
- * Why this is needed (owner, 2026-07-16: the chat's name/last-seen/call header
+ * Why (owner, 2026-07-16, reported twice: the chat's name/last-seen/call header
  * must stay fixed "even when the placeholder and keyboard is opened"):
- * `interactiveWidget: "resizes-content"` in app/layout.tsx already handles this
- * on Android/Chromium by shrinking the LAYOUT viewport, so `inset-0` reflows
- * and the header stays put. iOS Safari/WKWebView does not do that — it leaves
- * the layout viewport at full height and instead shrinks the VISUAL viewport
- * and scrolls it. A `position: fixed` element stays pinned to the (unchanged)
- * layout viewport, so the thread's header is pushed up out of the visible area
- * the moment the composer takes focus. That's the exact reported symptom, and
- * it's a documented iOS behaviour, not a layout mistake in the thread itself.
+ * `interactiveWidget: "resizes-content"` in app/layout.tsx handles this on
+ * Chromium by shrinking the LAYOUT viewport, so `inset-0` reflows and the
+ * header stays put. **Safari ignores `interactiveWidget`** — iOS keeps the
+ * layout viewport at full height, shrinks the VISUAL viewport, and scrolls it
+ * to reveal the focused input. A `position: fixed` element is anchored to the
+ * unchanged layout viewport, so it rides up out of view. That's the reported
+ * symptom, and it's documented platform behaviour, not a mistake in the
+ * thread's own layout (its header is `shrink-0` above a `flex-1 overflow-y-auto`
+ * list, which is correct).
  *
- * So: while the keyboard is up, re-anchor the surface to
- * `visualViewport.offsetTop` with `visualViewport.height`. `bottom` must be
- * released to `auto` — `inset-0`'s `bottom: 0` would otherwise fight the
- * explicit height and stretch the box back under the keyboard.
+ * This tracks the visual viewport CONTINUOUSLY while mounted rather than
+ * switching on a "keyboard looks open" heuristic. The first version gated on
+ * `innerHeight - vv.height > 120`, which left two real holes: nothing was
+ * pinned during the keyboard's open/close animation (so the header visibly
+ * jumped), and a SHORT keyboard — an iPad hardware-keyboard accessory bar, a
+ * floating/split keyboard — never crossed 120px at all, so the header was
+ * pushed off-screen with no correction. Tracking continuously removes the
+ * heuristic entirely.
+ *
+ * It is a no-op in the common case: with no keyboard, `vv.height` equals the
+ * layout height and `vv.offsetTop` is 0, so this resolves to exactly what
+ * `inset-0` already does. `bottom` must be released to `auto` — `inset-0`'s
+ * `bottom: 0` would otherwise fight the explicit height and stretch the box
+ * back down under the keyboard.
  *
  * Returns `null` (no override) on large screens, where the thread is a normal
- * in-flow pane inside the desktop split layout rather than a fixed overlay,
- * and whenever the keyboard is closed, so the plain CSS stays authoritative in
- * the common case.
+ * in-flow pane in the desktop split layout rather than a fixed overlay, and
+ * where the CSS must stay authoritative.
+ *
+ * NOTE: this cannot be reproduced in a desktop browser — Chromium's headless
+ * viewport never emulates the iOS keyboard's visual-viewport behaviour. It's
+ * written against the documented platform contract and needs a real device to
+ * confirm.
  */
-export function useKeyboardViewportPin(): ViewportPin | null {
+export function useVisualViewportPin(): ViewportPin | null {
   const [pin, setPin] = useState<ViewportPin | null>(null);
 
   useEffect(() => {
@@ -87,11 +102,16 @@ export function useKeyboardViewportPin(): ViewportPin | null {
         setPin(null);
         return;
       }
-      const keyboardOpen = window.innerHeight - vv.height > 120;
-      setPin(
-        keyboardOpen
-          ? { top: `${vv.offsetTop}px`, height: `${vv.height}px`, bottom: "auto" }
-          : null,
+      const next: ViewportPin = {
+        top: `${Math.round(vv.offsetTop)}px`,
+        height: `${Math.round(vv.height)}px`,
+        bottom: "auto",
+      };
+      // Only re-render when a value actually changed — `scroll` on the visual
+      // viewport fires continuously during a keyboard animation and momentum
+      // scrolling, and this sits above the whole thread.
+      setPin((prev) =>
+        prev && prev.top === next.top && prev.height === next.height ? prev : next,
       );
     };
 
@@ -99,7 +119,7 @@ export function useKeyboardViewportPin(): ViewportPin | null {
     vv.addEventListener("resize", update);
     // iOS scrolls the visual viewport while the keyboard animates in and when
     // focus moves between fields — without tracking scroll too, the surface
-    // would re-anchor once and then drift.
+    // would re-anchor once and then drift back off.
     vv.addEventListener("scroll", update);
     desktop.addEventListener("change", update);
     return () => {

@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import { rankForYou, type Row } from "./home-feed";
 
+// ONE shared timestamp for every default row — NOT `new Date()` per call.
+// Real CI flake (2026-07-16, run #451): each makeRow() used to call
+// `new Date().toISOString()` separately, so two "otherwise-identical" rows
+// created across a millisecond boundary genuinely differed in age — and
+// rankForYou's freshness term (40/(1+ageHours/30)) is continuous, so a 1ms
+// age gap produces a tiny nonzero score gap. The "ties preserve original
+// order" test below then wasn't testing a tie at all: the older row
+// correctly sorted last and the test failed, purely depending on clock
+// timing (passed 450 runs by luck — all rows usually land in the same ms).
+const SHARED_CREATED_AT = new Date().toISOString();
+
 function makeRow(overrides: Partial<Row> = {}): Row {
   return {
     id: overrides.id ?? Math.random().toString(36).slice(2),
@@ -23,7 +34,7 @@ function makeRow(overrides: Partial<Row> = {}): Row {
     shares_count: 0,
     comments_count: 0,
     downloads_count: 0,
-    created_at: new Date().toISOString(),
+    created_at: SHARED_CREATED_AT,
     ...overrides,
   };
 }

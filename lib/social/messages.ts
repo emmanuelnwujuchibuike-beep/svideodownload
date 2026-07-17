@@ -1688,6 +1688,78 @@ export interface ConversationView {
   syncedAt: string;
 }
 
+const MESSAGE_COLUMNS =
+  "id, sender_id, body, created_at, delivered_at, read_at, reply_to_id, edited_at, deleted_at, pinned, encryption_iv, metadata";
+/** `allow_reshare` arrives with migration 0081 (the sender's "can others reshare
+ *  my media" switch). supabase-js fails the WHOLE select if a named column is
+ *  missing, so every path tries it and falls back to the pre-0081 list — an
+ *  unapplied migration must only cost the switch, never the entire thread. */
+const MESSAGE_COLUMNS_WITH_RESHARE = `${MESSAGE_COLUMNS}, allow_reshare`;
+
+/**
+ * The thread's messages. Extracted from `getConversation` so it can be STARTED
+ * before the roster/profile lookups and awaited after them — the two are
+ * independent, and there was no reason for the biggest query on the path to
+ * queue behind a profile fetch (2026-07-16 latency pass).
+ *
+ * Both paths keep the 42703 fallback: the delta path is what every resync uses,
+ * so covering only the full path would leave the reshare switch silently broken
+ * on exactly the hot path.
+ */
+async function fetchMessageRows(
+  db: ReturnType<typeof createAdminClient>,
+  conversationId: string,
+  sinceUpdatedAt?: string,
+): Promise<RawMessageRow[]> {
+  if (sinceUpdatedAt) {
+    // Delta path — small, order doesn't matter (the client merges by id into
+    // its own already-ordered state), so no need to reverse.
+    const attempt = await db
+      .from("messages")
+      .select(MESSAGE_COLUMNS_WITH_RESHARE)
+      .eq("conversation_id", conversationId)
+      .gt("updated_at", sinceUpdatedAt)
+      .order("created_at", { ascending: true })
+      .limit(500);
+    let delta: unknown = attempt.data;
+    if (attempt.error?.code === "42703") {
+      const legacy = await db
+        .from("messages")
+        .select(MESSAGE_COLUMNS)
+        .eq("conversation_id", conversationId)
+        .gt("updated_at", sinceUpdatedAt)
+        .order("created_at", { ascending: true })
+        .limit(500);
+      delta = legacy.data;
+    }
+    return (delta as RawMessageRow[] | null) ?? [];
+  }
+
+  // Full path — most-recent 300, then reversed back to oldest-first for
+  // display. A plain ascending order+limit (the pre-existing pre-Part-1 shape
+  // of this query) returns the OLDEST 300 messages once a thread passes that
+  // size, permanently hiding the actual recent conversation behind ancient
+  // history. Groups make this materially worse (more senders → faster
+  // accumulation).
+  const attempt = await db
+    .from("messages")
+    .select(MESSAGE_COLUMNS_WITH_RESHARE)
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: false })
+    .limit(300);
+  let msgsDesc: unknown = attempt.data;
+  if (attempt.error?.code === "42703") {
+    const legacy = await db
+      .from("messages")
+      .select(MESSAGE_COLUMNS)
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: false })
+      .limit(300);
+    msgsDesc = legacy.data;
+  }
+  return ((msgsDesc as RawMessageRow[] | null) ?? []).slice().reverse();
+}
+
 interface RawMessageRow {
   id: string;
   sender_id: string;
@@ -1833,6 +1905,19 @@ export async function getConversation(
     const myMembership = membershipRes.data;
     if (!myMembership) return null;
 
+    // Start the MESSAGES query before resolving the roster below — the two are
+    // independent (messages are filtered by conversation, not by member), so
+    // there is no reason for the biggest query on this path to queue behind a
+    // profile lookup. Part of the 2026-07-16 latency pass; see the note on the
+    // parallel batch above for the measurements.
+    //
+    // `queryStartedAt` MUST be captured here, before the query is issued — see
+    // its own note further down: it becomes the next delta sync's `since`, and
+    // a timestamp taken after the query returns could silently skip a message
+    // that changed while it ran.
+    const queryStartedAt = new Date().toISOString();
+    const messagesPromise = fetchMessageRows(db, conversationId, sinceUpdatedAt);
+
     let other: OtherUser | null = null;
     let members: ConversationMember[] = [];
     // Part 11b — "read receipts" toggle: if the OTHER person has disabled
@@ -1892,71 +1977,8 @@ export async function getConversation(
         .filter((m): m is ConversationMember => !!m);
     }
 
-    // Captured BEFORE the query runs, not after — so it's safe to hand back
-    // as the next delta call's `since`. A message that changes DURING this
-    // query's execution window is worst-case re-included next time
-    // (harmless, idempotent merge on the client); using a later timestamp
-    // instead could silently skip it.
-    const queryStartedAt = new Date().toISOString();
-    const MESSAGE_COLUMNS =
-      "id, sender_id, body, created_at, delivered_at, read_at, reply_to_id, edited_at, deleted_at, pinned, encryption_iv, metadata";
-    // `allow_reshare` arrives with migration 0081 (the sender's "can others
-    // reshare my media" switch). supabase-js fails the WHOLE select if a named
-    // column is missing, so BOTH paths below try it and fall back to the
-    // pre-0081 column list — an unapplied migration must only cost the switch,
-    // never the entire thread. Both paths need this: the delta path is what
-    // every resync/catch-up uses, so covering only the full path would leave
-    // the switch silently broken on exactly the hot path.
-    const WITH_RESHARE = `${MESSAGE_COLUMNS}, allow_reshare`;
-    let rows: RawMessageRow[];
-    if (sinceUpdatedAt) {
-      // Delta path — small, order doesn't matter (the client merges by id
-      // into its own already-ordered state), so no need to reverse.
-      const attempt = await db
-        .from("messages")
-        .select(WITH_RESHARE)
-        .eq("conversation_id", conversationId)
-        .gt("updated_at", sinceUpdatedAt)
-        .order("created_at", { ascending: true })
-        .limit(500);
-      let delta: unknown = attempt.data;
-      if (attempt.error?.code === "42703") {
-        const legacy = await db
-          .from("messages")
-          .select(MESSAGE_COLUMNS)
-          .eq("conversation_id", conversationId)
-          .gt("updated_at", sinceUpdatedAt)
-          .order("created_at", { ascending: true })
-          .limit(500);
-        delta = legacy.data;
-      }
-      rows = (delta as RawMessageRow[] | null) ?? [];
-    } else {
-      // Full path — most-recent 300, then reversed back to oldest-first for
-      // display. A plain ascending order+limit (the pre-existing pre-Part-1
-      // shape of this query) returns the OLDEST 300 messages once a thread
-      // passes that size, permanently hiding the actual recent conversation
-      // behind ancient history. Groups make this materially worse (more
-      // senders → faster accumulation), so fixed it here rather than
-      // carrying it forward.
-      const attempt = await db
-        .from("messages")
-        .select(WITH_RESHARE)
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: false })
-        .limit(300);
-      let msgsDesc: unknown = attempt.data;
-      if (attempt.error?.code === "42703") {
-        const legacy = await db
-          .from("messages")
-          .select(MESSAGE_COLUMNS)
-          .eq("conversation_id", conversationId)
-          .order("created_at", { ascending: false })
-          .limit(300);
-        msgsDesc = legacy.data;
-      }
-      rows = ((msgsDesc as RawMessageRow[] | null) ?? []).slice().reverse();
-    }
+    // Started before the roster resolution above, so it ran alongside it.
+    const rows = await messagesPromise;
 
     const replyIds = [...new Set(rows.map((m) => m.reply_to_id).filter((x): x is string => !!x))];
     const messageIds = rows.map((m) => m.id);

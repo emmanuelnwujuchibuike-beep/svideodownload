@@ -115,8 +115,24 @@ export function VideoComment({ url, thumbnailUrl, durationMs }: { url: string; t
           // eslint-disable-next-line @next/next/no-img-element
           <img src={thumbnailUrl} alt="" loading="lazy" className="max-h-64 w-auto max-w-full object-cover" />
         ) : (
+          // No uploaded thumbnail — show the video's OWN first frame rather
+          // than a black rectangle (owner, 2026-07-16: "videos sent in chat
+          // should always [have] a cover image of the starting of the video").
+          //
+          // `#t=0.1` is the load-bearing part: a bare `<video preload="metadata">`
+          // fetches dimensions/duration but renders NOTHING until a frame is
+          // decoded, so it sits black. A media-fragment start time makes the
+          // browser seek there and paint that frame as the poster — the same
+          // trick the stories row already uses for its video covers (`#t=0.3`).
+          // 0.1s, not 0: some encoders' frame at exactly 0 is black/absent.
           // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video src={url} muted playsInline preload="metadata" className="max-h-64 w-auto max-w-full object-cover" />
+          <video
+            src={`${url}#t=0.1`}
+            muted
+            playsInline
+            preload="metadata"
+            className="max-h-64 w-auto max-w-full object-cover"
+          />
         )}
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/15 transition group-hover:bg-black/30">
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md">

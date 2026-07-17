@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, Plus, Repeat2, Send, Smile, X } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -84,8 +85,7 @@ export function StoriesRow({
           <span className={cn("relative rounded-full p-0.5", ownGroup ? "bg-brand" : "ring-1 ring-inset ring-border/70")}>
             <span className="block rounded-full bg-background p-0.5">
               {viewerAvatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={viewerAvatarUrl} alt="" className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
+                <Image src={viewerAvatarUrl} alt="" width={68} height={68} className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
               ) : (
                 <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
                   {initial}
@@ -116,14 +116,19 @@ export function StoriesRow({
               >
                 <span className="block overflow-hidden rounded-full bg-background p-0.5">
                   {cover?.mediaKind === "image" ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={cover.mediaUrl} alt="" className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
+                    <Image
+                      src={cover.mediaUrl}
+                      alt=""
+                      width={68}
+                      height={68}
+                      unoptimized={false}
+                      className="h-[4.25rem] w-[4.25rem] rounded-full object-cover"
+                    />
                   ) : cover?.mediaKind === "video" ? (
                     // eslint-disable-next-line jsx-a11y/media-has-caption
                     <video src={`${cover.mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
                   ) : g.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={g.avatarUrl} alt="" className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
+                    <Image src={g.avatarUrl} alt="" width={68} height={68} className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
                   ) : (
                     <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
                       {g.displayName.charAt(0).toUpperCase()}

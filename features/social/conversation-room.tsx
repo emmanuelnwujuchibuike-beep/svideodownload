@@ -64,6 +64,7 @@ import {
   subscribeMessageQueue,
 } from "@/lib/offline/message-queue";
 import { readImageDimensions, readVideoMetadata } from "@/lib/media/message-attachments-client";
+import { captureVideoPoster } from "@/lib/media/video-poster";
 import { haptic } from "@/lib/motion/haptics";
 import { useLongPress } from "@/lib/dom/use-long-press";
 import { springs } from "@/lib/motion/springs";
@@ -1419,6 +1420,7 @@ export function ConversationRoom({
         let mediaWidth: number | undefined;
         let mediaHeight: number | undefined;
         let durationMs: number | undefined;
+        let thumbnailUrl: string | undefined;
         if (resolvedKind === "image") {
           const dims = await readImageDimensions(file);
           if (dims) {
@@ -1432,12 +1434,33 @@ export function ConversationRoom({
             mediaHeight = meta.height;
             durationMs = meta.durationMs;
           }
+          // Capture + upload the first frame as a real cover (owner,
+          // 2026-07-16: "videos sent in chat should always [have] a cover image
+          // of the starting of the video").
+          //
+          // Chat video sends read metadata but NEVER captured a poster, so
+          // `thumbnailUrl` was always null and every video bubble fell back to
+          // a bare <video> — a black rectangle until the browser decoded a
+          // frame. The create composer has always done this (see
+          // composer-core's publishComposition); chat simply never did.
+          //
+          // Best-effort on purpose: a failed capture must not fail the SEND.
+          // The bubble's `#t=0.1` fallback still paints the first frame in that
+          // case, so the worst outcome is a slower cover, never a broken one.
+          const poster = await captureVideoPoster(file).catch(() => null);
+          if (poster) {
+            thumbnailUrl =
+              (await uploadPostMedia({ data: poster, kind: "image", ext: "jpg", contentType: "image/jpeg" }).catch(
+                () => undefined,
+              )) ?? undefined;
+          }
         }
         setPendingAttachments((prev) => [
           ...prev,
           {
             mediaKind: resolvedKind,
             mediaUrl: url,
+            thumbnailUrl,
             mediaWidth,
             mediaHeight,
             durationMs,

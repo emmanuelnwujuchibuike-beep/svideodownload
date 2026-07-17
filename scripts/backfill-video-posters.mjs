@@ -15,6 +15,21 @@
  *   - message_attachments (media_kind='video', thumbnail_url is null) — permanent
  *   - stories (media_kind='video', thumbnail_url is null) — 24h, but they're
  *     what's on screen right now
+ *   - posts (2026-07-17) — see below. This is what the FEED and the LANDING PAGE
+ *     render, and it was the one table this script never covered.
+ *
+ * POSTS ARE A SECOND, WORSE PROBLEM: a foreign poster URL that EXPIRES.
+ * A post created from a download stored whatever thumbnail yt-dlp resolved —
+ * usually the source platform's *signed* CDN URL (p16-/p19-common-sign.tiktokcdn-us.com,
+ * scontent-*.fbcdn.net). Those signatures lapse and the URL then 403s FOREVER, so
+ * the tile is permanently broken. Measured 2026-07-17: 50 of 64 video posts had a
+ * dead or missing poster (21 p16, 13 p19, 15 null, 1 fbcdn); only 14 were healthy.
+ *
+ * So for `posts` the rule is not "thumbnail_url is null" but "the poster is not on
+ * OUR media host" — a foreign host is, by definition, a URL we don't control and
+ * can't keep alive. Re-hosting to R2 fixes it permanently and costs no egress.
+ * Videos themselves are already all on R2, which is why a poster can be regenerated
+ * at all: ffmpeg reads OUR mp4, not the platform's expired link.
  *
  * Frame at 0.3s, not 0: the frame at exactly 0 is black/absent in some encoders.
  *
@@ -94,21 +109,52 @@ async function uploadPoster(key, bytes) {
   return `${publicBase}/${key.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-async function run(table, label) {
+/**
+ * @param reclaimForeign  also re-host posters that live on someone else's CDN.
+ *   Only `posts` needs this (see the header): chat/stories posters were always
+ *   captured client-side and written straight to R2, so for those a non-null
+ *   thumbnail is already ours and must not be touched.
+ */
+async function run(table, label, { reclaimForeign = false } = {}) {
+  // Filter in JS rather than PostgREST: the predicate is "not on our host",
+  // which means a `not.like` against a URL full of `:`/`/`/`.` — easy to get
+  // subtly wrong and silently match nothing. These tables are small.
   const { data, error } = await db
     .from(table)
     .select("id, media_url, thumbnail_url")
-    .eq("media_kind", "video")
-    .is("thumbnail_url", null);
+    .eq("media_kind", "video");
   if (error) {
     console.log(`${label}: query failed (${error.code}) — skipping`);
     return;
   }
-  console.log(`\n${label}: ${data.length} video(s) without a poster`);
-  for (const row of data) {
+
+  const skipped = [];
+  const targets = data.filter((row) => {
+    // ffmpeg has to be able to READ the source. If the video itself is on a
+    // foreign (likely expired) URL there is nothing to grab a frame from.
+    if (!row.media_url?.startsWith(publicBase)) {
+      if (!row.thumbnail_url) skipped.push(row.id);
+      return false;
+    }
+    if (!row.thumbnail_url) return true;
+    return reclaimForeign && !row.thumbnail_url.startsWith(publicBase);
+  });
+
+  const missing = targets.filter((r) => !r.thumbnail_url).length;
+  const foreign = targets.length - missing;
+  console.log(
+    `\n${label}: ${data.length} video(s), ${targets.length} need a poster` +
+      (targets.length ? ` (${missing} missing, ${foreign} on a foreign/expiring CDN)` : ""),
+  );
+  if (skipped.length) console.log(`  (${skipped.length} skipped — source video is not on our media host)`);
+
+  let ok = 0;
+  let failed = 0;
+  for (const row of targets) {
     const key = posterKeyFor(row.media_url);
     if (DRY) {
-      console.log(`  would generate ${key}`);
+      const why = row.thumbnail_url ? `replace ${new URL(row.thumbnail_url).host}` : "no poster";
+      console.log(`  would generate ${key}  (${why})`);
       continue;
     }
     try {
@@ -116,13 +162,19 @@ async function run(table, label) {
       const url = await uploadPoster(key, bytes);
       const { error: upErr } = await db.from(table).update({ thumbnail_url: url }).eq("id", row.id);
       if (upErr) throw new Error(upErr.message);
+      ok++;
       console.log(`  ✓ ${row.id} -> ${(bytes.length / 1024).toFixed(0)}KB poster`);
     } catch (e) {
+      failed++;
       console.warn(`  ! ${row.id}: ${e.message}`);
     }
   }
+  if (!DRY && targets.length) console.log(`  ${label}: ${ok} repaired, ${failed} failed`);
 }
 
 await run("message_attachments", "chat videos");
 await run("stories", "stories");
+// `posts` is the public surface (feed + landing page) and the only table whose
+// posters were hotlinked to an expiring foreign CDN — so it alone reclaims them.
+await run("posts", "feed posts", { reclaimForeign: true });
 console.log("\ndone");

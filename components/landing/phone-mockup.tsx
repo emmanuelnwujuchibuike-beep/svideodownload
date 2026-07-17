@@ -1,4 +1,4 @@
-import { Check, Flame, Heart, MessageCircle, Play, Search, Sparkles, Smile, Trophy, UserPlus, Users, Wifi } from "lucide-react";
+import { Check, Download, Flame, Heart, MessageCircle, Play, Search, Sparkles, Smile, Trophy, UserPlus, Users, Wifi } from "lucide-react";
 
 import {
   FrenzFriendsOutline,
@@ -6,6 +6,8 @@ import {
   FrenzInboxOutline,
   FrenzPersonSolid,
 } from "@/components/icons/frenz-icons";
+import { getFeed } from "@/lib/social/feed";
+import { formatCompactNumber } from "@/lib/utils";
 
 // Initials-in-gradient-circle, matching the fallback-avatar convention used by
 // meet-people.tsx and notification-card — never emoji (see the no-emoji rule).
@@ -32,9 +34,31 @@ const PEOPLE = [
  * re-rasterizes on scroll. This sits beside the hero's <h1>, which is the LCP
  * element, so it must never compete for the main thread (docs/FEATURE_21_HERO.md §1).
  */
-export function PhoneMockup() {
+export async function PhoneMockup() {
+  // REAL reels, not a gradient placeholder. Same query that already backs
+  // TrendingToday on this page: anonymous (`viewerId: null`), and it filters
+  // suspended / low-trust / hidden / blocked publishers server-side, so nothing
+  // here can surface an account that shouldn't be public. It's a DB read, not a
+  // dynamic API, so `/` stays statically generated and just refreshes on ISR
+  // (cadence is app/layout.tsx's `revalidate`).
+  //
+  // ONLY thumbnails we host ourselves are eligible, and that is load-bearing:
+  // a lot of `thumbnail_url` values point at the source platform's SIGNED CDN
+  // (e.g. p16-common-sign.tiktokcdn-us.com). Those signatures EXPIRE, after
+  // which the URL 403s permanently — measured on this very page: 4 of 11 remote
+  // images were already broken, all of them tiktokcdn, while every
+  // media.frenzsave.com image loaded. The hero is the first thing a visitor
+  // sees; it must never gamble on someone else's expiring URL. Own-media also
+  // means R2 (zero egress) instead of a third-party hotlink.
+  const ownMedia = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, "");
+  const reels = (await getFeed({ sort: "trending", viewerId: null, limit: 24 })).filter(
+    (p): p is typeof p & { thumbnailUrl: string } =>
+      p.mediaKind === "video" && !!p.thumbnailUrl && !!ownMedia && p.thumbnailUrl.startsWith(ownMedia),
+  );
+  const [lead, second] = reels;
+
   return (
-    <div className="relative mx-auto w-full max-w-[292px] [perspective:1800px]">
+    <div className="relative mx-auto w-full max-w-[292px]">
       {/* Floating chips — line icons only, no emoji */}
       <div className="absolute -right-3 -top-4 z-20 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400 text-white shadow-xl shadow-amber-500/30 animate-float">
         <Smile className="h-6 w-6" aria-hidden />
@@ -54,6 +78,43 @@ export function PhoneMockup() {
         <Trophy className="h-7 w-7" aria-hidden />
       </div>
 
+      {/* Download callout — the whole point of the mockup is that a visitor should
+          understand HOW you download without reading a word. The + in the nav opens
+          the action sheet whose first row is "Download Video", so this labels that
+          button explicitly and draws an arrow to it. Sits outside the frame so it
+          covers none of the UI it's explaining. */}
+      <div className="pointer-events-none absolute -bottom-[52px] left-1/2 z-30 -translate-x-1/2">
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-foreground px-3 py-1.5 text-[11px] font-bold text-background shadow-xl">
+          <Download className="h-3.5 w-3.5" aria-hidden />
+          Tap + to download any video
+        </span>
+      </div>
+      {/* Arrow from the callout up to the + button. Electric Blue deliberately:
+          it crosses BOTH the near-black phone screen and the light page
+          background, so a foreground-coloured arrow disappears over one or the
+          other. Brand blue reads on both. */}
+      <svg
+        aria-hidden
+        viewBox="0 0 24 74"
+        className="pointer-events-none absolute -bottom-[22px] left-1/2 z-30 h-[74px] w-6 -translate-x-1/2 text-primary"
+        fill="none"
+      >
+        <path
+          d="M12 70 L12 16"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeDasharray="4 4"
+        />
+        <path
+          d="M12 8 l 6 8 M12 8 l -6 8"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+
       {/* Soft glow behind phone */}
       <div aria-hidden className="absolute inset-0 -z-10 scale-110 rounded-[3.5rem] bg-gradient-to-br from-blue-500/25 via-violet-500/18 to-purple-600/25 blur-3xl" />
 
@@ -63,16 +124,32 @@ export function PhoneMockup() {
         className="absolute inset-x-6 bottom-1 -z-10 h-10 rounded-[50%] bg-black/35 blur-2xl dark:bg-black/60"
       />
 
-      {/* Titanium frame — iPhone 17 Pro Max. Horizontal gradient = light raking
-          across a rounded metal band: bright at both chamfers, dark in the middle. */}
+      {/* Titanium frame — iPhone 17 Pro Max.
+          Held FLAT-ON (owner: "it can still be high 3d without being bent"), so all
+          the depth has to come from material rather than rotation:
+            - the band gradient reads as light raking across a rounded metal edge —
+              bright at both chamfers, dark through the middle
+            - a polished outer ring separates the device from the page
+            - inset rings give the band real thickness
+            - four stacked shadows carry it off the background
+          All of it is paint. No transform, no filter — nothing that costs a frame. */}
       <div
         data-phone-frame
-        className="relative z-10 aspect-[776/1630] rounded-[2.6rem] bg-[linear-gradient(100deg,#f4f4f5_0%,#a1a1aa_6%,#52525b_22%,#3f3f46_50%,#52525b_78%,#a1a1aa_94%,#e4e4e7_100%)] p-[2.5px] shadow-[0_2px_6px_rgba(0,0,0,0.28),0_18px_40px_-8px_rgba(0,0,0,0.45),0_40px_80px_-20px_rgba(0,0,0,0.5)] [transform:rotateY(-7deg)_rotateX(2deg)] [transform-style:preserve-3d]"
+        className="relative z-10 aspect-[776/1630] rounded-[2.6rem] bg-[linear-gradient(100deg,#fafafa_0%,#d4d4d8_4%,#71717a_13%,#3f3f46_34%,#27272a_50%,#3f3f46_66%,#71717a_87%,#d4d4d8_96%,#fafafa_100%)] p-[3px] shadow-[0_0_0_0.5px_rgba(255,255,255,0.35),inset_0_1px_1px_rgba(255,255,255,0.65),inset_0_-1px_1px_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.3),0_10px_20px_-6px_rgba(0,0,0,0.35),0_28px_50px_-12px_rgba(0,0,0,0.5),0_56px_90px_-24px_rgba(0,0,0,0.55)]"
       >
-        {/* Top/bottom chamfer highlight — the band catching light along its length. */}
+        {/* Chamfer highlight down the length of the band — the polished edge. */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-[2.6rem] bg-[linear-gradient(to_bottom,rgba(255,255,255,0.55)_0%,rgba(255,255,255,0)_7%,rgba(255,255,255,0)_93%,rgba(255,255,255,0.35)_100%)]"
+          className="pointer-events-none absolute inset-0 rounded-[2.6rem] bg-[linear-gradient(to_bottom,rgba(255,255,255,0.6)_0%,rgba(255,255,255,0)_5%,rgba(255,255,255,0)_95%,rgba(255,255,255,0.4)_100%)]"
+        />
+        {/* Specular hits where a rounded band would catch the light hardest. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-[16%] -left-[0.5px] w-[2px] rounded-full bg-gradient-to-b from-transparent via-white/70 to-transparent"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-[24%] -right-[0.5px] w-[2px] rounded-full bg-gradient-to-b from-transparent via-white/50 to-transparent"
         />
 
         {/* Titanium side buttons — shaded so they read as raised, not painted on. */}
@@ -151,18 +228,62 @@ export function PhoneMockup() {
                 </span>
                 <span className="text-[10px] text-blue-400">View all</span>
               </div>
+              {/* REAL trending reels.
+                  Raw <img>, NOT next/image — deliberate, and the same reason
+                  trending-rail.tsx does it. Thumbnails live on whatever CDN yt-dlp
+                  resolved (TikTok, Instagram, …); next/image fetches them
+                  SERVER-side and re-serves them, and those CDNs answer a
+                  server-side fetch with 403. The browser fetching the URL directly
+                  is allowed. Verified: /_next/image on a tiktokcdn URL => 403.
+                  No CLS risk despite the missing width/height: the parent reserves
+                  a fixed box (h-28) and the image is absolutely positioned in it. */}
               <div className="flex gap-2">
-                <div className="relative h-28 flex-1 overflow-hidden rounded-xl bg-gradient-to-br from-rose-500 via-fuchsia-500 to-indigo-500">
-                  <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-md bg-black/45 px-1.5 py-0.5 text-[9px] font-medium backdrop-blur">
-                    <Play className="h-2.5 w-2.5" /> 12.5K
-                  </span>
-                  <span className="absolute inset-0 flex items-center justify-center">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 backdrop-blur">
-                      <Play className="h-4 w-4 fill-white" />
-                    </span>
-                  </span>
-                </div>
-                <div className="relative h-28 w-12 overflow-hidden rounded-xl bg-gradient-to-br from-blue-600 to-violet-700" />
+                {lead ? (
+                  <>
+                    <div className="relative h-28 flex-1 overflow-hidden rounded-xl bg-neutral-800">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={lead.thumbnailUrl}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                      <span className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                      <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-md bg-black/45 px-1.5 py-0.5 text-[9px] font-medium">
+                        <Play className="h-2.5 w-2.5" /> {formatCompactNumber(lead.viewsCount)}
+                      </span>
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 backdrop-blur">
+                          <Play className="h-4 w-4 fill-white" />
+                        </span>
+                      </span>
+                    </div>
+                    <div className="relative h-28 w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-800">
+                      {second ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={second.thumbnailUrl}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                      ) : null}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="relative h-28 flex-1 overflow-hidden rounded-xl bg-gradient-to-br from-rose-500 via-fuchsia-500 to-indigo-500">
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 backdrop-blur">
+                          <Play className="h-4 w-4 fill-white" />
+                        </span>
+                      </span>
+                    </div>
+                    <div className="relative h-28 w-12 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-blue-600 to-violet-700" />
+                  </>
+                )}
               </div>
             </div>
 
@@ -228,8 +349,17 @@ export function PhoneMockup() {
                 <TabIcon icon={FrenzHomeSolid} label="Home" active />
                 <TabIcon icon={FrenzFriendsOutline} label="Friends" />
 
-                {/* Create — raised gradient circle, same as the real nav */}
-                <span className="-mt-4 self-center">
+                {/* Create — raised gradient circle, same as the real nav. This is
+                    the button the callout below points at: in the real app it opens
+                    the action sheet whose FIRST row is "Download Video — download
+                    from any social platform" (features/create/create-action-sheet.tsx).
+                    A soft pulse ring draws the eye to it without animating anything
+                    expensive (transform/opacity only, motion-safe). */}
+                <span className="relative -mt-4 self-center">
+                  <span
+                    aria-hidden
+                    className="bg-brand absolute inset-0 rounded-full opacity-60 motion-safe:animate-ping"
+                  />
                   <span className="bg-brand relative flex h-8 w-8 items-center justify-center rounded-full text-white shadow-lg shadow-violet-500/30 ring-[2px] ring-neutral-950">
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
                       <path d="M12 5v14M5 12h14" />

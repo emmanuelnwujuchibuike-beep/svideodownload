@@ -549,7 +549,11 @@ async function loadHomeFeed(
     }
 
     const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
-    const [{ data: profs }, { data: privs }, { data: subs }, reactionRows, blocks, mutes] = await Promise.all([
+    // `friendIdSet` rides IN this batch, not after it: it depends only on
+    // viewerId, so awaiting it separately (as it was when 0082 added it) put a
+    // whole extra sequential round trip on /home's critical path for nothing.
+    // Owner's 2-second page budget — see [[rule-2-second-page-budget]].
+    const [{ data: profs }, { data: privs }, { data: subs }, reactionRows, blocks, mutes, friends] = await Promise.all([
       db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden, trust_score").in("id", publisherIds),
       db.from("privacy_settings").select("user_id, show_in_recommendations").in("user_id", publisherIds),
       db.from("subscriptions").select("user_id, plan, status").in("user_id", publisherIds).in("status", ["active", "trialing"]),
@@ -562,6 +566,7 @@ async function loadHomeFeed(
       viewerId
         ? db.from("muted_creators").select("muted_id").eq("muter_id", viewerId)
         : Promise.resolve({ data: [] as { muted_id: string }[] }),
+      friendIdSet(viewerId),
     ]);
 
     const profById = new Map<string, Record<string, unknown>>();
@@ -570,8 +575,7 @@ async function loadHomeFeed(
     // "suspended" is the historical name for "authors this viewer can't see".
     // Since 0082 that's two different things: a suspension (nobody sees them)
     // and an admin hide (only their friends see them), so the set is now
-    // per-viewer rather than absolute.
-    const friends = await friendIdSet(viewerId);
+    // per-viewer rather than absolute. `friends` comes from the batch above.
     const suspended = new Set<string>();
     const lowTrust = new Set<string>();
     for (const p of (profs ?? []) as { id: string; is_suspended: boolean; is_hidden: boolean; trust_score: number; handle: string | null }[]) {
@@ -812,14 +816,16 @@ async function surfaceFollowedReposts(
   if (rows.length === 0) return [];
 
   const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
-  const [{ data: profs }, { data: subs }, reactionRows, { data: blocks }] = await Promise.all([
+  // friendIdSet rides IN the batch — it only needs viewerId, so awaiting it
+  // after this was a free extra round trip (see the same fix in loadHomeFeed).
+  const [{ data: profs }, { data: subs }, reactionRows, { data: blocks }, friends] = await Promise.all([
     db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden").in("id", publisherIds),
     db.from("subscriptions").select("user_id, plan").in("user_id", publisherIds).in("status", ["active", "trialing"]),
     fetchReactionRows(db, viewerId, rows.map((r) => r.id)),
     db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`),
+    friendIdSet(viewerId),
   ]);
 
-  const friends = await friendIdSet(viewerId);
   const profById = new Map<string, Record<string, unknown>>();
   const suspended = new Set<string>();
   for (const p of (profs ?? []) as { id: string; handle: string | null; is_suspended: boolean; is_hidden: boolean }[]) {

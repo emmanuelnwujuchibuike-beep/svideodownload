@@ -179,13 +179,17 @@ export async function getActiveStories(
     if (rows.length === 0) return [];
 
     const userIds = [...new Set(rows.map((r) => r.user_id))];
-    const { data: profs } = await db
-      .from("profiles")
-      .select("id, handle, display_name, avatar_url, is_verified, visibility, is_suspended, is_hidden")
-      .in("id", userIds);
+    // Both in one batch — `friendIdSet` only needs viewerId, so awaiting it after
+    // the profiles query was a free extra round trip (owner's 2s page budget).
+    const [{ data: profs }, friends] = await Promise.all([
+      db
+        .from("profiles")
+        .select("id, handle, display_name, avatar_url, is_verified, visibility, is_suspended, is_hidden")
+        .in("id", userIds),
+      friendIdSet(viewerId),
+    ]);
     const profById = new Map<string, Record<string, unknown>>();
     for (const p of (profs ?? []) as Record<string, unknown>[]) profById.set(p.id as string, p);
-    const friends = await friendIdSet(viewerId);
 
     const groups = new Map<string, StoryGroup>();
     for (const r of rows) {

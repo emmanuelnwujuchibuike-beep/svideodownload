@@ -153,19 +153,21 @@ async function loadFeed(
     if (rows.length === 0) return [];
 
     const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
-    const [{ data: profs }, { data: privs }, blocks] = await Promise.all([
+    // friendIdSet rides IN the batch — it only needs viewerId, so awaiting it
+    // after this was a free extra round trip on the feed's critical path.
+    const [{ data: profs }, { data: privs }, blocks, friends] = await Promise.all([
       db.from("profiles").select("id, is_suspended, is_hidden, trust_score").in("id", publisherIds),
       db.from("privacy_settings").select("user_id, show_in_recommendations").in("user_id", publisherIds),
       viewerId
         ? db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`)
         : Promise.resolve({ data: [] as { blocker_id: string; blocked_id: string }[] }),
+      friendIdSet(viewerId),
     ]);
 
     const profRows = (profs ?? []) as { id: string; is_suspended: boolean; is_hidden: boolean; trust_score: number }[];
     // Per-viewer since 0082: a suspension is invisible to all, an admin hide only
     // to people the author isn't friends with. (Note the unrelated `hidden` set
     // below — that one is the creator's own "show in recommendations" opt-out.)
-    const friends = await friendIdSet(viewerId);
     const suspended = new Set(
       profRows.filter((p) => !isAccountVisibleTo(flagsOf(p), relationTo(p.id, viewerId, friends))).map((p) => p.id),
     );

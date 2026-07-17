@@ -1412,7 +1412,7 @@ export async function listConversations(userId: string): Promise<ConversationSum
       .map((c) => (c.user_low === userId ? c.user_high : c.user_low))
       .filter((id): id is string => !!id);
 
-    const [{ data: profs }, { data: directUnread }, { data: groupUnread }, { data: groupMembers }] = await Promise.all([
+    const [{ data: profs }, { data: directUnread }, { data: groupUnread }, { data: groupMembers }, friends] = await Promise.all([
       directOtherIds.length
         ? db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden").in("id", directOtherIds)
         : Promise.resolve({ data: [] as Record<string, unknown>[] }),
@@ -1440,6 +1440,11 @@ export async function listConversations(userId: string): Promise<ConversationSum
       groupConvIds.length
         ? db.from("conversation_members").select("conversation_id").in("conversation_id", groupConvIds).is("left_at", null)
         : Promise.resolve({ data: [] as { conversation_id: string }[] }),
+      // In the batch, not after it: it only needs `userId`, so awaiting it
+      // separately (as it was when 0082 added it) put an extra sequential round
+      // trip on the INBOX's critical path — the page the owner watches most.
+      // Owner's 2-second page budget: see [[rule-2-second-page-budget]].
+      friendIdSet(userId),
     ]);
 
     // Group unread cursor: need each group's OWN last_read_at, which isn't in
@@ -1485,12 +1490,10 @@ export async function listConversations(userId: string): Promise<ConversationSum
         .then(undefined, () => {});
     }
 
-    // NOTE: `friends` here is the account-visibility friend set (migration 0082,
-    // "hidden = friends-only"), unrelated to the per-conversation `hidden_at`
-    // pref just below — which is the user's own "Delete" swipe. Same word, two
-    // completely different features.
-    const friends = await friendIdSet(userId);
-
+    // NOTE: `friends` (from the batch above) is the account-visibility friend set
+    // (migration 0082, "hidden = friends-only"), unrelated to the
+    // per-conversation `hidden_at` pref just below — which is the user's own
+    // "Delete" swipe. Same word, two completely different features.
     const out: ConversationSummary[] = [];
     for (const c of convs) {
       const pref = prefByConv.get(c.id);

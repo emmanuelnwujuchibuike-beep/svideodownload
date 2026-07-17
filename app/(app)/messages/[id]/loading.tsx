@@ -1,23 +1,24 @@
-import { WarmThreadPreview } from "@/features/social/warm-thread-preview";
 import { Skeleton, SkeletonAvatar } from "@/features/ui/skeleton";
 
 /**
- * Thread loading state — fills the Glass Split right panel.
+ * Thread skeleton — fills the Glass Split right panel.
  *
- * Paints the WARMED thread when the inbox has already peeked it, and only falls
- * back to the skeleton below when it hasn't (cold start, a chat outside the
- * warmed top 10, a hard reload).
+ * REVERTED 2026-07-17: this briefly rendered `WarmThreadPreview` (the warm cache
+ * painted during the route transition, to kill the grey entry). It shipped a
+ * far worse bug — owner: "when i enter a chat it glitchs and show a wrong chat
+ * for 1 sec before showing the real chat". `loading.tsx` gets no `params`, so the
+ * preview resolved the conversation id from `usePathname()`, and during a route
+ * transition that does not reliably read as the INCOMING chat — so it painted the
+ * PREVIOUS conversation's messages. Showing one person's chat inside another's is
+ * unacceptable regardless of how brief it is, and it is not a styling nit to be
+ * tuned: a route-transition-time preview needs an id it can TRUST.
  *
- * This file is the ONLY place that can remove the entry wait: it's the one thing
- * that renders BEFORE the RSC round trip. The page itself is an async server
- * component, so by the time it can read the warm cache, the server has already
- * re-sent the same data. See WarmThreadPreview's doc comment.
+ * The underlying problem is still real and still open (the warm-up is inert
+ * because /messages/[id] is an async server page — see [[open-work-2026-07-17]]).
+ * The fix must get the id from something authoritative for the INCOMING route,
+ * not from a hook that lags the transition.
  */
 export default function ConversationLoading() {
-  return <WarmThreadPreview fallback={<ThreadSkeleton />} />;
-}
-
-function ThreadSkeleton() {
   return (
     // Matches [id]/page.tsx's mobile full-viewport overlay exactly (same
     // fixed/z-50/lg: split) — otherwise the skeleton renders in-flow below

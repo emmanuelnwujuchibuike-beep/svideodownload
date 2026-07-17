@@ -5,6 +5,7 @@ import { Check, Loader2, UserCheck, UserPlus, Users, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
 import { FriendCelebration } from "./friend-celebration";
@@ -104,15 +105,24 @@ export function AddFriendButton({
     }
   };
 
+  // `active:scale-[0.97]` + a haptic on every one of these buttons: the press
+  // has to answer on CONTACT, not when the network does (owner, 2026-07-17:
+  // "sending a request button isnt smooth and immediate on click"). Nothing here
+  // was slow — "Add Friend" only opens the modal — but with no press response
+  // and no haptic there was nothing to confirm the tap registered, which reads
+  // as lag.
   const base =
-    "inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-60";
+    "inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition duration-150 active:scale-[0.97] disabled:opacity-60";
 
   return (
     <>
       {state === "none" ? (
         <button
           type="button"
-          onClick={() => setModal(true)}
+          onClick={() => {
+            haptic("selection");
+            setModal(true);
+          }}
           className={cn(
             base,
             "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25 hover:opacity-95",

@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { mutate, useQuery } from "@/features/data";
+import { mutate, revalidate, useQuery } from "@/features/data";
 import { usePresence } from "@/features/friends/use-presence";
 import { isThreadWarm, warmThread } from "@/features/social/thread-cache";
 import { GroupAvatarStack } from "@/features/social/group-avatar-stack";
@@ -24,6 +24,28 @@ import { cn } from "@/lib/utils";
  *  thread cache holds 10, so warming past this would only evict what it just
  *  fetched. */
 const WARM_THREAD_LIMIT = 10;
+
+/**
+ * Friend-request ids this browser session has already accepted/declined.
+ *
+ * MODULE scope, not component state or a ref, and that's the entire point: both
+ * die with the component, and this must outlive a remount. `initialRequests` is
+ * server data replayed from Next's client Router Cache (staleTimes.dynamic = 6h),
+ * so navigating away from /messages and back re-seeds the list from a payload
+ * that STILL contains the request you just accepted — which is what made an
+ * accepted request reappear (owner, 2026-07-17). The DB was always right.
+ *
+ * Same shape of bug, and same shape of fix, as the home-module "hide switch
+ * stopped saving" regression: a stale Router Cache payload being trusted as
+ * fresh server truth. router.refresh() would also fix it and is deliberately NOT
+ * used — it drops the whole Router Cache for every route, i.e. the visible
+ * reload the owner has reported over and over.
+ *
+ * Unbounded growth isn't a concern: it only ever holds requests THIS session
+ * responded to, and a full reload (where the server data is genuinely fresh)
+ * clears it.
+ */
+const respondedRequestIds = new Set<string>();
 
 function timeAgo(iso: string): string {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -231,7 +253,18 @@ export function ConversationList({
   const online = usePresence();
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<InboxTab>("all");
-  const [requests, setRequests] = useState<FriendRequestItem[]>(initialRequests);
+  // Seeded THROUGH `respondedRequestIds` — never straight from the prop.
+  // `initialRequests` is server data, and on a client navigation back to
+  // /messages Next replays the RSC payload from its Router Cache
+  // (staleTimes.dynamic = 6h), so it still lists a request you accepted minutes
+  // ago. The optimistic removal below is real, but the next REMOUNT re-seeded
+  // from that stale payload and the request came back — owner, 2026-07-17: "it
+  // accepts and still show same pending request". Verified against the DB: the
+  // accept itself lands correctly (row `accepted`, friendship row created), so
+  // this was only ever the UI re-seeding from a stale truth.
+  const [requests, setRequests] = useState<FriendRequestItem[]>(() =>
+    initialRequests.filter((r) => !respondedRequestIds.has(r.id)),
+  );
   const [requestBusyId, setRequestBusyId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   // Owner ask: only one row's swipe-reveal strip open at a time — opening a
@@ -349,6 +382,10 @@ export function ConversationList({
     haptic("selection");
     setRequestBusyId(req.id);
     const prev = requests;
+    // Remember it OUTSIDE this component's state, so a remount that re-seeds
+    // from the stale Router Cache payload can't resurrect it (see the note on
+    // `requests` above). Rolled back below if the server actually refused.
+    respondedRequestIds.add(req.id);
     setRequests((l) => l.filter((r) => r.id !== req.id));
     try {
       const res = await fetch(`/api/friends/${req.user.id}`, {
@@ -356,8 +393,18 @@ export function ConversationList({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      if (!res.ok) setRequests(prev);
+      if (!res.ok) {
+        respondedRequestIds.delete(req.id);
+        setRequests(prev);
+        return;
+      }
+      // Accepting creates a real conversation-worthy relationship — refresh the
+      // inbox so the new friend is immediately reachable, without a
+      // router.refresh() (which would blow the whole client Router Cache and
+      // cause the visible reload the owner has repeatedly reported).
+      void revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
     } catch {
+      respondedRequestIds.delete(req.id);
       setRequests(prev);
     } finally {
       setRequestBusyId(null);

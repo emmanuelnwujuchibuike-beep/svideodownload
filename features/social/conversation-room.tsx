@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { RichText } from "@/components/social/rich-text";
@@ -89,6 +89,14 @@ import { useVisualViewport } from "@/lib/pwa/use-visual-viewport";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "@/features/ui/toast";
+
+/**
+ * Layout effect on the client, plain effect during SSR (where layout effects
+ * never run and React warns if you register one). The thread's scroll-to-bottom
+ * MUST be a layout effect: a plain effect fires after paint, so every entry
+ * showed the top of the thread for a frame before jumping to the newest message.
+ */
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 const COMPOSER_MAX_HEIGHT = 128;
 const DRAFT_PREFIX = "frenz-draft:";
@@ -664,9 +672,31 @@ export function ConversationRoom({
   // height even though no new message arrived), so the latest bubble never
   // ends up hidden behind the keyboard the moment the composer is focused.
   const { height: viewportHeight } = useVisualViewport();
-  useEffect(() => {
+  // useLayoutEffect, not useEffect (owner, 2026-07-16: "make the chat page open
+  // from the botton on any entry so users dont need to scroll down to see new
+  // messages"): a plain effect runs AFTER the browser paints, so every entry
+  // showed the TOP of the thread for a frame and then jumped. A layout effect
+  // runs before paint — the first frame the user ever sees is already at the
+  // newest message. Guarded for SSR, where layout effects don't run and React
+  // warns if you register one.
+  useIsoLayoutEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length, viewportHeight]);
+
+  /**
+   * Re-pin to the bottom after something below the fold changes height — used by
+   * attachments with no stored intrinsic size, which are the only ones that can
+   * still shift layout after paint.
+   *
+   * Only re-pins if the user is ALREADY at the bottom: yanking someone back down
+   * while they're reading history would be a worse bug than the one it fixes.
+   */
+  const stickToBottomIfAtBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom < 120) el.scrollTop = el.scrollHeight;
+  }, []);
 
   // Catch-up resync: `postgres_changes` has NO replay — messages sent while the
   // socket was suspended (backgrounded phone, tunnel, sleep) are lost from the
@@ -1953,8 +1983,34 @@ export function ConversationRoom({
                                   onClick={() => setViewingImage({ url: att.url, alt: att.filename ?? "Image" })}
                                   className="block overflow-hidden rounded-2xl"
                                 >
+                                  {/* width/height are LOAD-BEARING, not metadata:
+                                      without them the browser reserves ZERO
+                                      height for the image until it decodes, then
+                                      snaps to full height — shoving every bubble
+                                      below it down. That layout shift is the
+                                      "scroll bug ... in some chat" (owner,
+                                      2026-07-16): only chats WITH media have it.
+                                      It's also why the thread didn't stay at the
+                                      bottom — the mount scroll ran, THEN the
+                                      image grew and pushed the newest message off
+                                      screen. With the intrinsic size the browser
+                                      computes the box before the bytes arrive and
+                                      nothing moves.
+                                      The values were already stored and already
+                                      sent to the client (media_width/media_height,
+                                      migration 0045); this <img> just never used
+                                      them. */}
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={att.url} alt="" className="max-h-80 w-full max-w-full object-cover" />
+                                  <img
+                                    src={att.url}
+                                    alt=""
+                                    width={att.width ?? undefined}
+                                    height={att.height ?? undefined}
+                                    // Older rows may have no stored size — re-anchor
+                                    // on load for those instead of shifting.
+                                    onLoad={att.width && att.height ? undefined : stickToBottomIfAtBottom}
+                                    className="max-h-80 w-full max-w-full object-cover"
+                                  />
                                 </button>
                               ) : att.kind === "video" ? (
                                 <VideoComment key={att.id} url={att.url} thumbnailUrl={att.thumbnailUrl} durationMs={att.durationMs} />

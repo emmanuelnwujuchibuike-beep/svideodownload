@@ -471,24 +471,34 @@
      block for `position:fixed` descendants, which would silently break every
      modal/viewer that ISN'T portaled. During the play there IS a transform, but
      the app's fixed surfaces are portaled to <body> and so escape it anyway. */
+  /* SLIDE ONLY — deliberately NO opacity. An opacity 0→1 fade made every section
+     of the destination (an inbox's stories strip, its profile button) fade up from
+     nothing on each navigation, which reads as a "reload flash". A pure horizontal
+     slide keeps everything fully opaque the whole time, so nothing ever appears to
+     reload — it just moves, the way WhatsApp/Snapchat screens do. The page slides
+     over the app's own background (the shell paints it), never a white gap. */
   @keyframes page-in-forward {
-    from { opacity: 0; transform: translate3d(24px, 0, 0); }
-    to   { opacity: 1; transform: none; }
+    from { transform: translate3d(100%, 0, 0); }
+    to   { transform: none; }
   }
   @keyframes page-in-back {
-    from { opacity: 0; transform: translate3d(-24px, 0, 0); }
-    to   { opacity: 1; transform: none; }
+    from { transform: translate3d(-100%, 0, 0); }
+    to   { transform: none; }
   }
   @keyframes page-in-fade {
     from { opacity: 0; }
     to   { opacity: 1; }
   }
-  .page-transition-forward { animation: page-in-forward var(--dur) var(--ease-out); will-change: transform, opacity; }
-  .page-transition-back    { animation: page-in-back var(--dur) var(--ease-out); will-change: transform, opacity; }
+  /* The wrapper carries the app background so the incoming page never slides over a
+     bare/white area, and its own outgoing edge is covered. */
+  .page-transition-forward,
+  .page-transition-back { background: hsl(var(--background)); }
+  .page-transition-forward { animation: page-in-forward var(--dur-slow) var(--ease-out); will-change: transform; }
+  .page-transition-back    { animation: page-in-back var(--dur-slow) var(--ease-out); will-change: transform; }
   /* Reduced motion: a quick fade instead of any slide. */
   @media (prefers-reduced-motion: reduce) {
     .page-transition-forward,
-    .page-transition-back { animation: page-in-fade var(--dur-fast) linear; }
+    .page-transition-back { animation: page-in-fade var(--dur-fast) linear; background: none; }
   }
 
   /* Wrong-code shake for the OTP boxes (GPU-friendly, respects reduced motion). */

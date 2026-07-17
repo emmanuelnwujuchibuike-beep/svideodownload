@@ -119,12 +119,20 @@ export async function getFeed(opts: {
   category?: Category | null;
   viewerId: string | null;
   limit?: number;
+  /**
+   * Override the per-publisher diversity cap. The feed defaults to a small cap so
+   * one prolific creator can't dominate discovery — right for the feed, wrong for
+   * the landing mockup's reels deck, which wants EVERY public reel even though the
+   * library today comes from just a few publishers. Pass a large number there.
+   */
+  diversityCap?: number;
 }): Promise<PostCard[]> {
   if (!hasSupabase) return [];
   const limit = opts.limit ?? 24;
   const category = opts.category ?? null;
-  const key = `feed:${opts.sort}:${category ?? "all"}:${limit}:${opts.viewerId ?? "anon"}`;
-  return getCached(key, 45, () => loadFeed(opts.sort, category, opts.viewerId, limit));
+  const cap = opts.diversityCap;
+  const key = `feed:${opts.sort}:${category ?? "all"}:${limit}:${cap ?? "d"}:${opts.viewerId ?? "anon"}`;
+  return getCached(key, 45, () => loadFeed(opts.sort, category, opts.viewerId, limit, cap));
 }
 
 async function loadFeed(
@@ -132,10 +140,12 @@ async function loadFeed(
   category: Category | null,
   viewerId: string | null,
   limit: number,
+  diversityCapOverride?: number,
 ): Promise<PostCard[]> {
   try {
     const db = createAdminClient();
     const settings = await getTrendingSettings();
+    const diversityCap = diversityCapOverride ?? settings.diversityCap;
 
     let q = db
       .from("posts")
@@ -198,7 +208,7 @@ async function loadFeed(
       )
         continue;
       const n = perPublisher.get(r.publisher_id) ?? 0;
-      if (n >= settings.diversityCap) continue;
+      if (n >= diversityCap) continue;
       perPublisher.set(r.publisher_id, n + 1);
       out.push({
         id: r.id,

@@ -63,8 +63,15 @@ export async function PhoneMockup() {
   // media.frenzsave.com image loaded. The hero is the first thing a visitor
   // sees; it must never gamble on someone else's expiring URL. Own-media also
   // means R2 (zero egress) instead of a third-party hotlink.
+  // ALL public reels, not the diversity-capped trending slice. The 64 published
+  // reels today come from only a few publishers, so the feed's per-publisher cap
+  // collapsed them to ~6 — right for discovery, wrong here where the deck should
+  // mirror the full reels page. `diversityCap: 999` lifts that; every other safety
+  // filter (suspended / hidden / low-trust / blocked) still applies.
   const ownMedia = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, "");
-  const eligible = (await getFeed({ sort: "trending", viewerId: null, limit: 24 })).filter(
+  const eligible = (
+    await getFeed({ sort: "trending", viewerId: null, limit: 60, diversityCap: 999 })
+  ).filter(
     (p) =>
       p.mediaKind === "video" &&
       !!p.thumbnailUrl &&
@@ -88,7 +95,7 @@ export async function PhoneMockup() {
   // Every reel — including brand-new ones — carries the same illustrative
   // 30k–50k engagement pattern that GROWS with real anonymous activity.
   const reels: MockReel[] = shuffle(eligible)
-    .slice(0, 30)
+    .slice(0, 40)
     .map((p) => {
       const s = showcaseStats(p.id, { views: p.viewsCount, likes: p.likesCount });
       return {

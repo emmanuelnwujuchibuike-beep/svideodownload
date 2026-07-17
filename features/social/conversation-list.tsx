@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Archive as ArchiveIcon, BadgeCheck, BarChart3, BellOff, Check, FileText, Image as ImageIcon, Loader2, MapPin, Mic, MoreHorizontal, Pin, Search, SlidersHorizontal, Trash2, User, Video as VideoIcon, X } from "lucide-react";
+import { Archive as ArchiveIcon, BadgeCheck, BarChart3, BellOff, Check, CheckCheck, FileText, Image as ImageIcon, Loader2, MapPin, Mic, MoreHorizontal, Pin, Search, SlidersHorizontal, Trash2, User, Video as VideoIcon, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -97,6 +97,33 @@ function previewText(kind: string | null, body: string | null): string {
   if (!text) return "…";
   const words = text.split(/\s+/);
   return words.length <= PREVIEW_WORDS ? text : `${words.slice(0, PREVIEW_WORDS).join(" ")}…`;
+}
+
+/**
+ * Delivery ticks on the inbox row — so you can read your last message's state
+ * without opening the chat (owner, 2026-07-16: "delivered 2 blue tick, seen 2
+ * green tick without anyone needing to enter the chat to see, they just see it
+ * outside just like whatsapp and go to the next").
+ *
+ * Colours are the owner's, NOT WhatsApp's (WhatsApp is grey/grey/blue): one
+ * tick sent, two BLUE delivered, two GREEN seen. The thread's own receipt line
+ * keeps its wording ("Sent/Delivered/Seen") — this is the same three states
+ * rendered compactly.
+ *
+ * `status` is null when there's nothing honest to show — a group (no
+ * per-message read state exists), a secret chat, or a last message that wasn't
+ * yours. It falls back to a single neutral tick rather than inventing a state.
+ * "Seen" is suppressed server-side when the recipient has read receipts off;
+ * see ConversationSummary.lastStatus.
+ */
+function LastStatusTicks({ status }: { status: "sent" | "delivered" | "seen" | null }) {
+  if (status === "seen") {
+    return <CheckCheck className="h-3.5 w-3.5 shrink-0 text-emerald-500" aria-label="Seen" />;
+  }
+  if (status === "delivered") {
+    return <CheckCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" aria-label="Delivered" />;
+  }
+  return <Check className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Sent" />;
 }
 
 type InboxTab = "all" | "unread" | "groups" | "requests" | "channels";
@@ -814,7 +841,7 @@ function ConversationRow({
             </p>
           ) : (
             <p className={cn("mt-0.5 flex items-center gap-1 truncate text-sm", c.unread ? "text-foreground" : "text-muted-foreground")}>
-              {c.fromMe ? <Check className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="You sent" /> : null}
+              {c.fromMe ? <LastStatusTicks status={c.lastStatus} /> : null}
               {/* A real icon for what kind of message this was — never an
                   emoji standing in for one (standing app rule). */}
               {(() => {

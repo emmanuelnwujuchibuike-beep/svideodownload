@@ -1177,6 +1177,21 @@ export interface ConversationSummary {
   lastMessageKind: LastMessageKind;
   lastAt: string;
   fromMe: boolean;
+  /**
+   * Delivery state of YOUR OWN last message, so the inbox shows it without
+   * anyone opening the chat (owner, 2026-07-16: "just like whatsapp ... they
+   * just see it outside and go to the next"). Null when the last message wasn't
+   * yours, or when there's nothing honest to show.
+   *
+   * Direct threads only — groups have no per-message read state at all (they
+   * use a per-member `last_read_at` cursor), so a "seen" tick there would be a
+   * claim the data can't support.
+   *
+   * "seen" is SUPPRESSED when the other person has turned read receipts off —
+   * showing it anyway would leak exactly what that toggle exists to hide. Such
+   * a message reports "delivered" instead, which is still true.
+   */
+  lastStatus: "sent" | "delivered" | "seen" | null;
   unread: boolean;
   unreadCount: number;
   muted: boolean;
@@ -1310,6 +1325,71 @@ export async function listConversations(userId: string): Promise<ConversationSum
       return attachmentKindByConv.get(id) ?? null;
     };
 
+    // Receipt state of the viewer's OWN last message per conversation, so the
+    // inbox can show sent/delivered/seen without opening the chat (owner,
+    // 2026-07-16: "just like whatsapp ... they just see it outside and go to
+    // the next").
+    //
+    // Direct threads only: groups have no per-message read state (they use a
+    // per-member `last_read_at` cursor), so a tick there would assert something
+    // the data can't back.
+    //
+    // The PRIVACY half is not optional. "Seen" must be suppressed when the
+    // other person has read receipts off — surfacing it in the inbox would leak
+    // precisely what that toggle exists to hide, and would be a worse leak than
+    // the thread's, because it's visible at a glance across every chat. The
+    // thread already suppresses it (see getConversation's
+    // `otherReadReceiptsEnabled`); this mirrors that rule rather than inventing
+    // a second one.
+    const statusByConv = new Map<string, "sent" | "delivered" | "seen">();
+    try {
+      const directIds = convs.filter((c) => c.type === "direct").map((c) => c.id);
+      if (directIds.length > 0) {
+        const otherIdOf = (c: (typeof convs)[number]) => (c.user_low === userId ? c.user_high : c.user_low);
+        const otherIds = [
+          ...new Set(convs.filter((c) => c.type === "direct").map(otherIdOf).filter((x): x is string => !!x)),
+        ];
+        const [{ data: lastRows }, { data: privRows }] = await Promise.all([
+          db
+            .from("messages")
+            .select("conversation_id, sender_id, delivered_at, read_at, created_at")
+            .in("conversation_id", directIds)
+            .order("created_at", { ascending: false })
+            .limit(600),
+          otherIds.length
+            ? db.from("privacy_settings").select("user_id, read_receipts_enabled").in("user_id", otherIds)
+            : Promise.resolve({ data: [] as { user_id: string; read_receipts_enabled: boolean | null }[] }),
+        ]);
+        const receiptsOff = new Set(
+          ((privRows ?? []) as { user_id: string; read_receipts_enabled: boolean | null }[])
+            .filter((p) => p.read_receipts_enabled === false)
+            .map((p) => p.user_id),
+        );
+        const seenConv = new Set<string>();
+        for (const r of (lastRows ?? []) as {
+          conversation_id: string;
+          sender_id: string;
+          delivered_at: string | null;
+          read_at: string | null;
+        }[]) {
+          // Rows are newest-first, so the first per conversation IS the last
+          // message. Everything after it is history.
+          if (seenConv.has(r.conversation_id)) continue;
+          seenConv.add(r.conversation_id);
+          if (r.sender_id !== userId) continue; // only YOUR message carries ticks
+          const conv = convs.find((c) => c.id === r.conversation_id);
+          const otherId = conv ? otherIdOf(conv) : null;
+          const canShowSeen = !otherId || !receiptsOff.has(otherId);
+          statusByConv.set(
+            r.conversation_id,
+            r.read_at && canShowSeen ? "seen" : r.read_at || r.delivered_at ? "delivered" : "sent",
+          );
+        }
+      }
+    } catch {
+      /* best-effort — rows just render without a tick */
+    }
+
     const directConvs = convs.filter((c) => c.type === "direct");
     const groupConvs = convs.filter((c) => c.type === "group");
     const directConvIds = directConvs.map((c) => c.id);
@@ -1418,6 +1498,7 @@ export async function listConversations(userId: string): Promise<ConversationSum
           memberCount: 2,
           lastBody: c.last_body,
           lastMessageKind: previewKindFor(c.id, c.last_body),
+          lastStatus: statusByConv.get(c.id) ?? null,
           lastAt: c.last_message_at,
           fromMe: c.last_sender_id === userId,
           unread: (unreadByConv.get(c.id) ?? 0) > 0,
@@ -1436,6 +1517,7 @@ export async function listConversations(userId: string): Promise<ConversationSum
           memberCount: memberCountByGroup.get(c.id) ?? 0,
           lastBody: c.last_body,
           lastMessageKind: previewKindFor(c.id, c.last_body),
+          lastStatus: statusByConv.get(c.id) ?? null,
           lastAt: c.last_message_at,
           fromMe: c.last_sender_id === userId,
           unread: (unreadByConv.get(c.id) ?? 0) > 0,
@@ -1524,6 +1606,9 @@ export async function listSecretConversations(userId: string): Promise<Conversat
         lastMessageKind: null,
         lastAt: c.last_message_at,
         fromMe: c.last_sender_id === userId,
+        // Same honest limitation as `unread` below: secret chats have no
+        // server-visible receipt state, so there is nothing truthful to tick.
+        lastStatus: null,
         // No server-visible unread state for secret chats (would need the
         // same read_at plumbing regular messages have; kept out of v1 scope
         // — see docs on this round's honest limitations).

@@ -41,14 +41,36 @@ html.frenz-boot-off #frenz-boot{display:none}
 // marker — once set, the loader never showed again on that browser. That marker
 // is gone; it can't express "every cold start", only "the first one ever".
 //
-// Cold start is now read from the Navigation Timing API, which distinguishes the
+// REVISED AGAIN 2026-07-17: "can you make the F loader only show 3 new start a
+// day instead of a cold start that affects the chat swipe back on ios ... on
+// another phone it showed too delayed reload on swiped back on ios pwa but not
+// on browser."
+//
+// So a cold start is now capped: the loader shows for the FIRST 3 cold starts of
+// each (local) day and is instant for the rest. Login still always shows and is
+// deliberately NOT counted against that budget — the owner asked to limit "new
+// starts", not logins.
+//
+// Why the cap rather than dropping cold starts entirely: on iOS a back-swipe
+// genuinely IS a cold start whenever the OS has killed the PWA's process (see
+// the note below), so "every cold start" means "every back-swipe on a
+// memory-pressured device" — which is what the owner hit on a second phone and
+// not in a browser, where the tab stays alive. A daily budget keeps the branded
+// moment for the openings that read as real launches, and stops it turning every
+// back gesture into a wait.
+//
+// Cold start is read from the Navigation Timing API, which distinguishes the
 // three cases at the source instead of inferring them from storage:
 //
 //     nav.type === 'navigate'      -> a fresh entry into the app: PWA launch,
 //                                     new tab, external link, or a login's own
-//                                     window.location.assign().  SHOW.
+//                                     window.location.assign().  SHOW (≤3/day).
 //     nav.type === 'reload'        -> the user hit refresh.       instant.
 //     nav.type === 'back_forward'  -> iOS back-gesture / history.  instant.
+//
+// The counter is keyed on the LOCAL calendar date, not UTC: the audience is
+// Africa-primary (UTC+1), where a UTC key would reset the budget at 1am local
+// and hand someone 3 more loaders in the middle of an evening session.
 //
 // Reload and back-gesture stay instant deliberately: they are NOT cold starts,
 // and "the loader shows for seconds on back-gesture" was the owner's own earlier
@@ -110,7 +132,14 @@ html.frenz-boot-off #frenz-boot{display:none}
 // failsafe + the `pageshow` restore-guard both just re-add the class — so
 // recovery is now guaranteed on every path, cold load / reload / back-
 // gesture alike.
-const JS = `(function(){var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';if(!justSignedIn&&!coldStart){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var faded=false;var fade=function(){if(faded)return;faded=true;var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};var shellReady=function(){return !!document.querySelector('main')};if(shellReady()){fade()}else{try{var mo=new MutationObserver(function(){if(shellReady()){mo.disconnect();fade()}});mo.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}document.addEventListener('DOMContentLoaded',fade)}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
+// NOTE for anyone editing the minified body below: the whole thing is ONE
+// function scope, and `var` is function-scoped, so a new `var` here can silently
+// clobber an earlier one. That is not hypothetical — adding `var d=new Date()`
+// for the daily counter reassigned the `var d=document.documentElement` on the
+// first line, so `dismiss()` called `d.classList.add` on a Date, threw, and left
+// the splash STUCK on screen forever. Caught only by a real-browser test. Use
+// distinct names (`dt`), and re-run the boot verification after any edit.
+const JS = `(function(){var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';var show=justSignedIn;if(!show&&coldStart){var dt=new Date();var today=dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate();var n=0;try{var raw=localStorage.getItem('frenz-boot-shows');if(raw){var rec=JSON.parse(raw);if(rec&&rec.d===today)n=rec.n||0}}catch(e){}if(n<3){show=true;try{localStorage.setItem('frenz-boot-shows',JSON.stringify({d:today,n:n+1}))}catch(e){}}}if(!show){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var faded=false;var fade=function(){if(faded)return;faded=true;var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};var shellReady=function(){return !!document.querySelector('main')};if(shellReady()){fade()}else{try{var mo=new MutationObserver(function(){if(shellReady()){mo.disconnect();fade()}});mo.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}document.addEventListener('DOMContentLoaded',fade)}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
 
 // Must run BEFORE the <style> below is evaluated, AND before next-themes'
 // own injected script (rendered later, wherever <ThemeProvider> sits) so the

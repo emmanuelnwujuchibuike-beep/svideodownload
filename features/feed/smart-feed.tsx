@@ -601,7 +601,17 @@ export function SmartFeed({
           void fetchPage(sort, nextOffset, false);
         }
       },
-      { rootMargin: "800px 0px" },
+      // 2400px ≈ three phone screens of runway. 800px was barely ONE, and a feed
+      // card is close to a full screen tall — so the next page only began
+      // fetching about one post before it was needed, and a fast scroll outran
+      // it (owner, 2026-07-17: "the scrolling loads slowly and shows white
+      // first instead of prefetching the next 5 to 10 post").
+      //
+      // NOTE this only buys the page DATA earlier. It is NOT the whole fix: the
+      // white block in the owner's screenshot is a card that HAS its data and is
+      // waiting on its IMAGE, which next/image lazy-loads (see FeedImage). The
+      // media warm-window is the other half and is still to do.
+      { rootMargin: "2400px 0px" },
     );
     obs.observe(el);
     return () => obs.disconnect();

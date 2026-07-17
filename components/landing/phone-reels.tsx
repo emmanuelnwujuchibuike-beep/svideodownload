@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, MessageCircle, Play, Volume2, VolumeX, X } from "lucide-react";
+import { Heart, MessageCircle, Pause, Play, Rewind, FastForward, Sparkles, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface MockReel {
@@ -10,8 +10,14 @@ export interface MockReel {
   /** Illustrative engagement for the mockup — see `showcaseStats`. */
   viewsCount: number;
   likesCount: number;
+  commentsCount: number;
   title: string;
 }
+
+// After this many anonymous likes, a visitor is nudged to sign up (owner:
+// "when they like more than 10 posts they should be redirected to login").
+const LIKE_LIMIT = 10;
+const SIGNUP = "/login?signup=1";
 
 // showcaseStats lives in ./showcase-stats.ts — a plain module, so the SERVER
 // component PhoneMockup can call it (a "use client" export can't be invoked from
@@ -93,9 +99,16 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
   // /guest-like beacons) — this only makes the already-real growth visible NOW.
   const [bumpViews, setBumpViews] = useState<Record<string, number>>({});
   const [liked, setLiked] = useState<Record<string, boolean>>({});
+  // Which panel is manually paused, and a transient seek cue (‹‹ / ››) per panel.
+  const [paused, setPaused] = useState<Record<number, boolean>>({});
+  const [seekFlash, setSeekFlash] = useState<{ i: number; dir: "back" | "fwd" } | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const viewed = useRef<Set<string>>(new Set());
+  const likeCount = useRef(0);
+  const lastTap = useRef<{ t: number; x: number } | null>(null);
+  const singleTapTimer = useRef<number | null>(null);
+  const seekTimer = useRef<number | null>(null);
 
   // Warm strictly AFTER the load event, then on idle.
   //
@@ -147,14 +160,85 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
    * poster one "Someone liked your reel" notification (migration 0084). Optimistic —
    * the heart fills and the count +1 immediately; a duplicate is a server no-op, so
    * re-tapping doesn't inflate. Fire-and-forget.
+   *
+   * After LIKE_LIMIT likes the visitor is sent to sign-up — they've clearly engaged,
+   * so the ask is earned rather than an interruption (owner's "redirect to login").
    */
   const toggleLike = useCallback((id: string) => {
     setLiked((l) => {
       if (l[id]) return l; // already liked this session — one anonymous like each
       fetch(`/api/posts/${id}/guest-like`, { method: "POST", keepalive: true }).catch(() => {});
+      likeCount.current += 1;
+      if (likeCount.current >= LIKE_LIMIT) {
+        // Let the heart paint first, then hand off.
+        setTimeout(() => {
+          window.location.href = SIGNUP;
+        }, 450);
+      }
       return { ...l, [id]: true };
     });
   }, []);
+
+  /**
+   * TikTok-style gestures on a clip:
+   *   - single tap  → pause / resume
+   *   - double-tap LEFT third  → rewind 5s
+   *   - double-tap RIGHT third → skip 5s
+   *   - double-tap CENTRE → like
+   * A single tap is deferred by one double-tap window so a double-tap never also
+   * fires a pause. Pointer, not click, so it works for touch and mouse alike.
+   */
+  const onTap = useCallback(
+    (i: number, e: React.PointerEvent<HTMLElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const v = videoRefs.current[i];
+      const now = Date.now();
+      const prev = lastTap.current;
+
+      if (prev && now - prev.t < 300) {
+        // DOUBLE tap — cancel the pending single tap.
+        if (singleTapTimer.current) {
+          clearTimeout(singleTapTimer.current);
+          singleTapTimer.current = null;
+        }
+        lastTap.current = null;
+        if (!v) return;
+        const frac = x / rect.width;
+        if (frac < 0.4) {
+          v.currentTime = Math.max(0, v.currentTime - 5);
+          flashSeek(i, "back");
+        } else if (frac > 0.6) {
+          v.currentTime = Math.min(v.duration || v.currentTime + 5, v.currentTime + 5);
+          flashSeek(i, "fwd");
+        } else {
+          toggleLike(reels[i]!.id);
+        }
+        return;
+      }
+
+      lastTap.current = { t: now, x };
+      singleTapTimer.current = window.setTimeout(() => {
+        singleTapTimer.current = null;
+        lastTap.current = null;
+        if (!v) return;
+        if (v.paused) {
+          v.play().catch(() => {});
+          setPaused((p) => ({ ...p, [i]: false }));
+        } else {
+          v.pause();
+          setPaused((p) => ({ ...p, [i]: true }));
+        }
+      }, 260);
+    },
+    [reels, toggleLike],
+  );
+
+  const flashSeek = (i: number, dir: "back" | "fwd") => {
+    setSeekFlash({ i, dir });
+    if (seekTimer.current) clearTimeout(seekTimer.current);
+    seekTimer.current = window.setTimeout(() => setSeekFlash(null), 550);
+  };
 
   // Play only what's on screen. One IntersectionObserver over the panels, not a
   // scroll handler — no per-frame work.
@@ -170,6 +254,7 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
           if (!v) continue;
           if (e.isIntersecting && e.intersectionRatio > 0.6) {
             setActive(i);
+            setPaused((p) => (p[i] ? { ...p, [i]: false } : p)); // a fresh scroll-in always plays
             v.play()
               .then(() => countView(reels[i]!.id))
               .catch(() => {
@@ -194,6 +279,15 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
     if (open) return;
     for (const v of videoRefs.current) v?.pause();
   }, [open]);
+
+  // Tidy transient timers on unmount so a late fire can't touch a dead component.
+  useEffect(
+    () => () => {
+      if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
+      if (seekTimer.current) clearTimeout(seekTimer.current);
+    },
+    [],
+  );
 
   const lead = reels[0];
   const second = reels[1];
@@ -249,9 +343,17 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
             <Play className="h-2.5 w-2.5" /> {compact(lead.viewsCount + (bumpViews[lead.id] ?? 0))} views
           </span>
 
-          {/* Play affordance — grows on hover so it reads as a control. */}
-          <span className="absolute inset-0 flex items-center justify-center">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/25 ring-1 ring-white/40 backdrop-blur transition-transform duration-300 group-hover/reel:scale-110">
+          {/* "Top to Watch" — a glowing badge above the play button that marks the
+              lead reel as the one to open. The glow is a blurred gradient halo
+              (transform/opacity only, motion-safe) so it feels alive without cost. */}
+          <span className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+            <span className="relative inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-2 py-[3px] text-[8px] font-bold uppercase tracking-wide text-black shadow-lg">
+              <span aria-hidden className="absolute inset-0 -z-10 rounded-full bg-amber-400/70 blur-md motion-safe:animate-pulse" />
+              <Sparkles className="h-2.5 w-2.5" /> Top to Watch
+            </span>
+            {/* Play affordance — grows on hover so it reads as a control. */}
+            <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/25 ring-1 ring-white/40 backdrop-blur transition-transform duration-300 group-hover/reel:scale-110">
+              <span aria-hidden className="absolute inset-0 -z-10 rounded-full bg-white/30 blur-md motion-safe:animate-ping" />
               <Play className="ml-[1px] h-4 w-4 fill-white text-white" />
             </span>
           </span>
@@ -362,11 +464,41 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
                   playsInline
                   className="absolute inset-0 h-full w-full object-cover"
                 />
+
+                {/* Gesture layer — tap to pause, double-tap sides to seek, centre to
+                    like. Sits over the video, under the action rail/controls. */}
+                <button
+                  type="button"
+                  onPointerDown={(e) => onTap(i, e)}
+                  aria-label="Reel — tap to pause, double-tap to seek"
+                  className="absolute inset-0 z-0 h-full w-full cursor-default"
+                />
+
+                {/* Manual-pause overlay */}
+                {paused[i] ? (
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 backdrop-blur">
+                      <Pause className="h-6 w-6 fill-white text-white" />
+                    </span>
+                  </span>
+                ) : null}
+
+                {/* Seek cue */}
+                {seekFlash && seekFlash.i === i ? (
+                  <span
+                    className={`pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 ${seekFlash.dir === "back" ? "left-4" : "right-4"} flex flex-col items-center text-white`}
+                  >
+                    {seekFlash.dir === "back" ? <Rewind className="h-6 w-6 fill-white" /> : <FastForward className="h-6 w-6 fill-white" />}
+                    <span className="text-[8px] font-bold">5s</span>
+                  </span>
+                ) : null}
+
                 <span className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent" />
 
                 {/* Action rail — mirrors the real deck's right-hand column. The heart
-                    is a real, tappable anonymous like. */}
-                <span className="absolute bottom-16 right-1.5 flex flex-col items-center gap-2.5 text-white drop-shadow">
+                    is a real, tappable anonymous like. z-10 so it sits above the
+                    gesture layer. */}
+                <span className="absolute bottom-16 right-1.5 z-10 flex flex-col items-center gap-2.5 text-white drop-shadow">
                   <button
                     type="button"
                     onClick={() => toggleLike(r.id)}
@@ -383,7 +515,7 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
                   </button>
                   <span className="flex flex-col items-center gap-0.5">
                     <MessageCircle className="h-4 w-4" />
-                    <span className="text-[7px] font-semibold">{compact(Math.round(r.likesCount / 9))}</span>
+                    <span className="text-[7px] font-semibold">{compact(r.commentsCount)}</span>
                   </span>
                   <span className="flex flex-col items-center gap-0.5">
                     <Play className="h-4 w-4" />

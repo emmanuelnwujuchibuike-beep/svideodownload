@@ -2,13 +2,14 @@ import { MessageCircle, UserPlus } from "lucide-react";
 import Link from "next/link";
 
 import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
+import { PrefetchOnView } from "@/components/landing/prefetch-on-view";
 
 // Display profiles used when signed-out (and to pad the rail to a tidy 4).
 const SAMPLE_PEOPLE = [
-  { name: "Sarah", sub: "Lagos, Nigeria · Photography", from: "from-rose-500 to-pink-600", action: "add" },
-  { name: "James", sub: "London, UK · Watching Trending", from: "from-blue-500 to-indigo-600", action: "chat" },
-  { name: "Maria", sub: "Brazil · Music Lover", from: "from-violet-500 to-purple-600", action: "follow" },
-  { name: "Daniel", sub: "New York, USA · Football Fan", from: "from-emerald-500 to-teal-600", action: "add" },
+  { name: "Sarah", female: true, sub: "Lagos, Nigeria · Photography", from: "from-rose-500 to-pink-600", action: "add" },
+  { name: "James", female: false, sub: "London, UK · Watching Trending", from: "from-blue-500 to-indigo-600", action: "chat" },
+  { name: "Stephanie", female: true, sub: "Brazil · Music Lover", from: "from-violet-500 to-purple-600", action: "follow" },
+  { name: "Daniel", female: false, sub: "New York, USA · Football Fan", from: "from-emerald-500 to-teal-600", action: "add" },
 ] as const;
 
 const CLUSTER = [
@@ -28,6 +29,7 @@ type Card = {
   key: string;
   href: string;
   name: string;
+  female: boolean;
   sub: string;
   from: string;
   action: keyof typeof ACTION;
@@ -54,6 +56,7 @@ export function MeetNewPeople() {
     key: s.name,
     href: SIGNUP,
     name: s.name,
+    female: s.female,
     sub: s.sub,
     from: s.from,
     action: s.action as keyof typeof ACTION,
@@ -61,6 +64,7 @@ export function MeetNewPeople() {
 
   return (
     <section className="container max-w-6xl py-10 sm:py-14">
+      <PrefetchOnView routes={[SIGNUP, "/explore"]} />
       <div className="mb-5 flex items-end justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-[-0.02em] sm:text-3xl">Meet New People</h2>
@@ -88,6 +92,7 @@ export function MeetNewPeople() {
               <span className="absolute inset-x-0 top-0 flex h-[72%] items-end justify-center">
                 <BitmojiAvatar
                   seed={c.name}
+                  female={c.female}
                   className="h-[118%] w-[82%] translate-y-[6%] drop-shadow-[0_6px_10px_rgba(0,0,0,0.28)] transition-transform duration-500 [transition-timing-function:var(--ease-out)] group-hover:scale-105"
                 />
               </span>

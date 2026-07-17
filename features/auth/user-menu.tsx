@@ -1,6 +1,6 @@
 "use client";
 
-import { Bookmark, KeyRound, LogOut, MessageCircle, User as UserIcon, UserCircle } from "lucide-react";
+import { ArrowRight, Bookmark, LogOut, MessageCircle, Sparkles, User as UserIcon, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -96,11 +96,21 @@ export function UserMenu() {
     // not just the REST API) and hid the fact that signing up happens through
     // this same passwordless flow — there is no separate register page.
     return (
+      // Premium, alive login CTA. Simple copy + icon (owner). The motion is all
+      // GPU (transform/opacity): a brand-gradient fill, a sheen that sweeps across
+      // on hover, a soft glow that breathes, and a press-scale. The icon nudges on
+      // hover. Everything inherits the global reduced-motion guard.
       <Link
         href="/login?next=/account"
-        className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+        className="group relative inline-flex items-center gap-1.5 overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-500/30 transition-all duration-300 hover:shadow-violet-500/50 active:scale-[0.97]"
       >
-        <KeyRound className="h-4 w-4" /> Log in or create account
+        {/* breathing glow behind the pill */}
+        <span aria-hidden className="pointer-events-none absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 opacity-40 blur-md motion-safe:animate-pulse" />
+        {/* sheen sweep on hover */}
+        <span aria-hidden className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full" />
+        <Sparkles className="h-4 w-4 transition-transform duration-300 group-hover:rotate-12" />
+        Get started
+        <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
       </Link>
     );
   }

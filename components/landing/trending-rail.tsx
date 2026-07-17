@@ -2,8 +2,10 @@
 
 import { ChevronRight, Play } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
+import { useInView } from "@/features/data";
 import { CATEGORIES, categoryLabel } from "@/lib/social/categories";
 import type { PostCard } from "@/lib/social/posts";
 import { formatCompactNumber } from "@/lib/utils";
@@ -21,6 +23,18 @@ const RAIL_GRADIENTS = [
  * categories that actually have videos, so a topic always matches its content. */
 export function TrendingRail({ posts }: { posts: PostCard[] }) {
   const [active, setActive] = useState<string>("all");
+  const router = useRouter();
+
+  // Warm the destinations while the rail is still ~a screen away, so the first
+  // tap opens instantly instead of paying a cold navigation — and Next keeps the
+  // prefetched result cached, so it stays instant (owner's "cache-first, keeps
+  // opening instantly"). Only a handful, so it never floods the network.
+  const { ref: warmRef, inView } = useInView<HTMLDivElement>({ rootMargin: "800px" });
+  useEffect(() => {
+    if (!inView) return;
+    router.prefetch("/explore");
+    for (const p of posts.slice(0, 6)) router.prefetch(`/p/${p.id}`);
+  }, [inView, posts, router]);
 
   // Categories present in the data, ordered by the canonical taxonomy.
   const present = useMemo(() => {
@@ -52,6 +66,8 @@ export function TrendingRail({ posts }: { posts: PostCard[] }) {
 
   return (
     <>
+      {/* Prefetch sentinel — fires the warm-up ~800px before the rail is on screen. */}
+      <div ref={warmRef} aria-hidden className="h-0" />
       {/* Category chips */}
       <div className="mb-5 mt-4 flex flex-wrap gap-2">
         {chip("all", "All")}

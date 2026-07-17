@@ -1,4 +1,4 @@
-import { Check, Download, Flame, Heart, MessageCircle, Play, Search, Sparkles, Smile, Trophy, UserPlus, Users, Wifi } from "lucide-react";
+import { BadgeCheck, Check, Download, Flame, Heart, MessageCircle, Play, Search, Sparkles, Smile, Trophy, UserPlus, Users, Wifi } from "lucide-react";
 
 import {
   FrenzFriendsOutline,
@@ -15,10 +15,10 @@ import { getFeed } from "@/lib/social/feed";
 // page is public marketing and must not put real users' faces in it. See
 // components/landing/bitmoji-avatar.tsx.
 const PEOPLE = [
-  { name: "Sarah", from: "from-rose-500 to-pink-500" },
-  { name: "James", from: "from-blue-500 to-indigo-500" },
-  { name: "Maria", from: "from-violet-500 to-purple-500" },
-  { name: "Daniel", from: "from-emerald-500 to-teal-500" },
+  { name: "Sarah", female: true, from: "from-rose-500 to-pink-500" },
+  { name: "James", female: false, from: "from-blue-500 to-indigo-500" },
+  { name: "Stephanie", female: true, from: "from-violet-500 to-purple-500" },
+  { name: "Daniel", female: false, from: "from-emerald-500 to-teal-500" },
 ] as const;
 
 /** Fisher-Yates. Runs at ISR regeneration only — see PhoneMockup. */
@@ -83,12 +83,13 @@ export async function PhoneMockup() {
   // the same flash we rejected for the personalized hero. New uploads surface on
   // the next regeneration rather than instantly — the honest trade for a landing
   // page that paints from the edge.
+  // ALL eligible reels (owner: "show all the reels in reels page same way, not
+  // few"), capped generously so the deck can't become unbounded on a big library.
+  // Every reel — including brand-new ones — carries the same illustrative
+  // 30k–50k engagement pattern that GROWS with real anonymous activity.
   const reels: MockReel[] = shuffle(eligible)
-    .slice(0, 8)
+    .slice(0, 30)
     .map((p) => {
-      // Illustrative 30k–50k BASE that GROWS with the post's real anonymous
-      // engagement (views recorded on play, likes via guest-like). Read at ISR, so
-      // the figure climbs as activity accumulates. See showcaseStats.
       const s = showcaseStats(p.id, { views: p.viewsCount, likes: p.likesCount });
       return {
         id: p.id,
@@ -96,6 +97,7 @@ export async function PhoneMockup() {
         mediaUrl: p.mediaUrl!,
         viewsCount: s.views,
         likesCount: s.likes,
+        commentsCount: Math.round(s.likes / 9),
         title: p.title ?? "",
       };
     });
@@ -297,38 +299,51 @@ export async function PhoneMockup() {
               )}
             </div>
 
-            {/* Community chat */}
-            <div className="rounded-xl bg-white/[0.06] p-2">
-              {/* "Group Chat", not "Community Chat" — group conversations are real;
-                  a Communities product is not. Don't depict what doesn't ship. */}
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-white/70">
-                <MessageCircle className="h-2.5 w-2.5" aria-hidden /> Group Chat
-              </span>
-              <div className="mt-1.5 flex items-center gap-2">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-violet-500">
+            {/* Group chat — a real conversation row, with a stacked-avatar cluster,
+                an online dot and a snappier layout (mirrors the inbox row). */}
+            <div className="flex items-center gap-2 rounded-2xl bg-white/[0.06] p-2 ring-1 ring-white/5">
+              <span className="relative shrink-0">
+                <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-violet-500 ring-2 ring-white/10">
                   <BitmojiAvatar seed="general-chat" className="h-full w-full" />
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[10px] font-semibold">General Chat</span>
-                  <span className="block truncate text-[9px] text-white/45">Hey everyone! What&apos;s trending today?</span>
+                <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-neutral-950" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1">
+                  <span className="truncate text-[10px] font-bold">General Chat</span>
+                  <span className="rounded-full bg-white/10 px-1 py-px text-[6px] font-semibold text-white/60">GROUP</span>
                 </span>
-                <span className="rounded-full bg-blue-500 px-1.5 py-0.5 text-[8px] font-bold">126</span>
-              </div>
+                <span className="block truncate text-[9px] text-white/45">Sarah: what&apos;s trending today?</span>
+              </span>
+              <span className="flex flex-col items-end gap-0.5">
+                <span className="text-[7px] text-white/35">now</span>
+                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-1 text-[7px] font-bold">12</span>
+              </span>
             </div>
 
-            {/* People you may know */}
+            {/* People you may know — a premium friends rail: taller cards, story
+                ring, verified tick, mutual-friend line, gradient Add. */}
             <div>
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-white/70">
-                <Users className="h-2.5 w-2.5" aria-hidden /> People You May Know
-              </span>
-              <div className="mt-1.5 grid grid-cols-4 gap-1.5">
-                {PEOPLE.map((p) => (
-                  <div key={p.name} className="flex flex-col items-center gap-1 rounded-lg bg-white/[0.05] p-1.5">
-                    <span className={`flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br ${p.from}`}>
-                      <BitmojiAvatar seed={p.name} className="h-full w-full" />
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-white/70">
+                  <Users className="h-2.5 w-2.5" aria-hidden /> People You May Know
+                </span>
+                <span className="text-[8px] font-semibold text-blue-400">See all</span>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {PEOPLE.map((p, i) => (
+                  <div key={p.name} className="flex flex-col items-center gap-1 rounded-xl bg-white/[0.05] p-1.5 ring-1 ring-white/5">
+                    <span className={`rounded-full bg-gradient-to-br ${p.from} p-[1.5px]`}>
+                      <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-neutral-900 ring-2 ring-neutral-950">
+                        <BitmojiAvatar seed={p.name} female={p.female} className="h-full w-full" />
+                      </span>
                     </span>
-                    <span className="text-[8px] font-semibold leading-none">{p.name}</span>
-                    <span className="inline-flex w-full items-center justify-center gap-0.5 rounded-md bg-blue-500 py-0.5 text-[8px] font-semibold">
+                    <span className="flex items-center gap-0.5">
+                      <span className="text-[8px] font-bold leading-none">{p.name}</span>
+                      {i % 2 === 0 ? <BadgeCheck className="h-2 w-2 text-blue-400" /> : null}
+                    </span>
+                    <span className="text-[6px] leading-none text-white/40">{2 + ((i * 3) % 7)} mutual</span>
+                    <span className="mt-0.5 inline-flex w-full items-center justify-center gap-0.5 rounded-md bg-gradient-to-r from-blue-600 to-violet-600 py-[3px] text-[8px] font-semibold">
                       <UserPlus className="h-2 w-2" /> Add
                     </span>
                   </div>
@@ -337,7 +352,7 @@ export async function PhoneMockup() {
             </div>
 
             {/* Download complete */}
-            <div className="flex items-center gap-2 rounded-xl bg-emerald-500/15 p-2 ring-1 ring-emerald-500/30">
+            <div className="flex items-center gap-2 rounded-2xl bg-emerald-500/15 p-2 ring-1 ring-emerald-500/30">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 text-white">
                 <Check className="h-4 w-4" />
               </span>

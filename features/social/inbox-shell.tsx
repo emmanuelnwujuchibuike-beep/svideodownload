@@ -35,8 +35,16 @@ export function InboxShell({ children }: { children: ReactNode }) {
           Outer: `overflow-hidden` CLIPS the box. Inner: the actual scroller,
           plus `overscroll-y-none` so an iOS rubber-band bounce stays inside
           this box instead of chaining to the page and flashing the gradient. */}
-      <div className="frenz-inbox-page flex-1 overflow-hidden bg-background lg:hidden">
-        <div className="h-full overflow-y-auto overscroll-y-none px-3 pt-3.5">
+      {/* `frenz-nav-bleed` grows this box down through the strip the messages
+          layout reserves for the floating nav, and `frenz-nav-pad` on the
+          scroller keeps the last row clear of the pill. Without the pair, the
+          list stopped ~69px short of the bottom and left a dead band of page
+          background under it, clipping the final row mid-row (owner, 2026-07-16:
+          "there is a white background at the bottom covering chats, nothing is
+          suppose to be there only the bottom nav"). The reservation itself has
+          to stay for the THREAD, whose composer must sit above the nav. */}
+      <div className="frenz-inbox-page frenz-nav-bleed flex-1 overflow-hidden bg-background lg:hidden">
+        <div className="frenz-nav-pad h-full overflow-y-auto overscroll-y-none px-3 pt-3.5">
           <div className="mb-3.5 flex items-start justify-between gap-2">
             {/* The title block sits a touch off the true edge and the subtitle
                 reads as a distinct, smaller second line (owner, 2026-07-15). */}

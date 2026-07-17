@@ -167,6 +167,7 @@ export function ConversationList({
   variant = "page",
   initialRequests = [],
   viewerId,
+  preview = false,
 }: {
   initial: ConversationSummary[];
   variant?: "page" | "pane";
@@ -175,6 +176,11 @@ export function ConversationList({
    *  used to skip our own presence key and to cap how many rows subscribe
    *  (below) — the list never broadcasts its own typing state. */
   viewerId: string;
+  /** Rendered as the Suspense fallback (WarmInboxFallback) — a transient instance
+   *  that's replaced by the real list within a moment, so it must NOT re-run the
+   *  route/message warm-up effects (they'd fire twice and spend the user's data
+   *  for nothing). Visuals are identical; only the side effects are skipped. */
+  preview?: boolean;
 }) {
   // Live updates come from InboxRealtimeTracker (mounted once in the app
   // shell) revalidating this same shared cache — no second subscription here.
@@ -203,10 +209,10 @@ export function ConversationList({
   // a very large inbox can't fire an unbounded prefetch burst.
   const idsKey = [...conversations.map((c) => c.id)].sort().join(",");
   useEffect(() => {
-    if (!idsKey) return;
+    if (preview || !idsKey) return;
     for (const id of idsKey.split(",").slice(0, 20)) router.prefetch(`/messages/${id}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- idsKey IS the dependency; conversations/router change identity too often (live badge/order updates)
-  }, [idsKey]);
+  }, [idsKey, preview]);
 
   // Message warm-up (owner, 2026-07-16: "chats should load one after the other
   // from top to bottom immediately the message page is opened to avoid loading
@@ -233,7 +239,7 @@ export function ConversationList({
   // trusted; warming only removes the visible load.
   const orderKey = conversations.map((c) => c.id).join(",");
   useEffect(() => {
-    if (!orderKey || isSlowConnection()) return;
+    if (preview || !orderKey || isSlowConnection()) return;
     let cancelled = false;
     const ids = orderKey.split(",").slice(0, WARM_THREAD_LIMIT);
     (async () => {
@@ -247,7 +253,7 @@ export function ConversationList({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- orderKey IS the dependency
-  }, [orderKey]);
+  }, [orderKey, preview]);
 
   const pathname = usePathname();
   const online = usePresence();

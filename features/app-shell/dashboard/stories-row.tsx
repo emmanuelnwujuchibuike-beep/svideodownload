@@ -21,6 +21,72 @@ const STICKERS = ["🎉", "💯", "😭", "🥰", "😎", "🤯", "👀", "🫶"
 
 const IMAGE_MS = 5000;
 
+/**
+ * One story circle. Shared by the viewer's own row and the friends row so the
+ * two can never drift apart visually.
+ */
+function StoryRing({
+  group,
+  label,
+  unseen,
+  onOpen,
+}: {
+  group: StoryGroup;
+  label: string;
+  unseen: boolean;
+  onOpen: () => void;
+}) {
+  // Show the story's own cover (most recent first) in the circle so it teases
+  // the content — not the author's profile picture.
+  const cover = group.stories[0];
+  // An image story is its own cover; a video story uses the poster stored at
+  // upload (0083). Either way the ring paints an <img>, never a <video>.
+  const coverImage = cover?.mediaKind === "image" ? cover.mediaUrl : (cover?.thumbnailUrl ?? null);
+
+  return (
+    <PressIcon className="shrink-0">
+      <button type="button" onClick={onOpen} className="flex w-[5.1rem] flex-col items-center gap-1.5">
+        <span className={cn("rounded-full p-0.5", unseen ? "bg-brand" : "ring-1 ring-inset ring-border/70")}>
+          <span className="block overflow-hidden rounded-full bg-background p-0.5">
+            {/* One <Image> for BOTH image stories and (since 0083) video
+                stories, via the stored first-frame poster. A video cover used to
+                render a raw <video preload="metadata"> here, which re-downloaded
+                MP4 data on every mount to paint 68px — the actual cause of "the
+                stories section loads for seconds on every entrance" (owner,
+                reported 3x). next/image serves a ~1-3KB AVIF from the CDN
+                instead, and it comes out of the image cache on remount. */}
+            {coverImage ? (
+              <Image
+                src={coverImage}
+                alt=""
+                width={68}
+                height={68}
+                unoptimized={false}
+                className="h-[4.25rem] w-[4.25rem] rounded-full object-cover"
+              />
+            ) : cover?.mediaKind === "video" ? (
+              // Legacy fallback: a video story posted before 0083 has no stored
+              // poster. Stories expire after 24h, so this branch empties itself
+              // within a day of the migration and isn't worth a backfill.
+              // eslint-disable-next-line jsx-a11y/media-has-caption
+              <video src={`${cover.mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
+            ) : group.avatarUrl ? (
+              <Image src={group.avatarUrl} alt="" width={68} height={68} className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
+            ) : (
+              <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
+                {group.displayName.charAt(0).toUpperCase()}
+              </span>
+            )}
+          </span>
+        </span>
+        <span className={cn("w-[5.1rem] truncate text-center text-[11px]", unseen ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
+          {label}
+        </span>
+      </button>
+    </PressIcon>
+  );
+}
+
 export function StoriesRow({
   initialGroups,
   viewerAvatarUrl,
@@ -79,94 +145,63 @@ export function StoriesRow({
   useEffect(() => setSeen(loadSeenMap()), [data]);
 
   return (
-    <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {/* Your Story — opens the viewer if you have an active one, otherwise
-          the dedicated Story surface (owner, 2026-07-16: no shared composer).
-          The ring only appears when there's something to watch; a plain dashed
-          ring would misleadingly suggest live content. */}
-      <PressIcon className="shrink-0">
-        <button
-          type="button"
-          onClick={() => (ownGroup ? setStart(groups.indexOf(ownGroup)) : router.push("/create/story"))}
-          className="flex w-[5.1rem] flex-col items-center gap-1.5"
-        >
-          <span className={cn("relative rounded-full p-0.5", ownGroup ? "bg-brand" : "ring-1 ring-inset ring-border/70")}>
-            <span className="block rounded-full bg-background p-0.5">
-              {viewerAvatarUrl ? (
-                <Image src={viewerAvatarUrl} alt="" width={68} height={68} className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
-              ) : (
-                <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
-                  {initial}
-                </span>
-              )}
-            </span>
-            <span className="absolute -bottom-0.5 -right-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background">
-              <Plus className="h-4 w-4" />
-            </span>
-          </span>
-          <span className="text-[11px] font-medium text-muted-foreground">Your Story</span>
-        </button>
-      </PressIcon>
+    <div className="flex flex-col gap-1">
+      {/* The viewer's OWN stories get their own row (owner, 2026-07-16: "make
+          stories user made to be in a separate roll not inside their story
+          profile picture, it should in a different row so the plus sign can be
+          for uploading new stories").
+          Only rendered when there's something to watch — an empty labelled row
+          would be noise. */}
+      {ownGroup ? (
+        <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <StoryRing
+            group={ownGroup}
+            label="Your story"
+            // Always reads as "unseen" (brand ring): it's yours, and greying out
+            // your own story the moment you watch it back makes a live story
+            // look expired.
+            unseen
+            onOpen={() => setStart(groups.indexOf(ownGroup))}
+          />
+        </div>
+      ) : null}
 
-      {otherGroups.map((g) => {
-        // Show the story's own cover (most recent first) in the circle so it
-        // teases the content — not the author's profile picture.
-        const cover = g.stories[0];
-        // An image story is its own cover; a video story uses the poster stored
-        // at upload (0083). Either way the ring paints an <img>, never a <video>.
-        const coverImage =
-          cover?.mediaKind === "image" ? cover.mediaUrl : (cover?.thumbnailUrl ?? null);
-        const unseen = !isGroupSeen(g, seen);
-        return (
-          <PressIcon key={g.handle} className="shrink-0">
-            <button type="button" onClick={() => setStart(groups.indexOf(g))} className="flex w-[5.1rem] flex-col items-center gap-1.5">
-              <span
-                className={cn(
-                  "rounded-full p-0.5",
-                  unseen ? "bg-brand" : "ring-1 ring-inset ring-border/70",
+      <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* The plus is ALWAYS the composer — never a viewer. It used to open your
+            own story instead the moment you had one, which meant that once you'd
+            posted, there was no way left to post another (owner: "the stories
+            doesnt post from the plus sign when a story is already there"). Your
+            own stories moved to the row above, so this button has exactly one
+            job. No brand ring for the same reason: nothing here is watchable. */}
+        <PressIcon className="shrink-0">
+          <button
+            type="button"
+            onClick={() => router.push("/create/story")}
+            aria-label="Add to your story"
+            className="flex w-[5.1rem] flex-col items-center gap-1.5"
+          >
+            <span className="relative rounded-full p-0.5 ring-1 ring-inset ring-border/70">
+              <span className="block rounded-full bg-background p-0.5">
+                {viewerAvatarUrl ? (
+                  <Image src={viewerAvatarUrl} alt="" width={68} height={68} className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
+                ) : (
+                  <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
+                    {initial}
+                  </span>
                 )}
-              >
-                <span className="block overflow-hidden rounded-full bg-background p-0.5">
-                  {/* One <Image> for BOTH image stories and (since 0083) video
-                      stories, via the stored first-frame poster. A video cover
-                      used to render a raw <video preload="metadata"> here, which
-                      re-downloaded MP4 data on every mount to paint 68px — the
-                      actual cause of "the stories section loads for seconds on
-                      every entrance" (owner, reported 3x). next/image serves a
-                      ~1-3KB AVIF from the CDN instead, and it comes out of the
-                      browser's image cache on remount. */}
-                  {coverImage ? (
-                    <Image
-                      src={coverImage}
-                      alt=""
-                      width={68}
-                      height={68}
-                      unoptimized={false}
-                      className="h-[4.25rem] w-[4.25rem] rounded-full object-cover"
-                    />
-                  ) : cover?.mediaKind === "video" ? (
-                    // Legacy fallback: a video story posted before 0083 has no
-                    // stored poster. Stories expire after 24h, so this branch
-                    // empties itself within a day of the migration and is not
-                    // worth a backfill.
-                    // eslint-disable-next-line jsx-a11y/media-has-caption
-                    <video src={`${cover.mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
-                  ) : g.avatarUrl ? (
-                    <Image src={g.avatarUrl} alt="" width={68} height={68} className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
-                  ) : (
-                    <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
-                      {g.displayName.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </span>
               </span>
-              <span className={cn("w-[5.1rem] truncate text-center text-[11px]", unseen ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
-                {g.displayName.split(" ")[0]}
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background">
+                <Plus className="h-4 w-4" />
               </span>
-            </button>
-          </PressIcon>
-        );
-      })}
+            </span>
+            <span className="text-[11px] font-medium text-muted-foreground">Add story</span>
+          </button>
+        </PressIcon>
+
+        {otherGroups.map((g) => (
+          <StoryRing key={g.handle} group={g} label={g.displayName.split(" ")[0] ?? ""} unseen={!isGroupSeen(g, seen)} onOpen={() => setStart(groups.indexOf(g))} />
+        ))}
+      </div>
 
       {start !== null ? (
         <StoryViewer groups={groups} startGroup={start} onClose={() => setStart(null)} onGroupSeen={() => setSeen(loadSeenMap())} />

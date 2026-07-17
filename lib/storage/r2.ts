@@ -1,5 +1,7 @@
 import { AwsClient } from "aws4fetch";
 
+import { MEDIA_CACHE_CONTROL } from "./cache-control";
+
 /**
  * Cloudflare R2 storage backend (S3-compatible) — the main store for large media
  * (videos, audio, reels, story media). Zero egress fees, served through the
@@ -56,7 +58,7 @@ export async function putR2(key: string, body: Uint8Array | ArrayBuffer | Blob, 
   const res = await r2().fetch(objectEndpoint(key), {
     method: "PUT",
     body: body as BodyInit,
-    headers: { "Content-Type": contentType, "Cache-Control": "public, max-age=31536000, immutable" },
+    headers: { "Content-Type": contentType, "Cache-Control": MEDIA_CACHE_CONTROL },
   });
   if (!res.ok) {
     throw new Error(`R2 upload failed: ${res.status}`);

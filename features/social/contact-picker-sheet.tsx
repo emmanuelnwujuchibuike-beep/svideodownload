@@ -53,7 +53,9 @@ export function ContactPickerSheet({ open, onClose, onPick }: { open: boolean; o
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            // onPointerDown, not onClick — see media-composer-sheet.tsx's
+            // backdrop for why `click` gets swallowed on touch.
+            onPointerDown={onClose}
             className="absolute inset-0 bg-black/55 backdrop-blur-sm"
           />
           <motion.div

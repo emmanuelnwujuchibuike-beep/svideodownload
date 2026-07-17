@@ -126,6 +126,26 @@ export function mutate<T>(key: string, updater: T | ((prev: T | undefined) => T)
   };
 }
 
+/**
+ * Fill a key with a locally-cached placeholder WITHOUT claiming it's newer than
+ * the server (contrast `mutate`, which bumps `version`).
+ *
+ * For seeding from disk/localStorage on a cold start: it paints instantly, and
+ * an in-flight revalidation still wins when it lands. Using `mutate` for this
+ * silently broke exactly that — the bumped version made the arriving server
+ * response look stale to the guard above, so it was discarded and the stale disk
+ * copy stuck around until the next focus/reconnect revalidation.
+ *
+ * No-op if real data is already present: a seed must never overwrite a live value.
+ */
+export function seed<T>(key: string, data: T): void {
+  const cur = cache.get(key) as CacheEntry<T> | undefined;
+  if (cur?.data !== undefined) return;
+  // updatedAt stays 0 deliberately — this data was never fetched, so it must not
+  // satisfy revalidate()'s `dedupeMs` freshness check and suppress the real GET.
+  patch(key, { data, error: undefined });
+}
+
 /** Drop a key (e.g. on sign-out). */
 export function invalidate(key: string): void {
   cache.delete(key);

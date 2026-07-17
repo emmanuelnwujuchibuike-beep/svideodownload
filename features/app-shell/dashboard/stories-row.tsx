@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
-import { mutate, useQuery } from "@/features/data";
+import { seed, useQuery } from "@/features/data";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { ReshareSheet } from "@/features/social/reshare-sheet";
 import { toast } from "@/features/ui/toast";
@@ -53,7 +53,15 @@ export function StoriesRow({
   useEffect(() => {
     if (initialGroups?.length || groups.length > 0) return;
     const cached = readCachedStories();
-    if (cached?.length) mutate<StoryGroup[]>("stories", cached);
+    // `seed`, not `mutate`: mutate() bumps the cache entry's version, and
+    // useQuery's own effect has ALREADY started a revalidation by the time this
+    // runs (hook order). That fetch captured the pre-seed version, so on arrival
+    // it saw a version bump, concluded it was stale, and threw the fresh server
+    // data away — leaving the rings on the disk copy until some later focus or
+    // reconnect revalidation. The version guard is right for user writes (it's
+    // what stops a slow GET clobbering a toggle); a disk seed is not a user
+    // write, so it must not pretend to be one.
+    if (cached?.length) seed<StoryGroup[]>("stories", cached);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per mount; the fetch below is the authority from then on
   }, []);
   const [start, setStart] = useState<number | null>(null);
@@ -104,6 +112,10 @@ export function StoriesRow({
         // Show the story's own cover (most recent first) in the circle so it
         // teases the content — not the author's profile picture.
         const cover = g.stories[0];
+        // An image story is its own cover; a video story uses the poster stored
+        // at upload (0083). Either way the ring paints an <img>, never a <video>.
+        const coverImage =
+          cover?.mediaKind === "image" ? cover.mediaUrl : (cover?.thumbnailUrl ?? null);
         const unseen = !isGroupSeen(g, seen);
         return (
           <PressIcon key={g.handle} className="shrink-0">
@@ -115,9 +127,17 @@ export function StoriesRow({
                 )}
               >
                 <span className="block overflow-hidden rounded-full bg-background p-0.5">
-                  {cover?.mediaKind === "image" ? (
+                  {/* One <Image> for BOTH image stories and (since 0083) video
+                      stories, via the stored first-frame poster. A video cover
+                      used to render a raw <video preload="metadata"> here, which
+                      re-downloaded MP4 data on every mount to paint 68px — the
+                      actual cause of "the stories section loads for seconds on
+                      every entrance" (owner, reported 3x). next/image serves a
+                      ~1-3KB AVIF from the CDN instead, and it comes out of the
+                      browser's image cache on remount. */}
+                  {coverImage ? (
                     <Image
-                      src={cover.mediaUrl}
+                      src={coverImage}
                       alt=""
                       width={68}
                       height={68}
@@ -125,6 +145,10 @@ export function StoriesRow({
                       className="h-[4.25rem] w-[4.25rem] rounded-full object-cover"
                     />
                   ) : cover?.mediaKind === "video" ? (
+                    // Legacy fallback: a video story posted before 0083 has no
+                    // stored poster. Stories expire after 24h, so this branch
+                    // empties itself within a day of the migration and is not
+                    // worth a backfill.
                     // eslint-disable-next-line jsx-a11y/media-has-caption
                     <video src={`${cover.mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
                   ) : g.avatarUrl ? (
@@ -310,7 +334,7 @@ export function StoryViewer({
           source="story"
           sourceId={story.id}
           mediaKind={story.mediaKind}
-          previewUrl={story.mediaKind === "image" ? story.mediaUrl : null}
+          previewUrl={story.mediaKind === "image" ? story.mediaUrl : story.thumbnailUrl}
         />
       ) : null}
 
@@ -345,6 +369,10 @@ export function StoryViewer({
             ref={videoRef}
             key={`${gi}-${si}`}
             src={story.mediaUrl}
+            // The stored first frame (0083) paints immediately while the video
+            // buffers, instead of a black rectangle — and it's already in the
+            // image cache from the ring the user just tapped.
+            poster={story.thumbnailUrl ?? undefined}
             autoPlay
             playsInline
             onTimeUpdate={(e) => {

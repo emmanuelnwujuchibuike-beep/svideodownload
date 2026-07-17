@@ -3,6 +3,7 @@
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import { createClient } from "@/lib/supabase/client";
 
+import { MEDIA_CACHE_CONTROL, MEDIA_MAX_AGE_SECONDS } from "./cache-control";
 import { POST_BUCKET } from "./index";
 
 export type UploadPlan =
@@ -43,7 +44,22 @@ export async function uploadWithPlan(plan: UploadPlan, data: Blob | File, conten
       const put = await fetch(plan.uploadUrl, {
         method: "PUT",
         body: data,
-        headers: { "Content-Type": contentType },
+        // Cache-Control is stored as object metadata and then served on every
+        // GET. WITHOUT it, R2 returned no Cache-Control and no Last-Modified, so
+        // browsers had nothing to compute freshness from and re-fetched the file
+        // on every mount — measured live on a real 1.4MB chat video, which also
+        // came back `Cf-Cache-Status: DYNAMIC`, i.e. Cloudflare wasn't caching it
+        // either and every view billed R2 egress. That is the actual cause of
+        // "the video sent in chat reloads each time someone enters the chat".
+        //
+        // Server-side putR2() has always set this; only the browser upload path
+        // (chat media, stories, posts — i.e. nearly everything) missed it.
+        //
+        // Sent unsigned, exactly like Content-Type directly above: the presigned
+        // URL uses query signing, so headers outside SignedHeaders don't break
+        // the signature but ARE still stored. Content-Type proves the mechanism
+        // — the live object came back `Content-Type: video/mp4`.
+        headers: { "Content-Type": contentType, "Cache-Control": MEDIA_CACHE_CONTROL },
       });
       if (!put.ok) throw new Error("Upload failed. Please try again.");
       return plan.publicUrl;
@@ -53,7 +69,11 @@ export async function uploadWithPlan(plan: UploadPlan, data: Blob | File, conten
     const supabase = createClient();
     const { error } = await supabase.storage
       .from(POST_BUCKET)
-      .upload(plan.key, data, { upsert: true, contentType, cacheControl: "3600" });
+      // 1h was far too short for content that can never change: every upload key
+      // is unique, so the bytes at a URL are immutable and can be cached for a
+      // year. This is Supabase's egress being paid over and over for no reason
+      // (the 5GB cap has already been hit once).
+      .upload(plan.key, data, { upsert: true, contentType, cacheControl: String(MEDIA_MAX_AGE_SECONDS) });
     if (error) throw new Error("Upload failed. Try a smaller file.");
     const { data: pub } = supabase.storage.from(POST_BUCKET).getPublicUrl(plan.key);
     return pub.publicUrl;

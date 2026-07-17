@@ -38,6 +38,7 @@ function group(handle: string, ageHours: number): StoryGroup {
         caption: null,
         createdAt: new Date(Date.now() - ageHours * 3600_000).toISOString(),
         allowReshare: true,
+        thumbnailUrl: null,
       },
     ],
   };

@@ -9,15 +9,20 @@ import { sendPushToUser } from "@/lib/push/web-push";
  * Priority-tiered, presence-aware push delivery — the real, buildable slice
  * of Part 4's "Smart Delivery" section, extended in Part 6 to also honor the
  * recipient's own Notification Settings (master/push switch, per-category
- * push toggle, quiet hours). `critical` always goes through (security
- * alerts — Part 6's settings can't turn these off either, see
- * computeShouldPush); `high` (direct messages, mentions, replies) always
- * goes through too, matching how iMessage/WhatsApp still surface a DM or
- * mention during Do Not Disturb; `medium`/`low` (group chatter, suggestions)
- * are held back while the recipient has manually set themselves to DND
- * (see [[presence-status]] from Part 3) OR while Part 6's quiet hours are
- * active for a non-exempt category — still delivered in-app via Realtime +
- * the Notification Center either way, just not pushed to the lock screen.
+ * push toggle, quiet hours).
+ *
+ * DND MEANS NO PUSH — owner, 2026-07-16: "do not disturb doesnt send push
+ * notification." This used to hold back only `medium`/`low` and deliberately let
+ * `high` (DMs, mentions, replies) through, on the reasoning that iMessage and
+ * WhatsApp still surface a DM during Do Not Disturb. The owner has overridden
+ * that: on this product DND is absolute. A DM to someone on DND now delivers
+ * in-app (Realtime + Notification Center) and does not reach the lock screen.
+ *
+ * The ONE exception is `critical`, which still bypasses DND: that tier is
+ * security alerts only (new sign-in, etc.), which Part 6's settings deliberately
+ * can't switch off either — silently suppressing "someone just logged into your
+ * account" is a safety problem, not a preference. If that should change too, it
+ * changes here and nowhere else.
  *
  * Deliberately NOT a queue/scheduler — "delay slightly" / "battery
  * optimization" / "network optimization" from the spec are what the OS
@@ -35,22 +40,30 @@ export async function sendSmartPush(userId: string, payload: PushPayload, priori
   // regardless of which priority branch below actually sends.
   const deliver: PushPayload = settings.hidePushPreview && payload.genericBody ? { ...payload, body: payload.genericBody } : payload;
 
+  // Security alerts only — the sole tier that outranks DND. See the note above.
   if (priority === "critical") {
     await sendPushToUser(userId, deliver);
     return;
   }
+
+  // Checked BEFORE the priority split, so DND holds back `high` (DMs, mentions)
+  // exactly as it holds back the rest. It used to sit inside the medium/low
+  // branch only, which is why Do Not Disturb still pushed every DM through.
+  // In-app delivery is unaffected — Realtime and the Notification Center still
+  // get it; this only governs the lock screen.
+  if ((await getOwnPresenceStatus(userId)) === "dnd") return;
+
   if (priority === "high") {
     // Still honors the master/push/category switches (a user who turned
     // messages off entirely shouldn't get pushed just because it's a DM),
-    // but never quiet-hours-gated — matches the existing DND-bypass intent.
+    // but never quiet-hours-gated — a DM is what quiet hours are meant to let
+    // through, and DND above is now the switch for silencing it.
     if (!settings.masterEnabled || !settings.pushEnabled) return;
     const pref = settings.categoryPrefs[category];
     if (pref && (!pref.enabled || !pref.push)) return;
     await sendPushToUser(userId, deliver);
     return;
   }
-  const status = await getOwnPresenceStatus(userId);
-  if (status === "dnd") return; // in-app delivery still happens via Realtime/Notification Center
   const nowUtcHour = new Date().getUTCHours();
   if (!computeShouldPush(settings, category, nowUtcHour)) return;
   // Part 8 fatigue reduction — only for medium/low, same carve-out as

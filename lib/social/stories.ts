@@ -16,6 +16,15 @@ export interface StoryItem {
    *  story to their own story or a private chat? Defaults to true, including
    *  when 0081 isn't applied yet. */
   allowReshare: boolean;
+  /**
+   * First-frame poster for a VIDEO story (migration 0083). Load-bearing for
+   * perceived speed, not decoration: without it the ring has to paint its 68px
+   * circle with a <video preload="metadata">, which re-downloads MP4 data on
+   * every mount and is the real cause of "the stories section loads for
+   * seconds on every entrance". Null for images (they're their own cover) and
+   * for stories posted before 0083 — those age out within 24h by themselves.
+   */
+  thumbnailUrl: string | null;
 }
 
 export interface StoryGroup {
@@ -142,12 +151,15 @@ export async function getActiveStories(
       caption: string | null;
       created_at: string;
       allow_reshare?: boolean | null;
+      thumbnail_url?: string | null;
     };
     const base = "id, user_id, media_url, media_kind, caption, created_at";
     const activeAfter = new Date().toISOString();
+    // `thumbnail_url` rides along with `allow_reshare` in the optional group so
+    // the existing 42703 fallback covers 0083 not being applied yet too.
     const first = await db
       .from("stories")
-      .select(`${base}, allow_reshare`)
+      .select(`${base}, allow_reshare, thumbnail_url`)
       .gt("expires_at", activeAfter)
       .order("created_at", { ascending: false })
       .limit(200);
@@ -203,6 +215,7 @@ export async function getActiveStories(
         createdAt: r.created_at,
         // Absent column (0081 unapplied) === the column's own default.
         allowReshare: r.allow_reshare ?? true,
+        thumbnailUrl: r.thumbnail_url ?? null,
       });
     }
 
@@ -252,12 +265,13 @@ export async function getActiveStoryForUser(userId: string, viewerId?: string | 
       caption: string | null;
       created_at: string;
       allow_reshare?: boolean | null;
+      thumbnail_url?: string | null;
     };
     const base = "id, user_id, media_url, media_kind, caption, created_at";
     const activeAfter = new Date().toISOString();
     const first = await db
       .from("stories")
-      .select(`${base}, allow_reshare`)
+      .select(`${base}, allow_reshare, thumbnail_url`)
       .eq("user_id", userId)
       .gt("expires_at", activeAfter)
       .order("created_at", { ascending: false })
@@ -299,6 +313,7 @@ export async function getActiveStoryForUser(userId: string, viewerId?: string | 
         caption: r.caption,
         createdAt: r.created_at,
         allowReshare: r.allow_reshare ?? true,
+        thumbnailUrl: r.thumbnail_url ?? null,
       })),
     };
   } catch {

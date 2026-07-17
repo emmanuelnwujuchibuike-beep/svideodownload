@@ -14,5 +14,5 @@ export type { QueryOptions, QueryResult } from "./use-query";
 export { useInfiniteQuery } from "./use-infinite-query";
 export type { InfiniteResult } from "./use-infinite-query";
 export { useInView } from "./use-in-view";
-export { mutate, invalidate, revalidate, getEntry } from "./cache";
+export { mutate, seed, invalidate, revalidate, getEntry } from "./cache";
 export type { CacheEntry } from "./cache";

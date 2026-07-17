@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { cacheDelete, getCached } from "@/lib/cache";
 import { bustHomeFeedCache } from "@/lib/social/home-feed";
 import { getActiveStories, type StoryScope } from "@/lib/social/stories";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -25,7 +26,23 @@ export async function GET(request: Request) {
   }
   const raw = new URL(request.url).searchParams.get("scope");
   const scope: StoryScope = raw === "friends" || raw === "following" ? raw : "all";
-  const groups = await getActiveStories(viewerId, 24, scope);
+
+  // Cached 20s per (viewer, scope). Measured 2026-07-16: getActiveStories costs
+  // ~850-1200ms for a ~1.3KB payload — it's round-trip-bound (several sequential
+  // queries), not data-bound, so caching the result is the whole win. The client
+  // paints from its own disk cache regardless, so this is about how fast the
+  // background revalidation settles, and about not paying a second of DB time on
+  // every entrance to /home and /messages.
+  //
+  // Per-VIEWER key, always: story visibility is per-viewer (scoped audiences,
+  // blocks, restrictions, and hidden accounts since 0082). A shared key here
+  // would serve one person's rings to another.
+  //
+  // 20s, not longer: a story you just posted must show up on your next look.
+  // bustStoryCache() below clears the poster's own key immediately on publish.
+  const groups = await getCached(`stories:${viewerId ?? "anon"}:${scope}`, 20, () =>
+    getActiveStories(viewerId, 24, scope),
+  );
   return NextResponse.json({ groups }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
@@ -93,9 +110,19 @@ export async function POST(request: Request) {
 
   let storyId: string | null = null;
   if (wantStory) {
+    // `thumbnail_url` (0083) is what stops the story ring streaming this MP4 on
+    // every mount just to paint a 68px circle. The client already captures and
+    // uploads this poster and has always sent it — it was being dropped here for
+    // want of a column.
     const { data: story, error } = await supabase
       .from("stories")
-      .insert({ user_id: user.id, media_url: mediaUrl, media_kind: mediaKind, caption: caption ?? null })
+      .insert({
+        user_id: user.id,
+        media_url: mediaUrl,
+        media_kind: mediaKind,
+        caption: caption ?? null,
+        thumbnail_url: mediaKind === "video" ? (thumbnailUrl ?? null) : null,
+      })
       .select("id")
       .single();
     if (error) return NextResponse.json({ error: "Couldn't post story." }, { status: 500 });
@@ -161,6 +188,14 @@ export async function POST(request: Request) {
   // The publisher's own feed caches are busted so the new post/reel shows up
   // the moment their feed re-renders — never "where did my upload go?".
   if (postId) await bustHomeFeedCache(user.id);
+  // Same promise for the story ring: the 20s GET cache above must never be the
+  // reason you can't see the story you just posted. Only the poster's own keys
+  // need clearing — everyone else's entries are ≤20s stale by construction.
+  if (storyId) {
+    await Promise.all(
+      (["all", "friends", "following"] as const).map((s) => cacheDelete(`stories:${user.id}:${s}`)),
+    ).catch(() => {});
+  }
 
   return NextResponse.json({ ok: true, storyId, postId });
 }

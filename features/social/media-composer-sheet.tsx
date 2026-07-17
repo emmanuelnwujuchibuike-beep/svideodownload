@@ -75,7 +75,14 @@ export function MediaComposerSheet({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            // onPointerDown, not onClick — the same fix already applied to the
+            // message-bubble and inbox-row menus (2026-07-15), which these
+            // sheets missed. On touch, `click` only fires after touch-end once
+            // the browser resolves tap-vs-scroll; over a sheet that can be
+            // dragged, that resolution often never lands and the tap is
+            // swallowed, so the backdrop feels dead. pointerdown fires on
+            // contact and always closes.
+            onPointerDown={onClose}
             className="absolute inset-0 bg-black/55 backdrop-blur-sm"
           />
           <motion.div

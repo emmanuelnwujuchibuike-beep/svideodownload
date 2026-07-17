@@ -55,3 +55,35 @@ export async function PATCH(request: Request) {
   if (error) return NextResponse.json({ error: "Couldn't save settings." }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
+
+/**
+ * GET /api/privacy — the signed-in user's own privacy settings.
+ *
+ * Added for the presence picker's "Hide my last seen" switch: a control that
+ * shows its own state has to be able to READ that state, and this route was
+ * PATCH-only (the settings page gets its copy server-side, so nothing had needed
+ * a client read before).
+ *
+ * Defaults mirror getPrivacySettings' — a user who has never opened Privacy has
+ * no row at all, which is not an error and must read as the defaults, not as
+ * "hidden".
+ */
+export async function GET() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const { data } = await supabase
+    .from("privacy_settings")
+    .select("last_seen_visibility, read_receipts_enabled, typing_indicators_enabled")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  return NextResponse.json({
+    last_seen_visibility: (data?.last_seen_visibility as string) ?? "everyone",
+    read_receipts_enabled: (data?.read_receipts_enabled as boolean) ?? true,
+    typing_indicators_enabled: (data?.typing_indicators_enabled as boolean) ?? true,
+  });
+}

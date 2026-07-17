@@ -1,5 +1,7 @@
-import { MessageCircle, UserPlus, UserRound } from "lucide-react";
+import { MessageCircle, UserPlus } from "lucide-react";
 import Link from "next/link";
+
+import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
 
 // Display profiles used when signed-out (and to pad the rail to a tidy 4).
 const SAMPLE_PEOPLE = [
@@ -70,17 +72,30 @@ export function MeetNewPeople() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        {cards.map((c) => {
+        {cards.map((c, i) => {
           const act = ACTION[c.action];
           return (
             <Link
               key={c.key}
               href={c.href}
-              className="group relative aspect-[3/4] overflow-hidden rounded-2xl shadow-soft ring-1 ring-border/60 transition hover:-translate-y-1 hover:shadow-card"
+              style={{ animationDelay: `${i * 70}ms` }}
+              className="group relative aspect-[3/4] animate-fade-up overflow-hidden rounded-2xl shadow-soft ring-1 ring-border/60 transition-all duration-300 [transition-timing-function:var(--ease-spring)] will-change-transform hover:-translate-y-1.5 hover:shadow-elevated hover:ring-violet-500/30"
             >
-              <span className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br ${c.from} text-4xl font-bold text-white`}>
-                {c.name.charAt(0).toUpperCase()}
+              {/* 3D-shaded cartoon avatar, never a real face or the old "S"/"D"
+                  initial. Fills the card Snapchat-friend-card style; scales gently
+                  on hover so the row feels alive. */}
+              <span className={`absolute inset-0 bg-gradient-to-br ${c.from}`} />
+              <span className="absolute inset-x-0 top-0 flex h-[72%] items-end justify-center">
+                <BitmojiAvatar
+                  seed={c.name}
+                  className="h-[118%] w-[82%] translate-y-[6%] drop-shadow-[0_6px_10px_rgba(0,0,0,0.28)] transition-transform duration-500 [transition-timing-function:var(--ease-out)] group-hover:scale-105"
+                />
               </span>
+              {/* Sheen sweep on hover */}
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full"
+              />
               <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
               <span className="absolute inset-x-2.5 bottom-2.5 text-white">
                 <span className="flex items-center gap-1 text-sm font-bold">
@@ -108,8 +123,8 @@ export function MeetNewPeople() {
           </h3>
           <div className="mt-3 flex -space-x-2">
             {CLUSTER.map((g, i) => (
-              <span key={i} aria-hidden className={`flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br ${g.from} ring-2 ring-background`}>
-                <UserRound className="h-4 w-4 text-white" />
+              <span key={i} aria-hidden className={`flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br ${g.from} ring-2 ring-background`}>
+                <BitmojiAvatar seed={`cluster-${i}`} className="h-full w-full" />
               </span>
             ))}
           </div>

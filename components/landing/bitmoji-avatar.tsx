@@ -46,17 +46,36 @@ export function BitmojiAvatar({ seed, className }: { seed: string; className?: s
   const variant = (h >> 9) % 3; // hair shape
   const smile = (h >> 11) % 2; // grin vs soft smile
 
+  const uid = `bm${h.toString(36)}`;
   return (
     <svg viewBox="0 0 64 64" className={className} role="img" aria-label="Illustrated avatar">
+      <defs>
+        {/* Soft dimensional shading — a top-left light source: highlight on the
+            forehead/cheek, shadow toward the jaw. Gives the flat glyph a rounded,
+            Bitmoji-like read without any raster asset. */}
+        <radialGradient id={`${uid}-skin`} cx="40%" cy="34%" r="75%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.35" />
+          <stop offset="55%" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="100%" stopColor="#000000" stopOpacity="0.18" />
+        </radialGradient>
+        <linearGradient id={`${uid}-shirt`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="#000000" stopOpacity="0.16" />
+        </linearGradient>
+      </defs>
       {/* shoulders */}
       <path d="M10 64c0-11 9.9-17 22-17s22 6 22 17z" fill={shirt} />
-      {/* neck */}
+      <path d="M10 64c0-11 9.9-17 22-17s22 6 22 17z" fill={`url(#${uid}-shirt)`} />
+      {/* neck (with a soft chin shadow above it) */}
       <rect x="27" y="38" width="10" height="12" rx="5" fill={skin} />
+      <ellipse cx="32" cy="40" rx="9" ry="3.5" fill="#000000" opacity="0.12" />
       {/* head */}
       <ellipse cx="32" cy="27" rx="15" ry="16" fill={skin} />
       {/* ears */}
       <circle cx="17" cy="28" r="3" fill={skin} />
       <circle cx="47" cy="28" r="3" fill={skin} />
+      {/* dimensional shading over the skin, UNDER hair + features */}
+      <ellipse cx="32" cy="27" rx="15" ry="16" fill={`url(#${uid}-skin)`} />
       {/* hair */}
       {variant === 0 ? (
         <path d="M17 24c0-9 6.7-14 15-14s15 5 15 14c0-4-4-6-15-6s-15 2-15 6z" fill={hair} />
@@ -73,6 +92,9 @@ export function BitmojiAvatar({ seed, className }: { seed: string; className?: s
       {/* brows */}
       <path d="M23 22.5q3-1.6 6 0" stroke={hair} strokeWidth="1.4" strokeLinecap="round" fill="none" />
       <path d="M35 22.5q3-1.6 6 0" stroke={hair} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+      {/* cheek blush — a small warmth, the Bitmoji tell */}
+      <ellipse cx="24" cy="31" rx="2.4" ry="1.6" fill="#ff6b6b" opacity="0.18" />
+      <ellipse cx="40" cy="31" rx="2.4" ry="1.6" fill="#ff6b6b" opacity="0.18" />
       {/* mouth */}
       {smile ? (
         <path d="M27 34q5 4.5 10 0" stroke="#7A3B2E" strokeWidth="1.6" strokeLinecap="round" fill="none" />

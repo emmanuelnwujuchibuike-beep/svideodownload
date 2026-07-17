@@ -68,6 +68,33 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   // on `user.id`. Not awaited here; see below.
   const viewerProfilePromise = supabase.from("profiles").select("display_name, handle").eq("id", user.id).maybeSingle();
 
+  // Resolve the other participant with ONE cheap query so the story strip can
+  // run ALONGSIDE the conversation fetch instead of after it.
+  //
+  // 2026-07-16 latency pass: `getActiveStoryForUser` used to be awaited after
+  // `getConversation` (it needed `convo.other.id`), and it is not a single
+  // query — it drags `excludedStoryAuthors`'s blocks/restriction checks with
+  // it, several round trips of its own, all of them stacked onto the end of the
+  // critical path for a secondary strip. Paying one small query up front to
+  // overlap that whole chain is a clear win; the conversation row is tiny and
+  // RLS-scoped to members, so it costs far less than it saves.
+  const { data: convRow } = await supabase
+    .from("conversations")
+    .select("type, user_low, user_high")
+    .eq("id", id)
+    .maybeSingle();
+  const otherId =
+    convRow?.type === "direct"
+      ? ((convRow.user_low as string | null) === user.id ? (convRow.user_high as string | null) : (convRow.user_low as string | null))
+      : null;
+
+  // Best-effort + time-boxed: a failed or slow stories fetch means no strip,
+  // never a blocked thread. `withTimeout` here is deliberately SHORTER than the
+  // conversation's — see STORY_TIMEOUT_MS.
+  const storyPromise = otherId
+    ? withTimeout(getActiveStoryForUser(otherId, user.id), STORY_TIMEOUT_MS, null).catch(() => null)
+    : Promise.resolve(null);
+
   // A stuck/slow query here used to leave the whole thread — including its
   // header and composer — on the loading skeleton forever, with no way back
   // out short of a hard reload. Racing it turns that into a fast, honest
@@ -115,10 +142,13 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   // slow/hanging query anywhere in that chain hung the WHOLE thread page
   // indefinitely (a real "stuck on loading" report), since nothing here ever
   // raced it against a deadline the way `getConversation` above already is.
-  const otherStoryGroup =
-    convo.type === "direct" && convo.other
-      ? await withTimeout(getActiveStoryForUser(convo.other.id, user.id), STORY_TIMEOUT_MS, null).catch(() => null)
-      : null;
+  //
+  // ISSUED far above, in parallel with `getConversation` — only awaited here.
+  // `convo.type` is still the authority on whether the strip renders at all:
+  // the early `otherId` resolution is just a hint used to start the work, and a
+  // group/secret thread resolves it to null anyway, so this can't show a strip
+  // where the thread type says it shouldn't.
+  const otherStoryGroup = convo.type === "direct" && convo.other ? await storyPromise : null;
 
   return (
     // Mobile: a true full-viewport overlay — covers the persistent app

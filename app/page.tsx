@@ -4,7 +4,6 @@ import { CtaBanner } from "@/components/landing/cta-banner";
 import { Faq } from "@/components/landing/faq";
 import { FeatureCards } from "@/components/landing/feature-cards";
 import { Hero } from "@/components/landing/hero";
-import { LatestNews } from "@/components/landing/latest-news";
 import { MeetNewPeople } from "@/components/landing/meet-people";
 import { PlatformShowcase } from "@/components/landing/platform-showcase";
 import { StatsCounter } from "@/components/landing/stats-counter";
@@ -65,9 +64,6 @@ export default function HomePage() {
         </Suspense>
         <Suspense fallback={<section className="min-h-[280px]" />}>
           <TrendingToday />
-        </Suspense>
-        <Suspense fallback={<section className="min-h-[240px]" />}>
-          <LatestNews />
         </Suspense>
 
         {/* Stats band */}

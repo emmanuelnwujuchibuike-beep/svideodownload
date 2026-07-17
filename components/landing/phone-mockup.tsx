@@ -6,8 +6,8 @@ import {
   FrenzInboxOutline,
   FrenzPersonSolid,
 } from "@/components/icons/frenz-icons";
+import { PhoneReels, type MockReel } from "@/components/landing/phone-reels";
 import { getFeed } from "@/lib/social/feed";
-import { formatCompactNumber } from "@/lib/utils";
 
 // Initials-in-gradient-circle, matching the fallback-avatar convention used by
 // meet-people.tsx and notification-card — never emoji (see the no-emoji rule).
@@ -51,14 +51,26 @@ export async function PhoneMockup() {
   // sees; it must never gamble on someone else's expiring URL. Own-media also
   // means R2 (zero egress) instead of a third-party hotlink.
   const ownMedia = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, "");
-  const reels = (await getFeed({ sort: "trending", viewerId: null, limit: 24 })).filter(
-    (p): p is typeof p & { thumbnailUrl: string } =>
-      p.mediaKind === "video" && !!p.thumbnailUrl && !!ownMedia && p.thumbnailUrl.startsWith(ownMedia),
-  );
-  const [lead, second] = reels;
+  const reels: MockReel[] = (await getFeed({ sort: "trending", viewerId: null, limit: 24 }))
+    .filter(
+      (p) =>
+        p.mediaKind === "video" &&
+        !!p.thumbnailUrl &&
+        !!p.mediaUrl &&
+        !!ownMedia &&
+        p.thumbnailUrl.startsWith(ownMedia),
+    )
+    .slice(0, 8)
+    .map((p) => ({
+      id: p.id,
+      thumbnailUrl: p.thumbnailUrl!,
+      mediaUrl: p.mediaUrl!,
+      viewsCount: p.viewsCount,
+      title: p.title ?? "",
+    }));
 
   return (
-    <div className="relative mx-auto w-full max-w-[292px]">
+    <div className="group/phone relative mx-auto w-full max-w-[292px]">
       {/* Floating chips — line icons only, no emoji */}
       <div className="absolute -right-3 -top-4 z-20 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400 text-white shadow-xl shadow-amber-500/30 animate-float">
         <Smile className="h-6 w-6" aria-hidden />
@@ -79,14 +91,17 @@ export async function PhoneMockup() {
       </div>
 
       {/* Download callout — the whole point of the mockup is that a visitor should
-          understand HOW you download without reading a word. The + in the nav opens
-          the action sheet whose first row is "Download Video", so this labels that
-          button explicitly and draws an arrow to it. Sits outside the frame so it
-          covers none of the UI it's explaining. */}
-      <div className="pointer-events-none absolute -bottom-[52px] left-1/2 z-30 -translate-x-1/2">
+          understand HOW downloading works without reading a word.
+          The copy names the button as the REAL in-app one, not a landing-page
+          control: "Tap + to download" was ambiguous — a visitor could read it as
+          the + on this page. In the app, that + opens the action sheet whose first
+          row is "Download Video: download from any social platform"
+          (features/create/create-action-sheet.tsx), which is what this describes.
+          Sits outside the frame so it covers none of the UI it's explaining. */}
+      <div className="pointer-events-none absolute -bottom-[56px] left-1/2 z-30 w-max -translate-x-1/2 text-center transition-opacity duration-200 group-has-[[data-deck-open]]/phone:opacity-0">
         <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-foreground px-3 py-1.5 text-[11px] font-bold text-background shadow-xl">
           <Download className="h-3.5 w-3.5" aria-hidden />
-          Tap + to download any video
+          The + button in the app downloads any video
         </span>
       </div>
       {/* Arrow from the callout up to the + button. Electric Blue deliberately:
@@ -96,7 +111,7 @@ export async function PhoneMockup() {
       <svg
         aria-hidden
         viewBox="0 0 24 74"
-        className="pointer-events-none absolute -bottom-[22px] left-1/2 z-30 h-[74px] w-6 -translate-x-1/2 text-primary"
+        className="pointer-events-none absolute -bottom-[26px] left-1/2 z-30 h-[74px] w-6 -translate-x-1/2 text-primary transition-opacity duration-200 group-has-[[data-deck-open]]/phone:opacity-0"
         fill="none"
       >
         <path
@@ -228,63 +243,27 @@ export async function PhoneMockup() {
                 </span>
                 <span className="text-[10px] text-blue-400">View all</span>
               </div>
-              {/* REAL trending reels.
-                  Raw <img>, NOT next/image — deliberate, and the same reason
-                  trending-rail.tsx does it. Thumbnails live on whatever CDN yt-dlp
-                  resolved (TikTok, Instagram, …); next/image fetches them
-                  SERVER-side and re-serves them, and those CDNs answer a
-                  server-side fetch with 403. The browser fetching the URL directly
-                  is allowed. Verified: /_next/image on a tiktokcdn URL => 403.
-                  No CLS risk despite the missing width/height: the parent reserves
-                  a fixed box (h-28) and the image is absolutely positioned in it. */}
-              <div className="flex gap-2">
-                {lead ? (
-                  <>
-                    <div className="relative h-28 flex-1 overflow-hidden rounded-xl bg-neutral-800">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={lead.thumbnailUrl}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        className="absolute inset-0 h-full w-full object-cover"
-                      />
-                      <span className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                      <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-md bg-black/45 px-1.5 py-0.5 text-[9px] font-medium">
-                        <Play className="h-2.5 w-2.5" /> {formatCompactNumber(lead.viewsCount)}
+              {/* REAL trending reels — tapping play opens the real deck inside the
+                  phone (snap-scrolling column, muted autoplay, view counted).
+                  Raw <img> inside PhoneReels, NOT next/image — deliberate: some
+                  thumbnails live on whatever CDN yt-dlp resolved, and next/image
+                  fetches SERVER-side, which those CDNs answer with 403 (verified).
+                  Falls back to gradient tiles when no reel has an own-host poster,
+                  so the hero can never render a broken image. */}
+              {reels.length > 0 ? (
+                <PhoneReels reels={reels} />
+              ) : (
+                <div className="flex gap-2">
+                  <div className="relative h-28 flex-1 overflow-hidden rounded-xl bg-gradient-to-br from-rose-500 via-fuchsia-500 to-indigo-500">
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 backdrop-blur">
+                        <Play className="h-4 w-4 fill-white" />
                       </span>
-                      <span className="absolute inset-0 flex items-center justify-center">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 backdrop-blur">
-                          <Play className="h-4 w-4 fill-white" />
-                        </span>
-                      </span>
-                    </div>
-                    <div className="relative h-28 w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-800">
-                      {second ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={second.thumbnailUrl}
-                          alt=""
-                          loading="lazy"
-                          decoding="async"
-                          className="absolute inset-0 h-full w-full object-cover"
-                        />
-                      ) : null}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="relative h-28 flex-1 overflow-hidden rounded-xl bg-gradient-to-br from-rose-500 via-fuchsia-500 to-indigo-500">
-                      <span className="absolute inset-0 flex items-center justify-center">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 backdrop-blur">
-                          <Play className="h-4 w-4 fill-white" />
-                        </span>
-                      </span>
-                    </div>
-                    <div className="relative h-28 w-12 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-blue-600 to-violet-700" />
-                  </>
-                )}
-              </div>
+                    </span>
+                  </div>
+                  <div className="relative h-28 w-12 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-blue-600 to-violet-700" />
+                </div>
+              )}
             </div>
 
             {/* Community chat */}
@@ -344,8 +323,14 @@ export async function PhoneMockup() {
                 (Home · Friends · [+] · Chats · Profile), so this can't drift into
                 advertising a nav Frenz doesn't have. Mirrors the real bar's
                 glass pill + raised brand-gradient Create button. */}
+            {/* grid-cols-5, NOT justify-around: with five items of unequal label
+                widths ("Friends" vs "You") justify-around does not put the middle
+                item at the container's centre — it drifted several px left, which
+                is exactly why the download arrow didn't line up with the +. Equal
+                columns make the + mathematically centred, so the arrow (also
+                centred) hits it dead-on at any width. */}
             <div className="relative">
-              <div className="flex items-end justify-around rounded-full border border-white/10 bg-white/[0.07] px-2 pb-1 pt-1.5">
+              <div className="grid grid-cols-5 items-end rounded-full border border-white/10 bg-white/[0.07] px-2 pb-1 pt-1.5">
                 <TabIcon icon={FrenzHomeSolid} label="Home" active />
                 <TabIcon icon={FrenzFriendsOutline} label="Friends" />
 
@@ -355,7 +340,7 @@ export async function PhoneMockup() {
                     from any social platform" (features/create/create-action-sheet.tsx).
                     A soft pulse ring draws the eye to it without animating anything
                     expensive (transform/opacity only, motion-safe). */}
-                <span className="relative -mt-4 self-center">
+                <span className="relative -mt-4 flex h-8 items-center justify-self-center self-center">
                   <span
                     aria-hidden
                     className="bg-brand absolute inset-0 rounded-full opacity-60 motion-safe:animate-ping"

@@ -1,7 +1,23 @@
+import { WarmThreadPreview } from "@/features/social/warm-thread-preview";
 import { Skeleton, SkeletonAvatar } from "@/features/ui/skeleton";
 
-/** Thread skeleton — fills the Glass Split right panel. */
+/**
+ * Thread loading state — fills the Glass Split right panel.
+ *
+ * Paints the WARMED thread when the inbox has already peeked it, and only falls
+ * back to the skeleton below when it hasn't (cold start, a chat outside the
+ * warmed top 10, a hard reload).
+ *
+ * This file is the ONLY place that can remove the entry wait: it's the one thing
+ * that renders BEFORE the RSC round trip. The page itself is an async server
+ * component, so by the time it can read the warm cache, the server has already
+ * re-sent the same data. See WarmThreadPreview's doc comment.
+ */
 export default function ConversationLoading() {
+  return <WarmThreadPreview fallback={<ThreadSkeleton />} />;
+}
+
+function ThreadSkeleton() {
   return (
     // Matches [id]/page.tsx's mobile full-viewport overlay exactly (same
     // fixed/z-50/lg: split) — otherwise the skeleton renders in-flow below

@@ -1,5 +1,12 @@
 import { Check, Flame, Heart, MessageCircle, Play, Search, Sparkles, Smile, Trophy, UserPlus, Users, Wifi } from "lucide-react";
 
+import {
+  FrenzFriendsOutline,
+  FrenzHomeSolid,
+  FrenzInboxOutline,
+  FrenzPersonSolid,
+} from "@/components/icons/frenz-icons";
+
 // Initials-in-gradient-circle, matching the fallback-avatar convention used by
 // meet-people.tsx and notification-card — never emoji (see the no-emoji rule).
 const PEOPLE = [
@@ -9,10 +16,25 @@ const PEOPLE = [
   { name: "Daniel", from: "from-emerald-500 to-teal-500" },
 ] as const;
 
-/** Decorative in-app preview shown in the hero — styled as an iPhone 17 Pro Max. */
+/**
+ * Decorative in-app preview shown in the hero — an iPhone 17 Pro Max.
+ *
+ * GEOMETRY IS REAL, not eyeballed. The device body is 77.6 x 163.0 mm, so the
+ * frame is locked to `aspect-[776/1630]` (0.476) rather than being sized by its
+ * own content. The previous mockup measured 320x540 = 0.593 — noticeably too
+ * wide and too short to read as an iPhone. Because the aspect ratio now drives
+ * the height, the screen is a fixed box and the UI inside it flexes to fit;
+ * don't add content here expecting the phone to grow, it won't.
+ *
+ * Depth is done with layered gradients + inset rings (chamfer highlights, glass
+ * sheen, screen falloff) and a small perspective tilt. All of it is paint and
+ * `transform` — no `filter`/`backdrop-filter` animation, nothing that
+ * re-rasterizes on scroll. This sits beside the hero's <h1>, which is the LCP
+ * element, so it must never compete for the main thread (docs/FEATURE_21_HERO.md §1).
+ */
 export function PhoneMockup() {
   return (
-    <div className="relative mx-auto w-full max-w-[320px]">
+    <div className="relative mx-auto w-full max-w-[292px] [perspective:1800px]">
       {/* Floating chips — line icons only, no emoji */}
       <div className="absolute -right-3 -top-4 z-20 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400 text-white shadow-xl shadow-amber-500/30 animate-float">
         <Smile className="h-6 w-6" aria-hidden />
@@ -26,31 +48,63 @@ export function PhoneMockup() {
       <div className="absolute -left-6 top-32 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-xl ring-4 ring-background animate-float">
         <Sparkles className="h-6 w-6" aria-hidden />
       </div>
-      <div className="absolute -right-4 bottom-24 z-20 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-xl ring-4 ring-background">
+      {/* Left side, clear of the tab bar — at bottom-right it sat on top of the
+          Chats tab and hid the nav the mockup is meant to be showing off. */}
+      <div className="absolute -left-5 bottom-28 z-20 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-xl ring-4 ring-background">
         <Trophy className="h-7 w-7" aria-hidden />
       </div>
 
       {/* Soft glow behind phone */}
       <div aria-hidden className="absolute inset-0 -z-10 scale-110 rounded-[3.5rem] bg-gradient-to-br from-blue-500/25 via-violet-500/18 to-purple-600/25 blur-3xl" />
 
-      {/* Titanium frame — iPhone 17 Pro Max */}
-      <div className="relative z-10 rounded-[3rem] bg-gradient-to-b from-zinc-500 via-zinc-700 to-zinc-600 p-[2px] shadow-2xl">
-        {/* Titanium side buttons */}
-        <span aria-hidden className="absolute -left-[3px] top-24 h-7 w-[3px] rounded-l-sm bg-zinc-600" />
-        <span aria-hidden className="absolute -left-[3px] top-36 h-12 w-[3px] rounded-l-sm bg-zinc-600" />
-        <span aria-hidden className="absolute -left-[3px] top-52 h-12 w-[3px] rounded-l-sm bg-zinc-600" />
-        {/* Power button */}
-        <span aria-hidden className="absolute -right-[3px] top-40 h-16 w-[3px] rounded-r-sm bg-zinc-600" />
-        {/* Camera Control button */}
-        <span aria-hidden className="absolute -right-[3px] top-60 h-8 w-[3px] rounded-r-sm bg-zinc-500" />
+      {/* Contact shadow — grounds the device instead of letting it float flat. */}
+      <div
+        aria-hidden
+        className="absolute inset-x-6 bottom-1 -z-10 h-10 rounded-[50%] bg-black/35 blur-2xl dark:bg-black/60"
+      />
 
-        <div className="relative overflow-hidden rounded-[2.85rem] border-[5px] border-black bg-black">
+      {/* Titanium frame — iPhone 17 Pro Max. Horizontal gradient = light raking
+          across a rounded metal band: bright at both chamfers, dark in the middle. */}
+      <div
+        data-phone-frame
+        className="relative z-10 aspect-[776/1630] rounded-[2.6rem] bg-[linear-gradient(100deg,#f4f4f5_0%,#a1a1aa_6%,#52525b_22%,#3f3f46_50%,#52525b_78%,#a1a1aa_94%,#e4e4e7_100%)] p-[2.5px] shadow-[0_2px_6px_rgba(0,0,0,0.28),0_18px_40px_-8px_rgba(0,0,0,0.45),0_40px_80px_-20px_rgba(0,0,0,0.5)] [transform:rotateY(-7deg)_rotateX(2deg)] [transform-style:preserve-3d]"
+      >
+        {/* Top/bottom chamfer highlight — the band catching light along its length. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-[2.6rem] bg-[linear-gradient(to_bottom,rgba(255,255,255,0.55)_0%,rgba(255,255,255,0)_7%,rgba(255,255,255,0)_93%,rgba(255,255,255,0.35)_100%)]"
+        />
+
+        {/* Titanium side buttons — shaded so they read as raised, not painted on. */}
+        <span aria-hidden className="absolute -left-[3.5px] top-[14%] h-7 w-[3.5px] rounded-l-[2px] bg-gradient-to-r from-zinc-400 to-zinc-600 shadow-[-1px_0_2px_rgba(0,0,0,0.35)]" />
+        <span aria-hidden className="absolute -left-[3.5px] top-[20%] h-12 w-[3.5px] rounded-l-[2px] bg-gradient-to-r from-zinc-400 to-zinc-600 shadow-[-1px_0_2px_rgba(0,0,0,0.35)]" />
+        <span aria-hidden className="absolute -left-[3.5px] top-[29%] h-12 w-[3.5px] rounded-l-[2px] bg-gradient-to-r from-zinc-400 to-zinc-600 shadow-[-1px_0_2px_rgba(0,0,0,0.35)]" />
+        {/* Power button */}
+        <span aria-hidden className="absolute -right-[3.5px] top-[23%] h-16 w-[3.5px] rounded-r-[2px] bg-gradient-to-l from-zinc-400 to-zinc-600 shadow-[1px_0_2px_rgba(0,0,0,0.35)]" />
+        {/* Camera Control button */}
+        <span aria-hidden className="absolute -right-[3.5px] top-[35%] h-8 w-[3.5px] rounded-r-[2px] bg-gradient-to-l from-zinc-300 to-zinc-500 shadow-[1px_0_2px_rgba(0,0,0,0.35)]" />
+
+        <div className="relative h-full overflow-hidden rounded-[2.45rem] border-[4px] border-black bg-black">
           {/* Dynamic Island */}
-          <div className="absolute left-1/2 top-[0.55rem] z-30 flex h-[1.55rem] w-[5.5rem] -translate-x-1/2 items-center justify-end rounded-full bg-black pr-2.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
-            <span className="h-2 w-2 rounded-full bg-zinc-800 ring-1 ring-zinc-700" />
+          <div className="absolute left-1/2 top-[0.5rem] z-30 flex h-[1.4rem] w-[4.9rem] -translate-x-1/2 items-center justify-end rounded-full bg-black pr-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-zinc-800 ring-1 ring-zinc-700" />
           </div>
 
-          <div className="space-y-3 rounded-[2.6rem] bg-neutral-950 px-3 pb-5 pt-3 text-white">
+          {/* Glass sheen — a diagonal reflection across the display. Sits above the
+              UI, below the Island, and never intercepts pointer events. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-20 rounded-[2.1rem] bg-[linear-gradient(112deg,rgba(255,255,255,0.13)_0%,rgba(255,255,255,0.05)_18%,rgba(255,255,255,0)_38%,rgba(255,255,255,0)_100%)]"
+          />
+          {/* Inner bezel falloff — the display recessed under the glass. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-20 rounded-[2.1rem] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.10),inset_0_0_18px_rgba(0,0,0,0.55)]"
+          />
+
+          {/* The screen is a FIXED box now (the frame's aspect ratio drives it), so
+              the UI flexes to fill it rather than defining its height. */}
+          <div className="flex h-full flex-col gap-2.5 overflow-hidden rounded-[2.1rem] bg-neutral-950 px-3 pb-4 pt-3 text-white">
             {/* iOS status bar — time · signal · wifi · battery */}
             <div className="flex items-center justify-between px-3 text-white">
               <span className="text-[11px] font-semibold tracking-tight">9:41</span>
@@ -159,9 +213,69 @@ export function PhoneMockup() {
                 <span className="block text-[9px] text-white/50">1080p · No Watermark</span>
               </span>
             </div>
+
+            {/* Spacer — absorbs whatever height is left so the tab bar stays
+                pinned to the bottom of the fixed screen box, like a real app. */}
+            <div className="flex-1" />
+
+            {/* Bottom tab bar — wired to the REAL app nav: the same tab set and the
+                same icon components features/app-shell/mobile-nav.tsx renders
+                (Home · Friends · [+] · Chats · Profile), so this can't drift into
+                advertising a nav Frenz doesn't have. Mirrors the real bar's
+                glass pill + raised brand-gradient Create button. */}
+            <div className="relative">
+              <div className="flex items-end justify-around rounded-full border border-white/10 bg-white/[0.07] px-2 pb-1 pt-1.5">
+                <TabIcon icon={FrenzHomeSolid} label="Home" active />
+                <TabIcon icon={FrenzFriendsOutline} label="Friends" />
+
+                {/* Create — raised gradient circle, same as the real nav */}
+                <span className="-mt-4 self-center">
+                  <span className="bg-brand relative flex h-8 w-8 items-center justify-center rounded-full text-white shadow-lg shadow-violet-500/30 ring-[2px] ring-neutral-950">
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </span>
+                </span>
+
+                <TabIcon icon={FrenzInboxOutline} label="Chats" badge="3" />
+                <TabIcon icon={FrenzPersonSolid} label="You" />
+              </div>
+            </div>
+
+            {/* Home indicator — every modern iPhone has one; without it the
+                screen doesn't read as iOS. */}
+            <div className="flex justify-center pt-0.5">
+              <span className="h-[3px] w-24 rounded-full bg-white/60" />
+            </div>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function TabIcon({
+  icon: Icon,
+  label,
+  active = false,
+  badge,
+}: {
+  icon: typeof FrenzHomeSolid;
+  label: string;
+  active?: boolean;
+  badge?: string;
+}) {
+  return (
+    <span className="relative flex flex-col items-center gap-[2px]">
+      <Icon className={`h-[15px] w-[15px] ${active ? "text-white" : "text-white/45"}`} />
+      <span className={`text-[7px] font-semibold leading-none ${active ? "text-white" : "text-white/40"}`}>
+        {label}
+      </span>
+      {badge ? (
+        <span className="absolute -right-1.5 -top-1 flex h-[11px] min-w-[11px] items-center justify-center rounded-full bg-blue-500 px-[3px] text-[6px] font-bold text-white">
+          {badge}
+        </span>
+      ) : null}
+    </span>
   );
 }

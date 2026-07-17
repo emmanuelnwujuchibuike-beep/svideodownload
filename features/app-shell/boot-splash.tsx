@@ -3,16 +3,14 @@
  * initial HTML so a genuine cold start or the post-login redirect never
  * flashes an empty page before content paints.
  *
- * Owner (2026-07-12): the colored logo must ONLY appear on a true cold start
- * (first hard load of a browser/PWA session) or immediately after signing in
- * — never on a plain refresh, never on SPA navigation. A refresh or nav
- * should fall through to each page's own colorless Suspense skeleton (see
- * the "Skeleton loading standard" convention) instead. Distinguishing
- * "cold start" from "refresh" needs a `sessionStorage` marker (both are
- * identical hard-document-loads at the HTTP level) — set the moment this
- * script first runs in a tab session, checked before ever painting. Login is
- * force-shown regardless of that marker via a short-lived `frenz_just_signed_in`
- * cookie set by the auth callback routes right before their redirect.
+ * CURRENT RULE (owner, 2026-07-16 — supersedes the 07-12 and earlier 07-16
+ * rules): the F loader shows on EVERY login and EVERY cold start. Never on a
+ * refresh, an iOS back-gesture, or an SPA navigation — those fall through to
+ * each page's own colorless Suspense skeleton (the "Skeleton loading standard").
+ *
+ * The full decision, and why it's read from the Navigation Timing API rather
+ * than a storage marker, is documented on `JS` below. Short version: a marker
+ * can only express "the first boot ever", which is the rule this replaced.
  *
  * Also owner (2026-07-12): remove the purple/violet glow entirely — no
  * shadow or ambient color behind the mark, just the clean logo — and make it
@@ -35,30 +33,45 @@ html.frenz-boot-off #frenz-boot{display:none}
 @media (prefers-reduced-motion:reduce){.frenz-boot__mark,.frenz-boot__shine{animation:none}}
 `;
 
-// Suppression checks run FIRST, synchronously:
-//  1. A `frenz_just_signed_in` cookie (set by the auth callback routes)
-//     always wins — force-show, clear the cookie, mark booted.
-//  2. Otherwise, if this BROWSER (localStorage, not sessionStorage) has
-//     ever booted before, dismiss INSTANTLY and let the page's own
-//     skeleton carry the loading state instead. Owner rule (2026-07-16):
-//     the F loader should ONLY show when a user newly enters the app with
-//     no saved cache (first-ever visit, or after clearing site data) — a
-//     reload, an iOS back-gesture, or a PWA relaunch must open instantly.
-//     This was `sessionStorage` before ("once per tab session"), which iOS
-//     defeated: it kills a backgrounded standalone PWA's whole process for
-//     memory pressure (see register-sw.tsx's identical lesson with the
-//     reload guard), and every relaunch/back-gesture-restore then arrived
-//     with a BRAND-NEW empty sessionStorage — so the loader showed on
-//     every single reentry, and on a streamed force-dynamic page like
-//     /messages it stayed up until DOMContentLoaded, i.e. until the SERVER
-//     finished rendering — seconds of F loader on every back-gesture
-//     ("loads for too long before opening"). localStorage survives a
-//     process kill, so those paths now take the instant branch, where
-//     `frenz-boot-off` is added SYNCHRONOUSLY before first paint — the
-//     splash never becomes visible at all.
-//  3. Landing on /home with no `frenz_welcomed` cookie means the colorful
-//     BrandSplash is about to take over immediately — dismiss instantly
-//     instead of flashing first.
+// WHEN THE F LOADER SHOWS — owner rule, REVISED 2026-07-16:
+// "i want every login to show the F loader and every cold start."
+//
+// This REPLACES the previous, narrower rule ("only on a first-ever visit /
+// cleared site data"), which was implemented with a `frenz-booted` localStorage
+// marker — once set, the loader never showed again on that browser. That marker
+// is gone; it can't express "every cold start", only "the first one ever".
+//
+// Cold start is now read from the Navigation Timing API, which distinguishes the
+// three cases at the source instead of inferring them from storage:
+//
+//     nav.type === 'navigate'      -> a fresh entry into the app: PWA launch,
+//                                     new tab, external link, or a login's own
+//                                     window.location.assign().  SHOW.
+//     nav.type === 'reload'        -> the user hit refresh.       instant.
+//     nav.type === 'back_forward'  -> iOS back-gesture / history.  instant.
+//
+// Reload and back-gesture stay instant deliberately: they are NOT cold starts,
+// and "the loader shows for seconds on back-gesture" was the owner's own earlier
+// complaint. The revised rule widens the trigger set to every cold start; it
+// doesn't ask for those two back.
+//
+// Why this also covers "every login" with no extra work: every sign-in path ends
+// in `window.location.assign(next)` — a full document navigation, which reports
+// as 'navigate'. That matters because only OAuth and magic-link actually redirect
+// through /auth/callback (which sets the `frenz_just_signed_in` cookie); the
+// password and email-code paths verify client-side and never touch that route,
+// so a cookie-only check would have missed the most common logins entirely.
+// The cookie check is kept as belt-and-braces for any login that lands without a
+// document navigation, and still force-shows regardless of nav type.
+//
+// One suppression remains: landing on /home with no `frenz_welcomed` cookie means
+// the colorful BrandSplash is about to take over immediately — dismiss instantly
+// rather than flash the F first.
+//
+// NOTE the cost this rule accepts: on a streamed force-dynamic page (/messages),
+// a cold start holds the loader until DOMContentLoaded — i.e. until the server
+// finishes rendering. That's the intended trade: a branded loader during a real
+// cold start beats a blank screen. The 6s failsafe still bounds the worst case.
 //
 // Dismissal is node-INDEPENDENT — the permanent fix for the long-recurring
 // "stuck on the F loader" reports. Instead of hiding or removing the
@@ -79,7 +92,7 @@ html.frenz-boot-off #frenz-boot{display:none}
 // failsafe + the `pageshow` restore-guard both just re-add the class — so
 // recovery is now guaranteed on every path, cold load / reload / back-
 // gesture alike.
-const JS = `(function(){var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var alreadyBooted=false;try{alreadyBooted=localStorage.getItem('frenz-booted')==='1'}catch(e){}if(!justSignedIn&&alreadyBooted){instant=true}else{try{localStorage.setItem('frenz-booted','1')}catch(e){}if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var fade=function(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',fade)}else{fade()}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
+const JS = `(function(){var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';if(!justSignedIn&&!coldStart){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var fade=function(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',fade)}else{fade()}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
 
 // Must run BEFORE the <style> below is evaluated, AND before next-themes'
 // own injected script (rendered later, wherever <ThemeProvider> sits) so the
@@ -180,13 +193,13 @@ export function ThemeBootScript() {
  * moving it to <head>.
  *
  * In <head>, the decision runs before ANY first paint (nothing is paintable
- * while the head parses). For an already-booted reload/back-gesture it adds
- * `frenz-boot-off` to <html> synchronously, so when the body's `#frenz-boot`
- * <div> is parsed later the CSS (also here in <head>) has it display:none from
- * the very first frame — the splash never becomes visible at all. The script
- * only touches `document.documentElement` + storage/cookies, so it has no
- * dependency on <body> existing. A genuine cold boot still shows the splash
- * and fades it on DOMContentLoaded, unchanged.
+ * while the head parses). For a reload/back-gesture it adds `frenz-boot-off` to
+ * <html> synchronously, so when the body's `#frenz-boot` <div> is parsed later
+ * the CSS (also here in <head>) has it display:none from the very first frame —
+ * the splash never becomes visible at all. The script only touches
+ * `document.documentElement` + cookies, so it has no dependency on <body>
+ * existing. A cold start or a login shows the splash and fades it on
+ * DOMContentLoaded.
  */
 export function BootHead() {
   return (

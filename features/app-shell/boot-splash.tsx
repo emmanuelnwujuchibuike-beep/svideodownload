@@ -68,10 +68,28 @@ html.frenz-boot-off #frenz-boot{display:none}
 // the colorful BrandSplash is about to take over immediately — dismiss instantly
 // rather than flash the F first.
 //
-// NOTE the cost this rule accepts: on a streamed force-dynamic page (/messages),
-// a cold start holds the loader until DOMContentLoaded — i.e. until the server
-// finishes rendering. That's the intended trade: a branded loader during a real
-// cold start beats a blank screen. The 6s failsafe still bounds the worst case.
+// WHY AN iOS PWA BACK-SWIPE CAN LEGITIMATELY SHOW IT (owner, 2026-07-17: "why
+// does some accounts show the F loader for few seconds in the webapp not in
+// browser when i swiped back ... does it mean the swiped back in the ios pwa is
+// like a cold start?"). Yes — exactly that. iOS kills a backgrounded standalone
+// PWA's whole process under memory pressure (the same fact that forced the old
+// boot marker from sessionStorage to localStorage, and register-sw.tsx's reload
+// guard before it). When the process is gone, "back" doesn't restore a live
+// page: the OS RELAUNCHES the app, which is a brand-new document reporting
+// 'navigate'. So it is a genuine cold start and this rule shows the loader. In a
+// browser the tab is still alive, so back is a bfcache restore / 'back_forward'
+// and stays instant. Nothing to do with re-login — the session is untouched.
+//
+// DISMISSAL TIMING is what made that feel bad, and it's fixed here rather than
+// by narrowing the rule. The cold path used to fade on DOMContentLoaded, which
+// on a STREAMED force-dynamic page (/messages) only fires once the SERVER has
+// finished rendering — seconds on a data-heavy account, which is exactly why
+// "some accounts" saw it longer than others. But the app shell + each page's own
+// skeleton arrive in the FIRST chunk, long before that. So the splash now hands
+// off as soon as the app's own markup exists (a <main> element), with the 300ms
+// minimum kept so it never strobes. The branded moment stays; the dead wait on
+// the server doesn't. DOMContentLoaded remains as a fallback and the 6s failsafe
+// still bounds the worst case.
 //
 // Dismissal is node-INDEPENDENT — the permanent fix for the long-recurring
 // "stuck on the F loader" reports. Instead of hiding or removing the
@@ -92,7 +110,7 @@ html.frenz-boot-off #frenz-boot{display:none}
 // failsafe + the `pageshow` restore-guard both just re-add the class — so
 // recovery is now guaranteed on every path, cold load / reload / back-
 // gesture alike.
-const JS = `(function(){var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';if(!justSignedIn&&!coldStart){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var fade=function(){var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',fade)}else{fade()}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
+const JS = `(function(){var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';if(!justSignedIn&&!coldStart){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var faded=false;var fade=function(){if(faded)return;faded=true;var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};var shellReady=function(){return !!document.querySelector('main')};if(shellReady()){fade()}else{try{var mo=new MutationObserver(function(){if(shellReady()){mo.disconnect();fade()}});mo.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}document.addEventListener('DOMContentLoaded',fade)}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
 
 // Must run BEFORE the <style> below is evaluated, AND before next-themes'
 // own injected script (rendered later, wherever <ThemeProvider> sits) so the

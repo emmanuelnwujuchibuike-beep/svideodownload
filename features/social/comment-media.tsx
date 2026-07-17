@@ -103,7 +103,21 @@ export function VoiceMessage({ url, durationMs, waveform }: { url: string; durat
 }
 
 /** A short video-reply — muted poster preview inline, tap opens a fullscreen player with sound. */
-export function VideoComment({ url, thumbnailUrl, durationMs }: { url: string; thumbnailUrl: string | null; durationMs: number | null }) {
+export function VideoComment({
+  url,
+  thumbnailUrl,
+  durationMs,
+  width,
+  height,
+}: {
+  url: string;
+  thumbnailUrl: string | null;
+  durationMs: number | null;
+  /** Intrinsic size of the SOURCE VIDEO — the poster is a frame of it, so it
+   *  shares the aspect ratio. Reserves the box before the poster loads. */
+  width?: number | null;
+  height?: number | null;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -112,8 +126,23 @@ export function VideoComment({ url, thumbnailUrl, durationMs }: { url: string; t
           // max-w-full: a landscape clip capped only by max-h-64 (height) would
           // otherwise render wider than a phone screen at 16:9 (256px tall ×
           // 16/9 ≈ 455px wide) — width now yields to the viewport instead.
+          //
+          // width/height are LOAD-BEARING (owner, 2026-07-17, with a screenshot
+          // of a thread opening mid-conversation): without them this poster
+          // reserves ZERO height until it decodes, then snaps to full height and
+          // shoves the thread down — after the scroll-to-bottom has already run.
+          // The image bubbles were given their dimensions; this one was missed,
+          // and `loading="lazy"` made it worse (a poster below the fold doesn't
+          // even START loading until scrolled toward, so the shift lands late).
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={thumbnailUrl} alt="" loading="lazy" className="max-h-64 w-auto max-w-full object-cover" />
+          <img
+            src={thumbnailUrl}
+            alt=""
+            loading="lazy"
+            width={width ?? undefined}
+            height={height ?? undefined}
+            className="max-h-64 w-auto max-w-full object-cover"
+          />
         ) : (
           // No uploaded thumbnail — show the video's OWN first frame rather
           // than a black rectangle (owner, 2026-07-16: "videos sent in chat

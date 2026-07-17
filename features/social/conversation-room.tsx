@@ -681,22 +681,51 @@ export function ConversationRoom({
   // warns if you register one.
   useIsoLayoutEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    atBottomRef.current = true;
   }, [messages.length, viewportHeight]);
 
   /**
-   * Re-pin to the bottom after something below the fold changes height — used by
-   * attachments with no stored intrinsic size, which are the only ones that can
-   * still shift layout after paint.
+   * Whether the user was at the bottom BEFORE any late layout growth.
    *
-   * Only re-pins if the user is ALREADY at the bottom: yanking someone back down
-   * while they're reading history would be a worse bug than the one it fixes.
+   * Tracked on real scrolls rather than recomputed on demand, and that's the
+   * whole point: growing content does NOT fire a scroll event, so this ref still
+   * holds the user's actual intent at the moment media lands. Recomputing the
+   * distance inside the handler instead (the first version of this) is subtly
+   * broken — by then the content has ALREADY grown, so the viewer is suddenly
+   * "500px from the bottom" and the re-pin declines to fire, which is exactly
+   * the bug it exists to fix.
    */
-  const stickToBottomIfAtBottom = useCallback(() => {
+  const atBottomRef = useRef(true);
+  const handleThreadScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (distanceFromBottom < 120) el.scrollTop = el.scrollHeight;
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
   }, []);
+
+  /** Re-pin to the newest message, but only if the user hadn't scrolled away —
+   *  yanking someone back down while they read history would be a worse bug. */
+  const stickToBottomIfAtBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
+  }, []);
+
+  /**
+   * The belt to the reserved-dimensions braces (owner, 2026-07-17, with a
+   * screenshot of a thread opening mid-conversation: "fix it for good please").
+   *
+   * Declared sizes stop most late growth, but not all of it — rows predating the
+   * width/height columns, lazily-loaded video posters, font swaps. `load` does
+   * NOT bubble, but it DOES propagate in the CAPTURE phase, so this single
+   * listener on the scroller catches every <img>/<video> inside it however
+   * deeply nested, with no per-element wiring and nothing to forget next time a
+   * new attachment type is added.
+   */
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener("load", stickToBottomIfAtBottom, true);
+    return () => el.removeEventListener("load", stickToBottomIfAtBottom, true);
+  }, [stickToBottomIfAtBottom]);
 
   // Catch-up resync: `postgres_changes` has NO replay — messages sent while the
   // socket was suspended (backgrounded phone, tunnel, sleep) are lost from the
@@ -1671,6 +1700,9 @@ export function ConversationRoom({
       <div
         ref={scrollRef}
         onScroll={() => {
+          // Records whether the viewer is at the newest message, so late-loading
+          // media can re-pin without fighting someone reading history.
+          handleThreadScroll();
           // The action menu is now `fixed` (see toggleMessageMenu) so it can
           // clamp itself to the viewport — but that means it no longer
           // scrolls with its message, so it must close instead of visually
@@ -2006,14 +2038,11 @@ export function ConversationRoom({
                                     alt=""
                                     width={att.width ?? undefined}
                                     height={att.height ?? undefined}
-                                    // Older rows may have no stored size — re-anchor
-                                    // on load for those instead of shifting.
-                                    onLoad={att.width && att.height ? undefined : stickToBottomIfAtBottom}
                                     className="max-h-80 w-full max-w-full object-cover"
                                   />
                                 </button>
                               ) : att.kind === "video" ? (
-                                <VideoComment key={att.id} url={att.url} thumbnailUrl={att.thumbnailUrl} durationMs={att.durationMs} />
+                                <VideoComment key={att.id} url={att.url} thumbnailUrl={att.thumbnailUrl} durationMs={att.durationMs} width={att.width} height={att.height} />
                               ) : att.kind === "audio" ? (
                                 <VoiceMessage key={att.id} url={att.url} durationMs={att.durationMs} waveform={att.waveform} />
                               ) : (

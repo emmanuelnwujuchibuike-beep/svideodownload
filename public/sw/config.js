@@ -71,13 +71,23 @@ SWX.API_CACHE_ALLOWLIST = [];
 // they simply don't get the cache-speed benefit, same as any other
 // non-allowlisted URL) rather than guessing at path patterns.
 SWX.PAGE_CACHE_ALLOWLIST_PREFIXES = ["/blog", "/contact", "/developers", "/dmca", "/privacy", "/terms", "/pricing"];
-// "/" is deliberately NOT here even though it's the marketing landing page:
-// app/page.tsx redirects a SIGNED-IN visitor straight to /home (personalized),
-// so "/" isn't purely public by construction. A signed-out visitor's landing
-// page not getting the cache-speed benefit is a fine trade for never risking
-// this bucket seeing personalized HTML under any circumstance — the whole
-// point of this allowlist. See the block comment above.
-SWX.PAGE_CACHE_ALLOWLIST_EXACT = [];
+// "/" IS allowlisted as of 2026-07-17. It previously was not, for a reason that
+// no longer holds: app/page.tsx used to call cookies()/getUser() and redirect a
+// SIGNED-IN visitor to /home, so "/" wasn't purely public by construction and
+// could in principle put personalized HTML in this shared, URL-keyed bucket.
+//
+// That redirect now runs in middleware.ts, and app/page.tsx touches NO dynamic
+// API at all — "/" is statically prerendered and byte-identical for every
+// visitor (see docs/FEATURE_21_LANDING.md §4 and the comment in app/page.tsx).
+// A signed-in visitor never reaches it; the edge redirects them first. So the
+// hazard this exclusion guarded against is now structurally impossible, and the
+// installed PWA gets the marketing page from cache the moment the network is
+// slow or flaky instead of hanging on networkFirst's 10s timeout and dropping
+// to the offline page — the owner's "the landing page doesn't refresh like a
+// native app on the webapp".
+//
+// If "/" ever regains a server-side auth read, this MUST be reverted with it.
+SWX.PAGE_CACHE_ALLOWLIST_EXACT = ["/"];
 
 // Dev-only diagnostics. sw.js is a static file (no bundler env-var inlining
 // like the rest of the app gets), so this checks the actual hostname at

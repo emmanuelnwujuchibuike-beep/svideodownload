@@ -20,8 +20,29 @@
  * Uses the actual logo asset (`/brand/frenz-logo.png`, 512x512 source,
  * preloaded in app/layout.tsx's <head> so it's never the slow part).
  */
+// PURE-CSS FAILSAFE (2026-07-17): `#frenz-boot` runs `frenz-boot-selfclear`,
+// which at 8s sets `visibility:hidden` (`forwards` holds it). A hidden element is
+// invisible AND lets clicks through to the page under it — so the app is usable
+// even if the splash element itself never leaves. This is the ONLY dismissal path
+// that does not depend on the inline boot script surviving.
+//
+// Why it's needed: the boot IIFE schedules its own 6s failsafe at the top level
+// AFTER an if/else that can throw (a MutationObserver on an odd DOM, a
+// hydration-mismatched node). If that throws, the 6s timer is never registered and
+// the splash stays up forever — the "stuck until I refreshed again" the owner
+// reported, and the same silent-failsafe-no-op fixed once before
+// (messaging-stuck-loading, 07-15). A JS exception cannot stop a CSS animation, so
+// this closes the hole for every cause at once.
+//
+// It animates ONLY `visibility` — deliberately NOT opacity/display, which the JS
+// path drives (frenz-boot-out sets opacity:0, frenz-boot-off sets display:none).
+// Touching those here would fight the real fade: an animation setting opacity:1
+// for 0-99% would pin the splash opaque and BREAK the normal <1s dismissal until
+// 8s. `step-end` holds `visible` (the synthesized start) untouched until the very
+// end, so a JS dismiss at any time before 8s is completely unaffected and always
+// wins (8s > the JS 6s). CSS only ever bites when JS didn't run at all.
 const CSS = `
-#frenz-boot{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:#ffffff;transition:opacity .4s ease}
+#frenz-boot{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:#ffffff;transition:opacity .4s ease;animation:frenz-boot-selfclear 8s step-end forwards}
 html.dark #frenz-boot{background:#050816}
 html.frenz-boot-out #frenz-boot{opacity:0;pointer-events:none}
 html.frenz-boot-off #frenz-boot{display:none}
@@ -30,6 +51,7 @@ html.frenz-boot-off #frenz-boot{display:none}
 .frenz-boot__shine{position:absolute;inset:0;background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.65) 50%,transparent 60%);transform:translateX(-130%);animation:frenz-boot-shimmer 1.4s ease-in-out infinite}
 @keyframes frenz-boot-breathe{0%,100%{opacity:.95}50%{opacity:.65}}
 @keyframes frenz-boot-shimmer{0%{transform:translateX(-130%)}100%{transform:translateX(130%)}}
+@keyframes frenz-boot-selfclear{to{visibility:hidden}}
 @media (prefers-reduced-motion:reduce){.frenz-boot__mark,.frenz-boot__shine{animation:none}}
 `;
 

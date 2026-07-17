@@ -8,6 +8,7 @@ import {
 } from "@/components/icons/frenz-icons";
 import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
 import { PhoneReels, type MockReel } from "@/components/landing/phone-reels";
+import { showcaseStats } from "@/components/landing/showcase-stats";
 import { getFeed } from "@/lib/social/feed";
 
 // Illustrated cartoon avatars, never a real person's photo or handle — the landing
@@ -84,13 +85,19 @@ export async function PhoneMockup() {
   // page that paints from the edge.
   const reels: MockReel[] = shuffle(eligible)
     .slice(0, 8)
-    .map((p) => ({
-      id: p.id,
-      thumbnailUrl: p.thumbnailUrl!,
-      mediaUrl: p.mediaUrl!,
-      viewsCount: p.viewsCount,
-      title: p.title ?? "",
-    }));
+    .map((p) => {
+      // Illustrative 30k–50k engagement for the mockup (owner request) — decorative
+      // only, deterministic, never written or counted. See showcaseStats.
+      const s = showcaseStats(p.id);
+      return {
+        id: p.id,
+        thumbnailUrl: p.thumbnailUrl!,
+        mediaUrl: p.mediaUrl!,
+        viewsCount: s.views,
+        likesCount: s.likes,
+        title: p.title ?? "",
+      };
+    });
 
   return (
     <div className="group/phone relative mx-auto w-full max-w-[292px]">

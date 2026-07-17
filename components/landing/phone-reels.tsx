@@ -7,9 +7,15 @@ export interface MockReel {
   id: string;
   thumbnailUrl: string;
   mediaUrl: string;
+  /** Illustrative engagement for the mockup — see `showcaseStats`. */
   viewsCount: number;
+  likesCount: number;
   title: string;
 }
+
+// showcaseStats lives in ./showcase-stats.ts — a plain module, so the SERVER
+// component PhoneMockup can call it (a "use client" export can't be invoked from
+// the server; doing so was a build-breaking prerender error).
 
 /** How many clips we're willing to warm. Matches the owner's "first 4". */
 const WARM_COUNT = 4;
@@ -18,20 +24,32 @@ const WARM_COUNT = 4;
  * Should we spend the visitor's data warming clips they may never play?
  *
  * The landing page is the first thing a stranger loads, often on mobile data in a
- * region where it's expensive — so warming is a privilege, not a default. Skip it
- * outright on Save-Data or anything slower than 4g. `connection` is Chromium-only;
- * everywhere else we warm, which is the same bet the rest of the page already makes.
+ * region where it's expensive — so warming is a privilege, not a default.
+ *
+ * `effectiveType === "4g"` ALONE is far too permissive and actively hurt us: the
+ * Network Information API reports "4g" for anything above ~700kbps, so a genuinely
+ * slow phone still qualified and we'd start pulling a multi-megabyte clip, saturating
+ * the very link the visitor then needs to actually play it. Reels here are raw MP4
+ * (Cloudflare Stream is not configured — no adaptive ladder), and they run to ~5.5MB;
+ * at ~250kbps that's ~3 minutes, which is exactly the owner's "on the webapp the
+ * videos take about 3 minutes". So gate on measured `downlink` too, and only warm
+ * when there is real headroom.
  */
+const MIN_DOWNLINK_MBPS = 2.5;
+
 function shouldWarm(): boolean {
   if (typeof navigator === "undefined") return false;
   const c = (
     navigator as Navigator & {
-      connection?: { saveData?: boolean; effectiveType?: string };
+      connection?: { saveData?: boolean; effectiveType?: string; downlink?: number };
     }
   ).connection;
-  if (!c) return true;
+  // No Network Information API (Safari/Firefox) — don't gamble a stranger's data on
+  // an unknown link. Warming is an optimisation; skipping it only costs a spinner.
+  if (!c) return false;
   if (c.saveData) return false;
-  return c.effectiveType === undefined || c.effectiveType === "4g";
+  if (c.effectiveType !== "4g") return false;
+  return typeof c.downlink === "number" && c.downlink >= MIN_DOWNLINK_MBPS;
 }
 
 /**
@@ -207,7 +225,7 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
           </span>
 
           <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-md bg-black/45 px-1.5 py-0.5 text-[9px] font-medium text-white backdrop-blur">
-            <Play className="h-2.5 w-2.5" /> {compact(lead.viewsCount)}
+            <Play className="h-2.5 w-2.5" /> {compact(lead.viewsCount)} views
           </span>
 
           {/* Play affordance — grows on hover so it reads as a control. */}
@@ -326,14 +344,14 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
                 <span className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent" />
 
                 {/* Action rail — mirrors the real deck's right-hand column */}
-                <span className="pointer-events-none absolute bottom-16 right-1.5 flex flex-col items-center gap-2.5 text-white">
+                <span className="pointer-events-none absolute bottom-16 right-1.5 flex flex-col items-center gap-2.5 text-white drop-shadow">
                   <span className="flex flex-col items-center gap-0.5">
-                    <Heart className="h-4 w-4" />
-                    <span className="text-[7px] font-semibold">{compact(Math.round(r.viewsCount / 8))}</span>
+                    <Heart className="h-4 w-4 fill-rose-500 text-rose-500" />
+                    <span className="text-[7px] font-semibold">{compact(r.likesCount)}</span>
                   </span>
                   <span className="flex flex-col items-center gap-0.5">
                     <MessageCircle className="h-4 w-4" />
-                    <span className="text-[7px] font-semibold">{compact(Math.round(r.viewsCount / 20))}</span>
+                    <span className="text-[7px] font-semibold">{compact(Math.round(r.likesCount / 9))}</span>
                   </span>
                   <span className="flex flex-col items-center gap-0.5">
                     <Play className="h-4 w-4" />

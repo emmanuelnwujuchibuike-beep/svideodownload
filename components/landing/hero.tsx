@@ -71,8 +71,12 @@ export function Hero() {
           </div>
         </div>
 
-        {/* Right — phone mockup */}
-        <div className="relative">
+        {/* Right — phone mockup.
+            pb reserves room for the download callout, which hangs ~56px BELOW the
+            frame. Without it the chip collided with the "Paste a link to download"
+            label under the hero — the callout is absolutely positioned, so it
+            contributes no height of its own and nothing downstream knows it's there. */}
+        <div className="relative pb-16 sm:pb-14">
           <PhoneMockup />
         </div>
       </div>

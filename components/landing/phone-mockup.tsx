@@ -6,17 +6,29 @@ import {
   FrenzInboxOutline,
   FrenzPersonSolid,
 } from "@/components/icons/frenz-icons";
+import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
 import { PhoneReels, type MockReel } from "@/components/landing/phone-reels";
 import { getFeed } from "@/lib/social/feed";
 
-// Initials-in-gradient-circle, matching the fallback-avatar convention used by
-// meet-people.tsx and notification-card — never emoji (see the no-emoji rule).
+// Illustrated cartoon avatars, never a real person's photo or handle — the landing
+// page is public marketing and must not put real users' faces in it. See
+// components/landing/bitmoji-avatar.tsx.
 const PEOPLE = [
   { name: "Sarah", from: "from-rose-500 to-pink-500" },
   { name: "James", from: "from-blue-500 to-indigo-500" },
   { name: "Maria", from: "from-violet-500 to-purple-500" },
   { name: "Daniel", from: "from-emerald-500 to-teal-500" },
 ] as const;
+
+/** Fisher-Yates. Runs at ISR regeneration only — see PhoneMockup. */
+function shuffle<T>(xs: T[]): T[] {
+  const a = [...xs];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a;
+}
 
 /**
  * Decorative in-app preview shown in the hero — an iPhone 17 Pro Max.
@@ -51,15 +63,26 @@ export async function PhoneMockup() {
   // sees; it must never gamble on someone else's expiring URL. Own-media also
   // means R2 (zero egress) instead of a third-party hotlink.
   const ownMedia = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, "");
-  const reels: MockReel[] = (await getFeed({ sort: "trending", viewerId: null, limit: 24 }))
-    .filter(
-      (p) =>
-        p.mediaKind === "video" &&
-        !!p.thumbnailUrl &&
-        !!p.mediaUrl &&
-        !!ownMedia &&
-        p.thumbnailUrl.startsWith(ownMedia),
-    )
+  const eligible = (await getFeed({ sort: "trending", viewerId: null, limit: 24 })).filter(
+    (p) =>
+      p.mediaKind === "video" &&
+      !!p.thumbnailUrl &&
+      !!p.mediaUrl &&
+      !!ownMedia &&
+      p.thumbnailUrl.startsWith(ownMedia),
+  );
+
+  // Shuffle so the hero isn't the same clip forever, and so a newly uploaded reel
+  // can reach the front page.
+  //
+  // This runs at ISR REGENERATION, not per request — `/` is one static CDN document
+  // (docs/FEATURE_21_LANDING.md §4), so every visitor in a given window shares an
+  // order and the page stays cacheable. That also makes it the only correct place:
+  // shuffling on the client would swap the hero's tile after hydration, which is
+  // the same flash we rejected for the personalized hero. New uploads surface on
+  // the next regeneration rather than instantly — the honest trade for a landing
+  // page that paints from the edge.
+  const reels: MockReel[] = shuffle(eligible)
     .slice(0, 8)
     .map((p) => ({
       id: p.id,
@@ -274,7 +297,9 @@ export async function PhoneMockup() {
                 <MessageCircle className="h-2.5 w-2.5" aria-hidden /> Group Chat
               </span>
               <div className="mt-1.5 flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-500 text-[9px] font-bold">G</span>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-violet-500">
+                  <BitmojiAvatar seed="general-chat" className="h-full w-full" />
+                </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[10px] font-semibold">General Chat</span>
                   <span className="block truncate text-[9px] text-white/45">Hey everyone! What&apos;s trending today?</span>
@@ -291,8 +316,8 @@ export async function PhoneMockup() {
               <div className="mt-1.5 grid grid-cols-4 gap-1.5">
                 {PEOPLE.map((p) => (
                   <div key={p.name} className="flex flex-col items-center gap-1 rounded-lg bg-white/[0.05] p-1.5">
-                    <span className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br ${p.from} text-[10px] font-bold text-white`}>
-                      {p.name.charAt(0).toUpperCase()}
+                    <span className={`flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br ${p.from}`}>
+                      <BitmojiAvatar seed={p.name} className="h-full w-full" />
                     </span>
                     <span className="text-[8px] font-semibold leading-none">{p.name}</span>
                     <span className="inline-flex w-full items-center justify-center gap-0.5 rounded-md bg-blue-500 py-0.5 text-[8px] font-semibold">

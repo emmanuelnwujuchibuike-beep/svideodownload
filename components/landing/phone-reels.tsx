@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, MessageCircle, Play, X } from "lucide-react";
+import { Heart, MessageCircle, Play, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface MockReel {
@@ -42,39 +42,66 @@ function shouldWarm(): boolean {
  * clip per panel, muted autoplay on the active clip only. Scrolling is the browser's,
  * not a JS carousel, so it's smooth on a mid-range phone and costs no main thread.
  *
- * DATA / "INSTANT OPEN", the honest version:
- *   - The poster is what makes the open instant. It's already decoded (it's the tile
- *     the visitor just tapped), so the first frame paints immediately and the video
- *     starts underneath it. That's the TikTok trick, and it costs zero extra bytes.
- *   - Warming is `preload="metadata"` on the first 4 — headers only, a few KB each,
- *     enough that DNS/TLS/the moov atom are hot when the deck opens. NOT
- *     `preload="auto"`: pulling 4 full clips onto the landing page for visitors who
- *     may never press play is exactly the kind of thing that burned this project's
- *     egress cap once already.
- *   - Only the ACTIVE clip gets `preload="auto"` and plays. Everything else is
- *     paused and unbuffered.
- *   - Warming waits for idle, so it can never compete with the hero's LCP.
+ * DATA vs "INSTANT", and where the line sits:
+ *   - The LEAD clip is warmed with `preload="auto"` — real buffered video. Metadata
+ *     alone was not enough: the click still began a cold fetch and the visitor sat
+ *     watching the poster ("the reels don't play instant, it just shows like an
+ *     image"). Sources are faststart (moov before mdat, verified), so buffered bytes
+ *     play immediately.
+ *   - Clips 2-4 warm to `preload="metadata"` only — headers, a few KB. They're a
+ *     swipe away, and four full clips on the landing page is the bill that blew this
+ *     project's egress cap once already.
+ *   - Open: the active clip and the NEXT one buffer (`auto`) so a swipe lands on
+ *     video, not a poster. Everything past the warm window is `none`, so a long deck
+ *     never becomes a long download.
+ *   - Warming waits for idle and is skipped on Save-Data / slower-than-4g, so it can
+ *     never compete with the hero's LCP or spend a stranger's data uninvited.
+ *   - Audio is ON, because the deck only ever opens from a tap — that gesture is
+ *     exactly what autoplay policy requires. A mute control is always visible.
  */
 export function PhoneReels({ reels }: { reels: MockReel[] }) {
   const [open, setOpen] = useState(false);
   const [warm, setWarm] = useState(false);
   const [active, setActive] = useState(0);
+  // Sound is ON once the deck is opened by a tap. That tap is a user gesture, which
+  // is what browser autoplay policy requires for audible playback — the deck can be
+  // audible precisely because it is never opened without one. If a later clip is
+  // still refused (Safari is stricter per-element), we fall back to muted rather
+  // than leaving a silent, frozen video.
+  const [muted, setMuted] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const viewed = useRef<Set<string>>(new Set());
 
-  // Warm on idle, never on load — the <h1> is the LCP element and nothing here may
-  // queue in front of it.
+  // Warm strictly AFTER the load event, then on idle.
+  //
+  // Idle alone was not enough and it measurably cost us: on a throttled mobile link
+  // requestIdleCallback fires while the page is still fetching, so four video
+  // preloads went out competing with the <h1>'s own resources and LCP regressed
+  // 2004ms -> 2304ms — straight through the 2s budget. `load` means the critical
+  // resources are already done, so the warm-up can only ever use leftover bandwidth.
+  // Idle covers the CPU; load covers the network. Both are required.
   useEffect(() => {
     if (!shouldWarm()) return;
-    const start = () => setWarm(true);
-    // requestIdleCallback is unsupported on Safari <16.4; fall back to a timeout
-    // long enough to be safely past LCP either way.
-    const idle = typeof window.requestIdleCallback === "function";
-    const id = idle ? window.requestIdleCallback(start) : window.setTimeout(start, 2500);
+    let cancelled = false;
+    let idleId = 0;
+    let timerId = 0;
+    const start = () => {
+      if (!cancelled) setWarm(true);
+    };
+    const afterLoad = () => {
+      if (cancelled) return;
+      // requestIdleCallback is unsupported on Safari <16.4 — fall back to a timeout.
+      if (typeof window.requestIdleCallback === "function") idleId = window.requestIdleCallback(start);
+      else timerId = window.setTimeout(start, 1200);
+    };
+    if (document.readyState === "complete") afterLoad();
+    else window.addEventListener("load", afterLoad, { once: true });
     return () => {
-      if (idle) window.cancelIdleCallback(id);
-      else window.clearTimeout(id);
+      cancelled = true;
+      window.removeEventListener("load", afterLoad);
+      if (idleId) window.cancelIdleCallback(idleId);
+      if (timerId) window.clearTimeout(timerId);
     };
   }, []);
 
@@ -104,7 +131,14 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
           if (!v) continue;
           if (e.isIntersecting && e.intersectionRatio > 0.6) {
             setActive(i);
-            v.play().then(() => countView(reels[i]!.id)).catch(() => {});
+            v.play()
+              .then(() => countView(reels[i]!.id))
+              .catch(() => {
+                // Refused audible autoplay — retry muted so the clip still plays.
+                setMuted(true);
+                v.muted = true;
+                v.play().then(() => countView(reels[i]!.id)).catch(() => {});
+              });
           } else {
             v.pause();
           }
@@ -128,40 +162,102 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
 
   return (
     <>
-      {/* Closed state — the row of tiles */}
+      {/* Closed state — the row the visitor sees BEFORE tapping. Polished: a
+          duration-style pill, a live "Now playing"-ish cue on the lead, a soft ring
+          so the tiles read as cards rather than flat crops, and the queued clip
+          showing it's next. All paint, no extra bytes. */}
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setOpen(true);
+            setMuted(false);
+            // Kick playback off INSIDE the gesture. Waiting for the effect/IO to do
+            // it puts play() in a later task, where the browser no longer counts it
+            // as user-initiated and refuses audio. The element is already mounted
+            // (the deck renders on the same commit), so a rAF is enough to have the
+            // ref, and we're still within the gesture's grace window.
+            requestAnimationFrame(() => {
+              const v = videoRefs.current[0];
+              if (!v) return;
+              v.muted = false;
+              v.play().catch(() => {
+                setMuted(true);
+                v.muted = true;
+                void v.play().catch(() => {});
+              });
+            });
+          }}
           aria-label="Play trending reels"
-          className="relative h-28 flex-1 overflow-hidden rounded-xl bg-neutral-800"
+          className="group/reel relative h-28 flex-1 overflow-hidden rounded-xl bg-neutral-800 ring-1 ring-inset ring-white/10"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lead.thumbnailUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
-          <span className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-          <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-md bg-black/45 px-1.5 py-0.5 text-[9px] font-medium text-white">
+          <img
+            src={lead.thumbnailUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover/reel:scale-[1.06]"
+          />
+          <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/25" />
+
+          {/* LIVE cue — a real signal that this is playable video, not a photo. */}
+          <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-1.5 py-[3px] text-[8px] font-bold uppercase tracking-wide text-white backdrop-blur">
+            <span className="h-1 w-1 rounded-full bg-rose-400 motion-safe:animate-pulse" /> Reels
+          </span>
+
+          <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-md bg-black/45 px-1.5 py-0.5 text-[9px] font-medium text-white backdrop-blur">
             <Play className="h-2.5 w-2.5" /> {compact(lead.viewsCount)}
           </span>
+
+          {/* Play affordance — grows on hover so it reads as a control. */}
           <span className="absolute inset-0 flex items-center justify-center">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 backdrop-blur">
-              <Play className="h-4 w-4 fill-white text-white" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/25 ring-1 ring-white/40 backdrop-blur transition-transform duration-300 group-hover/reel:scale-110">
+              <Play className="ml-[1px] h-4 w-4 fill-white text-white" />
             </span>
           </span>
         </button>
-        <div className="relative h-28 w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-800">
+
+        {/* Up-next tile — labelled, so the row reads as a queue rather than a stray crop. */}
+        <div className="relative h-28 w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-800 ring-1 ring-inset ring-white/10">
           {second ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={second.thumbnailUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={second.thumbnailUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+              <span className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+              <span className="absolute inset-x-0 bottom-1 text-center text-[7px] font-semibold uppercase tracking-wide text-white/80">
+                Next
+              </span>
+            </>
           ) : null}
         </div>
       </div>
 
-      {/* Warm-up. Rendered only once idle + on a connection that can afford it.
-          `preload="metadata"` = headers only. No poster here on purpose: the tiles
-          above already hold the same images, so this fetches no pixels. */}
+      {/* Warm-up, rendered only once idle + on a connection that can afford it.
+          The LEAD clip gets `preload="auto"` — actual buffered video, which is the
+          only thing that makes play truly instant. `preload="metadata"` (what this
+          did before) fetches headers ONLY, so the click still started a cold fetch
+          and the visitor sat looking at the poster: the owner's "the reels don't
+          play instant, it just shows like an image". Clips 2-4 stay on metadata —
+          they're a scroll away, and 4 full clips on the landing page is exactly the
+          bill that blew the egress cap once. Verified: sources are faststart
+          (moov before mdat), so buffered bytes start playing immediately. */}
       {warm && !open
-        ? reels.slice(0, WARM_COUNT).map((r) => (
-            <video key={`warm-${r.id}`} src={r.mediaUrl} preload="metadata" muted playsInline className="hidden" />
+        ? reels.slice(0, WARM_COUNT).map((r, i) => (
+            <video
+              key={`warm-${r.id}`}
+              src={r.mediaUrl}
+              preload={i === 0 ? "auto" : "metadata"}
+              muted
+              playsInline
+              aria-hidden
+              tabIndex={-1}
+              // NOT `hidden`/`display:none` — a display:none <video> is not loaded at
+              // all (measured: preload="auto" still gave readyState 0, buffered 0, so
+              // the warm-up was silently doing nothing). It has to stay in the layout
+              // to load, so: 1px, transparent, out of flow, uninteractive.
+              className="pointer-events-none absolute h-px w-px opacity-0"
+            />
           ))
         : null}
 
@@ -184,6 +280,26 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
           >
             <X className="h-3.5 w-3.5" />
           </button>
+          {/* Audio is on by default here (the deck is only ever opened by a tap), so
+              a visible mute control is mandatory — sound the visitor can't stop is
+              the single most hostile thing a landing page can do. */}
+          <button
+            type="button"
+            onClick={() => {
+              const next = !muted;
+              setMuted(next);
+              const v = videoRefs.current[active];
+              if (v) {
+                v.muted = next;
+                if (!next) void v.play().catch(() => {});
+              }
+            }}
+            aria-label={muted ? "Unmute reels" : "Mute reels"}
+            aria-pressed={muted}
+            className="absolute left-2 top-8 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur"
+          >
+            {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+          </button>
 
           <div
             ref={scrollerRef}
@@ -197,10 +313,12 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
                   }}
                   src={r.mediaUrl}
                   poster={r.thumbnailUrl}
-                  // Only the active clip buffers. `metadata` for the warm window,
-                  // `none` past it — a deck of 24 must not become 24 downloads.
-                  preload={i === active ? "auto" : i < WARM_COUNT ? "metadata" : "none"}
-                  muted
+                  // Buffer the active clip AND the next one — that's how a swipe up
+                  // lands on video rather than a poster (TikTok's model: fetch ahead
+                  // by one while watching). Everything past the warm window is
+                  // "none", so a long deck never becomes a long download.
+                  preload={i === active || i === active + 1 ? "auto" : i < WARM_COUNT ? "metadata" : "none"}
+                  muted={muted}
                   loop
                   playsInline
                   className="absolute inset-0 h-full w-full object-cover"

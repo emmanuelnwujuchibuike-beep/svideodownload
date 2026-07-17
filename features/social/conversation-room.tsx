@@ -281,6 +281,13 @@ export function ConversationRoom({
   // of JUST the story state is the safer fix — it never touches the route
   // or this component's own mount lifecycle at all.
   const [liveOtherStoryGroup, setLiveOtherStoryGroup] = useState(otherStoryGroup);
+  // The header story ring's cover: an image story is its own cover, a video
+  // story uses the poster stored at upload (0083). Null only for a pre-0083
+  // video story, which falls back to <video> below.
+  const storyRingCover =
+    liveOtherStoryGroup?.stories[0]?.mediaKind === "image"
+      ? liveOtherStoryGroup.stories[0].mediaUrl
+      : (liveOtherStoryGroup?.stories[0]?.thumbnailUrl ?? null);
   useEffect(() => {
     setLiveOtherStoryGroup(otherStoryGroup);
     if (type !== "direct" || !otherName) return;
@@ -1659,10 +1666,17 @@ export function ConversationRoom({
           >
             <span className="rounded-full bg-brand p-0.5">
               <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-background p-0.5">
-                {liveOtherStoryGroup.stories[0]?.mediaKind === "image" ? (
+                {/* An <img> for both kinds — a video story uses its stored poster
+                    (0083). This used to stream the MP4 through a <video> to paint
+                    a 44px circle, and a <video> re-requests on every mount no
+                    matter what: the SW deliberately skips video (native range
+                    pipeline) and Safari re-fetches ranges regardless of
+                    Cache-Control. Only an <img> can come from cache. */}
+                {storyRingCover ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={liveOtherStoryGroup.stories[0].mediaUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                  <img src={storyRingCover} alt="" className="h-full w-full rounded-full object-cover" />
                 ) : liveOtherStoryGroup.stories[0]?.mediaKind === "video" ? (
+                  // Legacy: a video story from before 0083 with no poster.
                   // eslint-disable-next-line jsx-a11y/media-has-caption
                   <video src={`${liveOtherStoryGroup.stories[0].mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-full w-full rounded-full object-cover" />
                 ) : liveOtherStoryGroup.avatarUrl ? (

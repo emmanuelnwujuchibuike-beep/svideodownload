@@ -1,4 +1,4 @@
-import { Play } from "lucide-react";
+import { Newspaper, Play } from "lucide-react";
 import Link from "next/link";
 
 const NEWS = [
@@ -16,7 +16,10 @@ export function LatestNews() {
     <section className="container max-w-6xl py-10 sm:py-14">
       <div className="mb-5 flex items-end justify-between">
         <div>
-          <h2 className="flex items-center gap-2 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">📰 Latest News</h2>
+          <h2 className="flex items-center gap-2 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
+            <Newspaper className="h-6 w-6 shrink-0 text-cyan-500 sm:h-7 sm:w-7" aria-hidden />
+            Latest News
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">Stay updated with what&apos;s happening around the world.</p>
         </div>
         <Link href="/blog" className="text-sm font-semibold text-primary hover:underline">

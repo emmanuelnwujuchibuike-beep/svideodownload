@@ -1,5 +1,3 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { CtaBanner } from "@/components/landing/cta-banner";
@@ -18,55 +16,39 @@ import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { AdScripts } from "@/features/monetization/ad-scripts";
 import { AdSlot } from "@/features/monetization/ad-slot";
 import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
-import { sourceUrlSchema } from "@/lib/validation";
-import { createClient } from "@/lib/supabase/server";
 
-// manifest.ts `share_target` posts here as a GET with these params when
-// someone shares a link into Frenz from another app (e.g. TikTok/Instagram's
-// own "Share" sheet). Some senders put the link in `url`, others just dump it
-// in `text` — check both. Reuses the same schema the download APIs already
-// validate against, so a malformed/unsafe value is silently dropped rather
-// than handed to the client unchecked.
-function extractSharedUrl(params: { url?: string; text?: string }): string | undefined {
-  for (const candidate of [params.url, params.text?.match(/https?:\/\/\S+/)?.[0]]) {
-    if (candidate && sourceUrlSchema.safeParse(candidate).success) return candidate;
-  }
-  return undefined;
-}
-
-export default async function HomePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ url?: string; text?: string; title?: string }>;
-}) {
-  const sharedUrl = extractSharedUrl(await searchParams);
-
-  // Signed-in users get the app dashboard, not the marketing landing page —
-  // unless they just shared a link in, since the paste-a-link tool that
-  // Share Target hands off to only lives on this landing page today.
-  // Only pay for the getUser() auth round-trip when a session cookie exists —
-  // brand-new visitors skip it entirely and the landing renders immediately.
-  const jar = await cookies();
-  const maybeSignedIn = jar.getAll().some((c) => c.name.includes("-auth-token"));
-  let signedIn = false;
-  if (maybeSignedIn) {
-    try {
-      const supabase = await createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      signedIn = !!user;
-    } catch {
-      /* anon → show landing */
-    }
-  }
-  if (signedIn && !sharedUrl) redirect("/home"); // outside try/catch — redirect() throws by design
-
+/**
+ * The marketing landing page — the first page a new visitor ever loads, and the
+ * one the 2-second budget matters most on (docs/FEATURE_21_LANDING.md §4).
+ *
+ * This page is deliberately STATIC. It touches no dynamic API: no `cookies()`,
+ * no `searchParams`, no per-visitor data. Either one would opt the whole route
+ * out of static generation and make every cold visitor wait on an origin render
+ * in cdg1 (Paris) — from an Africa-primary audience — instead of hitting a CDN.
+ *
+ * Two things used to force that, and both moved rather than disappeared:
+ *  - the signed-in → /home redirect now runs in middleware.ts, at the edge;
+ *  - the Share Target hand-off is read on the client by SharedLinkDownloader.
+ *
+ * The auth-dependent chrome never needed the server: SiteHeader is a client
+ * component resolving the user via useUser(). Keep it that way — adding a
+ * server auth read here silently un-statics the page again.
+ *
+ * The Suspense'd sections below are data-backed and stream in behind the hero,
+ * so the shell paints immediately rather than blocking the first byte on their
+ * DB queries.
+ */
+// Static, but not frozen: ISR regenerates this document so Trending stays
+// current without any visitor ever waiting on a DB read. The cadence is set by
+// `export const revalidate = 60` in app/layout.tsx — Next uses the LOWEST
+// revalidate in the segment tree, so a larger value declared here would be
+// silently ignored. Change it there, not here.
+export default function HomePage() {
   return (
     <>
       <SiteHeader />
       <main>
-        <Hero initialUrl={sharedUrl} />
+        <Hero />
         <FeatureCards />
 
         {/* Ad slot — unchanged zone, placed in the new flow */}

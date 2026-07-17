@@ -1,9 +1,11 @@
 import { Lock, Play, Plus, Sparkles, UserX, Zap } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { HeroWave } from "@/components/landing/hero-wave";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
 import { Downloader } from "@/features/downloader/downloader";
+import { SharedLinkDownloader } from "@/features/downloader/shared-link-downloader";
 
 const TRUST = [
   { icon: UserX, line1: "No Login", line2: "Required", tint: "text-blue-500" },
@@ -11,7 +13,7 @@ const TRUST = [
   { icon: Zap, line1: "Fast", line2: "Downloads", tint: "text-violet-500" },
 ];
 
-export function Hero({ initialUrl }: { initialUrl?: string }) {
+export function Hero() {
   return (
     <section className="relative overflow-hidden pb-12 pt-28 sm:pb-16 sm:pt-32">
       <HeroWave />
@@ -80,7 +82,14 @@ export function Hero({ initialUrl }: { initialUrl?: string }) {
         <div className="mb-3 flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
           <span className="h-px w-8 bg-border" /> Paste a link to download <span className="h-px w-8 bg-border" />
         </div>
-        <Downloader initialUrl={initialUrl} />
+        {/* The tool is prerendered into the static HTML by the fallback, then
+            swapped for the identical tool pre-filled from a Share Target
+            hand-off. Same markup either way, so nothing shifts — and the
+            boundary is what lets `/` prerender at all (useSearchParams()
+            suspends). See features/downloader/shared-link-downloader.tsx. */}
+        <Suspense fallback={<Downloader />}>
+          <SharedLinkDownloader />
+        </Suspense>
       </div>
     </section>
   );

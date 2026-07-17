@@ -1,3 +1,4 @@
+import { Flame } from "lucide-react";
 import Link from "next/link";
 
 import { TrendingRail } from "@/components/landing/trending-rail";
@@ -10,7 +11,8 @@ export async function TrendingToday() {
   return (
     <section className="container max-w-6xl py-10 sm:py-14">
       <h2 className="flex items-center gap-2 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
-        🔥 Trending Today
+        <Flame className="h-6 w-6 shrink-0 text-rose-500 sm:h-7 sm:w-7" aria-hidden />
+        Trending Today
       </h2>
 
       {posts.length > 0 ? (

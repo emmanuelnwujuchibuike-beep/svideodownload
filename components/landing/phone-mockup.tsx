@@ -1,19 +1,21 @@
-import { Check, Heart, MessageCircle, Play, Search, UserPlus, Wifi } from "lucide-react";
+import { Check, Flame, Heart, MessageCircle, Play, Search, Sparkles, Smile, Trophy, UserPlus, Users, Wifi } from "lucide-react";
 
+// Initials-in-gradient-circle, matching the fallback-avatar convention used by
+// meet-people.tsx and notification-card — never emoji (see the no-emoji rule).
 const PEOPLE = [
-  { name: "Sarah", emoji: "👩🏽", from: "from-rose-500 to-pink-500" },
-  { name: "James", emoji: "🧑🏻", from: "from-blue-500 to-indigo-500" },
-  { name: "Maria", emoji: "👩🏼", from: "from-violet-500 to-purple-500" },
-  { name: "Daniel", emoji: "🧑🏾", from: "from-emerald-500 to-teal-500" },
+  { name: "Sarah", from: "from-rose-500 to-pink-500" },
+  { name: "James", from: "from-blue-500 to-indigo-500" },
+  { name: "Maria", from: "from-violet-500 to-purple-500" },
+  { name: "Daniel", from: "from-emerald-500 to-teal-500" },
 ] as const;
 
 /** Decorative in-app preview shown in the hero — styled as an iPhone 17 Pro Max. */
 export function PhoneMockup() {
   return (
     <div className="relative mx-auto w-full max-w-[320px]">
-      {/* Floating chips */}
-      <div className="absolute -right-3 -top-4 z-20 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400 text-2xl shadow-xl shadow-amber-500/30 animate-float">
-        😄
+      {/* Floating chips — line icons only, no emoji */}
+      <div className="absolute -right-3 -top-4 z-20 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400 text-white shadow-xl shadow-amber-500/30 animate-float">
+        <Smile className="h-6 w-6" aria-hidden />
       </div>
       <div className="absolute -right-6 top-28 z-20 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-bold shadow-xl ring-1 ring-border/60">
         <MessageCircle className="h-3.5 w-3.5 text-rose-500" /> 128
@@ -21,11 +23,11 @@ export function PhoneMockup() {
       <div className="absolute -right-8 top-44 z-20 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-bold shadow-xl ring-1 ring-border/60">
         <Heart className="h-3.5 w-3.5 fill-rose-500 text-rose-500" /> 3.2K
       </div>
-      <div className="absolute -left-6 top-32 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-2xl shadow-xl ring-4 ring-background animate-float">
-        😎
+      <div className="absolute -left-6 top-32 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-xl ring-4 ring-background animate-float">
+        <Sparkles className="h-6 w-6" aria-hidden />
       </div>
-      <div className="absolute -right-4 bottom-24 z-20 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 text-3xl shadow-xl ring-4 ring-background">
-        🥳
+      <div className="absolute -right-4 bottom-24 z-20 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-xl ring-4 ring-background">
+        <Trophy className="h-7 w-7" aria-hidden />
       </div>
 
       {/* Soft glow behind phone */}
@@ -90,7 +92,9 @@ export function PhoneMockup() {
             {/* Trending reels */}
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[11px] font-semibold">🔥 Trending Reels</span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold">
+                  <Flame className="h-3 w-3 text-rose-400" aria-hidden /> Trending Reels
+                </span>
                 <span className="text-[10px] text-blue-400">View all</span>
               </div>
               <div className="flex gap-2">
@@ -110,7 +114,11 @@ export function PhoneMockup() {
 
             {/* Community chat */}
             <div className="rounded-xl bg-white/[0.06] p-2">
-              <span className="text-[10px] font-semibold text-white/70">💬 Community Chat</span>
+              {/* "Group Chat", not "Community Chat" — group conversations are real;
+                  a Communities product is not. Don't depict what doesn't ship. */}
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-white/70">
+                <MessageCircle className="h-2.5 w-2.5" aria-hidden /> Group Chat
+              </span>
               <div className="mt-1.5 flex items-center gap-2">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-500 text-[9px] font-bold">G</span>
                 <span className="min-w-0 flex-1">
@@ -123,11 +131,15 @@ export function PhoneMockup() {
 
             {/* People you may know */}
             <div>
-              <span className="text-[10px] font-semibold text-white/70">👥 People You May Know</span>
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-white/70">
+                <Users className="h-2.5 w-2.5" aria-hidden /> People You May Know
+              </span>
               <div className="mt-1.5 grid grid-cols-4 gap-1.5">
                 {PEOPLE.map((p) => (
                   <div key={p.name} className="flex flex-col items-center gap-1 rounded-lg bg-white/[0.05] p-1.5">
-                    <span className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br ${p.from} text-sm`}>{p.emoji}</span>
+                    <span className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br ${p.from} text-[10px] font-bold text-white`}>
+                      {p.name.charAt(0).toUpperCase()}
+                    </span>
                     <span className="text-[8px] font-semibold leading-none">{p.name}</span>
                     <span className="inline-flex w-full items-center justify-center gap-0.5 rounded-md bg-blue-500 py-0.5 text-[8px] font-semibold">
                       <UserPlus className="h-2 w-2" /> Add

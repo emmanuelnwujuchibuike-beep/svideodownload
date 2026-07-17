@@ -254,6 +254,9 @@ async function loadFriendProfiles(db: Db, ids: string[]): Promise<Map<string, Fr
     .in("id", ids);
   const out = new Map<string, FriendProfile>();
   for (const r of (data ?? []) as (ProfileRow & { is_suspended: boolean })[]) {
+    // Checks `is_suspended` only, deliberately: every id here is already one of
+    // the viewer's friends, and an admin hide (0082) is friends-only rather than
+    // a silencing — so a hidden friend belongs in their friends' activity feed.
     if (r.is_suspended) continue;
     out.set(r.id, toProfile(r));
   }
@@ -264,11 +267,16 @@ async function loadPublicProfiles(db: Db, ids: string[]): Promise<Map<string, Fr
   if (ids.length === 0) return new Map();
   const { data } = await db
     .from("profiles")
-    .select("id, handle, display_name, avatar_url, is_verified, is_suspended, visibility")
+    .select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden, visibility")
     .in("id", ids);
   const out = new Map<string, FriendProfile>();
-  for (const r of (data ?? []) as (ProfileRow & { is_suspended: boolean; visibility: string })[]) {
-    if (r.is_suspended || !r.handle || r.visibility !== "public") continue;
+  for (const r of (data ?? []) as (ProfileRow & { is_suspended: boolean; is_hidden: boolean; visibility: string })[]) {
+    // Unlike loadFriendProfiles above, these are activity TARGETS ("Ada followed
+    // X") and X may be a stranger to the viewer — and this helper has no viewer
+    // to compare against. So an admin-hidden target is dropped outright rather
+    // than per-viewer: fail closed, at the cost of a friend not seeing a hidden
+    // friend named as a target here. Narrow surface, and the safe direction.
+    if (r.is_suspended || r.is_hidden || !r.handle || r.visibility !== "public") continue;
     out.set(r.id, toProfile(r));
   }
   return out;

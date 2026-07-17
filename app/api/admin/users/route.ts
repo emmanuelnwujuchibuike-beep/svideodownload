@@ -14,14 +14,7 @@ const LIMIT = 25;
  * Owner (2026-07-16): "make admin can hide a users account from everyone for
  * security reasons."
  *
- * Almost all of that already existed and is deliberately reused rather than
- * rebuilt: `is_suspended` on `profiles` already hides an account EVERYWHERE
- * (profile page 404s via getProfile's `if (!row || row.is_suspended) return
- * null`, plus the home feed, explore feed, discovery, engagement lists, friend
- * activity, stories and broadcasts all filter on it), and
- * `POST /api/admin/moderation` with `action: "suspend"` already sets it.
- *
- * The ONLY real gap was reach: the moderation queue can only act on targets
+ * The gap this closes is reach: the moderation queue can only act on targets
  * that have been REPORTED (it lists `ReportedTarget`s), so an admin could not
  * proactively hide someone nobody had reported — exactly the "for security
  * reasons" case, which is by definition something an admin spots first. This
@@ -29,10 +22,14 @@ const LIMIT = 25;
  * through the existing, audited `moderate()` path so there is one write path
  * and one audit trail, not two.
  *
+ * Since migration 0082 the hide writes `is_hidden`, NOT `is_suspended` — the
+ * two mean different things now (friends-only vs full lockout). Both are
+ * selected here so the panel can show which state an account is actually in.
+ *
  * Admin-gated by `getAdminUser()` (the same guard every other admin route
- * uses), and it reads via the service-role client — so a suspended account
- * stays visible HERE even though it is hidden everywhere else. That's the
- * point: an admin has to be able to find someone to un-hide them.
+ * uses), and it reads via the service-role client — so a hidden account stays
+ * visible HERE even though strangers can't see it. That's the point: an admin
+ * has to be able to find someone to un-hide them.
  */
 export async function GET(request: Request) {
   const admin = await getAdminUser();
@@ -43,7 +40,7 @@ export async function GET(request: Request) {
 
   let query = db
     .from("profiles")
-    .select("id, handle, display_name, avatar_url, is_verified, is_suspended, created_at")
+    .select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden, created_at")
     .not("handle", "is", null)
     .order("created_at", { ascending: false })
     .limit(LIMIT);

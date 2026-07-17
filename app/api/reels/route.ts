@@ -74,6 +74,8 @@ export async function POST(request: Request) {
   const { mediaUrl, mediaKind, title, thumbnailUrl, sourceUrl } = parsed.data;
 
   const admin = createAdminClient();
+  // `is_suspended` only — a hidden account (0082) still publishes normally; only
+  // its audience is narrowed, to friends, by the feed/profile read filters.
   const { data: prof } = await admin.from("profiles").select("handle, is_suspended").eq("id", user.id).maybeSingle();
   if (!prof?.handle) return NextResponse.json({ error: "Set a username before publishing." }, { status: 403 });
   if (prof.is_suspended) return NextResponse.json({ error: "Your account can't publish." }, { status: 403 });

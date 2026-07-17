@@ -2,8 +2,10 @@ import { cacheDelete, getCached } from "@/lib/cache";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { flagsOf, isAccountVisibleTo, relationTo } from "./account-visibility";
 import type { Category } from "./categories";
 import { fetchReactionRows } from "./engagement";
+import { friendIdSet } from "./friend-ids";
 import { getTrendingSettings } from "./feed";
 import { getHomePreferences, type HomePreferences } from "./home-preferences";
 import { canSeePost, type MediaKind, type Visibility } from "./posts";
@@ -271,10 +273,14 @@ export async function getFeedItemById(id: string, viewerId: string | null): Prom
 
     const { data: prof } = await db
       .from("profiles")
-      .select("id, handle, display_name, avatar_url, is_verified, is_suspended")
+      .select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden")
       .eq("id", row.publisher_id)
       .maybeSingle();
-    if (!prof || !prof.handle || prof.is_suspended) return null;
+    if (!prof || !prof.handle) return null;
+    // An admin-hidden author's post still opens for their friends (0082); it 404s
+    // for everyone else, exactly as a suspended author's does for all.
+    if (!isAccountVisibleTo(flagsOf(prof), relationTo(row.publisher_id, viewerId, await friendIdSet(viewerId))))
+      return null;
 
     const { data: subs } = await db
       .from("subscriptions")
@@ -544,7 +550,7 @@ async function loadHomeFeed(
 
     const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
     const [{ data: profs }, { data: privs }, { data: subs }, reactionRows, blocks, mutes] = await Promise.all([
-      db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, trust_score").in("id", publisherIds),
+      db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden, trust_score").in("id", publisherIds),
       db.from("privacy_settings").select("user_id, show_in_recommendations").in("user_id", publisherIds),
       db.from("subscriptions").select("user_id, plan, status").in("user_id", publisherIds).in("status", ["active", "trialing"]),
       viewerId ? fetchReactionRows(db, viewerId, rows.map((r) => r.id)) : Promise.resolve([]),
@@ -561,10 +567,15 @@ async function loadHomeFeed(
     const profById = new Map<string, Record<string, unknown>>();
     for (const p of (profs ?? []) as Record<string, unknown>[]) profById.set(p.id as string, p);
 
+    // "suspended" is the historical name for "authors this viewer can't see".
+    // Since 0082 that's two different things: a suspension (nobody sees them)
+    // and an admin hide (only their friends see them), so the set is now
+    // per-viewer rather than absolute.
+    const friends = await friendIdSet(viewerId);
     const suspended = new Set<string>();
     const lowTrust = new Set<string>();
-    for (const p of (profs ?? []) as { id: string; is_suspended: boolean; trust_score: number; handle: string | null }[]) {
-      if (p.is_suspended || !p.handle) suspended.add(p.id);
+    for (const p of (profs ?? []) as { id: string; is_suspended: boolean; is_hidden: boolean; trust_score: number; handle: string | null }[]) {
+      if (!p.handle || !isAccountVisibleTo(flagsOf(p), relationTo(p.id, viewerId, friends))) suspended.add(p.id);
       if (settings.feedTrustMin > 0 && (p.trust_score ?? 0) < settings.feedTrustMin) lowTrust.add(p.id);
     }
     const optedOut = new Set(
@@ -802,17 +813,19 @@ async function surfaceFollowedReposts(
 
   const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
   const [{ data: profs }, { data: subs }, reactionRows, { data: blocks }] = await Promise.all([
-    db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended").in("id", publisherIds),
+    db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden").in("id", publisherIds),
     db.from("subscriptions").select("user_id, plan").in("user_id", publisherIds).in("status", ["active", "trialing"]),
     fetchReactionRows(db, viewerId, rows.map((r) => r.id)),
     db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`),
   ]);
 
+  const friends = await friendIdSet(viewerId);
   const profById = new Map<string, Record<string, unknown>>();
   const suspended = new Set<string>();
-  for (const p of (profs ?? []) as { id: string; handle: string | null; is_suspended: boolean }[]) {
+  for (const p of (profs ?? []) as { id: string; handle: string | null; is_suspended: boolean; is_hidden: boolean }[]) {
     profById.set(p.id, p as unknown as Record<string, unknown>);
-    if (p.is_suspended || !p.handle) suspended.add(p.id);
+    // Per-viewer since 0082: a hidden author is filtered for strangers, kept for friends.
+    if (!p.handle || !isAccountVisibleTo(flagsOf(p), relationTo(p.id, viewerId, friends))) suspended.add(p.id);
   }
   const planById = new Map(((subs ?? []) as { user_id: string; plan: BillingPlan }[]).map((s) => [s.user_id, s.plan]));
   const blocked = new Set<string>();

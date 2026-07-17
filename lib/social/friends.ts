@@ -1,6 +1,7 @@
 import { after } from "next/server";
 
 import { sendPushToUser } from "@/lib/push/web-push";
+import { flagsOf, isAccountVisibleTo } from "@/lib/social/account-visibility";
 import { listConversations } from "@/lib/social/messages";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -216,14 +217,28 @@ export async function sendFriendRequest(
   try {
     const db = createAdminClient();
 
-    const { data: rec } = await db
+    const { data: profs } = await db
       .from("profiles")
-      .select("is_suspended, handle")
-      .eq("id", receiverId)
-      .maybeSingle();
-    if (!rec || rec.is_suspended || !rec.handle) return { ok: false, reason: "unavailable" };
+      .select("id, is_suspended, is_hidden, handle")
+      .in("id", [senderId, receiverId]);
+    const rows = (profs ?? []) as { id: string; is_suspended: boolean; is_hidden: boolean; handle: string | null }[];
+    const rec = rows.find((r) => r.id === receiverId);
+    const me = rows.find((r) => r.id === senderId);
+    if (!rec || !rec.handle) return { ok: false, reason: "unavailable" };
     if (await eitherBlocked(db, senderId, receiverId)) return { ok: false, reason: "blocked" };
     if (await areFriends(db, senderId, receiverId)) return { ok: false, reason: "exists" };
+
+    // Ordering matters: this runs AFTER the areFriends check, so an existing
+    // friendship still reports "exists" rather than being masked as unavailable.
+    //
+    // A hidden account (migration 0082) is confined to the friends it ALREADY
+    // has, so a NEW friend request is exactly what a hide should stop — in both
+    // directions. Nobody can request a hidden stranger (they can't see them to
+    // begin with), and a hidden account can't request its way to new people.
+    // Reaching here means the two are not friends, so each is a stranger to the
+    // other as far as the visibility rule is concerned.
+    if (!isAccountVisibleTo(flagsOf(rec), "stranger") || !isAccountVisibleTo(flagsOf(me), "stranger"))
+      return { ok: false, reason: "unavailable" };
 
     // If they already asked *you*, don't create a crossing request — surface theirs.
     const { count: incoming } = await db

@@ -13,24 +13,24 @@ interface AdminUser {
   avatar_url: string | null;
   is_verified: boolean;
   is_suspended: boolean;
+  is_hidden: boolean;
   created_at: string;
 }
 
 /**
- * Hide any account from everyone (owner, 2026-07-16: "make admin can hide a
- * users account from everyone for security reasons").
+ * Hide any account from people it isn't friends with (owner, 2026-07-16: "make
+ * admin can hide a users account ... for security reasons", refined the same
+ * day to "can interact, post, chat and everything, but to only people they are
+ * already friends with").
  *
- * Deliberately thin. The hiding mechanism already existed and is fully wired —
- * `profiles.is_suspended` removes an account from the profile page (404), the
- * home + explore feeds, discovery, engagement lists, friend activity, stories
- * and broadcasts — and `POST /api/admin/moderation` already sets it. The only
- * thing missing was REACH: the moderation queue can only act on accounts
- * somebody has already REPORTED, which is precisely the wrong constraint for a
- * security hide (an admin spotting a problem first is the whole scenario).
+ * A hide is NOT a suspension and this panel must never imply it is. It writes
+ * `is_hidden` (migration 0082): the account keeps every ability — posting,
+ * commenting, reacting, chatting — and simply stops existing for strangers. The
+ * report queue's Suspend action still writes `is_suspended`, a full lockout,
+ * and stays a separate, stronger thing.
  *
- * So this adds search, and reuses the existing audited `moderate()` write path
- * rather than introducing a second way to set the same column. One write path,
- * one audit trail.
+ * The write still goes through the audited `moderate()` path so there is one
+ * write path and one audit trail, not two.
  */
 export function UserModeration() {
   const [q, setQ] = useState("");
@@ -66,11 +66,14 @@ export function UserModeration() {
   }, [q, search]);
 
   const toggleHidden = async (u: AdminUser) => {
-    const hiding = !u.is_suspended;
+    const hiding = !u.is_hidden;
     if (
       hiding &&
+      // Says what a hide ACTUALLY does. It used to promise "invisible across the
+      // whole app", which stopped being true in 0082 — an admin acting on a
+      // security report has to know the account can still reach its friends.
       !window.confirm(
-        `Hide @${u.handle} from everyone?\n\nTheir profile, posts, stories and comments become invisible across the whole app, and they disappear from search and discovery. Reversible at any time.`,
+        `Hide @${u.handle} from everyone they aren't friends with?\n\nTheir profile, posts and stories stop being visible to strangers, and they disappear from search and discovery.\n\nThey keep chatting, posting and commenting normally with their existing friends — this is not a suspension. Reversible at any time.`,
       )
     ) {
       return;
@@ -80,14 +83,14 @@ export function UserModeration() {
       const res = await fetch("/api/admin/moderation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetType: "user", targetId: u.id, action: hiding ? "suspend" : "unsuspend" }),
+        body: JSON.stringify({ targetType: "user", targetId: u.id, action: hiding ? "hide" : "unhide" }),
       });
       if (!res.ok) throw new Error();
       // Patch in place rather than router.refresh(): this panel owns its own
       // data (it's client-fetched), and refresh() would additionally blow away
       // the whole client Router Cache for every other route — the exact cause
       // of "Home reloads on every entry" fixed elsewhere today.
-      setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, is_suspended: hiding } : x)));
+      setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, is_hidden: hiding } : x)));
     } catch {
       setError("That change didn't save.");
     } finally {
@@ -102,7 +105,8 @@ export function UserModeration() {
         Account visibility
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Hide any account from everyone. Works without a report — for security cases you spot first.
+        Hide an account from everyone it isn&apos;t friends with. It keeps posting and chatting normally with its existing
+        friends — this is not a suspension. Works without a report, for security cases you spot first.
       </p>
 
       <div className="relative mt-4">
@@ -145,7 +149,14 @@ export function UserModeration() {
                 </Link>
                 <span className="block truncate text-xs text-muted-foreground">
                   @{u.handle}
-                  {u.is_suspended ? " · hidden from everyone" : ""}
+                  {/* Suspension is the stronger state and outranks a hide, so name it
+                      first — an admin must never read "friends only" on an account
+                      that is in fact fully locked out. */}
+                  {u.is_suspended
+                    ? " · suspended (full lockout)"
+                    : u.is_hidden
+                      ? " · hidden · friends only"
+                      : ""}
                 </span>
               </span>
               <button
@@ -154,19 +165,19 @@ export function UserModeration() {
                 disabled={busyId === u.id}
                 className={cn(
                   "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50",
-                  u.is_suspended
+                  u.is_hidden
                     ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 dark:text-emerald-400"
                     : "bg-red-500/15 text-red-600 hover:bg-red-500/25 dark:text-red-400",
                 )}
               >
                 {busyId === u.id ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : u.is_suspended ? (
+                ) : u.is_hidden ? (
                   <Eye className="h-3.5 w-3.5" />
                 ) : (
                   <EyeOff className="h-3.5 w-3.5" />
                 )}
-                {u.is_suspended ? "Unhide" : "Hide"}
+                {u.is_hidden ? "Unhide" : "Hide"}
               </button>
             </li>
           ))

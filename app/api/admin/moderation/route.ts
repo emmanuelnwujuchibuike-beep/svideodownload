@@ -10,7 +10,9 @@ export const dynamic = "force-dynamic";
 const schema = z.object({
   targetType: z.enum(["post", "comment", "user"]),
   targetId: z.string().uuid(),
-  action: z.enum(["remove", "restore", "suspend", "unsuspend", "dismiss"]),
+  // hide/unhide are friends-only visibility (migration 0082) and are NOT
+  // synonyms for suspend/unsuspend, which remain a full lockout.
+  action: z.enum(["remove", "restore", "suspend", "unsuspend", "hide", "unhide", "dismiss"]),
 });
 
 /** GET — the moderation queue (open reports grouped by target). */

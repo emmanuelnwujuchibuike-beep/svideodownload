@@ -1,7 +1,9 @@
 import { getCached } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { flagsOf, isAccountVisibleTo, relationTo } from "./account-visibility";
 import { type Category } from "./categories";
+import { friendIdSet } from "./friend-ids";
 import type { PostCard } from "./posts";
 
 /**
@@ -152,15 +154,21 @@ async function loadFeed(
 
     const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
     const [{ data: profs }, { data: privs }, blocks] = await Promise.all([
-      db.from("profiles").select("id, is_suspended, trust_score").in("id", publisherIds),
+      db.from("profiles").select("id, is_suspended, is_hidden, trust_score").in("id", publisherIds),
       db.from("privacy_settings").select("user_id, show_in_recommendations").in("user_id", publisherIds),
       viewerId
         ? db.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`)
         : Promise.resolve({ data: [] as { blocker_id: string; blocked_id: string }[] }),
     ]);
 
-    const profRows = (profs ?? []) as { id: string; is_suspended: boolean; trust_score: number }[];
-    const suspended = new Set(profRows.filter((p) => p.is_suspended).map((p) => p.id));
+    const profRows = (profs ?? []) as { id: string; is_suspended: boolean; is_hidden: boolean; trust_score: number }[];
+    // Per-viewer since 0082: a suspension is invisible to all, an admin hide only
+    // to people the author isn't friends with. (Note the unrelated `hidden` set
+    // below — that one is the creator's own "show in recommendations" opt-out.)
+    const friends = await friendIdSet(viewerId);
+    const suspended = new Set(
+      profRows.filter((p) => !isAccountVisibleTo(flagsOf(p), relationTo(p.id, viewerId, friends))).map((p) => p.id),
+    );
     // Shadow-discount: keep low-trust creators out of discovery.
     const lowTrust = new Set(
       settings.feedTrustMin > 0

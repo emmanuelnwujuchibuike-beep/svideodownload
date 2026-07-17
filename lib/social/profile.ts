@@ -1,5 +1,7 @@
 import { getCached } from "@/lib/cache";
 import type { BillingPlan } from "@/lib/monetization/types";
+import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
+import { friendIdSet } from "@/lib/social/friend-ids";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -67,13 +69,15 @@ interface ProfileRow {
   visibility: Visibility;
   is_verified: boolean;
   is_suspended: boolean;
+  /** Admin hide (0082): friends-only. Distinct from is_suspended's full lockout. */
+  is_hidden: boolean;
   followers_count: number;
   following_count: number;
   created_at: string;
 }
 
 const SELECT =
-  "id, email, handle, display_name, bio, avatar_url, banner_url, website, visibility, is_verified, is_suspended, followers_count, following_count, created_at";
+  "id, email, handle, display_name, bio, avatar_url, banner_url, website, visibility, is_verified, is_suspended, is_hidden, followers_count, following_count, created_at";
 
 function fallbackName(row: ProfileRow): string {
   return row.display_name || (row.handle ? `@${row.handle}` : "Member");
@@ -129,7 +133,13 @@ async function loadPublicProfile(norm: string, viewerId: string | null): Promise
     .maybeSingle();
   if (error) throw error; // don't cache a DB failure as "not found"
   const row = data as ProfileRow | null;
-  if (!row || row.is_suspended) return null;
+  if (!row) return null;
+
+  // A suspension 404s for everyone; an admin hide 404s for strangers but stays
+  // fully visible to the account's friends (migration 0082). `getPublicProfile`
+  // caches per (handle, viewer), so a friend's hit can never be served to a
+  // stranger — that cache key is what makes this safe to decide here.
+  if (!isAccountVisibleTo(flagsOf(row), relationTo(row.id, viewerId, await friendIdSet(viewerId)))) return null;
 
   const isOwner = viewerId === row.id;
   const { isFollowing, blockedByTarget, viewerHasBlocked } = isOwner
@@ -292,9 +302,14 @@ async function buildList(
   if (profileIds.length === 0) return [];
   const { data: profs } = await db
     .from("profiles")
-    .select("id, handle, display_name, avatar_url, bio, is_verified, is_suspended")
+    .select("id, handle, display_name, avatar_url, bio, is_verified, is_suspended, is_hidden")
     .in("id", profileIds);
-  const rows = ((profs ?? []) as ProfileRow[]).filter((p) => !p.is_suspended && p.handle);
+  // Follower/following lists: an admin-hidden account (0082) stays listed for its
+  // own friends and drops out for everyone else.
+  const friends = await friendIdSet(viewerId);
+  const rows = ((profs ?? []) as ProfileRow[]).filter(
+    (p) => p.handle && isAccountVisibleTo(flagsOf(p), relationTo(p.id, viewerId, friends)),
+  );
 
   const ids = rows.map((r) => r.id);
   const [plans, follows] = await Promise.all([

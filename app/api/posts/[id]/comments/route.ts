@@ -79,7 +79,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
-  // Trust/account gate.
+  // Trust/account gate. Checks `is_suspended` ONLY, on purpose: a hidden account
+  // (`is_hidden`, migration 0082) keeps every ability and must still be able to
+  // comment — its reach is limited by who can SEE it, not by blocking the act.
+  // Don't add is_hidden here; that would cut it off from its own friends.
   const { data: prof } = await supabase
     .from("profiles")
     .select("is_suspended")

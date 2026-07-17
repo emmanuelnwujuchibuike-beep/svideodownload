@@ -43,6 +43,11 @@ async function loadSuggestedCreators(viewerId: string | null, limit: number): Pr
       .not("handle", "is", null)
       .eq("visibility", "public")
       .eq("is_suspended", false)
+      // Suggestions exist to introduce people who AREN'T connected yet, which is
+      // exactly the reach an admin hide removes (0082). So a hidden account is
+      // excluded outright here rather than per-viewer: a friend can't be
+      // "suggested" to you anyway, so there's no friend case to preserve.
+      .eq("is_hidden", false)
       .order("followers_count", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(limit * 3);

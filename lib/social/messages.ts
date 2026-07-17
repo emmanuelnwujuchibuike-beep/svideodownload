@@ -7,6 +7,8 @@ import {
   type ChatAppearanceRow,
 } from "@/lib/social/chat-appearance";
 
+import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
+import { friendIdSet } from "@/lib/social/friend-ids";
 import { CONVERSATION_THEMES, GROUP_TITLE_MAX, MAX_GROUP_MEMBERS, parseMentionedHandles, type ConversationTheme } from "@/lib/social/message-meta";
 import { MAX_ATTACHMENTS_PER_MESSAGE, type AttachmentKind } from "@/lib/social/message-media";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -123,12 +125,24 @@ export async function canMessage(senderId: string, recipientId: string): Promise
   try {
     const db = createAdminClient();
 
-    const { data: rec } = await db
+    // Both sides, one query — an admin hide (migration 0082) confines an account
+    // to its existing friends in BOTH directions: a stranger can't open a chat
+    // with a hidden account, and a hidden account can't open one with a stranger.
+    // Existing friendships are deliberately untouched, which is the whole point
+    // of a hide being a visibility measure rather than a suspension.
+    const { data: profs } = await db
       .from("profiles")
-      .select("is_suspended, handle")
-      .eq("id", recipientId)
-      .maybeSingle();
-    if (!rec || rec.is_suspended || !rec.handle) return { ok: false, reason: "unavailable" };
+      .select("id, is_suspended, is_hidden, handle")
+      .in("id", [senderId, recipientId]);
+    const rows = (profs ?? []) as { id: string; is_suspended: boolean; is_hidden: boolean; handle: string | null }[];
+    const rec = rows.find((r) => r.id === recipientId);
+    const me = rows.find((r) => r.id === senderId);
+    if (!rec || !rec.handle) return { ok: false, reason: "unavailable" };
+
+    const friends = await friendIdSet(senderId);
+    const theyAreVisibleToMe = isAccountVisibleTo(flagsOf(rec), relationTo(recipientId, senderId, friends));
+    const iAmVisibleToThem = isAccountVisibleTo(flagsOf(me), friends.has(recipientId) ? "friend" : "stranger");
+    if (!theyAreVisibleToMe || !iAmVisibleToThem) return { ok: false, reason: "unavailable" };
 
     if (await bothBlocked(db, senderId, recipientId)) return { ok: false, reason: "blocked" };
 
@@ -1400,7 +1414,7 @@ export async function listConversations(userId: string): Promise<ConversationSum
 
     const [{ data: profs }, { data: directUnread }, { data: groupUnread }, { data: groupMembers }] = await Promise.all([
       directOtherIds.length
-        ? db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended").in("id", directOtherIds)
+        ? db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden").in("id", directOtherIds)
         : Promise.resolve({ data: [] as Record<string, unknown>[] }),
       directConvIds.length
         ? db
@@ -1471,6 +1485,12 @@ export async function listConversations(userId: string): Promise<ConversationSum
         .then(undefined, () => {});
     }
 
+    // NOTE: `friends` here is the account-visibility friend set (migration 0082,
+    // "hidden = friends-only"), unrelated to the per-conversation `hidden_at`
+    // pref just below — which is the user's own "Delete" swipe. Same word, two
+    // completely different features.
+    const friends = await friendIdSet(userId);
+
     const out: ConversationSummary[] = [];
     for (const c of convs) {
       const pref = prefByConv.get(c.id);
@@ -1482,7 +1502,11 @@ export async function listConversations(userId: string): Promise<ConversationSum
       if (c.type === "direct") {
         const otherId = c.user_low === userId ? c.user_high : c.user_low;
         const p = otherId ? profById.get(otherId) : null;
-        if (!otherId || !p || (p.is_suspended as boolean) || !p.handle) continue;
+        if (!otherId || !p || !p.handle) continue;
+        // A hidden friend's chat stays right where it is (migration 0082) — the
+        // inbox is friends-only by nature, so a hide must not empty it. Only a
+        // suspension, or a hidden account the viewer never befriended, drops out.
+        if (!isAccountVisibleTo(flagsOf(p), relationTo(otherId, userId, friends))) continue;
         out.push({
           id: c.id,
           type: "direct",
@@ -1579,15 +1603,19 @@ export async function listSecretConversations(userId: string): Promise<Conversat
 
     const otherIds = convs.map((c) => (c.user_low === userId ? c.user_high : c.user_low)).filter((id): id is string => !!id);
     const { data: profs } = otherIds.length
-      ? await db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended").in("id", otherIds)
+      ? await db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden").in("id", otherIds)
       : { data: [] as Record<string, unknown>[] };
     const profById = new Map(((profs ?? []) as Record<string, unknown>[]).map((p) => [p.id as string, p]));
+    const friends = await friendIdSet(userId);
 
     const out: ConversationSummary[] = [];
     for (const c of convs) {
       const otherId = c.user_low === userId ? c.user_high : c.user_low;
       const p = otherId ? profById.get(otherId) : null;
-      if (!otherId || !p || (p.is_suspended as boolean) || !p.handle) continue;
+      if (!otherId || !p || !p.handle) continue;
+      // Same rule as the main inbox: a hidden friend's secret chat survives a
+      // hide (0082); only a suspension or a hidden non-friend disappears.
+      if (!isAccountVisibleTo(flagsOf(p), relationTo(otherId, userId, friends))) continue;
       const pref = prefByConv.get(c.id);
       out.push({
         id: c.id,

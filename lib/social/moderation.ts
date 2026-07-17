@@ -83,7 +83,7 @@ export async function listReportedTargets(limit = 100): Promise<ReportedTarget[]
         ? db.from("post_comments").select("id, body, status, author_id").in("id", commentIds)
         : Promise.resolve({ data: [] }),
       userIds.length
-        ? db.from("profiles").select("id, handle, display_name, is_suspended").in("id", userIds)
+        ? db.from("profiles").select("id, handle, display_name, is_suspended, is_hidden").in("id", userIds)
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -123,7 +123,13 @@ export async function listReportedTargets(limit = 100): Promise<ReportedTarget[]
         if (u) {
           g.title = (u.display_name as string) || (u.handle ? `@${u.handle as string}` : "User");
           g.handle = (u.handle as string) ?? null;
-          g.currentStatus = (u.is_suspended as boolean) ? "suspended" : "active";
+          // Distinct states since 0082 — an admin reading the queue must be able
+          // to tell a full lockout from a friends-only hide.
+          g.currentStatus = (u.is_suspended as boolean)
+            ? "suspended"
+            : (u.is_hidden as boolean)
+              ? "hidden"
+              : "active";
           g.sublabel = g.handle ? `@${g.handle}` : null;
         } else g.title = "Deleted user";
       }
@@ -156,8 +162,10 @@ export async function listReportedTargets(limit = 100): Promise<ReportedTarget[]
 export type ModAction =
   | "remove" // remove post/comment
   | "restore" // restore post/comment to live
-  | "suspend" // suspend user
+  | "suspend" // suspend user — FULL lockout (punishment)
   | "unsuspend"
+  | "hide" // hide user — friends-only (security measure, NOT a punishment)
+  | "unhide"
   | "dismiss"; // close reports, no action
 
 /** Apply a moderation action to a target and resolve its open reports. */
@@ -198,12 +206,21 @@ export async function moderate(
     else if (action === "dismiss")
       await db.from("post_comments").update({ status: "visible" }).eq("id", targetId).eq("status", "hidden");
   } else if (targetType === "user") {
+    // suspend/unsuspend and hide/unhide are DIFFERENT states, not two names for
+    // one (migration 0082). Suspension is a punishment and a full lockout; a
+    // hide is a security measure that only confines the account to its existing
+    // friends, keeping every ability intact. Never fold these back together.
     if (action === "suspend") await db.from("profiles").update({ is_suspended: true }).eq("id", targetId);
     else if (action === "unsuspend") await db.from("profiles").update({ is_suspended: false }).eq("id", targetId);
+    else if (action === "hide")
+      await db.from("profiles").update({ is_hidden: true, hidden_at: new Date().toISOString(), hidden_by: adminId ?? null }).eq("id", targetId);
+    else if (action === "unhide")
+      await db.from("profiles").update({ is_hidden: false, hidden_at: null, hidden_by: null }).eq("id", targetId);
   }
 
   // 2) Resolve the open reports for this target.
-  const resolved = action === "dismiss" || action === "restore" || action === "unsuspend" ? "dismissed" : "actioned";
+  const resolved =
+    action === "dismiss" || action === "restore" || action === "unsuspend" || action === "unhide" ? "dismissed" : "actioned";
   await db
     .from("reports")
     .update({ status: resolved })

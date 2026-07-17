@@ -3,7 +3,9 @@ import { createHash } from "node:crypto";
 import { getCached } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { flagsOf, isAccountVisibleTo, relationTo } from "./account-visibility";
 import { type Category } from "./categories";
+import { friendIdSet } from "./friend-ids";
 
 /**
  * Published-download ("post") data layer — directory model: metadata + a source
@@ -91,7 +93,9 @@ export async function publishPost(
       return { ok: false, error: "Publishing is currently disabled.", code: "disabled" };
     }
 
-    // Account must be in good standing + meet the trust threshold.
+    // Account must be in good standing + meet the trust threshold. `is_suspended`
+    // only: an admin-hidden account (0082) publishes normally — the hide narrows
+    // who can SEE the post, it doesn't take away the ability to make one.
     const { data: prof } = await db
       .from("profiles")
       .select("is_suspended, trust_score, handle")
@@ -274,10 +278,15 @@ export async function getPost(
 
     const { data: prof } = await db
       .from("profiles")
-      .select("id, handle, display_name, avatar_url, is_verified, is_suspended")
+      .select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden")
       .eq("id", post.publisher_id)
       .maybeSingle();
-    if (!prof || !prof.handle || (prof.is_suspended && !viewerIsAdmin)) return null;
+    if (!prof || !prof.handle) return null;
+    // Admins keep seeing everything (they have to, to moderate it). Otherwise a
+    // suspended author's post 404s for all, and an admin-hidden author's opens
+    // only for their friends (0082).
+    if (!viewerIsAdmin && !isAccountVisibleTo(flagsOf(prof), relationTo(post.publisher_id, viewerId, await friendIdSet(viewerId))))
+      return null;
 
     let isFollowing = false;
     if (viewerId && viewerId !== post.publisher_id) {

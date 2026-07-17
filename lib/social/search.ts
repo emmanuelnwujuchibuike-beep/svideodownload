@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { flagsOf, isAccountVisibleTo, relationTo } from "./account-visibility";
+import { friendIdSet } from "./friend-ids";
 import type { MediaKind, PostCard } from "./posts";
 
 /**
@@ -35,11 +37,17 @@ export async function searchPeople(q: string, limit = 12, viewerId: string | nul
     const db = createAdminClient();
     const { data } = await db
       .from("profiles")
-      .select("id, handle, display_name, avatar_url, is_verified, followers_count, is_suspended")
+      .select("id, handle, display_name, avatar_url, is_verified, followers_count, is_suspended, is_hidden")
       .or(`handle.ilike.%${term}%,display_name.ilike.%${term}%`)
       .order("followers_count", { ascending: false })
       .limit(limit * 2);
-    const people = ((data ?? []) as Record<string, unknown>[]).filter((p) => !p.is_suspended && p.handle).slice(0, limit);
+    // A hidden account is unsearchable for strangers but must stay findable by
+    // its own friends (0082) — being unable to search up a friend you already
+    // chat with would be a bug, not privacy.
+    const friends = await friendIdSet(viewerId);
+    const people = ((data ?? []) as Record<string, unknown>[])
+      .filter((p) => p.handle && isAccountVisibleTo(flagsOf(p), relationTo(p.id as string, viewerId, friends)))
+      .slice(0, limit);
 
     // Which of these the viewer already follows.
     let followingSet = new Set<string>();

@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { flagsOf, isAccountVisibleTo, relationTo } from "./account-visibility";
+import { friendIdSet } from "./friend-ids";
 import type { MediaKind } from "./posts";
 
 /**
@@ -102,7 +104,7 @@ export async function getDiscoveryFeed(
       // `location` is best-effort — select it, fall back to the base columns if absent.
       db
         .from("profiles")
-        .select("id, handle, display_name, avatar_url, is_verified, is_suspended, location")
+        .select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden, location")
         .in("id", publisherIds),
       db.from("privacy_settings").select("user_id, show_in_recommendations").in("user_id", publisherIds),
       viewerId
@@ -115,7 +117,7 @@ export async function getDiscoveryFeed(
       // Location column not migrated yet — retry without it.
       const { data: base } = await db
         .from("profiles")
-        .select("id, handle, display_name, avatar_url, is_verified, is_suspended")
+        .select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden")
         .in("id", publisherIds);
       profs = (base ?? []) as Record<string, unknown>[];
     }
@@ -133,12 +135,16 @@ export async function getDiscoveryFeed(
       blocked.add(b.blocker_id === viewerId ? b.blocked_id : b.blocker_id);
     }
 
+    const friends = await friendIdSet(viewerId);
     const wantLoc = (opts.viewerLocation ?? "").trim().toLowerCase();
     const seenCreator = new Set<string>();
     const items: DiscoveryItem[] = [];
     for (const r of rows) {
       const prof = profById.get(r.publisher_id);
-      if (!prof || !prof.handle || prof.is_suspended) continue;
+      if (!prof || !prof.handle) continue;
+      // Per-viewer since 0082 — an admin-hidden creator drops out of discovery
+      // for strangers, but a friend browsing still sees them.
+      if (!isAccountVisibleTo(flagsOf(prof), relationTo(r.publisher_id, viewerId, friends))) continue;
       if (optedOut.has(r.publisher_id) || blocked.has(r.publisher_id)) continue;
       if (seenCreator.has(r.publisher_id)) continue; // one card per creator — variety
       seenCreator.add(r.publisher_id);

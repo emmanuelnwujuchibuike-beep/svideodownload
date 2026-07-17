@@ -57,6 +57,10 @@ export async function createAndSendBroadcast(
   try {
     const db = createAdminClient();
 
+    // `is_suspended` only, on purpose: an admin-hidden account (0082) is a
+    // normal member who happens to be invisible to strangers, and it should keep
+    // receiving admin broadcasts. Hiding controls who can see THEM, not what
+    // they receive.
     let query = db.from("profiles").select("id").not("handle", "is", null).eq("is_suspended", false).limit(MAX_TARGETS);
     if (targetPlan !== "all") query = query.eq("plan", targetPlan);
     const { data: targets } = await query;

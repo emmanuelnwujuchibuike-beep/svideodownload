@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
+import { friendIdSet } from "@/lib/social/friend-ids";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +25,21 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   if (!UUID.test(id)) return NextResponse.json({ reactors: [] }, { status: 400 });
 
+  // Reads the viewer even though this endpoint is public: since 0082 an
+  // admin-hidden account's reaction must still be visible to its FRIENDS, and
+  // that can't be decided without knowing who's asking. Anonymous callers simply
+  // resolve to a stranger, which hides every hidden reactor — fail closed.
+  let viewerId: string | null = null;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    viewerId = user?.id ?? null;
+  } catch {
+    /* anonymous — treated as a stranger below */
+  }
+
   try {
     const db = createAdminClient();
     const rr = await db.from("comment_reactions").select("user_id, emoji").eq("comment_id", id).limit(200);
@@ -33,11 +51,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const ids = [...new Set(rows.map((r) => r.user_id))];
     const { data: profs } = await db
       .from("profiles")
-      .select("id, handle, display_name, avatar_url, is_suspended")
+      .select("id, handle, display_name, avatar_url, is_suspended, is_hidden")
       .in("id", ids);
+    const friends = await friendIdSet(viewerId);
     const byId = new Map<string, { handle: string; displayName: string; avatarUrl: string | null }>();
     for (const p of (profs ?? []) as Record<string, unknown>[]) {
-      if ((p.is_suspended as boolean) || !p.handle) continue;
+      if (!p.handle) continue;
+      if (!isAccountVisibleTo(flagsOf(p), relationTo(p.id as string, viewerId, friends))) continue;
       byId.set(p.id as string, {
         handle: p.handle as string,
         displayName: (p.display_name as string) || `@${p.handle as string}`,

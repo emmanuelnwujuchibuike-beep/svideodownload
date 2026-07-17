@@ -1,4 +1,5 @@
 import type { BillingPlan } from "@/lib/monetization/types";
+import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -188,7 +189,7 @@ export async function listComments(
     // blocked by the viewer.
     const authorIds = [...new Set(rows.map((r) => r.author_id))];
     const [{ data: profs }, { data: subs }, blocked] = await Promise.all([
-      db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended").in("id", authorIds),
+      db.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_suspended, is_hidden").in("id", authorIds),
       db.from("subscriptions").select("user_id, plan, status").in("user_id", authorIds).in("status", ["active", "trialing"]),
       // Fetch only the VIEWER's block edges (bounded) — never one filter per
       // commenter, which would balloon the URL on busy posts.
@@ -225,7 +226,11 @@ export async function listComments(
     const authorById = new Map<string, CommentAuthor>();
     for (const p of (profs ?? []) as Record<string, unknown>[]) {
       const id = p.id as string;
-      if ((p.is_suspended as boolean) || !p.handle) continue;
+      if (!p.handle) continue;
+      // Reuses the `friendIds` set already gathered above for Friends-First
+      // sorting. Since 0082 a hidden commenter is still shown to their friends;
+      // strangers don't see the comment at all.
+      if (!isAccountVisibleTo(flagsOf(p), relationTo(id, viewerId, friendIds))) continue;
       authorById.set(id, {
         id,
         handle: p.handle as string,

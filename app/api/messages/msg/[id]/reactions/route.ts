@@ -2,6 +2,8 @@ import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
+import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
+import { friendIdSet } from "@/lib/social/friend-ids";
 import { isMessageReaction } from "@/lib/social/message-meta";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -146,10 +148,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (list.length === 0) return NextResponse.json({ reactors: [] });
 
     const ids = [...new Set(list.map((r) => r.user_id))];
-    const { data: profs } = await db.from("profiles").select("id, handle, display_name, avatar_url, is_suspended").in("id", ids);
+    const { data: profs } = await db.from("profiles").select("id, handle, display_name, avatar_url, is_suspended, is_hidden").in("id", ids);
+    const friends = await friendIdSet(user.id);
     const byId = new Map<string, { handle: string; displayName: string; avatarUrl: string | null }>();
     for (const p of (profs ?? []) as Record<string, unknown>[]) {
-      if ((p.is_suspended as boolean) || !p.handle) continue;
+      if (!p.handle) continue;
+      // A hidden friend's reaction still shows to their friends (0082).
+      if (!isAccountVisibleTo(flagsOf(p), relationTo(p.id as string, user.id, friends))) continue;
       byId.set(p.id as string, {
         handle: p.handle as string,
         displayName: (p.display_name as string) || `@${p.handle as string}`,

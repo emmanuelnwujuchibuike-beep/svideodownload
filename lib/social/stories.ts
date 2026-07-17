@@ -1,3 +1,5 @@
+import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
+import { friendIdSet } from "@/lib/social/friend-ids";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withTimeout } from "@/lib/utils";
 
@@ -167,15 +169,19 @@ export async function getActiveStories(
     const userIds = [...new Set(rows.map((r) => r.user_id))];
     const { data: profs } = await db
       .from("profiles")
-      .select("id, handle, display_name, avatar_url, is_verified, visibility, is_suspended")
+      .select("id, handle, display_name, avatar_url, is_verified, visibility, is_suspended, is_hidden")
       .in("id", userIds);
     const profById = new Map<string, Record<string, unknown>>();
     for (const p of (profs ?? []) as Record<string, unknown>[]) profById.set(p.id as string, p);
+    const friends = await friendIdSet(viewerId);
 
     const groups = new Map<string, StoryGroup>();
     for (const r of rows) {
       const p = profById.get(r.user_id);
-      if (!p || !p.handle || p.is_suspended) continue;
+      if (!p || !p.handle) continue;
+      // An admin-hidden author's story still reaches their friends (0082) — a
+      // hide narrows the audience to friends, it doesn't silence the account.
+      if (!isAccountVisibleTo(flagsOf(p), relationTo(r.user_id, viewerId, friends))) continue;
       if (p.visibility !== "public" && r.user_id !== viewerId) continue;
       let g = groups.get(r.user_id);
       if (!g) {
@@ -272,10 +278,13 @@ export async function getActiveStoryForUser(userId: string, viewerId?: string | 
 
     const { data: prof } = await db
       .from("profiles")
-      .select("handle, display_name, avatar_url, is_verified, is_suspended")
+      .select("handle, display_name, avatar_url, is_verified, is_suspended, is_hidden")
       .eq("id", userId)
       .maybeSingle();
-    if (!prof || !prof.handle || prof.is_suspended) return null;
+    if (!prof || !prof.handle) return null;
+    // Friends of an admin-hidden author still open their story ring (0082).
+    if (!isAccountVisibleTo(flagsOf(prof), relationTo(userId, viewerId ?? null, await friendIdSet(viewerId ?? null))))
+      return null;
 
     return {
       userId,

@@ -1,4 +1,4 @@
-import { BadgeCheck, Check, Download, Flame, Heart, MessageCircle, Play, Search, Sparkles, Smile, Trophy, UserPlus, Users, Wifi } from "lucide-react";
+import { BadgeCheck, BellOff, Check, CheckCheck, Download, Flame, Heart, MessageCircle, Play, Search, Sparkles, Smile, Trophy, UserPlus, Users, Wifi } from "lucide-react";
 
 import {
   FrenzFriendsOutline,
@@ -19,6 +19,14 @@ const PEOPLE = [
   { name: "James", female: false, from: "from-blue-500 to-indigo-500" },
   { name: "Stephanie", female: true, from: "from-violet-500 to-purple-500" },
   { name: "Daniel", female: false, from: "from-emerald-500 to-teal-500" },
+] as const;
+
+// Inbox preview rows — mirror the real upgraded inbox styling (verified tick,
+// read receipt, timestamp, unread/mute). Illustrative, never real users.
+const MOCK_CHATS = [
+  { name: "Peace", female: false, from: "from-blue-500 to-violet-600", preview: "Afa", time: "9:41", unread: "3", online: true, verified: false, group: false, ring: true },
+  { name: "Julie Ngozi", female: true, from: "from-amber-500 to-orange-600", preview: "See you tonight!", time: "9:20", unread: "", online: true, verified: true, group: false, ring: false },
+  { name: "Marketing Team", female: false, from: "from-violet-500 to-fuchsia-600", preview: "Let's meet at 10am", time: "Yst", unread: "5", online: false, verified: false, group: true, ring: false },
 ] as const;
 
 /** Fisher-Yates. Runs at ISR regeneration only — see PhoneMockup. */
@@ -306,26 +314,47 @@ export async function PhoneMockup() {
               )}
             </div>
 
-            {/* Group chat — a real conversation row, with a stacked-avatar cluster,
-                an online dot and a snappier layout (mirrors the inbox row). */}
-            <div className="flex items-center gap-2 rounded-2xl bg-white/[0.06] p-2 ring-1 ring-white/5">
-              <span className="relative shrink-0">
-                <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-violet-500 ring-2 ring-white/10">
-                  <BitmojiAvatar seed="general-chat" className="h-full w-full" />
+            {/* Messages preview — mirrors the real upgraded inbox: a search pill,
+                then premium chat rows (verified tick, read-receipt ✓✓, timestamp,
+                unread pill / mute). This is the "make the chat section look like my
+                inbox" ask, scaled into the mockup. */}
+            <div className="rounded-2xl bg-white/[0.05] p-2 ring-1 ring-white/5">
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-white/70">
+                  <MessageCircle className="h-2.5 w-2.5" aria-hidden /> Messages
                 </span>
-                <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-neutral-950" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1">
-                  <span className="truncate text-[10px] font-bold">General Chat</span>
-                  <span className="rounded-full bg-white/10 px-1 py-px text-[6px] font-semibold text-white/60">GROUP</span>
+                <span className="ml-auto flex items-center gap-1 rounded-full bg-white/[0.07] px-2 py-0.5 text-[8px] text-white/40">
+                  <Search className="h-2 w-2" /> Search
                 </span>
-                <span className="block truncate text-[9px] text-white/45">Sarah: what&apos;s trending today?</span>
-              </span>
-              <span className="flex flex-col items-end gap-0.5">
-                <span className="text-[7px] text-white/35">now</span>
-                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-1 text-[7px] font-bold">12</span>
-              </span>
+              </div>
+              {MOCK_CHATS.map((c) => (
+                <div key={c.name} className="flex items-center gap-2 rounded-xl px-1 py-1">
+                  <span className="relative shrink-0">
+                    <span className={`flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br ${c.from} ${c.ring ? "ring-2 ring-blue-400/60" : ""}`}>
+                      <BitmojiAvatar seed={c.name} female={c.female} className="h-full w-full" />
+                    </span>
+                    {c.online ? <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-neutral-950" /> : null}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-0.5">
+                      <span className="truncate text-[10px] font-bold">{c.name}</span>
+                      {c.verified ? <BadgeCheck className="h-2.5 w-2.5 text-blue-400" /> : null}
+                      {c.group ? <span className="rounded-full bg-white/10 px-1 py-px text-[6px] font-semibold text-white/50">GROUP</span> : null}
+                    </span>
+                    <span className="flex items-center gap-0.5 text-[9px] text-white/45">
+                      <CheckCheck className="h-2.5 w-2.5 text-blue-400" /> <span className="truncate">{c.preview}</span>
+                    </span>
+                  </span>
+                  <span className="flex flex-col items-end gap-0.5">
+                    <span className="text-[7px] text-white/35">{c.time}</span>
+                    {c.unread ? (
+                      <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-1 text-[7px] font-bold">{c.unread}</span>
+                    ) : (
+                      <BellOff className="h-2.5 w-2.5 text-white/30" />
+                    )}
+                  </span>
+                </div>
+              ))}
             </div>
 
             {/* People you may know — a premium friends rail: taller cards, story

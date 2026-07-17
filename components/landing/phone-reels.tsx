@@ -349,7 +349,7 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
           <span className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
             <span className="relative inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-2 py-[3px] text-[8px] font-bold uppercase tracking-wide text-black shadow-lg">
               <span aria-hidden className="absolute inset-0 -z-10 rounded-full bg-amber-400/70 blur-md motion-safe:animate-pulse" />
-              <Sparkles className="h-2.5 w-2.5" /> Top to Watch
+              <Sparkles className="h-2.5 w-2.5" /> Tap to Watch
             </span>
             {/* Play affordance — grows on hover so it reads as a control. */}
             <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/25 ring-1 ring-white/40 backdrop-blur transition-transform duration-300 group-hover/reel:scale-110">

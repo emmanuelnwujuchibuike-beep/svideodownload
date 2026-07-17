@@ -611,3 +611,52 @@ export async function recordPostView(
     /* duplicate view or transient error — ignore */
   }
 }
+
+/**
+ * Records a deduped anonymous "like" (per viewer|ip per day) and — only on a
+ * genuinely new like — sends the poster ONE "Someone liked your reel"
+ * notification. See migration 0084. Fire-and-forget; every failure is swallowed
+ * because this is decorative engagement on the marketing page and must never
+ * surface an error to the visitor.
+ */
+export async function recordGuestLike(
+  postId: string,
+  viewerId: string | null,
+  ipHash: string,
+): Promise<void> {
+  if (!hasSupabase) return;
+  const db = createAdminClient();
+
+  // The unique index (post, coalesce(viewer,ip), day) makes a repeat a no-op.
+  // `select()` tells us whether a row was actually inserted, so the notification
+  // only fires for a NEW like — not on every re-tap.
+  let inserted: unknown[] | null = null;
+  try {
+    const { data } = await db
+      .from("post_guest_likes")
+      .insert({ post_id: postId, viewer_id: viewerId, ip_hash: viewerId ? "" : ipHash })
+      .select("id");
+    inserted = data;
+  } catch {
+    // Duplicate (already liked today) or the 0084 migration hasn't run yet.
+    return;
+  }
+  if (!inserted || inserted.length === 0) return;
+
+  // Notify the poster — one collapsed row per post (actor_id NULL = "Someone").
+  // Never notify a self-like. Best-effort; the like itself already counted.
+  try {
+    const { data: post } = await db.from("posts").select("publisher_id").eq("id", postId).maybeSingle();
+    const recipient = post?.publisher_id as string | undefined;
+    if (!recipient || recipient === viewerId) return;
+    // A plain insert: the partial unique index notifications_guest_like_unique_idx
+    // (0084) rejects a second guest-like notification for the same (user, post)
+    // with a 23505, which the catch swallows — so the poster gets exactly one
+    // "Someone liked your reel" no matter how many anonymous likes arrive. Simpler
+    // and more robust than trying to make PostgREST's onConflict target a partial
+    // index.
+    await db.from("notifications").insert({ user_id: recipient, actor_id: null, type: "like", post_id: postId });
+  } catch {
+    /* notification is best-effort; the like still counted */
+  }
+}

@@ -86,9 +86,10 @@ export async function PhoneMockup() {
   const reels: MockReel[] = shuffle(eligible)
     .slice(0, 8)
     .map((p) => {
-      // Illustrative 30k–50k engagement for the mockup (owner request) — decorative
-      // only, deterministic, never written or counted. See showcaseStats.
-      const s = showcaseStats(p.id);
+      // Illustrative 30k–50k BASE that GROWS with the post's real anonymous
+      // engagement (views recorded on play, likes via guest-like). Read at ISR, so
+      // the figure climbs as activity accumulates. See showcaseStats.
+      const s = showcaseStats(p.id, { views: p.viewsCount, likes: p.likesCount });
       return {
         id: p.id,
         thumbnailUrl: p.thumbnailUrl!,

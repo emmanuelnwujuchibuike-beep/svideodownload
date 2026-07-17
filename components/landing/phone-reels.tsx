@@ -87,6 +87,12 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
   // still refused (Safari is stricter per-element), we fall back to muted rather
   // than leaving a silent, frozen video.
   const [muted, setMuted] = useState(false);
+  // Optimistic engagement so numbers visibly climb within the session rather than
+  // only at the next ISR regeneration: a +1 view when a clip first plays, a +1 like
+  // when the visitor taps like. Both mirror a REAL recorded signal (the /view and
+  // /guest-like beacons) — this only makes the already-real growth visible NOW.
+  const [bumpViews, setBumpViews] = useState<Record<string, number>>({});
+  const [liked, setLiked] = useState<Record<string, boolean>>({});
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const viewed = useRef<Set<string>>(new Set());
@@ -132,7 +138,22 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
   const countView = useCallback((id: string) => {
     if (viewed.current.has(id)) return;
     viewed.current.add(id);
+    setBumpViews((b) => ({ ...b, [id]: (b[id] ?? 0) + 1 })); // visible +1 now
     fetch(`/api/posts/${id}/view`, { method: "POST", keepalive: true }).catch(() => {});
+  }, []);
+
+  /**
+   * A real anonymous like: deduped per (ip, post, day) server-side, and it sends the
+   * poster one "Someone liked your reel" notification (migration 0084). Optimistic —
+   * the heart fills and the count +1 immediately; a duplicate is a server no-op, so
+   * re-tapping doesn't inflate. Fire-and-forget.
+   */
+  const toggleLike = useCallback((id: string) => {
+    setLiked((l) => {
+      if (l[id]) return l; // already liked this session — one anonymous like each
+      fetch(`/api/posts/${id}/guest-like`, { method: "POST", keepalive: true }).catch(() => {});
+      return { ...l, [id]: true };
+    });
   }, []);
 
   // Play only what's on screen. One IntersectionObserver over the panels, not a
@@ -225,7 +246,7 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
           </span>
 
           <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-md bg-black/45 px-1.5 py-0.5 text-[9px] font-medium text-white backdrop-blur">
-            <Play className="h-2.5 w-2.5" /> {compact(lead.viewsCount)} views
+            <Play className="h-2.5 w-2.5" /> {compact(lead.viewsCount + (bumpViews[lead.id] ?? 0))} views
           </span>
 
           {/* Play affordance — grows on hover so it reads as a control. */}
@@ -343,19 +364,30 @@ export function PhoneReels({ reels }: { reels: MockReel[] }) {
                 />
                 <span className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent" />
 
-                {/* Action rail — mirrors the real deck's right-hand column */}
-                <span className="pointer-events-none absolute bottom-16 right-1.5 flex flex-col items-center gap-2.5 text-white drop-shadow">
-                  <span className="flex flex-col items-center gap-0.5">
-                    <Heart className="h-4 w-4 fill-rose-500 text-rose-500" />
-                    <span className="text-[7px] font-semibold">{compact(r.likesCount)}</span>
-                  </span>
+                {/* Action rail — mirrors the real deck's right-hand column. The heart
+                    is a real, tappable anonymous like. */}
+                <span className="absolute bottom-16 right-1.5 flex flex-col items-center gap-2.5 text-white drop-shadow">
+                  <button
+                    type="button"
+                    onClick={() => toggleLike(r.id)}
+                    aria-label={liked[r.id] ? "Liked" : "Like this reel"}
+                    aria-pressed={!!liked[r.id]}
+                    className="flex flex-col items-center gap-0.5"
+                  >
+                    <Heart
+                      className={`h-4 w-4 transition-transform active:scale-125 ${
+                        liked[r.id] ? "scale-110 fill-rose-500 text-rose-500" : "text-white"
+                      }`}
+                    />
+                    <span className="text-[7px] font-semibold">{compact(r.likesCount + (liked[r.id] ? 1 : 0))}</span>
+                  </button>
                   <span className="flex flex-col items-center gap-0.5">
                     <MessageCircle className="h-4 w-4" />
                     <span className="text-[7px] font-semibold">{compact(Math.round(r.likesCount / 9))}</span>
                   </span>
                   <span className="flex flex-col items-center gap-0.5">
                     <Play className="h-4 w-4" />
-                    <span className="text-[7px] font-semibold">{compact(r.viewsCount)}</span>
+                    <span className="text-[7px] font-semibold">{compact(r.viewsCount + (bumpViews[r.id] ?? 0))}</span>
                   </span>
                 </span>
 

@@ -1,18 +1,15 @@
-import { InboxShell } from "@/features/social/inbox-shell";
-import { WarmInboxFallback } from "@/features/social/warm-inbox-fallback";
+import { InboxListSkeleton, InboxShell } from "@/features/social/inbox-shell";
 
 /**
- * Inbox loading state — the route-level fallback Next shows while the page's RSC
- * loads. On a back-swipe this renders BEFORE the page's own Suspense fallback, so
- * it has to be warm too or the flash comes back one level up.
+ * Inbox loading state.
  *
- * Renders the SAME shell as the page, so the header/stories never change. And the
- * list area uses WarmInboxFallback (not a grey skeleton): on a warm re-entry it
- * paints the real last-known conversations from the client cache, so entering
- * /messages by back-swipe shows the actual inbox from the very first frame — no
- * placeholder title, no missing profile button, no skeleton flash (owner,
- * 2026-07-16 / 2026-07-17: "i dont want any flash at all on every back swipe").
- * Only a true cold start (empty cache) falls through to the skeleton inside it.
+ * Renders the SAME shell as the page itself, so the only thing that changes
+ * when the real data lands is the list body. This used to paint a grey
+ * `Skeleton` block where the "Messages" title goes, with no subtitle and no
+ * header actions — so entering /messages always flashed a placeholder title and
+ * a missing profile button before the real header appeared, which is precisely
+ * the "reloads too noticeable … the profile button at the top" report (owner,
+ * 2026-07-16).
  */
 export default function MessagesLoading() {
   return (
@@ -20,7 +17,7 @@ export default function MessagesLoading() {
       <span role="status" aria-live="polite" className="sr-only">
         Loading messages…
       </span>
-      <WarmInboxFallback />
+      <InboxListSkeleton />
     </InboxShell>
   );
 }

@@ -25,7 +25,7 @@ const PEOPLE = [
 // read receipt, timestamp, unread/mute). Illustrative, never real users.
 const MOCK_CHATS = [
   { name: "Peace", female: false, from: "from-blue-500 to-violet-600", preview: "Afa", time: "9:41", unread: "3", online: true, verified: false, group: false, ring: true },
-  { name: "Julie Ngozi", female: true, from: "from-amber-500 to-orange-600", preview: "See you tonight!", time: "9:20", unread: "", online: true, verified: true, group: false, ring: false },
+  { name: "Julie", female: true, from: "from-amber-500 to-orange-600", preview: "See you tonight!", time: "9:20", unread: "", online: true, verified: false, group: false, ring: false },
   { name: "Marketing Team", female: false, from: "from-violet-500 to-fuchsia-600", preview: "Let's meet at 10am", time: "Yst", unread: "5", online: false, verified: false, group: true, ring: false },
 ] as const;
 
@@ -374,10 +374,7 @@ export async function PhoneMockup() {
                         <BitmojiAvatar seed={p.name} female={p.female} className="h-full w-full" />
                       </span>
                     </span>
-                    <span className="flex items-center gap-0.5">
-                      <span className="text-[8px] font-bold leading-none">{p.name}</span>
-                      {i % 2 === 0 ? <BadgeCheck className="h-2 w-2 text-blue-400" /> : null}
-                    </span>
+                    <span className="text-[8px] font-bold leading-none">{p.name}</span>
                     <span className="text-[6px] leading-none text-white/40">{2 + ((i * 3) % 7)} mutual</span>
                     <span className="mt-0.5 inline-flex w-full items-center justify-center gap-0.5 rounded-md bg-gradient-to-r from-blue-600 to-violet-600 py-[3px] text-[8px] font-semibold">
                       <UserPlus className="h-2 w-2" /> Add

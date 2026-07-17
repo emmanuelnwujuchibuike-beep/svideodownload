@@ -5,8 +5,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { ConversationList } from "@/features/social/conversation-list";
-import { InboxShell } from "@/features/social/inbox-shell";
-import { WarmInboxFallback } from "@/features/social/warm-inbox-fallback";
+import { InboxListSkeleton, InboxShell } from "@/features/social/inbox-shell";
 import { listIncomingFriendRequests, type FriendRequestItem } from "@/lib/social/friends";
 import { listConversations, type ConversationSummary } from "@/lib/social/messages";
 import { createClient, getUserBounded } from "@/lib/supabase/server";
@@ -59,7 +58,7 @@ export default function MessagesPage() {
 
   return (
     <InboxShell>
-      <Suspense fallback={<WarmInboxFallback />}>
+      <Suspense fallback={<InboxListSkeleton />}>
         <InboxList />
       </Suspense>
     </InboxShell>

@@ -145,63 +145,55 @@ export function StoriesRow({
   useEffect(() => setSeen(loadSeenMap()), [data]);
 
   return (
-    <div className="flex flex-col gap-1">
-      {/* The viewer's OWN stories get their own row (owner, 2026-07-16: "make
-          stories user made to be in a separate roll not inside their story
-          profile picture, it should in a different row so the plus sign can be
-          for uploading new stories").
-          Only rendered when there's something to watch — an empty labelled row
-          would be noise. */}
+    <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* Order is the owner's, 2026-07-16: "i want it in the same line with other
+          stories but it should be the first" —
+            [+ Add story] [Your story] [friends…]
+          Your own story is a normal ring in the SAME row, just first; the plus
+          is a separate, dedicated upload button ahead of it.
+
+          The plus is ALWAYS the composer — never a viewer. It used to open your
+          own story the moment you had one, which meant that once you'd posted
+          there was no way left to post another ("the stories doesnt post from
+          the plus sign when a story is already there"). Splitting the upload
+          button from your story ring is what makes both jobs reachable.
+          No brand ring on the plus, for the same reason: nothing there is
+          watchable. */}
+      <PressIcon className="shrink-0">
+        <button
+          type="button"
+          onClick={() => router.push("/create/story")}
+          aria-label="Add to your story"
+          className="flex w-[5.1rem] flex-col items-center gap-1.5"
+        >
+          <span className="relative rounded-full p-0.5 ring-1 ring-inset ring-border/70">
+            <span className="block rounded-full bg-background p-0.5">
+              {viewerAvatarUrl ? (
+                <Image src={viewerAvatarUrl} alt="" width={68} height={68} className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
+              ) : (
+                <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
+                  {initial}
+                </span>
+              )}
+            </span>
+            <span className="absolute -bottom-0.5 -right-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background">
+              <Plus className="h-4 w-4" />
+            </span>
+          </span>
+          <span className="text-[11px] font-medium text-muted-foreground">Add story</span>
+        </button>
+      </PressIcon>
+
+      {/* Yours first, then everyone else. Always reads as "unseen" (brand ring):
+          greying out your own story the moment you watch it back makes a live
+          story look expired. */}
       {ownGroup ? (
-        <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <StoryRing
-            group={ownGroup}
-            label="Your story"
-            // Always reads as "unseen" (brand ring): it's yours, and greying out
-            // your own story the moment you watch it back makes a live story
-            // look expired.
-            unseen
-            onOpen={() => setStart(groups.indexOf(ownGroup))}
-          />
-        </div>
+        <StoryRing group={ownGroup} label="Your story" unseen onOpen={() => setStart(groups.indexOf(ownGroup))} />
       ) : null}
 
-      <div className="-mx-1 flex gap-4 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {/* The plus is ALWAYS the composer — never a viewer. It used to open your
-            own story instead the moment you had one, which meant that once you'd
-            posted, there was no way left to post another (owner: "the stories
-            doesnt post from the plus sign when a story is already there"). Your
-            own stories moved to the row above, so this button has exactly one
-            job. No brand ring for the same reason: nothing here is watchable. */}
-        <PressIcon className="shrink-0">
-          <button
-            type="button"
-            onClick={() => router.push("/create/story")}
-            aria-label="Add to your story"
-            className="flex w-[5.1rem] flex-col items-center gap-1.5"
-          >
-            <span className="relative rounded-full p-0.5 ring-1 ring-inset ring-border/70">
-              <span className="block rounded-full bg-background p-0.5">
-                {viewerAvatarUrl ? (
-                  <Image src={viewerAvatarUrl} alt="" width={68} height={68} className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
-                ) : (
-                  <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
-                    {initial}
-                  </span>
-                )}
-              </span>
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-background">
-                <Plus className="h-4 w-4" />
-              </span>
-            </span>
-            <span className="text-[11px] font-medium text-muted-foreground">Add story</span>
-          </button>
-        </PressIcon>
-
-        {otherGroups.map((g) => (
-          <StoryRing key={g.handle} group={g} label={g.displayName.split(" ")[0] ?? ""} unseen={!isGroupSeen(g, seen)} onOpen={() => setStart(groups.indexOf(g))} />
-        ))}
-      </div>
+      {otherGroups.map((g) => (
+        <StoryRing key={g.handle} group={g} label={g.displayName.split(" ")[0] ?? ""} unseen={!isGroupSeen(g, seen)} onOpen={() => setStart(groups.indexOf(g))} />
+      ))}
 
       {start !== null ? (
         <StoryViewer groups={groups} startGroup={start} onClose={() => setStart(null)} onGroupSeen={() => setSeen(loadSeenMap())} />

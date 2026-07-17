@@ -460,6 +460,37 @@
     will-change: transform, opacity;
   }
 
+  /* ── Premium native-style page transitions ────────────────────────────────
+     Forward nav: the new page slides in from the right; back nav: from the left;
+     both fade in. GPU-only (translate3d + opacity), iOS-safe.
+
+     Deliberately CSS-animation, NOT a framer-motion transform-at-rest: the final
+     keyframe is `transform: none`, and there is NO `animation-fill-mode`, so once
+     the ~280ms play finishes the wrapper carries NO transform. That matters — a
+     lingering `transform` (even translateX(0)) makes an element the containing
+     block for `position:fixed` descendants, which would silently break every
+     modal/viewer that ISN'T portaled. During the play there IS a transform, but
+     the app's fixed surfaces are portaled to <body> and so escape it anyway. */
+  @keyframes page-in-forward {
+    from { opacity: 0; transform: translate3d(24px, 0, 0); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes page-in-back {
+    from { opacity: 0; transform: translate3d(-24px, 0, 0); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes page-in-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .page-transition-forward { animation: page-in-forward var(--dur) var(--ease-out); will-change: transform, opacity; }
+  .page-transition-back    { animation: page-in-back var(--dur) var(--ease-out); will-change: transform, opacity; }
+  /* Reduced motion: a quick fade instead of any slide. */
+  @media (prefers-reduced-motion: reduce) {
+    .page-transition-forward,
+    .page-transition-back { animation: page-in-fade var(--dur-fast) linear; }
+  }
+
   /* Wrong-code shake for the OTP boxes (GPU-friendly, respects reduced motion). */
   @keyframes otp-shake {
     0%, 100% { transform: translate3d(0, 0, 0); }

@@ -297,7 +297,7 @@ Full scope is a multi-month program; it cannot land in one change, and pretendin
 | Phase | Deliverable | Value standalone |
 |---|---|---|
 | **1** ✅ | Reality Ledger gate + `veracity` on the existing registry + fix `stats-counter` | Kills a live factual-claims exposure. ~1 change. |
-| **2** | Full Product Genome types + backfill the 6 real modules | Source of truth exists; landing page reads from it |
+| **2** ✅ | Full Product Genome types + backfill the 6 real modules | Source of truth exists; landing page reads from it |
 | **3** | Experience Graph + compile step + generalised content engine | Internal linking, sitemap, recommendations unify |
 | **4** | Authoring DB + admin + editorial workflow | Editors stop needing engineers |
 | **5** | Sync Engine + generation + localization + analytics | The living part |
@@ -348,6 +348,61 @@ a number was wrong.
 
 **Verification:** `tsc --noEmit` clean · 229/229 tests · lint clean · `/` screenshotted
 and confirmed rendering `11 / 4 / Free / None`.
+
+---
+
+## Appendix C — Phase 2 as shipped (2026-07-18)
+
+**Landed:** `lib/content/genome/{types,registry,queries}.ts` + 15 tests;
+`components/landing/product-grid.tsx`; genome-derived JSON-LD on `/`.
+Commit `6b5d45c`.
+
+**Two refinements on §2's sketch, both load-bearing:**
+
+1. **The genome is a separate record keyed by module id**, not extra fields on
+   `PlatformModule`. `modules.ts` is imported by client components (nav, launcher,
+   RBAC gates); hanging ~30 fields of prose, release history and structured data off
+   it would ship all of that into the client bundle of every signed-in page.
+2. **The genome is JSON-serializable** — no `LucideIcon`, no functions, contrary to
+   §2's first sketch. This is what makes Phase 4 possible: the authoring plane
+   compiles Postgres rows into exactly this shape, and a genome holding a JS value
+   could never round-trip through a database. Icons stay on `PlatformModule`.
+
+**Population rule:** every field is a verified fact or absent. `studio` and `cloud`
+are near-empty on purpose — that emptiness is what stops a content generator, a
+feature card or an AI summary from inventing detail. Sparse is information.
+
+**Status is never encoded as prose.** A `purpose` of "Internal: assistant endpoint
+backing…" leaked engineering register onto the rendered product grid. Status belongs
+in `veracity.stage`, which the badge, the ledger and the compiler can all query; a
+sentence prefix is invisible to every one of them. Pinned by a test.
+
+### The mockup conflicts this Phase resolves structurally
+
+`public/main landing page.jpg` shows six product cards, each with a live "Explore"
+link. `getClaimableProfiles()` yields two. The grid keeps the mockup's shape and lets
+veracity choose the treatment, so the design intent survives without the claim. The
+remaining mockup conflicts are listed in Appendix D.
+
+---
+
+## Appendix D — open conflicts between the landing mockup and the ledger
+
+`public/main landing page.jpg` (owner-supplied, 2026-07-18) conflicts with shipped
+Phase 1/2 invariants in three places. **None are resolved; all need an owner call.**
+
+1. **A five-figure stats band** — "10M+ Happy Users · 50M+ Downloads · 20+ Platforms
+   Supported · 99.9% Uptime · 4.9★ User Rating". Every one is unsourced, and they are
+   *larger* than the 35M/8M figures Phase 1 removed. Building this band as drawn would
+   fail `reality-ledger.test.ts` and re-open the exposure that Phase 1 closed.
+2. **"Frenzsave AI" as a product name** — the established brand rule is that this
+   suite is **Smart**, never "AI" (see the comment on the module entry in
+   `modules.ts`). Pinned by a genome test.
+3. **"Join millions of users"** in the closing CTA band — same class as (1).
+
+Everything else in the mockup — the layout, the neon/glow treatment, the phone
+composition, the trust bar, the creator section, the rewards card, the footer — has
+no ledger conflict and can be built exactly as drawn.
 
 ---
 

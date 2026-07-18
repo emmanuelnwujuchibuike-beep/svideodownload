@@ -1,7 +1,10 @@
-import type { Lesson } from "./types";
+import { getLessonMeta, LESSON_CATALOG, type LessonMeta } from "./catalog";
+import type { Lesson, LessonSection } from "./types";
 
 /**
- * Learning Academy™ content. See `docs/DOWNLOAD_HUB_RFC.md` §4.
+ * Learning Academy™ lesson BODIES. Metadata lives in `catalog.ts` — see the note
+ * there for why they are separate (short version: most consumers need a title,
+ * not 15 kB of prose).
  *
  * Two rules govern what may be written here, and both are enforced by
  * `lib/content/reality-ledger.test.ts`, which scans this directory:
@@ -18,17 +21,14 @@ import type { Lesson } from "./types";
  * -content risk.
  */
 
-export const LESSONS: Lesson[] = [
-  /* ------------------------------- downloading ------------------------------ */
-  {
-    slug: "how-to-save-a-video",
-    title: "How to save a video from a link",
-    description:
-      "Paste a link, pick a format, save the file. The whole workflow, plus what to do when a link will not resolve.",
-    topic: "downloading",
-    minutes: 4,
-    platformIds: [],
-    relatedActionIds: [],
+interface LessonBody {
+  intro: string;
+  sections: LessonSection[];
+  faqs: { q: string; a: string }[];
+}
+
+const LESSON_BODIES: Record<string, LessonBody> = {
+  "how-to-save-a-video": {
     intro:
       "Saving a video is three steps, and most of the difficulty people hit is in the first one — getting a link the downloader can actually read. This covers the happy path and the two places it usually goes wrong.",
     sections: [
@@ -82,18 +82,9 @@ export const LESSONS: Lesson[] = [
         a: "There is a daily cap that varies by plan, which exists to keep the extraction workers responsive for everyone rather than to upsell you.",
       },
     ],
-    related: ["what-you-can-and-cannot-download", "how-to-improve-video-quality"],
   },
 
-  {
-    slug: "what-you-can-and-cannot-download",
-    title: "What you can and cannot download",
-    description:
-      "Copyright, fair use and platform terms in plain language — what saving a video actually permits you to do with it.",
-    topic: "downloading",
-    minutes: 5,
-    platformIds: [],
-    relatedActionIds: ["publish-post", "publish-reel"],
+  "what-you-can-and-cannot-download": {
     intro:
       "Downloading and republishing are different acts with very different rules, and conflating them is the single most common way people get themselves into trouble. This is the honest version, without legal theatre.",
     sections: [
@@ -140,19 +131,9 @@ export const LESSONS: Lesson[] = [
         a: "Then it is yours, and getting your own work back off a platform is one of the most legitimate reasons to use a downloader.",
       },
     ],
-    related: ["how-to-save-a-video", "how-to-build-a-creator-workflow"],
   },
 
-  /* --------------------------------- editing -------------------------------- */
-  {
-    slug: "how-to-edit-a-clip",
-    title: "How to edit a clip without ruining it",
-    description:
-      "Trimming, cropping and re-encoding explained — including the generation-loss trap that quietly degrades re-shared video.",
-    topic: "editing",
-    minutes: 6,
-    platformIds: [],
-    relatedActionIds: ["edit-video", "make-thumbnail"],
+  "how-to-edit-a-clip": {
     intro:
       "Most editing damage is not caused by bad cuts. It is caused by re-encoding the same footage repeatedly without realising it. Understanding that one mechanic will do more for your output than any effect.",
     sections: [
@@ -209,19 +190,9 @@ export const LESSONS: Lesson[] = [
         a: "Up to a point. Beyond what the source actually contains, extra bitrate only makes the file larger and slower to upload without adding detail.",
       },
     ],
-    related: ["how-to-improve-video-quality", "how-to-make-a-thumbnail"],
   },
 
-  /* -------------------------------- captions -------------------------------- */
-  {
-    slug: "how-to-add-subtitles",
-    title: "How to add subtitles that people actually read",
-    description:
-      "Burned-in versus sidecar captions, timing, line length, and why most video is watched with the sound off.",
-    topic: "captions",
-    minutes: 5,
-    platformIds: [],
-    relatedActionIds: ["generate-subtitles", "translate-subtitles"],
+  "how-to-add-subtitles": {
     intro:
       "A large share of social video is watched muted, which makes captions the difference between a clip that lands and one that gets scrolled past. They are also the single cheapest accessibility improvement available to you.",
     sections: [
@@ -273,19 +244,9 @@ export const LESSONS: Lesson[] = [
         a: "They help retention, which most ranking systems respond to — a muted viewer who can follow along keeps watching. They also make the words available to search engines when carried as a sidecar file.",
       },
     ],
-    related: ["how-to-edit-a-clip", "how-to-build-a-creator-workflow"],
   },
 
-  /* --------------------------------- quality -------------------------------- */
-  {
-    slug: "how-to-improve-video-quality",
-    title: "How to improve video quality (and what is impossible)",
-    description:
-      "What upscaling can and cannot recover, choosing the right rendition, and the settings that actually affect how sharp an upload looks.",
-    topic: "quality",
-    minutes: 5,
-    platformIds: [],
-    relatedActionIds: ["enhance-quality"],
+  "how-to-improve-video-quality": {
     intro:
       "There is a hard limit here worth stating up front: detail that was never captured cannot be restored. Everything genuinely useful in this area is about not losing what you already have.",
     sections: [
@@ -324,19 +285,9 @@ export const LESSONS: Lesson[] = [
         a: "You likely selected a lower rendition, or the source only publishes a compressed version. Sources routinely keep a higher-quality master that is never served publicly.",
       },
     ],
-    related: ["how-to-edit-a-clip", "how-to-save-a-video"],
   },
 
-  /* ------------------------------- organising ------------------------------- */
-  {
-    slug: "how-to-organise-your-media",
-    title: "How to organise media you have saved",
-    description:
-      "A naming and folder system that still works when the library is large, and why sorting by date fails first.",
-    topic: "organising",
-    minutes: 4,
-    platformIds: [],
-    relatedActionIds: ["save-to-cloud", "organize-project"],
+  "how-to-organise-your-media": {
     intro:
       "Every media library reaches a point where finding something takes longer than re-downloading it. The fix is boring and it works: decide the structure before you need it.",
     sections: [
@@ -382,19 +333,9 @@ export const LESSONS: Lesson[] = [
         a: "No. History records what you fetched, not the files themselves — it lets you download something again while the source still exists.",
       },
     ],
-    related: ["how-to-build-a-creator-workflow", "how-to-save-a-video"],
   },
 
-  /* ------------------------------- publishing ------------------------------- */
-  {
-    slug: "how-to-make-a-thumbnail",
-    title: "How to make a thumbnail worth clicking",
-    description:
-      "Composition, contrast and text at small sizes — designing for the size the thumbnail is actually viewed at.",
-    topic: "editing",
-    minutes: 4,
-    platformIds: [],
-    relatedActionIds: ["make-thumbnail"],
+  "how-to-make-a-thumbnail": {
     intro:
       "A thumbnail is judged at roughly the size of a postage stamp, in a scrolling column, in under a second. Almost every common mistake comes from designing it at full size on a large screen.",
     sections: [
@@ -439,18 +380,9 @@ export const LESSONS: Lesson[] = [
         a: "Often yes, if it has a clear subject and good contrast. A crop of a well-chosen frame beats a badly-designed custom graphic.",
       },
     ],
-    related: ["how-to-edit-a-clip", "how-to-build-a-creator-workflow"],
   },
 
-  {
-    slug: "how-to-build-a-creator-workflow",
-    title: "How to build a creator workflow that survives contact with reality",
-    description:
-      "Turning ad-hoc saving and posting into a repeatable pipeline — capture, organise, edit, caption, publish, review.",
-    topic: "publishing",
-    minutes: 6,
-    platformIds: [],
-    relatedActionIds: ["organize-project", "publish-reel", "publish-post"],
+  "how-to-build-a-creator-workflow": {
     intro:
       "The difference between people who publish consistently and people who publish in bursts is almost never talent or equipment. It is having a pipeline dull enough to follow on a bad day.",
     sections: [
@@ -511,36 +443,26 @@ export const LESSONS: Lesson[] = [
         a: "At whatever interval you can sustain for months. Consistency compounds and bursts do not.",
       },
     ],
-    related: ["what-you-can-and-cannot-download", "how-to-organise-your-media", "how-to-add-subtitles"],
-  },
-];
+  },};
 
 /* --------------------------------- queries -------------------------------- */
 
-const BY_SLUG = new Map(LESSONS.map((l) => [l.slug, l]));
-
+/** Full lesson (metadata + body). Only `/learn/[slug]` needs this. */
 export function getLesson(slug: string): Lesson | undefined {
-  return BY_SLUG.get(slug);
+  const meta = getLessonMeta(slug);
+  const body = LESSON_BODIES[slug];
+  if (!meta || !body) return undefined;
+  return { ...meta, ...body };
 }
 
-export const LESSON_SLUGS: string[] = LESSONS.map((l) => l.slug);
-
-export function lessonsForTopic(topic: Lesson["topic"]): Lesson[] {
-  return LESSONS.filter((l) => l.topic === topic);
+/** Every lesson in full. Used by the Learning Academy index and the admin view. */
+export function getLessons(): Lesson[] {
+  return LESSON_CATALOG.map((meta) => ({ ...meta, ...LESSON_BODIES[meta.slug]! }));
 }
 
-/**
- * The lesson that best supports a given Gateway action — how the Discovery
- * Gateway attaches contextual education to a completed download.
- */
-export function lessonForAction(actionId: string): Lesson | undefined {
-  return LESSONS.find((l) => l.relatedActionIds.includes(actionId));
+/** Slugs that have a body — the set `generateStaticParams` may safely render. */
+export function bodySlugs(): string[] {
+  return Object.keys(LESSON_BODIES);
 }
 
-export function relatedLessons(slug: string): Lesson[] {
-  const lesson = getLesson(slug);
-  if (!lesson) return [];
-  return lesson.related
-    .map((s) => BY_SLUG.get(s))
-    .filter((l): l is Lesson => Boolean(l));
-}
+export type { LessonMeta };

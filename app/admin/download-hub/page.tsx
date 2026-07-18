@@ -6,7 +6,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { isAdmin } from "@/lib/admin";
 import { GATEWAY_ACTIONS } from "@/lib/download-hub/actions";
 import { resolveAvailability } from "@/lib/download-hub/recommend";
-import { LESSONS } from "@/lib/learning/lessons";
+import { LESSON_CATALOG } from "@/lib/learning/catalog";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -203,7 +203,7 @@ export default async function DownloadHubOpsPage() {
         <section className="mt-10">
           <h2 className="text-lg font-semibold">Learning Academy</h2>
           <ul className="mt-4 space-y-2">
-            {LESSONS.map((lesson) => {
+            {LESSON_CATALOG.map((lesson) => {
               const orphaned = lesson.relatedActionIds.length === 0;
               return (
                 <li

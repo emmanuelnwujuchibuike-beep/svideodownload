@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
-import { LESSONS } from "@/lib/learning/lessons";
+import { LESSON_CATALOG } from "@/lib/learning/catalog";
 import type { LessonTopic } from "@/lib/learning/types";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL as siteUrl } from "@/lib/site";
@@ -48,7 +48,7 @@ export default function LearnIndexPage() {
     name: "Frenz Learning Academy",
     description: metadata.description,
     url: `${siteUrl}/learn`,
-    hasPart: LESSONS.map((l) => ({
+    hasPart: LESSON_CATALOG.map((l) => ({
       "@type": "Article",
       headline: l.title,
       description: l.description,
@@ -83,7 +83,7 @@ export default function LearnIndexPage() {
 
         <div className="mt-12 space-y-12">
           {TOPIC_ORDER.map((topic) => {
-            const lessons = LESSONS.filter((l) => l.topic === topic);
+            const lessons = LESSON_CATALOG.filter((l) => l.topic === topic);
             if (lessons.length === 0) return null;
             return (
               <section key={topic}>

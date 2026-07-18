@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { hrefFor, recommend } from "@/lib/download-hub/recommend";
 import type { DownloadContext, Recommendation } from "@/lib/download-hub/types";
-import { lessonForAction } from "@/lib/learning/lessons";
+import { lessonForAction } from "@/lib/learning/catalog";
 import { cn } from "@/lib/utils";
 
 import { useGatewayMemory } from "./use-gateway-memory";

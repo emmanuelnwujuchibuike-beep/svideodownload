@@ -20,10 +20,11 @@ import { PublishButton } from "@/features/social/publish-button";
 import { FetchedAd } from "@/features/monetization/fetched-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
 import { useUser } from "@/features/auth/use-user";
+import { buildDownloadContext } from "@/lib/download-hub/context";
 import type { DownloadContext } from "@/lib/download-hub/types";
 import { detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
-import type { MediaFormat, MediaKind } from "@/types";
+import type { MediaKind } from "@/types";
 
 import { useDownloader } from "./use-downloader";
 
@@ -39,23 +40,6 @@ const DiscoveryGateway = dynamic(
   () => import("@/features/download-hub/discovery-gateway").then((m) => m.DiscoveryGateway),
   { ssr: false },
 );
-
-/**
- * Vertical pixel count of a chosen rendition, for Discovery Gateway ranking.
- *
- * There is no `height` field on MediaFormat, so this reads the three places the
- * information actually appears, cheapest first. Returns 0 for "unknown", which
- * the ranker treats as a neutral signal rather than as low quality.
- */
-function heightOf(fmt: MediaFormat | undefined): number {
-  if (!fmt) return 0;
-  const fromId = Number(fmt.formatId);
-  if (Number.isFinite(fromId) && fromId > 0) return fromId;
-  const fromResolution = fmt.resolution?.match(/x(\d+)/)?.[1];
-  if (fromResolution) return Number(fromResolution);
-  const fromLabel = fmt.label?.match(/(\d+)p/)?.[1];
-  return fromLabel ? Number(fromLabel) : 0;
-}
 
 // Cycled through in the input placeholder for a lively, on-brand prompt.
 const PLACEHOLDER_PLATFORMS = [
@@ -113,20 +97,15 @@ export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
     });
     setJustDownloaded(true);
     countDownload();
-    setSavedContext({
-      platformId: metadata.platform,
-      kind,
-      durationSec: metadata.durationSeconds ?? 0,
-      height: heightOf(fmt),
-      // `acodec: "none"` is yt-dlp's marker for a video-only rendition. Absent
-      // codec data means unknown, and assuming audio is present is the safer
-      // default — it keeps caption suggestions available rather than silently
-      // dropping them.
-      hasAudio: kind !== "image" && fmt?.acodec !== "none",
-      signedIn: !!user,
-      plan: "free",
-      downloadCount: downloadCount + 1,
-    });
+    setSavedContext(
+      buildDownloadContext({
+        metadata,
+        formatId,
+        kind,
+        signedIn: !!user,
+        downloadCount: downloadCount + 1,
+      }),
+    );
   };
 
   // Share Target (manifest `share_target`) hands us a link from another app

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import { LESSON_SLUGS } from "@/lib/learning/lessons";
+import { LESSON_SLUGS } from "@/lib/learning/catalog";
 import { BLOG_SLUGS } from "@/lib/seo/blog";
 import { SEO_SLUGS } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";

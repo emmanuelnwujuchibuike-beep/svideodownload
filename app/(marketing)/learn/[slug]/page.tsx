@@ -5,7 +5,8 @@ import { notFound } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
-import { getLesson, LESSON_SLUGS, relatedLessons } from "@/lib/learning/lessons";
+import { LESSON_SLUGS, relatedLessons } from "@/lib/learning/catalog";
+import { getLesson } from "@/lib/learning/lessons";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";

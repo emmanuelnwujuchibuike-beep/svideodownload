@@ -63,24 +63,46 @@ the four genuinely-new concerns.
 
 ## 2. The Hub
 
-### 2.1 One workspace, two audiences
+### 2.1 One workflow, two shells
 
-`/downloads` currently redirects signed-out users to `/login`. That is correct for a
-*history* page and wrong for a *hub* — the hub's single most valuable visitor is the
-anonymous first-timer who arrived from a search result.
+**AMENDED during Phase 2 implementation.** The original text here said the Hub at
+`/downloads` should render for everyone, signed in or not. Implementation showed
+that to be wrong, and the reason is worth recording.
 
-The Hub therefore renders for everyone, with capability tiers rather than a wall:
+`/downloads` lives in the `(app)` route group, whose layout is a *signed-in shell*:
+sidebar, topbar, PIN-lock gate, presence tracker, inbox realtime subscription, live
+notification toasts. Rendering that for an anonymous visitor would mean either
+booting subscriptions with no user or threading "maybe signed out" through every one
+of those components. That is a large amount of risk to take on for a page they can
+already reach in a better form.
 
-- **Anonymous** — paste, fetch, choose format, download. Full core workflow. No
-  history persistence beyond `localStorage` (`features/history/store.ts` already
-  does exactly this).
-- **Signed in** — synced history, cloud saves, publish, send-to-chat.
-- **Pro** — batch, higher quota (`lib/api/download-quota.ts` already tiers this).
+Because the anonymous Hub **already exists** — it is `/` and the ~100
+`/[downloader]` pages. Those carry the same `Downloader`, the same extraction
+pipeline, and (since Phase 1) the same Discovery Gateway. They are also where the
+anonymous visitor actually lands, since that is what ranks in search. The
+capability tiering the original text described is real; it is just expressed as two
+shells rather than one page.
 
-**Why not gate the hub behind login?** Because the download *is* the acquisition
-event. Asking for an account before delivering the thing the visitor came for
-inverts the funnel: it spends trust you have not yet earned. The Gateway (§3) asks
-for the account *after* delivering value, which is when the ask is credible.
+So the split is:
+
+| | Anonymous | Signed in |
+|---|---|---|
+| Surface | `/`, `/[downloader]` | `/downloads` |
+| Shell | marketing | app |
+| Core workflow | full — paste, fetch, pick, save | full |
+| History | `localStorage` (`features/history/store.ts`) | synced |
+| Gateway | yes | yes |
+
+**What does NOT change:** the download is still the acquisition event, and nothing
+gates it behind an account. The Gateway still asks for the account *after*
+delivering value, which is when the ask is credible — it just does that on the
+marketing surface, where the anonymous visitor already is.
+
+**The bug this amendment fixed:** `DownloadBox` (the Hub's paste bar) had no Gateway
+at all. Phase 1 wired only the marketing `Downloader`, so signed-in users — the
+people most able to act on a recommendation — were the only ones not getting any.
+`lib/download-hub/context.ts` now builds the ranking context for both, so the two
+surfaces cannot drift apart again.
 
 ### 2.2 Layout
 
@@ -296,7 +318,7 @@ and the affirmation is where that is addressed.
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Gateway engine, action catalogue, ranking, availability derivation, tests | **this change** |
-| 2 | Hub workspace UI, Gateway panel, post-download wiring | **this change** |
+| 2 | Gateway in the Hub, rail honesty pass, Auto Download + quality preference | **shipped** |
 | 3 | Learning Academy registry, `/learn` routes, SEO interlinking | **this change** |
 | 4 | Migration `0087`, event recording, waitlist | **this change** |
 | 5 | Admin dashboard, config-driven weights | **this change** |
@@ -322,4 +344,31 @@ the aggregate — platform, kind, duration — and the URL adds nothing to that 
 adding the entire privacy liability.
 
 **Why let anonymous users use the whole Hub?** The download is the acquisition event.
-Gating it spends trust before earning it.
+Gating it spends trust before earning it. (See §2.1 — this is delivered by the
+marketing surface rather than by opening the app shell to anonymous visitors.)
+
+---
+
+## Appendix B — Phase 2 honesty pass on `/downloads`
+
+The Hub's right rail carried four controls that misrepresented themselves. Recorded
+because they are all the same failure — UI shipped ahead of the thing it describes —
+and because that failure has a house rule against it.
+
+| Control | Problem | Resolution |
+|---|---|---|
+| Storage donut | `TOTAL_GB = 128`, captioned "Used of 128 GB". No such allowance exists — Frenz Cloud is `concept` and this is local device storage of unknowable capacity. An invented quota rendered as a measured one. | Donut now shows library **composition** (video/audio/image), which the data can actually answer. Caption is the real file count. |
+| "Manage Storage" | No `onClick`. A button that did nothing. | Replaced with a link to the guide on organising a media library. |
+| "Auto Download" | Bare `useState(false)` — saved nothing, did nothing, reset on navigation, while presenting as a stored setting. Worse than a dead button: the user believes they configured something. | Made real. Persists to `localStorage`, and `DownloadBox` honours it by skipping the picker. |
+| "Download Quality" | Linked to `/account`, which has no quality setting. | Made real. It is now the setting itself, and it is what Auto Download uses. |
+
+Plus: "View All Categories" linked to `/downloads` — the page it was already on —
+and the "Download from Link" quick action pointed at `#download`, an anchor that
+existed only on the landing hero. The first was removed (the card already lists
+every category); the second now has its anchor.
+
+`pickFormat` in `lib/download-hub/context.ts` is the one piece of this with real
+teeth, so it is unit-tested: a height preference must never *overshoot*. Asking for
+720p on a source offering 1080p and 480p has to yield 480p, because the user chose a
+ceiling to protect a metered connection and Auto Download gives them no chance to
+intervene.

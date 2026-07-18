@@ -1,16 +1,30 @@
 "use client";
 
 import { ClipboardPaste, Loader2, Search, X } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { useUser } from "@/features/auth/use-user";
+import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
 import { useDownloader } from "@/features/downloader/use-downloader";
 import { PreviewCard } from "@/features/downloader/preview-card";
 import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
 import { startDownload } from "@/features/downloads/manager";
+import { getAutoDownload, getPreferredQuality } from "@/lib/download-hub/auto-download";
+import { buildDownloadContext, pickFormat } from "@/lib/download-hub/context";
+import type { DownloadContext } from "@/lib/download-hub/types";
 import { BRAND_ICONS, FLAGSHIP_IDS } from "@/lib/platform-icons";
 import { detectPlatform, PLATFORMS } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
 import type { MediaKind } from "@/types";
+
+// Renders only after a download completes, and pulls in the Learning Academy
+// content it links to — code-split so the Hub's initial bundle does not carry it.
+// Importing it directly cost /downloads 16 kB of lesson prose on first load.
+const DiscoveryGateway = dynamic(
+  () => import("@/features/download-hub/discovery-gateway").then((m) => m.DiscoveryGateway),
+  { ssr: false },
+);
 
 /** Large paste box + preview that enqueues into the in-app download manager
  * (real progress / pause / resume), with supported-platform badges. */
@@ -19,6 +33,13 @@ export function DownloadBox() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const { status, metadata, error, fetchMetadata, reset } = useDownloader();
   const [justQueued, setJustQueued] = useState(false);
+
+  // Discovery Gateway™ context for the most recent save. The Hub is where a
+  // signed-in user downloads, so this is the surface where a recommendation is
+  // MOST actionable — they already have an account to act with.
+  const [savedContext, setSavedContext] = useState<DownloadContext | null>(null);
+  const { downloadCount, countDownload } = useGatewayMemory();
+  const { user } = useUser();
 
   const isBusy = status === "fetching";
 
@@ -79,11 +100,41 @@ export function DownloadBox() {
     });
     setJustQueued(true);
     setTimeout(() => setJustQueued(false), 2400);
+    countDownload();
+    setSavedContext(
+      buildDownloadContext({
+        metadata,
+        formatId,
+        kind,
+        signedIn: !!user,
+        downloadCount: downloadCount + 1,
+      }),
+    );
   };
+
+  /*
+   * Auto Download: honour the rail's toggle by starting the best rendition as
+   * soon as metadata resolves, instead of rendering the picker.
+   *
+   * `autoStartedFor` guards against re-firing — this effect re-runs whenever
+   * metadata changes identity, and without the guard a re-render would enqueue
+   * the same file twice.
+   */
+  const autoStartedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!metadata || !getAutoDownload()) return;
+    if (autoStartedFor.current === metadata.id) return;
+    const chosen = pickFormat(metadata.formats, getPreferredQuality());
+    if (!chosen) return;
+    autoStartedFor.current = metadata.id;
+    onDownload(chosen.formatId, chosen.kind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metadata]);
 
   const clear = () => {
     setUrl("");
     setValidationError(null);
+    setSavedContext(null);
     reset();
   };
 
@@ -149,6 +200,7 @@ export function DownloadBox() {
       {metadata ? (
         <div className="text-foreground">
           <PreviewCard metadata={metadata} phase="idle" onDownload={onDownload} />
+          {savedContext ? <DiscoveryGateway context={savedContext} /> : null}
         </div>
       ) : null}
 

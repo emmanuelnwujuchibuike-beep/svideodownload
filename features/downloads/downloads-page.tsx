@@ -88,8 +88,13 @@ export function DownloadsPage() {
 
   return (
     <div className="space-y-5 pt-1">
-      {/* Hero */}
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-700 via-violet-700 to-purple-800 p-5 text-white shadow-elevated sm:p-7">
+      {/* Hero. `id="download"` is the target the rail's "Download from Link"
+          quick action points at — the anchor previously existed only on the
+          landing hero, so that control did nothing on this page. */}
+      <section
+        id="download"
+        className="relative scroll-mt-20 overflow-hidden rounded-2xl bg-gradient-to-br from-blue-700 via-violet-700 to-purple-800 p-5 text-white shadow-elevated sm:p-7"
+      >
         <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full bg-fuchsia-400/30 blur-3xl motion-safe:animate-drift" />
         <div className="relative">
           <div className="flex items-start justify-between gap-4">

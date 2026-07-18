@@ -5,7 +5,6 @@ import { CtaBanner } from "@/components/landing/cta-banner";
 import { Faq } from "@/components/landing/faq";
 import { Hero } from "@/components/landing/hero";
 import { ProductGrid } from "@/components/landing/product-grid";
-import { MeetNewPeople } from "@/components/landing/meet-people";
 import { PlatformShowcase } from "@/components/landing/platform-showcase";
 import { StatsCounter } from "@/components/landing/stats-counter";
 import { TrendingToday } from "@/components/landing/trending-today";
@@ -103,9 +102,6 @@ export default function HomePage() {
         {/* Data-backed sections stream in behind the hero so the page paints
             instantly instead of blocking the first byte on their DB queries. */}
         <Suspense fallback={<section className="min-h-[280px]" />}>
-          <MeetNewPeople />
-        </Suspense>
-        <Suspense fallback={<section className="min-h-[280px]" />}>
           <TrendingToday />
         </Suspense>
 
@@ -121,8 +117,11 @@ export default function HomePage() {
           />
         </Suspense>
 
-        {/* "Built for Creators" — benefit checklist + rewards card, per the mockup. */}
-        <CreatorsSection />
+        {/* "Built for Creators" — now data-backed (real published covers), so it
+            streams like the other DB-reading sections instead of blocking TTFB. */}
+        <Suspense fallback={<section className="min-h-[560px]" />}>
+          <CreatorsSection />
+        </Suspense>
 
         <CtaBanner />
 

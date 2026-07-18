@@ -18,7 +18,7 @@ import { getModules } from "@/lib/platform/modules";
  * This file exists because both of the failures it prevents have ALREADY shipped:
  *
  *   1. Products marketed that were never built. The landing spec described 25
- *      products; 16 did not exist. `Frenzsave Studio` and `Frenzsave Cloud` still
+ *      products; 16 did not exist. `Frenz Studio` and `Frenzsave Cloud` still
  *      have no route, and `Frenzsave Smart` was carrying `status: "beta"` while its
  *      only UI surface sat commented out in `app/layout.tsx`.
  *
@@ -169,14 +169,14 @@ describe("Reality Ledger — the detector itself", () => {
   });
 
   it("catches present-tense copy for an unbuilt product", () => {
-    const copy = `<p>Frenzsave Studio lets you trim and remix every clip.</p>`;
+    const copy = `<p>Frenz Studio lets you trim and remix every clip.</p>`;
     const hits = findFalseExistenceClaims("x.tsx", copy);
     expect(hits).toHaveLength(1);
-    expect(hits[0]?.product).toBe("Frenzsave Studio");
+    expect(hits[0]?.product).toBe("Frenz Studio");
   });
 
   it("permits future-tense copy for the same product", () => {
-    expect(findFalseExistenceClaims("x.tsx", `<p>Frenzsave Studio is coming soon.</p>`)).toHaveLength(0);
+    expect(findFalseExistenceClaims("x.tsx", `<p>Frenz Studio is coming soon.</p>`)).toHaveLength(0);
   });
 });
 

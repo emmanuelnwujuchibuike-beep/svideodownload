@@ -21,7 +21,7 @@ import {
 export const MODULES: PlatformModule[] = [
   {
     id: "download",
-    name: "Frenzsave Download",
+    name: "Frenz Download",
     shortName: "Download",
     tagline: "Save video & audio from 20+ platforms.",
     basePath: "/downloads",
@@ -40,7 +40,7 @@ export const MODULES: PlatformModule[] = [
   },
   {
     id: "community",
-    name: "Frenzsave Community",
+    name: "Frenz Community",
     shortName: "Community",
     tagline: "Stories, reels and your feed.",
     basePath: "/home",
@@ -62,7 +62,7 @@ export const MODULES: PlatformModule[] = [
   },
   {
     id: "studio",
-    name: "Frenzsave Studio",
+    name: "Frenz Studio",
     shortName: "Studio",
     tagline: "Edit, trim and remix what you capture.",
     basePath: "/studio",
@@ -79,7 +79,7 @@ export const MODULES: PlatformModule[] = [
   },
   {
     id: "cloud",
-    name: "Frenzsave Cloud",
+    name: "Frenz Cloud",
     shortName: "Cloud",
     tagline: "Your library, synced across every device.",
     basePath: "/cloud",
@@ -97,7 +97,7 @@ export const MODULES: PlatformModule[] = [
   {
     // Brand rule: never "AI" in product naming — this is the "Smart" suite.
     id: "smart",
-    name: "Frenzsave Smart",
+    name: "Frenz Smart",
     shortName: "Smart",
     tagline: "Summaries, captions and smart search.",
     basePath: "/smart",
@@ -121,7 +121,7 @@ export const MODULES: PlatformModule[] = [
   },
   {
     id: "admin",
-    name: "Frenzsave Admin",
+    name: "Frenz Admin",
     shortName: "Admin",
     tagline: "Operate the platform.",
     basePath: "/admin",

@@ -40,7 +40,7 @@ export function ProductGrid() {
           One Platform. Unlimited Possibilities.
         </h2>
         <p className="mx-auto mt-2 max-w-2xl text-sm text-muted-foreground">
-          Frenzsave brings together powerful tools and social experiences in one seamless platform.
+          Frenz brings together powerful tools and social experiences in one seamless platform.
         </p>
       </div>
 
@@ -99,11 +99,11 @@ export function ProductGrid() {
       </div>
 
       {/* "See All Features" — the mockup's closing action for this section.
-          Points at the platform showcase, which is the real full-capability
-          surface on this page; a /features route does not exist. */}
+          Opens /features — the full capability list, rendered from the Product
+          Genome so it cannot drift from what the product actually does. */}
       <div className="mt-8 flex justify-center">
         <Link
-          href="#platforms"
+          href="/features"
           className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-6 py-3 text-sm font-semibold shadow-soft transition hover:border-foreground/20 hover:shadow-card active:scale-[0.99]"
         >
           See All Features <LayoutGrid className="h-4 w-4" />

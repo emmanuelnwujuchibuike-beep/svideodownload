@@ -15,7 +15,7 @@ export function CtaBanner() {
               Reality Ledger now fails the build on worded magnitudes too.
             */}
             <h2 className="text-2xl font-bold tracking-[-0.02em] text-white sm:text-3xl">
-              Ready to Experience Frenzsave?
+              Ready to Experience Frenz?
             </h2>
             <p className="mt-2 max-w-md text-sm leading-relaxed text-white/80">
               Download videos. Discover what&apos;s trending. Meet new friends. Chat instantly. Share your own content.

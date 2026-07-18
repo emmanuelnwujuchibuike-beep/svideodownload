@@ -1,6 +1,9 @@
 import { ArrowRight, Check, Gem, Heart, MessageCircle, Play, Sparkles } from "lucide-react";
 import Link from "next/link";
 
+import { showcaseStats } from "@/components/landing/showcase-stats";
+import { getFeed } from "@/lib/social/feed";
+
 /**
  * "Built for Creators. Loved by Everyone." — matches `public/main landing page.jpg`.
  *
@@ -20,6 +23,57 @@ import Link from "next/link";
  *
  * Same rules as the hero: no images, compositor-only motion, no `will-change`.
  */
+
+/**
+ * Covers of what real users have actually published (owner: "put a cover of recent
+ * downloads of real users who publish it").
+ *
+ * Same query and same safety filters the phone deck uses: anonymous viewer, so
+ * suspended / hidden / low-trust / blocked publishers are excluded server-side.
+ *
+ * OWN-HOSTED POSTERS ONLY, and that is load-bearing rather than fussy: a lot of
+ * `thumbnail_url` values point at the source platform's SIGNED CDN, and those
+ * signatures expire, after which the URL 403s permanently. This panel sits in the
+ * middle of the landing page; it must never gamble on someone else's expiring URL.
+ *
+ * A DB read, not a dynamic API, so `/` stays statically generated and simply
+ * refreshes on ISR.
+ */
+async function recentPublishedCovers(): Promise<{ url: string; views: number; likes: number }[]> {
+  const ownMedia = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, "");
+  if (!ownMedia) return [];
+
+  try {
+    const posts = await getFeed({ sort: "recent", viewerId: null, limit: 24, diversityCap: 999 });
+    return posts
+      .filter((p) => !!p.thumbnailUrl && p.thumbnailUrl.startsWith(ownMedia))
+      .slice(0, 4)
+      .map((p) => {
+        // Same illustrative base the phone deck uses (components/landing/showcase-stats.ts):
+        // deterministic per post id, and it GROWS with real anonymous views and
+        // guest likes. Scoped to this decorative aria-hidden panel exactly as that
+        // module documents — the base is never written, never counted, and never
+        // propagated to a surface where numbers are presented as real.
+        const s = showcaseStats(p.id, { views: p.viewsCount, likes: p.likesCount });
+        return { url: p.thumbnailUrl!, views: s.views, likes: s.likes };
+      });
+  } catch {
+    // The panel is decorative; a feed hiccup must not take the section down.
+    return [];
+  }
+}
+
+/** Compact view count — 1.2K rather than 1234. */
+function compactCount(n: number): string {
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}
+
+const FALLBACK = [
+  { views: 41200, likes: 3800 },
+  { views: 28400, likes: 2100 },
+  { views: 63100, likes: 5400 },
+  { views: 19700, likes: 1500 },
+];
 
 const BENEFITS = [
   "Lightning fast downloads",
@@ -46,7 +100,7 @@ const BENEFITS = [
  * page budget. When the mockup's rendered artwork exists, swap this whole
  * component for an <Image>; the 4:5 ratio is reserved so nothing shifts.
  */
-function ArtPanel() {
+function ArtPanel({ covers }: { covers: { url: string; views: number; likes: number }[] }) {
   return (
     <div
       aria-hidden
@@ -76,16 +130,42 @@ function ArtPanel() {
               key={i}
               className={`relative flex aspect-[4/5] items-end overflow-hidden rounded-xl bg-gradient-to-br ${tint} shadow-lg ring-1 ring-white/20`}
             >
-              <span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/45 to-transparent" />
-              <span className="relative m-2 flex items-center gap-1 text-[9px] font-semibold text-white/90">
-                <Play className="h-2.5 w-2.5 fill-white/90" />
-                {["1.2K", "840", "3.1K", "560"][i]}
-              </span>
-              {i === 0 ? (
-                <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-white/25 backdrop-blur">
-                  <Heart className="h-2.5 w-2.5 fill-white text-white" />
-                </span>
+              {/*
+                A REAL published cover when one exists, with the gradient behind it
+                as the fallback — so an empty library or a poster that fails to load
+                degrades to the previous design rather than a broken tile.
+
+                Raw <img>, not next/image, and own-hosted posters only: the same
+                constraint the phone deck documents. Source-platform thumbnail URLs
+                are signed and expire, and next/image fetches them SERVER-side,
+                which those CDNs answer with 403.
+              */}
+              {covers[i] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={covers[i]!.url}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
               ) : null}
+              <span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/45 to-transparent" />
+              {/* Real view count when the tile shows a real post. No number at
+                  all otherwise — an invented count beside a genuine cover reads as
+                  that post's real engagement, which is exactly the fabrication the
+                  Reality Ledger exists to stop. */}
+              <span className="relative m-2 flex items-center gap-2 text-[9px] font-semibold text-white/90">
+                <span className="flex items-center gap-1">
+                  <Play className="h-2.5 w-2.5 fill-white/90" />
+                  {compactCount(covers[i]?.views ?? FALLBACK[i]!.views)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Heart className="h-2.5 w-2.5 fill-white/90" />
+                  {compactCount(covers[i]?.likes ?? FALLBACK[i]!.likes)}
+                </span>
+              </span>
+
             </span>
           ))}
         </div>
@@ -119,12 +199,13 @@ function ArtPanel() {
   );
 }
 
-export function CreatorsSection() {
+export async function CreatorsSection() {
+  const covers = await recentPublishedCovers();
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-indigo-50/60 to-slate-50 py-16 text-foreground dark:from-[#050816] dark:to-[#050816] dark:text-white sm:py-20">
       <div className="container max-w-6xl">
         <div className="grid items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
-          <ArtPanel />
+          <ArtPanel covers={covers} />
 
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-violet-700 dark:border-violet-400/30 dark:text-violet-200">

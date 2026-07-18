@@ -69,7 +69,7 @@ export function SiteFooter() {
             <span className="text-gradient">Frenz</span>
           </SecretAdminGesture>
           <p className="mt-3 max-w-[240px] text-sm leading-relaxed text-muted-foreground">
-            Frenzsave is your all-in-one super app for downloading, creating, sharing and
+            Frenz is your all-in-one super app for downloading, creating, sharing and
             connecting. Save more. Do more. Be more.
           </p>
           {/* Social row, per the mockup. Only networks we actually publish on get a

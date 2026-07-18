@@ -1,4 +1,4 @@
-import { ArrowRight, Feather, Play, ShieldCheck, Smartphone, Sparkles, WifiOff } from "lucide-react";
+import { ArrowRight, Feather, Play, ShieldCheck, Sparkles, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -16,7 +16,6 @@ import { SharedLinkDownloader } from "@/features/downloader/shared-link-download
  * for the same reason the stats band does — they describe what the thing IS.
  */
 const CHIPS = [
-  { icon: Smartphone, title: "No App Store", sub: "100% Web App" },
   { icon: WifiOff, title: "Works Offline", sub: "Smart Caching" },
   { icon: Feather, title: "Lightweight", sub: "Save Data & Storage" },
   { icon: ShieldCheck, title: "Secure", sub: "Your Data, Our Priority" },
@@ -54,7 +53,7 @@ export function Hero() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-lg text-pretty text-base leading-relaxed text-slate-600 dark:text-white/70 sm:text-lg lg:mx-0">
-            Frenzsave is your super app for downloading, watching, creating, sharing and
+            Frenz is your super app for downloading, watching, creating, sharing and
             connecting. Save content. Create more. Earn rewards. All{" "}
             <span className="font-medium text-blue-600 dark:text-blue-300">without consuming your phone storage.</span>
           </p>
@@ -75,7 +74,7 @@ export function Hero() {
               Download Now <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
-              href="#platforms"
+              href="/features"
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-7 py-3.5 text-sm font-semibold text-slate-900 shadow-soft transition hover:border-slate-400 dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur dark:hover:border-white/30 active:scale-[0.99] sm:w-auto"
             >
               <Play className="h-4 w-4" /> Explore Features
@@ -83,7 +82,7 @@ export function Hero() {
           </div>
 
           {/* Four capability chips */}
-          <div className="mt-10 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4 lg:gap-x-4">
+          <div className="mt-10 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:gap-x-4">
             {CHIPS.map((chip) => (
               <div key={chip.title} className="text-left">
                 <chip.icon className="h-4 w-4 text-blue-600 dark:text-blue-300" />

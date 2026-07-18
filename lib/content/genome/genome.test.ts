@@ -69,13 +69,13 @@ describe("Product Genome — the honesty invariants", () => {
 
   it("never emits JSON-LD for an unbuilt product", () => {
     const names = productJsonLd("https://frenzsave.com").map((n) => n.name);
-    expect(names).not.toContain("Frenzsave Studio");
-    expect(names).not.toContain("Frenzsave Cloud");
-    expect(names).toContain("Frenzsave Download");
+    expect(names).not.toContain("Frenz Studio");
+    expect(names).not.toContain("Frenz Cloud");
+    expect(names).toContain("Frenz Download");
   });
 
   it("emits only real surfaces and capabilities into structured data", () => {
-    const node = productJsonLd("https://frenzsave.com").find((n) => n.name === "Frenzsave Download");
+    const node = productJsonLd("https://frenzsave.com").find((n) => n.name === "Frenz Download");
     // `extension`, `android` and `ios` are all `concept` for download today.
     expect(node?.operatingSystem).not.toContain("ios");
     expect(node?.featureList).toContain("Link extraction");

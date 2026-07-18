@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Gem, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Gem, Heart, MessageCircle, Play, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 /**
@@ -30,7 +30,22 @@ const BENEFITS = [
   "Daily rewards & bonuses",
 ];
 
-/** Placeholder for the mockup's hero illustration. See the note above. */
+/**
+ * The left-hand visual.
+ *
+ * First version was three abstract plates on a gradient and read as unfinished
+ * (owner: "the container next to built for creators looks too empty"). Abstract
+ * shapes cannot fill a 4:5 panel — there is nothing for the eye to land on.
+ *
+ * This version fills it with the PRODUCT instead: a reels grid, a completed
+ * download, a chat bubble and a rewards chip — the same surfaces the checklist
+ * beside it is describing. It is denser, it is on-brand, and it says something
+ * true about the app rather than being decoration.
+ *
+ * Still zero images and compositor-only motion, so it costs nothing against the
+ * page budget. When the mockup's rendered artwork exists, swap this whole
+ * component for an <Image>; the 4:5 ratio is reserved so nothing shifts.
+ */
 function ArtPanel() {
   return (
     <div
@@ -38,18 +53,68 @@ function ArtPanel() {
       className="relative aspect-[4/5] overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-[#070b1c]"
     >
       <div className="absolute inset-0 bg-[radial-gradient(90%_70%_at_50%_15%,rgba(167,139,250,0.28)_0%,rgba(191,219,254,0.35)_45%,transparent_75%)] dark:bg-[radial-gradient(90%_70%_at_50%_15%,rgba(139,92,246,0.4)_0%,rgba(30,27,75,0.5)_45%,transparent_75%)]" />
-      {/* Neon horizon — the city glow in the mockup, as pure gradient. */}
       <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(to_top,rgba(56,189,248,0.22)_0%,rgba(168,85,247,0.12)_40%,transparent_100%)] dark:bg-[linear-gradient(to_top,rgba(56,189,248,0.35)_0%,rgba(168,85,247,0.18)_40%,transparent_100%)]" />
-      {/* Floating device plates, echoing the composited screens. */}
-      <span className="frenz-float absolute left-[12%] top-[22%] h-24 w-16 rounded-xl border border-slate-300/60 dark:border-white/15 bg-gradient-to-br from-fuchsia-500/30 to-indigo-600/30 backdrop-blur-sm" />
+
+      {/*
+        Laid out in FLOW, not absolutely.
+
+        The first attempt positioned the grid absolutely and the two bottom tiles
+        overflowed the panel and were clipped, with the download card landing on
+        top of them. A padded flex column cannot overflow: the grid takes the space
+        it needs, the card sits under it, and the panel's 4:5 box stays authoritative
+        at every width.
+      */}
+      <div className="absolute inset-0 flex flex-col justify-center gap-3 p-[9%]">
+        <div className="grid grid-cols-2 gap-2.5">
+          {[
+            "from-rose-500/70 to-fuchsia-600/70",
+            "from-blue-500/70 to-indigo-600/70",
+            "from-violet-500/70 to-purple-600/70",
+            "from-sky-500/70 to-cyan-600/70",
+          ].map((tint, i) => (
+            <span
+              key={i}
+              className={`relative flex aspect-[4/5] items-end overflow-hidden rounded-xl bg-gradient-to-br ${tint} shadow-lg ring-1 ring-white/20`}
+            >
+              <span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/45 to-transparent" />
+              <span className="relative m-2 flex items-center gap-1 text-[9px] font-semibold text-white/90">
+                <Play className="h-2.5 w-2.5 fill-white/90" />
+                {["1.2K", "840", "3.1K", "560"][i]}
+              </span>
+              {i === 0 ? (
+                <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-white/25 backdrop-blur">
+                  <Heart className="h-2.5 w-2.5 fill-white text-white" />
+                </span>
+              ) : null}
+            </span>
+          ))}
+        </div>
+
+        {/* Download-complete card. */}
+        <div className="flex items-center gap-2 rounded-2xl border border-white/20 bg-white/85 p-2.5 shadow-xl backdrop-blur dark:bg-white/10">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500 text-white">
+            <Check className="h-4 w-4" strokeWidth={3} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[11px] font-bold text-slate-900 dark:text-white">Saved to your library</span>
+            <span className="block text-[10px] text-slate-500 dark:text-white/60">1080p · no watermark</span>
+          </span>
+        </div>
+      </div>
+
+      {/* Chat bubble + rewards chip, for depth at the edges. */}
       <span
-        className="frenz-float absolute right-[16%] top-[32%] h-28 w-20 rounded-xl border border-slate-300/60 dark:border-white/15 bg-gradient-to-br from-blue-500/30 to-violet-600/30 backdrop-blur-sm"
+        className="frenz-float absolute left-[4%] top-[46%] flex items-center gap-1.5 rounded-full border border-white/20 bg-white/85 px-2.5 py-1.5 text-[10px] font-semibold text-slate-900 shadow-lg backdrop-blur dark:bg-white/10 dark:text-white"
         style={{ animationDelay: "-2s" }}
-      />
+      >
+        <MessageCircle className="h-3 w-3 text-blue-500" /> Nice one!
+      </span>
       <span
-        className="frenz-float absolute bottom-[18%] left-[30%] h-20 w-28 rounded-xl border border-slate-300/60 dark:border-white/15 bg-gradient-to-br from-sky-500/25 to-purple-600/25 backdrop-blur-sm"
+        className="frenz-float absolute right-[3%] top-[30%] flex items-center gap-1.5 rounded-full border border-white/20 bg-white/85 px-2.5 py-1.5 text-[10px] font-semibold text-slate-900 shadow-lg backdrop-blur dark:bg-white/10 dark:text-white"
         style={{ animationDelay: "-4s" }}
-      />
+      >
+        <Gem className="h-3 w-3 text-violet-500" /> +25 pts
+      </span>
     </div>
   );
 }

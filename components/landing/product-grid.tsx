@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, LayoutGrid } from "lucide-react";
 import Link from "next/link";
 
 import { getProfiles } from "@/lib/content/genome/queries";
@@ -96,6 +96,18 @@ export function ProductGrid() {
             </div>
           );
         })}
+      </div>
+
+      {/* "See All Features" — the mockup's closing action for this section.
+          Points at the platform showcase, which is the real full-capability
+          surface on this page; a /features route does not exist. */}
+      <div className="mt-8 flex justify-center">
+        <Link
+          href="#platforms"
+          className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-6 py-3 text-sm font-semibold shadow-soft transition hover:border-foreground/20 hover:shadow-card active:scale-[0.99]"
+        >
+          See All Features <LayoutGrid className="h-4 w-4" />
+        </Link>
       </div>
     </section>
   );

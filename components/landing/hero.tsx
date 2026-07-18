@@ -61,11 +61,18 @@ export function Hero() {
 
           {/* CTAs */}
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:items-start lg:justify-start">
+            {/*
+              Primary CTA goes straight to the paste-link tool, not to signup
+              (owner, 2026-07-18). The downloader needs no account, so sending a
+              visitor to /login first put a wall in front of the one thing the page
+              is asking them to do. `#download` is the anchor on the tool below,
+              which carries `scroll-mt-24` so the fixed header does not cover it.
+            */}
             <Link
-              href="/login?signup=1"
+              href="#download"
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 via-violet-600 to-fuchsia-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/30 transition hover:opacity-95 active:scale-[0.99] sm:w-auto"
             >
-              Get Frenz — Start Now <ArrowRight className="h-4 w-4" />
+              Download Now <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               href="#platforms"

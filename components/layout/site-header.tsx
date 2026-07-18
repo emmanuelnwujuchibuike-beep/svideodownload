@@ -1,6 +1,6 @@
 "use client";
 
-import { Bookmark, Crown, KeyRound, LogOut, Menu, MessageCircle, User as UserIcon, UserCircle, X } from "lucide-react";
+import { ArrowRight, Bookmark, Crown, Fingerprint, LogOut, Menu, MessageCircle, User as UserIcon, UserCircle, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -228,27 +228,36 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
                 </form>
               </>
             ) : (
-              /* Owner (2026-07-16): "change the login button in the landing
-                 page to login or create account to access all features". The
-                 drawer is full-width, so it carries the whole sentence — the
-                 desktop header's button (UserMenu) is width-constrained next to
-                 Go Pro and the theme toggle, so it uses the same wording minus
-                 the trailing clause. */
+              /*
+                Owner (2026-07-18): "the login button on mobile is still the old
+                type … make the mobile button the same with the laptop login
+                button with a more premium icon that means login."
+
+                This now mirrors UserMenu's desktop CTA exactly — same brand
+                gradient, same breathing glow, same hover sheen, same Fingerprint
+                mark — differing only in being full-width, which the drawer is.
+                It supersedes the 2026-07-16 two-line "log in or create account"
+                wording: one control, one treatment, on every viewport.
+
+                Fingerprint over KeyRound: it reads as authentication at a glance
+                and is the more premium mark, which is what was asked for.
+              */
               <Link
                 href={enabled ? "/login?next=/account" : "/#download"}
                 onClick={() => setOpen(false)}
-                className="mt-2 flex flex-col items-center justify-center gap-0.5 rounded-2xl bg-primary px-4 py-3.5 text-center text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition hover:shadow-primary/40"
+                className="group relative mt-2 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-3.5 text-base font-semibold text-white shadow-lg shadow-violet-500/30 transition-all duration-300 hover:shadow-violet-500/50 active:scale-[0.97]"
               >
-                {enabled ? (
-                  <>
-                    <span className="flex items-center gap-2">
-                      <KeyRound className="h-5 w-5" /> Log in or create account
-                    </span>
-                    <span className="text-xs font-medium text-primary-foreground/80">to access all features</span>
-                  </>
-                ) : (
-                  "Get Started"
-                )}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 opacity-40 blur-md motion-safe:animate-pulse"
+                />
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full"
+                />
+                <Fingerprint className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
+                {enabled ? "Launch App" : "Get Started"}
+                <ArrowRight className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-0.5" />
               </Link>
             )}
             </nav>

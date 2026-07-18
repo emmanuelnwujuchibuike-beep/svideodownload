@@ -85,8 +85,16 @@ export default function HomePage() {
         {/* Rendered from the Product Genome — see components/landing/product-grid.tsx */}
         <ProductGrid />
 
-        {/* Ad slot — unchanged zone, placed in the new flow */}
-        <div className="container max-w-5xl py-2">
+        {/*
+          Ad slot — unchanged zone, placed in the new flow.
+
+          `empty:hidden` collapses the wrapper when no ad is configured for this
+          zone. Without it the padding still rendered as a band of dead space
+          between two sections, which is exactly the "empty space" this page was
+          reported for. The utility only matches when the element has no child
+          nodes at all, so a live ad is unaffected.
+        */}
+        <div className="container max-w-5xl py-2 empty:hidden">
           <AdSlot zone="homepage_top" />
         </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Bookmark, LogOut, MessageCircle, Sparkles, User as UserIcon, UserCircle } from "lucide-react";
+import { ArrowRight, Bookmark, Fingerprint, LogOut, MessageCircle, User as UserIcon, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -108,8 +108,13 @@ export function UserMenu() {
         <span aria-hidden className="pointer-events-none absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 opacity-40 blur-md motion-safe:animate-pulse" />
         {/* sheen sweep on hover */}
         <span aria-hidden className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full" />
-        <Sparkles className="h-4 w-4 transition-transform duration-300 group-hover:rotate-12" />
-        Get started
+        {/* Fingerprint, not Sparkles: the button's job is to say "sign in", and a
+            fingerprint reads as authentication instantly while still being the
+            premium mark the header wants. Sparkles said "something magic here",
+            which is decorative, not a login affordance. */}
+        <Fingerprint className="h-4 w-4 transition-transform duration-300 group-hover:scale-110" />
+        {/* "Launch App", per the landing mockup's header button. */}
+        Launch App
         <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
       </Link>
     );

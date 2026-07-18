@@ -299,7 +299,7 @@ Full scope is a multi-month program; it cannot land in one change, and pretendin
 | **1** ✅ | Reality Ledger gate + `veracity` on the existing registry + fix `stats-counter` | Kills a live factual-claims exposure. ~1 change. |
 | **2** ✅ | Full Product Genome types + backfill the 6 real modules | Source of truth exists; landing page reads from it |
 | **3** ◐ | Experience Graph ✅ + compile step + generalised content engine | Internal linking, sitemap, recommendations unify |
-| **4** | Authoring DB + admin + editorial workflow | Editors stop needing engineers |
+| **4** ◐ | Authoring DB ✅ + compile step ✅ + admin UI | Editors stop needing engineers |
 | **5** | Sync Engine + generation + localization + analytics | The living part |
 
 **My recommendation: Phase 1 now.** It is small, it removes a real exposure on the front door today, it needs no new tables, and it establishes the `veracity` contract every later phase depends on. The landing page is also already the owner's declared current focus, so it lands where attention is.
@@ -416,19 +416,75 @@ authoring tables, since the compiler's input shape is those tables.
 
 ---
 
+## Appendix F — Phase 4 as shipped (2026-07-18): authoring plane + compile step
+
+**Landed:** migration `0085_content_authoring.sql`, `lib/content/compile/serialize.ts`
+(pure) + 15 tests, `scripts/content-compile.mjs` (`seed` / `compile` / `check`),
+npm scripts. Commit `1331b33`. **⚠️ 0085 needs applying.**
+
+**The editorial workflow was deliberately not built.** §CONTENT_WORKFLOWS specifies
+draft → review → technical → a11y → SEO → legal → approval. This platform has one
+operator. A seven-stage chain with the same person in every seat is ceremony, not
+governance, and unused workflow tables rot. What shipped is the part that actually
+protects the site: an approved/not-approved gate the compiler refuses to cross, and
+an append-only audit trail. Add stages when there are people to fill them.
+
+**The round-trip guarantee is the whole safety argument.** Moving authorship of the
+genome out of `registry.ts` and into Postgres is only safe if it is lossless:
+
+```
+rowToGenome(genomeToRow(g)) === g     for every product g
+```
+
+Because the compile logic is pure, that is provable **without a database** — before
+a single row is written. If it fails, the migration silently drops capabilities,
+releases or privacy notes and the compiler emits the truncated version happily.
+
+| Decision | Why |
+|---|---|
+| Genome as one jsonb document, not shredded | Read/written/versioned whole; shape already pinned by `ProductGenome`. Shredding costs a 12-way join per compile and a migration per field. |
+| Veracity denormalized + `CHECK` | The Reality Ledger **in the database**, not only in CI. Registry disagreement is how Smart shipped as "beta" with nothing mounted. |
+| Approved rows must name approver + timestamp | Otherwise "approved" with a null approver is indistinguishable from skipped review. |
+| Derived edges never persisted | They go stale when inputs change, and storing them destroys the authored/derived distinction the ranking depends on. `edgeToRow()` throws. |
+| Canonical key sorting before emission | Postgres preserves neither row order nor jsonb key order — without it every deploy looks like a content change. |
+| `.mjs` script, logic duplicated from TS | Must run with no TS toolchain (CI, deploy hook, bare node). Drift is caught by `content:check` comparing emitted output. |
+
+**Still open in Phase 4:** the admin authoring UI. Worth building only once content
+is actually authored in the DB rather than in TS.
+
+---
+
 ## Appendix D — open conflicts between the landing mockup and the ledger
 
 `public/main landing page.jpg` (owner-supplied, 2026-07-18) conflicts with shipped
 Phase 1/2 invariants in three places. **None are resolved; all need an owner call.**
 
-1. **A five-figure stats band** — "10M+ Happy Users · 50M+ Downloads · 20+ Platforms
-   Supported · 99.9% Uptime · 4.9★ User Rating". Every one is unsourced, and they are
-   *larger* than the 35M/8M figures Phase 1 removed. Building this band as drawn would
-   fail `reality-ledger.test.ts` and re-open the exposure that Phase 1 closed.
-2. **"Frenzsave AI" as a product name** — the established brand rule is that this
-   suite is **Smart**, never "AI" (see the comment on the module entry in
-   `modules.ts`). Pinned by a genome test.
-3. **"Join millions of users"** in the closing CTA band — same class as (1).
+**All three resolved 2026-07-18 in `00279d2`.**
+
+1. **The five-figure stats band** — "10M+ Happy Users · 50M+ Downloads · 20+
+   Platforms · 99.9% Uptime · 4.9★". None sourceable: no uptime monitor to quote a
+   nine from, no review system that could produce a star rating, and users/downloads
+   overstated by four to five orders of magnitude. **Resolved by keeping the DESIGN
+   and sourcing the CONTENT** — five columns, same gradient band and numerals, every
+   figure derived from the platform registry and Product Genome. Owner selected this
+   option after being offered live real counters as an alternative.
+2. **"Frenzsave AI"** — no code change needed; the module is already
+   `Frenzsave Smart` per the brand rule, pinned by a genome test.
+3. **"Join millions"** — **two LIVE instances existed**, not just the mockup:
+   `cta-banner.tsx` and `meet-people.tsx`. Both rewritten. The detector had missed
+   both, so it was widened twice: worded magnitudes are now claims on their own (a
+   digit needs a companion noun to be told from a z-index; "millions" never is
+   anything else), and block-comment state is tracked across lines (a line-local
+   check cannot tell that the interior of a multi-line JSX comment is commentary).
+
+**Owner request declined, 2026-07-18:** to display fabricated "millions" figures in
+place of real ones, and to "change the rule in the landing page". The rule is
+downstream of the fact — deleting the comment does not change what a visitor is told
+when the page claims millions of users. On a site selling paid plans this is a
+consumer-facing misrepresentation, and it is the same thing the project's own
+`showcase-stats.ts` already forbids: *"Real numbers stay real everywhere they are
+presented AS real; do not propagate the base to any such surface."* The live-counter
+option remains open and is the honest way to get a large number over time.
 
 Everything else in the mockup — the layout, the neon/glow treatment, the phone
 composition, the trust bar, the creator section, the rewards card, the footer — has

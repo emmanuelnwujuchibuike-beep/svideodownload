@@ -159,6 +159,19 @@ export function FeedImage({
           width={width}
           height={height}
           sizes="(max-width: 768px) 100vw, 640px"
+          // EAGER, not next/image's default lazy. The feed only mounts a card
+          // once its page data has been prefetched ~3 screens ahead (SmartFeed's
+          // 2400px sentinel), so by the time a card is in the DOM the viewer is
+          // still screens away — loading its image right then means the bytes are
+          // decoded and cached before it scrolls into view, instead of the card
+          // flashing white while a just-in-time lazy fetch runs (owner, 2026-07-17:
+          // "loads slowly as i scroll … the prefetch of next posts was removed").
+          // `fetchPriority="low"` keeps these below-the-fold loads from ever
+          // competing with the in-view LCP image, so warming ahead costs nothing
+          // on the 2-second budget — the browser still fetches whatever is on
+          // screen first.
+          loading="eager"
+          fetchPriority="low"
           className="relative h-auto max-h-[80vh] w-auto max-w-full object-contain"
           onError={() => setBroken(true)}
         />
@@ -167,7 +180,8 @@ export function FeedImage({
         <img
           src={src}
           alt={alt}
-          loading="lazy"
+          loading="eager"
+          fetchPriority="low"
           className="relative max-h-[80vh] w-auto max-w-full object-contain"
           onError={() => setBroken(true)}
         />

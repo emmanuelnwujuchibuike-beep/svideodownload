@@ -39,6 +39,35 @@ import { useRef } from "react";
 let firstMount = true;
 const navStack: string[] = [];
 
+/**
+ * The whole `/messages` subtree opts out of the WRAPPER slide — for two different
+ * reasons that share one mechanism (a transformed wrapper is a containing block).
+ *
+ * 1. The inbox INDEX (`/messages`). Every other (app) page's top chrome is the
+ *    persistent `AppTopbar` in `(app)/layout.tsx` — ABOVE this template — so it
+ *    sits still while only the body slides. The inbox hides that global topbar
+ *    (app-topbar.tsx: `onMessagesIndex && "hidden lg:flex"`) and renders its OWN
+ *    header (the "Messages" title, the profile/tools cluster) and the Stories
+ *    strip INSIDE the page. Sliding the wrapper therefore dragged that chrome
+ *    across the screen on every navigation — most visibly an iOS back-swipe out of
+ *    a chat — which reads as the "story section and profile button shake on every
+ *    back swipe" the owner has reported repeatedly (2026-07-17: "i need them to
+ *    never shake at all … why is the chat page different and has always been the
+ *    issue"). Held still, the inbox chrome matches every other page's topbar.
+ *
+ * 2. A THREAD (`/messages/[id]`, and the secret/new rooms). Each is a
+ *    `position: fixed inset-0 z-50` overlay meant to cover the bottom nav. If the
+ *    wrapper is mid-transform, it becomes that overlay's containing block, so the
+ *    overlay is sized to the content column (which reserves nav space) rather than
+ *    the viewport — and the bottom nav shows THROUGH the chat (owner, 2026-07-17:
+ *    "the bottom nav went inside the chat"). Kept off the wrapper slide, the
+ *    overlay stays viewport-fixed and covers the nav; the thread animates ITSELF
+ *    via `.thread-enter` (globals.css) so entering a chat still slides in.
+ */
+function noSlideFor(pathname: string): boolean {
+  return pathname === "/messages" || pathname.startsWith("/messages/");
+}
+
 export function PageTransition({
   children,
   wrapperClassName = "flex min-h-0 flex-1 flex-col",
@@ -59,16 +88,20 @@ export function PageTransition({
   // twice for one navigation.
   const cls = useRef<string | null>(null);
   if (cls.current === null) {
+    // Maintain the stack even for no-slide routes so a LATER navigation still
+    // reads its direction correctly (e.g. /messages → /home → back to /messages);
+    // only the visible animation is suppressed for them.
+    const noSlide = noSlideFor(pathname);
     if (firstMount) {
       firstMount = false;
       navStack.push(pathname);
       cls.current = ""; // initial load — the boot splash owns this frame
     } else if (navStack.length >= 2 && navStack[navStack.length - 2] === pathname) {
       navStack.pop(); // returned to the previous page
-      cls.current = "page-transition-back";
+      cls.current = noSlide ? "" : "page-transition-back";
     } else {
       navStack.push(pathname);
-      cls.current = "page-transition-forward";
+      cls.current = noSlide ? "" : "page-transition-forward";
     }
   }
 

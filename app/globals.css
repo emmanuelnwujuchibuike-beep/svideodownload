@@ -493,12 +493,51 @@
      bare/white area, and its own outgoing edge is covered. */
   .page-transition-forward,
   .page-transition-back { background: hsl(var(--background)); }
-  .page-transition-forward { animation: page-in-forward var(--dur-slow) var(--ease-out); will-change: transform; }
-  .page-transition-back    { animation: page-in-back var(--dur-slow) var(--ease-out); will-change: transform; }
+  /* Timing (owner, 2026-07-17: "the slide … seems a bit too fast and not smooth
+     like whatsapp and snapchat, i need smoothness but not delay like … load").
+     520ms (was 420) reads as unhurried/premium without ever feeling like a wait,
+     and the iOS push curve — cubic-bezier(0.32, 0.72, 0, 1) — has an even, gentle
+     velocity the whole way instead of the old ease-out's fast jump + long crawl.
+     Its own literal values (not the shared --dur-slow/--ease-out tokens) so tuning
+     the page feel never disturbs message-bubble / fade-up animations.
+
+     NO permanent `will-change: transform` here. `will-change` establishes a
+     CONTAINING BLOCK for `position: fixed` descendants (Chrome/iOS Safari) and,
+     because these classes stay on the wrapper for the component's whole life, it
+     did so PERMANENTLY — not just during the slide. Two bugs came from that: the
+     marketing SiteHeader drawer (`fixed top-16 bottom-0`) grew to the full page
+     height instead of the viewport ("the mobile nav menu has an unlimited
+     height"), and a chat thread's `fixed inset-0` overlay was sized to the content
+     column so the bottom nav showed through it. The `translate3d(...)` keyframes
+     still GPU-promote the layer for the animation's duration, so the slide stays
+     smooth without the hint. */
+  .page-transition-forward { animation: page-in-forward 520ms cubic-bezier(0.32, 0.72, 0, 1); }
+  .page-transition-back    { animation: page-in-back 520ms cubic-bezier(0.32, 0.72, 0, 1); }
   /* Reduced motion: a quick fade instead of any slide. */
   @media (prefers-reduced-motion: reduce) {
     .page-transition-forward,
     .page-transition-back { animation: page-in-fade var(--dur-fast) linear; background: none; }
+  }
+
+  /* Full-screen chat thread slide-in (mobile only). A thread (/messages/[id]) is
+     its OWN `position: fixed inset-0 z-50` overlay that must cover the bottom nav.
+     It therefore CAN'T be moved by the page-transition wrapper — a transformed
+     wrapper becomes the overlay's containing block and lets the nav show through
+     (see page-transition.tsx: the whole /messages subtree opts out of the wrapper
+     slide). Instead the overlay animates ITSELF: sliding in from the right over a
+     viewport-fixed box, so it covers the nav the entire way in. Ends at
+     `transform: none` (no fill-mode) so it never lingers as a containing block for
+     its own composer/menus. Desktop (lg) shows the thread in-flow in the Glass
+     Split, so the slide is scoped to mobile widths only. */
+  @media (max-width: 1023px) {
+    @keyframes thread-in {
+      from { transform: translate3d(100%, 0, 0); }
+      to   { transform: none; }
+    }
+    .thread-enter { animation: thread-in 520ms cubic-bezier(0.32, 0.72, 0, 1); }
+  }
+  @media (max-width: 1023px) and (prefers-reduced-motion: reduce) {
+    .thread-enter { animation: none; }
   }
 
   /* Wrong-code shake for the OTP boxes (GPU-friendly, respects reduced motion). */

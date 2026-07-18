@@ -158,12 +158,19 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     // Glass Split layout, where the topbar/sidebar stay visible alongside
     // the inbox pane — that's a dashboard, not a full-screen navigation, so
     // it's deliberately left untouched there.
+    //
+    // `thread-enter` (mobile only, globals.css) slides THIS overlay in from the
+    // right on open. The /messages subtree is deliberately kept off the
+    // page-transition WRAPPER slide (see page-transition.tsx): a transformed
+    // wrapper would become this `fixed inset-0`'s containing block and let the
+    // bottom nav show through the chat. Animating the overlay itself keeps it
+    // viewport-fixed (covering the nav the whole way in) AND still slides.
     <ThreadAppearanceProvider
       conversationId={convo.id}
       initialTheme={convo.theme}
       initialWallpaperUrl={convo.wallpaperUrl}
       initialAppearance={convo.appearance}
-      className="fixed inset-0 z-50 flex min-h-0 flex-col bg-background bg-cover bg-center lg:static lg:inset-auto lg:z-auto lg:flex-1 lg:bg-transparent"
+      className="thread-enter fixed inset-0 z-50 flex min-h-0 flex-col bg-background bg-cover bg-center lg:static lg:inset-auto lg:z-auto lg:flex-1 lg:bg-transparent"
     >
       <ThreadHeader
         conversationId={convo.id}

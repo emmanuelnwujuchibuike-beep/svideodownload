@@ -298,7 +298,7 @@ Full scope is a multi-month program; it cannot land in one change, and pretendin
 |---|---|---|
 | **1** ✅ | Reality Ledger gate + `veracity` on the existing registry + fix `stats-counter` | Kills a live factual-claims exposure. ~1 change. |
 | **2** ✅ | Full Product Genome types + backfill the 6 real modules | Source of truth exists; landing page reads from it |
-| **3** | Experience Graph + compile step + generalised content engine | Internal linking, sitemap, recommendations unify |
+| **3** ◐ | Experience Graph ✅ + compile step + generalised content engine | Internal linking, sitemap, recommendations unify |
 | **4** | Authoring DB + admin + editorial workflow | Editors stop needing engineers |
 | **5** | Sync Engine + generation + localization + analytics | The living part |
 
@@ -383,6 +383,36 @@ sentence prefix is invisible to every one of them. Pinned by a test.
 link. `getClaimableProfiles()` yields two. The grid keeps the mockup's shape and lets
 veracity choose the treatment, so the design intent survives without the claim. The
 remaining mockup conflicts are listed in Appendix D.
+
+---
+
+## Appendix E — Phase 3 part 1 as shipped (2026-07-18): the Experience Graph
+
+**Landed:** `lib/content/graph/{types,build,traverse}.ts` + 20 tests; `ProductLinks`
+in `components/seo/related-links.tsx`. Commit `e43781e`.
+
+**Shape today:** 193 nodes (6 products, 14 capabilities, 13 features, 11 topics,
+1 workflow, 148 SEO pages), ~800 edges, of which 44 are authored.
+
+**The gap it closed.** `config/seoPages.ts` and `lib/content/genome` were disjoint —
+148 pages linked only to each other, 6 products linked only to themselves, zero edges
+between. Every SEO page now has a crawl path into the product and capabilities it
+describes, which is new internal-link surface that did not previously exist.
+
+**Design decisions worth keeping:**
+
+| Decision | Why |
+|---|---|
+| Sibling edges nameable but **never materialized** | O(n²) per cluster: ~1,600 edges today, ~83,000 at 1,000 pages, to express what two `partOf` edges already imply. `siblingsOf()` derives in two hops; storage stays linear. Pinned by a test. |
+| Derived edges marked **and discounted** | An inference must never outrank a human assertion, and an editor must be able to tell them apart. |
+| Term-based capability matching, not embeddings | Clusters use different vocabulary for one intent (Facebook "mp3", TikTok "sound"). An editor has to see *why* an edge exists. |
+| `relatedFor` defaults to `realOnly` | The Reality Ledger at the link layer — a traversal cannot surface an unbuilt product however it is reached. |
+| Cycles fatal, orphans advisory | Breadcrumbs recurse and dependency resolution never terminates on a cycle. An orphan is a content bug, per §4. |
+| Existing sibling **rotation kept** in `getRelatedPages` | Its seeded rotation distributes links differently per page — an SEO diversity property that a stable id sort would destroy. Migrate deliberately, not incidentally. |
+
+**Still open in Phase 3:** the compile step (`scripts/content-compile.ts`) and the
+generalised multi-type content engine. Both are better done alongside Phase 4's
+authoring tables, since the compiler's input shape is those tables.
 
 ---
 

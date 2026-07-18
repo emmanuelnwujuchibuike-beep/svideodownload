@@ -42,6 +42,29 @@ interface HomeModulesValue {
 
 const Ctx = createContext<HomeModulesValue | null>(null);
 
+/**
+ * Session memory of the hidden set — the fix for "the Continue Watching hide
+ * button no longer saves; it resets when I enter another page or come back"
+ * (owner, 2026-07-18).
+ *
+ * The DB write was never the problem (PATCH → user_home_preferences persists,
+ * so a genuine cold reload comes back correct). The regression is client-side:
+ * the page-transition template now remounts the /home subtree on EVERY
+ * navigation, and the client Router Cache re-serves the /home RSC that was
+ * rendered BEFORE the toggle (staleTimes.dynamic = 6h) — so a fresh provider
+ * mounts with the PRE-toggle `initialHidden` and the module snaps back to
+ * visible. `locallyOwned` below is a useRef, so it dies on that remount and
+ * can't defend the tap.
+ *
+ * A module-level cache survives the remount (same trick useEntitlements uses
+ * for the same reason). It is ONLY ever written from a client effect, so SSR
+ * never touches it — no cross-request leak, and the hydration render still
+ * matches the server (`hiddenMem` is null there → falls back to `initialHidden`).
+ * On a real full reload / PWA relaunch it starts null again and re-seeds from
+ * the server's freshly-read row, which reflects the persisted DB truth.
+ */
+let hiddenMem: HomeModuleKey[] | null = null;
+
 async function patch(body: { hideModule: HomeModuleKey } | { showModule: HomeModuleKey }) {
   const res = await fetch("/api/home-preferences", {
     method: "PATCH",
@@ -58,8 +81,18 @@ export function HomeModulesProvider({
   initialHidden: HomeModuleKey[];
   children: ReactNode;
 }) {
-  const [hidden, setHidden] = useState<HomeModuleKey[]>(initialHidden);
+  // Seed from session memory when it exists (a within-session return to Home),
+  // else from the server row (a genuine cold load). The initializer runs on the
+  // server too, where `hiddenMem` is always null, so SSR == first client render.
+  const [hidden, setHidden] = useState<HomeModuleKey[]>(() => hiddenMem ?? initialHidden);
   const [pending, setPending] = useState<HomeModuleKey | null>(null);
+
+  // Mirror the live set into session memory so the NEXT remount restores exactly
+  // what's on screen now — including an optimistic toggle whose PATCH is still in
+  // flight, and its rollback if that PATCH fails.
+  useEffect(() => {
+    hiddenMem = hidden;
+  }, [hidden]);
 
   /**
    * Keys this session has deliberately toggled. Once a key is in here, no

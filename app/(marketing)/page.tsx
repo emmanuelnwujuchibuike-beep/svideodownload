@@ -2,8 +2,8 @@ import { Suspense } from "react";
 
 import { CtaBanner } from "@/components/landing/cta-banner";
 import { Faq } from "@/components/landing/faq";
-import { FeatureCards } from "@/components/landing/feature-cards";
 import { Hero } from "@/components/landing/hero";
+import { ProductGrid } from "@/components/landing/product-grid";
 import { MeetNewPeople } from "@/components/landing/meet-people";
 import { PlatformShowcase } from "@/components/landing/platform-showcase";
 import { StatsCounter } from "@/components/landing/stats-counter";
@@ -12,6 +12,9 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { DownloaderLinks } from "@/components/seo/downloader-links";
+import { productJsonLd } from "@/lib/content/genome/queries";
+import { jsonLd } from "@/lib/seo/json-ld";
+import { SITE_URL } from "@/lib/site";
 import { AdScripts } from "@/features/monetization/ad-scripts";
 import { AdSlot } from "@/features/monetization/ad-slot";
 import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
@@ -45,10 +48,25 @@ import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
 export default function HomePage() {
   return (
     <>
+      {/*
+        Product entities, emitted from the Product Genome so the machine-readable
+        description and the human-readable copy cannot drift — they are one record.
+        Only CLAIMABLE products appear: `productJsonLd` filters on veracity, so an
+        unbuilt product can never be published as a schema.org entity. Emitted here
+        on the ecosystem pillar page rather than in the root layout, which would
+        ship these bytes on every signed-in app page for no benefit.
+      */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: jsonLd({ "@context": "https://schema.org", "@graph": productJsonLd(SITE_URL) }),
+        }}
+      />
       <SiteHeader />
       <main>
         <Hero />
-        <FeatureCards />
+        {/* Rendered from the Product Genome — see components/landing/product-grid.tsx */}
+        <ProductGrid />
 
         {/* Ad slot — unchanged zone, placed in the new flow */}
         <div className="container max-w-5xl py-2">

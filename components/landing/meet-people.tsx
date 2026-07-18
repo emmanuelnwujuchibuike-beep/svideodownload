@@ -133,7 +133,8 @@ export function MeetNewPeople() {
               </span>
             ))}
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">Join millions of people already on Frenz.</p>
+          {/* Was "Join millions of people already on Frenz" — unsourceable scale. */}
+          <p className="mt-3 text-xs text-muted-foreground">Create a free account and start connecting.</p>
           <Link
             href={SIGNUP}
             className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-95"

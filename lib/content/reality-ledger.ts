@@ -77,8 +77,27 @@ const SOCIAL_PROOF =
 /** Rate limits and quotas: product specs, not social proof. */
 const QUOTA = /\b(?:per\s+(?:day|month|hour|week)|\/\s*(?:day|month|hour|week)|up to|limit|quota|requests?)\b/i;
 
-/** Any figure a reader would parse as a quantity. */
+/**
+ * Any figure a reader would parse as a quantity — including WORDED magnitudes.
+ *
+ * The digit-only version of this pattern shipped and then missed two live claims:
+ * "Join Millions Using Frenz" (`cta-banner.tsx`) and "Join millions of people
+ * already on Frenz" (`meet-people.tsx`), both against a real profile count in the
+ * dozens. A reader draws exactly the same inference from "millions" as from
+ * "8,000,000+", so the gate has to treat them the same. Requiring digits was an
+ * implementation detail leaking into the policy.
+ */
 const FIGURE = /\b\d{1,3}(?:[,_]\d{3})+\+?|\b\d+(?:\.\d+)?\s*(?:million|billion|[MBK])\+|\b\d+(?:\.\d+)?\s*%|\b\d{2,}\+/gi;
+
+/**
+ * Worded magnitudes, which are a claim ON THEIR OWN.
+ *
+ * A digit needs a companion noun to be distinguishable from styling or a quota, but
+ * "millions" is never anything except a scale claim — and requiring a noun let
+ * "Join Millions Using Frenz" through, because the line says "Using", not "users".
+ * Chasing that with more nouns is the wrong fix; the magnitude word is the claim.
+ */
+const WORDED_MAGNITUDE = /\b(?:millions?|billions?|thousands?|hundreds)\b/gi;
 
 /** Remove CSS colour functions and Tailwind arbitrary values before scanning. */
 function stripStyling(line: string): string {
@@ -116,18 +135,41 @@ export function findMagnitudeClaims(file: string, source: string): MagnitudeClai
   const lines = source.split(/\r?\n/);
   const out: MagnitudeClaim[] = [];
 
+  /*
+   * Block-comment state has to be tracked ACROSS lines. A line-local check cannot
+   * tell that an interior line of a `{/* … *\/}` JSX comment is commentary — which
+   * is how a comment explaining a removed "Millions" claim tripped the gate it was
+   * documenting. Middle lines carry no `//` or leading `*` marker of their own.
+   */
+  let inBlock = false;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
     const prev = lines[i - 1] ?? "";
+
+    const opens = line.lastIndexOf("/*");
+    const closes = line.lastIndexOf("*/");
+    const wasInBlock = inBlock;
+    if (!inBlock && opens !== -1 && closes < opens) inBlock = true;
+    else if (inBlock && closes !== -1 && closes > opens) inBlock = false;
+    if (wasInBlock || inBlock) continue;
+
     if (line.includes(SOURCED_MARKER) || prev.includes(SOURCED_MARKER)) continue;
 
     // Skip imports and pure type positions — no user ever reads these.
     if (/^\s*import\s/.test(line)) continue;
 
     const clean = stripStyling(stripComments(line));
-    if (!SOCIAL_PROOF.test(clean)) continue; // a number alone is not a claim
     if (QUOTA.test(clean)) continue; // a plan limit is a spec, not social proof
 
+    // A worded magnitude is a scale claim by itself.
+    for (const match of clean.matchAll(WORDED_MAGNITUDE)) {
+      out.push({ file, line: i + 1, text: match[0].trim(), snippet: line.trim() });
+    }
+
+    // A digit only becomes a claim next to something it could be counting —
+    // otherwise it is a z-index, a duration or a colour channel.
+    if (!SOCIAL_PROOF.test(clean)) continue;
     for (const match of clean.matchAll(FIGURE)) {
       out.push({ file, line: i + 1, text: match[0].trim(), snippet: line.trim() });
     }

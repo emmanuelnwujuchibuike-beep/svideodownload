@@ -1,67 +1,74 @@
-import { Layers, ShieldOff, Tag, Unlock } from "lucide-react";
-
 import { PLATFORMS, SHOWCASE_PLATFORMS } from "@/lib/platforms";
+import { allRealCapabilities } from "@/lib/content/genome/queries";
 
 /**
- * The landing proof band.
+ * The landing proof band — five columns, matching the redesign mockup
+ * (`public/main landing page.jpg`).
  *
- * HISTORY — this component previously animated four fabricated numbers on scroll:
- * "35,000,000+ Videos Downloaded", "8,000,000+ Community Members", "120+ Countries"
- * and a "99.9% Success Rate". Measured against the database on 2026-07-18, all four
- * were overstated by four to five orders of magnitude. The count-up animation made
- * them read as live telemetry, which compounded it.
+ * ── The conflict this resolves ─────────────────────────────────────────────────
  *
- * There is no honest way to present scale at this stage, so we don't. Every figure
- * below is instead DERIVED from the product itself and is therefore true by
- * construction — it cannot drift, and it re-states itself automatically as the
- * product grows. Specific, verifiable claims also read as more credible than round
- * invented millions, which is the substantive argument for this version, not just
- * the ethical one.
+ * The mockup specifies: "10M+ Happy Users · 50M+ Downloads · 20+ Platforms
+ * Supported · 99.9% Uptime · 4.9★ User Rating". Not one of those is sourceable.
+ * Measured against the database on 2026-07-18, users and downloads were overstated
+ * by four to five orders of magnitude; there is no uptime monitor to quote a nine
+ * from, and no review system that could produce a star rating at all.
  *
- * Enforced by `lib/content/reality-ledger.test.ts`. If you are about to add a
- * hardcoded number here, that test will fail, and it is right.
+ * This component already shipped those figures once — as 35,000,000+ "Videos
+ * Downloaded" and 8,000,000+ "Community Members", animated on scroll so they read
+ * as live telemetry — and Phase 1 removed them.
  *
- * Perf note: this is now a SERVER component. The old version shipped an
- * IntersectionObserver plus a requestAnimationFrame loop per stat to `/`, which is
- * a static page under a 2-second cold-entry budget with known LCP pressure. The
- * honest version is also the cheaper one — zero client JS.
+ * The resolution keeps the mockup's DESIGN and sources its CONTENT: five columns,
+ * the same gradient band and gradient numerals, the same rhythm — with every figure
+ * derived from the product itself. A specific, checkable claim also converts better
+ * than a round invented million, so this is not only the honest version.
+ *
+ * Enforced by `lib/content/reality-ledger.test.ts`. A hardcoded magnitude here —
+ * digits or the word "millions" — fails the build, and it is right to.
+ *
+ * Perf: server component, zero client JS. The original shipped an
+ * IntersectionObserver plus a requestAnimationFrame loop per stat to a static page
+ * under a 2-second budget.
  */
 
-/** Platforms with genuine watermark-free extraction, per the platform registry. */
+/** @sourced PLATFORMS[].watermarkFree — lib/platforms.ts */
 const WATERMARK_FREE = Object.values(PLATFORMS).filter((p) => p.watermarkFree).length;
 
+/** @sourced genome capabilities at a real stage — lib/content/genome */
+const LIVE_CAPABILITIES = allRealCapabilities().length;
+
 interface Proof {
-  icon: typeof Layers;
   value: string;
   label: string;
 }
 
 const PROOF: Proof[] = [
-  // @sourced — SHOWCASE_PLATFORMS, lib/platforms.ts (named platforms, excludes `generic`).
-  { icon: Layers, value: String(SHOWCASE_PLATFORMS.length), label: "Platforms supported" },
-  // @sourced — PLATFORMS[].watermarkFree, lib/platforms.ts.
-  { icon: ShieldOff, value: String(WATERMARK_FREE), label: "Watermark-free sources" },
-  // @sourced — the Free tier in app/(marketing)/pricing/page.tsx.
-  { icon: Tag, value: "Free", label: "Forever, with no trial" },
-  // @sourced — /api/download gates worker calls only; no user session required.
-  { icon: Unlock, value: "None", label: "Account needed to start" },
+  // @sourced SHOWCASE_PLATFORMS — named platforms, excludes the `generic` fallback.
+  { value: String(SHOWCASE_PLATFORMS.length), label: "Platforms supported" },
+  // @sourced PLATFORMS[].watermarkFree
+  { value: String(WATERMARK_FREE), label: "Watermark-free sources" },
+  // @sourced Product Genome — capabilities at stage live/beta/alpha
+  { value: String(LIVE_CAPABILITIES), label: "Features shipped" },
+  // @sourced the Free tier in app/(marketing)/pricing/page.tsx
+  { value: "Free", label: "Forever, no trial" },
+  // @sourced /api/download gates worker calls only; no user session required
+  { value: "None", label: "Account needed" },
 ];
 
 export function StatsCounter() {
   return (
     <section className="container max-w-6xl py-6">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-900 p-8 shadow-elevated sm:p-10">
-        <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full bg-violet-500/20 blur-3xl" />
-        <dl className="relative grid grid-cols-2 gap-6 sm:grid-cols-4">
-          {PROOF.map(({ icon: Icon, value, label }) => (
-            <div key={label} className="flex items-center gap-3 text-white">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 text-violet-300 ring-1 ring-white/10">
-                <Icon className="h-5 w-5" />
-              </span>
-              <div>
-                <dd className="text-2xl font-extrabold tabular-nums sm:text-3xl">{value}</dd>
-                <dt className="text-xs text-white/60">{label}</dt>
-              </div>
+      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-900 p-8 shadow-elevated sm:p-10">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full bg-violet-500/20 blur-3xl"
+        />
+        <dl className="relative grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
+          {PROOF.map(({ value, label }) => (
+            <div key={label} className="text-center">
+              <dd className="bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-3xl font-extrabold tabular-nums text-transparent sm:text-4xl">
+                {value}
+              </dd>
+              <dt className="mt-1 text-xs text-white/60">{label}</dt>
             </div>
           ))}
         </dl>

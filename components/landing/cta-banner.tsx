@@ -9,8 +9,13 @@ export function CtaBanner() {
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-3xl" aria-hidden />
         <div className="relative flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
           <div>
+            {/*
+              Was "Join Millions Using Frenz" — a scale claim we cannot source.
+              The invitation is just as strong without inventing a crowd, and the
+              Reality Ledger now fails the build on worded magnitudes too.
+            */}
             <h2 className="text-2xl font-bold tracking-[-0.02em] text-white sm:text-3xl">
-              Join Millions Using Frenz
+              Ready to Experience Frenzsave?
             </h2>
             <p className="mt-2 max-w-md text-sm leading-relaxed text-white/80">
               Download videos. Discover what&apos;s trending. Meet new friends. Chat instantly. Share your own content.

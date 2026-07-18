@@ -135,6 +135,23 @@ describe("Reality Ledger — the detector itself", () => {
     expect(findMagnitudeClaims("x.tsx", `<h2>Download from 20+ Platforms</h2>`)).toHaveLength(1);
   });
 
+  it("ignores the interior lines of a multi-line JSX comment", () => {
+    // A comment documenting a removed claim must not itself be flagged. Line-local
+    // detection cannot see this: the middle line carries no comment marker.
+    const src = ['{/*', '  Was "Join Millions Using Frenz" — removed.', '*/}'].join("\n");
+    expect(findMagnitudeClaims("x.tsx", src)).toHaveLength(0);
+  });
+
+  it("still catches a claim on the line after a block comment closes", () => {
+    const src = ["/* explanatory note */", "<p>Join millions of people</p>"].join("\n");
+    expect(findMagnitudeClaims("x.tsx", src)).toHaveLength(1);
+  });
+
+  it("catches worded magnitudes with no companion noun", () => {
+    // "Join Millions Using Frenz" has no social-proof noun ("Using", not "users").
+    expect(findMagnitudeClaims("x.tsx", `<h2>Join Millions Using Frenz</h2>`)).toHaveLength(1);
+  });
+
   it("ignores CSS colours, Tailwind arbitrary values and comments", () => {
     expect(findMagnitudeClaims("x.tsx", `shadow-[0_0_0_1px_rgba(255,255,255,0.35)] users`)).toHaveLength(0);
     expect(findMagnitudeClaims("x.tsx", `// we used to claim 8,000,000 members`)).toHaveLength(0);

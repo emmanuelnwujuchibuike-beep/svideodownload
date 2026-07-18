@@ -668,6 +668,14 @@ export function SmartFeed({
       setRefreshing(true);
       setPull(PULL_THRESHOLD);
       haptic("selection");
+      // A NEW reshuffle token — this is what actually re-orders the feed (owner:
+      // "drag down in feed doesnt reshuffle posts"). Pull-to-refresh was calling
+      // fetchPage with the SAME `seedRef`, so the server returned the identical
+      // arrangement; minting a fresh seed first is exactly what the new-posts
+      // pill's `refreshTop` already does, and what makes a pull "feel like a
+      // refresh" instead of a silent re-fetch of the same order.
+      seedRef.current = newFeedSeed();
+      setFreshCount(0);
       await fetchPage(sort, 0, true);
       setRefreshing(false);
     }

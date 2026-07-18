@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 
+import { CreatorsSection } from "@/components/landing/creators-section";
 import { CtaBanner } from "@/components/landing/cta-banner";
 import { Faq } from "@/components/landing/faq";
 import { Hero } from "@/components/landing/hero";
@@ -62,8 +63,22 @@ export default function HomePage() {
           __html: jsonLd({ "@context": "https://schema.org", "@graph": productJsonLd(SITE_URL) }),
         }}
       />
-      <SiteHeader />
-      <main>
+      {/*
+        The landing page is committed to the mockup's dark treatment
+        (`public/main landing page.jpg`), so `dark` is scoped to this page rather
+        than left to the visitor's theme. Every section below already ships dark
+        variants, so this switches tokens rather than overriding colours.
+
+        Scoped with a plain class — NO transform, NO `will-change`. Either would
+        make this element a containing block and break the `position: fixed`
+        descendants inside it (the header, its portalled mobile menu, and the
+        sticky bottom ad), which is the exact failure removed in 135ed36.
+
+        The rest of the site stays theme-aware; only `/` is pinned.
+      */}
+      <div className="dark bg-[#050816] text-white">
+        <SiteHeader />
+        <main>
         <Hero />
         {/* Rendered from the Product Genome — see components/landing/product-grid.tsx */}
         <ProductGrid />
@@ -96,13 +111,17 @@ export default function HomePage() {
           />
         </Suspense>
 
+        {/* "Built for Creators" — benefit checklist + rewards card, per the mockup. */}
+        <CreatorsSection />
+
         <CtaBanner />
 
         {/* SEO link surface */}
         <DownloaderLinks heading="Popular video downloaders" />
-        <Faq />
-      </main>
-      <SiteFooter />
+          <Faq />
+        </main>
+        <SiteFooter />
+      </div>
       {/* Ads live only here on the marketing landing page. */}
       <StickyBottomAd />
       <AdScripts />

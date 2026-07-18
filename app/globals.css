@@ -610,3 +610,45 @@
   left: -5px;
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
 }
+
+/* ── Landing hero ambient effects ─────────────────────────────────────────────
+   Backs components/landing/hero-effects.tsx. All motion is transform/opacity
+   only, so frames stay on the compositor and never trigger layout or paint —
+   `/` is a static page under a 2-second budget and these run for the whole
+   visit, so a per-frame repaint would cost battery on exactly the mid-range
+   Android hardware this audience uses.
+
+   NOTE: no `will-change` anywhere below, deliberately. `will-change: transform`
+   creates a permanent CONTAINING BLOCK, which previously broke `position: fixed`
+   descendants (nav-menu height, bottom-nav-in-chat — see 135ed36). The
+   compositor promotes these layers from the running animation anyway. */
+@keyframes frenz-orbit {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes frenz-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, -14px, 0); }
+}
+@keyframes frenz-drift {
+  0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.6; }
+  50%      { transform: translate3d(-12px, -8px, 0); opacity: 0.85; }
+}
+
+/* The tilt lives on the element's own class, so the spin has to compose with it.
+   Separate rotate on a wrapper would fight the tilt; these keyframes rotate the
+   already-tilted ellipse about its centre, which is what produces the sweeping
+   light-trail read rather than a flat spin. */
+.frenz-orbit-slow { animation: frenz-orbit 38s linear infinite; }
+.frenz-orbit-mid  { animation: frenz-orbit 26s linear infinite reverse; }
+.frenz-orbit-fast { animation: frenz-orbit 18s linear infinite; }
+.frenz-float      { animation: frenz-float 7s ease-in-out infinite; }
+.frenz-drift      { animation: frenz-drift 14s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .frenz-orbit-slow,
+  .frenz-orbit-mid,
+  .frenz-orbit-fast,
+  .frenz-float,
+  .frenz-drift { animation: none; }
+}

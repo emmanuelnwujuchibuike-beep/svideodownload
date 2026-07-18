@@ -299,8 +299,8 @@ Full scope is a multi-month program; it cannot land in one change, and pretendin
 | **1** ✅ | Reality Ledger gate + `veracity` on the existing registry + fix `stats-counter` | Kills a live factual-claims exposure. ~1 change. |
 | **2** ✅ | Full Product Genome types + backfill the 6 real modules | Source of truth exists; landing page reads from it |
 | **3** ◐ | Experience Graph ✅ + compile step + generalised content engine | Internal linking, sitemap, recommendations unify |
-| **4** ◐ | Authoring DB ✅ + compile step ✅ + admin UI | Editors stop needing engineers |
-| **5** | Sync Engine + generation + localization + analytics | The living part |
+| **4** ✅ | Authoring DB + compile step + editorial workflow + admin UI | Editors stop needing engineers |
+| **5** ◐ | Sync Engine ✅ + localization schema ✅ + generation + analytics | The living part |
 
 **My recommendation: Phase 1 now.** It is small, it removes a real exposure on the front door today, it needs no new tables, and it establishes the `veracity` contract every later phase depends on. The landing page is also already the owner's declared current focus, so it lands where attention is.
 
@@ -451,6 +451,47 @@ releases or privacy notes and the compiler emits the truncated version happily.
 
 **Still open in Phase 4:** the admin authoring UI. Worth building only once content
 is actually authored in the DB rather than in TS.
+
+---
+
+## Appendix G — Phase 4b + Phase 5 as shipped (2026-07-18)
+
+**Landed:** migration `0086_editorial_workflow.sql`, `lib/content/sync/*` (+23 tests),
+`app/admin/content/page.tsx`. Commit `1ac83a2`. **⚠️ 0085 and 0086 both need applying.**
+
+**Scope correction.** Phase 4 originally shipped without the editorial pipeline or
+admin UI — my judgment was that approval ceremony with one operator is overhead. The
+owner overrode that ("build everything, dont leave anything behind"), and both are
+now built. The override was reasonable: the pipeline is configurable enough that a
+solo operator isn't forced through it.
+
+**Workflow stages are DATA, not an enum.** A workflow is a row and its stages are
+rows, so a solo operator can run two stages while regulated content runs all eight —
+no migration, no code change. A hardcoded eight-step enum would simply be abandoned.
+Non-blocking stages run in parallel so the pipeline doesn't serialise into eight
+sequential waits for one person.
+
+**The Sync Engine detects drift against the CODEBASE, not the database.** This is the
+central decision. Diffing content version N against N-1 finds *editing* drift, which
+is not this site's problem; the problem is the product moving underneath content that
+stays still. A database-only differ would have found Smart's records perfectly
+consistent — and they were, and they were also false.
+
+| Decision | Why |
+|---|---|
+| Detectors pure over an injected `RepoSnapshot` | "The route was deleted" is testable without deleting a route. |
+| Severity is not uniform | A dead basePath with no nav is `stale`, not a break — nothing is broken for a visitor, and a permanently-red queue is an ignored queue. |
+| Age is never breakage | Treating an old `verifiedAt` as a break trains people to bump the date without checking. |
+| Impact traverses **inbound** edges | The question is "what points at this?" — outbound walks away from every dependant. |
+| Capped at 2 hops | At 3 hops nearly every node reaches every other; a queue listing everything lists nothing. |
+| Findings grouped by cause | One broken route is one fix, not forty pages. |
+
+**Live result on the current tree:** 4 stale findings, 0 factual breaks — the three
+dead basePaths and the commented-out `<AssistantWidget />`.
+
+**Still open:** AI draft generation (Phase 5), navigation analytics, and the
+generalised multi-type content engine (Phase 3). All three want content actually
+authored in the DB first, which is the `content:seed` step.
 
 ---
 

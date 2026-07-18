@@ -9,6 +9,7 @@ import { MeetNewPeople } from "@/components/landing/meet-people";
 import { PlatformShowcase } from "@/components/landing/platform-showcase";
 import { StatsCounter } from "@/components/landing/stats-counter";
 import { TrendingToday } from "@/components/landing/trending-today";
+import { TrustBar } from "@/components/landing/trust-bar";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
@@ -64,22 +65,23 @@ export default function HomePage() {
         }}
       />
       {/*
-        The landing page is committed to the mockup's dark treatment
-        (`public/main landing page.jpg`), so `dark` is scoped to this page rather
-        than left to the visitor's theme. Every section below already ships dark
-        variants, so this switches tokens rather than overriding colours.
+        The landing page follows the VISITOR'S THEME — it is not pinned to dark.
+        `public/main landing page.jpg` is the dark-theme design; the light theme
+        gets its own treatment of the same composition (same layout, same effects,
+        light ground and softened glows) rather than a forced dark page.
 
-        Scoped with a plain class — NO transform, NO `will-change`. Either would
-        make this element a containing block and break the `position: fixed`
-        descendants inside it (the header, its portalled mobile menu, and the
-        sticky bottom ad), which is the exact failure removed in 135ed36.
-
-        The rest of the site stays theme-aware; only `/` is pinned.
+        Every landing section below styles both, so this wrapper only carries the
+        theme tokens. Deliberately no `dark` class and no transform here: forcing
+        the class would override the site toggle, and a transform would make this a
+        containing block and break the `position: fixed` header, its portalled
+        mobile menu, and the sticky ad (the failure removed in 135ed36).
       */}
-      <div className="dark bg-[#050816] text-white">
+      <div className="bg-background text-foreground">
         <SiteHeader />
         <main>
         <Hero />
+        {/* Supported-platform marks, per the mockup. */}
+        <TrustBar />
         {/* Rendered from the Product Genome — see components/landing/product-grid.tsx */}
         <ProductGrid />
 

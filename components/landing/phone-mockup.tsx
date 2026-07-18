@@ -1,4 +1,4 @@
-import { BadgeCheck, BellOff, Check, CheckCheck, Download, Flame, Heart, MessageCircle, Play, Search, Sparkles, Smile, Trophy, UserPlus, Users, Wifi } from "lucide-react";
+import { BadgeCheck, BellOff, Check, CheckCheck, Cloud, Download, Flame, Heart, LayoutGrid, MessageCircle, Play, Search, Sparkles, Smile, Trophy, UserPlus, Users, Wand2, Wifi } from "lucide-react";
 
 import {
   FrenzFriendsOutline,
@@ -268,26 +268,83 @@ export async function PhoneMockup() {
               </div>
             </div>
 
-            {/* App brand bar */}
+            {/*
+              FRONT DISPLAY — recomposed to match `public/main landing page.jpg`
+              (owner: "do not remove the iphone mock up reels features, rather only
+              change how the front display is").
+
+              The reels deck below is untouched and still plays real video; what
+              changed is the dashboard around it. The mockup's "Recent Downloads"
+              row is exactly that deck, so the feature survives its relabelling.
+
+              The messages and friends rails further down are kept deliberately —
+              they were a previous owner ask ("make the chat section look like my
+              inbox") and the screen is a fixed-height overflow-hidden box, so they
+              sit below the fold and read as a scrollable app rather than being lost.
+            */}
+
+            {/* App brand bar — wordmark + the mockup's three actions. */}
             <div className="flex items-center justify-between px-1 pt-1">
-              <span className="text-sm font-bold">
-                Frenz
+              <span className="text-sm font-bold">Frenzsave</span>
+              <span className="flex items-center gap-2 text-white/55">
+                <Search className="h-3 w-3" />
+                <MessageCircle className="h-3 w-3" />
+                <LayoutGrid className="h-3 w-3" />
               </span>
-              <Search className="h-3.5 w-3.5 text-white/55" />
             </div>
 
-            {/* Tabs */}
-            <div className="flex items-center gap-4 border-b border-white/10 pb-2 text-[11px]">
-              <span className="font-semibold text-white">For You</span>
-              <span className="text-white/45">Trending</span>
-              <span className="text-white/45">Following</span>
+            {/* Greeting card */}
+            <div className="flex shrink-0 items-center gap-2 rounded-2xl bg-white/[0.06] p-2 ring-1 ring-white/10">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[9px] text-white/50">Good morning,</span>
+                <span className="block text-[12px] font-bold">Alexander 👋</span>
+              </span>
+              <span className="h-8 w-14 shrink-0 rounded-lg bg-gradient-to-br from-blue-500/70 to-violet-600/70 ring-1 ring-white/10" />
+            </div>
+
+            {/* Quick Access — five product tiles.
+                Labelled "Smart", not "AI": the brand rule is that this suite is
+                never named "AI" (see the module entry in lib/platform/modules.ts),
+                and the genome test pins it. The mockup's "AI" label is the one
+                place its copy contradicts the established naming. */}
+            <div className="shrink-0">
+              <span className="mb-1.5 block text-[10px] font-semibold text-white/70">Quick Access</span>
+              <div className="grid grid-cols-5 gap-1.5">
+                {[
+                  { icon: Download, label: "Download", tint: "from-blue-500 to-indigo-600" },
+                  { icon: Wand2, label: "Studio", tint: "from-amber-500 to-orange-600" },
+                  { icon: Users, label: "Community", tint: "from-fuchsia-500 to-violet-600" },
+                  { icon: Cloud, label: "Cloud", tint: "from-cyan-500 to-blue-600" },
+                  { icon: Sparkles, label: "Smart", tint: "from-violet-500 to-purple-600" },
+                ].map((tile) => (
+                  <span key={tile.label} className="flex flex-col items-center gap-1">
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br ${tile.tint} text-white ring-1 ring-white/10`}>
+                      <tile.icon className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-[7px] leading-none text-white/55">{tile.label}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Featured card */}
+            <div className="relative shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600/30 to-indigo-700/30 p-2.5 ring-1 ring-white/10">
+              <span className="absolute -right-4 -top-4 h-16 w-16 rounded-full bg-violet-500/30 blur-2xl" aria-hidden />
+              <span className="relative block text-[8px] font-semibold uppercase tracking-wide text-white/50">Featured</span>
+              <span className="relative mt-0.5 block text-[12px] font-bold">Smart Studio</span>
+              <span className="relative mt-0.5 block text-[9px] leading-snug text-white/60">
+                Create stunning content in seconds.
+              </span>
+              <span className="relative mt-1.5 inline-flex items-center rounded-lg bg-white/15 px-2 py-1 text-[8px] font-semibold ring-1 ring-white/20">
+                Try New
+              </span>
             </div>
 
             {/* Trending reels */}
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold">
-                  <Flame className="h-3 w-3 text-rose-400" aria-hidden /> Trending Reels
+                  <Flame className="h-3 w-3 text-rose-400" aria-hidden /> Recent Downloads
                 </span>
                 <span className="text-[10px] text-blue-400">View all</span>
               </div>

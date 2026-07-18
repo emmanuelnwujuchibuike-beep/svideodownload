@@ -17,12 +17,23 @@ import { PLATFORMS } from "@/lib/platforms";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
 import { cn } from "@/lib/utils";
 
+/**
+ * Marketing nav, per `public/main landing page.jpg`.
+ *
+ * Every entry resolves to a route that exists — the mockup's "Products" points at
+ * the ecosystem grid on `/` rather than a `/products` page nobody has built, and
+ * "Support" at the real contact route. Shipping a nav item that 404s is the same
+ * class of defect the Reality Ledger exists to catch, just in the chrome instead
+ * of the copy.
+ */
 const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/#platforms", label: "Features" },
-  { href: "/explore", label: "Community" },
-  { href: "/blog", label: "News" },
+  { href: "/#products", label: "Products" },
   { href: "/#download", label: "Download" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/blog", label: "Blog" },
+  { href: "/contact", label: "Support" },
 ];
 
 const DOWNLOADERS = getPrimaryPages();

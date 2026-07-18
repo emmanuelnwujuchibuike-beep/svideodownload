@@ -48,8 +48,14 @@ export function HeroEffects() {
      * with `relative z-10`.
      */
     <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-      {/* Deep-space wash. The mockup's page is near-black with a violet bloom. */}
-      <div className="absolute inset-0 bg-[radial-gradient(120%_90%_at_70%_20%,rgba(76,29,149,0.45)_0%,rgba(30,27,75,0.35)_35%,transparent_70%)]" />
+      {/*
+        Ambient wash. Two versions, not one with an opacity tweak: the dark theme
+        is a deep violet bloom on near-black (the mockup), the light theme a pale
+        sky-to-violet tint on near-white. A single palette cannot serve both —
+        violet at 45% over white is a grey smear, and the same value over #050816
+        is the glow the design depends on.
+      */}
+      <div className="absolute inset-0 bg-[radial-gradient(120%_90%_at_70%_20%,rgba(191,219,254,0.55)_0%,rgba(233,213,255,0.4)_35%,transparent_70%)] dark:bg-[radial-gradient(120%_90%_at_70%_20%,rgba(76,29,149,0.45)_0%,rgba(30,27,75,0.35)_35%,transparent_70%)]" />
 
       {/* Orbital light trails. Three ellipses at different tilts and speeds; the
           conic gradient makes the stroke brighten along its length, which is what
@@ -62,25 +68,32 @@ export function HeroEffects() {
         ].map((ring) => (
           <span
             key={ring.spin}
-            className={`absolute ${ring.size} ${ring.tilt} rounded-[50%] ${ring.spin}`}
-            style={{
-              // A conic gradient masked to the ring edge: bright arc, fading tail.
-              background:
-                "conic-gradient(from 0deg, transparent 0deg, rgba(59,130,246,0.55) 40deg, rgba(168,85,247,0.65) 90deg, transparent 170deg, transparent 360deg)",
-              WebkitMask: "radial-gradient(closest-side, transparent calc(100% - 2px), #000 calc(100% - 1px))",
-              mask: "radial-gradient(closest-side, transparent calc(100% - 2px), #000 calc(100% - 1px))",
-            }}
+            /* The conic gradient is a CSS custom property so the light and dark
+               palettes can be swapped by a `dark:` utility — an inline `background`
+               cannot carry a variant, and duplicating the element would double the
+               animation cost for one that is always hidden. */
+            className={`absolute ${ring.size} ${ring.tilt} rounded-[50%] ${ring.spin} bg-[image:var(--ring-light)] dark:bg-[image:var(--ring-dark)]`}
+            style={
+              {
+                "--ring-light":
+                  "conic-gradient(from 0deg, transparent 0deg, rgba(59,130,246,0.30) 40deg, rgba(168,85,247,0.34) 90deg, transparent 170deg, transparent 360deg)",
+                "--ring-dark":
+                  "conic-gradient(from 0deg, transparent 0deg, rgba(59,130,246,0.55) 40deg, rgba(168,85,247,0.65) 90deg, transparent 170deg, transparent 360deg)",
+                WebkitMask: "radial-gradient(closest-side, transparent calc(100% - 2px), #000 calc(100% - 1px))",
+                mask: "radial-gradient(closest-side, transparent calc(100% - 2px), #000 calc(100% - 1px))",
+              } as React.CSSProperties
+            }
           />
         ))}
       </div>
 
       {/* Neon bloom behind the device. */}
-      <div className="absolute left-1/2 top-1/2 h-[26rem] w-[26rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(139,92,246,0.35)_0%,rgba(59,130,246,0.18)_45%,transparent_70%)] blur-2xl" />
+      <div className="absolute left-1/2 top-1/2 h-[26rem] w-[26rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(167,139,250,0.22)_0%,rgba(96,165,250,0.12)_45%,transparent_70%)] blur-2xl dark:bg-[radial-gradient(circle,rgba(139,92,246,0.35)_0%,rgba(59,130,246,0.18)_45%,transparent_70%)]" />
 
       {/* Drifting particles. A repeating-gradient starfield rather than N elements —
           one node instead of forty, and it scales to any viewport for free. */}
       <div
-        className="frenz-drift absolute inset-0 opacity-60"
+        className="frenz-drift absolute inset-0 hidden opacity-60 dark:block"
         style={{
           backgroundImage: [
             "radial-gradient(1.5px 1.5px at 12% 22%, rgba(255,255,255,0.65) 50%, transparent 51%)",

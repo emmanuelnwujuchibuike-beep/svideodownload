@@ -11,6 +11,7 @@ import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
 import { OfflineBanner } from "@/features/app-shell/offline-banner";
 import { StatusBarScrim } from "@/features/app-shell/status-bar-scrim";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
+import { CommandCenterMount } from "@/features/navigation/command-center-mount";
 import { RegisterServiceWorker } from "@/features/notifications/register-sw";
 import { ScrollPerfMonitor } from "@/features/perf/scroll-perf-monitor";
 import { WebVitals } from "@/features/perf/web-vitals";
@@ -237,6 +238,11 @@ export default function RootLayout({
             {/* Ads are intentionally NOT global anymore — they live only on the
                 marketing landing page. The app/social surfaces (home, feed,
                 profiles, messages, …) are ad-free; social monetization comes later. */}
+            {/* Universal Command Center — ⌘K / Ctrl+K, or "/" outside a text
+                field. This mount is a keydown listener and a boolean; the palette
+                itself is dynamically imported on first use so it never taxes the
+                initial bundle on a page under a 2-second budget. */}
+            <CommandCenterMount />
             <RegisterServiceWorker />
             <GlobalErrorCapture />
             <StatusBarScrim />

@@ -2,7 +2,7 @@ import { MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 
 import { BRAND_ICONS } from "@/lib/platform-icons";
-import { PLATFORMS } from "@/lib/platforms";
+import { PLATFORMS, SHOWCASE_PLATFORMS } from "@/lib/platforms";
 import type { PlatformId } from "@/types";
 
 // Display order + short labels to match the marketing grid.
@@ -22,8 +22,17 @@ export function PlatformShowcase() {
   return (
     <section id="platforms" className="container max-w-6xl py-10 sm:py-14">
       <div className="text-center">
-        <h2 className="text-2xl font-bold tracking-[-0.02em] sm:text-3xl">Download from 20+ Platforms</h2>
-        <p className="mt-2 text-sm text-muted-foreground">Supports all your favorite platforms and more.</p>
+        {/*
+          Count is DERIVED from the platform registry, never written by hand — the
+          heading previously read "20+ Platforms" against 11 named entries. Deriving
+          it means the claim cannot drift from the product again.
+        */}
+        <h2 className="text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
+          Download from {SHOWCASE_PLATFORMS.length} Platforms
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Plus any other public video link our universal extractor can handle.
+        </p>
       </div>
 
       <div className="mt-8 grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-10">

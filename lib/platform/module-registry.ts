@@ -25,6 +25,38 @@ export interface ModuleAccess {
 
 export type ModuleStatus = "live" | "beta" | "soon";
 
+/**
+ * The Reality Ledger, made structural.
+ *
+ * Marketing surfaces may only state that a product EXISTS when its genome says so.
+ * This is enforced by `lib/content/reality-ledger.test.ts`, not by discipline —
+ * the site has previously shipped copy for products that were never built, and
+ * front-door claims that were off by four orders of magnitude.
+ *
+ * `status` answers "how finished is it?" (a user-facing maturity badge).
+ * `veracity` answers "may we say it exists?" (a truth gate). They are deliberately
+ * separate: a `beta` product is real and claimable; a `soon` product is neither.
+ */
+export interface ProductVeracity {
+  /** Real build stage. Narrower than `status`, which is a display concern. */
+  stage: "live" | "beta" | "alpha" | "internal" | "planned" | "concept";
+  /**
+   * May marketing copy state, in the present tense, that this exists?
+   * `false` ⇒ every surface must use future/conditional tense ("coming", "planned").
+   */
+  claimable: boolean;
+  /**
+   * A route that proves the product is real. Asserted to exist by the ledger test
+   * for every `claimable` product — a claim with no reachable product is the exact
+   * failure mode this field exists to catch.
+   */
+  provingRoute?: string;
+  /** Commit, PR or migration that shipped it. Free text; for humans reviewing drift. */
+  evidence?: string;
+  /** ISO date a human last confirmed this record against the running product. */
+  verifiedAt?: string;
+}
+
 /** A navigation entry a module contributes to the shared app shell. */
 export interface ModuleNavItem {
   label: string;
@@ -49,6 +81,8 @@ export interface PlatformModule {
   /** Tailwind gradient classes for the module's brand chip/card. */
   accent: string;
   status: ModuleStatus;
+  /** Truth gate for marketing copy. See {@link ProductVeracity}. */
+  veracity: ProductVeracity;
   /** Whether the given visitor may open this module. */
   canAccess: (access: ModuleAccess) => boolean;
   /** Nav entries this module contributes to the app shell (optional). */

@@ -28,6 +28,13 @@ export const MODULES: PlatformModule[] = [
     icon: Download,
     accent: "from-blue-600 to-violet-600",
     status: "live",
+    veracity: {
+      stage: "live",
+      claimable: true,
+      provingRoute: "/downloads",
+      evidence: "app/(app)/downloads — extraction pipeline live via /api/download",
+      verifiedAt: "2026-07-18",
+    },
     canAccess: everyone,
     nav: [{ label: "Download", href: "/downloads", icon: Download }],
   },
@@ -40,6 +47,13 @@ export const MODULES: PlatformModule[] = [
     icon: Users,
     accent: "from-fuchsia-500 to-violet-600",
     status: "live",
+    veracity: {
+      stage: "live",
+      claimable: true,
+      provingRoute: "/home",
+      evidence: "app/(app)/home — feed, reels, stories, messaging all shipped",
+      verifiedAt: "2026-07-18",
+    },
     canAccess: everyone,
     nav: [
       { label: "Home", href: "/home", icon: Home },
@@ -55,6 +69,12 @@ export const MODULES: PlatformModule[] = [
     icon: Wand2,
     accent: "from-amber-500 to-orange-600",
     status: "soon",
+    veracity: {
+      // No `/studio` route exists. Copy must stay future-tense until one does.
+      stage: "concept",
+      claimable: false,
+      verifiedAt: "2026-07-18",
+    },
     canAccess: proOnly,
   },
   {
@@ -66,6 +86,12 @@ export const MODULES: PlatformModule[] = [
     icon: Cloud,
     accent: "from-cyan-500 to-blue-600",
     status: "soon",
+    veracity: {
+      // No `/cloud` route exists. Copy must stay future-tense until one does.
+      stage: "concept",
+      claimable: false,
+      verifiedAt: "2026-07-18",
+    },
     canAccess: everyone,
   },
   {
@@ -78,6 +104,19 @@ export const MODULES: PlatformModule[] = [
     icon: Sparkles,
     accent: "from-violet-500 to-indigo-600",
     status: "beta",
+    veracity: {
+      /*
+       * `status: "beta"` overstates this. The backend exists (`app/api/assistant`),
+       * but there is no `/smart` route and the only UI surface — `<AssistantWidget />`
+       * — is commented out of `app/layout.tsx` ("temporarily removed"). Nothing is
+       * user-reachable, so nothing may be claimed. Flip to `beta`/claimable when the
+       * widget is re-mounted or a `/smart` destination ships.
+       */
+      stage: "internal",
+      claimable: false,
+      evidence: "backend only: app/api/assistant/route.ts; widget unmounted",
+      verifiedAt: "2026-07-18",
+    },
     canAccess: everyone,
   },
   {
@@ -89,6 +128,13 @@ export const MODULES: PlatformModule[] = [
     icon: Shield,
     accent: "from-slate-600 to-slate-800",
     status: "live",
+    veracity: {
+      stage: "live",
+      claimable: false, // Real, but internal — never surfaced in marketing.
+      provingRoute: "/admin",
+      evidence: "app/admin",
+      verifiedAt: "2026-07-18",
+    },
     canAccess: adminOnly,
     nav: [{ label: "Admin", href: "/admin", icon: Shield }],
   },

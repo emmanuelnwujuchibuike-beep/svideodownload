@@ -13,6 +13,62 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑18 — Living Content Platform Phase 1: the Reality Ledger (RFC accepted)
+
+Owner asked for a full "Living Content Platform" — Product Genome™, Experience
+Graph™, Living Content Engine™, Experience Sync Engine™, a Global Content
+Orchestrator™, 26 backend services, ~8 migrations, an admin platform. Designed in
+full in **`docs/LIVING_CONTENT_PLATFORM_RFC.md`**; Phase 1 built and shipped.
+
+**The most useful finding was that two of the five named systems already existed
+here in embryo.** `config/seoPages.ts` (1033 lines, cluster × modifier → hundreds of
+pages, FAQs, metadata, internal links) *is* a Living Content Engine, just scoped to
+the downloader vertical. `lib/platform/modules.ts` *is* a Product Genome, at 8 fields
+instead of ~30. The work is generalising those, not greenfield.
+
+**Architectural crux — authoring plane ≠ render plane.** An enterprise CMS implies
+request-time DB reads, which would put a ~290ms Supabase round trip in front of every
+marketing page and un-static `/` (`e7f25c6`), spending the 2-second page budget. So:
+Postgres is the **authoring** plane (drafts, review, approval, versions); approved
+content **compiles to typed TS modules** that Next renders statically. Publishing is a
+build, not a write. Content becomes type-checked, diffable in git, and free at request
+time. Owner approved this model.
+
+**Phase 1 — the Reality Ledger, enforced by tests.** `ProductVeracity` now sits on
+every module (`stage`, `claimable`, `provingRoute`, `evidence`, `verifiedAt`),
+deliberately separate from the display-only `status`. `lib/content/reality-ledger.ts`
++ its 16-assertion CI test make it mechanically impossible to claim a product that
+isn't built, or to state a magnitude nobody can source.
+
+**It found three live violations on first run.** `stats-counter.tsx` was animating
+**"35,000,000+ Videos Downloaded"** and **"8,000,000+ Community Members"** on scroll so
+they read as live telemetry. Measured against the database that day, both were
+overstated by four to five orders of magnitude. That is a factual claim about the
+business, presented as measured, on the front door. Also: `platform-showcase`
+claimed "20+ Platforms" against 11 in the registry. And `Frenzsave Smart` carried
+`status: "beta"` while having no `/smart` route and its only UI surface commented out
+of `app/layout.tsx:236` — recorded as `internal` / not claimable.
+
+Every figure on the band is now **derived from the product** (`11` platforms, `4`
+watermark-free, `Free`, `None` account needed) so it is true by construction and
+re-states itself as the product grows. The honest version is also the faster one: the
+component dropped its `IntersectionObserver` + `requestAnimationFrame` loop and is now
+a **server component with zero client JS** on a page under a 2s budget.
+
+**Detector design.** First cut flagged 21 sites, 19 noise (CSS `rgba()`, Tailwind
+arbitrary values, real plan quotas like "10,000 requests/day" — those are specs, not
+social proof). Narrowed to social-proof shapes only. It also flagged its own changelog
+until comment-stripping was added: documenting a past violation must never trip the
+gate, or authors learn to stop writing down why a number was wrong.
+
+Open for the owner: `/studio`, `/cloud`, `/smart` are dead `basePath`s (safe today —
+no `nav` entries — but an app launcher built off `getModulesFor()` would 404); and the
+`download` module tagline still says "20+ platforms" unsourced. Phases 2–5 (full
+Genome, Experience Graph + compile step, authoring DB + editorial workflow, Sync
+Engine) remain open.
+
+---
+
 ## 2026‑07‑16 highlights (batch 70 — chat appearance PER-CONVERSATION, the real "can't save" cause, /messages made standalone)
 
 Owner's next round: chat bubble style/color/font should change **only in the chat where they were set, not in every chat**; the font-style picker "shows can't save," and so does the chat wallpaper; the bubble color loads late (shows the default blue for a moment on every entry); make the chat-list rows sit tightly together like WhatsApp (the divider line already separates them); `/messages` sits on the F loader for seconds on a reload / iOS back-swipe and feels like it "re-routes through login," when it should be standalone like every other page; plus a full theme-init audit and a home-page instant-load investigation.

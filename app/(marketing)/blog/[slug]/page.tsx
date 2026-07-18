@@ -8,6 +8,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { AdSlot } from "@/features/monetization/ad-slot";
 import { BLOG_SLUGS, getPost } from "@/lib/seo/blog";
+import { jsonLd } from "@/lib/seo/json-ld";
 import { getSeoPage } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
@@ -66,7 +67,7 @@ export default async function BlogPostPage({
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(articleLd) }}
       />
       <SiteHeader />
       <main className="container max-w-3xl pb-24 pt-28 sm:pt-32">

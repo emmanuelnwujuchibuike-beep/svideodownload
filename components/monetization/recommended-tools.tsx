@@ -2,6 +2,7 @@ import { ArrowUpRight } from "lucide-react";
 
 import { getMonetizationSettings } from "@/lib/monetization/settings";
 import { getRecommendedTools, type Placement, type RecommendedTool } from "@/lib/monetization/tools";
+import { jsonLd } from "@/lib/seo/json-ld";
 import { cn } from "@/lib/utils";
 
 import { AffiliateDisclosure } from "./affiliate-disclosure";
@@ -50,7 +51,7 @@ export async function RecommendedTools({
   if (variant === "sidebar") {
     return (
       <aside className={cn("rounded-2xl border border-border/70 bg-card p-4 shadow-soft", className)}>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
         <h2 className="mb-3 text-sm font-semibold">{title}</h2>
         <ul className="space-y-2">
           {tools.map((t) => (
@@ -66,7 +67,7 @@ export async function RecommendedTools({
 
   return (
     <section className={cn("w-full", className)}>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
       <div className="mb-5 text-center">
         <h2 className="text-xl font-semibold tracking-[-0.02em] sm:text-2xl">{title}</h2>
         {subtitle ? <p className="mt-1.5 text-sm text-muted-foreground">{subtitle}</p> : null}

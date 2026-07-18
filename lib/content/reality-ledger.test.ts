@@ -40,8 +40,16 @@ import { getModules } from "@/lib/platform/modules";
 
 const ROOT = path.resolve(__dirname, "../..");
 
-/** Surfaces a prospective user reads before signing up. */
-const MARKETING_DIRS = ["components/landing", "app/(marketing)", "config"];
+/**
+ * Surfaces a prospective user reads before signing up.
+ *
+ * `lib/learning` is in here because Learning Academy lessons are marketing copy in
+ * every sense that matters: they are indexed, they are the landing page for search
+ * traffic, and they discuss products that do not exist yet. A lesson may teach a
+ * technique, but it may not describe an unbuilt Frenz product as usable today.
+ * See `docs/DOWNLOAD_HUB_RFC.md` §4.
+ */
+const MARKETING_DIRS = ["components/landing", "app/(marketing)", "config", "lib/learning"];
 
 function walk(dir: string): string[] {
   const abs = path.join(ROOT, dir);

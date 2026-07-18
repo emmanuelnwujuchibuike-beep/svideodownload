@@ -11,6 +11,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
+import { jsonLd } from "@/lib/seo/json-ld";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { RelatedLinks } from "@/components/seo/related-links";
@@ -118,7 +119,7 @@ export default async function DownloaderPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify([softwareLd, faqLd, breadcrumbLd, howToLd]),
+          __html: jsonLd([softwareLd, faqLd, breadcrumbLd, howToLd]),
         }}
       />
       <SiteHeader />

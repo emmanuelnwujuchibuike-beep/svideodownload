@@ -1,6 +1,7 @@
 import { ChevronDown } from "lucide-react";
 
 import { Reveal } from "@/components/ui/reveal";
+import { jsonLd } from "@/lib/seo/json-ld";
 
 const FAQS: { q: string; a: string }[] = [
   {
@@ -52,7 +53,7 @@ export function Faq() {
     <section id="faq" className="border-t border-border/60 py-28 sm:py-36">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(faqJsonLd) }}
       />
       <div className="container max-w-3xl">
         <Reveal className="mb-14 text-center">

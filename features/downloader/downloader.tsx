@@ -13,14 +13,17 @@ import dynamic from "next/dynamic";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { RecommendedToolsClient } from "@/components/monetization/recommended-tools-client";
+import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
 import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
 import { startDownload as enqueueDownload } from "@/features/downloads/manager";
 import { PublishButton } from "@/features/social/publish-button";
 import { FetchedAd } from "@/features/monetization/fetched-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
+import { useUser } from "@/features/auth/use-user";
+import type { DownloadContext } from "@/lib/download-hub/types";
 import { detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
-import type { MediaKind } from "@/types";
+import type { MediaFormat, MediaKind } from "@/types";
 
 import { useDownloader } from "./use-downloader";
 
@@ -28,6 +31,31 @@ import { useDownloader } from "./use-downloader";
 // visitor submits a link — code-split it out of the landing page's initial
 // bundle instead of shipping it to every visitor who never converts.
 const PreviewCard = dynamic(() => import("./preview-card").then((m) => m.PreviewCard), { ssr: false });
+
+// Discovery Gateway™ — only renders once a download has actually completed, so
+// code-split it (along with the Learning Academy content it links to) out of the
+// landing page's initial bundle. Same proven pattern as PreviewCard above.
+const DiscoveryGateway = dynamic(
+  () => import("@/features/download-hub/discovery-gateway").then((m) => m.DiscoveryGateway),
+  { ssr: false },
+);
+
+/**
+ * Vertical pixel count of a chosen rendition, for Discovery Gateway ranking.
+ *
+ * There is no `height` field on MediaFormat, so this reads the three places the
+ * information actually appears, cheapest first. Returns 0 for "unknown", which
+ * the ranker treats as a neutral signal rather than as low quality.
+ */
+function heightOf(fmt: MediaFormat | undefined): number {
+  if (!fmt) return 0;
+  const fromId = Number(fmt.formatId);
+  if (Number.isFinite(fromId) && fromId > 0) return fromId;
+  const fromResolution = fmt.resolution?.match(/x(\d+)/)?.[1];
+  if (fromResolution) return Number(fromResolution);
+  const fromLabel = fmt.label?.match(/(\d+)p/)?.[1];
+  return fromLabel ? Number(fromLabel) : 0;
+}
 
 // Cycled through in the input placeholder for a lively, on-brand prompt.
 const PLACEHOLDER_PLATFORMS = [
@@ -51,9 +79,18 @@ export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
   const detected = url ? detectPlatform(url) : null;
 
   // Set once the user taps download on this fetch's result — drives the
-  // "publish it" prompt below. Reset whenever a new video is fetched.
+  // Discovery Gateway below. Reset whenever a new video is fetched.
   const [justDownloaded, setJustDownloaded] = useState(false);
   useEffect(() => setJustDownloaded(false), [metadata?.id]);
+
+  // What was actually saved, in the shape the Gateway ranks over. Held in state
+  // rather than derived from `metadata` because the chosen format matters: the
+  // right next step after a 360p grab differs from a 1080p one.
+  const [savedContext, setSavedContext] = useState<DownloadContext | null>(null);
+  useEffect(() => setSavedContext(null), [metadata?.id]);
+
+  const { downloadCount, countDownload } = useGatewayMemory();
+  const { user } = useUser();
 
   const handleDownload = (formatId: string, kind: MediaKind) => {
     if (!metadata) return;
@@ -75,6 +112,21 @@ export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
       qualityLabel: fmt?.label ?? (kind === "audio" ? "Audio" : kind === "image" ? "Image" : "Video"),
     });
     setJustDownloaded(true);
+    countDownload();
+    setSavedContext({
+      platformId: metadata.platform,
+      kind,
+      durationSec: metadata.durationSeconds ?? 0,
+      height: heightOf(fmt),
+      // `acodec: "none"` is yt-dlp's marker for a video-only rendition. Absent
+      // codec data means unknown, and assuming audio is present is the safer
+      // default — it keeps caption suggestions available rather than silently
+      // dropping them.
+      hasAudio: kind !== "image" && fmt?.acodec !== "none",
+      signedIn: !!user,
+      plan: "free",
+      downloadCount: downloadCount + 1,
+    });
   };
 
   // Share Target (manifest `share_target`) hands us a link from another app
@@ -226,16 +278,29 @@ export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
           {/* Admin-managed recommended tools (renders nothing when empty). */}
           <RecommendedToolsClient placement="download_result" />
 
-          {/* Once the download starts, invite the user to publish it to their
-              profile — the moment they're most likely to share. */}
+          {/*
+            Discovery Gateway™ — replaces what used to be a single hardcoded
+            "publish it" prompt with a ranked, contextual set of next steps.
+            See docs/DOWNLOAD_HUB_RFC.md §3.
+
+            It renders only AFTER the download has been handed to the manager, so
+            it never delays or gates the file. Publish stays alongside it as the
+            direct affordance, because it works from metadata here and the Gateway
+            deliberately caps itself at three suggestions.
+          */}
           {justDownloaded ? (
-            <div className="mt-5 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-4 text-center ring-1 ring-inset ring-violet-500/20">
-              <p className="text-sm font-bold">Downloaded — share it with your Frenz</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Publish it to your profile so your followers can watch and save it too.</p>
-              <div className="mt-3 flex justify-center">
-                <PublishButton metadata={metadata} highlight />
+            <>
+              <div className="mt-5 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-4 text-center ring-1 ring-inset ring-violet-500/20">
+                <p className="text-sm font-bold">Downloaded — share it with your Frenz</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Publish it to your profile so your followers can watch and save it too.
+                </p>
+                <div className="mt-3 flex justify-center">
+                  <PublishButton metadata={metadata} highlight />
+                </div>
               </div>
-            </div>
+              {savedContext ? <DiscoveryGateway context={savedContext} /> : null}
+            </>
           ) : null}
 
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">

@@ -16,7 +16,10 @@
     "backfill:r2": "node scripts/backfill-r2.mjs",
     "backfill:thumbs": "node scripts/backfill-thumbnails.mjs",
     "setup:r2-cors": "node scripts/setup-r2-cors.mjs",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "content:seed": "node scripts/content-compile.mjs seed",
+    "content:compile": "node scripts/content-compile.mjs compile",
+    "content:check": "node scripts/content-compile.mjs check"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",

@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowRight, Bookmark, Crown, Fingerprint, LogOut, Menu, MessageCircle, User as UserIcon, UserCircle, X } from "lucide-react";
+import { ArrowRight, Crown, Fingerprint, LogOut, UserCircle, X } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { IconTile } from "@/components/icons/icon-tile";
@@ -12,6 +12,9 @@ import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useUser } from "@/features/auth/use-user";
 import { UserMenu } from "@/features/auth/user-menu";
 import { useShowAds } from "@/features/monetization/use-show-ads";
+import { SearchTrigger, SearchTriggerIcon } from "@/features/navigation/search-trigger";
+import { DESTINATIONS } from "@/lib/navigation/registry";
+import type { Destination } from "@/lib/navigation/types";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
@@ -36,6 +39,23 @@ const NAV_LINKS = [
   { href: "/contact", label: "Support" },
 ];
 
+/**
+ * The mobile menu's structure, as ordered groups of registry ids.
+ *
+ * Ordered by what someone needs first: what the app DOES, then what they can make,
+ * then their own stuff, then reference material.
+ *
+ * Ids only — labels, icons, hrefs and access rules all come from the navigation
+ * registry, so this stays a layout decision and never becomes a second source of
+ * truth that can disagree with the command palette.
+ */
+const MENU_GROUPS: { title: string; ids: string[] }[] = [
+  { title: "Discover", ids: ["home", "explore", "reels", "search"] },
+  { title: "Create", ids: ["create-post", "create-reel", "create-story"] },
+  { title: "Your stuff", ids: ["downloads", "saved", "messages", "friends", "notifications"] },
+  { title: "Learn more", ids: ["pricing", "developers", "blog", "contact"] },
+];
+
 const DOWNLOADERS = getPrimaryPages();
 
 /**
@@ -49,8 +69,48 @@ const DOWNLOADERS = getPrimaryPages();
  */
 export function SiteHeader({ social = false, desktopHidden = false }: { social?: boolean; desktopHidden?: boolean }) {
   const [open, setOpen] = useState(false);
+  /**
+   * Slide state, kept separate from mount state.
+   *
+   * `open` decides whether the sheet is in the DOM; `shown` drives the transform.
+   * A panel mounted already at its final position has nothing to animate FROM, so
+   * it would just appear — flipping `shown` one frame after mount gives the browser
+   * a start and an end to interpolate. On close we reverse `shown` first and unmount
+   * after the transition, otherwise the sheet vanishes instead of sliding out.
+   */
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
+  const closeMenu = useCallback(() => {
+    setShown(false);
+    // Matches the 300ms transition on the panel; unmounting sooner cuts it short.
+    window.setTimeout(() => setOpen(false), 300);
+  }, []);
+
+  // Escape closes, and the page behind is scroll-locked while the sheet covers it.
+  // `overflowY` only — the convention here, because locking `overflow` outright
+  // also kills horizontal clipping and shifts the layout.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeMenu();
+    };
+    const previous = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflowY = previous;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, closeMenu]);
+
   const { user, enabled } = useUser();
-  const { handle } = useEntitlements();
+  const { handle, plan } = useEntitlements();
   const { showAds, ready } = useShowAds();
   const isPremium = ready && !showAds;
 
@@ -88,178 +148,250 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
               <Crown className="h-4 w-4" /> Go Pro
             </Link>
           )}
+          <SearchTrigger className="w-48" />
           <ThemeToggle />
           <UserMenu />
         </div>
 
-        {/* Mobile trigger — hidden on social surfaces (bottom nav owns nav there) */}
+        {/* Mobile right — search then menu, hidden on social surfaces (the bottom
+            nav owns navigation there). */}
         {social ? null : (
-          <button
-            type="button"
-            aria-label={open ? "Close menu" : "Open menu"}
-            aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
-            className="inline-flex h-10 w-10 items-center justify-center lg:hidden"
-          >
-            {/* Same glass-tile treatment as the in-app topbar's search/create/
-                notification icons — consistent premium chrome across every
-                page, marketing or in-app. */}
-            <IconTile>{open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</IconTile>
-          </button>
+          <div className="flex items-center gap-0.5 lg:hidden">
+            <SearchTriggerIcon />
+            <button
+              type="button"
+              aria-label={open ? "Close menu" : "Open menu"}
+              aria-expanded={open}
+              onClick={() => {
+                if (open) closeMenu();
+                else setOpen(true);
+              }}
+              className="inline-flex h-10 w-10 items-center justify-center"
+            >
+              <IconTile>
+                {/*
+                  A custom mark rather than the default hamburger (owner: "change
+                  the menu toggle icon to something more unique"): three
+                  right-aligned bars of DIFFERENT widths, which reads as a
+                  considered brand mark instead of a generic control — and folds
+                  into an X when open.
+
+                  Spans rather than an icon component so each bar animates
+                  independently, on transform and opacity only.
+                */}
+                <span className="relative flex h-5 w-5 flex-col items-end justify-center gap-[3.5px]">
+                  <span
+                    className={cn(
+                      "h-[2px] rounded-full bg-current transition-all duration-300",
+                      open ? "w-5 translate-y-[5.5px] rotate-45" : "w-5",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "h-[2px] rounded-full bg-current transition-all duration-300",
+                      open ? "w-0 opacity-0" : "w-2.5 opacity-100",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "h-[2px] rounded-full bg-current transition-all duration-300",
+                      open ? "w-5 -translate-y-[5.5px] -rotate-45" : "w-3.5",
+                    )}
+                  />
+                </span>
+              </IconTile>
+            </button>
+          </div>
         )}
       </div>
       </header>
 
-      {/* Mobile drawer — right-side panel; left half of the page stays visible */}
+      {/*
+        Mobile menu — a right-side sheet that SLIDES IN (owner: "the menu should
+        also open with a slide right just like claude ai ios app").
+
+        `open` controls mount; `shown` drives the transform and flips one frame
+        later, so the panel exists at its off-screen start position before the
+        transition begins. Without that gap the browser has nothing to animate
+        FROM and the sheet simply appears. Closing reverses `shown` first and
+        unmounts after the transition, so it slides out instead of vanishing.
+
+        Contents come from the NAVIGATION REGISTRY rather than a hand-kept list, so
+        this menu and the command palette cannot disagree about what exists — the
+        payoff for building that registry first.
+      */}
       {open && !social && (
         <>
-          {/* Backdrop over the exposed page area */}
           <button
             type="button"
             aria-label="Close menu"
-            onClick={() => setOpen(false)}
-            className="fixed inset-x-0 bottom-0 top-16 z-40 bg-background/50 backdrop-blur-sm lg:hidden"
-          />
-          <div className="fixed bottom-0 right-0 top-16 z-50 w-[62%] min-w-[18rem] max-w-sm overflow-y-auto overscroll-contain border-l border-border/40 bg-background/97 shadow-2xl lg:hidden">
-            <nav className="flex flex-col gap-1 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-            {/* Go Pro — top CTA, hidden for paying users */}
-            {!isPremium && (
-              <Link
-                href="/pricing"
-                onClick={() => setOpen(false)}
-                className="group relative mb-2 flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 px-4 py-3.5 text-base font-semibold text-white shadow-lg shadow-amber-500/25"
-              >
-                <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-                <Crown className="h-5 w-5" /> Go Pro — remove ads
-              </Link>
+            onClick={closeMenu}
+            className={cn(
+              "fixed inset-0 z-40 bg-background/60 backdrop-blur-sm transition-opacity duration-300 lg:hidden",
+              shown ? "opacity-100" : "opacity-0",
             )}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu"
+            className={cn(
+              "fixed bottom-0 right-0 top-0 z-50 flex w-[88%] min-w-[18rem] max-w-sm flex-col border-l border-border/60 bg-background shadow-2xl lg:hidden",
+              "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
+              shown ? "translate-x-0" : "translate-x-full",
+            )}
+          >
+            {/* The sheet covers the page, so it carries its own brand and close
+                control rather than relying on the bar behind it. */}
+            <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 pb-3 pt-[max(0.875rem,env(safe-area-inset-top))]">
+              <FrenzWordmark size={28} />
+              <button
+                type="button"
+                onClick={closeMenu}
+                aria-label="Close menu"
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-            <Link
-              href="/explore"
-              onClick={() => setOpen(false)}
-              className="rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
-            >
-              Explore
-            </Link>
-            <Link
-              href="/blog"
-              onClick={() => setOpen(false)}
-              className="rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
-            >
-              Blog
-            </Link>
+            <nav className="flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
+              {/* Search lives IN the menu (owner: "everything need to be in the
+                  mobile menu and organised even the search"). A keyboard shortcut
+                  is an accelerator for people with a keyboard; on a phone the only
+                  discoverable search is one you can see and tap. */}
+              <SearchTrigger className="w-full" />
 
-            {/* Platform list — vertical, scrollable */}
-            <p className="mt-3 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
-              Download from
-            </p>
-            <div className="mt-2 flex flex-col gap-2">
-              {DOWNLOADERS.map((d) => {
-                const platform = PLATFORMS[d.platformId];
-                const Icon = BRAND_ICONS[d.platformId];
+              {!isPremium && (
+                <Link
+                  href="/pricing"
+                  onClick={closeMenu}
+                  className="group relative mt-3 flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-amber-500/25"
+                >
+                  <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+                  <Crown className="h-4 w-4" /> Go Pro — remove ads
+                </Link>
+              )}
+
+              {/* Grouped in the order someone actually needs them. The previous
+                  menu was one flat list with eleven platform rows through the
+                  middle, which buried everything under them. */}
+              {MENU_GROUPS.map((group) => {
+                const items = group.ids
+                  .map((id) => DESTINATIONS.find((d) => d.id === id))
+                  .filter((d): d is Destination => Boolean(d))
+                  .filter((d) => (d.requiresAuth ? !!user : true))
+                  .filter((d) => d.canAccess({ plan: plan ?? "free", isAdmin: false }));
+
+                if (items.length === 0) return null;
+
                 return (
-                  <Link
-                    key={d.slug}
-                    href={`/${d.slug}`}
-                    onClick={() => setOpen(false)}
-                    className="group flex items-center gap-2.5 rounded-xl border border-border/80 bg-card/90 p-2.5 transition hover:border-foreground/20 active:scale-[0.98]"
-                  >
-                    <span
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${platform.accent} text-white shadow-sm`}
-                    >
-                      {Icon ? <Icon className="h-4 w-4" /> : null}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold leading-tight">
-                        {platform.name}
-                      </span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {d.thing}
-                      </span>
-                    </span>
-                  </Link>
+                  <div key={group.title} className="mt-6">
+                    <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
+                      {group.title}
+                    </p>
+                    <ul className="mt-2 space-y-0.5">
+                      {items.map((d) => (
+                        <li key={d.id}>
+                          <Link
+                            href={d.href}
+                            onClick={closeMenu}
+                            className="flex min-h-[44px] items-center gap-3 rounded-xl px-2 py-2 text-[15px] font-medium transition-colors hover:bg-secondary"
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
+                              <d.icon className="h-4 w-4" />
+                            </span>
+                            {d.label}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 );
               })}
-            </div>
 
-            <div className="mt-4 flex items-center justify-between rounded-xl border border-border/60 bg-card/60 p-3">
-              <span className="text-sm font-medium text-muted-foreground">Appearance</span>
-              <ThemeToggle />
-            </div>
+              {/* Platforms as a compact grid instead of eleven full-width rows. */}
+              <div className="mt-6">
+                <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
+                  Download from
+                </p>
+                <div className="mt-2 grid grid-cols-4 gap-2">
+                  {DOWNLOADERS.slice(0, 8).map((d) => {
+                    const platform = PLATFORMS[d.platformId];
+                    const Icon = BRAND_ICONS[d.platformId];
+                    return (
+                      <Link
+                        key={d.slug}
+                        href={`/${d.slug}`}
+                        onClick={closeMenu}
+                        className="flex flex-col items-center gap-1.5 rounded-xl border border-border/60 p-2 transition-colors hover:bg-secondary"
+                      >
+                        <span
+                          className={cn(
+                            "flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br text-white",
+                            platform.accent,
+                          )}
+                        >
+                          {Icon ? <Icon className="h-4 w-4" /> : null}
+                        </span>
+                        <span className="w-full truncate text-center text-[9px] text-muted-foreground">
+                          {platform.name}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
 
-            {/* Auth */}
-            {enabled && user ? (
-              <>
-                <Link
-                  href={handle ? `/u/${handle}` : "/account#profile"}
-                  onClick={() => setOpen(false)}
-                  className="mt-2 flex items-center gap-3 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
-                >
-                  <ModuleIconBadge icon={UserCircle} /> {handle ? "My profile" : "Set up profile"}
-                </Link>
-                <Link
-                  href="/messages"
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
-                >
-                  <ModuleIconBadge icon={MessageCircle} /> Messages
-                </Link>
-                <Link
-                  href="/saved"
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
-                >
-                  <ModuleIconBadge icon={Bookmark} /> Saved
-                </Link>
-                <Link
-                  href="/account"
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-secondary"
-                >
-                  <ModuleIconBadge icon={UserIcon} /> Account
-                </Link>
-                <form action="/auth/signout" method="post">
-                  <button
-                    type="submit"
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-base font-medium text-muted-foreground transition hover:bg-secondary"
+              <div className="mt-6 flex items-center justify-between rounded-2xl border border-border/60 px-3 py-2">
+                <span className="text-sm font-medium text-muted-foreground">Appearance</span>
+                <ThemeToggle />
+              </div>
+
+              {enabled && user ? (
+                <div className="mt-3 space-y-0.5">
+                  <Link
+                    href={handle ? `/u/${handle}` : "/account#profile"}
+                    onClick={closeMenu}
+                    className="flex min-h-[44px] items-center gap-3 rounded-xl px-2 py-2 text-[15px] font-medium transition-colors hover:bg-secondary"
                   >
-                    <ModuleIconBadge icon={LogOut} /> Sign out
-                  </button>
-                </form>
-              </>
-            ) : (
-              /*
-                Owner (2026-07-18): "the login button on mobile is still the old
-                type … make the mobile button the same with the laptop login
-                button with a more premium icon that means login."
+                    <ModuleIconBadge icon={UserCircle} /> {handle ? "My profile" : "Set up profile"}
+                  </Link>
+                  <form action="/api/auth/signout" method="post">
+                    <button
+                      type="submit"
+                      className="flex min-h-[44px] w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-[15px] font-medium text-rose-600 transition-colors hover:bg-secondary dark:text-rose-400"
+                    >
+                      <ModuleIconBadge icon={LogOut} /> Sign out
+                    </button>
+                  </form>
+                </div>
+              ) : null}
 
-                This now mirrors UserMenu's desktop CTA exactly — same brand
-                gradient, same breathing glow, same hover sheen, same Fingerprint
-                mark — differing only in being full-width, which the drawer is.
-                It supersedes the 2026-07-16 two-line "log in or create account"
-                wording: one control, one treatment, on every viewport.
-
-                Fingerprint over KeyRound: it reads as authentication at a glance
-                and is the more premium mark, which is what was asked for.
-              */
-              <Link
-                href={enabled ? "/login?next=/account" : "/#download"}
-                onClick={() => setOpen(false)}
-                className="group relative mt-2 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-3.5 text-base font-semibold text-white shadow-lg shadow-violet-500/30 transition-all duration-300 hover:shadow-violet-500/50 active:scale-[0.97]"
-              >
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 opacity-40 blur-md motion-safe:animate-pulse"
-                />
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full"
-                />
-                <Fingerprint className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
-                {enabled ? "Launch App" : "Get Started"}
-                <ArrowRight className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-0.5" />
-              </Link>
-            )}
+              {enabled && !user ? (
+                /*
+                  Mirrors UserMenu's desktop CTA exactly — same gradient, glow,
+                  sheen and Fingerprint mark — differing only in being full-width.
+                  One control, one treatment, on every viewport.
+                */
+                <Link
+                  href="/login?next=/account"
+                  onClick={closeMenu}
+                  className="group relative mt-4 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-3.5 text-base font-semibold text-white shadow-lg shadow-violet-500/30 transition-all duration-300 active:scale-[0.97]"
+                >
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 opacity-40 blur-md motion-safe:animate-pulse"
+                  />
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full"
+                  />
+                  <Fingerprint className="h-5 w-5" />
+                  Launch App
+                  <ArrowRight className="h-5 w-5" />
+                </Link>
+              ) : null}
             </nav>
           </div>
         </>

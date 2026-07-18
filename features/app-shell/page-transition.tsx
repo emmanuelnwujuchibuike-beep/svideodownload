@@ -39,7 +39,19 @@ import { useRef } from "react";
 let firstMount = true;
 const navStack: string[] = [];
 
-export function PageTransition({ children }: { children: ReactNode }) {
+export function PageTransition({
+  children,
+  wrapperClassName = "flex min-h-0 flex-1 flex-col",
+}: {
+  children: ReactNode;
+  /**
+   * Layout classes for the animated wrapper. Defaults to the flex-fill that (app)
+   * pages need (they live in the shell's flex column). Marketing pages flow
+   * normally in the document, so they pass a plain wrapper — a flex-fill there
+   * would be inert at best and could fight a normal scrolling page.
+   */
+  wrapperClassName?: string;
+}) {
   const pathname = usePathname();
 
   // Compute the direction class exactly once per mount. A ref guard keeps it
@@ -60,9 +72,5 @@ export function PageTransition({ children }: { children: ReactNode }) {
     }
   }
 
-  // `flex min-h-0 flex-1 flex-col` preserves the layout {children} had as a direct
-  // flex child of the (app) shell column — full-height pages (inbox, reels) keep
-  // their `flex-1` sizing; content pages just stack. Without it a full-height page
-  // would collapse inside a plain wrapper.
-  return <div className={`flex min-h-0 flex-1 flex-col ${cls.current}`}>{children}</div>;
+  return <div className={`${wrapperClassName} ${cls.current}`}>{children}</div>;
 }

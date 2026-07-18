@@ -8,6 +8,7 @@ import { FloatingMessages } from "@/features/app-shell/floating-messages";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { OfflineQueueSync } from "@/features/app-shell/offline-queue-sync";
 import { PinLockGate } from "@/features/account/pin-lock-gate";
+import { InboxMobileChrome } from "@/features/social/inbox-mobile-chrome";
 import { AutoAwayTracker, PresenceTracker } from "@/features/friends/use-presence";
 import { NotificationLiveToast } from "@/features/notifications/live-toast";
 import { InboxRealtimeTracker } from "@/features/social/inbox";
@@ -37,6 +38,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         {children}
       </div>
       <MobileNav />
+      {/* The mobile inbox's persistent top chrome (title + profile/tools +
+          Stories). In the shell, above the page-transition template, so it never
+          unmounts on the iOS back-swipe out of a chat — the fix for the
+          long-running "stories/profile flash on swipe back". Renders only on
+          /messages (mobile); see InboxMobileChrome. */}
+      <InboxMobileChrome />
       <FloatingMessages />
       <Toaster />
       {/* Floating-reaction layer — Wow taps rise from the tap point. */}

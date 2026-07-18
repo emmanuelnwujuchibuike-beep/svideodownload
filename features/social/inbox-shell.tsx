@@ -2,29 +2,22 @@ import type { ReactNode } from "react";
 
 import { MessageCircle } from "lucide-react";
 
-import { InboxHeaderActions } from "@/features/social/inbox-header-actions";
-import { InboxStoriesRow } from "@/features/social/inbox-stories-row";
-import { InboxUnreadDot } from "@/features/social/inbox-unread-dot";
-
 /**
- * The /messages index shell — the mobile container + its header, and the
- * desktop "pick a conversation" panel.
+ * The /messages index shell — the mobile list container, and the desktop "pick a
+ * conversation" panel.
  *
- * Shared by `messages/page.tsx` AND `messages/loading.tsx` on purpose. Owner
- * (2026-07-16): "the message pages should never reload visibly when swiped
- * back … no object including the profile button at the top of the message page
- * should never reload."
+ * Shared by `messages/page.tsx` AND `messages/loading.tsx` on purpose, so the
+ * only thing that can ever change between the loading and loaded states is the
+ * list body itself.
  *
- * Two things had to be true for that. First, the header can't depend on server
- * data (it doesn't any more — see the page's note; the unread dot reads the
- * client inbox cache). Second, the loading state and the loaded state have to
- * be the SAME markup, or the swap between them is itself a visible reload — the
- * old `loading.tsx` painted a grey `Skeleton` block where the "Messages" title
- * goes and had no header actions at all, so every entry flashed a placeholder
- * title and a missing profile button before the real ones appeared.
- *
- * Rendering one shell from both places means the only thing that can ever
- * change between them is the list body below.
+ * The top chrome (the "Messages" title, the profile/tools cluster, the Stories
+ * strip) is NO LONGER here — it moved to `InboxMobileChrome`, rendered from the
+ * persistent app shell. It used to live in this page-level shell, so on an iOS
+ * back-swipe out of a chat the whole header + Stories vanished for the
+ * transition commit and popped back (the long-running "stories/profile flash on
+ * swipe back"). In the shell it stays mounted across that gap. This scroller
+ * pads its top by `--inbox-chrome-h` (published by InboxMobileChrome) so the
+ * first row clears that fixed overlay.
  */
 export function InboxShell({ children }: { children: ReactNode }) {
   return (
@@ -44,25 +37,17 @@ export function InboxShell({ children }: { children: ReactNode }) {
           suppose to be there only the bottom nav"). The reservation itself has
           to stay for the THREAD, whose composer must sit above the nav. */}
       <div className="frenz-inbox-page frenz-nav-bleed flex-1 overflow-hidden bg-background lg:hidden">
-        <div className="frenz-nav-pad h-full overflow-y-auto overscroll-y-none px-3 pt-3.5">
-          <div className="mb-3.5 flex items-start justify-between gap-2">
-            {/* The title block sits a touch off the true edge and the subtitle
-                reads as a distinct, smaller second line (owner, 2026-07-15). */}
-            <div className="pl-1">
-              <h1 className="flex items-center gap-1.5 text-[28px] font-bold leading-tight tracking-[-0.03em]">
-                Messages
-                <InboxUnreadDot />
-              </h1>
-              <p className="mt-1 pl-0.5 text-xs text-muted-foreground">Stay connected with the people you care about</p>
-            </div>
-            <InboxHeaderActions />
-          </div>
-
-          {/* Part of the SHELL, not the streamed list: it's client-only, so it
-              paints with the header rather than behind the list's skeleton, and
-              it stays identical between loading.tsx and the real page. */}
-          <InboxStoriesRow />
-
+        {/* pt = the fixed InboxMobileChrome's height (published as a CSS var),
+            so the first conversation clears it. The fallback covers the first
+            paint before the ResizeObserver has measured. */}
+        <div
+          className="frenz-nav-pad h-full overflow-y-auto overscroll-y-none px-3"
+          // The ResizeObserver-published height is exact; the fallback only
+          // covers the first paint before it fires. Sized a touch ABOVE the real
+          // chrome (~234px) so that frame can only ever leave a hair of gap,
+          // never overlap the first row under the header.
+          style={{ paddingTop: "var(--inbox-chrome-h, 15rem)" }}
+        >
           {children}
         </div>
       </div>

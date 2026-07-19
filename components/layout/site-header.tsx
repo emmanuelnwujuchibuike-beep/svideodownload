@@ -2,7 +2,7 @@
 
 import { ArrowRight, Crown, Fingerprint, LogOut, UserCircle, X } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FrenzWordmark } from "@/components/brand/frenz-logo";
 import { IconTile } from "@/components/icons/icon-tile";
@@ -86,10 +86,42 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
     return () => cancelAnimationFrame(id);
   }, [open]);
 
+  /**
+   * Pending unmount from a close that is still animating. Held so a tap during
+   * the slide-out can cancel it and slide the sheet back in.
+   */
+  const closeTimer = useRef<number | null>(null);
+
   const closeMenu = useCallback(() => {
     setShown(false);
     // Matches the 300ms transition on the panel; unmounting sooner cuts it short.
-    window.setTimeout(() => setOpen(false), 300);
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null;
+      setOpen(false);
+    }, 300);
+  }, []);
+
+  /**
+   * Opening has two cases, and conflating them is a real bug rather than a nicety.
+   *
+   * If a close is still animating the sheet is STILL MOUNTED, so `setOpen(true)`
+   * is a no-op — `open` never changes, the rAF effect above never re-runs, and the
+   * menu would stay off-screen while the button claimed it was open. Cancelling the
+   * pending unmount and flipping `shown` slides it straight back in.
+   */
+  const openMenu = useCallback(() => {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+      setShown(true);
+      return;
+    }
+    setOpen(true); // fresh mount — the rAF effect gives it a frame to animate from
+  }, []);
+
+  // Never leave a timer to fire against an unmounted component.
+  useEffect(() => () => {
+    if (closeTimer.current !== null) clearTimeout(closeTimer.current);
   }, []);
 
   // Escape closes, and the page behind is scroll-locked while the sheet covers it.
@@ -174,9 +206,12 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
               type="button"
               aria-label={open ? "Close menu" : "Open menu"}
               aria-expanded={open}
+              // Keyed off `shown`, not `open`: mid-slide-out the sheet is still
+              // mounted, and keying off `open` would try to close an already
+              // closing menu instead of bringing it back.
               onClick={() => {
-                if (open) closeMenu();
-                else setOpen(true);
+                if (shown) closeMenu();
+                else openMenu();
               }}
               className="inline-flex h-10 w-10 items-center justify-center"
             >
@@ -191,23 +226,38 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
                   Spans rather than an icon component so each bar animates
                   independently, on transform and opacity only.
                 */}
+                {/*
+                  The bars follow `shown`, NOT `open`.
+
+                  `open` is mount state: on close it stays true for the 300ms the
+                  sheet takes to slide out, so an X-driven-by-`open` sat as an X
+                  for the whole animation and only snapped back to bars once the
+                  panel unmounted. That reads as a laggy, unresponsive control —
+                  the tap appears to do nothing for a third of a second.
+
+                  `shown` is the visual/intent state and flips the instant the
+                  user taps, so the mark morphs back to bars in step with the
+                  panel sliding away, which is what makes the control feel
+                  immediate. ARIA below deliberately stays on `open`, because the
+                  sheet really is still present and focusable until it unmounts.
+                */}
                 <span className="relative flex h-5 w-5 flex-col items-end justify-center gap-[3.5px]">
                   <span
                     className={cn(
                       "h-[2px] rounded-full bg-current transition-all duration-300",
-                      open ? "w-5 translate-y-[5.5px] rotate-45" : "w-5",
+                      shown ? "w-5 translate-y-[5.5px] rotate-45" : "w-5",
                     )}
                   />
                   <span
                     className={cn(
                       "h-[2px] rounded-full bg-current transition-all duration-300",
-                      open ? "w-0 opacity-0" : "w-2.5 opacity-100",
+                      shown ? "w-0 opacity-0" : "w-2.5 opacity-100",
                     )}
                   />
                   <span
                     className={cn(
                       "h-[2px] rounded-full bg-current transition-all duration-300",
-                      open ? "w-5 -translate-y-[5.5px] -rotate-45" : "w-3.5",
+                      shown ? "w-5 -translate-y-[5.5px] -rotate-45" : "w-3.5",
                     )}
                   />
                 </span>

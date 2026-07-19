@@ -3,6 +3,7 @@ import { teachableSchools } from "@/lib/academy/schools";
 import { LESSON_CATALOG } from "@/lib/learning/catalog";
 import { ALL_PAGES } from "@/lib/seo/seo-pages";
 import { SUPPORT_ARTICLES } from "@/lib/support/articles";
+import { GLOSSARY } from "@/lib/support/glossary";
 import { sectionMeta } from "@/lib/support/sections";
 
 /**
@@ -29,7 +30,7 @@ import { sectionMeta } from "@/lib/support/sections";
  * that could disagree with the first.
  */
 
-export type SearchKind = "lesson" | "school" | "course" | "trust" | "downloader";
+export type SearchKind = "lesson" | "school" | "course" | "trust" | "downloader" | "term";
 
 export interface SearchDoc {
   id: string;
@@ -58,6 +59,12 @@ export interface SearchDoc {
 const WEIGHT: Record<SearchKind, number> = {
   trust: 10, // people searching these are usually mid-problem
   downloader: 9, // the product itself
+  /*
+    Above lessons: someone typing a bare jargon word ("bitrate") wants to know
+    what it means. Someone wanting to learn the subject types a question, and the
+    query-shape difference sorts them out without the ranker needing to guess.
+  */
+  term: 8,
   lesson: 7,
   school: 6,
   course: 5,
@@ -80,6 +87,21 @@ export function buildSearchIndex(): SearchDoc[] {
       group: sectionMeta(article.section).name,
       keywords: [],
       weight: WEIGHT.trust,
+    });
+  }
+
+  for (const term of GLOSSARY) {
+    docs.push({
+      id: `term:${term.slug}`,
+      kind: "term",
+      title: term.term,
+      summary: term.definition,
+      href: `/glossary#${term.slug}`,
+      group: "Glossary",
+      // Aliases ARE the search terms — someone types "srt" far more often than
+      // "sidecar captions", and without these that query finds nothing.
+      keywords: term.aliases,
+      weight: WEIGHT.term,
     });
   }
 

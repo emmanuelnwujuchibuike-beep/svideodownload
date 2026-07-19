@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { SUPPORT_ARTICLES, getArticle, relatedArticles } from "./articles";
+import { GLOSSARY, getTerm } from "./glossary";
 import { SECTIONS } from "./sections";
 import { TRUST_SECTIONS } from "./types";
 
@@ -112,5 +113,62 @@ describe("no fabricated reliability claims", () => {
 
     const found = slaClaims.filter((re) => re.test(corpus)).map((re) => re.source);
     expect(found, `Unmeasured commitments in trust copy:\n  ${found.join("\n  ")}`).toHaveLength(0);
+  });
+});
+
+/* ---------------------------------- glossary --------------------------------- */
+
+describe("glossary", () => {
+  it("has unique slugs and terms", () => {
+    expect(new Set(GLOSSARY.map((t) => t.slug)).size).toBe(GLOSSARY.length);
+    expect(new Set(GLOSSARY.map((t) => t.term.toLowerCase())).size).toBe(GLOSSARY.length);
+  });
+
+  it("resolves every related term", () => {
+    const broken = GLOSSARY.flatMap((t) =>
+      t.related.filter((s) => !getTerm(s)).map((s) => `${t.slug} → ${s}`),
+    );
+    expect(broken, `Broken glossary links:\n  ${broken.join("\n  ")}`).toHaveLength(0);
+  });
+
+  it("never relates a term to itself", () => {
+    for (const t of GLOSSARY) {
+      expect(t.related, `${t.slug} lists itself`).not.toContain(t.slug);
+    }
+  });
+
+  it("gives every term aliases people would actually type", () => {
+    /*
+     * Aliases are the search terms. Somebody types "srt" far more often than
+     * "sidecar captions", and a term with no aliases is findable only by people
+     * who already know its name — i.e. the people who did not need the glossary.
+     */
+    for (const t of GLOSSARY) {
+      expect(t.aliases.length, `${t.slug} has no aliases`).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps definitions self-contained", () => {
+    /*
+     * A definition may not require another definition to parse. Jargon defined by
+     * more jargon is the failure mode of every glossary ever written, and it is
+     * worse than no glossary because it looks like help.
+     *
+     * Checked narrowly: a definition may MENTION another term (that is what
+     * `related` is for) but must not open by leaning on one, which is the shape
+     * that leaves a reader circling.
+     */
+    const terms = GLOSSARY.map((t) => t.term.toLowerCase());
+    for (const t of GLOSSARY) {
+      const opening = t.definition.toLowerCase().slice(0, 40);
+      const leansOn = terms.filter((other) => other !== t.term.toLowerCase() && opening.includes(other));
+      expect(leansOn, `${t.slug} opens by relying on: ${leansOn.join(", ")}`).toHaveLength(0);
+    }
+  });
+
+  it("keeps definitions short enough to read", () => {
+    for (const t of GLOSSARY) {
+      expect(t.definition.length, `${t.slug} is too long for a definition`).toBeLessThan(320);
+    }
   });
 });

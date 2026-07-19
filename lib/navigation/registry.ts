@@ -139,6 +139,7 @@ export const DESTINATIONS: Destination[] = [
 
   { id: "admin", label: "Admin dashboard", href: "/admin", kind: "admin", icon: Shield, keywords: ["operate", "moderation", "stats"], canAccess: adminOnly, requiresAuth: true },
   { id: "admin-content", label: "Content operations", href: "/admin/content", kind: "admin", icon: FileText, keywords: ["sync", "genome", "graph", "drift", "content"], canAccess: adminOnly, requiresAuth: true },
+  { id: "admin-corpora", label: "Corpus operations", href: "/admin/corpora", kind: "admin", icon: GraduationCap, keywords: ["academy", "lessons", "courses", "articles", "glossary", "translation", "locale", "coverage", "orphan"], canAccess: adminOnly, requiresAuth: true },
 ];
 
 /* --------------------------------- commands --------------------------------- */

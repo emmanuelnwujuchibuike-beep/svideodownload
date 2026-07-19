@@ -205,7 +205,15 @@ describe("Navigation — content surfaces are reachable", () => {
    * what puts it in the mobile menu and the command palette.
    */
   it("registers every top-level content surface", () => {
-    const required = ["/academy", "/learn", "/trust", "/glossary", "/developers", "/pricing"];
+    const required = [
+      "/academy",
+      "/learn",
+      "/help",
+      "/trust",
+      "/glossary",
+      "/developers",
+      "/pricing",
+    ];
     const registered = new Set(DESTINATIONS.map((d) => d.href));
     const missing = required.filter((href) => !registered.has(href));
 
@@ -215,13 +223,17 @@ describe("Navigation — content surfaces are reachable", () => {
     ).toHaveLength(0);
   });
 
-  it("gives trust and glossary the keywords people actually type", () => {
-    // Nobody searches "Trust Center". They search "delete account" or "block
-    // someone" — mid-problem, in their own words. A destination findable only by
-    // its formal name is findable only by people who already knew it existed.
+  it("gives help, trust and glossary the keywords people actually type", () => {
+    // Nobody searches "Trust Center" or "Help Center". They search "delete
+    // account", "block someone", "not working" — mid-problem, in their own words.
+    // A destination findable only by its formal name is findable only by people
+    // who already knew it existed.
+    const help = DESTINATIONS.find((d) => d.href === "/help");
     const trust = DESTINATIONS.find((d) => d.href === "/trust");
     const glossary = DESTINATIONS.find((d) => d.href === "/glossary");
 
+    expect(help?.keywords).toContain("not working");
+    expect(help?.keywords).toContain("add to home screen");
     expect(trust?.keywords).toContain("delete account");
     expect(trust?.keywords).toContain("privacy");
     expect(glossary?.keywords).toContain("what is");

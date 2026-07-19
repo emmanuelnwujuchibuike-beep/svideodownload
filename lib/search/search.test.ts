@@ -16,7 +16,7 @@ import { SEARCH_INDEX, search } from "./index";
 describe("search index", () => {
   it("indexes every corpus", () => {
     const kinds = new Set(SEARCH_INDEX.map((d) => d.kind));
-    expect(kinds).toContain("trust");
+    expect(kinds).toContain("support");
     expect(kinds).toContain("lesson");
     expect(kinds).toContain("school");
     expect(kinds).toContain("downloader");
@@ -72,7 +72,7 @@ describe("ranking", () => {
   it("surfaces trust content for a problem-shaped query", () => {
     const results = search("delete my account");
     expect(results.length).toBeGreaterThan(0);
-    expect(results[0]!.kind).toBe("trust");
+    expect(results[0]!.kind).toBe("support");
   });
 
   it("narrows rather than broadens on a second word", () => {
@@ -97,7 +97,7 @@ describe("ranking", () => {
     for (const query of ["delete account", "deleting account", "deleted account"]) {
       const results = search(query);
       expect(results.length, `"${query}" found nothing`).toBeGreaterThan(0);
-      expect(results[0]!.kind, `"${query}" ranked a non-trust result first`).toBe("trust");
+      expect(results[0]!.kind, `"${query}" ranked a non-support result first`).toBe("support");
     }
   });
 

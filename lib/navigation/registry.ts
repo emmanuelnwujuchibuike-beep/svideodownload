@@ -127,6 +127,9 @@ export const DESTINATIONS: Destination[] = [
     answer the question the user actually has.
   */
   { id: "academy", label: "Academy", href: "/academy", kind: "docs", icon: GraduationCap, workspace: "learning", keywords: ["school", "course", "curriculum", "learn", "creator", "community", "security", "developer", "training"], canAccess: everyone },
+  /* Keywords are what people actually type when they are stuck. Nobody searches
+     "Help Center"; they search "not working", "no sound", "add to home screen". */
+  { id: "help", label: "Help Center", href: "/help", kind: "docs", icon: LifeBuoy, keywords: ["help", "support", "how to download", "not working", "won't download", "failed", "error", "install app", "add to home screen", "no sound", "quality", "sign in code", "getting started", "troubleshooting"], canAccess: everyone },
   { id: "trust", label: "Trust Center", href: "/trust", kind: "docs", icon: Shield, keywords: ["security", "privacy", "safety", "delete account", "export data", "block", "report", "appeal", "passkey", "2fa", "who can see"], canAccess: everyone },
   { id: "glossary", label: "Glossary", href: "/glossary", kind: "docs", icon: FileText, keywords: ["definition", "meaning", "jargon", "bitrate", "rendition", "captions", "watermark", "what is"], canAccess: everyone },
   { id: "blog", label: "Blog", href: "/blog", kind: "docs", icon: Newspaper, keywords: ["news", "articles", "updates"], canAccess: everyone },

@@ -126,6 +126,7 @@ export function SiteFooter() {
         <FooterColumn
           title="Support"
           links={[
+            ["Help Center", "/help"],
             ["Trust Center", "/trust"],
             ["FAQ", "/#faq"],
             ["Privacy Policy", "/privacy"],

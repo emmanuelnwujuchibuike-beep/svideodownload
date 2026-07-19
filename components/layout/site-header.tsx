@@ -45,7 +45,14 @@ const NAV_LINKS = [
     widths; it remains linked there and in the sitemap.
   */
   { href: "/academy", label: "Academy" },
-  { href: "/contact", label: "Support" },
+  /*
+    "Support" points at the Help Center rather than straight at the contact form.
+    Someone clicking it is usually mid-problem with a question we have already
+    written down, and /help puts those answers first while linking to Contact
+    prominently for the ones we have not. Contact stays reachable from there, from
+    the footer's Company column, and from the mobile menu.
+  */
+  { href: "/help", label: "Support" },
 ];
 
 /**
@@ -74,7 +81,7 @@ const MENU_GROUPS: { title: string; ids: string[] }[] = [
   { title: "Create", ids: ["create-post", "create-reel", "create-story"] },
   { title: "Your stuff", ids: ["downloads", "saved", "messages", "friends", "notifications"] },
   { title: "Learn", ids: ["academy", "learn", "glossary", "blog"] },
-  { title: "Help & trust", ids: ["trust", "contact", "developers", "pricing"] },
+  { title: "Help & trust", ids: ["help", "trust", "contact", "developers", "pricing"] },
 ];
 
 const DOWNLOADERS = getPrimaryPages();

@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 import { teachableSchools } from "@/lib/academy/schools";
 import { LESSON_SLUGS } from "@/lib/learning/catalog";
-import { SUPPORT_SLUGS } from "@/lib/support/articles";
+import { SUPPORT_ARTICLES, articleHref } from "@/lib/support/articles";
 import { BLOG_SLUGS } from "@/lib/seo/blog";
 import { SEO_SLUGS } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
@@ -51,11 +51,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.7,
   }));
 
-  /* Trust Center. High priority: these are the pages people look for before
-     trusting a service with an account, and they answer questions that otherwise
-     become support load. */
-  const trust: MetadataRoute.Sitemap = SUPPORT_SLUGS.map((slug) => ({
-    url: `${siteUrl}/trust/${slug}`,
+  /*
+    Support articles — both centres.
+
+    The URL comes from `articleHref` rather than a prefix written here. One
+    corpus feeds /help and /trust, and a sitemap that assumed /trust for every
+    article would have advertised each Help Center page at a URL that 404s while
+    never listing the one that works.
+
+    High priority: these answer the questions people ask before trusting a
+    service with an account, and the ones that otherwise become support load.
+  */
+  const support: MetadataRoute.Sitemap = SUPPORT_ARTICLES.map((article) => ({
+    url: `${siteUrl}${articleHref(article)}`,
     lastModified: now,
     changeFrequency: "monthly",
     priority: 0.6,
@@ -64,9 +72,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: siteUrl, lastModified: now, changeFrequency: "daily", priority: 1 },
     ...downloaders,
+    { url: `${siteUrl}/help`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${siteUrl}/trust`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${siteUrl}/glossary`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
-    ...trust,
+    ...support,
     { url: `${siteUrl}/academy`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
     ...schools,
     { url: `${siteUrl}/learn`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },

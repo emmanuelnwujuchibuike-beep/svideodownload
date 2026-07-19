@@ -2,7 +2,7 @@ import { coursesForSchool } from "@/lib/academy/courses";
 import { teachableSchools } from "@/lib/academy/schools";
 import { LESSON_CATALOG } from "@/lib/learning/catalog";
 import { ALL_PAGES } from "@/lib/seo/seo-pages";
-import { SUPPORT_ARTICLES } from "@/lib/support/articles";
+import { SUPPORT_ARTICLES, articleHref } from "@/lib/support/articles";
 import { GLOSSARY } from "@/lib/support/glossary";
 import { sectionMeta } from "@/lib/support/sections";
 
@@ -30,7 +30,7 @@ import { sectionMeta } from "@/lib/support/sections";
  * that could disagree with the first.
  */
 
-export type SearchKind = "lesson" | "school" | "course" | "trust" | "downloader" | "term";
+export type SearchKind = "lesson" | "school" | "course" | "support" | "downloader" | "term";
 
 export interface SearchDoc {
   id: string;
@@ -57,7 +57,8 @@ export interface SearchDoc {
 }
 
 const WEIGHT: Record<SearchKind, number> = {
-  trust: 10, // people searching these are usually mid-problem
+  // Help and trust articles both. People searching these are usually mid-problem.
+  support: 10,
   downloader: 9, // the product itself
   /*
     Above lessons: someone typing a bare jargon word ("bitrate") wants to know
@@ -79,14 +80,15 @@ export function buildSearchIndex(): SearchDoc[] {
 
   for (const article of SUPPORT_ARTICLES) {
     docs.push({
-      id: `trust:${article.slug}`,
-      kind: "trust",
+      id: `support:${article.slug}`,
+      kind: "support",
       title: article.title,
       summary: article.summary,
-      href: `/trust/${article.slug}`,
+      // Derived, never assumed — one corpus, two centres, one canonical each.
+      href: articleHref(article),
       group: sectionMeta(article.section).name,
       keywords: [],
-      weight: WEIGHT.trust,
+      weight: WEIGHT.support,
     });
   }
 

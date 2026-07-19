@@ -13,6 +13,49 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑19 — Help Center: the corpus had two empty sections and no route
+
+Continuing the Academy/Discovery queue after the glossary. The next open item was
+the Help Center, and the codebase-first check found it in a worse state than
+"not built": `lib/support/types.ts` already declared `getting-started` and
+`troubleshooting`, `sections.ts` gave both presentation metadata and an ordering,
+and the search index already grouped by those names — **with zero articles behind
+them and no route to render them on.** Declared, wired, and empty.
+
+**Shipped:** five articles (saving your first video · what an account adds ·
+installing on your phone · when a link will not download · quality, size and
+playback problems), `/help` and `/help/[slug]`, and the article body extracted to
+`components/support/support-article.tsx` so the two centres are two views over one
+corpus rather than two copies of one renderer.
+
+**Every claim was checked against the product before it was written**, and two
+did not survive: a draft said downloads are "free and unlimited" (the Free tier
+is capped at 30/day on the pricing page) and that separate video/audio streams
+are combined server-side (the code flags `hasAudio` but the merge is not
+established from the frontend — reworded to describe what the reader should do
+instead of asserting a mechanism). The landing FAQ still says "completely free
+and unlimited", which contradicts the pricing page — flagged for the owner.
+
+**The real bug this uncovered:** one corpus, two centres, and *every* consumer
+had hardcoded `/trust/<slug>` — the article route generated static params for the
+whole corpus, the sitemap listed every slug under /trust, the search index built
+/trust hrefs, and the assistant cited them as fact. Adding the first help article
+would have published it at two canonical URLs while advertising the one that
+404s. Search engines pick a winner, ranking splits, and nothing looks broken
+because both URLs render a perfectly good page. Fixed with a single `articleHref`
+derivation; `support.test.ts` now pins that the two route-param lists partition
+the corpus with nothing shared and nothing lost. Verified on the build artifact —
+5 help + 7 trust HTML files, no overlap — and at runtime, where a trust slug
+under /help returns a real 404.
+
+Reachability wired through all three systems per the `c743384` lesson (NAV_LINKS,
+the explicit `MENU_GROUPS` id list, the footer column, the registry), with
+keywords people actually type ("not working", "add to home screen"). Verified:
+tsc, lint, 479 tests, a full build (212 static pages), and screenshots in both
+themes.
+
+---
+
 ## 2026‑07‑18 — Living Content Platform Phase 1: the Reality Ledger (RFC accepted)
 
 Owner asked for a full "Living Content Platform" — Product Genome™, Experience

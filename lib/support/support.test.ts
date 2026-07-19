@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { SUPPORT_ARTICLES, getArticle, relatedArticles } from "./articles";
+import {
+  HELP_ARTICLES,
+  SUPPORT_ARTICLES,
+  TRUST_ARTICLES,
+  articleHref,
+  getArticle,
+  relatedArticles,
+} from "./articles";
 import { GLOSSARY, getTerm } from "./glossary";
 import { SECTIONS } from "./sections";
-import { TRUST_SECTIONS } from "./types";
+import { HELP_SECTIONS, TRUST_SECTIONS } from "./types";
 
 /**
  * Trust & Support corpus gates.
@@ -70,12 +77,49 @@ describe("support corpus", () => {
     }
   });
 
-  it("populates every Trust Center section", () => {
-    // An empty section renders as a heading with nothing under it — the trust
-    // equivalent of a hollow course.
-    for (const id of TRUST_SECTIONS) {
+  it("populates every section of both centres", () => {
+    // An empty section renders as a heading with nothing under it — the support
+    // equivalent of a hollow course. This caught the real state the Help Center
+    // shipped from: `getting-started` and `troubleshooting` existed as section
+    // metadata, in the search index's group labels and in the section ordering,
+    // with zero articles behind them and no route to render them on.
+    for (const id of [...TRUST_SECTIONS, ...HELP_SECTIONS]) {
       const count = SUPPORT_ARTICLES.filter((a) => a.section === id).length;
-      expect(count, `Trust section "${id}" has no articles`).toBeGreaterThan(0);
+      expect(count, `Section "${id}" has no articles`).toBeGreaterThan(0);
+    }
+  });
+
+  it("gives every article exactly one canonical URL", () => {
+    /*
+     * One corpus, two centres, one URL each.
+     *
+     * Before `articleHref` existed, every consumer assumed `/trust/<slug>`: the
+     * article route generated static params for the whole corpus, the sitemap
+     * listed every slug under /trust, the search index built /trust hrefs and the
+     * assistant cited them. The first help article would therefore have been
+     * published at two canonical URLs and advertised at the wrong one — search
+     * engines pick a winner, ranking splits, and nothing looks broken in the UI
+     * because both URLs render a perfectly good page.
+     */
+    for (const a of SUPPORT_ARTICLES) {
+      const href = articleHref(a);
+      const expected = HELP_SECTIONS.includes(a.section) ? "/help" : "/trust";
+      expect(href, `${a.slug} is not under ${expected}`).toBe(`${expected}/${a.slug}`);
+    }
+
+    expect(new Set(SUPPORT_ARTICLES.map(articleHref)).size).toBe(SUPPORT_ARTICLES.length);
+  });
+
+  it("splits the corpus between the centres with nothing lost or shared", () => {
+    // The two route-param lists must partition the corpus: an article in both
+    // gets two pages, an article in neither has no page at all and is reachable
+    // only by typing a URL that does not exist.
+    const help = new Set(HELP_ARTICLES.map((a) => a.slug));
+    const trust = new Set(TRUST_ARTICLES.map((a) => a.slug));
+
+    expect(help.size + trust.size).toBe(SUPPORT_ARTICLES.length);
+    for (const slug of help) {
+      expect(trust.has(slug), `${slug} would render under both centres`).toBe(false);
     }
   });
 

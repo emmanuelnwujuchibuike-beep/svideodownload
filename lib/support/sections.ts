@@ -1,4 +1,4 @@
-import type { SupportSection } from "./types";
+import { HELP_SECTIONS, type SupportSection } from "./types";
 
 /**
  * Section presentation metadata.
@@ -67,4 +67,30 @@ export const SECTIONS: Record<SupportSection, SectionMeta> = {
 
 export function sectionMeta(id: SupportSection): SectionMeta {
   return SECTIONS[id];
+}
+
+/* ----------------------------------- centres ---------------------------------- */
+
+/**
+ * The two views over the corpus.
+ *
+ * A section belongs to exactly one centre, and that mapping is what decides an
+ * article's URL, its breadcrumb, its metadata title and which index page lists
+ * it. Deriving all four from one record is what stops them drifting into
+ * disagreement — a breadcrumb saying "Trust Center" above a page living at /help
+ * is the kind of thing nobody notices for months.
+ */
+export interface CentreMeta {
+  id: "help" | "trust";
+  name: string;
+  href: string;
+}
+
+export const CENTRES: Record<CentreMeta["id"], CentreMeta> = {
+  help: { id: "help", name: "Help Center", href: "/help" },
+  trust: { id: "trust", name: "Trust Center", href: "/trust" },
+};
+
+export function centreOf(section: SupportSection): CentreMeta {
+  return HELP_SECTIONS.includes(section) ? CENTRES.help : CENTRES.trust;
 }

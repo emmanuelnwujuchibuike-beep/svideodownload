@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
-import { articlesInSection } from "@/lib/support/articles";
+import { articleHref, articlesInSection } from "@/lib/support/articles";
 import { SECTIONS } from "@/lib/support/sections";
 import { TRUST_SECTIONS } from "@/lib/support/types";
 import { jsonLd } from "@/lib/seo/json-ld";
@@ -103,7 +103,7 @@ export default function TrustPage() {
                   {articles.map((article) => (
                     <li key={article.slug}>
                       <Link
-                        href={`/trust/${article.slug}`}
+                        href={articleHref(article)}
                         className="group block rounded-xl border border-border/70 bg-card p-5 transition hover:border-primary/40 hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                       >
                         <h3 className="font-medium group-hover:text-primary">{article.title}</h3>

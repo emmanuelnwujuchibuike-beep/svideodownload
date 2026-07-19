@@ -3,7 +3,7 @@ import { teachableSchools } from "@/lib/academy/schools";
 import { claimableProducts, unclaimableProducts } from "@/lib/content/reality-ledger";
 import { LESSON_CATALOG } from "@/lib/learning/catalog";
 import { SHOWCASE_PLATFORMS } from "@/lib/platforms";
-import { SUPPORT_ARTICLES } from "@/lib/support/articles";
+import { SUPPORT_ARTICLES, articleHref } from "@/lib/support/articles";
 import { GLOSSARY } from "@/lib/support/glossary";
 
 /**
@@ -87,16 +87,23 @@ export function learningFacts(): string {
   );
 }
 
-/** Trust topics — the questions where being wrong matters most. */
-export function trustFacts(): string {
+/**
+ * Support topics — the questions where being wrong matters most.
+ *
+ * The href is derived, never written here. An assistant that confidently cites
+ * `/trust/saving-your-first-video` sends people to a 404 in the one moment they
+ * are already stuck, and it does it in a voice that sounds authoritative.
+ */
+export function supportFacts(): string {
   const articles = SUPPORT_ARTICLES.map(
-    (a) => `${a.title} (/trust/${a.slug}) — ${a.summary}`,
+    (a) => `${a.title} (${articleHref(a)}) — ${a.summary}`,
   );
 
   return (
-    `## Security, privacy and safety\n` +
-    `These summaries are authoritative. Do NOT improvise on account security, ` +
-    `privacy or deletion — quote these and link to the article.\n` +
+    `## Help, security, privacy and safety\n` +
+    `These summaries are authoritative. Do NOT improvise on how downloading ` +
+    `works, account security, privacy or deletion — quote these and link to the ` +
+    `article.\n` +
     bullet(articles)
   );
 }
@@ -118,7 +125,7 @@ export function generatedFacts(): string {
       `If asked about a site outside this list, say it is not currently supported.`,
     productFacts(),
     learningFacts(),
-    trustFacts(),
+    supportFacts(),
     glossaryFacts(),
   ].join("\n\n");
 }

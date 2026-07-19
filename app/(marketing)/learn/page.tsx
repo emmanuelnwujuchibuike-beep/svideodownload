@@ -39,6 +39,9 @@ const TOPIC_LABELS: Record<LessonTopic, string> = {
   quality: "Quality",
   organising: "Organising",
   publishing: "Publishing",
+  community: "Community",
+  privacy: "Privacy & security",
+  developer: "Developer",
 };
 
 const TOPIC_ORDER: LessonTopic[] = [
@@ -48,6 +51,9 @@ const TOPIC_ORDER: LessonTopic[] = [
   "quality",
   "organising",
   "publishing",
+  "community",
+  "privacy",
+  "developer",
 ];
 
 export default function LearnIndexPage() {

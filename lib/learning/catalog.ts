@@ -123,6 +123,78 @@ export const LESSON_CATALOG: LessonMeta[] = [
       "how-to-add-subtitles",
     ],
   },
+
+  /* ----------------------------- Community School ---------------------------- */
+  {
+    slug: "how-feeds-and-friends-work",
+    title: "How feeds and friends work",
+    description:
+      "Who sees what you post, how the feed decides its order, and the difference between a friend, a follower and a stranger.",
+    topic: "community",
+    minutes: 5,
+    platformIds: [],
+    relatedActionIds: ["publish-post", "publish-reel"],
+    related: ["who-can-see-your-profile", "how-to-share-without-oversharing"],
+  },
+  {
+    slug: "how-to-share-without-oversharing",
+    title: "How to share without oversharing",
+    description:
+      "Stories, reshares and chat each have a different reach. Knowing which is which is most of what keeps sharing comfortable.",
+    topic: "community",
+    minutes: 5,
+    platformIds: [],
+    relatedActionIds: ["send-to-chat", "publish-story"],
+    related: ["how-feeds-and-friends-work", "who-can-see-your-profile"],
+  },
+
+  /* ------------------------ Security & Privacy School ------------------------ */
+  {
+    slug: "who-can-see-your-profile",
+    title: "Who can see your profile",
+    description:
+      "What is public by default, what a hidden account actually changes, and how to check your own visibility rather than assume it.",
+    topic: "privacy",
+    minutes: 5,
+    platformIds: [],
+    relatedActionIds: [],
+    related: ["blocking-restricting-and-reporting", "how-feeds-and-friends-work"],
+  },
+  {
+    slug: "blocking-restricting-and-reporting",
+    title: "Blocking, restricting and reporting",
+    description:
+      "Three different tools for three different problems — what each one does, what the other person can tell, and when to use which.",
+    topic: "privacy",
+    minutes: 5,
+    platformIds: [],
+    relatedActionIds: [],
+    related: ["who-can-see-your-profile", "how-to-share-without-oversharing"],
+  },
+
+  /* ----------------------------- Developer School ---------------------------- */
+  {
+    slug: "getting-started-with-the-api",
+    title: "Getting started with the Frenzsave API",
+    description:
+      "Authenticating, analyzing a link and requesting a download — the three endpoints that cover almost every integration.",
+    topic: "developer",
+    minutes: 6,
+    platformIds: [],
+    relatedActionIds: [],
+    related: ["handling-rate-limits-and-failures", "how-to-save-a-video"],
+  },
+  {
+    slug: "handling-rate-limits-and-failures",
+    title: "Handling rate limits and failures",
+    description:
+      "Quotas, backoff, and the failure modes that are permanent versus the ones worth retrying — how to build an integration that degrades gracefully.",
+    topic: "developer",
+    minutes: 6,
+    platformIds: [],
+    relatedActionIds: [],
+    related: ["getting-started-with-the-api", "what-you-can-and-cannot-download"],
+  },
 ];
 
 /**

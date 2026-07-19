@@ -15,7 +15,12 @@ export type LessonTopic =
   | "captions"
   | "quality"
   | "organising"
-  | "publishing";
+  | "publishing"
+  /* Added with the Knowledge Campus — see docs/ACADEMY_RFC.md. Each maps to a
+     school whose availability the truth gate has already cleared. */
+  | "community"
+  | "privacy"
+  | "developer";
 
 export interface LessonSection {
   heading: string;

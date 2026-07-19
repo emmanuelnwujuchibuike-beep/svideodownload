@@ -443,7 +443,298 @@ const LESSON_BODIES: Record<string, LessonBody> = {
         a: "At whatever interval you can sustain for months. Consistency compounds and bursts do not.",
       },
     ],
-  },};
+  },
+
+  /* ----------------------------- Community School ---------------------------- */
+
+  "how-feeds-and-friends-work": {
+    intro:
+      "Most confusion about a social feed comes from one question nobody answers plainly: who actually sees this? This covers how the relationship model works, what the feed does with it, and how to check rather than guess.",
+    sections: [
+      {
+        heading: "Friends, followers and everyone else",
+        body: [
+          "A friend connection is mutual — both people agreed to it. That mutual link is what most privacy settings are built on, because it is the only relationship where both sides have consented.",
+          "Following is one-directional. Someone following you has said they want to see your public posts; you have not said anything about them. Treat a follower as a member of the public who has opted in, not as someone you know.",
+          "Everyone else is the public. If a post is public, this is its real audience — not the people you pictured while writing it.",
+        ],
+      },
+      {
+        heading: "How the feed decides what to show",
+        body: [
+          "A feed is ranked, not chronological. It weighs how recent something is, how close your connection to the author is, and what you have engaged with before.",
+          "The practical consequence is that posting more often does not straightforwardly mean being seen more. Two posts competing for the same audience on the same day can suppress each other.",
+          "It also means your own feed is not a reliable sample of what exists. Not seeing someone's posts is more often ranking than absence.",
+        ],
+      },
+      {
+        heading: "Check, do not assume",
+        body: [
+          "The reliable way to know what a stranger sees is to look at your profile while signed out, or from an account that is not connected to you. Settings describe intent; the signed-out view shows the result.",
+          "Do this after any change to your visibility settings rather than trusting that the change did what you expected.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        q: "Does posting more often get me seen more?",
+        a: "Not reliably. Posts compete for the same audience, so two in a day can each reach fewer people than one would have. Consistency over weeks does more than volume in a day.",
+      },
+      {
+        q: "Why can I not see a friend's post?",
+        a: "Usually ranking rather than anything deliberate. Visiting their profile directly shows everything they have shared with you, which is the quickest way to tell the difference.",
+      },
+    ],
+  },
+
+  "how-to-share-without-oversharing": {
+    intro:
+      "Every sharing surface has a different reach, and they are easy to mix up because the action looks the same. Getting this straight is most of what makes sharing feel comfortable rather than risky.",
+    sections: [
+      {
+        heading: "Reach, from narrowest to widest",
+        body: [
+          "A chat message goes to the people in that conversation and nobody else. It is the narrowest thing you can do and the right default for anything you would not want forwarded.",
+          "A story is visible to the audience you have chosen for stories, and it expires. Expiry limits how long something is discoverable; it does not limit who can screenshot it while it is up.",
+          "A post or reel is the widest. If your account is public, assume the audience is the public and the lifetime is indefinite.",
+        ],
+      },
+      {
+        heading: "Reshares change the audience, not the content",
+        body: [
+          "When something you posted is reshared, it reaches an audience you did not choose. That is the point of resharing, and it is also the thing to think about before posting.",
+          "Authors control whether their content may be reshared. If you are sharing something you would not want travelling, turn resharing off at the source rather than relying on the goodwill of everyone who sees it.",
+          "Resharing into chat is deliberately narrower than resharing onward publicly — the same privacy logic as above, applied to other people's content.",
+        ],
+      },
+      {
+        heading: "The forwarding test",
+        body: [
+          "Before sharing anything, ask what happens if it is forwarded once beyond the audience you pictured. If that outcome is fine, the surface you chose is fine.",
+          "If it is not fine, the answer is a narrower surface — not a carefully worded caption. Captions do not travel as reliably as media does.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        q: "Does an expiring story mean it is gone?",
+        a: "It is no longer shown to viewers, which is not the same as being unrecoverable. Anyone who saw it could have captured it. Expiry reduces exposure; it does not undo it.",
+      },
+      {
+        q: "Can I stop something being reshared?",
+        a: "You can turn resharing off for your own content. Once something has already been reshared, that copy exists in its new context.",
+      },
+    ],
+  },
+
+  /* ------------------------ Security & Privacy School ------------------------ */
+
+  "who-can-see-your-profile": {
+    intro:
+      "Profile visibility is a setting people set once and then reason about from memory, often incorrectly. This is what the states actually mean and how to verify yours.",
+    sections: [
+      {
+        heading: "Public by default",
+        body: [
+          "A new account is public: the profile, and anything posted publicly, is visible to anyone including people who are not signed in. That is the correct default for a platform people arrive at from search, but it is worth knowing rather than discovering.",
+          "Public also means indexable. Search engines can reach a public profile, which is a different and longer-lived kind of visibility than someone scrolling past.",
+        ],
+      },
+      {
+        heading: "What a hidden account changes",
+        body: [
+          "Hiding an account narrows its reach to friends. It is a visibility control: the account still works normally, you can still post, and your friends see everything as before.",
+          "It is deliberately separate from suspension, which is an enforcement action that stops an account being used at all. They are different things with different causes, and one does not imply the other.",
+          "Because hiding is friends-only rather than fully private, the honest way to think about it is: people you have mutually agreed to can see this, and nobody else can.",
+        ],
+      },
+      {
+        heading: "Verify from the outside",
+        body: [
+          "Open your profile in a private browsing window while signed out. That is what the public sees, with no cached assumptions.",
+          "Do this after every visibility change. A settings screen tells you what you asked for; the signed-out view tells you what happened.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        q: "Does hiding my account delete anything?",
+        a: "No. It changes who can reach your profile going forward. Nothing you posted is removed, and reversing it restores the previous visibility.",
+      },
+      {
+        q: "Is a hidden account the same as a suspended one?",
+        a: "No, and the difference matters. Hiding is a visibility choice you make. Suspension is an enforcement action that locks the account. They are tracked separately.",
+      },
+    ],
+  },
+
+  "blocking-restricting-and-reporting": {
+    intro:
+      "Three tools that get used interchangeably and should not be. They solve different problems, and picking the wrong one is why people often feel none of them worked.",
+    sections: [
+      {
+        heading: "Blocking — sever the connection",
+        body: [
+          "Blocking removes the relationship in both directions. The other person cannot message you, cannot see your content through the normal surfaces, and any mutual connection is broken.",
+          "It is the strongest tool and it is not subtle. Someone who was interacting with you and suddenly cannot will usually work out that they were blocked. Use it when you want the contact to stop and do not mind that being evident.",
+        ],
+      },
+      {
+        heading: "Restricting — limit reach quietly",
+        body: [
+          "Restricting narrows what someone can do without severing anything. It is the right tool when the situation is awkward rather than dangerous — someone you would rather not block outright, but whose reach you want reduced.",
+          "The advantage is that it is quiet. Nothing announces it, so it does not escalate a situation that escalation would make worse.",
+        ],
+      },
+      {
+        heading: "Reporting — involve moderation",
+        body: [
+          "Reporting is the only one of the three that tells anyone else. Blocking and restricting change your experience; reporting asks for a decision about whether something breaks the rules.",
+          "Report when the behaviour would be a problem regardless of who it happened to. Block when you simply want it to stop for you. These are frequently both true, and doing both is normal.",
+        ],
+      },
+      {
+        heading: "Choosing quickly",
+        body: [
+          "If you feel unsafe: block, then report. Stopping contact first is the priority; the report can follow.",
+          "If it is uncomfortable but not threatening: restrict, and see whether that settles it.",
+          "If it is not aimed at you but breaks the rules: report, and leave your own connections alone.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        q: "Will they be told?",
+        a: "No notification is sent for any of the three. Blocking tends to become obvious through its effects; restricting generally does not.",
+      },
+      {
+        q: "Can I undo it?",
+        a: "Blocking and restricting can both be reversed, though unblocking does not restore a mutual connection automatically — that has to be re-established.",
+      },
+    ],
+  },
+
+  /* ----------------------------- Developer School ---------------------------- */
+
+  "getting-started-with-the-api": {
+    intro:
+      "The Frenzsave API is small on purpose: authenticate, analyze a link, request a download. Almost every integration is those three calls, and this walks through each one.",
+    sections: [
+      {
+        heading: "Authentication",
+        body: [
+          "Every request carries your API key as a bearer token in the Authorization header. There is no session, no cookie and no OAuth dance — one header on every call.",
+          "Keys are secrets. They belong on a server, in an environment variable. A key shipped in browser JavaScript or a mobile bundle is public the moment it ships, and anyone who reads it can spend your quota.",
+        ],
+        steps: [
+          {
+            title: "Store the key server-side",
+            text: "Put it in an environment variable your server reads at runtime. Never commit it, and never reference it from client code.",
+          },
+          {
+            title: "Send it as a bearer token",
+            text: "Set `Authorization: Bearer <your key>` on every request. A missing or malformed key returns 401.",
+          },
+          {
+            title: "Proxy from your own backend",
+            text: "If a browser or app needs this data, call your backend and have it call the API. That keeps the key server-side and lets you apply your own limits.",
+          },
+        ],
+      },
+      {
+        heading: "POST /v1/analyze — inspect before committing",
+        body: [
+          "Analyze takes a URL and returns what is actually available: the title, the duration, and the renditions the source offers. It does not produce a file.",
+          "This is the call to make first in almost every flow. It is how you find out whether a link resolves at all, and it lets you show a user real options instead of guessing which formats exist.",
+        ],
+      },
+      {
+        heading: "POST /v1/download — request the file",
+        body: [
+          "Download returns metadata plus a download URL for the rendition you asked for. Fetch that URL to get the bytes.",
+          "Treat the returned URL as short-lived and single-purpose. Request it when you are ready to use it rather than storing it and hoping it still resolves later.",
+        ],
+      },
+      {
+        heading: "GET /v1/usage — know where you stand",
+        body: [
+          "Usage reports your consumption against your quota. Polling it occasionally is far better than discovering your limit by being rejected mid-job.",
+          "It is also the honest way to build a dashboard for your own users, rather than counting requests yourself and drifting out of sync.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        q: "Do I need to call analyze before download?",
+        a: "Not technically, but you almost always should. Analyze tells you which renditions exist, so download can request one that is actually available rather than failing on a guess.",
+      },
+      {
+        q: "Can I call the API from the browser?",
+        a: "You should not. It would expose your key to anyone who opens developer tools. Proxy through your own backend instead.",
+      },
+    ],
+  },
+
+  "handling-rate-limits-and-failures": {
+    intro:
+      "The difference between an integration that survives contact with production and one that does not is almost entirely how it handles the unhappy path. Two things matter: respecting your quota, and telling permanent failures apart from temporary ones.",
+    sections: [
+      {
+        heading: "Quotas are daily and tier-based",
+        body: [
+          "Each plan has a daily request allowance, and requests count against it whether or not they succeed. A retry loop against a permanent failure will burn a day's quota surprisingly fast.",
+          "Check `/v1/usage` rather than counting locally. Your own counter drifts the moment a request times out and you are unsure whether it landed.",
+        ],
+      },
+      {
+        heading: "Back off, do not hammer",
+        body: [
+          "When you are rate-limited, wait and retry with an increasing delay — double it each time, with a cap. Retrying immediately makes the situation worse for you and everyone else on the key.",
+          "Add a small random jitter to the delay. Without it, everything that failed together retries together, and you rebuild the spike you were trying to avoid.",
+        ],
+        steps: [
+          {
+            title: "Respect the response",
+            text: "If a response tells you how long to wait, wait that long. A server-supplied delay beats any heuristic you invent.",
+          },
+          {
+            title: "Grow the delay",
+            text: "Double the wait on each attempt — one second, two, four — up to a ceiling. Stop after a small number of attempts rather than retrying forever.",
+          },
+          {
+            title: "Jitter it",
+            text: "Randomise the delay slightly so concurrent clients do not synchronise into a thundering herd.",
+          },
+        ],
+      },
+      {
+        heading: "Permanent versus temporary",
+        body: [
+          "Some failures will never succeed no matter how many times you try. Private content, deleted posts, and links that require a login are permission boundaries — retrying is pure waste, and it spends quota.",
+          "Temporary failures are worth retrying: timeouts, rate limits, and transient upstream errors. These usually clear on their own.",
+          "Encode this distinction explicitly in your client. The common bug is a blanket retry that treats a deleted video like a network blip and burns hundreds of requests discovering it is still deleted.",
+        ],
+      },
+      {
+        heading: "Degrade honestly",
+        body: [
+          "When something fails permanently, tell the user what happened in terms they can act on: the post is private, or it was removed. 'Something went wrong' sends people to support with nothing useful.",
+          "When you are out of quota, say so rather than presenting it as a failure of the content. They are different problems with different fixes.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        q: "Do failed requests count against my quota?",
+        a: "Assume they do. Build on that assumption and a retry storm cannot quietly consume a day's allowance.",
+      },
+      {
+        q: "How many times should I retry?",
+        a: "A small number — three or four — with an increasing delay, and only for failures that could plausibly clear. Anything permanent should fail on the first attempt.",
+      },
+    ],
+  },
+};
 
 /* --------------------------------- queries -------------------------------- */
 

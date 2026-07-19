@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { getLessonMeta } from "@/lib/learning/catalog";
+import { bodySlugs } from "@/lib/learning/lessons";
 import { getModule } from "@/lib/platform/modules";
 
 import { COURSES, courseMinutes, coursesForSchool } from "./courses";
@@ -198,6 +199,21 @@ describe("Curriculum", () => {
         seen.set(slug, c.slug);
       }
     }
+  });
+
+  it("only links to lessons that have a BODY, not just metadata", () => {
+    /*
+     * The campus links each course lesson to `/learn/[slug]`, and that route
+     * renders from LESSON_BODIES. A lesson with a catalogue entry but no body
+     * would render as a perfectly convincing card that 404s on click — and the
+     * card looks right, so nothing would surface it. This is the check that would
+     * have caught it.
+     */
+    const withBody = new Set(bodySlugs());
+    const broken = COURSES.flatMap((c) =>
+      c.lessonSlugs.filter((s) => !withBody.has(s)).map((s) => `${c.slug} → /learn/${s}`),
+    );
+    expect(broken, `Courses linking to body-less lessons:\n  ${broken.join("\n  ")}`).toHaveLength(0);
   });
 
   it("derives course length from the lesson catalogue", () => {

@@ -92,6 +92,57 @@ export const COURSES: Course[] = [
     ],
     order: 2,
   },
+
+  /* ----------------------------- Community School ---------------------------- */
+  {
+    slug: "sharing-and-audience",
+    schoolId: "community",
+    title: "Sharing and audience",
+    description:
+      "Who actually sees what you post, how the feed decides its order, and how the sharing surfaces differ in reach.",
+    level: "intro",
+    lessonSlugs: ["how-feeds-and-friends-work", "how-to-share-without-oversharing"],
+    outcomes: [
+      "Explain the difference between a friend, a follower and the public",
+      "Predict the real audience of a post, story, reshare or chat message",
+      "Check what a stranger sees rather than assuming it from settings",
+    ],
+    order: 1,
+  },
+
+  /* ------------------------ Security & Privacy School ------------------------ */
+  {
+    slug: "privacy-and-safety-controls",
+    schoolId: "security",
+    title: "Privacy and safety controls",
+    description:
+      "What is public by default, what hiding an account changes, and which of blocking, restricting and reporting fits a given problem.",
+    level: "intro",
+    lessonSlugs: ["who-can-see-your-profile", "blocking-restricting-and-reporting"],
+    outcomes: [
+      "Verify your own profile visibility from outside your account",
+      "Describe what a hidden account changes, and how it differs from suspension",
+      "Choose correctly between blocking, restricting and reporting",
+    ],
+    order: 1,
+  },
+
+  /* ----------------------------- Developer School ---------------------------- */
+  {
+    slug: "building-on-the-api",
+    schoolId: "developer",
+    title: "Building on the Frenzsave API",
+    description:
+      "Authentication, the three endpoints, and the error handling that separates an integration that survives production from one that does not.",
+    level: "core",
+    lessonSlugs: ["getting-started-with-the-api", "handling-rate-limits-and-failures"],
+    outcomes: [
+      "Authenticate correctly and keep the API key off the client",
+      "Use analyze, download and usage for their intended purposes",
+      "Back off on rate limits and stop retrying permanent failures",
+    ],
+    order: 1,
+  },
 ];
 
 /* ----------------------------------- reads ----------------------------------- */

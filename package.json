@@ -15,6 +15,7 @@
     "backfill:stream": "node scripts/backfill-stream.mjs",
     "backfill:r2": "node scripts/backfill-r2.mjs",
     "backfill:thumbs": "node scripts/backfill-thumbnails.mjs",
+    "backfill:posters": "node scripts/backfill-video-posters.mjs",
     "setup:r2-cors": "node scripts/setup-r2-cors.mjs",
     "format": "prettier --write .",
     "content:seed": "node scripts/content-compile.mjs seed",

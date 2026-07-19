@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
+
+import { CATALOGUES, MESSAGE_KEYS, catalogueCoverage, translate } from "./messages";
 
 import {
   formatBytes,
@@ -144,5 +148,108 @@ describe("formatting", () => {
 
   it("formats lists with the locale's conjunction", () => {
     expect(formatList(["A", "B", "C"], "en")).toBe("A, B, and C");
+  });
+});
+
+/* ---------------------------------- catalogue --------------------------------- */
+
+describe("UI message catalogue", () => {
+  it("declares a catalogue for every locale, empty rather than absent", () => {
+    /*
+     * An absent catalogue is indistinguishable from a locale nobody considered;
+     * an empty one is a measured 0% that shows up in coverage and in the admin
+     * view as work outstanding.
+     */
+    for (const locale of LOCALES) {
+      expect(CATALOGUES[locale.code], `${locale.code} has no catalogue`).toBeDefined();
+    }
+  });
+
+  it("measures coverage instead of declaring it", () => {
+    // The bug this replaced: a hand-maintained table saying `en: 1`, which would
+    // have kept reporting 100% the first time anyone added an untranslated key.
+    expect(coverage("en")).toBe(1);
+    expect(catalogueCoverage("en")).toBe(coverage("en"));
+
+    for (const locale of LOCALES.filter((l) => l.code !== "en")) {
+      expect(coverage(locale.code), `${locale.code} claims coverage it does not have`).toBe(0);
+    }
+  });
+
+  it("counts a partially filled catalogue honestly", () => {
+    const total = MESSAGE_KEYS.length;
+    expect(total).toBeGreaterThan(10);
+
+    // Simulated rather than shipped: proves the arithmetic without inventing
+    // translations to prove it with.
+    const half = Math.floor(total / 2);
+    const filled = Object.fromEntries(MESSAGE_KEYS.slice(0, half).map((k) => [k, "x"]));
+    const measured = MESSAGE_KEYS.filter((k) => (filled as Record<string, string>)[k]).length / total;
+    expect(measured).toBeCloseTo(half / total);
+  });
+
+  it("never renders a raw key", () => {
+    /*
+     * The failure that actually ships: a missing string resolves to its own key
+     * and `footer.blurb` appears in the page. Falling back per KEY to English
+     * keeps a half-translated locale legible instead of taking the page down.
+     */
+    for (const key of MESSAGE_KEYS) {
+      for (const locale of LOCALES) {
+        const value = translate(locale.code, key);
+        expect(value, `${locale.code}/${key} resolved to the key`).not.toBe(key);
+        expect(value.trim().length, `${locale.code}/${key} resolved to nothing`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("falls back to English for an untranslated key", () => {
+    expect(translate("fr", "nav.pricing")).toBe(translate("en", "nav.pricing"));
+  });
+
+  it("interpolates named placeholders and leaves unknown ones visible", () => {
+    // Named, not positional: word order moves between languages, and {0}/{1}
+    // quietly forbids a translator from putting the value where grammar needs it.
+    expect(translate("en", "footer.copyright", { year: 2026 })).toContain("2026");
+    expect(translate("en", "footer.copyright")).toContain("{year}");
+  });
+
+  it("leaves no key unused by the interface", () => {
+    /*
+     * A catalogue that accumulates dead keys is a translation bill nobody is
+     * paying for — every unused string is real work asked of a translator for a
+     * screen that does not exist. This is the same dead-code check that caught
+     * `lib/i18n` itself being imported by nothing.
+     */
+    const sources = [
+      readFileSync("components/layout/site-header.tsx", "utf8"),
+      readFileSync("components/layout/site-footer.tsx", "utf8"),
+      readFileSync("lib/i18n/i18n.test.ts", "utf8"),
+    ].join("\n");
+
+    const unused = MESSAGE_KEYS.filter((key) => !sources.includes(key));
+    expect(unused, `Keys nobody renders:\n  ${unused.join("\n  ")}`).toHaveLength(0);
+  });
+});
+
+describe("the catalogue is actually wired in", () => {
+  it("leaves no hardcoded nav label in the header", () => {
+    /*
+     * The finding this pins: `lib/i18n` shipped complete, tested, and imported by
+     * ZERO files — a foundation nothing consumes looks done in the commit log and
+     * is invisible to users. Asserting the consumer, not just the library.
+     */
+    const header = readFileSync("components/layout/site-header.tsx", "utf8");
+    expect(header).toContain("@/lib/i18n/messages");
+    expect(header).toMatch(/labelKey:\s*"nav\./);
+    expect(header, "a nav label is still a literal").not.toMatch(/label:\s*"(Home|Pricing|Academy)"/);
+  });
+
+  it("drives <html lang/dir> from the registry", () => {
+    // A stale `dir="ltr"` mis-renders every RTL page regardless of translation
+    // quality, because it drives the browser's own bidi algorithm.
+    const layout = readFileSync("app/layout.tsx", "utf8");
+    expect(layout).toContain("isRtl(");
+    expect(layout, "lang is still a literal").not.toContain('<html lang="en" dir="ltr"');
   });
 });

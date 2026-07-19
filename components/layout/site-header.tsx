@@ -17,6 +17,8 @@ import { DESTINATIONS } from "@/lib/navigation/registry";
 import type { Destination } from "@/lib/navigation/types";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
+import { DEFAULT_LOCALE } from "@/lib/i18n/locales";
+import { translator, type MessageKey } from "@/lib/i18n/messages";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
 import { cn } from "@/lib/utils";
 
@@ -29,12 +31,20 @@ import { cn } from "@/lib/utils";
  * class of defect the Reality Ledger exists to catch, just in the chrome instead
  * of the copy.
  */
-const NAV_LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/features", label: "Features" },
-  { href: "/#products", label: "Products" },
-  { href: "/#download", label: "Download" },
-  { href: "/pricing", label: "Pricing" },
+/*
+  Labels are message KEYS, not literals.
+
+  A nav row is the highest-traffic string on the site and the first thing a
+  visitor reads in their own language or does not. Keying it means the row is
+  translated by the catalogue rather than by a second hand-maintained list that
+  would drift out of step with this one.
+*/
+const NAV_LINKS: { href: string; labelKey: MessageKey }[] = [
+  { href: "/", labelKey: "nav.home" },
+  { href: "/features", labelKey: "nav.features" },
+  { href: "/#products", labelKey: "nav.products" },
+  { href: "/#download", labelKey: "nav.download" },
+  { href: "/pricing", labelKey: "nav.pricing" },
   /*
     Academy sits in the top nav rather than only in the footer. It is the deepest
     content on the site and the hub the ~148 generated downloader pages link into,
@@ -44,7 +54,7 @@ const NAV_LINKS = [
     Blog moves to the footer to keep this row from overflowing on narrow desktop
     widths; it remains linked there and in the sitemap.
   */
-  { href: "/academy", label: "Academy" },
+  { href: "/academy", labelKey: "nav.academy" },
   /*
     "Support" points at the Help Center rather than straight at the contact form.
     Someone clicking it is usually mid-problem with a question we have already
@@ -52,7 +62,7 @@ const NAV_LINKS = [
     prominently for the ones we have not. Contact stays reachable from there, from
     the footer's Company column, and from the mobile menu.
   */
-  { href: "/help", label: "Support" },
+  { href: "/help", labelKey: "nav.support" },
 ];
 
 /**
@@ -96,6 +106,12 @@ const DOWNLOADERS = getPrimaryPages();
  * provides the mobile top bar.
  */
 export function SiteHeader({ social = false, desktopHidden = false }: { social?: boolean; desktopHidden?: boolean }) {
+  /*
+    Locale is fixed to the default until a second locale is genuinely translated.
+    It is resolved through one call rather than scattered literals so the switch
+    is a one-line change here, not an audit of every string in the header.
+  */
+  const t = translator(DEFAULT_LOCALE);
   const [open, setOpen] = useState(false);
   /**
    * Slide state, kept separate from mount state.
@@ -192,7 +208,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
               href={l.href}
               className="relative transition-colors hover:text-foreground after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-primary after:transition-all hover:after:w-full"
             >
-              {l.label}
+              {t(l.labelKey)}
             </Link>
           ))}
         </nav>
@@ -232,7 +248,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
             <SearchTriggerIcon />
             <button
               type="button"
-              aria-label={open ? "Close menu" : "Open menu"}
+              aria-label={open ? t("nav.closeMenu") : t("nav.openMenu")}
               aria-expanded={open}
               // Keyed off `shown`, not `open`: mid-slide-out the sheet is still
               // mounted, and keying off `open` would try to close an already
@@ -478,7 +494,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
                     className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full"
                   />
                   <Fingerprint className="h-5 w-5" />
-                  Launch App
+                  {t("nav.launchApp")}
                   <ArrowRight className="h-5 w-5" />
                 </Link>
               ) : null}

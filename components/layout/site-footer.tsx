@@ -2,6 +2,8 @@ import { Facebook, Instagram, Send, Youtube } from "lucide-react";
 import Link from "next/link";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
+import { DEFAULT_LOCALE, type LocaleCode } from "@/lib/i18n/locales";
+import { translator } from "@/lib/i18n/messages";
 import { FooterTools } from "@/components/monetization/footer-tools";
 import { SecretAdminGesture } from "@/features/account/secret-admin";
 
@@ -31,23 +33,23 @@ const SOCIALS: { label: string; href: string; icon: typeof Facebook }[] = [
  *
  * Replace the action with a real endpoint when a subscriber list exists.
  */
-function NewsletterForm() {
+function NewsletterForm({ t }: { t: Translate }) {
   return (
     <form action="/contact" method="get" className="mt-4 flex items-center gap-2">
       <label htmlFor="footer-email" className="sr-only">
-        Email address
+        {t("footer.emailLabel")}
       </label>
       <input
         id="footer-email"
         name="email"
         type="email"
         required
-        placeholder="Enter your email"
+        placeholder={t("footer.emailPlaceholder")}
         className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-card px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-foreground/30"
       />
       <button
         type="submit"
-        aria-label="Subscribe"
+        aria-label={t("footer.subscribe")}
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white transition hover:opacity-95 active:scale-[0.98]"
       >
         <Send className="h-4 w-4" />
@@ -56,7 +58,22 @@ function NewsletterForm() {
   );
 }
 
-export function SiteFooter() {
+/** Bound translator, threaded to the sub-components rather than re-derived. */
+type Translate = ReturnType<typeof translator>;
+
+/**
+ * `locale` is a prop with a default rather than a read of request state.
+ *
+ * The footer renders on `/`, which is `force-static`. Reading a cookie or a
+ * header here to detect a language would opt the whole route out of static
+ * generation — the exact defect that cost the front door its CDN caching. When a
+ * second locale is genuinely translated, the locale arrives through routing (a
+ * path prefix, prerendered per language) and is passed down; this signature does
+ * not change.
+ */
+export function SiteFooter({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } = {}) {
+  const t = translator(locale);
+
   return (
     <footer className="relative border-t border-border/40 pt-14 pb-10">
       {/* Top gradient line */}
@@ -72,8 +89,7 @@ export function SiteFooter() {
             <span className="text-gradient">Frenz</span>
           </SecretAdminGesture>
           <p className="mt-3 max-w-[240px] text-sm leading-relaxed text-muted-foreground">
-            Frenz is your all-in-one super app for downloading, creating, sharing and
-            connecting. Save more. Do more. Be more.
+            {t("footer.blurb")}
           </p>
           {/* Social row, per the mockup. Only networks we actually publish on get a
               link; the rest would be a dead icon, which is chrome-level drift. */}
@@ -93,7 +109,7 @@ export function SiteFooter() {
         </div>
 
         <FooterColumn
-          title="Products"
+          title={t("footer.products")}
           links={[
             ["Download", "/downloads"],
             ["Community", "/home"],
@@ -102,7 +118,7 @@ export function SiteFooter() {
           ]}
         />
         <FooterColumn
-          title="Company"
+          title={t("footer.company")}
           links={[
             ["About Us", "/about"],
             ["Blog", "/blog"],
@@ -116,7 +132,7 @@ export function SiteFooter() {
           called Learn is how trust content goes unread.
         */}
         <FooterColumn
-          title="Learn"
+          title={t("footer.learn")}
           links={[
             ["Academy", "/academy"],
             ["Guides", "/learn"],
@@ -124,7 +140,7 @@ export function SiteFooter() {
           ]}
         />
         <FooterColumn
-          title="Support"
+          title={t("footer.support")}
           links={[
             ["Help Center", "/help"],
             ["Trust Center", "/trust"],
@@ -137,11 +153,11 @@ export function SiteFooter() {
 
         {/* Stay in the Loop — the mockup's newsletter capture. */}
         <div>
-          <h3 className="text-sm font-semibold tracking-wide">Stay in the Loop</h3>
+          <h3 className="text-sm font-semibold tracking-wide">{t("footer.newsletterTitle")}</h3>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            Get the latest updates, tips and offers straight to your inbox.
+            {t("footer.newsletterBody")}
           </p>
-          <NewsletterForm />
+          <NewsletterForm t={t} />
         </div>
       </div>
 
@@ -152,10 +168,9 @@ export function SiteFooter() {
 
       <div className="container mt-12 flex flex-col items-start justify-between gap-3 border-t border-border/40 pt-6 text-xs text-muted-foreground/70 sm:flex-row sm:items-center">
         <p>
-          © {new Date().getFullYear()} Frenz. Please respect platform
-          terms and copyright. Download only content you have the right to save.
+          {t("footer.copyright", { year: new Date().getFullYear() })}
         </p>
-        <p className="shrink-0">Built with precision &amp; care.</p>
+        <p className="shrink-0">{t("footer.builtWith")}</p>
       </div>
     </footer>
   );

@@ -15,6 +15,7 @@ import { CommandCenterMount } from "@/features/navigation/command-center-mount";
 import { RegisterServiceWorker } from "@/features/notifications/register-sw";
 import { ScrollPerfMonitor } from "@/features/perf/scroll-perf-monitor";
 import { WebVitals } from "@/features/perf/web-vitals";
+import { DEFAULT_LOCALE, getLocale, isRtl } from "@/lib/i18n/locales";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
 import "./globals.css";
@@ -164,7 +165,23 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" dir="ltr" suppressHydrationWarning>
+    /*
+      lang/dir come from the locale registry, not from two literals.
+
+      They were hardcoded `en`/`ltr`, which is correct today and silently wrong
+      the moment Arabic ships: `dir` drives the browser's own bidi algorithm, so
+      a stale `ltr` mis-renders every RTL page no matter how good the translation
+      is. Deriving both from one place means the first RTL locale flips the
+      document without anyone remembering this file exists.
+
+      Still a build-time constant — `DEFAULT_LOCALE` is resolved statically, so
+      this does not read request state and cannot un-static the marketing routes.
+    */
+    <html
+      lang={getLocale(DEFAULT_LOCALE)?.bcp47 ?? "en"}
+      dir={isRtl(DEFAULT_LOCALE) ? "rtl" : "ltr"}
+      suppressHydrationWarning
+    >
       <head>
         {/* Theme class MUST be set from <head>, before any first paint — a
             <body> placement leaves a paint window on streamed responses

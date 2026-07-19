@@ -27,6 +27,8 @@
  * of it is translated — see `localeAvailability`.
  */
 
+import { catalogueCoverage } from "./messages";
+
 export type LocaleCode = "en" | "fr" | "ar" | "sw" | "pt" | "ha";
 
 export type TextDirection = "ltr" | "rtl";
@@ -73,21 +75,20 @@ export const DEFAULT_LOCALE: LocaleCode = "en";
 export type LocaleAvailability = "live" | "partial" | "planned";
 
 /**
- * Locales with translated strings, and how complete they are.
+ * Fraction of strings translated, 0 to 1 — MEASURED from the catalogue.
  *
- * Today this is English only, stated plainly rather than padded. When the
- * translation pipeline (0086 `locales`/`translations`) begins producing strings,
- * this is derived from coverage instead of declared — the declaration is a
- * placeholder for a measurement, and it is marked as such so nobody mistakes it
- * for a claim that six languages ship.
+ * This used to be a hand-maintained table declaring `en: 1`, with a note saying
+ * it was a placeholder for a measurement. It has been replaced by the
+ * measurement. A coverage number that has to be remembered is wrong the first
+ * time anyone adds a string, and it is wrong in the dangerous direction: it
+ * reports a locale as complete while new keys quietly fall back to English.
+ *
+ * Counting the real catalogue means a locale becomes offerable the moment it is
+ * genuinely translated and stops being offerable the moment the key space grows
+ * past it, with nobody having to notice either event.
  */
-const TRANSLATION_COVERAGE: Partial<Record<LocaleCode, number>> = {
-  en: 1,
-};
-
-/** Fraction of strings translated, 0 to 1. */
 export function coverage(code: LocaleCode): number {
-  return TRANSLATION_COVERAGE[code] ?? 0;
+  return catalogueCoverage(code);
 }
 
 /**

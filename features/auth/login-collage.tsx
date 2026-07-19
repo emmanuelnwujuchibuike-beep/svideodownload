@@ -55,47 +55,81 @@ export function LoginCollage() {
       arrives. The visual result is unchanged; only the dependency is.
     */
     <div className="relative mx-auto aspect-[10/11] max-h-[46vh] w-full max-w-[420px]">
-      {TILES.map((t, i) => (
-        <motion.div
-          key={t.img}
-          className={cn("absolute", t.z)}
-          style={{ top: t.pos.top, left: t.pos.left, width: t.pos.width, height: t.pos.height }}
-          initial={{ opacity: 0, scale: 0.55, rotate: t.rotate - 10, y: 18 }}
-          animate={{ opacity: 1, scale: 1, rotate: t.rotate, y: 0 }}
-          transition={{ delay: 0.05 + i * 0.09, type: "spring", stiffness: 140, damping: 15 }}
-        >
-          {/* Inner wrapper drifts forever (motion-safe) once it has settled */}
-          <div className={cn("relative h-full w-full overflow-hidden rounded-[22px] bg-gradient-to-br shadow-xl ring-1 ring-inset ring-white/15", t.grad, i % 2 ? "motion-safe:animate-drift" : "motion-safe:animate-drift-slow")}>
-            {/*
-              A plain <img> pointing straight at the WebP, NOT next/image.
+      {TILES.map((t, i) => {
+        const isHero = i === 0;
 
-              These sources are ALREADY 640px WebP (see README): next/image's
-              only jobs — format conversion and resizing — are already done, so
-              routing them through `/_next/image` just adds an on-demand
-              optimizer transform to the critical path. Measured: that transform,
-              cold under 4x CPU, made the centre hero the LCP element at ~4.9s
-              even though the file is 68KB and TTFB was 49ms. Bypassing it lets
-              the image arrive as fast as any static asset.
-
-              The centre hero (i === 0) is eager + fetchpriority=high so it lands
-              first; the rest lazy-load. `decoding="async"` keeps decode off the
-              main thread. The collage is decorative (`aria-hidden`), so if any
-              tile is slow the auth block below is unaffected.
-            */}
-            <img
-              src={`/login/${t.img}`}
-              alt=""
-              aria-hidden
-              loading={i === 0 ? "eager" : "lazy"}
-              fetchPriority={i === 0 ? "high" : "auto"}
-              decoding="async"
-              className="absolute inset-0 h-full w-full object-cover"
-            />
+        // A plain <img> straight at the WebP — see the note below Tile().
+        const img = (
+          <img
+            src={`/login/${t.img}`}
+            alt=""
+            aria-hidden
+            loading={isHero ? "eager" : "lazy"}
+            fetchPriority={isHero ? "high" : "auto"}
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        );
+        const inner = (
+          <div
+            className={cn(
+              "relative h-full w-full overflow-hidden rounded-[22px] bg-gradient-to-br shadow-xl ring-1 ring-inset ring-white/15",
+              t.grad,
+              i % 2 ? "motion-safe:animate-drift" : "motion-safe:animate-drift-slow",
+            )}
+          >
+            {img}
             {/* Subtle depth: soft top light + bottom shade, no badges */}
-            <span aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-white/5" />
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-white/5"
+            />
           </div>
-        </motion.div>
-      ))}
+        );
+
+        /*
+          THE LCP TILE IS NOT ANIMATED IN.
+
+          Every tile used to be a `motion.div` with `initial={{ opacity: 0 }}`.
+          framer-motion writes that initial state into the SSR HTML as an inline
+          `opacity: 0`, so the centre hero — which is the LCP element — was
+          painted at ZERO opacity until JS hydrated and ran its entrance spring.
+          LCP measures when an element becomes VISIBLE, so it could not fire
+          until hydration finished: measured live at 8-11s on slow 4G + 4x CPU,
+          while the 68KB image itself and FCP were both ~1-3s. The image was
+          never the bottleneck; a JS-gated opacity was.
+
+          The hero now renders as a plain div at full opacity, so it is visible
+          in the server HTML and its LCP is gated only by the image arriving. It
+          keeps the perpetual drift (CSS, not JS). The other six still spring in
+          — they are not LCP candidates, so animating them costs nothing that
+          matters.
+        */
+        if (isHero) {
+          return (
+            <div
+              key={t.img}
+              className={cn("absolute", t.z)}
+              style={{ top: t.pos.top, left: t.pos.left, width: t.pos.width, height: t.pos.height, transform: `rotate(${t.rotate}deg)` }}
+            >
+              {inner}
+            </div>
+          );
+        }
+
+        return (
+          <motion.div
+            key={t.img}
+            className={cn("absolute", t.z)}
+            style={{ top: t.pos.top, left: t.pos.left, width: t.pos.width, height: t.pos.height }}
+            initial={{ opacity: 0, scale: 0.55, rotate: t.rotate - 10, y: 18 }}
+            animate={{ opacity: 1, scale: 1, rotate: t.rotate, y: 0 }}
+            transition={{ delay: 0.05 + i * 0.09, type: "spring", stiffness: 140, damping: 15 }}
+          >
+            {inner}
+          </motion.div>
+        );
+      })}
     </div>
   );
 }

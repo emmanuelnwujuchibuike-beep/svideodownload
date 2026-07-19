@@ -36,6 +36,36 @@ import { useRef } from "react";
  * descendants once the ~240ms animation finishes.
  */
 
+/*
+ * CLIENT-ONLY navigation state — never read or written during a server render.
+ * See the `typeof window` guard in the component, which is what enforces that.
+ *
+ * ── The bug this prevents, measured ──────────────────────────────────────────
+ *
+ * These are module-level and mutable, and they used to be mutated DURING RENDER.
+ * A build renders every prerendered page in ONE Node process, so `firstMount`
+ * flipped false on the first page and `navStack` then accumulated across all the
+ * others. The result: a direction class was baked into the STATIC HTML of nearly
+ * every page. Measured on the build immediately before this fix:
+ *
+ *     170 of 174 prerendered pages shipped `page-transition-forward` (or -back)
+ *     in their HTML — including `/` itself, the whole blog, and all ~100 SEO
+ *     downloader pages.
+ *
+ * Two consequences, both user-visible:
+ *
+ *   1. Those pages SLID on cold entry — the one moment this component's own docs
+ *      say must not animate, because the boot splash owns that frame.
+ *   2. The client always starts fresh and computes "", so its first render
+ *      disagreed with the server HTML on every one of those pages. React's
+ *      hydration-mismatch warning is development-only, which is exactly why this
+ *      survived: dev showed a warning nobody chased, and production showed
+ *      nothing at all while still shipping the wrong markup.
+ *
+ * The same mechanism also let one visitor's navigation history influence the
+ * HTML rendered for another on any dynamically-rendered route, since the module
+ * lives for the lifetime of the server process.
+ */
 let firstMount = true;
 const navStack: string[] = [];
 
@@ -88,6 +118,26 @@ export function PageTransition({
   // twice for one navigation.
   const cls = useRef<string | null>(null);
   if (cls.current === null) {
+    /*
+     * The SERVER never computes a direction class, and never touches the module
+     * state above. This is the whole fix — see the note on `firstMount`.
+     *
+     * It is also the one place a `typeof window` branch CURES a hydration
+     * mismatch instead of causing one. The server always emits "", and the
+     * client's first render after a full page load also always resolves to ""
+     * (a freshly-evaluated module has `firstMount === true`), so the two agree
+     * by construction rather than by accident.
+     *
+     * The client path below is deliberately left byte-for-byte unchanged:
+     * computing the class during render is what makes the slide play on the
+     * first painted frame of a client navigation. Moving it into an effect was
+     * tried and measured — it stopped the animation from running at all.
+     */
+    if (typeof window === "undefined") {
+      cls.current = "";
+      return <div className={`${wrapperClassName} ${cls.current}`}>{children}</div>;
+    }
+
     // Maintain the stack even for no-slide routes so a LATER navigation still
     // reads its direction correctly (e.g. /messages → /home → back to /messages);
     // only the visible animation is suppressed for them.

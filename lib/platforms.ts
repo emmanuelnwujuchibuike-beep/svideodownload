@@ -12,13 +12,22 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     hosts: ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"],
     // Authentic TikTok look: black with the logo (it is NOT red).
     accent: "from-neutral-900 to-black",
+    accentForeground: "light",
     watermarkFree: true,
   },
   instagram: {
     id: "instagram",
     name: "Instagram",
     hosts: ["instagram.com", "instagr.am"],
-    accent: "from-[#feda75] via-[#d62976] to-[#4f5bd5]",
+    /*
+     * Instagram's official gradient runs yellow → orange → pink → purple → blue.
+     * It starts at the ORANGE stop here rather than the pale yellow #feda75,
+     * which measures 3.19:1 against white even under the hero scrim — below the
+     * 4.5:1 AA floor for the tagline. Every remaining stop clears 8:1, and the
+     * ramp still reads unmistakably as Instagram.
+     */
+    accent: "from-[#f77737] via-[#d62976] to-[#4f5bd5]",
+    accentForeground: "light",
     watermarkFree: true,
   },
   facebook: {
@@ -26,6 +35,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     name: "Facebook",
     hosts: ["facebook.com", "fb.watch", "fb.com"],
     accent: "from-[#0866ff] to-[#1d4ed8]",
+    accentForeground: "light",
     watermarkFree: false,
   },
   twitter: {
@@ -33,6 +43,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     name: "X (Twitter)",
     hosts: ["twitter.com", "x.com", "t.co"],
     accent: "from-zinc-700 to-black",
+    accentForeground: "light",
     watermarkFree: true,
   },
   pinterest: {
@@ -40,6 +51,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     name: "Pinterest",
     hosts: ["pinterest.com", "pin.it"],
     accent: "from-[#e60023] to-[#ad081b]",
+    accentForeground: "light",
     watermarkFree: false,
   },
   reddit: {
@@ -47,6 +59,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     name: "Reddit",
     hosts: ["reddit.com", "redd.it", "v.redd.it"],
     accent: "from-[#ff4500] to-[#ff8717]",
+    accentForeground: "light",
     watermarkFree: false,
   },
   vimeo: {
@@ -54,6 +67,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     name: "Vimeo",
     hosts: ["vimeo.com"],
     accent: "from-[#1ab7ea] to-[#0d6df0]",
+    accentForeground: "light",
     watermarkFree: false,
   },
   youtube: {
@@ -61,6 +75,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     name: "YouTube",
     hosts: ["youtube.com", "youtu.be", "m.youtube.com", "music.youtube.com"],
     accent: "from-[#ff0000] to-[#cc0000]",
+    accentForeground: "light",
     watermarkFree: false,
   },
   threads: {
@@ -68,6 +83,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     name: "Threads",
     hosts: ["threads.net", "threads.com"],
     accent: "from-zinc-700 to-black",
+    accentForeground: "light",
     watermarkFree: true,
   },
   snapchat: {
@@ -75,6 +91,13 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     name: "Snapchat Spotlight",
     hosts: ["snapchat.com"],
     accent: "from-[#fffc00] to-[#f7b500]",
+    /*
+     * The only dark-foreground brand, and it is not a style preference —
+     * #fffc00 against white measures 1.10:1 where WCAG AA wants 4.5:1. Even a
+     * 45% black scrim only reaches 3.62:1. Black on Snapchat yellow is both
+     * legible (19.18:1) and authentic to the brand.
+     */
+    accentForeground: "dark",
     watermarkFree: false,
   },
   linkedin: {
@@ -82,6 +105,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     name: "LinkedIn",
     hosts: ["linkedin.com", "lnkd.in"],
     accent: "from-[#0a66c2] to-[#004182]",
+    accentForeground: "light",
     watermarkFree: false,
   },
   generic: {
@@ -89,6 +113,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     name: "Web Video",
     hosts: [],
     accent: "from-emerald-500 to-teal-500",
+    accentForeground: "light",
     watermarkFree: false,
   },
 };

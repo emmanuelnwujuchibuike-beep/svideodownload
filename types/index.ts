@@ -25,6 +25,16 @@ export interface Platform {
   hosts: string[];
   /** Tailwind gradient classes for the platform card accent. */
   accent: string;
+  /**
+   * Which foreground the accent needs to stay legible.
+   *
+   * Ships WITH `accent` because it is a property of that colour, not a styling
+   * preference — and getting it wrong is an accessibility failure, not a cosmetic
+   * one. Snapchat's brand yellow (#fffc00) against white text is roughly 1.07:1;
+   * WCAG AA for large text is 3:1. Any surface that paints `accent` as a
+   * background must read this rather than assuming white.
+   */
+  accentForeground: "light" | "dark";
   /** Whether we advertise watermark-free extraction for this platform. */
   watermarkFree: boolean;
   audioOnly?: boolean;

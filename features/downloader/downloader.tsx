@@ -22,9 +22,9 @@ import { ResultOffer } from "@/features/monetization/result-offer";
 import { useUser } from "@/features/auth/use-user";
 import { buildDownloadContext } from "@/lib/download-hub/context";
 import type { DownloadContext } from "@/lib/download-hub/types";
-import { detectPlatform } from "@/lib/platforms";
+import { PLATFORMS, detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
-import type { MediaKind } from "@/types";
+import type { MediaKind, PlatformId } from "@/types";
 
 import { useDownloader } from "./use-downloader";
 
@@ -52,7 +52,10 @@ const PLACEHOLDER_PLATFORMS = [
   "Pinterest",
 ];
 
-export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
+export function Downloader({
+  initialUrl,
+  platformId,
+}: { initialUrl?: string; platformId?: PlatformId } = {}) {
   const [url, setUrl] = useState(initialUrl ?? "");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [phIndex, setPhIndex] = useState(0);
@@ -130,15 +133,28 @@ export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
     }
   }, [metadata]);
 
-  // Rotate the placeholder platform every couple of seconds (visible only while
-  // the field is empty).
+  /*
+    Rotate the placeholder platform every couple of seconds — but ONLY where the
+    page is not about a specific platform.
+
+    On the ~148 generated SEO pages this rotation was actively wrong: someone who
+    searched "youtube shorts downloader" and landed on that page was told to
+    "Paste your TikTok link…", because the cycle ran regardless of context. The
+    rotation is a homepage idea (we support many platforms); on a platform page
+    the answer is already known, so the interval never starts.
+  */
   useEffect(() => {
+    if (platformId) return;
     const id = setInterval(
       () => setPhIndex((i) => (i + 1) % PLACEHOLDER_PLATFORMS.length),
       2200,
     );
     return () => clearInterval(id);
-  }, []);
+  }, [platformId]);
+
+  const placeholderPlatform = platformId
+    ? PLATFORMS[platformId].name
+    : PLACEHOLDER_PLATFORMS[phIndex];
 
   const handlePaste = async () => {
     try {
@@ -187,7 +203,7 @@ export function Downloader({ initialUrl }: { initialUrl?: string } = {}) {
               autoComplete="off"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder={`Paste your ${PLACEHOLDER_PLATFORMS[phIndex]} link…`}
+              placeholder={`Paste your ${placeholderPlatform} link…`}
               aria-label="Video URL"
               className="h-16 w-full rounded-2xl bg-background/60 px-5 pr-28 text-base outline-none ring-1 ring-inset ring-border/80 transition-all focus:bg-background/90 focus:ring-2 focus:ring-primary sm:text-lg"
             />

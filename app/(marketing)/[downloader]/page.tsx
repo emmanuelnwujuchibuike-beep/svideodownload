@@ -17,6 +17,7 @@ import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { RelatedLinks } from "@/components/seo/related-links";
 import { Downloader } from "@/features/downloader/downloader";
 import { BRAND_ICONS } from "@/lib/platform-icons";
+import { PLATFORMS } from "@/lib/platforms";
 import { getSeoPage, howToSteps, SEO_SLUGS } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
@@ -76,6 +77,13 @@ export default async function DownloaderPage({
   if (!page) notFound();
 
   const Icon = BRAND_ICONS[page.platformId];
+  /*
+    The platform's authentic brand accent, derived from the page's own
+    `platformId`. `onDark` says whether the accent is dark enough to carry white
+    text — see the legibility note on the hero below.
+  */
+  const platform = PLATFORMS[page.platformId];
+  const onDark = platform.accentForeground === "light";
   const steps = howToSteps(page.brand, page.thing);
   const url = `${siteUrl}/${page.slug}`;
 
@@ -133,29 +141,81 @@ export default async function DownloaderPage({
       />
       <SiteHeader />
       <main>
-        {/* Hero + tool — gradient cover */}
+        {/*
+          Hero — painted in the PLATFORM'S OWN brand colours.
+
+          Every one of these ~148 pages used to render the same blue→violet→purple
+          cover, so the YouTube page, the Pinterest page and the TikTok page were
+          visually identical. That is a missed signal on the pages that carry the
+          site's entire organic search surface: a visitor arriving from a "youtube
+          shorts downloader" query should see YouTube red and know instantly they
+          are in the right place.
+
+          The colours are not new data — `lib/platforms.ts` has carried an authentic
+          `accent` per platform all along (TikTok black, not red; Pinterest #e60023;
+          Reddit #ff4500). `SeoPage` already knows its `platformId`, so the accent is
+          DERIVED here rather than mapped by hand, and a new platform gets a branded
+          page for free.
+
+          ── Legibility (measured, not assumed) ─────────────────────────────────
+          Brand colours are chosen for logos, not for holding body text. Against
+          white, Vimeo's #1ab7ea measures 2.33:1, Reddit 3.44:1 and YouTube 4.00:1,
+          where WCAG AA wants 4.5:1 for the tagline. The `bg-black/35` scrim below
+          fixes all of them (Vimeo → 5.10, Reddit → 7.01, YouTube → 8.01) while the
+          hue stays unmistakably branded. Snapchat is the one brand no scrim can
+          rescue — see the note on its `accentForeground` in lib/platforms.ts.
+        */}
         <section className="relative overflow-hidden pb-12 pt-28 sm:pt-32">
           <div className="container max-w-5xl">
-            <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-blue-600 via-violet-600 to-purple-700 px-6 py-12 shadow-elevated sm:px-10 sm:py-14">
+            <div
+              className={`relative overflow-hidden rounded-[2rem] bg-gradient-to-br ${platform.accent} px-6 py-12 shadow-elevated sm:px-10 sm:py-14`}
+            >
+              {/* Contrast floor for the text above. Skipped for dark-foreground
+                  brands, where darkening would fight the black text instead. */}
+              {onDark ? (
+                <div aria-hidden className="pointer-events-none absolute inset-0 bg-black/35" />
+              ) : null}
+              {/* Depth. Tinted from the accent itself rather than a fixed fuchsia,
+                  which previously left a purple bloom on every platform. */}
               <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/15 blur-3xl" />
-              <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-fuchsia-400/20 blur-3xl" />
+              <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-black/10 blur-3xl" />
               <div className="relative flex flex-col items-center text-center">
-                <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/25 backdrop-blur">
+                <span
+                  className={`mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold ring-1 ring-inset backdrop-blur ${
+                    onDark
+                      ? "bg-white/15 text-white ring-white/25"
+                      : "bg-black/10 text-black ring-black/20"
+                  }`}
+                >
                   {Icon ? <Icon className="h-4 w-4" /> : null}
                   {page.brand} downloader
                 </span>
-                <h1 className="max-w-3xl text-balance text-[2.2rem] font-extrabold leading-[1.08] tracking-[-0.03em] text-white sm:text-5xl lg:text-[3.4rem]">
+                <h1
+                  className={`max-w-3xl text-balance text-[2.2rem] font-extrabold leading-[1.08] tracking-[-0.03em] sm:text-5xl lg:text-[3.4rem] ${
+                    onDark ? "text-white" : "text-black"
+                  }`}
+                >
                   {page.h1}
                 </h1>
-                <p className="mt-5 max-w-xl text-pretty text-lg leading-relaxed text-white/85">
+                <p
+                  className={`mt-5 max-w-xl text-pretty text-lg leading-relaxed ${
+                    onDark ? "text-white/85" : "text-black/80"
+                  }`}
+                >
                   {page.tagline}
                 </p>
 
                 <div className="mt-10 w-full max-w-2xl scroll-mt-24" id="download">
-                  <Downloader />
+                  {/*
+                    The placeholder used to cycle through all seven platforms every
+                    2.2s, so this page advertised "Paste your TikTok link…" to
+                    someone who searched for a YouTube downloader. Passing the
+                    platform pins it to the one the page is actually about.
+                  */}
+                  <Downloader platformId={page.platformId} />
                 </div>
 
-                <p className="mt-5 text-sm text-white/75">
+                <p className={`mt-5 text-sm ${onDark ? "text-white/75" : "text-black/70"}`}>
                   Free · No watermark · No login · Works on iPhone, Android &amp; PC
                 </p>
               </div>

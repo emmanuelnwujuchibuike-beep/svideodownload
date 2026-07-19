@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { getModule } from "./platform/modules";
 import { PLATFORMS, SHOWCASE_PLATFORMS } from "./platforms";
 
 /**
@@ -55,6 +56,32 @@ const HERO_SCRIM = 0.35;
 
 /** WCAG AA for normal-size text. The hero tagline is 18px, which is not "large". */
 const AA_NORMAL = 4.5;
+
+describe("platform count claims", () => {
+  it("keeps the Download tagline's platform count true", () => {
+    /*
+     * The tagline said "20+ platforms" against a real 11. That is the same class
+     * of error as the fabricated landing stats the Reality Ledger was built to
+     * stop, and it slipped through because it lives in a registry rather than a
+     * component, which is where the ledger's scanner looks.
+     *
+     * It matters more than most copy because /llms.txt republishes it verbatim to
+     * AI crawlers, which have no way to check it and will repeat it.
+     */
+    const real = SHOWCASE_PLATFORMS.length;
+    const tagline = getModule("download")!.tagline;
+
+    const claimed = tagline.match(/(\d+)\s*\+?\s*(?:social\s+)?platforms/i);
+    expect(claimed, `No platform count found in: "${tagline}"`).toBeTruthy();
+    expect(Number(claimed![1]), `Tagline claims ${claimed![1]}, reality is ${real}`).toBe(real);
+  });
+
+  it("excludes the generic fallback from the advertised set", () => {
+    // `generic` is a yt-dlp catch-all, not a platform anyone searches for. Counting
+    // it would inflate every number derived from this list by one.
+    expect(SHOWCASE_PLATFORMS.some((p) => p.id === "generic")).toBe(false);
+  });
+});
 
 describe("platform accents — legibility", () => {
   it("declares a foreground for every platform", () => {

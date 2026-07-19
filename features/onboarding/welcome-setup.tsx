@@ -6,7 +6,9 @@ import { useState } from "react";
 import { ImageUpload } from "@/components/social/image-upload";
 import { cn } from "@/lib/utils";
 
-const PERKS = ["Download from 20+ platforms", "Post, follow & chat with friends", "Trending reels & latest news"];
+// "20+ platforms" claimed nearly double the real 11 — see the note on the Download
+// module's tagline in lib/platform/modules.ts, which the same error reached.
+const PERKS = ["Download from 11 social platforms", "Post, follow & chat with friends", "Trending reels & latest news"];
 
 /** First-run onboarding — a user must claim a username before using the app. */
 export function WelcomeSetup({

@@ -9,6 +9,7 @@ import { LESSON_SLUGS, relatedLessons } from "@/lib/learning/catalog";
 import { getLesson } from "@/lib/learning/lessons";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
+import { PersonalItemControls } from "@/features/personal/item-controls";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
 /*
@@ -135,6 +136,11 @@ export default async function LessonPage({
             {lesson.title}
           </h1>
           <p className="mt-4 text-lg leading-relaxed text-muted-foreground">{lesson.intro}</p>
+          {/*
+            The personal layer, mounted as a client island so this page stays
+            statically prerendered — see the component for why that matters.
+          */}
+          <PersonalItemControls kind="lesson" slug={lesson.slug} className="mt-6" />
         </header>
 
         <article className="mt-10 space-y-10">

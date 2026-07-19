@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
+import { PersonalItemControls } from "@/features/personal/item-controls";
 import { articleHref, relatedArticles } from "@/lib/support/articles";
 import { centreOf, sectionMeta } from "@/lib/support/sections";
 import type { SupportArticle } from "@/lib/support/types";
@@ -61,6 +62,13 @@ export function SupportArticleBody({ article }: { article: SupportArticle }) {
         <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-primary">In short</h2>
         <p className="mt-2 text-[0.95rem] leading-relaxed">{article.summary}</p>
       </div>
+
+      {/*
+        The personal layer. Mounted here rather than in each route so both
+        centres get it from one place, and as a client island so /help and
+        /trust stay statically prerendered.
+      */}
+      <PersonalItemControls kind="article" slug={article.slug} className="mt-6" />
 
       {article.policyHref ? (
         <p className="mt-4 text-sm text-muted-foreground">

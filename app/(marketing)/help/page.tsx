@@ -7,6 +7,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { articleHref, articlesInSection } from "@/lib/support/articles";
 import { SECTIONS } from "@/lib/support/sections";
 import { HELP_SECTIONS } from "@/lib/support/types";
+import { localeAlternates } from "@/lib/i18n/alternates";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
   title: "Help Center — getting started and troubleshooting",
   description:
     "How to save your first video, what an account adds, how to install Frenzsave on your phone, and what to do when a link will not download.",
-  alternates: { canonical: "/help" },
+  alternates: { canonical: "/help", ...localeAlternates("/help") },
 };
 
 /**

@@ -20,7 +20,10 @@
     "format": "prettier --write .",
     "content:seed": "node scripts/content-compile.mjs seed",
     "content:compile": "node scripts/content-compile.mjs compile",
-    "content:check": "node scripts/content-compile.mjs check"
+    "content:check": "node scripts/content-compile.mjs check",
+    "i18n:status": "node scripts/i18n.mjs status",
+    "i18n:export": "node scripts/i18n.mjs export",
+    "i18n:import": "node scripts/i18n.mjs import"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",

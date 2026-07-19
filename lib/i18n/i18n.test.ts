@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { localeAlternates, switchableLocales } from "./alternates";
 import { CATALOGUES, MESSAGE_KEYS, catalogueCoverage, translate } from "./messages";
 
 import {
@@ -251,5 +252,74 @@ describe("the catalogue is actually wired in", () => {
     const layout = readFileSync("app/layout.tsx", "utf8");
     expect(layout).toContain("isRtl(");
     expect(layout, "lang is still a literal").not.toContain('<html lang="en" dir="ltr"');
+  });
+});
+
+/* --------------------------------- alternates --------------------------------- */
+
+describe("hreflang alternates", () => {
+  it("emits no alternate for a locale nobody can read", () => {
+    /*
+     * Wrong hreflang is worse than absent hreflang. Absent says "no
+     * translations"; wrong says "translations that do not work", and search
+     * engines act on the second by crawling a French URL, finding English, and
+     * counting it against the pages that currently earn all the traffic.
+     */
+    const { languages } = localeAlternates("/help");
+    expect(Object.keys(languages).sort()).toEqual(["en", "x-default"]);
+    expect(languages["/fr/help"]).toBeUndefined();
+  });
+
+  it("keeps the default locale unprefixed", () => {
+    // English lives at /help, not /en/help. Prefixing it would change every URL
+    // on a site whose generated downloader pages hold the search traffic.
+    const { languages } = localeAlternates("/help");
+    expect(languages.en).toBe("/help");
+    expect(languages["x-default"]).toBe("/help");
+  });
+
+  it("normalises a path without a leading slash", () => {
+    expect(localeAlternates("help").languages["x-default"]).toBe("/help");
+  });
+
+  it("offers no switcher while there is nothing to switch to", () => {
+    // A control with one option is not a choice; it is furniture implying a
+    // capability the product does not have yet.
+    expect(switchableLocales()).toEqual([]);
+  });
+});
+
+/* ------------------------------ the pipeline ---------------------------------- */
+
+describe("translation pipeline", () => {
+  const script = readFileSync("scripts/i18n.mjs", "utf8");
+
+  it("reads only the translation field, never the English source", () => {
+    /*
+     * The bug this pins, found by running the round trip rather than reading it:
+     * the first version exported `{"nav.home": "Home"}` and accepted any
+     * non-empty string, so importing an UNTOUCHED export reported the locale
+     * 100% complete and flipped it to "offered" — in English. Every individual
+     * step looked correct. The {en, translation} shape removes the ambiguity.
+     */
+    expect(script).toContain("entry.translation");
+    expect(script).toContain("not in the {en, translation} shape");
+  });
+
+  it("refuses a translation that drops a placeholder", () => {
+    // A dropped {year} produces a copyright line with no year: correct-looking,
+    // wrong, and invisible until someone reads the footer in that language.
+    expect(script).toContain("expects placeholders");
+    expect(script).toContain("process.exit(1)");
+  });
+
+  it("has no machine-translation step", () => {
+    /*
+     * Deliberate. 0086 already encodes the position: `machine` is a status that
+     * must be reviewed before it counts. An auto-filled catalogue would flip a
+     * locale to 100%, switch the site into a language nobody has read, and look
+     * identical in the coverage table to work a human actually did.
+     */
+    expect(script.toLowerCase()).not.toMatch(/\btranslate\s*\(|googletrans|deepl|openai/);
   });
 });

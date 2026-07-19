@@ -44,3 +44,7 @@ yarn-error.log*
 
 .vercel
 .env*
+
+# Translation exchange files — regenerable with `npm run i18n:export`.
+# The catalogues under lib/i18n/messages are the committed artefact.
+/i18n/

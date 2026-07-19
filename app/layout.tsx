@@ -1,6 +1,6 @@
 import { MotionConfig } from "framer-motion";
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ThemeCacheSync } from "@/components/theme-cache-sync";
@@ -19,14 +19,30 @@ import { SITE_URL as siteUrl } from "@/lib/site";
 
 import "./globals.css";
 
-// Owner ask (2026-07-10): "a premium human font like snapchat and tiktok
-// font." Their actual fonts (Graphik/TikTok Sans) are proprietary; Plus
-// Jakarta Sans is the closest freely-licensed match to that same modern,
-// rounded-humanist-geometric feel — a common stand-in for exactly this brief
-// in premium consumer apps. Wired through the SAME `--font-sans` variable
-// Inter used, so every page inherits it automatically via Tailwind's
-// `font-sans` (no per-component changes needed).
-const displaySans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-sans" });
+/*
+ * Inter — restored 2026-07-19.
+ *
+ * History: Inter → Plus Jakarta Sans (`d1016da`, 2026-07-10) on the ask for "a
+ * premium human font like snapchat and tiktok font". Reverted on the owner's
+ * follow-up: Plus Jakarta's rounded, wide-aperture geometry reads informal at UI
+ * sizes, which is the "unprofessional" they were pointing at.
+ *
+ * Why Inter is also the right answer to "use the Snapchat font": Snapchat's is
+ * Graphik (Commercial Type). It is proprietary — a basic single-style web licence
+ * starts around $50 and the full collection is ~$1,500, priced per monthly unique
+ * visitor, so it cannot simply be dropped into a public repo. Inter is the closest
+ * freely-licensed match (commonly cited at ~88% similarity) and shares Graphik's
+ * whole design intent: Christian Schwartz called Graphik "emphatically vanilla",
+ * a sans whose job is to not be noticed, and Inter occupies exactly that territory
+ * in the open-source world.
+ *
+ * So both halves of the request — "restore the previous font" and "use the
+ * Snapchat font" — converge on Inter.
+ *
+ * Wired through the same `--font-sans` variable, so every surface inherits it via
+ * Tailwind's `font-sans` with no per-component change.
+ */
+const displaySans = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 // ISR: static pages (incl. the global footer's admin-managed Recommended Tools)
 // regenerate at most once a minute, so monetization changes go live without a

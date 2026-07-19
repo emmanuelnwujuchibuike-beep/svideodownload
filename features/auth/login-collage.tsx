@@ -39,7 +39,22 @@ const TILES: Tile[] = [
 
 export function LoginCollage() {
   return (
-    <div className="relative mx-auto aspect-[10/11] h-full max-h-[46vh] w-full max-w-[420px]">
+    /*
+      NO `h-full` — it was measured as the single largest layout shift in the app.
+      /login scored CLS 0.1614 (POOR) on slow 4G + 4x CPU, and the layout-shift
+      entry named exactly this element, firing ~1.8-2.1s in.
+
+      Why: this sits in a `flex-1` column whose height is whatever is left after
+      the auth block below it. That block contains the big gradient headline, so
+      when the webfont swaps in, the headline reflows, the leftover space changes,
+      and `h-full` drags the whole collage with it.
+
+      Dropping it lets `aspect-[10/11]` derive height from WIDTH, which is known at
+      first paint and never changes. `max-h-[46vh]` still caps it, and vh is also
+      known immediately — so the box has a stable size before any font or image
+      arrives. The visual result is unchanged; only the dependency is.
+    */
+    <div className="relative mx-auto aspect-[10/11] max-h-[46vh] w-full max-w-[420px]">
       {TILES.map((t, i) => (
         <motion.div
           key={t.img}

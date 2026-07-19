@@ -47,8 +47,28 @@ export default async function LoginPage({
         <ArrowLeft className="h-5 w-5" />
       </Link>
 
-      {/* Collage — fills the space above the auth block */}
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-4 pt-4">
+      {/*
+        Collage — fills the space above the auth block.
+
+        `items-start`, NOT `items-center`. Measured: centering made the collage's
+        Y position a function of THIS container's height, which is `flex-1` —
+        i.e. whatever is left after the auth block below. That block contains the
+        big gradient headline, so when the webfont swaps in, the headline
+        reflows, the auth block grows (~210px on a 390x844 screen), and the
+        centred collage slides up with it. That single move was CLS 0.1614 —
+        POOR, and the largest layout shift in the app.
+
+        Pinned to the top, the collage's Y is `container top + padding`: fixed
+        before any font or image arrives. The slack simply sits below it instead
+        of being split above and below, which on a real viewport is a difference
+        of about 18px and invisible.
+
+        The alternative — `font-display: optional` so the font never swaps —
+        would fix every such shift app-wide, but it means some visitors never see
+        Inter at all on a slow connection. Not worth trading the brand's
+        typography for one page's metric.
+      */}
+      <div className="relative flex min-h-0 flex-1 items-start justify-center px-4 pt-4">
         <LoginCollage />
       </div>
 

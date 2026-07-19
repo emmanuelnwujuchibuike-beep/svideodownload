@@ -71,6 +71,10 @@ export function DiscoveryGateway({ context, className }: DiscoveryGatewayProps) 
     <section
       className={cn(
         "mt-5 overflow-hidden rounded-2xl border border-border/60 bg-card p-4 sm:p-5",
+        // The panel appears mid-flow, after a download the user just triggered,
+        // so it arrives rather than pops. Compositor-only (transform + opacity)
+        // and skipped entirely under reduced-motion.
+        "motion-safe:animate-fade-up",
         className,
       )}
       aria-label="What you can do next"
@@ -83,11 +87,15 @@ export function DiscoveryGateway({ context, className }: DiscoveryGatewayProps) 
       </header>
 
       <ul className="mt-4 space-y-2">
-        {recommendations.map((rec) => (
+        {recommendations.map((rec, i) => (
           <GatewayRow
             key={rec.action.id}
             rec={rec}
             context={context}
+            // Short stagger so the options read in priority order rather than
+            // landing as one block. Kept under ~200ms total: past that a stagger
+            // stops feeling considered and starts feeling slow.
+            index={i}
             onDismiss={() => dismiss(rec.action.id)}
             onTake={() => markTaken(rec.action.id)}
           />
@@ -113,11 +121,13 @@ export function DiscoveryGateway({ context, className }: DiscoveryGatewayProps) 
 function GatewayRow({
   rec,
   context,
+  index,
   onDismiss,
   onTake,
 }: {
   rec: Recommendation;
   context: DownloadContext;
+  index: number;
   onDismiss: () => void;
   onTake: () => void;
 }) {
@@ -167,7 +177,10 @@ function GatewayRow({
   );
 
   return (
-    <li className="group flex items-center gap-1">
+    <li
+      className="group flex items-center gap-1 motion-safe:animate-fade-up"
+      style={{ animationDelay: `${index * 60}ms` }}
+    >
       {isPlanned ? (
         <WaitlistRow action={action.id} onJoined={onTake}>
           {body}
@@ -179,7 +192,7 @@ function GatewayRow({
           // `min-w-0` is load-bearing: a flex-1 item defaults to min-width:auto,
           // so a long description grows the row past its container instead of
           // truncating — which pushes the arrow and dismiss button off the panel.
-          className="flex min-h-[52px] min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-secondary"
+          className="flex min-h-[52px] min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 transition-colors duration-200 hover:bg-secondary motion-safe:transition-[background-color,transform] motion-safe:active:scale-[0.98]"
         >
           {body}
           <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
@@ -242,7 +255,7 @@ function WaitlistRow({
       type="button"
       onClick={join}
       disabled={state !== "idle"}
-      className="flex min-h-[52px] min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-secondary disabled:cursor-default"
+      className="flex min-h-[52px] min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors duration-200 hover:bg-secondary disabled:cursor-default motion-safe:transition-[background-color,transform] motion-safe:active:scale-[0.98]"
     >
       {children}
       <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">

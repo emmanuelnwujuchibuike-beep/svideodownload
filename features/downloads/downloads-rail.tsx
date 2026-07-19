@@ -13,22 +13,49 @@ import {
   setPreferredQuality,
   type PreferredQuality,
 } from "@/lib/download-hub/auto-download";
-import { getLessonMeta } from "@/lib/learning/catalog";
+import { getLessonMeta, RAIL_LESSON_SLUGS } from "@/lib/learning/catalog";
 import type { DownloadRecord, PlatformId } from "@/types";
 import { cn, formatBytes } from "@/lib/utils";
 
 const REEL_PLATFORMS: PlatformId[] = ["tiktok", "instagram", "snapchat"];
 
 /**
- * Guides surfaced in the rail. Deliberately the three that match what someone
- * standing in their own library is most likely to be about to do — organise it,
- * publish from it, or work out what they are allowed to do with it.
+ * A Hub panel card, with a staggered entrance.
+ *
+ * Deliberately a MOUNT-time CSS animation rather than the scroll-triggered
+ * `<Reveal>` used on marketing pages. Reveal holds its content at `opacity: 0`
+ * until an IntersectionObserver fires, and during this build it was observed
+ * leaving the whole desktop sidebar invisible — the panels are at the top of
+ * the viewport on a wide screen, so there is no scroll event to trigger them,
+ * and any hiccup in that first callback strands the content.
+ *
+ * These panels carry SETTINGS. Content a user needs to reach must not depend on
+ * an observer having fired: `animate-fade-up` runs on mount, always finishes,
+ * and cannot get stuck. `motion-safe:` drops it entirely under reduced-motion,
+ * where the card is simply present from the first frame.
  */
-const RAIL_LESSONS = [
-  "how-to-build-a-creator-workflow",
-  "what-you-can-and-cannot-download",
-  "how-to-improve-video-quality",
-] as const;
+function Panel({
+  children,
+  delay = 0,
+  className,
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  className?: string;
+}) {
+  return (
+    <section
+      className={cn(
+        "rounded-2xl border border-border/60 bg-card p-5 shadow-soft",
+        "motion-safe:animate-fade-up",
+        className,
+      )}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      {children}
+    </section>
+  );
+}
 
 function itemBytes(rec: DownloadRecord): number {
   if (rec.size && rec.size > 0) return rec.size;
@@ -96,9 +123,27 @@ export function DownloadsRail() {
   });
 
   return (
-    <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-80 shrink-0 flex-col gap-4 overflow-y-auto py-4 pr-4 xl:flex">
+    /*
+      RESPONSIVE, not hidden.
+      ────────────────────────
+      This was `hidden … xl:flex`, which meant that below 1280px — every phone
+      and most tablets, i.e. the majority of real sessions — Storage, Quick
+      Actions, Categories and Learn did not exist at all. The settings had no
+      reachable UI on the devices people actually download on.
+
+      It is now ONE tree that changes shape: a normal stacked column on small
+      screens, promoted to a sticky sidebar at `xl`. Rendering it twice behind
+      media queries would have been simpler and would have shipped two copies of
+      the donut, the lesson list and the preference controls to every device.
+    */
+    <aside
+      className={cn(
+        "flex w-full min-w-0 flex-col gap-4",
+        "xl:sticky xl:top-16 xl:h-[calc(100vh-4rem)] xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:py-4",
+      )}
+    >
       {/* Storage */}
-      <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-soft">
+      <Panel>
         <h3 className="text-sm font-bold">Storage</h3>
         <div className="relative mx-auto mt-4 h-36 w-36">
           <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
@@ -127,14 +172,14 @@ export function DownloadsRail() {
             replacement is a link to the guide on keeping a library findable. */}
         <Link
           href="/learn/how-to-organise-your-media"
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-secondary py-2 text-sm font-semibold transition hover:bg-secondary/70"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-secondary py-2 text-sm font-semibold transition-colors duration-200 hover:bg-secondary/70 motion-safe:active:scale-[0.98] motion-safe:transition-[background-color,transform]"
         >
           <GraduationCap className="h-4 w-4" /> Organising your media
         </Link>
-      </section>
+      </Panel>
 
       {/* Quick actions */}
-      <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-soft">
+      <Panel delay={60}>
         <h3 className="mb-3 text-sm font-bold">Quick Actions</h3>
         <div className="space-y-1">
           <QuickAction icon={Download} title="Download from Link" sub="Paste video link" href="#download" />
@@ -142,10 +187,10 @@ export function DownloadsRail() {
           <AutoDownloadToggle />
           <QualityPreference />
         </div>
-      </section>
+      </Panel>
 
       {/* Categories */}
-      <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-soft">
+      <Panel delay={120}>
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-bold">Categories</h3>
         </div>
@@ -159,22 +204,22 @@ export function DownloadsRail() {
         {/* "View All Categories" linked to /downloads — the page you are already
             on, and this card already lists every category. Removed rather than
             re-pointed: there was no third destination it could honestly mean. */}
-      </section>
+      </Panel>
 
       {/* Learning Academy — RFC §4: every download surface connects to the
           guides. Placed after Categories so it reads as a next step rather than
           competing with the library itself. */}
-      <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-soft">
+      <Panel delay={180}>
         <h3 className="mb-3 text-sm font-bold">Learn</h3>
         <ul className="space-y-1">
-          {RAIL_LESSONS.map((slug) => {
+          {RAIL_LESSON_SLUGS.map((slug) => {
             const lesson = getLessonMeta(slug);
             if (!lesson) return null;
             return (
               <li key={slug}>
                 <Link
                   href={`/learn/${lesson.slug}`}
-                  className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-secondary"
+                  className="flex items-center gap-3 rounded-xl p-2 transition-colors duration-200 hover:bg-secondary motion-safe:active:scale-[0.98] motion-safe:transition-[background-color,transform]"
                 >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
                     <GraduationCap className="h-4 w-4" />
@@ -196,10 +241,12 @@ export function DownloadsRail() {
         >
           All guides
         </Link>
-      </section>
+      </Panel>
 
-      {/* Recent history */}
-      <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-soft">
+      {/* Recent history. Hidden below xl: on a stacked layout the full
+          "Downloaded" list sits directly above this, so it would be the same
+          data twice on the smallest screens. */}
+      <Panel delay={240} className="hidden xl:block">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-bold">Recent History</h3>
           {items.length > 0 ? (
@@ -230,7 +277,7 @@ export function DownloadsRail() {
             ))}
           </ul>
         )}
-      </section>
+      </Panel>
     </aside>
   );
 }
@@ -245,7 +292,7 @@ function timeAgo(ts: number): string {
 
 function QuickAction({ icon: Icon, title, sub, href, soon }: { icon: typeof Download; title: string; sub: string; href?: string; soon?: boolean }) {
   const inner = (
-    <span className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-secondary">
+    <span className="flex items-center gap-3 rounded-xl p-2 transition-colors duration-200 hover:bg-secondary motion-safe:active:scale-[0.98] motion-safe:transition-[background-color,transform]">
       <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-primary"><Icon className="h-4 w-4" /></span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5 text-sm font-semibold">{title}{soon ? <span className="rounded bg-secondary px-1 py-0.5 text-[8px] font-bold uppercase text-muted-foreground">Soon</span> : null}</span>
@@ -282,7 +329,7 @@ function AutoDownloadToggle() {
   };
 
   return (
-    <button type="button" onClick={toggle} aria-pressed={on} className="flex w-full items-center gap-3 rounded-xl p-2 text-left transition hover:bg-secondary">
+    <button type="button" onClick={toggle} aria-pressed={on} className="flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors duration-200 hover:bg-secondary motion-safe:active:scale-[0.98] motion-safe:transition-[background-color,transform]">
       <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-primary"><Download className="h-4 w-4" /></span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">Auto Download</span>

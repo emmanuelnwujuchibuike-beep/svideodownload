@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 
 import { AppContent } from "@/features/app-shell/app-content";
 import { DownloadsPage } from "@/features/downloads/downloads-page";
-import { DownloadsRail } from "@/features/downloads/downloads-rail";
 import { getHomeProfile } from "@/lib/social/home";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,7 +24,14 @@ export default async function Downloads() {
   if (!profile?.handle) redirect("/welcome");
 
   return (
-    <AppContent rightRail={<DownloadsRail />}>
+    /*
+      No `rightRail`. The panels used to be passed here and were `hidden xl:flex`,
+      so below 1280px — every phone, most tablets — Storage, Quick Actions,
+      Categories and Learn did not render at all. They now live INSIDE
+      DownloadsPage, in a grid that stacks on small screens and becomes a sticky
+      sidebar at `xl`, which is one tree rather than two behind media queries.
+    */
+    <AppContent>
       <DownloadsPage />
     </AppContent>
   );

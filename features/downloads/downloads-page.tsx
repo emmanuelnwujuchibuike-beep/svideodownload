@@ -21,6 +21,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { DownloadBox } from "@/features/downloads/download-box";
+import { DownloadsRail } from "@/features/downloads/downloads-rail";
+import { HubWarmup } from "@/features/downloads/hub-warmup";
 import { openPlayer } from "@/features/downloads/player-store";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
@@ -86,8 +88,17 @@ export function DownloadsPage() {
 
   const failed = tasks.filter((t) => t.status === "failed").length;
 
+  // History records completed downloads, so completed = items.length. The rate is
+  // over ATTEMPTS, which is the only denominator that makes the figure mean
+  // anything — and null when there have been none, rather than a fabricated 100%.
+  const attempts = items.length + failed;
+  const completedRate = attempts > 0 ? `${Math.round((items.length / attempts) * 100)}%` : "—";
+
   return (
     <div className="space-y-5 pt-1">
+      {/* Warms the Gateway chunk and prefetches its destinations on idle, so
+          nothing lags the first time it is needed. Renders nothing. */}
+      <HubWarmup />
       {/* Hero. `id="download"` is the target the rail's "Download from Link"
           quick action points at — the anchor previously existed only on the
           landing hero, so that control did nothing on this page. */}
@@ -112,158 +123,193 @@ export function DownloadsPage() {
         </div>
       </section>
 
-      {/* Filter tabs */}
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => { setTab(t); setLimit(8); }}
-            aria-pressed={tab === t}
-            className={cn(
-              "shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition",
-              tab === t ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white" : "bg-secondary text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      {/*
+        The Hub proper: library on the left, panels on the right.
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Stat icon={Download} tint="text-violet-500" label="Total Downloads" value={items.length.toLocaleString()} sub="All time" />
-        <Stat icon={CheckCircle2} tint="text-emerald-500" label="Completed" value={items.length.toLocaleString()} sub="100%" />
-        <Stat icon={Loader2} tint="text-blue-500" label="In Progress" value={String(active.length)} sub={active.length ? "Active" : "—"} />
-        <Stat icon={AlertCircle} tint="text-amber-500" label="Failed" value={String(failed)} sub={failed ? "Retry available" : "0%"} />
-        <Stat icon={HardDrive} tint="text-cyan-500" label="Saved Storage" value={formatBytes(totalUsed)} sub="Space used" />
-      </div>
-
-      {/* Downloading */}
-      {active.length > 0 ? (
-        <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-bold">Downloading ({active.length})</h2>
-            <button type="button" onClick={pauseAll} className="text-xs font-semibold text-primary hover:underline">Pause all</button>
-          </div>
-          <div className="space-y-3">
-            {active.map((t) => {
-              const pct = t.totalBytes > 0 ? Math.min(100, Math.round((t.receivedBytes / t.totalBytes) * 100)) : t.status === "downloading" ? 0 : 0;
-              const Brand = BRAND_ICONS[t.platform];
-              return (
-                <div key={t.id} className="flex items-center gap-3 rounded-xl border border-border/50 bg-background p-2.5">
-                  <span className="relative h-14 w-20 shrink-0 overflow-hidden rounded-lg bg-neutral-800">
-                    {t.thumbnail ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={t.thumbnail} alt="" className="h-full w-full object-cover" />
-                    ) : null}
-                    {Brand ? <span className="absolute bottom-1 left-1 text-white/90"><Brand className="h-3 w-3" /></span> : null}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{t.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">{t.qualityLabel} · {t.platformName}</p>
-                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-                      <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      {t.status === "failed" ? <span className="text-rose-500">Failed — {t.error}</span> : t.status === "paused" ? "Paused" : (
-                        <>
-                          {formatBytes(t.receivedBytes)}{t.totalBytes ? ` / ${formatBytes(t.totalBytes)}` : ""}
-                          {t.speed ? ` · ${formatBytes(t.speed)}/s` : ""}{t.totalBytes ? ` · ${pct}%` : ""}
-                        </>
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    {t.status === "failed" ? (
-                      <IconBtn label="Retry" onClick={() => retryDownload(t.id)}><RotateCw className="h-4 w-4" /></IconBtn>
-                    ) : t.status === "paused" ? (
-                      <IconBtn label="Resume" onClick={() => resumeDownload(t.id)}><Play className="h-4 w-4" /></IconBtn>
-                    ) : (
-                      <IconBtn label="Pause" onClick={() => pauseDownload(t.id)}><Pause className="h-4 w-4" /></IconBtn>
-                    )}
-                    <IconBtn label="Cancel" onClick={() => cancelDownload(t.id)}><X className="h-4 w-4" /></IconBtn>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
-      {/* Downloaded */}
-      <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-bold">Downloaded ({filtered.length})</h2>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search"
-                aria-label="Search downloads"
-                className="h-9 w-32 rounded-lg bg-secondary/60 pl-8 pr-2 text-sm text-foreground outline-none ring-1 ring-inset ring-transparent transition focus:w-44 focus:bg-background focus:ring-primary sm:w-40"
-              />
-            </div>
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as typeof sort)}
-              aria-label="Sort"
-              className="h-9 rounded-lg bg-secondary/60 px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-transparent focus:ring-primary"
-            >
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="az">A–Z</option>
-            </select>
-          </div>
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border/70 p-10 text-center">
-            <p className="text-sm font-semibold">No downloads yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">Paste a link above to download your first video.</p>
-          </div>
-        ) : (
-          <>
-            <ul className="divide-y divide-border/50">
-              {filtered.slice(0, limit).map((r) => (
-                <DownloadedRow key={r.id} rec={r} onFavorite={() => toggleFavorite(r.id)} onRemove={() => removeDownload(r.id)} />
-              ))}
-            </ul>
-            {filtered.length > limit ? (
-              <button type="button" onClick={() => setLimit((n) => n + 8)} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold text-primary transition hover:bg-secondary">
-                Show More <ChevronDown className="h-4 w-4" />
+        One grid, two shapes. Below `xl` it is a single stacked column and the
+        panels follow the library; at `xl` the second track appears and they
+        become a sticky sidebar. The hero sits OUTSIDE this grid and spans the
+        full width, because the paste bar is the primary action on every device
+        and should never be squeezed into a column.
+      */}
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
+        <div className="min-w-0 space-y-5">
+          {/* Filter tabs */}
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {TABS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => { setTab(t); setLimit(8); }}
+                aria-pressed={tab === t}
+                className={cn(
+                  "shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition",
+                  tab === t ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white" : "bg-secondary text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t}
               </button>
-            ) : null}
-          </>
-        )}
-      </section>
-
-      {/* Premium banner */}
-      <Link href="/pricing" className="relative flex items-center justify-between gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-4 text-white shadow-elevated sm:p-5">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15"><Download className="h-5 w-5" /></span>
-          <div>
-            <p className="text-sm font-bold sm:text-base">Faster Downloads with Frenz Premium</p>
-            <p className="text-xs text-white/80">Download in 4K, no limits, ultra-fast speed and more.</p>
+            ))}
           </div>
+
+          {/*
+            Stat cards. The last one spans both columns on mobile — with five
+            cards in a two-up grid it was otherwise stranded alone on its row,
+            reading as a rendering fault rather than a layout.
+          */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <Stat icon={Download} tint="text-violet-500" label="Total Downloads" value={items.length.toLocaleString()} sub="All time" />
+            {/*
+              `sub` was the literal string "100%", which read "Completed 0 · 100%"
+              on an empty library. It is now the real completion rate over
+              attempts (completed + failed), and an em dash when there have been
+              no attempts to take a rate of.
+            */}
+            <Stat icon={CheckCircle2} tint="text-emerald-500" label="Completed" value={items.length.toLocaleString()} sub={completedRate} />
+            <Stat icon={Loader2} tint="text-blue-500" label="In Progress" value={String(active.length)} sub={active.length ? "Active" : "—"} />
+            <Stat icon={AlertCircle} tint="text-amber-500" label="Failed" value={String(failed)} sub={failed ? "Retry available" : attempts > 0 ? "0%" : "—"} />
+            <Stat className="col-span-2 sm:col-span-1" icon={HardDrive} tint="text-cyan-500" label="Saved Storage" value={formatBytes(totalUsed)} sub="Space used" />
+          </div>
+
+          {/* Downloading */}
+          {active.length > 0 ? (
+            <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-base font-bold">Downloading ({active.length})</h2>
+                <button type="button" onClick={pauseAll} className="text-xs font-semibold text-primary hover:underline">Pause all</button>
+              </div>
+              <div className="space-y-3">
+                {active.map((t) => {
+                  const pct = t.totalBytes > 0 ? Math.min(100, Math.round((t.receivedBytes / t.totalBytes) * 100)) : t.status === "downloading" ? 0 : 0;
+                  const Brand = BRAND_ICONS[t.platform];
+                  return (
+                    <div key={t.id} className="flex items-center gap-3 rounded-xl border border-border/50 bg-background p-2.5">
+                      <span className="relative h-14 w-20 shrink-0 overflow-hidden rounded-lg bg-neutral-800">
+                        {t.thumbnail ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={t.thumbnail} alt="" className="h-full w-full object-cover" />
+                        ) : null}
+                        {Brand ? <span className="absolute bottom-1 left-1 text-white/90"><Brand className="h-3 w-3" /></span> : null}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{t.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">{t.qualityLabel} · {t.platformName}</p>
+                        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                          <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          {t.status === "failed" ? <span className="text-rose-500">Failed — {t.error}</span> : t.status === "paused" ? "Paused" : (
+                            <>
+                              {formatBytes(t.receivedBytes)}{t.totalBytes ? ` / ${formatBytes(t.totalBytes)}` : ""}
+                              {t.speed ? ` · ${formatBytes(t.speed)}/s` : ""}{t.totalBytes ? ` · ${pct}%` : ""}
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {t.status === "failed" ? (
+                          <IconBtn label="Retry" onClick={() => retryDownload(t.id)}><RotateCw className="h-4 w-4" /></IconBtn>
+                        ) : t.status === "paused" ? (
+                          <IconBtn label="Resume" onClick={() => resumeDownload(t.id)}><Play className="h-4 w-4" /></IconBtn>
+                        ) : (
+                          <IconBtn label="Pause" onClick={() => pauseDownload(t.id)}><Pause className="h-4 w-4" /></IconBtn>
+                        )}
+                        <IconBtn label="Cancel" onClick={() => cancelDownload(t.id)}><X className="h-4 w-4" /></IconBtn>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          {/* Downloaded */}
+          <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-base font-bold">Downloaded ({filtered.length})</h2>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search"
+                    aria-label="Search downloads"
+                    className="h-9 w-32 rounded-lg bg-secondary/60 pl-8 pr-2 text-sm text-foreground outline-none ring-1 ring-inset ring-transparent transition focus:w-44 focus:bg-background focus:ring-primary sm:w-40"
+                  />
+                </div>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as typeof sort)}
+                  aria-label="Sort"
+                  className="h-9 rounded-lg bg-secondary/60 px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-transparent focus:ring-primary"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="az">A–Z</option>
+                </select>
+              </div>
+            </div>
+
+            {filtered.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border/70 p-10 text-center">
+                <p className="text-sm font-semibold">No downloads yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">Paste a link above to download your first video.</p>
+              </div>
+            ) : (
+              <>
+                <ul className="divide-y divide-border/50">
+                  {filtered.slice(0, limit).map((r) => (
+                    <DownloadedRow key={r.id} rec={r} onFavorite={() => toggleFavorite(r.id)} onRemove={() => removeDownload(r.id)} />
+                  ))}
+                </ul>
+                {filtered.length > limit ? (
+                  <button type="button" onClick={() => setLimit((n) => n + 8)} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold text-primary transition hover:bg-secondary">
+                    Show More <ChevronDown className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </>
+            )}
+          </section>
+
+          {/* Premium banner */}
+          <Link href="/pricing" className="relative flex items-center justify-between gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-4 text-white shadow-elevated sm:p-5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15"><Download className="h-5 w-5" /></span>
+              <div>
+                <p className="text-sm font-bold sm:text-base">Faster Downloads with Frenz Premium</p>
+                <p className="text-xs text-white/80">Download in 4K, no limits, ultra-fast speed and more.</p>
+              </div>
+            </div>
+            <span className="shrink-0 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900">Upgrade Now</span>
+          </Link>
         </div>
-        <span className="shrink-0 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900">Upgrade Now</span>
-      </Link>
+
+        {/* Storage, Quick Actions, Categories and Learn. A sticky sidebar at
+            `xl`, a stacked column everywhere else — see DownloadsRail. */}
+        <DownloadsRail />
+      </div>
     </div>
   );
 }
 
-function Stat({ icon: Icon, tint, label, value, sub }: { icon: typeof Download; tint: string; label: string; value: string; sub: string }) {
+function Stat({ icon: Icon, tint, label, value, sub, className }: { icon: typeof Download; tint: string; label: string; value: string; sub: string; className?: string }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-soft">
+    <div
+      className={cn(
+        "rounded-2xl border border-border/60 bg-card p-4 shadow-soft",
+        // Compositor-only lift. `transition-transform` rather than `transition`
+        // so a hover never animates layout properties.
+        "motion-safe:transition-transform motion-safe:duration-200 motion-safe:hover:-translate-y-0.5",
+        className,
+      )}
+    >
       <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl bg-secondary", tint)}>
         <Icon className="h-4 w-4" />
       </span>
       <p className="mt-3 text-xl font-extrabold tabular-nums">{value}</p>
-      <p className="text-xs font-medium text-foreground">{label}</p>
-      <p className="text-[11px] text-muted-foreground">{sub}</p>
+      <p className="truncate text-xs font-medium text-foreground">{label}</p>
+      <p className="truncate text-[11px] text-muted-foreground">{sub}</p>
     </div>
   );
 }

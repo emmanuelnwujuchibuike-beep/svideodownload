@@ -125,6 +125,19 @@ export const LESSON_CATALOG: LessonMeta[] = [
   },
 ];
 
+/**
+ * Guides surfaced in the Download Hub's panels — the three that match what
+ * someone standing in their own library is most likely about to do.
+ *
+ * Lives here rather than in the component because `HubWarmup` prefetches these
+ * routes and must not drift from what the panel actually links to.
+ */
+export const RAIL_LESSON_SLUGS = [
+  "how-to-build-a-creator-workflow",
+  "what-you-can-and-cannot-download",
+  "how-to-improve-video-quality",
+] as const;
+
 const BY_SLUG = new Map(LESSON_CATALOG.map((l) => [l.slug, l]));
 
 export const LESSON_SLUGS: string[] = LESSON_CATALOG.map((l) => l.slug);

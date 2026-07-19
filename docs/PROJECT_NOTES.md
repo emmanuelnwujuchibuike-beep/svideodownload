@@ -13,6 +13,60 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑19 — Working the recorded handoff: personal plane, corpus admin, translation pipeline
+
+Three items, in the order the previous session's handoff set: the personal plane
+first, admin surfaces second, locale work third.
+
+**Personal plane (`5c8b357`, migration `0088` — NEEDS APPLYING).** Progress,
+bookmarks and private notes over lessons and support articles. One row per
+(user, item) with three independently-nullable timestamps rather than three
+tables: they are three facts about one relationship, always read together.
+Course progress is *derived* from lesson completions and counts against
+*resolvable* lessons, so a retired lesson cannot strand a finished course at 90%
+forever. Not an extension of `collections` — `collection_items.post_id`
+references `posts`, so a lesson has nowhere to go.
+
+This is the first table recording what an individual **reads**, so the privacy
+work is the load-bearing part: exactly one RLS policy (a test asserts the count,
+because an aggregate over "who reads the security school" should be an explicit
+decision, not something that falls out of a loose grant), `no-store` on every
+response including errors (Cloudflare fronts Vercel; a shared-cache hit would
+serve one reader's notes to the next visitor), and a test pinning that exactly
+one `NextResponse.json` call exists so no path can bypass the header. The UI is
+a client island so `/learn`, `/help` and `/trust` stay prerendered.
+
+**Corpus operations (`2af9229`).** `/admin/corpora` — an inspection console, not
+an editor, because the corpora are compiled TypeScript and a save button would
+be a lie. It found the same unreachability defect on the operator side:
+`/admin/content` and `/admin/download-hub` had no link from the dashboard,
+reachable only by typing the URL. Third time this class has appeared. Severity
+is meant literally — `broken` means a reader is hitting something wrong now, and
+a test asserts there are none; orphan lessons are a gap, not a break. That
+distinction is the lesson from the orphan metric that once reported 155 problems
+out of 169 nodes: a console that cries wolf gets ignored, then deleted.
+
+**Translation pipeline + hreflang (`a3c93b7`).** `npm run i18n:export -- fr`
+gives a translator JSON; `i18n:import` compiles it to typed TS. No
+machine-translation step, deliberately — `0086` already says `machine` is a
+status that must be reviewed, and an auto-filled catalogue would flip a locale
+to 100% and switch the site into a language nobody has read.
+
+**The bug worth recording** is one I wrote and the round trip caught: the first
+version exported the English as the starting value and the import accepted any
+non-empty string, so importing an *untouched* export reported French 100%
+complete and flipped it to "offered" — in English. Every individual step read as
+correct; only running it end to end showed it. The format is now
+`{en, translation}` and the old flat shape is refused rather than guessed at.
+
+hreflang derives from real availability, so `/help` emits exactly `en` and
+`x-default` and no invented `/fr/help` (checked in the build artifact). Wrong
+hreflang is worse than absent. The `/[locale]` routing tree is deliberately not
+built: restructuring 212 routes today would prerender ~200 pages of English at
+French URLs. The gate belongs before the routes.
+
+---
+
 ## 2026‑07‑19 — Help Center: the corpus had two empty sections and no route
 
 Continuing the Academy/Discovery queue after the glossary. The next open item was

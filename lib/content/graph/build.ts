@@ -12,7 +12,10 @@
  * 2-second page budget. Phase 4 will feed authored edges in from Postgres via the
  * compile step; the shape below is what it must emit.
  */
+import { coursesForSchool } from "@/lib/academy/courses";
+import { teachableSchools } from "@/lib/academy/schools";
 import { GENOMES } from "@/lib/content/genome/registry";
+import { getLessonMeta } from "@/lib/learning/catalog";
 import { isRealStage } from "@/lib/content/genome/queries";
 import { getModules } from "@/lib/platform/modules";
 import { PLATFORMS } from "@/lib/platforms";
@@ -37,6 +40,9 @@ export const featureId = (product: string, feat: string): NodeId => `feature:${p
 export const seoPageId = (slug: string): NodeId => `seoPage:${slug}`;
 export const topicId = (id: string): NodeId => `topic:${id}`;
 export const workflowId = (id: string): NodeId => `workflow:${id}`;
+export const schoolId = (id: string): NodeId => `school:${id}`;
+export const courseId = (slug: string): NodeId => `course:${slug}`;
+export const lessonId = (slug: string): NodeId => `lesson:${slug}`;
 
 /* ----------------------- derived capability matching ------------------------ */
 
@@ -185,6 +191,86 @@ export function buildGraph(): ExperienceGraph {
       const cid = capabilityId(product!, cap!);
       if (!nodes.has(cid)) continue;
       if (terms.some((t) => haystack.includes(t))) addEdge(sid, cid, "illustrates", "derived");
+    }
+  }
+
+  /* ---- the Knowledge Campus: schools, courses and lessons ---- */
+
+  /*
+   * This is the join the two RFCs are built around: the Academy PRODUCES these
+   * nodes and the Discovery Platform PUBLISHES them. Feeding the campus in here
+   * rather than giving it its own graph is what lets internal linking, breadcrumbs,
+   * sitemap topology and JSON-LD stay four products of one model.
+   *
+   * Only TEACHABLE schools are added. A planned school has no page, so a node for
+   * it would be an entity with no URL — an orphan the audit would flag forever, and
+   * a candidate for accidentally being published as a schema.org Course.
+   */
+  for (const school of teachableSchools()) {
+    const schoolNode = schoolId(school.id);
+    addNode({
+      id: schoolNode,
+      kind: "guide",
+      title: school.name,
+      href: `/academy/${school.slug}`,
+      real: true,
+      meta: { availability: school.availability, kind: school.kind },
+    });
+
+    // A product school documents its product; that edge is what makes the campus
+    // reachable from the product side of the graph rather than a separate island.
+    if (school.productId) {
+      const pid = productId(school.productId);
+      if (nodes.has(pid)) addEdge(schoolNode, pid, "documents", "authored");
+    }
+
+    for (const course of coursesForSchool(school.id)) {
+      const courseNode = courseId(course.slug);
+      /*
+        Deliberately NO `href`. A course is rendered as a section of its school
+        page, not a page of its own, so it has no address to canonicalise. Giving
+        it the school's URL would make school and course claim the same canonical
+        — search engines would pick one, split the ranking signal between them,
+        and the loser would effectively vanish. `canonicalConflicts()` in
+        lib/discovery/entities.ts is the check that keeps this decision honest.
+      */
+      addNode({
+        id: courseNode,
+        kind: "guide",
+        title: course.title,
+        real: true,
+        meta: { level: course.level, schoolId: school.id },
+      });
+      addEdge(courseNode, schoolNode, "partOf", "authored");
+
+      course.lessonSlugs.forEach((slug, i) => {
+        const meta = getLessonMeta(slug);
+        if (!meta) return;
+
+        const lessonNode = lessonId(slug);
+        addNode({
+          id: lessonNode,
+          kind: "lesson",
+          title: meta.title,
+          href: `/learn/${slug}`,
+          real: true,
+          meta: { minutes: meta.minutes, topic: meta.topic },
+        });
+        addEdge(lessonNode, courseNode, "partOf", "authored");
+
+        // Teaching order, so "what comes next" is a graph fact rather than a
+        // per-page string someone has to keep in sync.
+        const next = course.lessonSlugs[i + 1];
+        if (next) addEdge(lessonNode, lessonId(next), "nextStep", "authored");
+
+        // A lesson teaches the topic its platform cluster is about, which is the
+        // edge that finally connects the ~148 generated downloader pages to real
+        // depth instead of only to each other.
+        for (const platformId of meta.platformIds) {
+          const topic = topicId(platformId);
+          if (nodes.has(topic)) addEdge(lessonNode, topic, "teaches", "authored");
+        }
+      });
     }
   }
 

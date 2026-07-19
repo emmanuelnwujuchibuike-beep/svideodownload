@@ -1,4 +1,4 @@
-import { getModule } from "@/lib/platform/modules";
+import { availabilityOfProduct } from "@/lib/platform/availability";
 
 import { GATEWAY_ACTIONS } from "./actions";
 import {
@@ -37,17 +37,14 @@ const CORE_LIVE_PRODUCTS = new Set(["learning"]);
  * Fail-closed: an unknown product id resolves to `planned`, so adding an action for
  * a product nobody has built yet is safe by default rather than dangerous by
  * default.
+ *
+ * The derivation itself now lives in `lib/platform/availability.ts` because the
+ * Academy (schools) and the Discovery Platform (schema.org entities) ask the same
+ * question, and three copies of "is it real?" would drift. This wrapper keeps the
+ * Gateway's own vocabulary — it takes an action, not a bare product id.
  */
 export function resolveAvailability(action: GatewayAction): Availability {
-  if (CORE_LIVE_PRODUCTS.has(action.productId)) return "live";
-
-  const product = getModule(action.productId);
-  if (!product) return "planned";
-
-  if (product.veracity.claimable) return "live";
-  return product.veracity.stage === "beta" || product.veracity.stage === "alpha"
-    ? "preview"
-    : "planned";
+  return availabilityOfProduct(action.productId, CORE_LIVE_PRODUCTS);
 }
 
 /** Real things outrank aspirational ones, always, by construction. */

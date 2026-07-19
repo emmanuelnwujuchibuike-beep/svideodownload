@@ -62,8 +62,15 @@ export type GatewayIntent = "send-to-chat" | "save-to-device" | "copy-link";
  * `planned` is not a lesser tier to be hidden — it is a first-class state with its
  * own honest presentation (future tense, notify-me). That is what makes declaring
  * all ten destinations safe.
+ *
+ * DEFINED IN `lib/platform/availability.ts` and re-exported here, not redeclared.
+ * The Academy and the Discovery Platform share this vocabulary, and two structurally
+ * identical unions in two files is exactly the duplication that lets one of them
+ * quietly gain a fourth state the others don't handle.
  */
-export type Availability = "live" | "preview" | "planned";
+import type { Availability } from "@/lib/platform/availability";
+
+export type { Availability };
 
 export type ActionGroup = "create" | "enhance" | "store" | "share" | "learn";
 

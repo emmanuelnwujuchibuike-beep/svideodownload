@@ -139,7 +139,19 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
 
         {/* Desktop right */}
         <div className="hidden items-center gap-3 lg:flex">
-          {!isPremium && (
+          {/*
+            "Go Pro" is shown only to people who are SIGNED IN and not premium.
+
+            The landing mockup's header carries exactly one gradient CTA —
+            "Launch App" (rendered by UserMenu for signed-out visitors). Showing
+            an amber "Go Pro" beside it gave a first-time visitor two competing
+            gradient buttons and asked them to buy a subscription before they had
+            an account, which is the wrong order: the download is the acquisition
+            event, and the upgrade ask only lands once there is something to
+            upgrade. Nothing is lost — Go Pro stays in the mobile menu, on
+            /pricing, and here for signed-in free users, where it is the right ask.
+          */}
+          {user && !isPremium && (
             <Link
               href="/pricing"
               className="group relative inline-flex items-center gap-1.5 overflow-hidden rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/25 transition-all hover:shadow-amber-500/40 hover:shadow-lg active:scale-[0.98]"

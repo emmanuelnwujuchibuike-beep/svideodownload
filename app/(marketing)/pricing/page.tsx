@@ -7,7 +7,14 @@ import { UpgradeButton } from "@/features/monetization/upgrade-button";
 import { getPricing } from "@/lib/monetization/pricing";
 import { cn } from "@/lib/utils";
 
-export const dynamic = "force-dynamic";
+/*
+ * Was `force-dynamic`, which made this public, header-linked page uncacheable on
+ * every request. The only reason was `getPricing()` reading admin-managed prices —
+ * but that goes through `createAdminClient` (service role, no cookies), so it is an
+ * ISR case, not a dynamic one. Price edits now appear within the `revalidate`
+ * window from app/layout.tsx instead of costing every visitor an origin render.
+ */
+export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Pricing — Go ad-free with Pro",

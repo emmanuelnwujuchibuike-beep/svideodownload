@@ -7,6 +7,15 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { getProfiles, isRealStage } from "@/lib/content/genome/queries";
 import { SHOWCASE_PLATFORMS } from "@/lib/platforms";
 
+/*
+ * Static by contract, not by inference. Vercel was building `/` as DYNAMIC while
+ * this repo built it static, which silently made it uncacheable at the edge and
+ * cost ~800-4700ms of TTFB before anyone noticed. This page reads no cookies, no
+ * headers and no searchParams, so it declares that rather than hoping the builder
+ * infers it. ISR still applies via `revalidate` in app/layout.tsx.
+ */
+export const dynamic = "force-static";
+
 /**
  * "Everything Frenz is built for" — the full capability list.
  *

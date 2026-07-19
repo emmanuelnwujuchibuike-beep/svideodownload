@@ -12,6 +12,15 @@ import { jsonLd } from "@/lib/seo/json-ld";
 import { getSeoPage } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
+/*
+ * Static by contract, not by inference. Vercel was building `/` as DYNAMIC while
+ * this repo built it static, which silently made it uncacheable at the edge and
+ * cost ~800-4700ms of TTFB before anyone noticed. This page reads no cookies, no
+ * headers and no searchParams, so it declares that rather than hoping the builder
+ * infers it. ISR still applies via `revalidate` in app/layout.tsx.
+ */
+export const dynamic = "force-static";
+
 export function generateStaticParams() {
   return BLOG_SLUGS.map((slug) => ({ slug }));
 }

@@ -37,21 +37,27 @@ export async function middleware(request: NextRequest) {
 
   const needsGuard = path.startsWith("/account") || path.startsWith("/admin");
 
-  /*
-   * The "signed-in visitors skip the marketing page" redirect USED to live here.
-   * It has moved to `features/auth/signed-in-landing-redirect.tsx`.
-   *
-   * It was the only cookie-conditional redirect on `/`, and that alone made the
-   * landing page uncacheable at the edge — measured live, `/` was the single
-   * prerendered route Vercel would not serve from cache (`x-vercel-cache: MISS`,
-   * `Cache-Control: private, no-cache, no-store`, no `x-nextjs-prerender`
-   * header) while every other static route came back `PRERENDER`/`public`.
-   * TTFB swung 799-4752ms as a result, on the page with the tightest budget.
-   *
-   * `/` is now excluded from the matcher entirely (see `config` at the bottom),
-   * so middleware never runs for it and the prerendered document is served
-   * straight from the CDN.
-   */
+  // Signed-in visitors don't need the marketing page — they get the app.
+  //
+  // This redirect lives HERE rather than in app/page.tsx because the page had
+  // to call cookies() + getUser() to make the decision, and reading cookies()
+  // opts the whole route out of static generation. `/` is the first page a new
+  // visitor ever loads, so it must stay a CDN-cached static document — the
+  // biggest single lever on its cold-entry time (docs/FEATURE_21_LANDING.md §4).
+  // Anonymous visitors fall through the no-auth-cookie branch below and never
+  // pay for any auth work at all.
+  //
+  // Share Target is the exception, and it fails SILENTLY if forgotten:
+  // manifest.ts posts shared links to `/` as a GET with ?url=/?text=, and the
+  // paste-a-link tool that handles them lives on the landing page. Redirecting
+  // those to /home would swallow every "share into Frenz" from a signed-in
+  // user — which is most of them. Keep this in sync with lib/share-target.ts
+  // and manifest.ts's share_target.action if the tool ever moves.
+  const isLandingRedirect =
+    path === "/" &&
+    !request.nextUrl.searchParams.has("url") &&
+    !request.nextUrl.searchParams.has("text");
+  const toHome = () => NextResponse.redirect(new URL("/home", request.url));
 
   // No Supabase auth cookie → the visitor is definitely signed out. Skip the
   // getUser() network round-trip entirely (the biggest latency on a cold entry).
@@ -90,6 +96,11 @@ export async function middleware(request: NextRequest) {
   // Guarded routes are deliberately excluded: their decision is an authorization
   // one, so they always verify against the auth server rather than trusting an
   // unauthenticated cookie hint.
+  // A comfortably-fresh access token means signed in — the same trust this
+  // fast path already extends to every unguarded route. Bounce to /home without
+  // paying for a getUser() round-trip; /home guards itself regardless.
+  if (isLandingRedirect && sessionIsComfortablyFresh(cookies)) return toHome();
+
   if (!needsGuard && sessionIsComfortablyFresh(cookies)) {
     return NextResponse.next({ request });
   }
@@ -158,6 +169,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
+  // Stale-token path: the session just refreshed above, so `user` is verified.
+  // A cookie that turned out to be dead falls through to the static landing —
+  // same as before this moved out of app/page.tsx.
+  if (user && isLandingRedirect) return toHome();
+
   // Admins only for /admin.
   if (user && pathname.startsWith("/admin")) {
     const { data: profile } = await supabase
@@ -175,25 +191,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-      `.+` rather than `.*` — the one-character difference EXCLUDES the exact
-      path `/` from middleware entirely, which is what makes the landing page
-      edge-cacheable.
-
-      Measured live before this change: `/` was the only prerendered route
-      Vercel would not serve from its cache — `x-vercel-cache: MISS`,
-      `Cache-Control: private, no-cache, no-store`, and no `x-nextjs-prerender`
-      header at all, while `/about`, `/learn` and every downloader page came
-      back `PRERENDER`/`STALE` and `public`. The cause was that `/` carried the
-      only cookie-conditional redirect in middleware (signed-in → /home), so its
-      response could vary per visitor and could not be shared. That cost a TTFB
-      of 799-4752ms on the page with the tightest budget in the product.
-
-      The redirect now runs on the client — see `SignedInLandingRedirect`.
-
-      Nothing else changes: `/home`, `/account`, `/admin`, `/api/*` and every
-      other path still have a character after the slash and still match.
-    */
-    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|twitter-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).+)",
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|twitter-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

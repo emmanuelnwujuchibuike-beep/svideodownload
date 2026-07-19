@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 
-import { SignedInLandingRedirect } from "@/features/auth/signed-in-landing-redirect";
 import { CreatorsSection } from "@/components/landing/creators-section";
 import { CtaBanner } from "@/components/landing/cta-banner";
 import { Faq } from "@/components/landing/faq";
@@ -31,12 +30,7 @@ import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
  * in cdg1 (Paris) — from an Africa-primary audience — instead of hitting a CDN.
  *
  * Two things used to force that, and both moved rather than disappeared:
- *  - the signed-in → /home redirect runs on the CLIENT (SignedInLandingRedirect).
- *    It lived in middleware until 2026-07-19, and that was the last thing keeping
- *    this page off the edge cache: a cookie-conditional redirect makes the
- *    response per-visitor, so Vercel served `/` from the origin on every request
- *    (`x-vercel-cache: MISS`, `private, no-store`) while every other static route
- *    came back `PRERENDER`. `/` is now excluded from the middleware matcher.
+ *  - the signed-in → /home redirect now runs in middleware.ts, at the edge;
  *  - the Share Target hand-off is read on the client by SharedLinkDownloader.
  *
  * The auth-dependent chrome never needed the server: SiteHeader is a client
@@ -82,16 +76,6 @@ export default function HomePage() {
         mobile menu, and the sticky ad (the failure removed in 135ed36).
       */}
       <div className="bg-background text-foreground">
-        {/*
-          Signed-in visitors bounce to /home from here rather than from
-          middleware. That move is what lets this page be served from the edge
-          cache — see the component for the measurements. Suspense because it
-          reads searchParams (Share Target), which would otherwise opt this
-          statically-rendered route into dynamic rendering.
-        */}
-        <Suspense fallback={null}>
-          <SignedInLandingRedirect />
-        </Suspense>
         <SiteHeader />
         <main>
         <Hero />

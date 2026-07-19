@@ -182,6 +182,57 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }],
       },
       {
+        /*
+          The worker's SUBMODULES need the same rule as the worker itself.
+          `/sw.js` is only an entry point — it pulls in `/sw/*.js` via
+          importScripts(), and its own header says a submodule is often the only
+          thing edited in a change.
+
+          Measured live before this: `/sw.js` was correctly `no-store`, while
+          `/sw/config.js` came back `public, max-age=7200, must-revalidate`. So a
+          fix shipped in a submodule could keep being served from a browser's
+          HTTP cache for two hours after deploy, while the entry file that pulls
+          it looked fresh — exactly the "my laptop still shows the old UI" class
+          of bug the /sw.js rule above exists to prevent, just through the door
+          it left open.
+        */
+        source: "/sw/:path*",
+        headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }],
+      },
+      {
+        /*
+          Long-lived, revalidation-free caching for assets that ship with the
+          build and never change in place.
+
+          These were served `public, max-age=7200, must-revalidate`, which is why
+          Cloudflare reported `REVALIDATED` rather than `HIT` for them: the edge
+          held a copy but still round-tripped to the origin in Paris on every
+          request to be told it was still fresh. For an Africa-primary audience
+          that revalidation IS the latency — the bytes were already local.
+
+          Dropping `must-revalidate` lets a Cloudflare PoP serve them outright.
+          `stale-while-revalidate` then refreshes in the background, so a
+          replaced file still propagates (within a week, or immediately via a
+          cache purge) without any request ever waiting on it.
+
+          Deliberately NOT `immutable`: that would promise these filenames can
+          never change content, and nothing enforces that. A week of staleness
+          is the honest ceiling. `/_next/static/*` is a different case — Next
+          content-hashes those filenames, so it already sets `immutable` itself.
+        */
+        source: "/:dir(login|brand|splash)/:file*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=2592000" },
+        ],
+      },
+      {
+        // Same reasoning, for the app icons the manifest and iOS reference.
+        source: "/:file(icon|icon-192|icon-512|icon-1024|icon-maskable-512|apple-icon-152|apple-icon-167).png",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=2592000" },
+        ],
+      },
+      {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },

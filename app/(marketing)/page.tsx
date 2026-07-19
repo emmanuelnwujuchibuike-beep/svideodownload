@@ -41,11 +41,34 @@ import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
  * so the shell paints immediately rather than blocking the first byte on their
  * DB queries.
  */
-// Static, but not frozen: ISR regenerates this document so Trending stays
-// current without any visitor ever waiting on a DB read. The cadence is set by
-// `export const revalidate = 60` in app/layout.tsx — Next uses the LOWEST
-// revalidate in the segment tree, so a larger value declared here would be
-// silently ignored. Change it there, not here.
+/*
+ * DECLARED static, not merely expected to be.
+ *
+ * This local build has always produced `○ /`. Vercel's build produces `ƒ /` —
+ * confirmed in its build log — and a dynamically-rendered route is served
+ * `Cache-Control: private, no-cache, no-store` with `x-vercel-cache: MISS`,
+ * which is why `/` was the ONLY prerendered route not served from the CDN
+ * (`/about`, `/learn` and every downloader page come back `PRERENDER`). That
+ * cost a TTFB of 799-4752ms on the page the 2-second budget exists for.
+ *
+ * The divergence is not a missing env var — a local build with `.env.local`
+ * removed entirely still yields `○`. Rather than keep guessing at what differs
+ * inside Vercel's builder, this states the intent the file has always
+ * documented: the page reads no cookies, no headers and no searchParams, so
+ * there is nothing for dynamic rendering to do.
+ *
+ * If some descendant ever DOES reach for request data, `force-static` makes
+ * that visible instead of silently un-caching the front door — which is the
+ * failure mode we just spent a long time diagnosing.
+ *
+ * Still not frozen: ISR regenerates this document so Trending stays current
+ * without any visitor waiting on a DB read. The cadence comes from
+ * `export const revalidate = 60` in app/layout.tsx — Next uses the LOWEST
+ * revalidate in the segment tree, so a larger value declared here would be
+ * silently ignored. Change it there, not here.
+ */
+export const dynamic = "force-static";
+
 export default function HomePage() {
   return (
     <>

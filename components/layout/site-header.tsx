@@ -35,7 +35,16 @@ const NAV_LINKS = [
   { href: "/#products", label: "Products" },
   { href: "/#download", label: "Download" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/blog", label: "Blog" },
+  /*
+    Academy sits in the top nav rather than only in the footer. It is the deepest
+    content on the site and the hub the ~148 generated downloader pages link into,
+    so footer-only placement would leave it effectively unreachable by browsing —
+    which is exactly what happened when it first shipped.
+
+    Blog moves to the footer to keep this row from overflowing on narrow desktop
+    widths; it remains linked there and in the sitemap.
+  */
+  { href: "/academy", label: "Academy" },
   { href: "/contact", label: "Support" },
 ];
 
@@ -49,11 +58,23 @@ const NAV_LINKS = [
  * registry, so this stays a layout decision and never becomes a second source of
  * truth that can disagree with the command palette.
  */
+/*
+  Groups are explicit id lists rather than a filter over the registry, so
+  registering a destination is NOT enough to make it appear here. That caught me
+  out: Academy, Trust Center and Glossary shipped as real, prerendered routes that
+  were unreachable by browsing on any device, because nothing linked to them.
+
+  "Learn" and "Help & trust" are separate groups because they answer different
+  questions. Someone browsing wants the Academy; someone mid-problem wants to
+  delete an account or block a person, and burying that under a heading called
+  "Learn more" is how trust content goes unread.
+*/
 const MENU_GROUPS: { title: string; ids: string[] }[] = [
   { title: "Discover", ids: ["home", "explore", "reels", "search"] },
   { title: "Create", ids: ["create-post", "create-reel", "create-story"] },
   { title: "Your stuff", ids: ["downloads", "saved", "messages", "friends", "notifications"] },
-  { title: "Learn more", ids: ["pricing", "developers", "blog", "contact"] },
+  { title: "Learn", ids: ["academy", "learn", "glossary", "blog"] },
+  { title: "Help & trust", ids: ["trust", "contact", "developers", "pricing"] },
 ];
 
 const DOWNLOADERS = getPrimaryPages();

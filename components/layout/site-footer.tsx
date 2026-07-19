@@ -62,7 +62,10 @@ export function SiteFooter() {
       {/* Top gradient line */}
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border/80 to-transparent" />
 
-      <div className="container grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1.6fr]">
+      {/* Six tracks, not five — the Learn column was added and an explicit
+          template silently overflows if the count drifts from the children.
+          Three-up at md keeps the columns readable before the full row fits. */}
+      <div className="container grid gap-10 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-[1.3fr_1fr_1fr_1fr_1fr_1.5fr]">
         <div>
           <SecretAdminGesture className="inline-flex items-center gap-2 text-lg font-bold tracking-tight">
             <FrenzLogo size={28} />
@@ -106,9 +109,24 @@ export function SiteFooter() {
             ["Contact", "/contact"],
           ]}
         />
+        {/*
+          Learn and Support are separate columns because they answer different
+          questions. Someone browsing wants the Academy; someone mid-problem wants
+          the Trust Center, and burying "who can see my profile" under a heading
+          called Learn is how trust content goes unread.
+        */}
+        <FooterColumn
+          title="Learn"
+          links={[
+            ["Academy", "/academy"],
+            ["Guides", "/learn"],
+            ["Glossary", "/glossary"],
+          ]}
+        />
         <FooterColumn
           title="Support"
           links={[
+            ["Trust Center", "/trust"],
             ["FAQ", "/#faq"],
             ["Privacy Policy", "/privacy"],
             ["Terms of Service", "/terms"],

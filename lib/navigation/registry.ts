@@ -116,6 +116,19 @@ export const DESTINATIONS: Destination[] = [
   { id: "pricing", label: "Pricing", href: "/pricing", kind: "page", icon: CreditCard, keywords: ["upgrade", "pro", "plans", "billing", "subscription"], canAccess: everyone },
   { id: "developers", label: "Developer API", href: "/developers", kind: "docs", icon: KeyRound, workspace: "developer", keywords: ["api", "docs", "keys", "integration", "rest"], canAccess: everyone },
   { id: "learn", label: "Learning Academy", href: "/learn", kind: "docs", icon: GraduationCap, workspace: "learning", keywords: ["guides", "tutorials", "how to", "help", "academy", "learn", "editing", "subtitles", "captions", "quality"], canAccess: everyone },
+  /*
+    Academy, Trust Center and Glossary. Registering them here is what puts them in
+    the mobile menu and ⌘K — both are views over this registry, so a page absent
+    from it is unreachable by navigation no matter how many routes exist.
+    That is precisely how these three shipped invisible.
+
+    Keywords matter more than labels here. Nobody types "Trust Center" — they type
+    "delete account", "is my profile private", "block someone". The entry has to
+    answer the question the user actually has.
+  */
+  { id: "academy", label: "Academy", href: "/academy", kind: "docs", icon: GraduationCap, workspace: "learning", keywords: ["school", "course", "curriculum", "learn", "creator", "community", "security", "developer", "training"], canAccess: everyone },
+  { id: "trust", label: "Trust Center", href: "/trust", kind: "docs", icon: Shield, keywords: ["security", "privacy", "safety", "delete account", "export data", "block", "report", "appeal", "passkey", "2fa", "who can see"], canAccess: everyone },
+  { id: "glossary", label: "Glossary", href: "/glossary", kind: "docs", icon: FileText, keywords: ["definition", "meaning", "jargon", "bitrate", "rendition", "captions", "watermark", "what is"], canAccess: everyone },
   { id: "blog", label: "Blog", href: "/blog", kind: "docs", icon: Newspaper, keywords: ["news", "articles", "updates"], canAccess: everyone },
   { id: "contact", label: "Support", href: "/contact", kind: "docs", icon: LifeBuoy, keywords: ["help", "contact", "support", "problem", "bug"], canAccess: everyone },
   { id: "terms", label: "Terms of Service", href: "/terms", kind: "docs", icon: FileText, keywords: ["legal", "tos"], canAccess: everyone },

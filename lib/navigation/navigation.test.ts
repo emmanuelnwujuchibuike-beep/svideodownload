@@ -191,3 +191,39 @@ describe("Navigation — palette results", () => {
     expect(searchNavigation("e", ADMIN, 4).length).toBeLessThanOrEqual(4);
   });
 });
+
+describe("Navigation — content surfaces are reachable", () => {
+  /**
+   * A page can exist, prerender correctly, sit in the sitemap, and still be
+   * unreachable by a human. That is not hypothetical: /academy, /trust and
+   * /glossary all shipped as real static routes that nothing linked to, on any
+   * device, and the only reason it surfaced was the owner saying they could not
+   * find them.
+   *
+   * Route existence tests above prove a link goes somewhere. This proves the
+   * reverse — that a destination worth having is actually registered, which is
+   * what puts it in the mobile menu and the command palette.
+   */
+  it("registers every top-level content surface", () => {
+    const required = ["/academy", "/learn", "/trust", "/glossary", "/developers", "/pricing"];
+    const registered = new Set(DESTINATIONS.map((d) => d.href));
+    const missing = required.filter((href) => !registered.has(href));
+
+    expect(
+      missing,
+      `Routes with no navigation entry — unreachable by browsing:\n  ${missing.join("\n  ")}`,
+    ).toHaveLength(0);
+  });
+
+  it("gives trust and glossary the keywords people actually type", () => {
+    // Nobody searches "Trust Center". They search "delete account" or "block
+    // someone" — mid-problem, in their own words. A destination findable only by
+    // its formal name is findable only by people who already knew it existed.
+    const trust = DESTINATIONS.find((d) => d.href === "/trust");
+    const glossary = DESTINATIONS.find((d) => d.href === "/glossary");
+
+    expect(trust?.keywords).toContain("delete account");
+    expect(trust?.keywords).toContain("privacy");
+    expect(glossary?.keywords).toContain("what is");
+  });
+});

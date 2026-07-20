@@ -10,13 +10,20 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { RecommendedToolsClient } from "@/components/monetization/recommended-tools-client";
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
 import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
-import { startDownload as enqueueDownload } from "@/features/downloads/manager";
+import {
+  getServerSnapshot as getServerDownloads,
+  getSnapshot as getDownloads,
+  startDownload as enqueueDownload,
+  subscribe as subscribeDownloads,
+} from "@/features/downloads/manager";
 import { PublishButton } from "@/features/social/publish-button";
+import { AdSurface } from "@/features/monetization/ad-surface";
+import { DownloadCompleteAd } from "@/features/monetization/download-complete-ad";
 import { FetchedAd } from "@/features/monetization/fetched-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
 import { useUser } from "@/features/auth/use-user";
@@ -78,6 +85,28 @@ export function Downloader({
 
   const { downloadCount, countDownload } = useGatewayMemory();
   const { user } = useUser();
+
+  /*
+    The after-download placement fires on a REAL completion, not on the button
+    press. `enqueueDownload` starts a background transfer; the file lands
+    seconds later, and showing "your download has started" over a transfer that
+    is still running would be both a lie and an interruption of the thing the
+    visitor is watching. The manager's store is the only source that knows.
+  */
+  const tasks = useSyncExternalStore(subscribeDownloads, getDownloads, getServerDownloads);
+  const announced = useRef<Set<string>>(new Set());
+  const [completeAdOpen, setCompleteAdOpen] = useState(false);
+
+  useEffect(() => {
+    for (const task of tasks) {
+      // Keyed per task id so a second download in the same session shows again,
+      // while re-renders of the same finished task do not.
+      if (task.status === "completed" && !announced.current.has(task.id)) {
+        announced.current.add(task.id);
+        setCompleteAdOpen(true);
+      }
+    }
+  }, [tasks]);
 
   const handleDownload = (formatId: string, kind: MediaKind) => {
     if (!metadata) return;
@@ -253,6 +282,26 @@ export function Downloader({
           </p>
         ) : null}
       </form>
+
+      {/*
+        The under-download placement.
+
+        Inside this component rather than on each page ON PURPOSE: `Downloader`
+        is what the home page and all ~148 generated downloader pages render, so
+        one edit here covers every one of them and a new SEO page inherits it.
+        Adding it per page would guarantee drift, and a missing ad is an absence
+        nobody notices.
+
+        It sits directly under the button while the visitor is deciding, and
+        `AdSurface` renders nothing at all until the zone is filled — so an
+        unconfigured site has exactly the layout it had before.
+      */}
+      <AdSurface zone="under_download" maxWidth="max-w-2xl" className="mt-5" />
+
+      {/* Renders nothing until a transfer genuinely completes AND the zone is
+          filled. Mounted here so it is scoped to the downloader flow rather
+          than firing on pages where no download can happen. */}
+      <DownloadCompleteAd open={completeAdOpen} onClose={() => setCompleteAdOpen(false)} />
 
       {(validationError || error) && status !== "fetching" ? (
         <ErrorCard

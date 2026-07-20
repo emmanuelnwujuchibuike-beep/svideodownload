@@ -3,7 +3,14 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { AD_ZONES } from "./ad-schema";
+import {
+  AD_FORMATS,
+  AD_ZONES,
+  AD_ZONE_META,
+  RETIRED_FORMATS,
+  isPersistentZone,
+  isServableFormat,
+} from "./ad-schema";
 
 /**
  * Ad slots — the empty-box class of bug.
@@ -96,6 +103,124 @@ describe("Ad slots — call-site inventory", () => {
   });
 });
 
+describe("Ad slots — retired formats", () => {
+  it("refuses to serve a click-hijacking unit", () => {
+    /*
+     * The audit found the site's only ad row was an Adsterra `pop` unit, which
+     * is what produced "I click a button and it redirects me to an ad site".
+     * Dropping it from `AD_FORMATS` stops new ones being created; this is the
+     * check that stops EXISTING ones being served, which matters because the
+     * migration that deactivates them is applied by hand.
+     */
+    for (const format of RETIRED_FORMATS) {
+      expect(isServableFormat(format), `${format} is still servable`).toBe(false);
+    }
+    expect((AD_FORMATS as readonly string[]).includes("pop")).toBe(false);
+  });
+
+  it("fails closed on an unknown format", () => {
+    // A typo in a hand-edited row must render nothing, not fall through to the
+    // display branch and inject whatever is in script_code.
+    for (const bogus of ["", "banner", "POP", "displayy", null, undefined]) {
+      expect(isServableFormat(bogus)).toBe(false);
+    }
+  });
+
+  it("leaves no branch that could execute a self-injecting script", () => {
+    // The pop renderer injected a network's script straight into the page.
+    // Deleting the branch is what makes the format unexecutable rather than
+    // merely unreachable.
+    const src = stripComments(
+      readFileSync(path.join(ROOT, "features/monetization/ad-slot.tsx"), "utf8"),
+    );
+    expect(src, "AdSlot still imports the script injector").not.toMatch(/injectAdMarkup/);
+    expect(src).not.toMatch(/=== "pop"/);
+  });
+});
+
+describe("Ad slots — zone registry", () => {
+  it("keeps the runtime list and the AdZone type in agreement", () => {
+    /*
+     * `AD_ZONES` drives the admin dropdown and the validator; `AdZone` is what
+     * every call site is typed against. When they drift, a placement validates
+     * and saves in the admin and then renders nowhere — which is invisible from
+     * either side on its own.
+     *
+     * Checked by source rather than by type because a type cannot be enumerated
+     * at runtime, and the failure is exactly a type/runtime mismatch.
+     */
+    const typeSrc = readFileSync(path.join(ROOT, "lib/monetization/types.ts"), "utf8");
+    const union = typeSrc.slice(typeSrc.indexOf("export type AdZone"));
+    const declared = [...union.slice(0, union.indexOf(";")).matchAll(/"([a-z_]+)"/g)].map(
+      (m) => m[1]!,
+    );
+
+    expect([...declared].sort()).toEqual([...AD_ZONES].sort());
+  });
+
+  it("describes every zone for the admin", () => {
+    // The dropdown shows these. An operator picking "result_top" cannot be
+    // expected to know it means the strip above a fetched result.
+    for (const zone of AD_ZONES) {
+      const meta = AD_ZONE_META[zone];
+      expect(meta, `${zone} has no admin metadata`).toBeTruthy();
+      expect(meta.label.length).toBeGreaterThan(3);
+      expect(meta.description.length).toBeGreaterThan(20);
+    }
+  });
+
+  it("never offers a dismiss control on furniture", () => {
+    // The bottom banner, the under-download unit and the homepage strip are
+    // layout, not interruptions. An X on them is what makes an ad read as
+    // something to get rid of rather than part of the page.
+    for (const zone of ["bottom_banner", "under_download", "homepage_top", "reward_video"]) {
+      expect(isPersistentZone(zone), `${zone} should be persistent`).toBe(true);
+    }
+    // …and the ones the visitor genuinely needs to get past are not furniture.
+    for (const zone of ["idle_interstitial", "download_complete", "download_result_page"]) {
+      expect(isPersistentZone(zone), `${zone} must stay dismissible`).toBe(false);
+    }
+  });
+});
+
+describe("Ad slots — one zone list, not four", () => {
+  it("never re-lists the zones anywhere outside the registry", () => {
+    /*
+     * Three separate copies of this list existed, and every one of them was out
+     * of date the moment a placement was added. Each failed silently and
+     * differently:
+     *
+     *  - `/api/ads` rejected the zone, so the unit could never fill no matter
+     *    what was seeded.
+     *  - `/api/track` rejected the beacon. `navigator.sendBeacon` never surfaces
+     *    a response, so impressions and clicks were dropped with no symptom at
+     *    all, and the dashboard showed a confident zero.
+     *  - `lib/monetization/stats.ts` iterated its copy to build the per-zone
+     *    table, so a live placement was ABSENT from the report rather than shown
+     *    as zero — unfalsifiable from the reader's side.
+     *
+     * The rule is therefore structural: any file that names two or more zone ids
+     * as string literals is building a second registry.
+     */
+    const offenders: string[] = [];
+    for (const file of FILES) {
+      if (file.endsWith(path.join("lib", "monetization", "ad-schema.ts"))) continue;
+      const src = stripComments(readFileSync(path.join(ROOT, file), "utf8"));
+      const hits = new Set(
+        [...src.matchAll(/["']([a-z_]+)["']/g)]
+          .map((m) => m[1]!)
+          .filter((v) => (AD_ZONES as readonly string[]).includes(v)),
+      );
+      if (hits.size >= 3) offenders.push(`${file} (${[...hits].join(", ")})`);
+    }
+    expect(
+      offenders,
+      `Files re-listing the zone registry:\n  ${offenders.join("\n  ")}\n\n` +
+        `Import AD_ZONES from lib/monetization/ad-schema instead.`,
+    ).toHaveLength(0);
+  });
+});
+
 describe("Ad slots — no decorated empty boxes", () => {
   it("gives every call site a way to collapse when the zone is empty", () => {
     /*
@@ -116,7 +241,29 @@ describe("Ad slots — no decorated empty boxes", () => {
 
     for (const file of CALL_SITES) {
       const src = stripComments(readFileSync(path.join(ROOT, file), "utf8"));
-      const collapses = /onResolved=/.test(src) || /empty:hidden/.test(src);
+
+      /*
+        Three mechanisms are acceptable, and a call site must use one:
+
+         1. `onResolved` — the slot reports whether it found an ad and the
+            parent withholds its chrome. Required whenever the chrome has
+            SIBLINGS of the slot, because then the wrapper is never childless.
+         2. `empty:hidden` — the CSS route. Only valid when the slot is the
+            wrapper's only child.
+         3. The component fetches the zone ITSELF and returns null when it is
+            empty. `ResultAd` does this because it needs the row's `skippable`
+            and `skip_after_seconds` anyway, so asking the slot a second time
+            would be redundant. It is exactly as safe: nothing renders.
+
+        (3) was missing when this rule was first written, and the guard
+        correctly flagged a component that was already correct — a false
+        positive is how a check like this earns a reputation for crying wolf
+        and gets deleted, so it is worth recognising the pattern properly.
+      */
+      const collapses =
+        /onResolved=/.test(src) ||
+        /empty:hidden/.test(src) ||
+        /if \(!ad[^)]*\)\s*return null/.test(src);
       if (collapses) continue;
 
       // Chrome = a label a reader would read as "an ad goes here", or a
@@ -148,12 +295,51 @@ describe("Ad slots — no decorated empty boxes", () => {
     expect(/Sponsored|min-h-\[|aria-label="Close ad"/.test(broken)).toBe(true);
   });
 
-  it("keeps the landing page wrapper collapsible", () => {
-    // This one is load-bearing and CSS-only: the wrapper has padding, so
-    // without `empty:hidden` it renders a band of dead space between two
-    // sections. It has regressed into that state once already.
-    const src = readFileSync(path.join(ROOT, "app/(marketing)/page.tsx"), "utf8");
-    expect(src).toMatch(/empty:hidden/);
+  it("routes the landing page slot through a collapsing surface", () => {
+    /*
+     * Was an `empty:hidden` assertion. That utility was the CSS-only fix for the
+     * band of dead space this section was reported for, and it has been
+     * superseded by `AdSurface`, which renders nothing at all until the slot
+     * confirms an ad — a stronger guarantee, since it also collapses the label
+     * and the card that `empty:hidden` could never see past.
+     *
+     * The requirement is unchanged: this page must not be able to render a
+     * wrapper around an empty zone.
+     */
+    const src = stripComments(readFileSync(path.join(ROOT, "app/(marketing)/page.tsx"), "utf8"));
+    expect(src, "landing page renders a raw AdSlot again").not.toMatch(/<AdSlot\b/);
+    expect(src).toMatch(/<AdSurface\b/);
+  });
+
+  it("puts the site-wide furniture in the layout, not on individual pages", () => {
+    /*
+     * The bottom banner and the idle interstitial must cover every page in the
+     * marketing group — ~150 routes once the generated downloader pages are
+     * counted. Mounting them per page guarantees drift: a route added later
+     * gets a header, a footer and no banner, and the missing thing is an
+     * absence nobody notices.
+     *
+     * Mounting them in BOTH places is the other failure — two bottom bars and
+     * two idle timers on the one page that has them inline.
+     */
+    const layout = stripComments(
+      readFileSync(path.join(ROOT, "app/(marketing)/layout.tsx"), "utf8"),
+    );
+    expect(layout).toMatch(/<StickyBottomAd\b/);
+    expect(layout).toMatch(/<IdleInterstitial\b/);
+
+    const home = stripComments(readFileSync(path.join(ROOT, "app/(marketing)/page.tsx"), "utf8"));
+    expect(home, "landing page mounts a second bottom banner").not.toMatch(/<StickyBottomAd\b/);
+    expect(home, "landing page mounts a second idle interstitial").not.toMatch(/<IdleInterstitial\b/);
+  });
+
+  it("puts the under-download slot in the shared Downloader, not per page", () => {
+    // One edit covering the home page and all ~148 generated downloader pages,
+    // and inherited automatically by any SEO page added later.
+    const src = stripComments(
+      readFileSync(path.join(ROOT, "features/downloader/downloader.tsx"), "utf8"),
+    );
+    expect(src).toMatch(/zone="under_download"/);
   });
 
   it("starts FetchedAd hidden rather than visible", () => {

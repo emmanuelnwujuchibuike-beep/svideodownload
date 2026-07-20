@@ -2685,3 +2685,87 @@ served.
 Also open: **what "a different way" means for the bottom banner** — needs the
 specific ask before redesigning. And `exit_intent_popup` is declared with no call
 site: either build it or remove the zone.
+
+---
+
+## Ad placements v2 — AdSense, premium surfaces, no click hijacking (2026-07-20)
+
+Owner: drop the click-hijacking formats, use display/native, make every slot feel
+like part of the design, add a slot under the Download button and a fixed bottom
+banner on every SEO page, AdSense for the two video placements, an idle
+interstitial and an after-download panel — and wire it all to the admin.
+
+**`pop` is retired, in two independent places.** `AD_FORMATS` no longer contains
+it (nothing new can be created) and `isServableFormat` filters it at read time
+(nothing existing can be served). Independent on purpose: migrations here are
+applied by hand, so the serving path must not wait for `0090`. The self-injecting
+branch in `AdSlot` was **deleted**, not disabled — that branch is what let a
+Social Bar hijack the first click. Verified end to end: the site's only ad row is
+that pop unit, and `/api/ads?zone=download_result_page` now returns `{"ad":null}`.
+
+### Three duplicated zone lists, each failing differently and silently
+
+The zone list existed in **four** places. Every copy was stale the moment a
+placement was added, and each broke in its own invisible way:
+
+| Copy | Effect |
+|---|---|
+| `/api/ads` | Rejected the zone — the unit could never fill, whatever was seeded |
+| `/api/track` | Rejected the beacon. `sendBeacon` never surfaces a response, so **every impression and click on a new placement was dropped** and the dashboard showed a confident zero |
+| `lib/monetization/stats.ts` | Iterates its copy to build the per-zone table, so a live placement was **absent from the report** rather than shown as zero — unfalsifiable from the reader's side |
+
+All three now import `AD_ZONES`. A test fails any file naming three or more zone
+ids as literals. It immediately caught a fourth (`ad-manager.tsx` deciding which
+fields to show), which became a `supportsSkip` flag on the zone registry beside
+`persistent` — the property belongs with the zone, not with each surface.
+
+⚠️ **My own visual verification hid this.** The Playwright run mocked `/api/ads`,
+so the new zones "worked" while the real endpoint rejected them. Re-verified
+against the running server: all 12 zones return `{"ad":null}` (valid, unseeded)
+and `/api/track` returns 200 for each while still rejecting a bogus zone with 400.
+
+### MRR was computed from environment variables, not the configured prices
+
+`fetchRevenueStats` read `MONETIZATION_MRR_PRO` / `_BUSINESS`, defaulting to 4.99
+and 9.99 — numbers unrelated to anything on the pricing screen. Changing a price
+in the admin moved `/pricing` and left the revenue figure untouched, so the
+dashboard reported a confident total built from values nobody had chosen.
+
+Now derived from `getPricing()` at request time. The stored price is a display
+string, so `parsePrice` handles symbols and grouping (`₦2,500`, `NGN 2,500`,
+`$9.99/mo`) and returns **null rather than guessing** — "Contact us" is a real
+thing to write on a pricing page. `RevenueStats.mrrComplete` reports that, so the
+dashboard can say the total is partial instead of silently treating a plan as
+free.
+
+### The placements
+
+`AdSurface` is the shared frame: solid card, small "Sponsored" label, page
+radius/shadow, **no dismiss control**, and it renders *nothing at all* until the
+slot confirms an ad. `isPersistentZone` enforces the missing X from the ZONE, so
+a call site cannot re-enable it. The label stays: a unit styled to belong to the
+page is, unlabelled, a unit disguised as editorial — and for AdSense that is a
+policy violation.
+
+- **`under_download`** — inside `Downloader`, so the home page and all ~148
+  generated pages get it from one edit and a new SEO page inherits it.
+- **`bottom_banner`** — in a new `app/(marketing)/layout.tsx` with the idle
+  interstitial, so coverage is structural across ~150 routes. Falls back to the
+  legacy `mobile_bottom_banner` zone (mobile-only) so configured rows are not
+  orphaned. Appends a spacer so a fixed bar cannot cover the footer's legal row.
+- **`idle_interstitial`** — 5s idle as specified, but capped to once per session
+  and never within 45s of load. Uncapped it would fire every few seconds of
+  reading, which is also the pattern that gets an AdSense account suspended.
+- **`download_complete`** — fires on a **real** completion from the download
+  manager's store, not on the button press; the transfer is still running then.
+- **`download_result_page`** — `ResultAd`, skip control timed by the row's own
+  `skippable` / `skip_after_seconds`, counted from when the ad RESOLVES, not from
+  mount.
+
+AdSense gets a real `<ins class="adsbygoogle">` in the top-level document — never
+inside the display format's `srcdoc` iframe, where it cannot read the host URL to
+target or verify. One loader per publisher id, one push per unit. **No CSP change
+was needed**: `script-src` and `frame-src` already allow `https:`.
+
+**Verified:** 616 tests, build clean, every marketing route still prerendered,
+and screenshots confirm the under-download card and bottom bar render with no X.

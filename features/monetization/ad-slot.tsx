@@ -3,10 +3,11 @@
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { isPersistentZone } from "@/lib/monetization/ad-schema";
 import { cn } from "@/lib/utils";
 import type { AdSlotData, AdZone } from "@/lib/monetization/types";
 
-import { injectAdMarkup } from "./inject";
+import { AdSenseUnit } from "./adsense-unit";
 
 function beacon(kind: "impression" | "click", zone: string, adId: string) {
   navigator.sendBeacon?.(
@@ -22,7 +23,19 @@ function beacon(kind: "impression" | "click", zone: string, adId: string) {
  *  - "display" → network banner rendered inside an isolated <iframe srcdoc> so
  *                even `document.write` codes (classic Adsterra/PropellerAds
  *                banners) work without wiping the page
- *  - "pop"     → self-injecting script executed directly in the page
+ *  - "adsense" → a real `<ins class="adsbygoogle">` in the top-level document,
+ *                which is the only place AdSense may run
+ *  - "video"   → handled by the placements that own a player; this component
+ *                renders nothing for it
+ *
+ * ── `pop` is gone ─────────────────────────────────────────────────────────────
+ *
+ * The self-injecting branch that ran a network's script directly in the page has
+ * been removed, not merely disabled. That branch is what made a pop-under or
+ * Social Bar unit able to hijack the first click anywhere on the page. The
+ * serving layer already filters those rows out (`isServableFormat`); deleting
+ * the branch means that even a row that somehow reached this component has
+ * nothing here to execute it.
  */
 export function AdSlot({
   zone,
@@ -47,7 +60,6 @@ export function AdSlot({
 }) {
   const [ad, setAd] = useState<AdSlotData | null>(null);
   const [closed, setClosed] = useState(false);
-  const hostRef = useRef<HTMLDivElement>(null);
   const tracked = useRef(false);
   const notified = useRef(false);
 
@@ -82,16 +94,6 @@ export function AdSlot({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone]);
 
-  // Self-injecting (pop) scripts run directly in the page.
-  useEffect(() => {
-    if (!ad || ad.format !== "pop" || !ad.scriptCode || !hostRef.current) return;
-    const host = hostRef.current;
-    injectAdMarkup(host, ad.scriptCode);
-    return () => {
-      host.innerHTML = "";
-    };
-  }, [ad]);
-
   useEffect(() => {
     if (!ad || tracked.current) return;
     tracked.current = true;
@@ -100,7 +102,22 @@ export function AdSlot({
 
   if (!ad || closed) return null;
 
-  const closeBtn = dismissible ? (
+  /*
+    Furniture is never dismissible, regardless of what the caller passed.
+
+    The bottom banner, the under-download unit and the homepage strip are part of
+    the page's layout — the SofaScore model, where the ad occupies a designed
+    slot rather than floating over the content with an X in the corner. A close
+    button on those reads as an interruption to be dismissed, which is precisely
+    the impression the placement is designed to avoid.
+
+    Decided from the ZONE rather than from the call site because it is a property
+    of the placement, and leaving it to each caller is how the two that matter
+    most end up inconsistent.
+  */
+  const canDismiss = dismissible && !isPersistentZone(zone);
+
+  const closeBtn = canDismiss ? (
     <button
       type="button"
       onClick={() => setClosed(true)}
@@ -163,6 +180,35 @@ export function AdSlot({
     );
   }
 
-  // pop: invisible host the script injected itself into.
-  return <div ref={hostRef} className={className} aria-hidden style={{ display: "contents" }} />;
+  // AdSense — must run in the top-level document, never in the display iframe.
+  if (ad.format === "adsense" && ad.adClient && ad.adSlotId) {
+    return (
+      <div className={cn("relative flex justify-center", className)}>
+        {closeBtn}
+        <AdSenseUnit
+          client={ad.adClient}
+          slotId={ad.adSlotId}
+          layout={ad.adLayout}
+          width={ad.width}
+          height={ad.height}
+          className="w-full"
+        />
+      </div>
+    );
+  }
+
+  /*
+    Anything left renders nothing.
+
+    Reached by a `video` row (whose player is owned by the reward and result
+    placements, not by this component) and by any row missing the fields its own
+    format requires — an AdSense row with no publisher id, a display row with no
+    script. Those are prevented at write time by `adCreateSchema` and by the
+    database CHECK, so reaching here means a row predates the validation. Render
+    nothing rather than a frame around nothing.
+
+    This is also where a retired `pop` row lands if one ever gets this far: there
+    is no branch left that can execute it.
+  */
+  return null;
 }

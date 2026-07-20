@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import type { RevenueStrategy } from "@/lib/monetization/types";
 
-import { AdSlot } from "./ad-slot";
+import { ResultAd } from "./result-ad";
 
 /**
  * Renders whatever the server-side decision engine chose for this visit:
@@ -32,7 +32,13 @@ export function ResultOffer() {
   if (!strategy || strategy.type === "none") return null;
 
   if (strategy.type === "ad") {
-    return <AdSlot zone="download_result_page" className="mx-auto mt-6 w-full max-w-2xl" />;
+    /*
+      `ResultAd` rather than a bare slot: this placement can hold a video, and
+      an unskippable video on the screen where the visitor's file is waiting is
+      the most resented pattern in this category. It also renders nothing when
+      the zone is empty, so no frame appears around nothing.
+    */
+    return <ResultAd />;
   }
 
   if (strategy.type === "affiliate") {

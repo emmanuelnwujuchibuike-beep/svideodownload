@@ -10,7 +10,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
  */
 
 export interface MonetizationSettings {
-  /** Adsterra networks (banners + global social-bar/pop scripts). */
+  /** Google AdSense units (banners, and the video placements). */
+  adsense: boolean;
+  /** Adsterra networks. */
   adsterra: boolean;
   /** PropellerAds networks. */
   propellerads: boolean;
@@ -18,18 +20,29 @@ export interface MonetizationSettings {
   affiliates: boolean;
   /** Curated "Recommended Tools" sections (homepage/footer/sidebar/blog). */
   recommendedTools: boolean;
-  /** Allow pop-under units (a `pop`-format ad). */
-  popunder: boolean;
-  /** Allow interstitial / full-page units. */
+  /**
+   * Allow interstitial / full-page units — the idle and download-complete
+   * placements, and any `video` unit.
+   *
+   * Defaults OFF. These are the most intrusive placements on the site and
+   * turning them on should be a deliberate act, not something inherited by a
+   * site that never configured anything.
+   */
   interstitial: boolean;
 }
 
+/*
+  `popunder` is deliberately absent. It was a switch that defaulted to ON and
+  permitted click-hijacking units; the format itself is now retired in
+  `ad-schema.ts`, which is a stronger guarantee than a toggle. A stored value
+  from before this change is simply ignored by the merge below.
+*/
 export const DEFAULT_MONETIZATION: MonetizationSettings = {
+  adsense: true,
   adsterra: true,
   propellerads: true,
   affiliates: true,
   recommendedTools: true,
-  popunder: true,
   interstitial: false,
 };
 

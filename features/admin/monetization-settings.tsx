@@ -7,13 +7,22 @@ import { useState } from "react";
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import { cn } from "@/lib/utils";
 
+/*
+  The "Pop-under" switch was removed with the format itself. It defaulted to ON
+  and permitted click-hijacking units; retiring the format in `ad-schema.ts` is
+  a stronger guarantee than a toggle an operator has to remember to turn off.
+*/
 const ROWS: { key: keyof MonetizationSettings; label: string; hint: string }[] = [
-  { key: "adsterra", label: "Adsterra", hint: "Banners + global social-bar / pop scripts" },
+  { key: "adsense", label: "Google AdSense", hint: "AdSense banner and video units" },
+  { key: "adsterra", label: "Adsterra", hint: "Adsterra network banners" },
   { key: "propellerads", label: "PropellerAds", hint: "PropellerAds network units" },
   { key: "affiliates", label: "Affiliate offers", hint: "Affiliate CTA on the download-result page" },
   { key: "recommendedTools", label: "Recommended tools", hint: "Curated tool sections (home/footer/sidebar)" },
-  { key: "popunder", label: "Pop-under", hint: "Allow pop-under units" },
-  { key: "interstitial", label: "Interstitial", hint: "Allow full-page interstitial units" },
+  {
+    key: "interstitial",
+    label: "Full-screen units",
+    hint: "Idle interstitial, the after-download panel, and any video unit. Off by default.",
+  },
 ];
 
 export function MonetizationSettings({ settings }: { settings: MonetizationSettings }) {

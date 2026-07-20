@@ -16,9 +16,7 @@ import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { productJsonLd } from "@/lib/content/genome/queries";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL } from "@/lib/site";
-import { AdScripts } from "@/features/monetization/ad-scripts";
-import { AdSlot } from "@/features/monetization/ad-slot";
-import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
+import { AdSurface } from "@/features/monetization/ad-surface";
 
 /**
  * The marketing landing page — the first page a new visitor ever loads, and the
@@ -127,16 +125,15 @@ export default function HomePage() {
         <ProductGrid />
 
         {/*
-          Ad slot — unchanged zone, placed in the new flow.
+          Ad slot — same zone, now on the shared premium surface.
 
-          `empty:hidden` collapses the wrapper when no ad is configured for this
-          zone. Without it the padding still rendered as a band of dead space
-          between two sections, which is exactly the "empty space" this page was
-          reported for. The utility only matches when the element has no child
-          nodes at all, so a live ad is unaffected.
+          `AdSurface` supersedes the old `empty:hidden` wrapper: it renders
+          nothing at all until the slot confirms an ad, which collapses the band
+          of dead space this section was reported for AND gives the unit the same
+          card, label and rhythm as every other placement on the site.
         */}
-        <div className="container max-w-5xl py-2 empty:hidden">
-          <AdSlot zone="homepage_top" />
+        <div className="container max-w-5xl py-2">
+          <AdSurface zone="homepage_top" maxWidth="max-w-3xl" />
         </div>
 
         <PlatformShowcase />
@@ -174,9 +171,12 @@ export default function HomePage() {
         </main>
         <SiteFooter />
       </div>
-      {/* Ads live only here on the marketing landing page. */}
-      <StickyBottomAd />
-      <AdScripts />
+      {/*
+        The bottom banner, the idle interstitial and the page-level script tag
+        moved to `app/(marketing)/layout.tsx` so every page in the group carries
+        them — including the ~148 generated downloader pages and the ones with
+        no paste box. Rendering them here as well would mount two of each.
+      */}
     </>
   );
 }

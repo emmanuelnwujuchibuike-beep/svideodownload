@@ -1,19 +1,171 @@
 import { z } from "zod";
 
-/** Validation for admin ad-placement writes (Adsterra / PropellerAds / house). */
+/** Validation for admin ad-placement writes (AdSense / Adsterra / house). */
 
+/**
+ * Every placement the site can fill, in the reading order of the page.
+ *
+ * The admin dropdown renders this list, and an operator picking a placement is
+ * thinking about WHERE it goes, not which component renders it — so the labels
+ * and descriptions in `AD_ZONE_META` are part of the contract, not decoration.
+ * A mis-placed ad is invisible to everyone except the visitor who sees it.
+ */
 export const AD_ZONES = [
   "global",
   "homepage_top",
-  "download_result_page",
+  "under_download",
   "result_top",
+  "download_result_page",
+  "download_complete",
+  "idle_interstitial",
   "reward_video",
   "sidebar",
-  "exit_intent_popup",
+  "bottom_banner",
+  /* Legacy, kept so existing rows stay visible and editable in the admin rather
+     than vanishing from the list they were created in. */
   "mobile_bottom_banner",
+  "exit_intent_popup",
 ] as const;
 
-export const AD_FORMATS = ["display", "pop", "native", "video"] as const;
+export type AdZoneId = (typeof AD_ZONES)[number];
+
+/**
+ * Formats an ad row may use.
+ *
+ * `pop` is deliberately ABSENT. Pop-under / OnClick / Social Bar units monetise
+ * by hijacking the visitor's first click, which is what produced the reported
+ * "I click a button and it redirects me to an ad site". The decision was to drop
+ * them in favour of `display` and `native` units placed as part of the design.
+ *
+ * Removing it here stops new ones being created. `isServableFormat` stops
+ * EXISTING ones being served, and the two are independent on purpose: the
+ * migrations in this project are applied by hand, so the serving path must not
+ * wait for one to land.
+ */
+export const AD_FORMATS = ["display", "native", "adsense", "video"] as const;
+
+export type AdFormatId = (typeof AD_FORMATS)[number];
+
+/** Formats that were once allowed and must never be served again. */
+export const RETIRED_FORMATS = ["pop"] as const;
+
+/**
+ * The serving gate.
+ *
+ * Fails closed on any unknown string, not just the retired ones: a typo in a
+ * hand-edited row should render nothing rather than fall through to the
+ * `display` branch and inject whatever happens to be in `script_code`.
+ */
+export function isServableFormat(format: string | null | undefined): format is AdFormatId {
+  return (AD_FORMATS as readonly string[]).includes(format ?? "");
+}
+
+export interface AdZoneMeta {
+  label: string;
+  description: string;
+  /** Furniture rather than something a visitor dismisses — never gets an X. */
+  persistent: boolean;
+  /**
+   * The visitor WAITS through this placement, so a skip control is meaningful
+   * and `skippable` / `skip_after_seconds` apply.
+   *
+   * A property of the zone, kept here beside `persistent`, because the
+   * alternative is each surface naming zone ids to decide — which is how three
+   * separate copies of the zone list came to exist in the first place.
+   */
+  supportsSkip: boolean;
+  deprecated?: boolean;
+}
+
+export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
+  global: {
+    label: "Page-level script",
+    description:
+      "Loaded once per page and renders nothing itself. Use for an AdSense Auto ads loader or a network page tag.",
+    persistent: true,
+    supportsSkip: false,
+  },
+  homepage_top: {
+    label: "Home — above the platform strip",
+    description: "Between the hero and the supported-platform row. Collapses when empty.",
+    persistent: true,
+    supportsSkip: false,
+  },
+  under_download: {
+    label: "Under the Download button",
+    description:
+      "Directly below the paste box and Download button, on the home page and every downloader page. The highest-attention placement on the site.",
+    persistent: true,
+    supportsSkip: false,
+  },
+  result_top: {
+    label: "Above a fetched result",
+    description: "A strip above a result that dismisses itself after five seconds.",
+    persistent: false,
+    supportsSkip: false,
+  },
+  download_result_page: {
+    label: "Download result",
+    description:
+      "Shown alongside the result. Renders as a skippable video when the format is AdSense or video.",
+    persistent: false,
+    supportsSkip: true,
+  },
+  download_complete: {
+    label: "After a download finishes",
+    description: "A skippable panel shown once the file has actually been saved.",
+    persistent: false,
+    supportsSkip: true,
+  },
+  idle_interstitial: {
+    label: "Idle interstitial",
+    description:
+      "Full screen, shown after the visitor has gone idle. Always closable from the top right.",
+    persistent: false,
+    supportsSkip: true,
+  },
+  reward_video: {
+    label: "Rewarded video (unlock HD)",
+    description:
+      "Watched to completion in exchange for an HD download. Never skippable — it is an exchange. AdSense is the intended network.",
+    persistent: true,
+    supportsSkip: false,
+  },
+  sidebar: {
+    label: "Blog sidebar",
+    description: "In-article placement on blog posts. Collapses when empty.",
+    persistent: true,
+    supportsSkip: false,
+  },
+  bottom_banner: {
+    label: "Fixed bottom banner (all pages)",
+    description:
+      "Pinned to the bottom of the viewport on every page, on a solid card so it reads as part of the chrome. Not dismissible.",
+    persistent: true,
+    supportsSkip: false,
+  },
+  mobile_bottom_banner: {
+    label: "Fixed bottom banner — mobile only (legacy)",
+    description:
+      "Superseded by the all-pages bottom banner, which serves this zone as a fallback. Prefer the new placement.",
+    persistent: true,
+    supportsSkip: false,
+    deprecated: true,
+  },
+  exit_intent_popup: {
+    label: "Exit intent (not built)",
+    description:
+      "Declared but nothing renders it. A row here will never be shown until the placement exists.",
+    persistent: false,
+    supportsSkip: false,
+    deprecated: true,
+  },
+};
+
+/** Zones whose unit is furniture — never given a dismiss control. */
+export function isPersistentZone(zone: string): boolean {
+  return AD_ZONE_META[zone as AdZoneId]?.persistent ?? false;
+}
 
 const httpUrl = z
   .string()
@@ -26,22 +178,110 @@ const httpUrl = z
   .or(z.literal("").transform(() => null));
 
 const intField = (max: number) => z.number().int().min(0).max(max).nullable().optional();
+const emptyToNull = z.literal("").transform(() => null);
 
-export const adCreateSchema = z.object({
+const baseFields = {
   zone: z.enum(AD_ZONES),
   network: z.string().trim().min(1).max(40),
   format: z.enum(AD_FORMATS),
-  script_code: z.string().max(20000).nullable().optional().or(z.literal("").transform(() => null)),
+  script_code: z.string().max(20000).nullable().optional().or(emptyToNull),
   image_url: httpUrl,
   target_url: httpUrl,
-  headline: z.string().trim().max(120).nullable().optional().or(z.literal("").transform(() => null)),
+  headline: z.string().trim().max(120).nullable().optional().or(emptyToNull),
   width: intField(4000),
   height: intField(4000),
+  /*
+    AdSense identifiers are shape-checked, not merely non-empty. A publisher id
+    pasted without its `ca-pub-` prefix, or a slot id with stray characters,
+    renders a unit that loads and earns nothing — and that failure is completely
+    silent on the page, which is the worst kind this table can produce.
+  */
+  ad_client: z
+    .string()
+    .trim()
+    .regex(/^ca-pub-\d{10,20}$/, "Should look like ca-pub-1234567890123456")
+    .nullable()
+    .optional()
+    .or(emptyToNull),
+  ad_slot_id: z
+    .string()
+    .trim()
+    .regex(/^\d{6,20}$/, "The numeric ad unit id from AdSense")
+    .nullable()
+    .optional()
+    .or(emptyToNull),
+  ad_layout: z.string().trim().max(40).nullable().optional().or(emptyToNull),
+  skippable: z.boolean().optional(),
+  skip_after_seconds: z.number().int().min(0).max(120).optional(),
   priority: z.number().int().min(0).max(1000).optional(),
   weight: z.number().int().min(1).max(1000).optional(),
   active: z.boolean().optional(),
-});
+};
 
-export const adUpdateSchema = adCreateSchema.partial();
+/**
+ * Cross-field rules, applied to both create and update.
+ *
+ * Every one of these describes a row that saves cleanly and then renders an
+ * empty frame — the data form of the empty-box bug. The database has the same
+ * constraint for the AdSense case; this exists so the admin shows a field error
+ * instead of a constraint violation, and so the rule still holds before the
+ * migration has been applied.
+ */
+function checkCoherence(
+  v: {
+    format?: string;
+    ad_client?: string | null;
+    ad_slot_id?: string | null;
+    script_code?: string | null;
+    target_url?: string | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  if (v.format === "adsense") {
+    if (!v.ad_client) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ad_client"],
+        message: "AdSense placements need a publisher id",
+      });
+    }
+    if (!v.ad_slot_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ad_slot_id"],
+        message: "AdSense placements need an ad unit id",
+      });
+    }
+  }
+  if ((v.format === "display" || v.format === "video") && !v.script_code) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["script_code"],
+      message: v.format === "video" ? "Video placements need a video URL" : "Paste the network embed code",
+    });
+  }
+  if (v.format === "native" && !v.target_url) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["target_url"],
+      message: "House ads need a click-through URL",
+    });
+  }
+}
+
+export const adCreateSchema = z.object(baseFields).superRefine(checkCoherence);
+
+/*
+  Update validates the same way, but only when `format` is part of the payload —
+  a partial patch that just flips `active` must not be rejected for lacking
+  fields it was never trying to change.
+*/
+export const adUpdateSchema = z
+  .object(baseFields)
+  .partial()
+  .superRefine((v, ctx) => {
+    if (v.format === undefined) return;
+    checkCoherence(v, ctx);
+  });
 
 export type AdCreateInput = z.infer<typeof adCreateSchema>;

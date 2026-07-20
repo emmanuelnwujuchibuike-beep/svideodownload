@@ -2,26 +2,27 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { recordAdClick, recordAdImpression } from "@/lib/analytics/events";
+import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { clientId, trackLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ZONES = [
-  "global",
-  "homepage_top",
-  "download_result_page",
-  "result_top",
-  "reward_video",
-  "sidebar",
-  "exit_intent_popup",
-  "mobile_bottom_banner",
-] as const;
+/*
+  Derived from the one registry, never re-listed here.
 
+  This was a hand-maintained copy and it did not include any placement added
+  after it was written. The failure was completely silent and specifically
+  destroys the numbers this endpoint exists to produce: the beacon is sent with
+  `navigator.sendBeacon`, which never surfaces a response, so a rejected zone
+  looks exactly like a recorded one from the page's side. Every impression and
+  click on a new placement would have been dropped, and the admin dashboard
+  would have shown a confident zero.
+*/
 const schema = z.object({
   kind: z.enum(["impression", "click"]),
-  zone: z.enum(ZONES),
+  zone: z.enum(AD_ZONES),
   adId: z.string().uuid().nullable().optional(),
 });
 

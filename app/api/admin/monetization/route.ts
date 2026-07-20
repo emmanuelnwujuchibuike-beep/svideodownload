@@ -7,12 +7,17 @@ import { setMonetizationSettings } from "@/lib/monetization/settings";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/*
+  `popunder` was dropped with the format. A payload from a cached older client
+  may still include it; `.strip()` (zod's default for unknown keys) discards it
+  rather than 400ing an otherwise valid save.
+*/
 const schema = z.object({
+  adsense: z.boolean(),
   adsterra: z.boolean(),
   propellerads: z.boolean(),
   affiliates: z.boolean(),
   recommendedTools: z.boolean(),
-  popunder: z.boolean(),
   interstitial: z.boolean(),
 });
 

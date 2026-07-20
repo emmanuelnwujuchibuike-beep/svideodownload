@@ -4,7 +4,7 @@ import { Loader2, Megaphone, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { AD_FORMATS, AD_ZONES } from "@/lib/monetization/ad-schema";
+import { AD_FORMATS, AD_ZONES, AD_ZONE_META } from "@/lib/monetization/ad-schema";
 import type { AdRecord } from "@/lib/monetization/ads";
 import { cn } from "@/lib/utils";
 
@@ -21,21 +21,31 @@ interface FormState {
   headline: string;
   width: string;
   height: string;
+  ad_client: string;
+  ad_slot_id: string;
+  ad_layout: string;
+  skippable: boolean;
+  skip_after_seconds: number;
   priority: number;
   weight: number;
   active: boolean;
 }
 
 const EMPTY: FormState = {
-  zone: "homepage_top",
-  network: "adsterra",
-  format: "display",
+  zone: "under_download",
+  network: "adsense",
+  format: "adsense",
   script_code: "",
   image_url: "",
   target_url: "",
   headline: "",
   width: "",
   height: "",
+  ad_client: "",
+  ad_slot_id: "",
+  ad_layout: "auto",
+  skippable: true,
+  skip_after_seconds: 5,
   priority: 100,
   weight: 1,
   active: true,
@@ -44,13 +54,24 @@ const EMPTY: FormState = {
 const recordToForm = (r: AdRecord): FormState => ({
   zone: r.zone as Zone,
   network: r.network,
-  format: r.format as Format,
+  /*
+    A legacy `pop` row has a format that is no longer in the dropdown. Showing
+    it as `display` would misrepresent what is stored; falling back to the first
+    valid format makes the edit form usable and means saving the row migrates it
+    off the retired format, which is the direction we want.
+  */
+  format: (AD_FORMATS as readonly string[]).includes(r.format) ? (r.format as Format) : "display",
   script_code: r.script_code ?? "",
   image_url: r.image_url ?? "",
   target_url: r.target_url ?? "",
   headline: r.headline ?? "",
   width: r.width != null ? String(r.width) : "",
   height: r.height != null ? String(r.height) : "",
+  ad_client: r.ad_client ?? "",
+  ad_slot_id: r.ad_slot_id ?? "",
+  ad_layout: r.ad_layout ?? "auto",
+  skippable: r.skippable ?? true,
+  skip_after_seconds: r.skip_after_seconds ?? 5,
   priority: r.priority,
   weight: r.weight,
   active: r.active,
@@ -88,6 +109,16 @@ export function AdManager({ ads }: { ads: AdRecord[] }) {
     headline: form.headline.trim() || null,
     width: form.width ? Number(form.width) : null,
     height: form.height ? Number(form.height) : null,
+    /*
+      Sent only for AdSense rows. Posting a stale publisher id alongside a
+      display row would satisfy the database CHECK (which only fires the other
+      way) and leave a misleading value behind after a format change.
+    */
+    ad_client: form.format === "adsense" ? form.ad_client.trim() || null : null,
+    ad_slot_id: form.format === "adsense" ? form.ad_slot_id.trim() || null : null,
+    ad_layout: form.format === "adsense" ? form.ad_layout.trim() || null : null,
+    skippable: form.skippable,
+    skip_after_seconds: form.skip_after_seconds,
     priority: form.priority,
     weight: form.weight,
     active: form.active,
@@ -235,7 +266,10 @@ function AdForm({
   const input =
     "h-10 w-full rounded-xl bg-background px-3 text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary";
   const label = "mb-1 block text-xs font-medium text-muted-foreground";
-  const isDisplayOrPop = form.format === "display" || form.format === "pop";
+  const needsScript = form.format === "display" || form.format === "video";
+  const isAdSense = form.format === "adsense";
+  const isNative = form.format === "native";
+  const zoneMeta = AD_ZONE_META[form.zone];
 
   return (
     <div className="mb-5 rounded-2xl border border-primary/30 bg-secondary/20 p-4">
@@ -248,16 +282,22 @@ function AdForm({
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div>
-          <label className={label}>Zone</label>
+          <label className={label}>Placement</label>
+          {/* Human labels, not raw ids. An operator choosing "result_top" cannot
+              be expected to know it means the strip above a fetched result, and
+              a mis-placed ad is invisible to everyone but the visitor. */}
           <select className={input} value={form.zone} onChange={(e) => set("zone", e.target.value as Zone)}>
             {AD_ZONES.map((z) => (
-              <option key={z} value={z}>{z}</option>
+              <option key={z} value={z}>
+                {AD_ZONE_META[z].label}
+                {AD_ZONE_META[z].deprecated ? " — legacy" : ""}
+              </option>
             ))}
           </select>
         </div>
         <div>
           <label className={label}>Network</label>
-          <input className={input} value={form.network} onChange={(e) => set("network", e.target.value)} placeholder="adsterra / propellerads / house" />
+          <input className={input} value={form.network} onChange={(e) => set("network", e.target.value)} placeholder="adsense / adsterra / house" />
         </div>
         <div>
           <label className={label}>Format</label>
@@ -268,19 +308,72 @@ function AdForm({
           </select>
         </div>
 
-        {form.format !== "native" ? (
+        {/* What this placement actually is, in the operator's terms. */}
+        <p className="sm:col-span-3 -mt-1 text-xs leading-relaxed text-muted-foreground">
+          {zoneMeta.description}
+          {zoneMeta.persistent ? " This placement is never dismissible." : ""}
+        </p>
+
+        {isAdSense ? (
+          <>
+            <div>
+              <label className={label}>Publisher ID</label>
+              <input className={input} value={form.ad_client} onChange={(e) => set("ad_client", e.target.value)} placeholder="ca-pub-1234567890123456" />
+            </div>
+            <div>
+              <label className={label}>Ad unit ID</label>
+              <input className={input} value={form.ad_slot_id} onChange={(e) => set("ad_slot_id", e.target.value)} placeholder="1234567890" />
+            </div>
+            <div>
+              <label className={label}>Ad format</label>
+              <select className={input} value={form.ad_layout} onChange={(e) => set("ad_layout", e.target.value)}>
+                <option value="auto">auto (responsive)</option>
+                <option value="fluid">fluid (in-article)</option>
+                <option value="rectangle">rectangle</option>
+                <option value="horizontal">horizontal</option>
+                <option value="vertical">vertical</option>
+              </select>
+            </div>
+            <p className="sm:col-span-3 text-xs leading-relaxed text-muted-foreground">
+              Both IDs come from the AdSense ad unit screen. Leave width and height blank for a
+              responsive unit — set them only to pin an exact size.
+            </p>
+          </>
+        ) : null}
+
+        {needsScript ? (
           <div className="sm:col-span-3">
-            <label className={label}>Embed / script code</label>
+            <label className={label}>
+              {form.format === "video" ? "Video URL" : "Embed / script code"}
+            </label>
             <textarea
               className="min-h-[90px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
               value={form.script_code}
               onChange={(e) => set("script_code", e.target.value)}
-              placeholder="<script ...>…</script>"
+              placeholder={form.format === "video" ? "https://…/ad.mp4" : "<script ...>…</script>"}
             />
           </div>
         ) : null}
 
-        {form.format === "native" ? (
+        {/* Only for placements the visitor waits through — a skip control on a
+            banner is meaningless, and on the reward unit it would break the
+            exchange. Read from the zone registry rather than by naming zone ids
+            here, which is how three copies of that list came to exist. */}
+        {zoneMeta.supportsSkip ? (
+          <>
+            <label className="flex items-center gap-2 self-end text-sm">
+              <input type="checkbox" checked={form.skippable} onChange={(e) => set("skippable", e.target.checked)} className="h-4 w-4 rounded border-border" />
+              Skippable
+            </label>
+            <div>
+              <label className={label}>Skip appears after (seconds)</label>
+              <input type="number" min={0} max={120} className={input} value={form.skip_after_seconds} onChange={(e) => set("skip_after_seconds", Number(e.target.value) || 0)} />
+            </div>
+            <div />
+          </>
+        ) : null}
+
+        {isNative ? (
           <>
             <div className="sm:col-span-3">
               <label className={label}>Headline</label>
@@ -297,7 +390,7 @@ function AdForm({
           </>
         ) : null}
 
-        {isDisplayOrPop ? (
+        {form.format === "display" || isAdSense ? (
           <>
             <div>
               <label className={label}>Width (px)</label>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { getAdsForZone } from "@/lib/monetization/ads";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { getMonetizationSettings } from "@/lib/monetization/settings";
@@ -9,16 +10,16 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ZONES: ReadonlySet<string> = new Set<AdZone>([
-  "global",
-  "homepage_top",
-  "download_result_page",
-  "result_top",
-  "reward_video",
-  "sidebar",
-  "exit_intent_popup",
-  "mobile_bottom_banner",
-]);
+/*
+  Derived, never re-listed.
+
+  This was a hand-maintained copy of the zone list, and it silently rejected
+  every placement added after it was written — `/api/ads?zone=under_download`
+  returned nothing, so the new units could never fill no matter what was seeded.
+  `/api/track` had the same copy with the same gap, which would have lost their
+  impressions too. Three lists, one of them right.
+*/
+const ZONES: ReadonlySet<string> = new Set<string>(AD_ZONES);
 
 /**
  * Returns the ad(s) to render for a zone, or null/empty for premium users.
@@ -45,14 +46,20 @@ export async function GET(request: Request) {
     /* no session → treat as free */
   }
 
-  // Respect the global network/format toggles so an admin can disable a whole
-  // network (Adsterra / PropellerAds) or unit type (pop-under / interstitial).
+  /*
+    Respect the global network/format toggles so an admin can disable a whole
+    network or unit type without editing every row.
+
+    The `popunder` switch is gone along with the format — `isServableFormat` in
+    the data layer now refuses those rows outright, which is a stronger
+    guarantee than a toggle that defaulted to ON.
+  */
   const settings = await getMonetizationSettings();
   const allowed = (a: AdSlotData): boolean => {
     const net = a.network.toLowerCase();
+    if (!settings.adsense && net.includes("adsense")) return false;
     if (!settings.adsterra && net.includes("adsterra")) return false;
     if (!settings.propellerads && net.includes("propeller")) return false;
-    if (!settings.popunder && a.format === "pop") return false;
     if (!settings.interstitial && a.format === "video") return false;
     return true;
   };

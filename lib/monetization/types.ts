@@ -1,14 +1,26 @@
 export type BillingPlan = "free" | "pro" | "business";
 
+/**
+ * Placement ids.
+ *
+ * Kept in sync with `AD_ZONES` in `ad-schema.ts`, which is the runtime list the
+ * admin and the validator read. `ad-slots.test.ts` pins that the two agree —
+ * they drifted apart the first time a zone was added, and the symptom was a
+ * placement that validated in the admin and rendered nothing on the page.
+ */
 export type AdZone =
   | "global"
   | "homepage_top"
-  | "download_result_page"
+  | "under_download"
   | "result_top"
+  | "download_result_page"
+  | "download_complete"
+  | "idle_interstitial"
   | "reward_video"
   | "sidebar"
-  | "exit_intent_popup"
-  | "mobile_bottom_banner";
+  | "bottom_banner"
+  | "mobile_bottom_banner"
+  | "exit_intent_popup";
 
 export type DeviceType = "mobile" | "desktop";
 
@@ -27,13 +39,24 @@ export interface AdSlotData {
   id: string;
   zone: string;
   network: string;
-  format: "display" | "pop" | "native" | "video";
+  /** `pop` is retired — the serving layer never emits it. See `ad-schema.ts`. */
+  format: "display" | "native" | "adsense" | "video";
   scriptCode: string | null;
   imageUrl: string | null;
   targetUrl: string | null;
   headline: string | null;
   width: number | null;
   height: number | null;
+  /** AdSense publisher id, e.g. `ca-pub-…`. Only set for `adsense`. */
+  adClient: string | null;
+  /** AdSense ad unit id. Only set for `adsense`. */
+  adSlotId: string | null;
+  /** AdSense `data-ad-format`, e.g. `auto` or `fluid`. */
+  adLayout: string | null;
+  /** Whether the visitor may dismiss a waiting unit. Reward ignores this. */
+  skippable: boolean;
+  /** Seconds before a skip control appears. */
+  skipAfterSeconds: number;
 }
 
 export interface AffiliateOffer {

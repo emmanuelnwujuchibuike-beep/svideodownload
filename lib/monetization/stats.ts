@@ -1,12 +1,49 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { AD_ZONES } from "./ad-schema";
+import { getPricing } from "./pricing";
+
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
   !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const CURRENCY = process.env.MONETIZATION_CURRENCY || "$";
-const PRICE_PRO = Number(process.env.MONETIZATION_MRR_PRO || 4.99);
-const PRICE_BUSINESS = Number(process.env.MONETIZATION_MRR_BUSINESS || 9.99);
+/**
+ * Parse an admin-entered display price into a number and a currency symbol.
+ *
+ * ── Why MRR is derived from the ADMIN price, not an env var ───────────────────
+ *
+ * This used to read `MONETIZATION_MRR_PRO` / `MONETIZATION_MRR_BUSINESS`,
+ * defaulting to 4.99 and 9.99. Those are unrelated to the prices an operator
+ * actually sets on the pricing screen, so the dashboard reported an MRR built
+ * from numbers nobody had chosen — a confident figure with no relationship to
+ * the business. Changing the price in the admin moved the /pricing page and
+ * left the revenue number untouched.
+ *
+ * The stored price is a display string ("$4.99", "₦2,500", "4.99/mo"), because
+ * that is what the pricing screen needs. So it is parsed rather than assumed:
+ * the currency is whatever non-numeric prefix the operator typed, and grouping
+ * separators are stripped before `Number`.
+ *
+ * Returns `null` for anything unparseable rather than guessing. A price of
+ * "contact us" is a real thing to write on a pricing page, and inventing a
+ * number for it is exactly the fabrication this codebase refuses elsewhere.
+ */
+export function parsePrice(display: string): { amount: number; currency: string } | null {
+  const trimmed = display.trim();
+  // Currency = the leading run of non-digit, non-separator characters.
+  const currency = trimmed.match(/^[^\d.,\s]+/)?.[0] ?? "";
+  /*
+    Strip thousands separators, keep the decimal point. Handles "2,500" and
+    "2.500,00" is deliberately NOT handled — a comma decimal would need a locale
+    this record does not carry, and silently reading "2,50" as 250 is worse than
+    declining to report.
+  */
+  const numeric = trimmed.slice(currency.length).replace(/[^\d.]/g, "");
+  if (!numeric) return null;
+  const amount = Number(numeric);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  return { amount, currency };
+}
 
 const sinceIso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
 const startOfTodayIso = () => {
@@ -51,22 +88,31 @@ export async function fetchSubscribers(): Promise<Subscriber[]> {
 export interface RevenueStats {
   currency: string;
   mrr: number;
+  /**
+   * False when a configured price could not be read as a number, so the caller
+   * can say "priced in the admin as X" instead of printing a total that quietly
+   * treats that plan as free. Without this the dashboard would under-report and
+   * look precise while doing it.
+   */
+  mrrComplete: boolean;
+  /** The prices MRR was actually computed from, as the operator entered them. */
+  prices: { pro: string; business: string };
   subscribers: { pro: number; business: number; total: number };
   ads: { impressionsToday: number; clicksToday: number; impr7d: number; clicks7d: number; ctr: number };
   affiliate: { clicksToday: number; clicks7d: number };
   api: { callsToday: number; calls7d: number; activeKeys: number };
 }
 
-const AD_ZONES = [
-  "global",
-  "homepage_top",
-  "download_result_page",
-  "result_top",
-  "reward_video",
-  "sidebar",
-  "exit_intent_popup",
-  "mobile_bottom_banner",
-] as const;
+/*
+  The zone list is imported, not restated.
+
+  This file had a third hand-maintained copy (after `/api/ads` and `/api/track`),
+  and its effect was the most misleading of the three: the dashboard iterates
+  THIS list to build per-zone stats, so a placement missing from it is absent
+  from the report entirely — not shown as zero, simply not shown. An operator
+  reading the table would have no way to tell that a live, earning placement was
+  missing from it.
+*/
 
 export interface MonetizationAnalytics {
   totals: { affiliateClicks7d: number; adClicks7d: number; adImpressions7d: number; ctr: number };
@@ -178,9 +224,25 @@ export async function fetchRevenueStats(): Promise<RevenueStats | null> {
     const i7 = impr7d.count ?? 0;
     const c7 = clicks7d.count ?? 0;
 
+    /*
+      The prices an operator actually set, read at request time rather than
+      captured from the environment at boot — changing them in the admin must
+      move this number on the next load.
+    */
+    const pricing = await getPricing();
+    const proPrice = parsePrice(pricing.pro.price);
+    const bizPrice = parsePrice(pricing.business.price);
+
     return {
-      currency: CURRENCY,
-      mrr: Math.round((pro * PRICE_PRO + business * PRICE_BUSINESS) * 100) / 100,
+      // The symbol the operator typed, not a separate env var that could
+      // disagree with the price beside it.
+      currency: proPrice?.currency || bizPrice?.currency || "",
+      mrr:
+        Math.round(
+          (pro * (proPrice?.amount ?? 0) + business * (bizPrice?.amount ?? 0)) * 100,
+        ) / 100,
+      mrrComplete: Boolean(proPrice && bizPrice),
+      prices: { pro: pricing.pro.price, business: pricing.business.price },
       subscribers: { pro, business, total: pro + business },
       ads: {
         impressionsToday: imprToday.count ?? 0,

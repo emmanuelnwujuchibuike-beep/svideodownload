@@ -1,10 +1,15 @@
 "use client";
 
-import { Loader2, Megaphone, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, Loader2, Megaphone, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { AD_FORMATS, AD_ZONES, AD_ZONE_META } from "@/lib/monetization/ad-schema";
+import {
+  AD_FORMATS,
+  AD_ZONES,
+  AD_ZONE_META,
+  looksLikeHijackScript,
+} from "@/lib/monetization/ad-schema";
 import type { AdRecord } from "@/lib/monetization/ads";
 import { cn } from "@/lib/utils";
 
@@ -219,6 +224,14 @@ export function AdManager({ ads }: { ads: AdRecord[] }) {
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
                   {r.headline || (r.script_code ? "script embed" : r.target_url || "—")}
                 </p>
+                {/* Flags EXISTING rows too, not just what is being typed — the
+                    ones already live are the ones showing blank right now. */}
+                {r.format === "display" && looksLikeHijackScript(r.script_code) ? (
+                  <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                    <AlertTriangle aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                    OnClick/pop-under script — renders blank, earns nothing here
+                  </p>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -352,6 +365,24 @@ function AdForm({
               onChange={(e) => set("script_code", e.target.value)}
               placeholder={form.format === "video" ? "https://…/ad.mp4" : "<script ...>…</script>"}
             />
+            {/*
+              The blank-slot warning. Both products are a one-line <script src>,
+              so without this an operator has no feedback until a visitor
+              complains that a blank area redirects them.
+            */}
+            {form.format === "display" && looksLikeHijackScript(form.script_code) ? (
+              <p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  This looks like an <strong>OnClick / pop-under</strong> script, not a banner.
+                  Those have no visual creative — the slot will render <strong>blank</strong> and
+                  monetise by taking over the visitor&apos;s next click. Frenzsave sandboxes the
+                  frame so it cannot navigate the page, which means it will earn nothing here. Use
+                  the <strong>banner</strong> invocation from your network dashboard instead (for
+                  Adsterra that is the one containing <code className="font-mono">atOptions</code>).
+                </span>
+              </p>
+            ) : null}
           </div>
         ) : null}
 

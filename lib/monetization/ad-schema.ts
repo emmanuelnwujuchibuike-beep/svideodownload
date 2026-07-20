@@ -74,7 +74,25 @@ export interface AdZoneMeta {
    * separate copies of the zone list came to exist in the first place.
    */
   supportsSkip: boolean;
+  /**
+   * Worth warming as soon as the page loads.
+   *
+   * True for placements that can appear without any interaction, so their data
+   * is already cached before the component mounts — the difference between an
+   * ad that is there when the visitor looks and one that arrives after they
+   * have downloaded and gone.
+   *
+   * False for placements that only exist after an action (a fetched result, a
+   * completed download): requesting those up front would spend a round trip on
+   * something most visitors never reach.
+   */
+  prefetch: boolean;
   deprecated?: boolean;
+}
+
+/** Zones to warm on page load. Derived, so the list cannot drift. */
+export function prefetchZoneIds(): AdZoneId[] {
+  return AD_ZONES.filter((z) => AD_ZONE_META[z].prefetch);
 }
 
 export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
@@ -84,12 +102,14 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
       "Loaded once per page and renders nothing itself. Use for an AdSense Auto ads loader or a network page tag.",
     persistent: true,
     supportsSkip: false,
+    prefetch: false,
   },
   homepage_top: {
     label: "Home — above the platform strip",
     description: "Between the hero and the supported-platform row. Collapses when empty.",
     persistent: true,
     supportsSkip: false,
+    prefetch: true,
   },
   under_download: {
     label: "Under the Download button",
@@ -97,12 +117,14 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
       "Directly below the paste box and Download button, on the home page and every downloader page. The highest-attention placement on the site.",
     persistent: true,
     supportsSkip: false,
+    prefetch: true,
   },
   result_top: {
     label: "Above a fetched result",
     description: "A strip above a result that dismisses itself after five seconds.",
     persistent: false,
     supportsSkip: false,
+    prefetch: false,
   },
   download_result_page: {
     label: "Download result",
@@ -110,12 +132,14 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
       "Shown alongside the result. Renders as a skippable video when the format is AdSense or video.",
     persistent: false,
     supportsSkip: true,
+    prefetch: false,
   },
   download_complete: {
     label: "After a download finishes",
     description: "A skippable panel shown once the file has actually been saved.",
     persistent: false,
     supportsSkip: true,
+    prefetch: false,
   },
   idle_interstitial: {
     label: "Idle interstitial",
@@ -123,6 +147,7 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
       "Full screen, shown after the visitor has gone idle. Always closable from the top right.",
     persistent: false,
     supportsSkip: true,
+    prefetch: true,
   },
   reward_video: {
     label: "Rewarded video (unlock HD)",
@@ -130,12 +155,14 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
       "Watched to completion in exchange for an HD download. Never skippable — it is an exchange. AdSense is the intended network.",
     persistent: true,
     supportsSkip: false,
+    prefetch: false,
   },
   sidebar: {
     label: "Blog sidebar",
     description: "In-article placement on blog posts. Collapses when empty.",
     persistent: true,
     supportsSkip: false,
+    prefetch: false,
   },
   bottom_banner: {
     label: "Fixed bottom banner (all pages)",
@@ -143,6 +170,7 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
       "Pinned to the bottom of the viewport on every page, on a solid card so it reads as part of the chrome. Not dismissible.",
     persistent: true,
     supportsSkip: false,
+    prefetch: true,
   },
   mobile_bottom_banner: {
     label: "Fixed bottom banner — mobile only (legacy)",
@@ -150,6 +178,7 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
       "Superseded by the all-pages bottom banner, which serves this zone as a fallback. Prefer the new placement.",
     persistent: true,
     supportsSkip: false,
+    prefetch: false,
     deprecated: true,
   },
   exit_intent_popup: {
@@ -158,6 +187,7 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
       "Declared but nothing renders it. A row here will never be shown until the placement exists.",
     persistent: false,
     supportsSkip: false,
+    prefetch: false,
     deprecated: true,
   },
 };
@@ -165,6 +195,67 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
 /** Zones whose unit is furniture — never given a dismiss control. */
 export function isPersistentZone(zone: string): boolean {
   return AD_ZONE_META[zone as AdZoneId]?.persistent ?? false;
+}
+
+/* ------------------------- click-hijack script detection ------------------- */
+
+/**
+ * Hosts and markers that identify an OnClick / pop-under / Social Bar script.
+ *
+ * These are the invocation URLs the networks hand out for their INTERSTITIAL
+ * products, as opposed to their banner products. The distinction is invisible
+ * from the snippet itself — both are `<script src="…">` — which is exactly why
+ * this exists.
+ */
+const HIJACK_MARKERS = [
+  "effectivecpmnetwork.com",
+  "effectivegatecpm.com",
+  "highperformanceformat.com/js",
+  "profitabledisplaynetwork.com",
+  "popcash",
+  "popads",
+  "propellerads.com/ntfc",
+  "onclickalgo",
+  "adcash",
+];
+
+/**
+ * Whether an embed looks like a click-hijacking unit rather than a banner.
+ *
+ * ── The mistake this catches ──────────────────────────────────────────────────
+ *
+ * A pop-under or OnClick script pasted into a `display` placement produces a
+ * slot that renders NOTHING — those products have no visual creative; they
+ * monetise by taking over the visitor's next click. The result is a blank space
+ * that navigates somewhere unexpected when tapped, which is precisely what was
+ * reported on this site.
+ *
+ * Nothing about the snippet says so. Both products are a one-line
+ * `<script src>`, so an operator pasting the wrong one from their dashboard has
+ * no feedback at all until a visitor complains.
+ *
+ * A heuristic, and deliberately advisory rather than blocking: these host lists
+ * change, and refusing to save on a false positive would be worse than a
+ * warning. The iframe sandbox in `AdSlot` is what actually prevents the hijack.
+ */
+export function looksLikeHijackScript(scriptCode: string | null | undefined): boolean {
+  if (!scriptCode) return false;
+  const s = scriptCode.toLowerCase();
+  return HIJACK_MARKERS.some((marker) => s.includes(marker));
+}
+
+/**
+ * Whether an embed looks like a genuine BANNER invocation.
+ *
+ * Adsterra banners carry an `atOptions` block with a size; PropellerAds banners
+ * use their iframe/banner tag. Used only to make the admin warning specific —
+ * "this looks like an OnClick script" is far more actionable than "this may not
+ * render".
+ */
+export function looksLikeBannerScript(scriptCode: string | null | undefined): boolean {
+  if (!scriptCode) return false;
+  const s = scriptCode.toLowerCase();
+  return s.includes("atoptions") || s.includes("data-cfasync") || /\bwidth\b.*\bheight\b/.test(s);
 }
 
 const httpUrl = z

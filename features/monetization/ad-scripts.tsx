@@ -4,6 +4,9 @@ import { useEffect, useRef } from "react";
 
 import type { AdSlotData } from "@/lib/monetization/types";
 
+import { prefetchZoneIds } from "@/lib/monetization/ad-schema";
+
+import { prefetchZones } from "./ad-cache";
 import { injectAdMarkup } from "./inject";
 
 /**
@@ -14,6 +17,21 @@ import { injectAdMarkup } from "./inject";
  */
 export function AdScripts() {
   const done = useRef(false);
+
+  /*
+    Warm the placements this page will render, immediately — NOT on idle.
+
+    The idle deferral below is right for injecting third-party SCRIPT, which is
+    heavy and competes with hydration. It is wrong for the ad DATA, which is one
+    small same-origin JSON request: delaying that was a large part of why ads
+    arrived after the visitor had already downloaded and left. Firing it here
+    means the answer is usually cached by the time the first slot mounts.
+  */
+  useEffect(() => {
+    // Derived from the zone registry, not listed here — a second list would
+    // drift the moment a placement is added, and silently stop warming it.
+    prefetchZones(prefetchZoneIds());
+  }, []);
 
   useEffect(() => {
     if (done.current) return;

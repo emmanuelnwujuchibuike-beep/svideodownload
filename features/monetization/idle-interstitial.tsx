@@ -38,15 +38,29 @@ import { useShowAds } from "./use-show-ads";
  * hostage situation.
  */
 
-/** Idle time before the unit is offered. The brief's number. */
-const IDLE_MS = 5_000;
+/** Idle time before the unit is offered. */
+const IDLE_MS = 3_000;
 
 /**
  * Never within this long of the page loading, no matter how still the visitor
- * is. Someone who lands and reads for five seconds has not gone idle — they
- * have started, and interrupting that is the worst possible first impression.
+ * is.
+ *
+ * ── Why this exists, and why it is now much shorter ───────────────────────────
+ *
+ * It was 45 seconds, which is why testing the interstitial appeared to do
+ * nothing: on a fresh page load the timer armed, fired, found itself inside the
+ * window and rearmed, so with a 3-second idle it took three quarters of a
+ * minute to appear at all. That is indistinguishable from broken.
+ *
+ * It is not removed, because zero would mean an interstitial three seconds
+ * after landing — before the visitor has read anything, on the page they just
+ * arrived at. Eight seconds is long enough that they have engaged with the page
+ * and short enough to be findable when testing.
+ *
+ * The once-per-session cap is what actually keeps this survivable, and it is
+ * unchanged.
  */
-const MIN_GAP_MS = 45_000;
+const MIN_GAP_MS = 8_000;
 
 const SESSION_KEY = "frenz:idle-interstitial-shown";
 

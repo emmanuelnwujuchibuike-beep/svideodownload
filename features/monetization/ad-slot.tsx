@@ -7,6 +7,7 @@ import { isPersistentZone } from "@/lib/monetization/ad-schema";
 import { cn } from "@/lib/utils";
 import type { AdSlotData, AdZone } from "@/lib/monetization/types";
 
+import { loadZoneAd } from "./ad-cache";
 import { AdSenseUnit } from "./adsense-unit";
 
 function beacon(kind: "impression" | "click", zone: string, adId: string) {
@@ -65,11 +66,14 @@ export function AdSlot({
 
   useEffect(() => {
     let alive = true;
-    fetch(`/api/ads?zone=${zone}`)
-      .then((r) => (r.ok ? r.json() : { ad: null }))
-      .then((d) => {
+    /*
+      Batched and memoised — see `ad-cache.ts`. Every placement on the page
+      resolves from ONE request instead of one each, which is most of why ads
+      used to arrive after the visitor had already finished and left.
+    */
+    loadZoneAd(zone)
+      .then((found) => {
         if (!alive) return;
-        const found = (d.ad ?? null) as AdSlotData | null;
         setAd(found);
         /*
           Fires for the empty case too — that is the case wrappers need. Guarded
@@ -176,10 +180,35 @@ export function AdSlot({
             srcDoc={srcDoc}
             width={w}
             height={h}
-            loading="lazy"
-            // allow-same-origin is required so the network's protocol-relative
-            // (//…) script URLs resolve; allow-popups lets the ad open on click.
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+            /*
+              EAGER, not lazy.
+
+              These placements are put where they are on purpose and are mostly
+              above the fold. Lazy-loading them meant the frame did not even
+              begin fetching until it neared the viewport, which on the
+              under-download slot is part of why an ad could still be blank when
+              the visitor had already pressed Download.
+            */
+            loading="eager"
+            /*
+              `allow-top-navigation-by-user-activation` is deliberately ABSENT.
+
+              With it, a script inside this frame can navigate the WHOLE PAGE on
+              any click it can attribute to the visitor — which is exactly the
+              reported "a blank slot that takes me to a different site when I
+              click it". Adsterra's Social Bar and OnClick creatives do this by
+              design, and pasting one into a `display` placement is enough: the
+              banner renders as an invisible full-size click layer.
+
+              Without the token, the frame simply cannot touch the top-level
+              location. `allow-popups` stays, so a legitimate banner click still
+              opens the advertiser in a new tab — the behaviour a real display
+              ad needs, and the only one it needs.
+
+              `allow-same-origin` stays because networks serve protocol-relative
+              (`//…`) script URLs that will not resolve in an opaque origin.
+            */
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
             style={{ border: 0, display: "block", maxWidth: "100%" }}
           />
         </div>

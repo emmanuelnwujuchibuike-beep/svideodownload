@@ -26,45 +26,106 @@ const ZONES: ReadonlySet<string> = new Set<string>(AD_ZONES);
  * `?all=1` returns every active ad in the zone (used for page-level `global`
  * scripts like pop-unders / social bars); otherwise a single weighted slot.
  */
-export async function GET(request: Request) {
-  const sp = new URL(request.url).searchParams;
-  const zone = sp.get("zone") ?? "";
-  const all = sp.get("all") === "1";
-  if (!ZONES.has(zone)) {
-    return NextResponse.json(all ? { ads: [] } : { ad: null }, { status: 400 });
-  }
-
-  // Premium users never see ads.
+/** Premium visitors never see ads. No session is treated as free. */
+async function isPremium(): Promise<boolean> {
   try {
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const plan = await getUserPlan(user?.id);
-    if (plan !== "free") return NextResponse.json(all ? { ads: [] } : { ad: null });
+    return (await getUserPlan(user?.id)) !== "free";
   } catch {
-    /* no session → treat as free */
+    return false;
   }
+}
 
-  /*
-    Respect the global network/format toggles so an admin can disable a whole
-    network or unit type without editing every row.
-
-    The `popunder` switch is gone along with the format — `isServableFormat` in
-    the data layer now refuses those rows outright, which is a stronger
-    guarantee than a toggle that defaulted to ON.
-  */
+/**
+ * The global network/format toggles, so an admin can disable a whole network or
+ * unit type without editing every row.
+ *
+ * The `popunder` switch is gone along with the format — `isServableFormat` in
+ * the data layer refuses those rows outright, which is a stronger guarantee
+ * than a toggle that defaulted to ON.
+ */
+async function allowedFilter(): Promise<(a: AdSlotData, zone: string) => boolean> {
   const settings = await getMonetizationSettings();
-  const allowed = (a: AdSlotData): boolean => {
+  return (a: AdSlotData, zone: string) => {
     const net = a.network.toLowerCase();
     if (!settings.adsense && net.includes("adsense")) return false;
     if (!settings.adsterra && net.includes("adsterra")) return false;
     if (!settings.propellerads && net.includes("propeller")) return false;
+    /*
+      The interstitial switch gates the full-screen PLACEMENTS, not just the
+      `video` format.
+
+      It previously only blocked `video`, so a display unit on the idle or
+      after-download placement served even with the switch off — while the
+      component's own documentation claimed the gate was server-side. The
+      inverse also bit: with the switch off (its default) a correctly configured
+      interstitial looked broken for a reason nothing surfaced.
+    */
+    if (!settings.interstitial && INTERSTITIAL_ZONES.has(zone)) return false;
     if (!settings.interstitial && a.format === "video") return false;
     return true;
   };
+}
 
-  const ads = (await getAdsForZone(zone)).filter(allowed);
+/** Placements that take over the screen — gated by the `interstitial` switch. */
+const INTERSTITIAL_ZONES: ReadonlySet<string> = new Set([
+  "idle_interstitial",
+  "download_complete",
+  "exit_intent_popup",
+]);
+
+export async function GET(request: Request) {
+  const sp = new URL(request.url).searchParams;
+  const zone = sp.get("zone") ?? "";
+  const all = sp.get("all") === "1";
+
+  /*
+    Batch form: `?zones=a,b,c` returns `{ ads: { a: …, b: … } }`.
+
+    Every placement used to fetch its own zone, so a downloader page made four
+    or five separate round trips before any ad could paint — on a mobile
+    connection that is most of the reason ads arrived after the visitor had
+    already downloaded and left. One request answers the whole page.
+
+    Deliberately capped: the parameter is attacker-controllable and each zone is
+    a cache lookup, so an unbounded list would be a cheap way to make this
+    endpoint do arbitrary work.
+  */
+  const batch = sp.get("zones");
+  if (batch !== null) {
+    const zones = batch
+      .split(",")
+      .map((z) => z.trim())
+      .filter((z) => ZONES.has(z))
+      .slice(0, 12);
+
+    if (zones.length === 0) return NextResponse.json({ ads: {} }, { status: 400 });
+
+    if (await isPremium()) {
+      return NextResponse.json({ ads: Object.fromEntries(zones.map((z) => [z, null])) });
+    }
+
+    const allowed = await allowedFilter();
+    const entries = await Promise.all(
+      zones.map(async (z) => [z, (await getAdsForZone(z)).filter((a) => allowed(a, z))[0] ?? null] as const),
+    );
+    return NextResponse.json(
+      { ads: Object.fromEntries(entries) },
+      { headers: { "Cache-Control": "private, max-age=30" } },
+    );
+  }
+
+  if (!ZONES.has(zone)) {
+    return NextResponse.json(all ? { ads: [] } : { ad: null }, { status: 400 });
+  }
+
+  if (await isPremium()) return NextResponse.json(all ? { ads: [] } : { ad: null });
+
+  const allowed = await allowedFilter();
+  const ads = (await getAdsForZone(zone)).filter((a) => allowed(a, zone));
   const headers = { "Cache-Control": "private, max-age=30" };
   if (all) return NextResponse.json({ ads }, { headers });
   return NextResponse.json({ ad: ads[0] ?? null }, { headers });

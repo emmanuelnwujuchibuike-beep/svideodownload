@@ -9,7 +9,21 @@ import { AdSlot } from "./ad-slot";
 import { useShowAds } from "./use-show-ads";
 
 /**
- * A full-screen unit shown after the visitor has gone idle.
+ * A full-screen unit shown on re-engagement — either the visitor returning after
+ * being away, or a stretch of in-page idle.
+ *
+ * ── Two triggers ──────────────────────────────────────────────────────────────
+ *
+ * 1. RETURN FROM AWAY (the owner's ask): the tab was hidden or the app
+ *    backgrounded for at least five seconds and the visitor has come back. This
+ *    is the better of the two — the visitor actively returned, so the ad meets
+ *    attention at a natural break instead of interrupting.
+ * 2. IN-PAGE IDLE: three seconds with no interaction while the tab is focused.
+ *
+ * Both share one cooldown (not a once-per-session cap), so a visitor who leaves
+ * and returns several times sees the unit again — but never more than once per
+ * minute, which is what keeps it clear of the "reappears constantly" pattern
+ * that suspends AdSense accounts.
  *
  * ── It PRELOADS, so it appears instantly ──────────────────────────────────────
  *
@@ -40,8 +54,30 @@ import { useShowAds } from "./use-show-ads";
  * not ask for this. Escape and a tap on the backdrop also close it.
  */
 
-/** Idle time before the unit is offered. */
+/** Idle time (no interaction, tab focused) before the unit is offered. */
 const IDLE_MS = 3_000;
+
+/**
+ * How long the visitor must be AWAY — tab hidden, app backgrounded — for their
+ * return to count as a re-engagement worth showing an ad on.
+ *
+ * This is the trigger the owner asked for: leave for five seconds, come back,
+ * see the ad. It is a better moment than pure idle — the visitor has actively
+ * returned, so the ad meets attention rather than interrupting reading — and it
+ * is the pattern app interstitials are actually designed around.
+ */
+const AWAY_MS = 5_000;
+
+/**
+ * Minimum time between interstitials.
+ *
+ * Replaces the old once-per-session cap. Returning from away is a repeatable,
+ * natural break, so capping it to a single lifetime impression wasted most of
+ * them — but firing on every quick tab-flick is exactly the spam that gets an
+ * AdSense account suspended. A cooldown threads that: re-engage on return, but
+ * never more than once per window.
+ */
+const COOLDOWN_MS = 60_000;
 
 /**
  * Never within this long of load, however still the visitor is.
@@ -53,7 +89,7 @@ const IDLE_MS = 3_000;
  */
 const MIN_GAP_MS = 3_000;
 
-const SESSION_KEY = "frenz:idle-interstitial-shown";
+const LAST_SHOWN_KEY = "frenz:interstitial-last-shown";
 
 const ACTIVITY = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"] as const;
 
@@ -62,55 +98,79 @@ export function IdleInterstitial() {
   const [open, setOpen] = useState(false);
   const [hasAd, setHasAd] = useState<boolean | null>(null);
   const mountedAt = useRef(Date.now());
-  const spent = useRef(false);
+  /** When the visitor's tab last went hidden — for the return-from-away trigger. */
+  const hiddenAt = useRef<number | null>(null);
 
   const close = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
     if (!ready || !showAds) return;
 
-    try {
-      if (sessionStorage.getItem(SESSION_KEY)) return;
-    } catch {
-      // Private mode or a blocked storage partition. Treat it as "already
-      // shown": failing closed costs one impression, failing open removes the
-      // cap entirely for those visitors.
-      return;
-    }
-
-    let timer: number | undefined;
-
-    const arm = () => {
-      window.clearTimeout(timer);
-      if (spent.current) return;
-      timer = window.setTimeout(() => {
-        if (spent.current) return;
-        if (Date.now() - mountedAt.current < MIN_GAP_MS) {
-          arm(); // Too early in the visit — go round again rather than give up.
-          return;
-        }
-        spent.current = true;
-        try {
-          sessionStorage.setItem(SESSION_KEY, "1");
-        } catch {
-          /* capped for this mount regardless, via `spent` */
-        }
-        setOpen(true);
-      }, IDLE_MS);
+    /** Persisted across reloads and client navigations, so the cooldown holds. */
+    const lastShown = (): number => {
+      try {
+        return Number(sessionStorage.getItem(LAST_SHOWN_KEY)) || 0;
+      } catch {
+        // Storage blocked: report "just shown" so the cooldown fails CLOSED
+        // rather than removing the cap for that visitor.
+        return Date.now();
+      }
     };
 
-    // `passive` on every listener — these fire on scroll and pointermove, and
-    // none of them calls preventDefault.
+    /** Whether an interstitial may be shown right now. */
+    const canShow = () => {
+      if (open) return false;
+      if (Date.now() - mountedAt.current < MIN_GAP_MS) return false;
+      return Date.now() - lastShown() >= COOLDOWN_MS;
+    };
+
+    const show = () => {
+      if (!canShow()) return;
+      try {
+        sessionStorage.setItem(LAST_SHOWN_KEY, String(Date.now()));
+      } catch {
+        /* the in-memory `open` still prevents a double-fire this tick */
+      }
+      setOpen(true);
+    };
+
+    /* ── Trigger 1: idle in-page (no interaction, tab focused) ── */
+    let timer: number | undefined;
+    const arm = () => {
+      window.clearTimeout(timer);
+      // Only while the tab is actually visible — an idle timer must not run down
+      // in a backgrounded tab and then fire the instant the visitor returns,
+      // which is the return trigger's job and would double-count.
+      if (document.visibilityState !== "visible") return;
+      timer = window.setTimeout(show, IDLE_MS);
+    };
+
+    /* ── Trigger 2: return after being away ≥ AWAY_MS ── */
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt.current = Date.now();
+        window.clearTimeout(timer);
+        return;
+      }
+      // Back in view.
+      const away = hiddenAt.current ? Date.now() - hiddenAt.current : 0;
+      hiddenAt.current = null;
+      if (away >= AWAY_MS) show();
+      else arm(); // short flick away — just restart the idle timer
+    };
+
     for (const event of ACTIVITY) {
       window.addEventListener(event, arm, { passive: true });
     }
+    document.addEventListener("visibilitychange", onVisibility);
     arm();
 
     return () => {
       window.clearTimeout(timer);
       for (const event of ACTIVITY) window.removeEventListener(event, arm);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [ready, showAds]);
+  }, [ready, showAds, open]);
 
   const shown = open && hasAd === true;
 

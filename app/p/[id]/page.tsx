@@ -9,6 +9,8 @@ import { notFound } from "next/navigation";
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { isAdmin } from "@/lib/admin";
 import { jsonLd } from "@/lib/seo/json-ld";
+import { streamThumbnailUrl } from "@/lib/media/stream";
+import { SITE_URL } from "@/lib/site";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RichText } from "@/components/social/rich-text";
 import { PostEditButton } from "@/features/social/post-edit-button";
@@ -141,19 +143,59 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     ...(albumMedia.length > 1 ? { mediaItems: albumMedia } : {}),
   };
 
-  const ld = {
-    "@context": "https://schema.org",
-    "@type": post.media_kind === "image" ? "ImageObject" : "VideoObject",
-    name: post.title,
-    ...(post.description ? { description: post.description } : {}),
-    ...(post.thumbnail_url ? { thumbnailUrl: post.thumbnail_url } : {}),
-    uploadDate: post.created_at,
-    interactionStatistic: {
-      "@type": "InteractionCounter",
-      interactionType: "https://schema.org/WatchAction",
-      userInteractionCount: post.views_count,
-    },
-  };
+  const isVideo = post.media_kind !== "image";
+
+  /*
+    A thumbnail is REQUIRED for a VideoObject.
+
+    Google Search Console flagged "No thumbnail URL provided": the old markup
+    only emitted `thumbnailUrl` when `post.thumbnail_url` was set, so any video
+    whose poster had not been backfilled produced an invalid VideoObject and was
+    dropped from video indexing. A representative image is acceptable to Google,
+    so this falls back rather than omitting the field:
+
+      1. the stored poster, when present;
+      2. the Cloudflare Stream auto-thumbnail, derivable from `stream_uid` for
+         any video we transcoded even if the poster column is null;
+      3. the site's own OG card as a last resort, so the field is never empty.
+
+    Absolute URLs throughout — structured data is read by a crawler with no page
+    context, and a relative thumbnail is treated as missing.
+  */
+  const streamThumb = post.stream_uid ? streamThumbnailUrl(post.stream_uid) : null;
+  const thumbnailUrl =
+    post.thumbnail_url || streamThumb || `${SITE_URL}/opengraph-image`;
+
+  const ld = isVideo
+    ? {
+        "@context": "https://schema.org",
+        "@type": "VideoObject",
+        name: post.title,
+        ...(post.description ? { description: post.description } : {}),
+        // Always present now — the whole point of the fallback chain above.
+        thumbnailUrl,
+        uploadDate: post.created_at,
+        // `contentUrl` is what Google fetches to index the actual video; without
+        // it a VideoObject is decorative. `embedUrl` is the page it plays on.
+        ...(post.media_url ? { contentUrl: post.media_url } : {}),
+        embedUrl: `${SITE_URL}/p/${post.id}`,
+        ...(post.duration_sec
+          ? { duration: `PT${Math.max(1, Math.round(post.duration_sec))}S` }
+          : {}),
+        interactionStatistic: {
+          "@type": "InteractionCounter",
+          interactionType: "https://schema.org/WatchAction",
+          userInteractionCount: post.views_count,
+        },
+      }
+    : {
+        "@context": "https://schema.org",
+        "@type": "ImageObject",
+        name: post.title,
+        ...(post.description ? { description: post.description } : {}),
+        contentUrl: post.media_url || thumbnailUrl,
+        uploadDate: post.created_at,
+      };
 
   return (
     <>

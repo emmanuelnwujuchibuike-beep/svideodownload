@@ -140,3 +140,73 @@ export interface PathView extends LearningPath {
   /** True when every step is teachable — the path can be completed end to end. */
   complete: boolean;
 }
+
+/* -------------------------------- assessments -------------------------------- */
+
+export interface Choice {
+  id: string;
+  text: string;
+}
+
+export interface Question {
+  id: string;
+  /**
+   * The lesson this question is drawn from.
+   *
+   * Not decoration and not analytics: it is what lets a wrong answer send the
+   * reader back to the exact lesson that covers it, and it is what
+   * `assessments.test.ts` uses to prove no question tests material the course
+   * never taught. A question outside its course's lessons is a trick question,
+   * and a trick question in a self-check teaches nothing except that the check
+   * is not worth taking.
+   */
+  lessonSlug: string;
+  prompt: string;
+  choices: Choice[];
+  correctChoiceId: string;
+  /**
+   * Why the right answer is right — shown after answering, whether the reader
+   * got it right or wrong. This is the actual teaching surface; the score is
+   * just the excuse to display it.
+   */
+  explanation: string;
+}
+
+export interface Assessment {
+  /** The course this checks. One assessment per course, at most. */
+  courseSlug: string;
+  title: string;
+  /**
+   * Fraction of questions needed to pass, 0–1.
+   *
+   * A threshold at all is arguable for a self-check. It stays because a bare
+   * score with no interpretation invites the reader to invent their own, and
+   * "5/7" means nothing without knowing whether that is fine.
+   */
+  passMark: number;
+  questions: Question[];
+}
+
+/** One graded answer. `chosenChoiceId` is null when the reader skipped it. */
+export interface GradedAnswer {
+  questionId: string;
+  chosenChoiceId: string | null;
+  correct: boolean;
+  /** Where to go and read the thing this question was about. */
+  lessonSlug: string;
+  lessonHref: string;
+}
+
+export interface AssessmentResult {
+  courseSlug: string;
+  answers: GradedAnswer[];
+  score: number;
+  total: number;
+  passed: boolean;
+  /**
+   * Lessons behind the questions the reader got wrong, de-duplicated and in
+   * teaching order — the whole point of the exercise. A score tells someone how
+   * they did; this tells them what to do about it.
+   */
+  reviewLessonSlugs: string[];
+}

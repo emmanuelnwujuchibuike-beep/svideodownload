@@ -92,12 +92,12 @@ export function PushToggle() {
       {expired ? (
         <Link
           href={`/login?next=${encodeURIComponent(pathname || "/home")}`}
-          className="text-[11px] font-medium text-destructive underline underline-offset-2"
+          className="text-[11px] font-medium text-rose-500 underline underline-offset-2"
         >
           Session expired — sign in again
         </Link>
       ) : failed ? (
-        <span className="text-[11px] font-medium text-destructive">{failed}</span>
+        <span className="text-[11px] font-medium text-rose-500">{failed}</span>
       ) : null}
     </span>
   );

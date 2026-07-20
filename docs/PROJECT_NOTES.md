@@ -2417,3 +2417,69 @@ Post tray, a blue→violet Story hero, and one surviving `bg-brand-tile` — eac
 exactly what the icon pass was meant to remove. Fixed before shipping. Driven
 end‑to‑end in a real browser with a real session: the `+` sheet routes to
 `/create/reel` and `/create/story`, and no tinted icon tiles remain.
+
+---
+
+## Academy course self-checks (2026-07-20)
+
+**What shipped.** A "Check your understanding" self-check at the end of each of
+the 7 courses — 28 questions, every one drawn from a lesson its own course
+teaches, with an explanation shown for right and wrong answers alike.
+
+**The answer key ships to the browser, and that is stated rather than hidden.**
+Grading is client-side. A `/api/assessments/grade` endpoint would look like
+security and provide none — the questions still ship, so anyone who wants the
+answers submits twice. Building it would be theatre and would put a Paris round
+trip in front of a checkbox on pages that are currently static. The honest
+framing is the one the design supports: a reader finding out whether they
+understood a course, with no stakes.
+
+**Therefore no certificates, no scores on a profile, no leaderboard.** A
+credential backed by a quiz whose answers are in the page source is a fabricated
+credential — the same family as the fabricated statistics already declined three
+times.
+
+**The score is the excuse; the review list is the product.** Every question
+names its source lesson, so a wrong answer resolves to "go and read this"
+in the course's teaching order rather than to a number.
+
+**Not wired into the personal plane, deliberately.** "I read this" and "I
+answered questions about it" are different facts. Collapsing them would corrupt
+the input to `recommendNext`, which reads completions — someone who guessed
+through four questions would stop being recommended lessons they never opened.
+
+### Three things that only showed up because they were measured
+
+1. **`border-destructive` emitted no CSS.** This palette has no `destructive`
+   token. Wrong answers rendered identically to untouched ones, distinguishable
+   only by an icon. tsc, lint, 555 tests and the build were all green; a
+   screenshot caught it. Fixed to `rose-500` (the house convention), and
+   `lib/design-tokens.test.ts` now fails on any shadcn token this palette does
+   not define. **It immediately found the same bug already live in
+   `features/notifications/push-toggle.tsx`** — two error messages rendering in
+   body colour.
+
+2. **The corpus cost 15 kB of first-load JS on every school page.** Importing
+   the questions into the component the page renders took `/academy/[school]`
+   from 260 kB to 275 kB — for a quiz that is collapsed by default and that most
+   readers never open. The perf-budget ratchet has headroom at 300 kB, so it
+   stayed green. Only building the branch twice and comparing showed it. Split
+   into a `React.lazy` panel fetched on click, with the question COUNT passed
+   from the server as a prop: back to 261 kB. `academy-perf.test.ts` pins the
+   split. (`next/dynamic` with `ssr: false` was avoided — it has never resolved
+   correctly here.)
+
+3. **`lib/academy` was not scanned by the Reality Ledger.** Quiz prose asserts
+   how software behaves, exactly like a lesson body. Added to `MARKETING_DIRS`
+   and verified empirically with a throwaway probe file — it correctly caught
+   both a false existence claim and magnitude claims before being deleted. The
+   existing Academy prose passes clean.
+
+**Also:** `/admin/corpora` now reports questions per course and lists courses
+with no check as a `note`, not a `gap` — a course without a self-check is
+complete, it just has no optional extra. Scoring it higher would repeat the
+orphan-detection mistake where a metric flagged 155 non-problems.
+
+**Verified end to end** in a real browser against a production build: opened the
+check, answered, submitted, confirmed the review list, the per-question
+explanations, the disabled fieldset and the reset — no console errors.

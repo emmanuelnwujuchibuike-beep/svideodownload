@@ -176,6 +176,7 @@ export default async function CorpusOpsPage() {
                   <th className="px-4 py-3 font-medium">School</th>
                   <th className="px-4 py-3 font-medium">Declared</th>
                   <th className="px-4 py-3 font-medium">Resolvable</th>
+                  <th className="px-4 py-3 font-medium">Check</th>
                 </tr>
               </thead>
               <tbody>
@@ -190,6 +191,11 @@ export default async function CorpusOpsPage() {
                       }`}
                     >
                       {course.resolvable}
+                    </td>
+                    {/* Muted, not red: a course without a self-check is complete,
+                        it just has no optional extra. */}
+                    <td className="px-4 py-3 tabular-nums text-muted-foreground">
+                      {course.questions === null ? "—" : `${course.questions} questions`}
                     </td>
                   </tr>
                 ))}

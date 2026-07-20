@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { CourseCheck } from "@/features/academy/course-check";
+import { assessmentQuestionCount } from "@/lib/academy/assessments";
 import { courseLessons, courseMinutes, coursesForSchool } from "@/lib/academy/courses";
 import { SCHOOLS, getSchoolBySlug, isTeachable } from "@/lib/academy/schools";
 import { jsonLd } from "@/lib/seo/json-ld";
@@ -174,6 +176,15 @@ export default async function SchoolPage({
                           </li>
                         ))}
                       </ol>
+
+                      {/* The count is resolved HERE, on the server, so the
+                          client never imports the question corpus just to
+                          learn how many questions there are. Renders nothing
+                          when the course has no check written yet. */}
+                      <CourseCheck
+                        courseSlug={course.slug}
+                        questionCount={assessmentQuestionCount(course.slug)}
+                      />
                     </article>
                   </li>
                 );

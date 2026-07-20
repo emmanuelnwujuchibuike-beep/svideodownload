@@ -48,8 +48,20 @@ const ROOT = path.resolve(__dirname, "../..");
  * traffic, and they discuss products that do not exist yet. A lesson may teach a
  * technique, but it may not describe an unbuilt Frenz product as usable today.
  * See `docs/DOWNLOAD_HUB_RFC.md` §4.
+ *
+ * `lib/academy` joined the list when course self-checks shipped. A quiz question
+ * and its explanation are prose asserting how something behaves — the same
+ * artefact as a lesson body, and read by the same people in the same place. The
+ * school registry lives there too, and it describes six products that do not
+ * exist, which is precisely the copy this scan exists to police.
  */
-const MARKETING_DIRS = ["components/landing", "app/(marketing)", "config", "lib/learning"];
+const MARKETING_DIRS = [
+  "components/landing",
+  "app/(marketing)",
+  "config",
+  "lib/learning",
+  "lib/academy",
+];
 
 function walk(dir: string): string[] {
   const abs = path.join(ROOT, dir);

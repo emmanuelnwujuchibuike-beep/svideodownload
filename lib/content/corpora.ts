@@ -1,3 +1,4 @@
+import { getAssessment, uncheckedCourses } from "@/lib/academy/assessments";
 import { COURSES, courseLessons, schoolCurriculumState } from "@/lib/academy/courses";
 import { SCHOOLS, isTeachable, schoolViews } from "@/lib/academy/schools";
 import { LOCALES } from "@/lib/i18n/locales";
@@ -137,6 +138,16 @@ export function auditCorpora(): CorpusFinding[] {
     });
   }
 
+  const unchecked = uncheckedCourses();
+  if (unchecked.length > 0) {
+    findings.push({
+      severity: "note",
+      area: "academy",
+      title: `${unchecked.length} course(s) have no self-check`,
+      detail: `Complete and readable without one — a check is an optional extra, not a missing part: ${unchecked.join(", ")}.`,
+    });
+  }
+
   const orphans = orphanLessons();
   if (orphans.length > 0) {
     findings.push({
@@ -227,7 +238,14 @@ export function localeProgress() {
   }));
 }
 
-/** Course-level curriculum view: lesson counts an operator can act on. */
+/**
+ * Course-level curriculum view: lesson counts an operator can act on.
+ *
+ * `questions` is null rather than 0 when no self-check exists — "no check
+ * written" and "a check with nothing in it" are different states, and only the
+ * second one is a fault. `assessments.test.ts` makes the second impossible, so
+ * a null here is the editorial backlog and a zero would be a bug.
+ */
 export function courseHealth() {
   return COURSES.map((course) => ({
     slug: course.slug,
@@ -235,5 +253,18 @@ export function courseHealth() {
     schoolId: course.schoolId,
     declared: course.lessonSlugs.length,
     resolvable: courseLessons(course.slug).length,
+    questions: getAssessment(course.slug)?.questions.length ?? null,
   }));
+}
+
+/**
+ * Teachable courses with no self-check yet.
+ *
+ * Reported as a `note`, not a `gap`: a course without a check is complete and
+ * useful, it simply has no optional extra. Scoring it higher would repeat the
+ * orphan-detection mistake — a metric that flags 155 non-problems gets ignored,
+ * then deleted, and takes the real findings with it.
+ */
+export function assessmentBacklog(): string[] {
+  return uncheckedCourses();
 }

@@ -55,8 +55,23 @@ export function AdSurface({
   if (!ready || !showAds) return null;
 
   return (
+    /*
+      The card SHRINKS TO THE AD rather than filling a fixed column.
+
+      `maxWidth` was applied as a width, so a 468×60 leaderboard sat inside a
+      `max-w-2xl` card with wide bands of empty card either side of it — the ad
+      looked lost in a box built for something else. `w-fit` makes the card hug
+      whatever the unit turns out to be, and `maxWidth` becomes a ceiling rather
+      than a target, so an oversized or responsive unit is still constrained to
+      the content column.
+    */
     <div
-      className={cn("w-full", maxWidth, "mx-auto", hasAd !== true && "hidden", className)}
+      className={cn(
+        "mx-auto w-fit max-w-full",
+        maxWidth,
+        hasAd !== true && "hidden",
+        className,
+      )}
       aria-hidden={hasAd !== true}
     >
       <div className="rounded-2xl border border-border/60 bg-card p-3 shadow-soft">

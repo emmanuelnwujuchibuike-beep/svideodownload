@@ -25,8 +25,13 @@ const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
   { key: "recommendedTools", label: "Recommended tools", hint: "Curated tool sections (home/footer/sidebar)" },
   {
     key: "popunder",
-    label: "Pop-under / OnClick",
-    hint: "Takes over the visitor's next click. Off by default — see the warning below.",
+    /*
+      Named for the MECHANISM, not one of its products. Adsterra's Social Bar is
+      a visible floating unit that needs exactly this switch, and a toggle
+      called "Pop-under" is one nobody would turn on to make a Social Bar work.
+    */
+    label: "In-page scripts",
+    hint: "Social Bar, pop-under and OnClick units. Off by default — see the warning below.",
   },
   {
     key: "interstitial",
@@ -103,18 +108,17 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
         <p className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
           <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            <strong>Pop-under is on while AdSense is enabled.</strong> Google prohibits units that
-            interfere with navigation, and a reviewer who meets a pop-under is meeting exactly that.
-            It is the most common reason a site is rejected, and it can cost an already-approved
-            account.
+            <strong>In-page scripts are on while AdSense is enabled.</strong> This switch also
+            allows pop-under and OnClick units, and Google prohibits anything that interferes with
+            navigation — a reviewer who meets one is meeting exactly that. It is the most common
+            reason a site is rejected, and it can cost an already-approved account.
             <br />
             <strong className="mt-1 inline-block">
               If your site is still &ldquo;Getting ready&rdquo; or under review, turn this off until
               you are approved.
             </strong>{" "}
-            Adsterra <em>banner</em> units are unaffected — this is only about the pop-under /
-            OnClick format. Running both is a deliberate trade; this is here so it is not an
-            accidental one.
+            Adsterra <em>banner</em> units are unaffected and safe to keep running. Note this is a
+            single switch: enabling it for a Social Bar also enables any pop-under row you have.
           </span>
         </p>
       ) : null}

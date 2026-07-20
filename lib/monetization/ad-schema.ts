@@ -68,6 +68,51 @@ export function isServableFormat(format: string | null | undefined): format is A
   return (AD_FORMATS as readonly string[]).includes(format ?? "");
 }
 
+/**
+ * What each format is, in the operator's terms.
+ *
+ * ── The naming problem this fixes ─────────────────────────────────────────────
+ *
+ * The dropdown showed raw ids, and `pop` was described everywhere as
+ * "pop-under / OnClick". That is only two thirds of what it is. Adsterra's
+ * **Social Bar** is a VISIBLE floating unit — not a click hijacker — and it uses
+ * the same mechanism: a script that must run in the page to attach itself.
+ *
+ * With no label saying so, the only options that looked right for a Social Bar
+ * were `display` (which sandboxes it in an iframe where it cannot attach, so it
+ * renders nothing) or a format called "pop-under" (which nobody would pick for
+ * a banner-like unit). Hence "why does the social link doesn't show".
+ */
+export interface AdFormatMeta {
+  label: string;
+  description: string;
+}
+
+export const AD_FORMAT_META: Record<AdFormatId, AdFormatMeta> = {
+  display: {
+    label: "Banner (iframe)",
+    description:
+      "A standard banner. Rendered in a sandboxed frame, so it cannot touch the page — use this for Adsterra's banner code (the one containing atOptions).",
+  },
+  native: {
+    label: "House ad",
+    description: "Your own image, headline and link. No network involved.",
+  },
+  adsense: {
+    label: "Google AdSense unit",
+    description: "A publisher ID and ad unit ID from the AdSense ad-unit screen.",
+  },
+  video: {
+    label: "Video file",
+    description: "A direct video URL, for the rewarded and result placements.",
+  },
+  pop: {
+    label: "In-page script (Social Bar, pop-under, OnClick)",
+    description:
+      "Runs in the page rather than a frame, which is what Social Bar and similar units need to attach themselves. Requires the in-page script switch to be on.",
+  },
+};
+
 export interface AdZoneMeta {
   label: string;
   description: string;

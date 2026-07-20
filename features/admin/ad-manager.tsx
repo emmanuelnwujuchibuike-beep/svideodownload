@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import {
   AD_FORMATS,
+  AD_FORMAT_META,
   AD_ZONES,
   AD_ZONE_META,
   looksLikeHijackScript,
@@ -60,10 +61,10 @@ const recordToForm = (r: AdRecord): FormState => ({
   zone: r.zone as Zone,
   network: r.network,
   /*
-    A legacy `pop` row has a format that is no longer in the dropdown. Showing
-    it as `display` would misrepresent what is stored; falling back to the first
-    valid format makes the edit form usable and means saving the row migrates it
-    off the retired format, which is the direction we want.
+    Falls back for a row whose stored format is not in the list — a hand-edited
+    value, or one from a version where the set differed. Showing something
+    selectable keeps the edit form usable; showing the raw value would render an
+    empty dropdown that silently rewrites the row on save.
   */
   format: (AD_FORMATS as readonly string[]).includes(r.format) ? (r.format as Format) : "display",
   script_code: r.script_code ?? "",
@@ -187,8 +188,10 @@ export function AdManager({ ads }: { ads: AdRecord[] }) {
         </button>
       </div>
       <p className="mb-4 text-sm text-muted-foreground">
-        Paste your Adsterra / PropellerAds embed code per zone. Network names
-        containing &quot;adsterra&quot; / &quot;propeller&quot; respect the global toggles above.
+        One row per placement. Pick the format that matches the code your network gave you —
+        a <strong>banner</strong> and a <strong>Social Bar</strong> use the same host but need
+        different formats here. Network names containing &quot;adsense&quot;, &quot;adsterra&quot;
+        or &quot;propeller&quot; respect the global toggles above.
       </p>
 
       {editing ? (
@@ -213,12 +216,16 @@ export function AdManager({ ads }: { ads: AdRecord[] }) {
             <li key={r.id} className="flex items-center gap-3 py-3">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold">{r.zone}</span>
+                  {/* Human labels, matching the form. An operator scanning this
+                      list should not have to translate `result_top` or `pop`. */}
+                  <span className="text-sm font-semibold">
+                    {AD_ZONE_META[r.zone as keyof typeof AD_ZONE_META]?.label ?? r.zone}
+                  </span>
                   <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
                     {r.network}
                   </span>
                   <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                    {r.format}
+                    {AD_FORMAT_META[r.format as keyof typeof AD_FORMAT_META]?.label ?? r.format}
                   </span>
                 </div>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -314,9 +321,13 @@ function AdForm({
         </div>
         <div>
           <label className={label}>Format</label>
+          {/* Labels, not raw ids — `pop` is also how a Social Bar is served,
+              which nobody could guess from the word "pop". */}
           <select className={input} value={form.format} onChange={(e) => set("format", e.target.value as Format)}>
             {AD_FORMATS.map((f) => (
-              <option key={f} value={f}>{f}</option>
+              <option key={f} value={f}>
+                {AD_FORMAT_META[f].label}
+              </option>
             ))}
           </select>
         </div>
@@ -325,6 +336,10 @@ function AdForm({
         <p className="sm:col-span-3 -mt-1 text-xs leading-relaxed text-muted-foreground">
           {zoneMeta.description}
           {zoneMeta.persistent ? " This placement is never dismissible." : ""}
+        </p>
+        <p className="sm:col-span-3 -mt-2 text-xs leading-relaxed text-muted-foreground">
+          <strong className="text-foreground">{AD_FORMAT_META[form.format].label}:</strong>{" "}
+          {AD_FORMAT_META[form.format].description}
         </p>
 
         {isAdSense ? (
@@ -370,16 +385,29 @@ function AdForm({
               so without this an operator has no feedback until a visitor
               complains that a blank area redirects them.
             */}
+            {/*
+              Fires on a self-injecting script saved as a BANNER. Both fixes are
+              offered because the same script host serves two very different
+              products — a Social Bar (visible, wants the in-page format) and an
+              OnClick unit (invisible, wants the banner code instead). Naming
+              only one fix is how "why doesn't my Social Bar show" happens.
+            */}
             {form.format === "display" && looksLikeHijackScript(form.script_code) ? (
               <p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
                 <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
-                  This looks like an <strong>OnClick / pop-under</strong> script, not a banner.
-                  Those have no visual creative — the slot will render <strong>blank</strong> and
-                  monetise by taking over the visitor&apos;s next click. Frenzsave sandboxes the
-                  frame so it cannot navigate the page, which means it will earn nothing here. Use
-                  the <strong>banner</strong> invocation from your network dashboard instead (for
-                  Adsterra that is the one containing <code className="font-mono">atOptions</code>).
+                  This is a <strong>self-injecting script</strong>, not a banner. Banners run in a
+                  sandboxed frame, and a script like this cannot attach itself from inside one — so
+                  the slot renders <strong>blank</strong>.
+                  <br />
+                  <strong className="mt-1 inline-block">If this is a Social Bar</strong> (or any
+                  visible in-page unit), change Format to{" "}
+                  <em>{AD_FORMAT_META.pop.label}</em> and turn on the in-page script switch in
+                  Monetization controls.
+                  <br />
+                  <strong className="mt-1 inline-block">If you wanted a banner</strong>, use the
+                  banner invocation from your network instead — for Adsterra that is the one
+                  containing <code className="font-mono">atOptions</code>.
                 </span>
               </p>
             ) : null}

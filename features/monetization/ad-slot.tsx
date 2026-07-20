@@ -175,12 +175,28 @@ export function AdSlot({
 
   // Display banner inside an isolated iframe (handles document.write embeds).
   if (ad.format === "display" && ad.scriptCode) {
-    const w = ad.width ?? 300;
-    const h = ad.height ?? 250;
+    /*
+      Sized to the AD, not to a default.
+
+      Width and height used to fall back to 300×250 whenever the row left them
+      blank, so a 468×60 leaderboard was rendered into a 300×250 box — cropped
+      horizontally and floating in dead space vertically. The frame now takes
+      the row's declared size when it has one, and otherwise fills the width it
+      is given, which is what every responsive network tag expects.
+
+      The height still needs a number: an iframe has no intrinsic height and
+      collapses to zero without one, and a cross-origin frame cannot be measured
+      to find out. So an unsized row gets a modest default rather than a tall
+      one — too short shows a scroll-free partial banner, too tall shows a band
+      of blank inside the card.
+    */
+    const hasSize = typeof ad.width === "number" && ad.width > 0;
+    const w = hasSize ? ad.width! : undefined;
+    const h = ad.height ?? (hasSize ? 250 : 100);
     const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden}</style></head><body>${ad.scriptCode}</body></html>`;
     return (
       <div className={cn("flex justify-center", className)}>
-        <div className="relative" style={{ width: w, maxWidth: "100%" }}>
+        <div className="relative w-full" style={w ? { width: w, maxWidth: "100%" } : undefined}>
           {closeBtn}
           <iframe
             title="Advertisement"
@@ -216,7 +232,9 @@ export function AdSlot({
               (`//…`) script URLs that will not resolve in an opaque origin.
             */
             sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-            style={{ border: 0, display: "block", maxWidth: "100%" }}
+            /* `width: 100%` only when the row declared no size — otherwise the
+               `width` attribute above is the exact one the unit was built for. */
+            style={{ border: 0, display: "block", maxWidth: "100%", ...(w ? null : { width: "100%" }) }}
           />
         </div>
       </div>

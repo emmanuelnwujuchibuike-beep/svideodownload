@@ -13,6 +13,43 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑19 — The landing hydration block, measured (and a fix that did not work)
+
+The 07‑17 audit flagged a 300–835ms main‑thread block on every page as the top
+performance item, with the cause explicitly unverified. Measured properly now:
+production build, slow‑4G (1.6Mbps / 300ms RTT) plus **4× CPU throttling**,
+390×844 mobile, three runs.
+
+`/` comes in at **LCP 1708/1976/2608ms** — the worst run is over the two‑second
+budget — with 1.3–2.4s of total blocking. Run‑to‑run variance is large enough
+(1708–2760ms) that a single run cannot decide anything; medians across at least
+three runs are the only honest comparison.
+
+**The block is React hydration itself, not a heavy component.** CPU profile
+self‑time: react‑dom 827ms, scheduler/internals 421ms, webpack runtime 225ms —
+and the landing page's own code 112ms, about 5% of it. Roughly 195kB of
+react‑dom, scheduler, framer‑motion and the Supabase auth SDK execute before any
+landing code runs. Supabase is there because the site header calls `useUser()`,
+so an anonymous visitor downloads and parses an auth SDK to discover they are
+anonymous.
+
+**A fix was tried and reverted.** Moving the Supabase client to a dynamic import
+inside the effect produced **no measurable improvement** — blocking medians
+2132ms before against 2107ms after, LCP worst 2608 → 2760. One profile run
+showed react‑dom time dropping 827→302ms, which looked like a win and turned out
+to be noise once compared across three runs. Because the chunk still loads
+immediately after mount, total transferred JS was identical at 356.8kB across
+the same 29 files; only the parse timing moved. Reverting was the right call: an
+unproven change to authentication on every page, unverifiable signed‑in in that
+session. Recorded so nobody retries it expecting a win — the target has to be
+removing bytes, not reordering them.
+
+Also spotted and not chased: an intermittent CLS of 0.0607 (two runs of three)
+attributed to a hero‑effects glow div. Under the 0.1 threshold, but roughly 25×
+the 0.0025 recorded on 07‑17, and it has a named node to start from.
+
+---
+
 ## 2026‑07‑19 — Working the recorded handoff: personal plane, corpus admin, translation pipeline
 
 Three items, in the order the previous session's handoff set: the personal plane

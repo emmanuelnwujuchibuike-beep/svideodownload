@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { RecommendedNext } from "@/features/personal/recommended-next";
 import { coursesForSchool, courseMinutes, schoolCurriculumState } from "@/lib/academy/courses";
 import { schoolViews } from "@/lib/academy/schools";
 import { jsonLd } from "@/lib/seo/json-ld";
@@ -77,6 +78,17 @@ export default function AcademyPage() {
               share without oversharing, stay private, and build on the API. Written to
               be used, not skimmed.
             </p>
+          </div>
+        </section>
+
+        {/*
+          The personal plane's payoff, as a client island so this page stays
+          statically prerendered — the ranking's input is the reader's completed
+          lessons, which live behind a no-store endpoint.
+        */}
+        <section className="pt-12">
+          <div className="container max-w-5xl">
+            <RecommendedNext />
           </div>
         </section>
 

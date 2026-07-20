@@ -102,6 +102,25 @@ export default function HomePage() {
         <SiteHeader />
         <main>
         <Hero />
+        {/*
+          Everything below the hero is skipped for layout and paint until it is
+          scrolled near.
+
+          MEASURED cause, not a guess: FCP on `/` lands around 1.1s while the
+          hero H1 — the LCP element — paints at ~2.5s. Blocking webfonts barely
+          moved it (2504ms vs 2588ms), so the gap is not the font; it is the
+          main thread doing style and layout for a ten-section document (heavy
+          hero effects, a full phone mockup) on a 4x-throttled CPU before it can
+          paint the top of the page.
+
+          `content-visibility: auto` lets the browser skip that work for
+          offscreen subtrees entirely. `contain-intrinsic-size` supplies a
+          placeholder height so the scrollbar and anchor links stay honest —
+          without it the page would collapse and jump as sections realise their
+          real size. Pure CSS: no JS, no visual change, and it degrades to
+          today's behaviour on browsers that do not support it.
+        */}
+        <div className="[contain-intrinsic-size:auto_900px] [content-visibility:auto]">
         {/* Supported-platform marks, per the mockup. */}
         <TrustBar />
         {/* Rendered from the Product Genome — see components/landing/product-grid.tsx */}
@@ -151,6 +170,7 @@ export default function HomePage() {
         {/* SEO link surface */}
         <DownloaderLinks heading="Popular video downloaders" />
           <Faq />
+        </div>
         </main>
         <SiteFooter />
       </div>

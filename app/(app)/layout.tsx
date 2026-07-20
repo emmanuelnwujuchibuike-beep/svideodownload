@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
 
 import { AppOverlays } from "@/features/app-shell/app-overlays";
+import { EdgeSwipeBack } from "@/features/app-shell/edge-swipe-back";
+import { OfflineBanner } from "@/features/app-shell/offline-banner";
+import { StatusBarScrim } from "@/features/app-shell/status-bar-scrim";
+import { ScrollPerfMonitor } from "@/features/perf/scroll-perf-monitor";
 import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { DeviceCheck } from "@/features/app-shell/device-check";
@@ -38,6 +42,21 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         {children}
       </div>
       <MobileNav />
+      {/*
+        App-shell chrome, moved here from the ROOT layout (2026-07-19).
+
+        These four are signed-in-surface concerns: the iOS back-swipe gesture,
+        the PWA status-bar scrim, the connectivity banner and the scroll-FPS
+        beacon. In the root layout they also shipped to every marketing page,
+        where none of them do anything — and OfflineBanner drags framer-motion
+        with it. Measured: the landing page paints nothing until FCP, and FCP is
+        gated on bandwidth and main-thread work, so chrome that cannot act is
+        pure cost there.
+      */}
+      <StatusBarScrim />
+      <EdgeSwipeBack />
+      <OfflineBanner />
+      <ScrollPerfMonitor />
       {/* The mobile inbox's persistent top chrome (title + profile/tools +
           Stories). In the shell, above the page-transition template, so it never
           unmounts on the iOS back-swipe out of a chat — the fix for the

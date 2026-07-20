@@ -17,7 +17,7 @@
  * noticeably bigger on the two moments it's allowed to show at all. The
  * previous glow's blur was reading as "the logo itself looks blurry."
  *
- * Uses the actual logo asset (`/brand/frenz-logo.png`, 512x512 source,
+ * Uses the actual logo asset (`/brand/frenz-logo-splash.png`, 384x384 —
  * preloaded in app/layout.tsx's <head> so it's never the slow part).
  */
 // PURE-CSS FAILSAFE (2026-07-17): `#frenz-boot` runs `frenz-boot-selfclear`,
@@ -285,7 +285,7 @@ export function BootSplash() {
       <span className="frenz-boot__mark">
         {/* eslint-disable-next-line @next/next/no-img-element -- must render
             before the JS bundle (next/image) is available */}
-        <img src="/brand/frenz-logo.png" width={152} height={152} alt="" />
+        <img src="/brand/frenz-logo-splash.png" width={152} height={152} alt="" />
         <span className="frenz-boot__shine" />
       </span>
     </div>

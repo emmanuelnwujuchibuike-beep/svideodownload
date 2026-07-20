@@ -6,14 +6,10 @@ import type { ReactNode } from "react";
 import { ThemeCacheSync } from "@/components/theme-cache-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { BootHead, BootSplash, ThemeBootScript } from "@/features/app-shell/boot-splash";
-import { EdgeSwipeBack } from "@/features/app-shell/edge-swipe-back";
 import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
-import { OfflineBanner } from "@/features/app-shell/offline-banner";
-import { StatusBarScrim } from "@/features/app-shell/status-bar-scrim";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
 import { CommandCenterMount } from "@/features/navigation/command-center-mount";
 import { RegisterServiceWorker } from "@/features/notifications/register-sw";
-import { ScrollPerfMonitor } from "@/features/perf/scroll-perf-monitor";
 import { WebVitals } from "@/features/perf/web-vitals";
 import { DEFAULT_LOCALE, getLocale, isRtl } from "@/lib/i18n/locales";
 import { SITE_URL as siteUrl } from "@/lib/site";
@@ -203,7 +199,7 @@ export default function RootLayout({
         {/* BootSplash (below) renders this as a raw <img> before React/next-image
             ever runs — preload it so the boot logo paints immediately on every
             cold load instead of waiting on a cache-cold fetch. */}
-        <link rel="preload" as="image" href="/brand/frenz-logo.png" fetchPriority="high" />
+        <link rel="preload" as="image" href="/brand/frenz-logo-splash.png" fetchPriority="high" />
         {SPLASH_SCREENS.flatMap(({ file, width, height, ratio }) =>
           (["light", "dark"] as const).map((theme) => (
             <link
@@ -278,11 +274,7 @@ export default function RootLayout({
             <CommandCenterMount />
             <RegisterServiceWorker />
             <GlobalErrorCapture />
-            <StatusBarScrim />
-            <EdgeSwipeBack />
-            <OfflineBanner />
             <WebVitals />
-            <ScrollPerfMonitor />
           </MotionConfig>
         </ThemeProvider>
       </body>

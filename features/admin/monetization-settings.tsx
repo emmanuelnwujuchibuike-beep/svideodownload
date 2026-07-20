@@ -103,10 +103,17 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
         <p className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
           <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            <strong>Pop-under and AdSense are both enabled.</strong> Google prohibits units that
-            interfere with navigation, and a reviewer who meets a pop-under is meeting exactly
-            that — it is the most common reason a site under review is rejected, and it can cost an
-            approved account. Running both is a deliberate trade; this is only here so it is not an
+            <strong>Pop-under is on while AdSense is enabled.</strong> Google prohibits units that
+            interfere with navigation, and a reviewer who meets a pop-under is meeting exactly that.
+            It is the most common reason a site is rejected, and it can cost an already-approved
+            account.
+            <br />
+            <strong className="mt-1 inline-block">
+              If your site is still &ldquo;Getting ready&rdquo; or under review, turn this off until
+              you are approved.
+            </strong>{" "}
+            Adsterra <em>banner</em> units are unaffected — this is only about the pop-under /
+            OnClick format. Running both is a deliberate trade; this is here so it is not an
             accidental one.
           </span>
         </p>
@@ -145,6 +152,22 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
             start with <code className="font-mono">ca-pub-</code> — the bare{" "}
             <code className="font-mono">pub-</code> form used in ads.txt will not load.
           </p>
+          {/*
+            The empty state is the one worth calling out. AdSense enabled with
+            no publisher id means the loader script is never emitted, so no unit
+            can ever fill — and nothing anywhere else says so. ads.txt can be
+            Authorised while this is blank, which makes it look done.
+          */}
+          {state.adsense && !state.adsensePublisherId.trim() ? (
+            <p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+              <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                <strong>No publisher ID set.</strong> The AdSense script is not on the site, so no
+                AdSense unit can fill — even once your site is approved, and even though ads.txt is
+                already authorised. Paste it above and save.
+              </span>
+            </p>
+          ) : null}
         </div>
 
         <div>
@@ -169,13 +192,20 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
       </div>
 
       <div className="mt-6 space-y-2 border-t border-border/60 pt-5">
-        <h3 className="text-sm font-semibold">Site verification (any network)</h3>
+        <h3 className="text-sm font-semibold">Site verification (other networks)</h3>
         <p className="text-xs leading-relaxed text-muted-foreground">
-          One <code className="font-mono">name|content</code> pair per line. Use the{" "}
-          <strong>meta tag</strong> method in your network&apos;s dashboard — the &ldquo;upload a
-          file to your root folder&rdquo; method cannot be used here, because Monetag and
-          PropellerAds both ask for <code className="font-mono">/sw.js</code>, which is already the
-          app&apos;s service worker (offline mode, push notifications, background downloads).
+          One <code className="font-mono">name|content</code> pair per line — only needed for
+          networks other than AdSense, whose tag is added automatically from the publisher ID above.
+          {/*
+            Kept because the constraint is permanent and the reason is not
+            obvious: a future network will ask for the same thing, and the next
+            person to hit it should find the answer here rather than by
+            overwriting the service worker and losing offline mode.
+          */}{" "}
+          Always choose the <strong>meta tag</strong> method: the &ldquo;upload a file to your root
+          folder&rdquo; option cannot be used, because networks that offer it ask for{" "}
+          <code className="font-mono">/sw.js</code> — already the app&apos;s service worker (offline
+          mode, push notifications, background downloads).
         </p>
         <textarea
           value={state.verificationTags}

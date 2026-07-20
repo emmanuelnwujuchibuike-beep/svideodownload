@@ -105,6 +105,9 @@ const config: Config = {
         "pulse-glow": "pulse-glow 3s ease-in-out infinite",
         drift: "drift 16s ease-in-out infinite",
         "drift-slow": "drift-slow 22s ease-in-out infinite",
+        // Login hero constellation — keyframes in globals.css.
+        "login-float": "login-float 6s ease-in-out infinite",
+        "login-pulse": "login-pulse 7s ease-in-out infinite",
       },
     },
   },

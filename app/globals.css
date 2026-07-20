@@ -652,3 +652,20 @@
   .frenz-float,
   .frenz-drift { animation: none; }
 }
+
+/* ── Login hero constellation ──────────────────────────────────────────────
+   A slow ring rotation, a per-tile counter-bob that keeps each logo upright,
+   and a breathing aura behind the mark. Registered as Tailwind animate-* via
+   the config; keyframes live here. Motion-safe is applied at the call site. */
+@keyframes login-orbit {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes login-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-6px) rotate(0deg); }
+}
+@keyframes login-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.97); }
+  50%      { opacity: 0.9;  transform: scale(1.03); }
+}

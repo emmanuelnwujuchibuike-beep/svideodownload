@@ -48,41 +48,37 @@ export default async function LoginPage({
       </Link>
 
       {/*
-        Collage — fills the space above the auth block.
+        The hero constellation, in its OWN bounded box.
 
-        `items-start`, NOT `items-center`. Measured: centering made the collage's
-        Y position a function of THIS container's height, which is `flex-1` —
-        i.e. whatever is left after the auth block below. That block contains the
-        big gradient headline, so when the webfont swaps in, the headline
-        reflows, the auth block grows (~210px on a 390x844 screen), and the
-        centred collage slides up with it. That single move was CLS 0.1614 —
-        POOR, and the largest layout shift in the app.
-
-        Pinned to the top, the collage's Y is `container top + padding`: fixed
-        before any font or image arrives. The slack simply sits below it instead
-        of being split above and below, which on a real viewport is a difference
-        of about 18px and invisible.
-
-        The alternative — `font-display: optional` so the font never swaps —
-        would fix every such shift app-wide, but it means some visitors never see
-        Inter at all on a slow connection. Not worth trading the brand's
-        typography for one page's metric.
+        `items-center` is safe now that the hero has a fixed aspect-ratio /
+        max-height rather than filling the column: its size is known at first
+        paint, so it does not slide when the webfont swaps the headline below
+        (the CLS 0.1614 the old `flex-1` + `h-full` collage caused). The box owns
+        its space, so nothing overlaps the title.
       */}
-      <div className="relative flex min-h-0 flex-1 items-start justify-center px-4 pt-4">
+      <div className="relative flex min-h-0 flex-1 items-center justify-center px-6 pt-2">
         <LoginCollage />
       </div>
 
-      {/* Headline + auth — pinned to the bottom, never scrolls */}
-      <div className="relative shrink-0 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-1 sm:px-8">
+      {/*
+        Title + auth — pinned to the bottom, generously spaced.
+
+        The headline stands ALONE in its own block with real breathing room above
+        and below, never over the image. `text-balance` keeps the three words
+        from breaking awkwardly.
+      */}
+      <div className="relative shrink-0 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4 sm:px-8">
         <div className="mx-auto w-full max-w-sm">
-          <h1 className="text-center text-[30px] font-extrabold leading-tight tracking-[-0.03em] sm:text-4xl">
-            <span className="bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent">Download. </span>
-            <span className="bg-gradient-to-r from-blue-500 to-violet-500 bg-clip-text text-transparent">Discover. </span>
+          <h1 className="text-balance text-center text-[32px] font-extrabold leading-[1.05] tracking-[-0.035em] sm:text-[40px]">
+            <span className="bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent">Download.</span>{" "}
+            <span className="bg-gradient-to-r from-blue-500 to-violet-500 bg-clip-text text-transparent">Discover.</span>{" "}
             <span className="bg-gradient-to-r from-violet-500 to-fuchsia-500 bg-clip-text text-transparent">Meet.</span>
           </h1>
-          <p className="mt-1.5 text-center text-[15px] font-medium text-muted-foreground">Your world. Your way.</p>
+          <p className="mt-2.5 text-center text-[15px] font-medium text-muted-foreground">
+            One place for every platform you already use.
+          </p>
 
-          <div className="mt-5">
+          <div className="mt-7">
             <AuthPanel next={next} />
           </div>
         </div>

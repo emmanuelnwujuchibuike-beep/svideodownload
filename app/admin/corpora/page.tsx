@@ -1,4 +1,4 @@
-import { AlertTriangle, BookOpen, CheckCircle2, Globe, Info, Languages } from "lucide-react";
+import { AlertTriangle, BarChart3, BookOpen, CheckCircle2, Globe, Info, Languages } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -11,6 +11,7 @@ import {
   localeProgress,
   type FindingSeverity,
 } from "@/lib/content/corpora";
+import { completionRate, learningEngagement } from "@/lib/content/learning-analytics";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -31,11 +32,19 @@ import { createClient } from "@/lib/supabase/server";
  * derived state, cross-references, and the checks that are otherwise only run by
  * the test suite — where an operator never sees them.
  *
- * ── No per-user data ──────────────────────────────────────────────────────────
+ * ── Aggregate over the personal plane, never per-user ─────────────────────────
  *
- * The personal plane (0088) knows what individuals read. None of it is on this
- * page. An operator needs to know a lesson is orphaned, not who read it, and the
- * screen that shows the second is how that boundary gets crossed by accident.
+ * The personal plane (0088) knows what individuals read, and an operator needs
+ * to know a lesson is orphaned rather than who read it — the screen that shows
+ * the second is how that boundary gets crossed by accident.
+ *
+ * The Engagement section (0089) is the one place this page touches that data,
+ * and it does so through a function that cannot return an identity: counts per
+ * ITEM, with every bucket below five distinct readers suppressed in SQL. The
+ * suppression is in the database rather than here on purpose — a filter in
+ * application code is one refactor from being dropped, and by then the rows have
+ * already crossed the wire. When the migration is unapplied the section says so
+ * instead of failing.
  *
  * `force-dynamic` + `robots: noindex`, matching the rest of /admin: an operator
  * tool, never crawled, explicitly outside the 2-second visitor budget.
@@ -91,6 +100,12 @@ export default async function CorpusOpsPage() {
   const findings = auditCorpora();
   const locales = localeProgress();
   const courses = courseHealth();
+  /*
+    Awaited after the admin guard above, never before. The function refuses a
+    non-admin itself, but the page should not be issuing the query at all for
+    someone it is about to redirect.
+  */
+  const engagement = await learningEngagement();
 
   const broken = findings.filter((f) => f.severity === "broken");
   const rest = findings.filter((f) => f.severity !== "broken");
@@ -202,6 +217,93 @@ export default async function CorpusOpsPage() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        {/*
+          Engagement — aggregate only, and suppressed below five readers.
+
+          The interesting number here is not "what is popular" but the gap
+          between readers and completions: an item many people open and few
+          finish is a problem with the writing, and it is otherwise invisible.
+        */}
+        <section className="mb-12">
+          <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold tracking-[-0.01em]">
+            <BarChart3 aria-hidden className="h-5 w-5 text-primary" />
+            Engagement
+          </h2>
+
+          {!engagement.available ? (
+            <p className="flex items-start gap-2 rounded-xl border border-border/70 bg-card p-4 text-sm leading-relaxed text-muted-foreground">
+              <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                {engagement.reason === "not-migrated" ? (
+                  <>
+                    Migration <code className="font-mono text-xs">0089</code> is not applied yet, so
+                    there is nothing to aggregate. The page degrades to this rather than failing —
+                    apply the migration and the table appears.
+                  </>
+                ) : engagement.reason === "not-authorized" ? (
+                  <>The database refused the aggregate for this session.</>
+                ) : (
+                  <>Engagement could not be read.</>
+                )}
+              </span>
+            </p>
+          ) : engagement.rows.length === 0 ? (
+            <p className="flex items-start gap-2 rounded-xl border border-border/70 bg-card p-4 text-sm leading-relaxed text-muted-foreground">
+              <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                {/*
+                  Said explicitly, because an empty table here is ambiguous and
+                  the wrong reading ("nobody reads anything") is the one an
+                  operator will jump to.
+                */}
+                No item has yet been read by enough distinct people to be
+                reportable. Counts below five readers are suppressed in the database, not here —
+                on a corpus this size a small count plus knowing who the users are is a disclosure,
+                not a statistic.
+              </span>
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-border/70">
+              <table className="w-full min-w-[36rem] text-sm">
+                <thead className="bg-secondary/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Item</th>
+                    <th className="px-4 py-3 font-medium">Kind</th>
+                    <th className="px-4 py-3 font-medium">Readers</th>
+                    <th className="px-4 py-3 font-medium">Finished</th>
+                    <th className="px-4 py-3 font-medium">Saved</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {engagement.rows.map((row) => {
+                    const rate = completionRate(row);
+                    return (
+                      <tr key={`${row.itemKind}:${row.itemSlug}`} className="border-t border-border/60">
+                        <td className="px-4 py-3 font-mono text-xs">{row.itemSlug}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{row.itemKind}</td>
+                        <td className="px-4 py-3 tabular-nums">{row.readers}</td>
+                        <td className="px-4 py-3 tabular-nums">
+                          {row.completions}
+                          {rate !== null && (
+                            <span
+                              className={
+                                rate < 0.4 ? "ml-2 text-xs text-amber-600" : "ml-2 text-xs text-muted-foreground"
+                              }
+                            >
+                              {Math.round(rate * 100)}%
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 tabular-nums text-muted-foreground">{row.bookmarks}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         {/* Locales — the honest picture: declared intent, measured progress. */}

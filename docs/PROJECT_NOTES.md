@@ -2548,3 +2548,64 @@ furthest.
 **Verified:** sitemap lists exactly the 4 published pillars; a held-back pillar
 404s; `/learn/[slug]` first-load JS unchanged at 265 kB (the topics import stays
 server-side); no console errors.
+
+---
+
+## Learning analytics — migration 0089 (2026-07-20)
+
+**This is the decision 0088 deferred.** That migration ends: *"There is
+deliberately no policy granting anyone else read access, including for aggregate
+stats — an aggregate is a separate decision, and it should be made explicitly
+rather than fall out of a loose policy."* 0089 is that decision, made as narrowly
+as the question allows.
+
+**No new data is collected.** No events table, no new write path — it aggregates
+the rows 0088 already stores. An analytics table would be a second record of the
+same behaviour, on a different retention schedule, with its own RLS to get wrong,
+for information already derivable.
+
+**An aggregate is not automatically safe because it is a COUNT.** On a corpus
+this size, "1 reader completed how-your-account-is-protected" plus any knowledge
+of who the users are is a disclosure with a number in front of it. So buckets
+below **5 distinct readers are suppressed** — suppressed, not rounded or fuzzed,
+because a rounded small count still tells you the cohort is small.
+
+**The threshold is a constant, not a parameter.** A `min_readers int default 5`
+argument is authorization by argument: the caller passes 1. The function takes no
+arguments at all, and a test asserts the signature is empty.
+
+**No grand total is published.** Suppression is defeated by differencing if an
+unsuppressed total sits next to it. 0089 exposes exactly one function, and the
+test pins that count so adding a second forces the reasoning to be redone.
+
+### Security review (the gate, run during implementation)
+
+- `SECURITY DEFINER` is required — it must read across all users, which is
+  exactly what 0088's RLS forbids. That makes the in-function `is_admin()` check
+  the only thing between a signed-in user and everyone's reading history, so it
+  is the first statement and it **raises** rather than returning empty: an empty
+  result is indistinguishable from "no data yet", and a security control that
+  cannot be told apart from a normal state is one nobody notices has broken.
+- `set search_path = public` — otherwise a caller could shadow `is_admin()` with
+  their own function returning true, and the definer context would run it.
+- `revoke all ... from public` **and** `from anon`. Postgres grants EXECUTE to
+  PUBLIC on creation; without the revoke, `anon` could invoke a definer function
+  that reads every row.
+- The read uses the session-scoped server client, never the service-role key —
+  service role would bypass `is_admin()` entirely.
+- Returns counts per ITEM. Never `user_id`; no per-reader breakdown, no "who
+  completed this", no time series fine enough to single someone out.
+
+**Empirically corrected assumption.** An unapplied RPC does NOT surface Postgres's
+`42883`. Calling it against the live project returned **`PGRST202`** with HTTP
+404 — PostgREST resolves functions from its schema cache and 404s before Postgres
+is ever asked. The degradation set now leads with PGRST202, and a test pins it
+with the observation recorded.
+
+**Deliberately not added:** an index on `(item_kind, item_slug)`. The aggregate is
+a full group-by and an index would make it cheaper, but the table is optimised for
+the per-user reads a READER waits on, and every index is a write cost paid on
+those. This query runs on an admin page, occasionally, on a small table — the
+layer nobody is waiting on.
+
+**Pending migrations are now 0083, 0088 and 0089.** All three degrade safely.

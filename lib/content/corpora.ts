@@ -39,6 +39,13 @@ import { centreOf } from "@/lib/support/sections";
  * here, and `personal.test.ts` pins that. An operator needs to know a lesson is
  * orphaned; they do not need to know who read it, and building the screen that
  * shows them is how that boundary gets crossed by accident later.
+ *
+ * This module in particular stays entirely free of it — everything here is
+ * derived from compiled content and nothing else. The aggregate that DOES read
+ * the personal plane (0089) lives in `lib/content/learning-analytics.ts`, behind
+ * an admin-gated database function with a k-anonymity floor, deliberately in a
+ * separate module so the boundary is visible in the import graph rather than
+ * buried in one function of a file that otherwise never touches user data.
  */
 
 export type FindingSeverity = "broken" | "gap" | "note";

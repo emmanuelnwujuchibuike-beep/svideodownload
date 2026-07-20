@@ -5,6 +5,7 @@ import { CheckCircle2, Download, Lock, Pause, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import type { AdSlotData } from "@/lib/monetization/types";
+import { cn } from "@/lib/utils";
 
 import { AdSlot } from "./ad-slot";
 
@@ -34,6 +35,8 @@ export function RewardedAdGate({
   onCancel: () => void;
 }) {
   const [ad, setAd] = useState<AdSlotData | null | undefined>(undefined);
+  /** null until the fallback slot answers; false means it has nothing to show. */
+  const [slotHasAd, setSlotHasAd] = useState<boolean | null>(null);
   const [watched, setWatched] = useState(0);
   const [required, setRequired] = useState(durationSec);
   const [paused, setPaused] = useState(false);
@@ -162,8 +165,27 @@ export function RewardedAdGate({
                   className="aspect-video w-full"
                 />
               ) : (
-                <div className="flex min-h-[180px] items-center justify-center p-2">
-                  <AdSlot zone="reward_video" dismissible={false} className="w-full" />
+                /*
+                  `min-h-[180px]` reserves a black rectangle. That is right while
+                  a network ad is loading and wrong once the slot has reported it
+                  has nothing — the same decorated-empty-box shape as FetchedAd,
+                  latent here because the gate grants immediately when the zone
+                  is unseeded, so it only surfaces for an ad row that exists but
+                  renders nothing (a `display` ad saved with no script code).
+                  Collapsed on a negative answer rather than left to be found.
+                */
+                <div
+                  className={cn(
+                    "flex items-center justify-center p-2",
+                    slotHasAd === false ? "min-h-0" : "min-h-[180px]",
+                  )}
+                >
+                  <AdSlot
+                    zone="reward_video"
+                    dismissible={false}
+                    className="w-full"
+                    onResolved={setSlotHasAd}
+                  />
                 </div>
               )}
             </div>

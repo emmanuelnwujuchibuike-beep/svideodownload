@@ -28,25 +28,58 @@ export function AdSlot({
   zone,
   className,
   dismissible = true,
+  onResolved,
 }: {
   zone: AdZone;
   className?: string;
   dismissible?: boolean;
+  /**
+   * Called once with whether this zone actually had an ad to show.
+   *
+   * Exists because a slot that renders nothing is invisible to its PARENT, and
+   * several parents draw chrome around it — a "Sponsored" label, a border, a
+   * close button, a reserved height. Those wrappers rendered unconditionally
+   * and produced a decorated empty box whenever a zone was unseeded, which is
+   * the "empty white space" this component was reported for. The slot is the
+   * only thing that knows, so it has to be the thing that says.
+   */
+  onResolved?: (hasAd: boolean) => void;
 }) {
   const [ad, setAd] = useState<AdSlotData | null>(null);
   const [closed, setClosed] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
   const tracked = useRef(false);
+  const notified = useRef(false);
 
   useEffect(() => {
     let alive = true;
     fetch(`/api/ads?zone=${zone}`)
       .then((r) => (r.ok ? r.json() : { ad: null }))
-      .then((d) => alive && setAd(d.ad ?? null))
-      .catch(() => {});
+      .then((d) => {
+        if (!alive) return;
+        setAd(d.ad ?? null);
+        /*
+          Fires for the empty case too — that is the case wrappers need. Guarded
+          so a re-render cannot re-notify a parent that has already collapsed.
+        */
+        if (!notified.current) {
+          notified.current = true;
+          onResolved?.(Boolean(d.ad));
+        }
+      })
+      .catch(() => {
+        // A failed request is indistinguishable from an unseeded zone as far as
+        // the wrapper is concerned: there is nothing to show, so do not frame it.
+        if (!alive || notified.current) return;
+        notified.current = true;
+        onResolved?.(false);
+      });
     return () => {
       alive = false;
     };
+    // `onResolved` deliberately omitted: an inline arrow from the parent would
+    // change identity every render and re-run the fetch on a loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone]);
 
   // Self-injecting (pop) scripts run directly in the page.

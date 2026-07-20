@@ -2609,3 +2609,79 @@ those. This query runs on an admin page, occasionally, on a small table — the
 layer nobody is waiting on.
 
 **Pending migrations are now 0083, 0088 and 0089.** All three degrade safely.
+
+---
+
+## Ad-slot audit (2026-07-20)
+
+Owner: *"run a total audit on where the ads slot are now and how they work and
+which isnt working because i tried some and some wasnt showing but when i click a
+button it redirect me to an ad site and some shows an empty white space, only the
+bottom banner works but i want it to be in a different way."*
+
+### The inventory — measured, not read
+
+Queried the live `ads` table and then every zone through the running API.
+**There is exactly ONE ad row in the entire database.**
+
+| zone | rendered by | page | seeded | live behaviour |
+|---|---|---|---|---|
+| `global` | `AdScripts` | landing | ✗ | injects nothing |
+| `homepage_top` | `AdSlot` | landing | ✗ | collapses (`empty:hidden`) |
+| `download_result_page` | `ResultOffer` | downloader | **✓ adsterra `pop`** | **hijacks clicks** |
+| `result_top` | `FetchedAd` | downloader | ✗ | **decorated empty box** |
+| `reward_video` | `RewardedAdGate` | preview | ✗ | dormant (grants instantly) |
+| `sidebar` | `AdSlot` | blog post | ✗ | renders nothing |
+| `exit_intent_popup` | — | **no call site** | ✗ | never rendered anywhere |
+| `mobile_bottom_banner` | `StickyBottomAd` | landing | ✗ | renders nothing |
+
+`/api/ads?zone=…` returns `{"ad":null}` for **7 of the 8** zones.
+
+### Each symptom, explained
+
+**"some wasn't showing"** — nothing is seeded. Not a code fault: `AdSlot`
+correctly renders nothing for an empty zone. The `AdManager` on `/admin` is
+working and is where zones get filled.
+
+**"when i click a button it redirect me to an ad site"** — the single seeded ad
+is `format: "pop"`, an Adsterra Social Bar / Popunder script, injected directly
+into the page by `injectAdMarkup`. **Those formats monetise by hijacking the
+first click. It is working exactly as configured.** This is a product decision,
+not a bug — see below.
+
+**"only the bottom banner works"** — `mobile_bottom_banner` has no ad, so
+`StickyBottomAd` renders nothing. The bar being seen is the **Adsterra Social Bar
+drawn by that same pop script**, which is why it is the only thing appearing and
+why it does not respond to the bottom-banner settings.
+
+**"some shows an empty white space"** — 🔴 **a real bug, now fixed.** `FetchedAd`
+drew its full card — border, gradient, "Sponsored" label, close button — around
+an `AdSlot` that returns `null`, above **every download result, for 5 seconds**.
+Its own comment claimed it was "hidden when no `result_top` ad is configured";
+the slot rendered nothing and the chrome around it did not. `empty:hidden` (which
+fixed this on the landing page) cannot work here because the label and button are
+siblings of the slot, so the card is never childless. `AdSlot` now reports
+`onResolved(hasAd)` and the card stays hidden until a real ad arrives. The same
+latent shape in `RewardedAdGate` (a reserved 180px black box) was collapsed too.
+
+### Guard
+
+`lib/monetization/ad-slots.test.ts` fails any `AdSlot` call site that draws chrome
+without a way to collapse. ⚠️ **The first version did not work**: it scanned raw
+source, and the doc comment explaining why `empty:hidden` was unusable *contained
+the string* `empty:hidden` — so the guard read its own prose and passed.
+Reintroducing the bug did not turn it red. It now strips comments first, and a
+test proves the rule can fail.
+
+### Open decision for the owner
+
+**Keep or drop the click-hijacking formats.** OnClick / pop-under / Social Bar
+break the visitor's intent by design, on a product positioned on trust, and they
+are the cause of two of the four reported symptoms. Recommendation is to drop
+`pop` and fill the zones with `display` and `native` formats instead — but it is
+revenue, so it is the owner's call. Nothing was changed about which formats are
+served.
+
+Also open: **what "a different way" means for the bottom banner** — needs the
+specific ask before redesigning. And `exit_intent_popup` is declared with no call
+site: either build it or remove the zone.

@@ -98,15 +98,34 @@ function cleanUrl(u: string): string {
  * Snapchat media URL. If the clean rendition is ever unavailable the proxy
  * download fails and the pipeline falls back to yt-dlp — never a broken file.
  */
-function stripSnapWatermark(u: string): string {
+export function stripSnapWatermark(u: string): string {
   try {
     const url = new URL(u);
     const mo = url.searchParams.get("mo") ?? "";
     const watermarked =
-      /\.27\.[^./?#]+$/.test(url.pathname) || // watermarked video rendition
+      /\.27\.[^./?#]+/.test(url.pathname) || // watermarked video rendition
       /U3BvdGxpZ2h0U2hhcmluZ/.test(mo); // base64 of "SpotlightSharing"
     if (!watermarked) return u;
-    url.pathname = url.pathname.replace(/(\/d\/[^./]+)\.\d+\./, "$1.1034.");
+
+    /*
+      Rewrite the rendition to the clean `.1034.` original.
+
+      ── The bug this fixes ──
+      The path letter is NOT always `/d/`. This extractor's own fallback notes
+      Spotlight serves from extension-less `/d/` OR `/y/` paths, but the rewrite
+      only matched `/d/`, so a `/y/` Spotlight URL passed the watermark check and
+      then had NOTHING rewritten — the download stayed watermarked. That is
+      exactly "Snapchat Spotlight still downloads with watermarks".
+
+      Generalised to any single-letter media directory, and anchored on the
+      rendition segment (`.<digits>.`) rather than the id, so it does not depend
+      on the id's characters. `.27.` is the watermarked share render; `.1034.` is
+      the story original. Both fixed points are still assumptions about
+      Snapchat's CDN — if they have changed the numbers wholesale, this needs a
+      live watermarked URL to re-derive, and the pipeline falls back to yt-dlp
+      rather than serving a broken file.
+    */
+    url.pathname = url.pathname.replace(/(\/[a-z]\/[^./]+)\.\d+\./i, "$1.1034.");
     url.searchParams.delete("mo");
     url.searchParams.delete("uc");
     return url.toString();

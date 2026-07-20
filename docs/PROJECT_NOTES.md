@@ -13,6 +13,44 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑20 — LCP attributed properly: it is the hydration task, and four cuts
+
+Yesterday's pass measured the block but not its cause. Capturing every LCP
+*candidate* alongside the long‑task timeline settled it: there is exactly one
+candidate — the hero H1 — and it paints the instant the first big hydration task
+ends (task at 1093ms lasting 659ms, H1 at 1848ms; second run 1060+758, H1 at
+1860ms). FCP is ~1.1s, so the gap between paint and LCP *is* that task.
+
+Two hypotheses were tested and rejected on evidence rather than argued about.
+Webfonts: `font-display: swap` was already set and there are zero font preloads,
+but blocking every woff2 moved worst‑case 2588 → 2504ms, which is noise. The
+page‑transition template: the static HTML carries no transition class, so the
+first‑mount guard is working.
+
+Four cuts shipped. The boot‑splash logo was a 512px, 159kB PNG rendered at 152px
+and preloaded at high priority on every page — it held the connection from 561ms
+to 2958ms on a 1.6Mbps link while render‑blocking CSS waited; resampled to 384px
+it is 15kB. Four app‑shell components (status‑bar scrim, edge‑swipe‑back,
+offline banner, scroll‑FPS monitor) moved out of the root layout into the app
+group, where they shipped to every marketing page and could not act.
+`content-visibility` now skips layout for everything below the hero. Third‑party
+ad scripts wait for idle instead of firing during hydration — the same request
+and injection, only later, and not a CSP change.
+
+Result, stated honestly: **median LCP 1976 → 1792ms and best‑case 1244ms, both
+under budget; worst‑of‑five is 2352ms, still over.** The remaining gate is the
+hydration task itself, which needs the hero's client components to stop
+hydrating eagerly — a refactor rather than a tweak. The local harness also
+swings about a second run to run, so the live site is the number that counts.
+
+Three sitemap items were closed as not applicable rather than built: a sitemap
+index exists to split past 50,000 URLs and this site has 198; an image sitemap
+would need per‑page images, and the generated OG cards 404 without the content
+hash Next appends, leaving a choice between breakable URLs and one generic card
+repeated 198 times; and no public page presents video as its primary content.
+
+---
+
 ## 2026‑07‑19 — The landing hydration block, measured (and a fix that did not work)
 
 The 07‑17 audit flagged a 300–835ms main‑thread block on every page as the top

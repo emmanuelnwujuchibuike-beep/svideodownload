@@ -7,6 +7,29 @@ import { BLOG_SLUGS } from "@/lib/seo/blog";
 import { SEO_SLUGS } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
+/*
+  ── No sitemap index, and no image/video sitemap. Both deliberate. ────────────
+
+  A sitemap INDEX exists to split a corpus past Google's per-file limit of
+  50,000 URLs / 50MB. This sitemap carries 198. Adding an index would be a layer
+  of indirection serving no crawler, and one more file to keep in step.
+  Revisit if this passes ~10,000 URLs; the generated downloader pages are the
+  only thing that could plausibly get there.
+
+  An IMAGE sitemap was attempted and abandoned on evidence. The only per-page
+  images we have are the generated OG cards, and their URLs are not stably
+  addressable: `/tiktok-downloader/opengraph-image` 404s without the content
+  hash Next appends. So the options were a sitemap full of URLs that break on
+  the next deploy, or the same generic OG card repeated against all 198 entries
+  — which tells an image crawler nothing and reads as spam. Neither is worth
+  shipping. Real per-page artwork would change this.
+
+  A VIDEO sitemap needs public pages whose primary content is a video. The
+  marketing site has none — reels live behind the app, on user-generated
+  content. Declaring video entries for pages that do not present video is the
+  same fabrication the Reality Ledger exists to stop, in a file only machines
+  read.
+*/
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
 

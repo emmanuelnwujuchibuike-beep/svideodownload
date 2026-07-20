@@ -46,32 +46,54 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const toggle = (key: ToggleKey) => setState((s) => ({ ...s, [key]: !s[key] }));
   const setText = (key: "adsensePublisherId" | "adsTxt" | "verificationTags", value: string) =>
     setState((s) => ({ ...s, [key]: value }));
 
-  const save = async () => {
+  const persist = async (next: MonetizationSettings) => {
     setBusy(true);
     setMsg(null);
     try {
       const res = await fetch("/api/admin/monetization", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(state),
+        body: JSON.stringify(next),
       });
       const json = await res.json();
       setMsg(
         res.ok
-          ? { ok: true, text: "Saved — applies within a minute." }
+          ? { ok: true, text: "Saved." }
           : { ok: false, text: json.error ?? "Failed to save." },
       );
       if (res.ok) router.refresh();
+      return res.ok;
     } catch {
       setMsg({ ok: false, text: "Network error." });
+      return false;
     } finally {
       setBusy(false);
     }
   };
+
+  /*
+    Toggles SAVE THEMSELVES.
+
+    The old design updated local state and required a separate "Save controls"
+    button — and on mobile that button was below a long section and easy to
+    miss, so an operator would turn Adsterra off, see the switch flip, leave, and
+    find it still running because nothing was persisted. A switch that looks off
+    but is on is worse than no switch. Flipping one now writes immediately, with
+    an optimistic UI and a rollback if the write fails.
+  */
+  const toggle = async (key: ToggleKey) => {
+    const next = { ...state, [key]: !state[key] };
+    setState(next);
+    const ok = await persist(next);
+    if (!ok) setState((s) => ({ ...s, [key]: !s[key] })); // roll back on failure
+  };
+
+  // The text fields (publisher id, ads.txt, verification tags) still save on a
+  // button — persisting on every keystroke would be absurd.
+  const saveText = () => persist(state);
 
   return (
     <section className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card">
@@ -79,8 +101,8 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
         <ToggleRight className="h-5 w-5 text-primary" /> Monetization controls
       </h2>
       <p className="mb-4 text-sm text-muted-foreground">
-        Master switches for each revenue subsystem. Turning one off hides it
-        everywhere immediately (cached up to ~60s).
+        Each switch saves on tap and takes effect within a few seconds. No
+        separate save.
       </p>
 
       <div className="grid gap-2.5 sm:grid-cols-2">
@@ -88,8 +110,9 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
           <button
             key={r.key}
             type="button"
+            disabled={busy}
             onClick={() => toggle(r.key)}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5 text-left transition hover:border-foreground/20"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5 text-left transition hover:border-foreground/20 disabled:opacity-70"
           >
             <span className="min-w-0">
               <span className="block text-sm font-semibold">{r.label}</span>
@@ -224,14 +247,17 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
         </p>
       </div>
 
-      <div className="mt-5 flex items-center gap-3">
+      {/* This button saves the AdSense TEXT fields above. The switches save
+          themselves on tap, so it no longer needs to be reached to turn a
+          subsystem off — which on mobile it often could not be. */}
+      <div className="mt-5 flex flex-wrap items-center gap-3">
         <button
           type="button"
-          onClick={save}
+          onClick={saveText}
           disabled={busy}
           className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
         >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save controls
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save AdSense details
         </button>
         {msg ? (
           <span className={cn("text-sm", msg.ok ? "text-green-500" : "text-red-400")}>{msg.text}</span>

@@ -116,7 +116,16 @@ const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 let cache: { at: number; value: MonetizationSettings } | null = null;
-const TTL_MS = 60_000;
+/*
+  Short, because this gates whether an ad shows at all.
+
+  `setMonetizationSettings` clears the cache on the instance that handled the
+  save, but on a multi-instance deploy every OTHER instance keeps its copy until
+  this expires — so this TTL is the real ceiling on "I turned Adsterra off and
+  it is still showing". Sixty seconds made the switch feel broken; ten keeps the
+  query cheap while making the change effectively immediate.
+*/
+const TTL_MS = 10_000;
 
 /** Effective global monetization settings (defaults + admin overrides). */
 export async function getMonetizationSettings(): Promise<MonetizationSettings> {

@@ -134,7 +134,7 @@ export async function GET(request: Request) {
     );
     return NextResponse.json(
       { ads: Object.fromEntries(entries) },
-      { headers: { "Cache-Control": "private, max-age=30" } },
+      { headers: { "Cache-Control": "private, max-age=10" } },
     );
   }
 
@@ -146,7 +146,7 @@ export async function GET(request: Request) {
 
   const allowed = await allowedFilter();
   const ads = (await getAdsForZone(zone)).filter((a) => allowed(a, zone));
-  const headers = { "Cache-Control": "private, max-age=30" };
+  const headers = { "Cache-Control": "private, max-age=10" };
   if (all) return NextResponse.json({ ads }, { headers });
   return NextResponse.json({ ad: ads[0] ?? null }, { headers });
 }

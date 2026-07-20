@@ -69,14 +69,21 @@ export function AdSlot({
       .then((r) => (r.ok ? r.json() : { ad: null }))
       .then((d) => {
         if (!alive) return;
-        setAd(d.ad ?? null);
+        const found = (d.ad ?? null) as AdSlotData | null;
+        setAd(found);
         /*
           Fires for the empty case too — that is the case wrappers need. Guarded
           so a re-render cannot re-notify a parent that has already collapsed.
+
+          AdSense is the exception and answers later. A configured AdSense row
+          is not a visible ad: an unapproved account or simply no demand returns
+          no creative and the unit collapses to nothing, which would leave the
+          parent's card and "Sponsored" label wrapped around empty space. For
+          that format the answer comes from `data-ad-status` via `onFill` below.
         */
-        if (!notified.current) {
+        if (!notified.current && found?.format !== "adsense") {
           notified.current = true;
-          onResolved?.(Boolean(d.ad));
+          onResolved?.(Boolean(found));
         }
       })
       .catch(() => {
@@ -192,6 +199,12 @@ export function AdSlot({
           width={ad.width}
           height={ad.height}
           className="w-full"
+          /* The real answer for this format — see the fetch above. */
+          onFill={(filled) => {
+            if (notified.current) return;
+            notified.current = true;
+            onResolved?.(filled);
+          }}
         />
       </div>
     );

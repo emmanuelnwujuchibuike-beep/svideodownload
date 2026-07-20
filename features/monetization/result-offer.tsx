@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import type { RevenueStrategy } from "@/lib/monetization/types";
 
-import { ResultAd } from "./result-ad";
+
 
 /**
  * Renders whatever the server-side decision engine chose for this visit:
@@ -33,12 +33,19 @@ export function ResultOffer() {
 
   if (strategy.type === "ad") {
     /*
-      `ResultAd` rather than a bare slot: this placement can hold a video, and
-      an unskippable video on the screen where the visitor's file is waiting is
-      the most resented pattern in this category. It also renders nothing when
-      the zone is empty, so no frame appears around nothing.
+      Renders nothing HERE on purpose.
+
+      The download-result placement moved inside `PreviewCard`, between the
+      "Choose quality" header and the format grid — the point where the visitor
+      is certainly looking, and still above the action rather than in front of
+      it. `ResultAd` is mounted there.
+
+      This branch stays rather than being folded into the `none` case because
+      the decision engine's choice is still meaningful: it chose an ad over an
+      affiliate offer or an upgrade prompt, and returning null here is what
+      honours that without rendering a second copy of the same unit.
     */
-    return <ResultAd />;
+    return null;
   }
 
   if (strategy.type === "affiliate") {

@@ -12,7 +12,17 @@ import { cn } from "@/lib/utils";
   and permitted click-hijacking units; retiring the format in `ad-schema.ts` is
   a stronger guarantee than a toggle an operator has to remember to turn off.
 */
-const ROWS: { key: keyof MonetizationSettings; label: string; hint: string }[] = [
+/*
+  Only the boolean switches. `MonetizationSettings` also carries the AdSense
+  publisher id and the ads.txt body, which are text fields rendered separately —
+  typing this as `keyof` would let one of them be dropped into the toggle grid,
+  where `!s[key]` would turn a publisher id into `false`.
+*/
+type ToggleKey = {
+  [K in keyof MonetizationSettings]: MonetizationSettings[K] extends boolean ? K : never;
+}[keyof MonetizationSettings];
+
+const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
   { key: "adsense", label: "Google AdSense", hint: "AdSense banner and video units" },
   { key: "adsterra", label: "Adsterra", hint: "Adsterra network banners" },
   { key: "propellerads", label: "PropellerAds", hint: "PropellerAds network units" },
@@ -31,8 +41,9 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const toggle = (key: keyof MonetizationSettings) =>
-    setState((s) => ({ ...s, [key]: !s[key] }));
+  const toggle = (key: ToggleKey) => setState((s) => ({ ...s, [key]: !s[key] }));
+  const setText = (key: "adsensePublisherId" | "adsTxt", value: string) =>
+    setState((s) => ({ ...s, [key]: value }));
 
   const save = async () => {
     setBusy(true);
@@ -82,6 +93,62 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
             <Switch on={state[r.key]} />
           </button>
         ))}
+      </div>
+
+      {/*
+        Site-level AdSense. Deliberately separated from the ad-placement form:
+        that form configures an ad UNIT (publisher id + slot id, rendered in a
+        placement); these two are what AdSense asks for to VERIFY the site, and
+        neither has a slot. There was previously nowhere to put them.
+      */}
+      <div className="mt-6 space-y-4 border-t border-border/60 pt-5">
+        <div>
+          <h3 className="text-sm font-semibold">Google AdSense — site setup</h3>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            These verify the site and enable Auto ads. Individual banner and video units are
+            configured under Ad placements.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="adsense-pub" className="mb-1 block text-xs font-medium text-muted-foreground">
+            Publisher ID
+          </label>
+          <input
+            id="adsense-pub"
+            value={state.adsensePublisherId}
+            onChange={(e) => setText("adsensePublisherId", e.target.value)}
+            placeholder="ca-pub-6455244673998965"
+            className="h-10 w-full rounded-xl bg-background px-3 font-mono text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+          />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {/* Naming the exact failure, because it is silent: the wrong prefix
+                produces a script URL that 404s and no ads, with no error. */}
+            From the <code className="font-mono">client=</code> part of the AdSense snippet. Must
+            start with <code className="font-mono">ca-pub-</code> — the bare{" "}
+            <code className="font-mono">pub-</code> form used in ads.txt will not load.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="ads-txt" className="mb-1 block text-xs font-medium text-muted-foreground">
+            ads.txt
+          </label>
+          <textarea
+            id="ads-txt"
+            value={state.adsTxt}
+            onChange={(e) => setText("adsTxt", e.target.value)}
+            placeholder="google.com, pub-6455244673998965, DIRECT, f08c47fec0942fa0"
+            className="min-h-[80px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+          />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Paste the line AdSense gives you. Served at{" "}
+            <a href="/ads.txt" target="_blank" rel="noopener" className="font-medium text-primary hover:underline">
+              /ads.txt
+            </a>{" "}
+            as soon as you save — add other networks&apos; lines here too, one per line.
+          </p>
+        </div>
       </div>
 
       <div className="mt-5 flex items-center gap-3">

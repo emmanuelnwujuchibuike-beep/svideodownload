@@ -70,6 +70,7 @@ export function AdSenseUnit({
   width,
   height,
   className,
+  onFill,
 }: {
   client: string;
   slotId: string;
@@ -78,6 +79,23 @@ export function AdSenseUnit({
   width?: number | null;
   height?: number | null;
   className?: string;
+  /**
+   * Reports whether AdSense actually returned a creative.
+   *
+   * ── Why a configured unit is not the same as a visible ad ─────────────────
+   *
+   * The parent surfaces used to reveal themselves as soon as an ad ROW existed.
+   * For every other network that is the same thing. For AdSense it is not: an
+   * unapproved account, an unverified site, or simply no matching demand all
+   * return NO creative, and the `<ins>` collapses to zero height — leaving a
+   * card with a "Sponsored" label and nothing underneath, which is exactly the
+   * empty box this whole system is meant to avoid.
+   *
+   * AdSense marks the outcome on the element itself as
+   * `data-ad-status="filled" | "unfilled"`, asynchronously and often well after
+   * the push. So the surface waits for that answer rather than assuming one.
+   */
+  onFill?: (filled: boolean) => void;
 }) {
   const insRef = useRef<HTMLModElement>(null);
   const pushed = useRef(false);
@@ -93,6 +111,50 @@ export function AdSenseUnit({
       // can act on. The slot simply stays empty; never surface it.
     }
   }, [client]);
+
+  useEffect(() => {
+    const el = insRef.current;
+    if (!el || !onFill) return;
+
+    let settled = false;
+    const report = (filled: boolean) => {
+      if (settled) return;
+      settled = true;
+      onFill(filled);
+    };
+
+    const read = () => {
+      const status = el.getAttribute("data-ad-status");
+      if (status === "filled") report(true);
+      else if (status === "unfilled") report(false);
+    };
+
+    read();
+    const observer = new MutationObserver(read);
+    observer.observe(el, { attributes: true, attributeFilter: ["data-ad-status"] });
+
+    /*
+      A backstop, because `data-ad-status` is not guaranteed to appear at all —
+      most commonly when the loader script never ran (no publisher id set, or an
+      ad blocker). Without this the surface would wait forever in its hidden
+      state, which is at least the safe direction, but the timeout lets a slow
+      genuine fill still win while resolving the stuck case.
+    */
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      const status = el.getAttribute("data-ad-status");
+      // Height is the fallback signal: a filled unit has been given one.
+      report(status === "filled" || el.getBoundingClientRect().height > 1);
+    }, 4000);
+
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timer);
+    };
+    // `onFill` is intentionally not a dependency — parents pass an inline
+    // setter, which would re-run this observer on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /*
     A fixed size is honoured when the operator gave one, otherwise the unit is

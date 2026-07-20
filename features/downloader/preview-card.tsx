@@ -24,6 +24,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { BatchUpgradeGate } from "@/features/downloader/batch-upgrade-gate";
 import { startDownload as enqueueDownload } from "@/features/downloads/manager";
+import { ResultAd } from "@/features/monetization/result-ad";
 import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { BRAND_ICONS } from "@/lib/platform-icons";
@@ -310,6 +311,21 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
             ) : null}
           </div>
         </div>
+
+        {/*
+          The download-result placement, between the "Choose quality" header and
+          the quality grid.
+
+          Deliberately INSIDE the card rather than below it, which is where it
+          used to sit. Here it is in the one place the visitor is certain to
+          look — they have a result and are picking a format — while still being
+          above the action rather than in front of it, so it never stands
+          between them and the download button.
+
+          Renders nothing at all when the zone is unseeded or, for AdSense, when
+          the unit comes back unfilled.
+        */}
+        <ResultAd className="mt-4" />
 
         {isImageTab && isBatchable ? (
           <div className="mt-4">

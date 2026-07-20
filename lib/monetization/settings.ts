@@ -12,6 +12,31 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export interface MonetizationSettings {
   /** Google AdSense units (banners, and the video placements). */
   adsense: boolean;
+  /**
+   * AdSense publisher id (`ca-pub-…`) for the SITE-LEVEL script.
+   *
+   * ── Why this is separate from an ad unit's `ad_client` ────────────────────
+   *
+   * AdSense asks for two different things and they are easy to confuse. An ad
+   * UNIT has a publisher id AND a slot id, and renders where you place it. The
+   * snippet AdSense gives you to verify a site — and to run Auto ads — has a
+   * publisher id and NO slot, belongs in `<head>` on every page, and renders
+   * nothing by itself.
+   *
+   * The ad-placement form only accepted the first shape, so there was nowhere
+   * to put the verification snippet at all. This is that field.
+   */
+  adsensePublisherId: string;
+  /**
+   * The literal contents of `/ads.txt`.
+   *
+   * Stored rather than generated because the line AdSense issues ends with a
+   * verification hash unique to the account — `google.com, pub-…, DIRECT,
+   * f08c47fec0942fa0` — which cannot be derived from the publisher id. Held as
+   * free text so additional networks' lines can be pasted in alongside it,
+   * which is exactly how ads.txt is meant to be used.
+   */
+  adsTxt: string;
   /** Adsterra networks. */
   adsterra: boolean;
   /** PropellerAds networks. */
@@ -39,6 +64,14 @@ export interface MonetizationSettings {
 */
 export const DEFAULT_MONETIZATION: MonetizationSettings = {
   adsense: true,
+  /*
+    Empty by default. A publisher id is account-specific, so a hardcoded one
+    would either be wrong or would quietly attribute another site's traffic —
+    and an empty value means no script is emitted at all, which is the correct
+    behaviour for a site that has not set one up.
+  */
+  adsensePublisherId: "",
+  adsTxt: "",
   adsterra: true,
   propellerads: true,
   affiliates: true,

@@ -19,6 +19,23 @@ const schema = z.object({
   affiliates: z.boolean(),
   recommendedTools: z.boolean(),
   interstitial: z.boolean(),
+  /*
+    Validated as "empty, or a well-formed publisher id" rather than just a
+    string. A malformed id produces a script URL that 404s and shows no ads at
+    all, with nothing in the UI to indicate why — so it is worth refusing the
+    save and saying so.
+  */
+  adsensePublisherId: z
+    .string()
+    .trim()
+    .max(40)
+    .refine((v) => v === "" || /^ca-pub-\d{10,20}$/.test(v), {
+      message: "Publisher ID must look like ca-pub-1234567890123456",
+    })
+    .default(""),
+  // Free text: several networks each contribute a line, and the AdSense line
+  // ends in an account-specific hash that cannot be derived or checked here.
+  adsTxt: z.string().max(8000).default(""),
 });
 
 /** Admin-only: flip the global monetization subsystems on/off. */

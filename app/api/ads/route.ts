@@ -4,7 +4,7 @@ import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { getAdsForZone } from "@/lib/monetization/ads";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { getMonetizationSettings } from "@/lib/monetization/settings";
-import type { AdSlotData, AdZone } from "@/lib/monetization/types";
+import type { AdSlotData } from "@/lib/monetization/types";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";

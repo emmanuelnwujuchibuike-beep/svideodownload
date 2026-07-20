@@ -14,6 +14,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
+import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { RelatedLinks } from "@/components/seo/related-links";
 import { Downloader } from "@/features/downloader/downloader";
 import { BRAND_ICONS } from "@/lib/platform-icons";
@@ -335,6 +336,19 @@ export default async function DownloaderPage({
         />
 
         <RelatedLinks slug={page.slug} brand={page.brand} />
+        {/*
+          The platform grid, and the `#platforms` anchor the "Browse all
+          supported platforms" button under the Download button targets.
+
+          It was on the home page, the blog and the topic pillars but NOT here —
+          so on the ~148 downloader pages that button pointed at an id that did
+          not exist and did nothing when clicked. Caught by driving the page
+          rather than by reading it: the anchor is valid HTML either way.
+
+          `currentSlug` drops the page's own entry from the grid, so it never
+          links to itself.
+        */}
+        <DownloaderLinks currentSlug={page.slug} heading="Every supported platform" />
       </main>
       <SiteFooter />
     </>

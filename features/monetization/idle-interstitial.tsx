@@ -45,22 +45,27 @@ const IDLE_MS = 3_000;
  * Never within this long of the page loading, no matter how still the visitor
  * is.
  *
- * ── Why this exists, and why it is now much shorter ───────────────────────────
+ * ── Why this exists, and why it keeps shrinking ───────────────────────────────
  *
- * It was 45 seconds, which is why testing the interstitial appeared to do
- * nothing: on a fresh page load the timer armed, fired, found itself inside the
- * window and rearmed, so with a 3-second idle it took three quarters of a
- * minute to appear at all. That is indistinguishable from broken.
+ * It started at 45 seconds, which is why the interstitial appeared not to work
+ * at all: on a fresh load the timer armed, fired, found itself inside the
+ * window and rearmed, so a 3-second idle still took three quarters of a minute
+ * to show. That is indistinguishable from broken.
  *
- * It is not removed, because zero would mean an interstitial three seconds
- * after landing — before the visitor has read anything, on the page they just
- * arrived at. Eight seconds is long enough that they have engaged with the page
- * and short enough to be findable when testing.
+ * Now matched to the idle threshold, on the instruction that it appear after
+ * three seconds. That is the earliest it can possibly fire, so in practice the
+ * unit shows about three seconds into a still page.
  *
- * The once-per-session cap is what actually keeps this survivable, and it is
- * unchanged.
+ * It is not removed entirely because a value of zero lets the interstitial race
+ * the page's own first paint — the visitor would meet an ad before the content
+ * they came for had finished rendering, which reads as a broken page rather
+ * than an ad.
+ *
+ * The once-per-session cap is what keeps this survivable at this cadence, and
+ * it is unchanged. So is the X: this unit is closable from the moment it
+ * appears, with no countdown, because the visitor did not ask for it.
  */
-const MIN_GAP_MS = 8_000;
+const MIN_GAP_MS = 3_000;
 
 const SESSION_KEY = "frenz:idle-interstitial-shown";
 

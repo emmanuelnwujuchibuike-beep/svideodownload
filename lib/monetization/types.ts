@@ -39,8 +39,8 @@ export interface AdSlotData {
   id: string;
   zone: string;
   network: string;
-  /** `pop` is retired — the serving layer never emits it. See `ad-schema.ts`. */
-  format: "display" | "native" | "adsense" | "video";
+  /** `pop` is gated by the `popunder` switch, which defaults off. */
+  format: "display" | "native" | "adsense" | "video" | "pop";
   scriptCode: string | null;
   imageUrl: string | null;
   targetUrl: string | null;

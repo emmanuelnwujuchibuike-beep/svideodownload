@@ -55,16 +55,22 @@ export function FetchedAd() {
   */
   const [hasAd, setHasAd] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    /*
-      The dismiss timer starts when there is something to dismiss. Started on
-      mount it would run down while the ad was still in flight on a slow
-      connection, so the ad would flash and vanish — or never appear at all.
-    */
-    if (hasAd !== true) return;
-    const t = setTimeout(() => setVisible(false), 5000);
-    return () => clearTimeout(t);
-  }, [hasAd]);
+  /*
+    ── The auto-dismiss is GONE ────────────────────────────────────────────────
+
+    It used to hide the strip five seconds after `onResolved` fired. That sounds
+    safe and is not: `onResolved` reports that an ad ROW was found, which for a
+    `display` unit happens well before the iframe has fetched and painted the
+    creative. On a slow connection the sequence was — row resolves, timer
+    starts, four seconds of iframe loading, ad finally paints, one second later
+    it vanishes. Exactly the reported "shows for 1 sec and goes out without
+    clicking the X".
+
+    Chasing it with a longer timer, or starting it on iframe `load`, would only
+    move the race. The strip has its own close button, sits above the result
+    rather than over it, and costs the visitor nothing by staying — so it stays
+    until they dismiss it.
+  */
 
   if (!showAds) return null;
 

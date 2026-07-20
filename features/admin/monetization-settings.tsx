@@ -1,17 +1,12 @@
 "use client";
 
-import { Loader2, ToggleRight } from "lucide-react";
+import { AlertTriangle, Loader2, ToggleRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import { cn } from "@/lib/utils";
 
-/*
-  The "Pop-under" switch was removed with the format itself. It defaulted to ON
-  and permitted click-hijacking units; retiring the format in `ad-schema.ts` is
-  a stronger guarantee than a toggle an operator has to remember to turn off.
-*/
 /*
   Only the boolean switches. `MonetizationSettings` also carries the AdSense
   publisher id and the ads.txt body, which are text fields rendered separately —
@@ -28,6 +23,11 @@ const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
   { key: "propellerads", label: "PropellerAds", hint: "PropellerAds network units" },
   { key: "affiliates", label: "Affiliate offers", hint: "Affiliate CTA on the download-result page" },
   { key: "recommendedTools", label: "Recommended tools", hint: "Curated tool sections (home/footer/sidebar)" },
+  {
+    key: "popunder",
+    label: "Pop-under / OnClick",
+    hint: "Takes over the visitor's next click. Off by default — see the warning below.",
+  },
   {
     key: "interstitial",
     label: "Full-screen units",
@@ -94,6 +94,23 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
           </button>
         ))}
       </div>
+
+      {/*
+        Shown only when both are on, and only then — a standing warning about a
+        combination nobody has selected is noise that trains people to ignore it.
+      */}
+      {state.popunder && state.adsense ? (
+        <p className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+          <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <strong>Pop-under and AdSense are both enabled.</strong> Google prohibits units that
+            interfere with navigation, and a reviewer who meets a pop-under is meeting exactly
+            that — it is the most common reason a site under review is rejected, and it can cost an
+            approved account. Running both is a deliberate trade; this is only here so it is not an
+            accidental one.
+          </span>
+        </p>
+      ) : null}
 
       {/*
         Site-level AdSense. Deliberately separated from the ad-placement form:

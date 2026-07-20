@@ -32,22 +32,30 @@ export type AdZoneId = (typeof AD_ZONES)[number];
 /**
  * Formats an ad row may use.
  *
- * `pop` is deliberately ABSENT. Pop-under / OnClick / Social Bar units monetise
- * by hijacking the visitor's first click, which is what produced the reported
- * "I click a button and it redirects me to an ad site". The decision was to drop
- * them in favour of `display` and `native` units placed as part of the design.
+ * ── `pop` is back, and it is gated ────────────────────────────────────────────
  *
- * Removing it here stops new ones being created. `isServableFormat` stops
- * EXISTING ones being served, and the two are independent on purpose: the
- * migrations in this project are applied by hand, so the serving path must not
- * wait for one to land.
+ * Pop-under / OnClick / Social Bar units monetise by hijacking the visitor's
+ * first click. They were removed once, on the instruction to drop
+ * click-hijacking formats, and restored on the later instruction to bring them
+ * back. Both were deliberate; this comment exists so the next person does not
+ * "fix" it in either direction by accident.
+ *
+ * What is NOT restored is the ability to run one without knowing: the
+ * `popunder` switch in monetization settings defaults to OFF, so a pop row
+ * serves nothing until an operator turns it on, and the admin warns on the row.
+ *
+ * ⚠️ Running these while an AdSense application is under review is the most
+ * common reason a site is rejected. Google's policies prohibit units that
+ * interfere with navigation, and a reviewer meeting a pop-under is meeting
+ * exactly that. Both can be configured here; running them together is a real
+ * risk to the AdSense account, and it is the operator's call.
  */
-export const AD_FORMATS = ["display", "native", "adsense", "video"] as const;
+export const AD_FORMATS = ["display", "native", "adsense", "video", "pop"] as const;
 
 export type AdFormatId = (typeof AD_FORMATS)[number];
 
 /** Formats that were once allowed and must never be served again. */
-export const RETIRED_FORMATS = ["pop"] as const;
+export const RETIRED_FORMATS = [] as const;
 
 /**
  * The serving gate.

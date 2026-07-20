@@ -19,6 +19,7 @@ const schema = z.object({
   affiliates: z.boolean(),
   recommendedTools: z.boolean(),
   interstitial: z.boolean(),
+  popunder: z.boolean().default(false),
   /*
     Validated as "empty, or a well-formed publisher id" rather than just a
     string. A malformed id produces a script URL that 404s and shows no ads at

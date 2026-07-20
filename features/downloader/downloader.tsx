@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  ChevronDown,
   ClipboardPaste,
   Loader2,
   Plus,
@@ -297,6 +298,33 @@ export function Downloader({
         unconfigured site has exactly the layout it had before.
       */}
       <AdSurface zone="under_download" maxWidth="max-w-2xl" className="mt-5" />
+
+      {/*
+        A route down to the platform section.
+
+        Sits immediately under the Download button because that is where a
+        visitor who did NOT come with a link in hand is looking — and the
+        section it lands on carries an ad above the platform grid, so a
+        deliberate scroll passes the unit rather than a visitor racing past it.
+
+        A plain anchor, not a scroll handler: `#platforms` works with JavaScript
+        disabled, is right-clickable, and `scroll-mt-24` on the target keeps the
+        heading clear of the fixed header. Both the landing page's showcase and
+        the downloader pages' link grid carry that id, so this resolves on every
+        page without knowing which one it is on.
+      */}
+      <div className="mt-4 flex justify-center">
+        <a
+          href="#platforms"
+          className="group inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-4 py-2 text-sm font-medium text-muted-foreground transition hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          Browse all supported platforms
+          <ChevronDown
+            aria-hidden
+            className="h-4 w-4 transition-transform group-hover:translate-y-0.5"
+          />
+        </a>
+      </div>
 
       {/* Renders nothing until a transfer genuinely completes AND the zone is
           filled. Mounted here so it is scoped to the downloader flow rather

@@ -9,6 +9,7 @@ import type { AdSlotData, AdZone } from "@/lib/monetization/types";
 
 import { loadZoneAd } from "./ad-cache";
 import { AdSenseUnit } from "./adsense-unit";
+import { injectAdMarkup } from "./inject";
 
 function beacon(kind: "impression" | "click", zone: string, adId: string) {
   navigator.sendBeacon?.(
@@ -29,14 +30,20 @@ function beacon(kind: "impression" | "click", zone: string, adId: string) {
  *  - "video"   → handled by the placements that own a player; this component
  *                renders nothing for it
  *
- * ── `pop` is gone ─────────────────────────────────────────────────────────────
+ *  - "pop"     → a self-injecting script, run in the page rather than in the
+ *                display iframe
  *
- * The self-injecting branch that ran a network's script directly in the page has
- * been removed, not merely disabled. That branch is what made a pop-under or
- * Social Bar unit able to hijack the first click anywhere on the page. The
- * serving layer already filters those rows out (`isServableFormat`); deleting
- * the branch means that even a row that somehow reached this component has
- * nothing here to execute it.
+ * ── About the pop format ──────────────────────────────────────────────────────
+ *
+ * Pop-under and OnClick creatives bind a handler that opens a window on the
+ * visitor's next interaction, which a sandboxed frame cannot do — that is why
+ * pasting one into a `display` placement yields a blank box that earns nothing.
+ *
+ * It was removed once on the instruction to drop click-hijacking formats, and
+ * restored on the later instruction to bring it back. Both were deliberate, so
+ * neither direction is a bug to be "fixed" in passing. What is not restored is
+ * running one unknowingly: the `popunder` switch defaults to OFF and gates this
+ * server-side.
  */
 export function AdSlot({
   zone,
@@ -240,6 +247,25 @@ export function AdSlot({
   }
 
   /*
+    `pop` — a self-injecting script, executed in the page rather than in the
+    display iframe.
+
+    It has to run at document level: pop-under and OnClick creatives work by
+    binding a handler that opens a window on the visitor's next interaction, and
+    a sandboxed frame cannot do that (which is why pasting one into a `display`
+    placement produces a blank box that earns nothing).
+
+    Renders no visible element — `display: contents` keeps the host out of the
+    layout entirely, so it can sit inside any wrapper without adding a box. The
+    injected markup is torn down on unmount.
+
+    Gated server-side by the `popunder` switch, which is off by default.
+  */
+  if (ad.format === "pop" && ad.scriptCode) {
+    return <PopHost code={ad.scriptCode} className={className} />;
+  }
+
+  /*
     Anything left renders nothing.
 
     Reached by a `video` row (whose player is owned by the reward and result
@@ -248,9 +274,22 @@ export function AdSlot({
     script. Those are prevented at write time by `adCreateSchema` and by the
     database CHECK, so reaching here means a row predates the validation. Render
     nothing rather than a frame around nothing.
-
-    This is also where a retired `pop` row lands if one ever gets this far: there
-    is no branch left that can execute it.
   */
   return null;
+}
+
+/** Injects a self-executing ad script into the page and cleans it up. */
+function PopHost({ code, className }: { code: string; className?: string }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    injectAdMarkup(host, code);
+    return () => {
+      host.innerHTML = "";
+    };
+  }, [code]);
+
+  return <div ref={hostRef} className={className} aria-hidden style={{ display: "contents" }} />;
 }

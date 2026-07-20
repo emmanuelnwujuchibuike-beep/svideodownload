@@ -78,14 +78,21 @@ export interface MonetizationSettings {
    * site that never configured anything.
    */
   interstitial: boolean;
+  /**
+   * Allow pop-under / OnClick units (the `pop` format).
+   *
+   * Defaults OFF, unlike the original switch which defaulted ON. These take
+   * over the visitor's next click, so running them has to be a deliberate act
+   * rather than something a site inherits by never configuring anything.
+   *
+   * ⚠️ Turning this on while an AdSense application is under review is the most
+   * common reason a site is rejected — Google prohibits units that interfere
+   * with navigation, and a reviewer meeting a pop-under is meeting exactly
+   * that. Both can be configured here; running them together is a real risk to
+   * the AdSense account.
+   */
+  popunder: boolean;
 }
-
-/*
-  `popunder` is deliberately absent. It was a switch that defaulted to ON and
-  permitted click-hijacking units; the format itself is now retired in
-  `ad-schema.ts`, which is a stronger guarantee than a toggle. A stored value
-  from before this change is simply ignored by the merge below.
-*/
 export const DEFAULT_MONETIZATION: MonetizationSettings = {
   adsense: true,
   /*
@@ -102,6 +109,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   affiliates: true,
   recommendedTools: true,
   interstitial: false,
+  popunder: false,
 };
 
 const hasSupabase =

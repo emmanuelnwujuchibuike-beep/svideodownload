@@ -11,6 +11,7 @@ import {
   isPersistentZone,
   isServableFormat,
 } from "./ad-schema";
+import { DEFAULT_MONETIZATION } from "./settings";
 
 /**
  * Ad slots — the empty-box class of bug.
@@ -103,19 +104,11 @@ describe("Ad slots — call-site inventory", () => {
   });
 });
 
-describe("Ad slots — retired formats", () => {
-  it("refuses to serve a click-hijacking unit", () => {
-    /*
-     * The audit found the site's only ad row was an Adsterra `pop` unit, which
-     * is what produced "I click a button and it redirects me to an ad site".
-     * Dropping it from `AD_FORMATS` stops new ones being created; this is the
-     * check that stops EXISTING ones being served, which matters because the
-     * migration that deactivates them is applied by hand.
-     */
+describe("Ad slots — formats", () => {
+  it("refuses to serve any format not in the registry", () => {
     for (const format of RETIRED_FORMATS) {
       expect(isServableFormat(format), `${format} is still servable`).toBe(false);
     }
-    expect((AD_FORMATS as readonly string[]).includes("pop")).toBe(false);
   });
 
   it("fails closed on an unknown format", () => {
@@ -126,15 +119,47 @@ describe("Ad slots — retired formats", () => {
     }
   });
 
-  it("leaves no branch that could execute a self-injecting script", () => {
-    // The pop renderer injected a network's script straight into the page.
-    // Deleting the branch is what makes the format unexecutable rather than
-    // merely unreachable.
+  it("keeps the pop format gated behind a switch that defaults OFF", () => {
+    /*
+     * `pop` was removed on the instruction to drop click-hijacking formats and
+     * restored on the later instruction to bring it back. Both were deliberate.
+     *
+     * What this pins is the part that must NOT be lost in either direction: a
+     * pop unit must never serve by default. The original switch defaulted ON,
+     * which is how a pop-under came to be running unnoticed and produced "I
+     * click a button and it redirects me to an ad site".
+     */
+    expect((AD_FORMATS as readonly string[]).includes("pop")).toBe(true);
+    expect(DEFAULT_MONETIZATION.popunder, "popunder must default to off").toBe(false);
+
+    const route = stripComments(readFileSync(path.join(ROOT, "app/api/ads/route.ts"), "utf8"));
+    expect(route, "the pop format is not gated server-side").toMatch(
+      /!settings\.popunder && a\.format === "pop"/,
+    );
+  });
+
+  it("runs a pop script in the page, never inside the display iframe", () => {
+    // A sandboxed frame cannot bind the window-opening handler these creatives
+    // rely on, so a pop pasted into a `display` placement renders a blank box
+    // that earns nothing — the failure the admin now warns about.
     const src = stripComments(
       readFileSync(path.join(ROOT, "features/monetization/ad-slot.tsx"), "utf8"),
     );
-    expect(src, "AdSlot still imports the script injector").not.toMatch(/injectAdMarkup/);
-    expect(src).not.toMatch(/=== "pop"/);
+    expect(src).toMatch(/injectAdMarkup/);
+    expect(src).toMatch(/format === "pop"/);
+  });
+
+  it("still refuses to let a display frame navigate the top window", () => {
+    /*
+     * Independent of the pop decision. `allow-top-navigation-by-user-activation`
+     * is what let a script inside the display iframe redirect the whole page on
+     * any click — the "blank slot that takes me to a different site". Restoring
+     * the pop FORMAT must not quietly restore that too.
+     */
+    const src = stripComments(
+      readFileSync(path.join(ROOT, "features/monetization/ad-slot.tsx"), "utf8"),
+    );
+    expect(src).not.toMatch(/allow-top-navigation/);
   });
 });
 

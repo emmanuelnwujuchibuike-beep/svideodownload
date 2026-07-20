@@ -26,8 +26,26 @@ const ZONES: ReadonlySet<string> = new Set<string>(AD_ZONES);
  * `?all=1` returns every active ad in the zone (used for page-level `global`
  * scripts like pop-unders / social bars); otherwise a single weighted slot.
  */
-/** Premium visitors never see ads. No session is treated as free. */
-async function isPremium(): Promise<boolean> {
+/**
+ * Premium visitors never see ads. No session is treated as free.
+ *
+ * ── The fast path, which is the common one ────────────────────────────────────
+ *
+ * Resolving a plan costs `auth.getUser()` plus a plan lookup — two Supabase
+ * round trips from Paris, on the request every ad on the page is waiting for.
+ * The overwhelming majority of visitors to a downloader are signed out, and for
+ * them the answer is knowable without asking anyone: no Supabase auth cookie
+ * means no session, which means free.
+ *
+ * So the cookie is checked first and the round trips are skipped entirely when
+ * it is absent. This is a LATENCY optimisation, not an authorisation one — a
+ * forged cookie only causes the real check to run, and that check is unchanged.
+ */
+async function isPremium(request: Request): Promise<boolean> {
+  const cookies = request.headers.get("cookie") ?? "";
+  // Supabase SSR names its auth cookies `sb-<project-ref>-auth-token[.N]`.
+  if (!/(^|;\s*)sb-[^=]*-auth-token/.test(cookies)) return false;
+
   try {
     const supabase = await createClient();
     const {
@@ -43,9 +61,9 @@ async function isPremium(): Promise<boolean> {
  * The global network/format toggles, so an admin can disable a whole network or
  * unit type without editing every row.
  *
- * The `popunder` switch is gone along with the format — `isServableFormat` in
- * the data layer refuses those rows outright, which is a stronger guarantee
- * than a toggle that defaulted to ON.
+ * The `popunder` switch is the gate for click-hijacking units. Unlike the
+ * original it defaults OFF, so a pop row serves nothing until an operator
+ * deliberately enables it.
  */
 async function allowedFilter(): Promise<(a: AdSlotData, zone: string) => boolean> {
   const settings = await getMonetizationSettings();
@@ -66,6 +84,8 @@ async function allowedFilter(): Promise<(a: AdSlotData, zone: string) => boolean
     */
     if (!settings.interstitial && INTERSTITIAL_ZONES.has(zone)) return false;
     if (!settings.interstitial && a.format === "video") return false;
+    // Off by default — a pop row serves nothing until deliberately enabled.
+    if (!settings.popunder && a.format === "pop") return false;
     return true;
   };
 }
@@ -104,7 +124,7 @@ export async function GET(request: Request) {
 
     if (zones.length === 0) return NextResponse.json({ ads: {} }, { status: 400 });
 
-    if (await isPremium()) {
+    if (await isPremium(request)) {
       return NextResponse.json({ ads: Object.fromEntries(zones.map((z) => [z, null])) });
     }
 
@@ -122,7 +142,7 @@ export async function GET(request: Request) {
     return NextResponse.json(all ? { ads: [] } : { ad: null }, { status: 400 });
   }
 
-  if (await isPremium()) return NextResponse.json(all ? { ads: [] } : { ad: null });
+  if (await isPremium(request)) return NextResponse.json(all ? { ads: [] } : { ad: null });
 
   const allowed = await allowedFilter();
   const ads = (await getAdsForZone(zone)).filter((a) => allowed(a, zone));

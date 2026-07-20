@@ -37,6 +37,30 @@ export interface MonetizationSettings {
    * which is exactly how ads.txt is meant to be used.
    */
   adsTxt: string;
+  /**
+   * Site-ownership verification meta tags, as `name|content` pairs, one per line.
+   *
+   * ── Why this exists ───────────────────────────────────────────────────────
+   *
+   * Every ad network verifies ownership, and each offers the same three or four
+   * methods: a file at the site root, a meta tag, or a DNS record. The FILE
+   * method is the one that cannot be supported here — Monetag/PropellerAds asks
+   * for `sw.js` in the root directory, and that path is already the Frenz
+   * service worker. Overwriting it would destroy offline caching, push
+   * notifications, background sync and the installed-app experience, to verify
+   * an ad account.
+   *
+   * The meta-tag method costs one line in `<head>` and conflicts with nothing,
+   * so it is the one this site supports, generically, for any network.
+   *
+   * ── Structured pairs, not raw HTML ────────────────────────────────────────
+   *
+   * Stored as `name|content` and rendered into a real `<meta>` element rather
+   * than injected as markup. An admin-only free-text field that reaches `<head>`
+   * unescaped is a stored-XSS primitive with extra steps — and one compromised
+   * or careless admin session should not be able to put a script on every page.
+   */
+  verificationTags: string;
   /** Adsterra networks. */
   adsterra: boolean;
   /** PropellerAds networks. */
@@ -72,6 +96,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   */
   adsensePublisherId: "",
   adsTxt: "",
+  verificationTags: "",
   adsterra: true,
   propellerads: true,
   affiliates: true,

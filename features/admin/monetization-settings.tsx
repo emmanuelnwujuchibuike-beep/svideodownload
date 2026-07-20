@@ -42,7 +42,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const toggle = (key: ToggleKey) => setState((s) => ({ ...s, [key]: !s[key] }));
-  const setText = (key: "adsensePublisherId" | "adsTxt", value: string) =>
+  const setText = (key: "adsensePublisherId" | "adsTxt" | "verificationTags", value: string) =>
     setState((s) => ({ ...s, [key]: value }));
 
   const save = async () => {
@@ -149,6 +149,28 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
             as soon as you save — add other networks&apos; lines here too, one per line.
           </p>
         </div>
+      </div>
+
+      <div className="mt-6 space-y-2 border-t border-border/60 pt-5">
+        <h3 className="text-sm font-semibold">Site verification (any network)</h3>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          One <code className="font-mono">name|content</code> pair per line. Use the{" "}
+          <strong>meta tag</strong> method in your network&apos;s dashboard — the &ldquo;upload a
+          file to your root folder&rdquo; method cannot be used here, because Monetag and
+          PropellerAds both ask for <code className="font-mono">/sw.js</code>, which is already the
+          app&apos;s service worker (offline mode, push notifications, background downloads).
+        </p>
+        <textarea
+          value={state.verificationTags}
+          onChange={(e) => setText("verificationTags", e.target.value)}
+          placeholder={"monetag|abc123def456\ngoogle-adsense-account|ca-pub-6455244673998965"}
+          className="min-h-[80px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+        />
+        <p className="text-xs text-muted-foreground">
+          Rendered as real <code className="font-mono">&lt;meta&gt;</code> tags in the page head on
+          every page. The AdSense one is added automatically from the publisher ID above — you only
+          need a line here for other networks.
+        </p>
       </div>
 
       <div className="mt-5 flex items-center gap-3">

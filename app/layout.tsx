@@ -10,7 +10,7 @@ import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
 import { CommandCenterMount } from "@/features/navigation/command-center-mount";
 import { RegisterServiceWorker } from "@/features/notifications/register-sw";
-import { AdSenseSiteScript } from "@/features/monetization/adsense-site-script";
+import { AdSenseSiteScript, VerificationTags } from "@/features/monetization/adsense-site-script";
 import { WebVitals } from "@/features/perf/web-vitals";
 import { DEFAULT_LOCALE, getLocale, isRtl } from "@/lib/i18n/locales";
 import { SITE_URL as siteUrl } from "@/lib/site";
@@ -227,6 +227,10 @@ export default function RootLayout({
           set one up ships no third-party script at all.
         */}
         <AdSenseSiteScript />
+        {/* Ownership verification for any network that offers a meta-tag method —
+            which is the method this site supports, because the FILE method
+            collides with the PWA service worker at /sw.js. */}
+        <VerificationTags />
       </head>
       <body className={`${displaySans.variable} font-sans`}>
         {/* Branded boot loader baked into the first HTML so cold entries never

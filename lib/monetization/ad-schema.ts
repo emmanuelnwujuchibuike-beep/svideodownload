@@ -287,17 +287,30 @@ const baseFields = {
     renders a unit that loads and earns nothing — and that failure is completely
     silent on the page, which is the worst kind this table can produce.
   */
+  /*
+    Normalised before validating, not merely trimmed.
+
+    A publisher id arrives from a copy-paste, an autocapitalising keyboard, or
+    retyping — so `Ca-pub-…` and `CA-PUB-…` are common, and rejecting them as
+    malformed is both wrong (AdSense ids are case-insensitive) and infuriating,
+    because the error names the exact string the operator believes they typed.
+    Lowercase it and move on.
+  */
   ad_client: z
     .string()
     .trim()
+    .toLowerCase()
     .regex(/^ca-pub-\d{10,20}$/, "Should look like ca-pub-1234567890123456")
     .nullable()
     .optional()
     .or(emptyToNull),
+  /* Strips spaces and dashes: AdSense displays slot ids grouped, and pasting
+     the displayed form is the obvious thing to do. */
   ad_slot_id: z
     .string()
     .trim()
-    .regex(/^\d{6,20}$/, "The numeric ad unit id from AdSense")
+    .transform((v) => v.replace(/[\s-]/g, ""))
+    .refine((v) => /^\d{6,20}$/.test(v), "The numeric ad unit id from AdSense")
     .nullable()
     .optional()
     .or(emptyToNull),

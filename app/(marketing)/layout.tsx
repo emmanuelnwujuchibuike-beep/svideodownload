@@ -1,4 +1,5 @@
 import { AdScripts } from "@/features/monetization/ad-scripts";
+import { ExitIntent } from "@/features/monetization/exit-intent";
 import { IdleInterstitial } from "@/features/monetization/idle-interstitial";
 import { StickyBottomAd } from "@/features/monetization/sticky-bottom-ad";
 
@@ -40,6 +41,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       */}
       <StickyBottomAd />
       <IdleInterstitial />
+      <ExitIntent />
       <AdScripts />
     </>
   );

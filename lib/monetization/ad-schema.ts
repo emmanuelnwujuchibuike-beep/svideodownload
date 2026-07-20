@@ -182,13 +182,12 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
     deprecated: true,
   },
   exit_intent_popup: {
-    label: "Exit intent (not built)",
+    label: "Exit intent",
     description:
-      "Declared but nothing renders it. A row here will never be shown until the placement exists.",
+      "Shown when the visitor looks like they are leaving — pointer to the address bar on desktop, tab hidden on mobile. Never traps the back button.",
     persistent: false,
     supportsSkip: false,
     prefetch: false,
-    deprecated: true,
   },
 };
 

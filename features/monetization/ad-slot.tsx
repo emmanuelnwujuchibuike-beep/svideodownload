@@ -3,7 +3,7 @@
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { isPersistentZone } from "@/lib/monetization/ad-schema";
+import { isPersistentZone, sizeFromScript } from "@/lib/monetization/ad-schema";
 import { cn } from "@/lib/utils";
 import type { AdSlotData, AdZone } from "@/lib/monetization/types";
 
@@ -190,9 +190,19 @@ export function AdSlot({
       one — too short shows a scroll-free partial banner, too tall shows a band
       of blank inside the card.
     */
-    const hasSize = typeof ad.width === "number" && ad.width > 0;
-    const w = hasSize ? ad.width! : undefined;
-    const h = ad.height ?? (hasSize ? 250 : 100);
+    /*
+      Explicit columns win; otherwise the size is read out of the embed's own
+      `atOptions` block, which declares it. Every banner seeded on this site
+      left the columns null while the script said 300×250 or 468×60 — so the
+      frame had nothing to use and cropped the ad.
+    */
+    const declared = sizeFromScript(ad.scriptCode);
+    const width = ad.width ?? declared?.width ?? null;
+    const height = ad.height ?? declared?.height ?? null;
+
+    const hasSize = typeof width === "number" && width > 0;
+    const w = hasSize ? width : undefined;
+    const h = height ?? 100;
     const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden}</style></head><body>${ad.scriptCode}</body></html>`;
     return (
       <div className={cn("flex justify-center", className)}>

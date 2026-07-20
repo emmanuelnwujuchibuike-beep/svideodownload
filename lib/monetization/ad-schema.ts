@@ -297,6 +297,38 @@ export function looksLikeHijackScript(scriptCode: string | null | undefined): bo
 }
 
 /**
+ * Read a banner's real size out of its own embed code.
+ *
+ * ── Why this is worth doing rather than asking the operator ───────────────────
+ *
+ * Adsterra's banner tag declares its dimensions in an `atOptions` block:
+ *
+ *     atOptions = { 'key': '…', 'format': 'iframe', 'height': 250, 'width': 300 }
+ *
+ * The width and height columns on the row are separate fields an operator has
+ * to fill in by hand, and in practice they do not — every seeded banner on this
+ * site left them null while the script itself said 300×250 or 468×60. The frame
+ * then had no size to use and fell back to a generic one, so a 250-tall unit
+ * was rendered 100 tall and cropped.
+ *
+ * The information was in the row the whole time. This reads it.
+ *
+ * Explicit columns still win: an operator who typed a size meant it, and some
+ * networks serve a responsive unit whose declared size is a minimum rather than
+ * a fixed frame.
+ */
+export function sizeFromScript(
+  scriptCode: string | null | undefined,
+): { width: number; height: number } | null {
+  if (!scriptCode) return null;
+  const width = Number(scriptCode.match(/['"]width['"]\s*:\s*['"]?(\d{2,4})/i)?.[1]);
+  const height = Number(scriptCode.match(/['"]height['"]\s*:\s*['"]?(\d{2,4})/i)?.[1]);
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
+  if (width <= 0 || height <= 0) return null;
+  return { width, height };
+}
+
+/**
  * Whether an embed looks like a genuine BANNER invocation.
  *
  * Adsterra banners carry an `atOptions` block with a size; PropellerAds banners

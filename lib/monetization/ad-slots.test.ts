@@ -344,15 +344,24 @@ describe("Ad slots — no decorated empty boxes", () => {
      * gets a header, a footer and no banner, and the missing thing is an
      * absence nobody notices.
      *
-     * Mounting them in BOTH places is the other failure — two bottom bars and
-     * two idle timers on the one page that has them inline.
+     * They now live in `DeferredAdFurniture`, which the layout mounts after the
+     * page is idle so it stays out of the landing page's first hydration task.
+     * The requirement is unchanged — the layout carries the furniture for every
+     * page — so the check follows it into that component.
      */
     const layout = stripComments(
       readFileSync(path.join(ROOT, "app/(marketing)/layout.tsx"), "utf8"),
     );
-    expect(layout).toMatch(/<StickyBottomAd\b/);
-    expect(layout).toMatch(/<IdleInterstitial\b/);
+    expect(layout).toMatch(/<DeferredAdFurniture\b/);
 
+    const furniture = stripComments(
+      readFileSync(path.join(ROOT, "features/monetization/deferred-ad-furniture.tsx"), "utf8"),
+    );
+    expect(furniture).toMatch(/<StickyBottomAd\b/);
+    expect(furniture).toMatch(/<IdleInterstitial\b/);
+
+    // Mounting them in BOTH places is the other failure — two bottom bars and
+    // two idle timers on the one page that has them inline.
     const home = stripComments(readFileSync(path.join(ROOT, "app/(marketing)/page.tsx"), "utf8"));
     expect(home, "landing page mounts a second bottom banner").not.toMatch(/<StickyBottomAd\b/);
     expect(home, "landing page mounts a second idle interstitial").not.toMatch(/<IdleInterstitial\b/);

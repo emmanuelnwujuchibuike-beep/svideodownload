@@ -3,67 +3,53 @@
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { cn } from "@/lib/utils";
+
 import { AdSlot } from "./ad-slot";
 import { useShowAds } from "./use-show-ads";
 
 /**
  * A full-screen unit shown after the visitor has gone idle.
  *
+ * ── It PRELOADS, so it appears instantly ──────────────────────────────────────
+ *
+ * The reported "takes time to show" was structural: the ad slot used to mount
+ * only when the interstitial opened, so the creative did not begin loading
+ * until the moment it was meant to be on screen — the visitor then watched an
+ * empty card fill in. The slot is now mounted from the start, hidden, so it
+ * fetches and paints in the background while the idle timer runs. When the timer
+ * fires the ad is already there and the overlay reveals with no wait.
+ *
  * ── Frequency capping is not optional here ────────────────────────────────────
  *
- * The brief was "idle for more than 5 seconds". Five seconds of no input is not
- * an unusual state — it is what reading a paragraph looks like. Without a cap
- * this would fire, be dismissed, and fire again a few seconds later, for the
- * whole visit.
- *
- * So the trigger is exactly as specified and the REPEAT is capped: once per
- * session, and never within `MIN_GAP_MS` of the page loading. That is what makes
- * it survivable, and it is also what keeps it inside Google's policy on
- * interstitials — an ad that reappears every few seconds is the pattern that
- * gets a publisher account suspended, which would cost far more than the unit
- * earns.
+ * Three seconds of no input is not an unusual state — it is what reading looks
+ * like. So the repeat is capped: once per session, and never within
+ * `MIN_GAP_MS` of load. That is what keeps it survivable, and what keeps it
+ * inside Google's interstitial policy — a unit that reappears every few seconds
+ * is what gets a publisher account suspended.
  *
  * ── Off unless explicitly enabled ─────────────────────────────────────────────
  *
- * The `interstitial` switch in monetization settings defaults to OFF, so a site
- * that never configures anything never shows one. `/api/ads` refuses to serve
- * the zone while the switch is off, which means the gate is server-side and not
- * something this component can be talked out of.
+ * The `interstitial` switch defaults OFF and gates the zone server-side, so a
+ * site that never configures anything never shows one.
  *
- * ── It always closes ──────────────────────────────────────────────────────────
+ * ── The X is present the instant the ad is ────────────────────────────────────
  *
- * The X sits at the top right, as specified, and Escape works too. There is no
- * timer before it appears: the visitor did not ask for this, so making them wait
- * to dismiss something they did not request is the part that turns an ad into a
- * hostage situation.
+ * It is a solid, high-contrast button at the top-right of the ad, visible from
+ * the first frame the overlay is shown — no countdown, because the visitor did
+ * not ask for this. Escape and a tap on the backdrop also close it.
  */
 
 /** Idle time before the unit is offered. */
 const IDLE_MS = 3_000;
 
 /**
- * Never within this long of the page loading, no matter how still the visitor
- * is.
+ * Never within this long of load, however still the visitor is.
  *
- * ── Why this exists, and why it keeps shrinking ───────────────────────────────
- *
- * It started at 45 seconds, which is why the interstitial appeared not to work
- * at all: on a fresh load the timer armed, fired, found itself inside the
- * window and rearmed, so a 3-second idle still took three quarters of a minute
- * to show. That is indistinguishable from broken.
- *
- * Now matched to the idle threshold, on the instruction that it appear after
- * three seconds. That is the earliest it can possibly fire, so in practice the
- * unit shows about three seconds into a still page.
- *
- * It is not removed entirely because a value of zero lets the interstitial race
- * the page's own first paint — the visitor would meet an ad before the content
- * they came for had finished rendering, which reads as a broken page rather
- * than an ad.
- *
- * The once-per-session cap is what keeps this survivable at this cadence, and
- * it is unchanged. So is the X: this unit is closable from the moment it
- * appears, with no countdown, because the visitor did not ask for it.
+ * Matched to the idle threshold, so in practice the unit shows about three
+ * seconds into a still page. Not zero, because that lets the interstitial race
+ * the page's own first paint — meeting an ad before the content has rendered
+ * reads as a broken page rather than an ad.
  */
 const MIN_GAP_MS = 3_000;
 
@@ -87,8 +73,8 @@ export function IdleInterstitial() {
       if (sessionStorage.getItem(SESSION_KEY)) return;
     } catch {
       // Private mode or a blocked storage partition. Treat it as "already
-      // shown": failing closed here costs one impression, and failing open
-      // would remove the cap entirely for those visitors.
+      // shown": failing closed costs one impression, failing open removes the
+      // cap entirely for those visitors.
       return;
     }
 
@@ -113,11 +99,8 @@ export function IdleInterstitial() {
       }, IDLE_MS);
     };
 
-    /*
-      `passive` on every listener: these fire on scroll and pointermove, i.e.
-      the two events most able to make a page feel heavy, and none of them
-      calls preventDefault.
-    */
+    // `passive` on every listener — these fire on scroll and pointermove, and
+    // none of them calls preventDefault.
     for (const event of ACTIVITY) {
       window.addEventListener(event, arm, { passive: true });
     }
@@ -129,52 +112,78 @@ export function IdleInterstitial() {
     };
   }, [ready, showAds]);
 
+  const shown = open && hasAd === true;
+
   useEffect(() => {
-    if (!open) return;
+    if (!shown) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
     };
     window.addEventListener("keydown", onKey);
-    // The page behind must not scroll while a full-screen panel is up.
+    // The page behind must not scroll while the panel is up.
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
     };
-  }, [open, close]);
+  }, [shown, close]);
 
-  if (!ready || !showAds || !open) return null;
+  // Nothing for premium visitors, and nothing until the plan is known.
+  if (!ready || !showAds) return null;
 
   /*
-    The overlay itself is only painted once the slot confirms an ad. Otherwise
-    an unseeded zone would black out the page around nothing — the empty-box
-    bug at full-screen scale, which is the worst place for it.
+    Always rendered so the ad PRELOADS, but only interactive once open AND
+    filled. While hidden it is `display:none` — a srcDoc iframe still fetches
+    and paints there, so by the time the overlay reveals the creative is ready.
+
+    `pointer-events-none` while hidden guarantees the invisible overlay can
+    never intercept a click on the page behind it.
   */
   return (
     <div
-      className={hasAd === true ? "fixed inset-0 z-[60] flex items-center justify-center p-4" : "hidden"}
+      className={cn(
+        "fixed inset-0 z-[60] flex items-center justify-center p-4",
+        shown ? "opacity-100" : "pointer-events-none opacity-0",
+      )}
+      // `hidden` for assistive tech and to stop the backdrop showing, without
+      // unmounting the slot that is preloading inside.
+      aria-hidden={!shown}
       role="dialog"
-      aria-modal="true"
+      aria-modal={shown}
       aria-label="Advertisement"
     >
       <button
         type="button"
         aria-label="Close advertisement"
+        tabIndex={shown ? 0 : -1}
         onClick={close}
-        className="absolute inset-0 h-full w-full cursor-default bg-background/80 backdrop-blur-sm"
+        className={cn(
+          "absolute inset-0 h-full w-full cursor-default bg-background/80 backdrop-blur-sm",
+          !shown && "hidden",
+        )}
       />
 
-      <div className="relative w-full max-w-lg rounded-3xl border border-border/60 bg-card p-4 shadow-card">
-        {/* Far top right, as specified — and outside the card's own padding so
-            it never overlaps the unit. */}
+      <div
+        className={cn(
+          "relative w-full max-w-lg rounded-3xl border border-border/60 bg-card p-4 shadow-card",
+          !shown && "hidden",
+        )}
+      >
+        {/*
+          The dismiss control. Solid primary fill, at the ad's top-right corner,
+          present from the first frame the overlay is shown — the "X should show
+          when the ad shows" ask. Large enough to be an easy tap target (44px),
+          and lifted slightly outside the card so it never sits over the unit.
+        */}
         <button
           type="button"
           onClick={close}
+          tabIndex={shown ? 0 : -1}
           aria-label="Close advertisement"
-          className="absolute -right-3 -top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-card transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="absolute -right-3 -top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-foreground text-background shadow-elevated ring-2 ring-background transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-          <X className="h-4 w-4" />
+          <X className="h-5 w-5" strokeWidth={2.5} />
         </button>
 
         <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">

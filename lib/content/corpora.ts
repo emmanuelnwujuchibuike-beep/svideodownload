@@ -4,6 +4,12 @@ import { SCHOOLS, isTeachable, schoolViews } from "@/lib/academy/schools";
 import { LOCALES } from "@/lib/i18n/locales";
 import { catalogueCoverage, missingKeys } from "@/lib/i18n/messages";
 import { LESSON_CATALOG, LESSON_SLUGS } from "@/lib/learning/catalog";
+import {
+  PILLAR_MIN_LESSONS,
+  PILLAR_MIN_MEMBERS,
+  allClusters,
+  isPublishable,
+} from "@/lib/seo/topics";
 import { SUPPORT_ARTICLES, articleHref } from "@/lib/support/articles";
 import { GLOSSARY } from "@/lib/support/glossary";
 import { centreOf } from "@/lib/support/sections";
@@ -145,6 +151,18 @@ export function auditCorpora(): CorpusFinding[] {
       area: "academy",
       title: `${unchecked.length} course(s) have no self-check`,
       detail: `Complete and readable without one — a check is an optional extra, not a missing part: ${unchecked.join(", ")}.`,
+    });
+  }
+
+  const heldTopics = allClusters().filter((c) => !isPublishable(c));
+  if (heldTopics.length > 0) {
+    findings.push({
+      severity: "note",
+      area: "academy",
+      title: `${heldTopics.length} topic cluster(s) have not earned a pillar page`,
+      detail: `Below the gate of ${PILLAR_MIN_LESSONS} lesson and ${PILLAR_MIN_MEMBERS} members, so no page is generated: ${heldTopics
+        .map((c) => `${c.topic.slug} (${c.size})`)
+        .join(", ")}. Each is one or two pieces of writing away from publishing itself.`,
     });
   }
 

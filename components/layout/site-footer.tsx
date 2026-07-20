@@ -135,6 +135,7 @@ export function SiteFooter({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } 
           title={t("footer.learn")}
           links={[
             ["Academy", "/academy"],
+            ["Topics", "/topics"],
             ["Guides", "/learn"],
             ["Glossary", "/glossary"],
           ]}

@@ -61,6 +61,10 @@ const MARKETING_DIRS = [
   "config",
   "lib/learning",
   "lib/academy",
+  /* `lib/seo` joined with topic clusters: pillar titles, descriptions and the
+     reader-intent lines are the copy on nine hub pages, and hubs are exactly
+     where a claim about an unbuilt product would spread furthest. */
+  "lib/seo",
 ];
 
 function walk(dir: string): string[] {

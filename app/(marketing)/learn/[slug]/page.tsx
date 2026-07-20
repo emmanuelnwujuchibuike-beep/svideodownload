@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { LESSON_SLUGS, relatedLessons } from "@/lib/learning/catalog";
+import { pillarForLesson, topicHref } from "@/lib/seo/topics";
 import { getLesson } from "@/lib/learning/lessons";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
@@ -61,6 +62,7 @@ export default async function LessonPage({
   if (!lesson) notFound();
 
   const related = relatedLessons(slug);
+  const pillar = pillarForLesson(slug);
   // Two downloader pages, chosen deterministically from the slug so the link graph
   // is stable between builds rather than reshuffling and looking like churn.
   const primaries = getPrimaryPages();
@@ -131,6 +133,24 @@ export default async function LessonPage({
         <header className="mt-6">
           <span className="text-xs font-medium text-muted-foreground">
             {lesson.minutes} min read
+            {/*
+              The cluster back-link — a spoke pointing at its hub, which is the
+              half of a topic cluster that actually passes authority. Rendered
+              only when the pillar was generated: `pillarForLesson` reads the
+              same gate as `generateStaticParams`, so this can never be a
+              confident link to a 404.
+            */}
+            {pillar && (
+              <>
+                {" · "}
+                <Link
+                  href={topicHref(pillar)}
+                  className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {pillar.title}
+                </Link>
+              </>
+            )}
           </span>
           <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.02em] sm:text-4xl sm:leading-[1.1]">
             {lesson.title}

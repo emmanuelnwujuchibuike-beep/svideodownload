@@ -90,7 +90,7 @@ const MENU_GROUPS: { title: string; ids: string[] }[] = [
   { title: "Discover", ids: ["home", "explore", "reels", "search"] },
   { title: "Create", ids: ["create-post", "create-reel", "create-story"] },
   { title: "Your stuff", ids: ["downloads", "saved", "messages", "friends", "notifications"] },
-  { title: "Learn", ids: ["academy", "learn", "glossary", "blog"] },
+  { title: "Learn", ids: ["academy", "topics", "learn", "glossary", "blog"] },
   { title: "Help & trust", ids: ["help", "trust", "contact", "developers", "pricing"] },
 ];
 

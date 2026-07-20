@@ -2483,3 +2483,68 @@ orphan-detection mistake where a metric flagged 155 non-problems.
 **Verified end to end** in a real browser against a production build: opened the
 check, answered, submitted, confirmed the review list, the per-question
 explanations, the disabled fieldset and the reset — no console errors.
+
+---
+
+## Topic clusters — the subject axis (2026-07-20)
+
+**The gap.** `config/seoPages.ts` clusters by PLATFORM (TikTok × modifiers, ~148
+pages) and `lib/content/graph` already had `topic` nodes — also one per platform.
+Same axis, and it is the axis a visitor is usually NOT on: someone searching "why
+does my video look worse after uploading" has no platform in mind. The corpus was
+~200 pages deep on platforms and structurally silent on what it is about.
+
+**One taxonomy, not two.** `Topic.id` IS a `LessonTopic`. Declaring a parallel id
+union would create two lists meaning the same thing that drift within a month.
+A test pins that every lesson topic has exactly one cluster record.
+
+**Membership is derived, and not the same way everywhere.** Lessons declare their
+topic, so for them it is authoritative. Nothing else in the corpus has a subject
+field, and adding one to four more content types means four editorial lists to
+keep in sync — so articles, glossary terms and keyword pages are matched on
+VOCABULARY, exactly as `graph/build.ts` already matches capabilities. Honest
+about being a heuristic, and constrained: terms must be specific (a test rejects
+"video", "file", "app" …), matching is on word boundaries (a bare `includes`
+makes "api" match "capability" and "rapid"), and the pillar gate below requires a
+human-authored lesson so no pillar is built purely from keyword matches.
+
+**The gate: >= 1 lesson AND >= 5 members.** Measured, not assumed — **4 of 9
+clusters qualify** (saving-video 155, video-quality 18, audience-and-sharing 9,
+privacy-and-safety 9). `editing` (4) and `developer` (4) miss by one member;
+`captions` 3, `organising` 2, `publishing` 1. Held-back clusters get no page at
+all rather than a hub linking to two things — the same stance as planned schools,
+and each is one or two pieces of writing away from publishing itself. Reported in
+`/admin/corpora` as a `note`.
+
+**Back-links can never 404.** `pillarForLesson` reads the same gate as
+`generateStaticParams`, so a lesson in a held-back cluster renders no pillar link
+rather than a confident link to nothing. Pinned both directions.
+
+### Two things only the rendered page showed
+
+1. **Two near-identical platform link grids, back to back.** The pillar rendered
+   its topic-specific "By platform" group and then `DownloaderLinks` immediately
+   below — the doorway-page pattern the 12-page cap exists to avoid,
+   reintroduced directly beneath it. Now rendered only when the cap actually
+   truncated something, where it is the honest "see all of them" destination.
+
+2. **The "By platform" sample was 12 TikTok pages.** The SEO corpus is grouped by
+   platform, so `.slice(0, 12)` never leaves the first one — under a heading
+   promising the subject "specific to where your media came from". Replaced with
+   a round-robin (`seoPagesAcrossPlatforms`): one page per platform, then a
+   second from each. Every individual link was correct and the set was useless.
+
+**Reachability.** Registered in all three systems the "route existing is not a
+route shipping" incident identified — `lib/navigation/registry.ts`, `MENU_GROUPS`
+in the header drawer, and the footer Learn column. Kept OUT of the desktop
+`NAV_LINKS` row deliberately: that row is already at overflow risk (Blog was
+moved to the footer for exactly this reason). Registry keywords are the SUBJECTS,
+not the word "topics" — nobody searches for a taxonomy.
+
+**Also:** `lib/seo` added to the Reality Ledger's scanned dirs — pillar titles and
+intent lines are the copy on hub pages, and a hub is where a false claim spreads
+furthest.
+
+**Verified:** sitemap lists exactly the 4 published pillars; a held-back pillar
+404s; `/learn/[slug]` first-load JS unchanged at 265 kB (the topics import stays
+server-side); no console errors.

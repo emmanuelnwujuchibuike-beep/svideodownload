@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { teachableSchools } from "@/lib/academy/schools";
+import { publishableClusters, topicHref } from "@/lib/seo/topics";
 import { LESSON_SLUGS } from "@/lib/learning/catalog";
 import { SUPPORT_ARTICLES, articleHref } from "@/lib/support/articles";
 import { BLOG_SLUGS } from "@/lib/seo/blog";
@@ -92,6 +93,23 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.6,
   }));
 
+  /*
+    Topic pillars — the subject axis.
+
+    Only PUBLISHABLE clusters, derived from the same gate `generateStaticParams`
+    reads, so this can never advertise a pillar that was not generated. The
+    lesson the schools above already taught, applied to a second corpus.
+
+    Priority above the individual keyword pages and alongside the schools: these
+    are hubs, and the whole point of a hub is that authority flows through it.
+  */
+  const topics: MetadataRoute.Sitemap = publishableClusters().map((cluster) => ({
+    url: `${siteUrl}${topicHref(cluster.topic)}`,
+    lastModified: now,
+    changeFrequency: "weekly",
+    priority: 0.7,
+  }));
+
   return [
     { url: siteUrl, lastModified: now, changeFrequency: "daily", priority: 1 },
     ...downloaders,
@@ -99,6 +117,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${siteUrl}/trust`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${siteUrl}/glossary`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     ...support,
+    { url: `${siteUrl}/topics`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
+    ...topics,
     { url: `${siteUrl}/academy`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
     ...schools,
     { url: `${siteUrl}/learn`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },

@@ -15,6 +15,7 @@ import {
   Film,
   FileText,
   GraduationCap,
+  Hash,
   Home,
   Image as ImageIcon,
   KeyRound,
@@ -132,6 +133,10 @@ export const DESTINATIONS: Destination[] = [
   { id: "help", label: "Help Center", href: "/help", kind: "docs", icon: LifeBuoy, keywords: ["help", "support", "how to download", "not working", "won't download", "failed", "error", "install app", "add to home screen", "no sound", "quality", "sign in code", "getting started", "troubleshooting"], canAccess: everyone },
   { id: "trust", label: "Trust Center", href: "/trust", kind: "docs", icon: Shield, keywords: ["security", "privacy", "safety", "delete account", "export data", "block", "report", "appeal", "passkey", "2fa", "who can see"], canAccess: everyone },
   { id: "glossary", label: "Glossary", href: "/glossary", kind: "docs", icon: FileText, keywords: ["definition", "meaning", "jargon", "bitrate", "rendition", "captions", "watermark", "what is"], canAccess: everyone },
+  /* Keywords are the SUBJECTS, not the word "topics" — nobody searches for a
+     taxonomy. Someone who types "why does my video look worse" should land on
+     the pillar that answers it. */
+  { id: "topics", label: "Topics", href: "/topics", kind: "docs", icon: Hash, keywords: ["topic", "subject", "guides by subject", "video quality", "captions", "subtitles", "editing", "privacy", "audience", "saving video", "api"], canAccess: everyone },
   { id: "blog", label: "Blog", href: "/blog", kind: "docs", icon: Newspaper, keywords: ["news", "articles", "updates"], canAccess: everyone },
   { id: "contact", label: "Support", href: "/contact", kind: "docs", icon: LifeBuoy, keywords: ["help", "contact", "support", "problem", "bug"], canAccess: everyone },
   { id: "terms", label: "Terms of Service", href: "/terms", kind: "docs", icon: FileText, keywords: ["legal", "tos"], canAccess: everyone },

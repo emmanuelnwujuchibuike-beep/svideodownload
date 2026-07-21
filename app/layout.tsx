@@ -116,22 +116,16 @@ export const viewport: Viewport = {
   // across the whole app, including the admin pages.
   maximumScale: 1,
   userScalable: false,
-  // viewportFit "auto" (NOT "cover") — owner, 2026-07-21, after "cover" + manual
-  // safe-area padding kept jamming content under the status bar on every page:
-  // "let the margin and padding and everything be zero, let iOS decide, only the
-  // part necessary for full edge be full edge like a native app." `cover` is what
-  // forces the web view UNDER the status bar / home indicator and hands us the job
-  // of padding it back — which is exactly the fight that kept failing (current iOS
-  // reports env(safe-area-inset-top) as 0 in a standalone PWA, so the padding
-  // collapsed). Dropping it lets iOS INSET the content into the safe area itself,
-  // natively, like an app: content sits below the status bar and above the home
-  // indicator with no CSS help, and env(safe-area-inset-*) all resolve to 0 so the
-  // remaining var(--frenz-safe-top)/inset-bottom paddings are harmless no-ops.
-  // Unlike the status-bar style, viewport-fit is read live on every launch, so
-  // this needs NO reinstall. Trade-off: nothing draws under the status bar any
-  // more — immersive media (reels/viewers) fills the safe viewport edge-to-edge,
-  // which is the native look, rather than bleeding under the clock.
-  viewportFit: "auto",
+  // viewportFit "cover" — content draws edge-to-edge (owner: "everything else can
+  // go totally up except buttons, icons and logos"; reels/media stay full-bleed).
+  // The chrome that must NOT go under the status bar (topbar, buttons, icons,
+  // logos, reel controls) pads itself by var(--frenz-safe-top). Because current
+  // iOS reports env(safe-area-inset-top) as 0 in a standalone PWA — and
+  // @media (display-mode: standalone) proved unreliable there too — that variable
+  // is floored to 44px via a JS-set `html.pwa-standalone` class (the inline script
+  // in <head> below + globals.css), which reads `navigator.standalone`, the signal
+  // iOS actually honours. So content is full-bleed and only the chrome comes down.
+  viewportFit: "cover",
   // Standards-based fix for "the keyboard covers the fixed bottom nav /
   // composer" (iOS 17.4+, Chrome 108+): makes the LAYOUT viewport itself
   // shrink when the on-screen keyboard opens, so `100dvh` containers and
@@ -203,6 +197,17 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        {/* Standalone (installed-PWA) detection, set BEFORE first paint so the
+            top-inset variable (--frenz-safe-top, globals.css) is already floored
+            when the chrome lays out — no reflow. Driven by `navigator.standalone`
+            (the signal iOS actually honours) because @media (display-mode:
+            standalone) proved unreliable in the installed app, which is why the
+            buttons kept jamming under the status bar. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches;if(s||navigator.standalone===true){document.documentElement.classList.add('pwa-standalone')}}catch(e){}})();`,
+          }}
+        />
         {/* Theme class MUST be set from <head>, before any first paint — a
             <body> placement leaves a paint window on streamed responses
             where the empty body flashes the default light background for

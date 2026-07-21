@@ -353,8 +353,6 @@ function ReelCard({
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
   const [buffering, setBuffering] = useState(false);
-  // Near-screen-aspect clips cover the screen edge-to-edge (TikTok full bleed).
-  const [fullBleed, setFullBleed] = useState(false);
   const [seekFlash, setSeekFlash] = useState<{ side: "back" | "fwd"; key: number } | null>(null);
   const [ui, setUi] = useState(true);
   const [scrubbing, setScrubbing] = useState(false);
@@ -1043,7 +1041,7 @@ function ReelCard({
         const scrubbable = native && dur > 0;
         const displayPct = scrubbing ? scrubPct * 100 : progress;
         return (
-          <div className={cn("absolute inset-x-0 top-[var(--frenz-safe-top)] z-40 transition-opacity duration-200", ui || scrubbing ? "opacity-100" : "opacity-0")}>
+          <div className={cn("absolute inset-x-0 bottom-[var(--frenz-nav-clearance)] z-40 transition-opacity duration-200 lg:bottom-6", ui || scrubbing ? "opacity-100" : "opacity-0")}>
             <div
               ref={seekBar}
               onPointerDown={scrubbable ? scrubStart : undefined}
@@ -1174,16 +1172,14 @@ function ReelCard({
               loop
               playsInline
               preload={preload}
-              // TikTok-style full bleed on phones: a clip shaped close to the
-              // screen COVERS it edge-to-edge (video runs under the status bar
-              // and home indicator — no letterbox slivers). Clearly different
-              // shapes (landscape/square) stay object-contain over the blurred
-              // backdrop so nothing meaningful is cut off. Desktop keeps the
-              // centered true-aspect column.
-              className={cn(
-                "relative z-10 h-full w-full lg:h-auto lg:max-h-full lg:w-auto lg:max-w-full lg:!object-contain",
-                fullBleed ? "object-cover" : "object-contain",
-              )}
+              // Always object-contain — the video is shown at its TRUE aspect and
+              // NOTHING is ever cropped (owner, 2026-07-21: "not to zoom videos
+              // that isn't full screen so no part of the video gets cut out"). The
+              // always-painted blurred backdrop (above) fills whatever the
+              // letterbox leaves, so the frame still reads edge-to-edge. A portrait
+              // 9:16 clip on a taller phone used to be object-cover'd (its top and
+              // bottom cropped to fill) — that zoom/crop is gone.
+              className="relative z-10 h-full w-full object-contain lg:h-auto lg:max-h-full lg:w-auto lg:max-w-full"
               onPlay={() => {
                 video.current && claimPlayback(video.current);
                 setBuffering(false);
@@ -1210,10 +1206,6 @@ function ReelCard({
               onLoadedMetadata={(e) => {
                 const v = e.currentTarget;
                 setDur(v.duration || 0);
-                if (v.videoWidth && v.videoHeight) {
-                  const screen = window.innerWidth / window.innerHeight;
-                  setFullBleed(Math.abs(v.videoWidth / v.videoHeight - screen) / screen < 0.22);
-                }
                 // Resume where this reel last stopped (tab switch / reopen) —
                 // switching For You/Following continues, never restarts.
                 const resumeAt = getPlaybackPosition(playbackKey);

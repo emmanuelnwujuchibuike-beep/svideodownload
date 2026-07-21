@@ -28,6 +28,9 @@ import { Suspense } from "react";
 
 import { AdManager } from "@/features/admin/ad-manager";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
+import { FeatureFlagManager } from "@/features/admin/feature-flags-manager";
+import { getFlags } from "@/lib/platform/flags";
+import { getFlagOverrides } from "@/lib/platform/flags-store";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -224,6 +227,12 @@ export default async function AdminPage() {
             </Suspense>
           </AdminPanel>
 
+          <AdminPanel id="flags">
+            <Suspense fallback={<PanelSkeleton />}>
+              <FlagsSection />
+            </Suspense>
+          </AdminPanel>
+
           <AdminPanel id="traffic">
             <Suspense fallback={<PanelSkeleton />}>
               <TrafficSection />
@@ -280,6 +289,26 @@ async function ContentSection() {
       <BroadcastComposer initialBroadcasts={broadcasts} />
     </>
   );
+}
+
+async function FlagsSection() {
+  const overrides = await getFlagOverrides();
+  const flags = getFlags().map((f) => {
+    const o = overrides[f.id];
+    return {
+      id: f.id,
+      label: f.label,
+      description: f.description,
+      category: f.category,
+      defaultEnabled: f.defaultEnabled,
+      rollout: f.rollout ?? null,
+      plans: f.plans ?? null,
+      adminBypass: !!f.adminBypass,
+      consumer: f.consumer,
+      override: { enabled: o?.enabled ?? null, rolloutPercentage: o?.rolloutPercentage ?? null },
+    };
+  });
+  return <FeatureFlagManager flags={flags} />;
 }
 
 async function TrafficSection() {

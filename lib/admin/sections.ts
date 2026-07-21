@@ -100,6 +100,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
 
   /* ── System ── */
   {
+    id: "flags",
+    label: "Feature flags",
+    category: "system",
+    icon: "Flag",
+    blurb: "Runtime toggles and rollouts. Flags are declared in code; their state is set here.",
+  },
+  {
     id: "traffic",
     label: "Traffic",
     category: "system",

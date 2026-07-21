@@ -88,6 +88,21 @@ export default async function LoginPage({
           <div className="mt-7">
             <AuthPanel next={next} />
           </div>
+
+          {/*
+            Trademark disclaimer. Deliberately the quietest thing on the page —
+            10px, dimmed, tight leading — so it satisfies the legal need to
+            disclaim affiliation with the brands whose logos appear in the hero
+            without pulling any weight from the headline or the CTAs. It is the
+            last element in the flow, below the auth panel, so it reads as a
+            footnote rather than a message. `text-pretty` keeps the brand list
+            from breaking into a lonely orphan on the last line.
+          */}
+          <p className="mt-5 text-pretty text-center text-[10px] leading-[1.5] text-muted-foreground/60">
+            Frenzsave is an independent service and is not affiliated with, endorsed by, or
+            sponsored by TikTok, Instagram, YouTube, Snapchat, Facebook, X, or Google. All
+            trademarks and logos are the property of their respective owners.
+          </p>
         </div>
       </div>
     </main>

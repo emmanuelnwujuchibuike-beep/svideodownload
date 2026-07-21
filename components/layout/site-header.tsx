@@ -463,7 +463,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
                   >
                     <ModuleIconBadge icon={UserCircle} /> {handle ? "My profile" : "Set up profile"}
                   </Link>
-                  <form action="/api/auth/signout" method="post">
+                  <form action="/auth/signout" method="post">
                     <button
                       type="submit"
                       className="flex min-h-[44px] w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-[15px] font-medium text-rose-600 transition-colors hover:bg-secondary dark:text-rose-400"

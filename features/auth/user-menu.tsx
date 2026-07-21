@@ -113,8 +113,11 @@ export function UserMenu() {
             premium mark the header wants. Sparkles said "something magic here",
             which is decorative, not a login affordance. */}
         <Fingerprint className="h-4 w-4 transition-transform duration-300 group-hover:scale-110" />
-        {/* "Launch App", per the landing mockup's header button. */}
-        Launch App
+        {/* "Log in" — owner, 2026-07-21: relabelled from "Launch App" (the mockup
+            copy) so a first-time visitor reads it as sign-in, and now rendered in
+            the MOBILE header too, not just desktop. Same passwordless flow either
+            way — this is also where a new account is created (no separate page). */}
+        Log in
         <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
       </Link>
     );

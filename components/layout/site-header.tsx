@@ -244,8 +244,15 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
         {/* Mobile right — search then menu, hidden on social surfaces (the bottom
             nav owns navigation there). */}
         {social ? null : (
-          <div className="flex items-center gap-0.5 lg:hidden">
+          <div className="flex items-center gap-1 lg:hidden">
             <SearchTriggerIcon />
+            {/* Log in — owner, 2026-07-21: the login CTA was desktop-only and
+                buried in the hamburger on mobile, so a new visitor on a phone had
+                no visible way in. UserMenu already carries the robust signed-in/out
+                detection (no "Log in" flash for a signed-in viewer mid-blip), so
+                reusing it here shows "Log in" to signed-out visitors and the
+                account avatar to signed-in ones — same as the desktop header. */}
+            <UserMenu />
             <button
               type="button"
               aria-label={open ? t("nav.closeMenu") : t("nav.openMenu")}

@@ -42,7 +42,17 @@ export function LoginCollage() {
   return (
     <div
       aria-hidden
-      className="relative mx-auto aspect-square w-full max-w-[300px] max-h-[38vh]"
+      /*
+        Height-driven, not width-driven.
+
+        `h-full` makes the box take whatever vertical space the parent gives it,
+        `aspect-square` derives the width from that height, and the two `max-*`
+        caps stop it exceeding 300px on a tall phone. The effect: on a short
+        laptop window where the hero column is squeezed, the constellation
+        shrinks to fit instead of overflowing into the title — while on mobile,
+        where there is room, it sits at its full 300px exactly as before.
+      */
+      className="relative mx-auto aspect-square h-full max-h-[300px] w-auto max-w-[300px]"
     >
       {/* Ambient aura — soft brand glow that anchors the composition. */}
       <div className="pointer-events-none absolute inset-[8%] rounded-full bg-gradient-to-br from-blue-500/25 via-violet-500/20 to-fuchsia-500/25 blur-3xl motion-safe:animate-login-pulse" />

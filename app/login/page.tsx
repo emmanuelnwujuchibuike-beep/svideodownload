@@ -56,7 +56,14 @@ export default async function LoginPage({
         (the CLS 0.1614 the old `flex-1` + `h-full` collage caused). The box owns
         its space, so nothing overlaps the title.
       */}
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-6 pt-2">
+      {/*
+        `overflow-hidden` is the safety net: on a short laptop window this column
+        shrinks, and the constellation now sizes to the space it is GIVEN (see
+        LoginCollage — height-driven, not a fixed width), so it can never grow
+        past this box into the title below. On a tall phone it caps at its normal
+        size, so the mobile layout is unchanged.
+      */}
+      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-6 py-3">
         <LoginCollage />
       </div>
 

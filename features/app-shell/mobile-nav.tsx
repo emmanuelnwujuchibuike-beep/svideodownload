@@ -51,8 +51,14 @@ export function MobileNav() {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
   const { handle, avatarUrl } = useEntitlements();
-  // Cached-first: shows the last-known unread count instantly, updates live.
-  const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox);
+  // Cached-first: shows the last-known unread count instantly, updates live via
+  // the realtime inbox subscription (InboxRealtimeTracker). `revalidateOnFocus:
+  // false` so an iOS back-swipe / app resume never refetches the inbox just to
+  // repaint this badge — that blanket refetch was part of the "message page
+  // reloads on swipe back" report (owner, 2026-07-21). This component is mounted
+  // on every signed-in surface, so it's also what keeps INBOX_KEY frozen
+  // app-wide (the cache's opt-out is reference-counted — see cache.ts).
+  const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox, { revalidateOnFocus: false });
   const unread = inbox?.unread ?? 0;
 
   const profileHref = handle ? `/u/${handle}` : "/account";

@@ -178,8 +178,13 @@ export function ConversationList({
 }) {
   // Live updates come from InboxRealtimeTracker (mounted once in the app
   // shell) revalidating this same shared cache — no second subscription here.
+  // `revalidateOnFocus: false` — the list revalidates on realtime activity, NOT
+  // on an iOS back-swipe / app resume (owner, 2026-07-21: "the message body
+  // should only revalidate when a new message comes … never reload during back
+  // swipe"). The blanket focus refetch was the visible reload.
   const { data } = useQuery<Inbox>(INBOX_KEY, loadInbox, {
     initialData: { conversations: initial, unread: initial.filter((c) => c.unread).length },
+    revalidateOnFocus: false,
   });
   const conversations = data?.conversations ?? initial;
   const router = useRouter();

@@ -28,6 +28,15 @@ export interface QueryOptions<T = unknown> {
   dedupeMs?: number;
   /** Server-rendered seed data — shown instantly on first paint, then revalidated. */
   initialData?: T;
+  /**
+   * Revalidate this key on window focus / reconnect / tab-visible / iOS
+   * back-swipe (bfcache restore). Default true. Set false for surfaces kept
+   * fresh by their own realtime subscription (inbox) or meant to stay frozen
+   * between genuine loads (Stories) — otherwise the blanket refetch on every
+   * resume reads as a visible "reload" on back-swipe. The key still loads on
+   * mount and still updates on explicit `revalidate()`/`mutate()` calls.
+   */
+  revalidateOnFocus?: boolean;
 }
 
 /**
@@ -36,7 +45,7 @@ export interface QueryOptions<T = unknown> {
  * focus/reconnect. The fetcher usually calls the SDK (`getApi().…`).
  */
 export function useQuery<T>(key: string, fetcher: () => Promise<T>, options: QueryOptions<T> = {}): QueryResult<T> {
-  const { enabled = true, dedupeMs, initialData } = options;
+  const { enabled = true, dedupeMs, initialData, revalidateOnFocus = true } = options;
 
   const entry = useSyncExternalStore(
     (cb) => subscribe(key, cb),
@@ -53,10 +62,10 @@ export function useQuery<T>(key: string, fetcher: () => Promise<T>, options: Que
   useEffect(() => {
     if (!enabled) return;
     ensureGlobalRevalidation();
-    registerFetcher(key, () => fetcherRef.current());
+    registerFetcher(key, () => fetcherRef.current(), revalidateOnFocus);
     void refetch().catch(() => {});
-    return () => unregisterFetcher(key);
-  }, [key, enabled, refetch]);
+    return () => unregisterFetcher(key, revalidateOnFocus);
+  }, [key, enabled, refetch, revalidateOnFocus]);
 
   return {
     // Fall back to the SSR seed until the cache is populated, so content paints

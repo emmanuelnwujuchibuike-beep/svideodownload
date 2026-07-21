@@ -34,6 +34,23 @@ const cache = new Map<string, CacheEntry>();
 const listeners = new Map<string, Set<() => void>>();
 /** Active fetchers by key, so focus/reconnect can revalidate what's mounted. */
 const fetchers = new Map<string, () => Promise<unknown>>();
+/**
+ * Reference count of mounted readers that OPT OUT of the automatic focus /
+ * reconnect / visibility / pageshow revalidation below. For surfaces kept fresh
+ * by their OWN realtime subscription (the inbox) or deliberately frozen between
+ * genuine loads (the Stories row), a blanket refetch on every window-focus / iOS
+ * back-swipe is exactly the visible "reload" the owner asked to remove
+ * (2026-07-21). These keys still load on mount and still update on explicit
+ * `revalidate()`/`mutate()` (a realtime event) — just never on the global
+ * focus/resume triggers.
+ *
+ * It's a COUNT, not a boolean, because one key (e.g. the shared `inbox`) is read
+ * by many components at once — the badge, the list, the notification bell. A
+ * plain boolean would be last-writer-wins: whichever of them registered last
+ * with the default `true` would silently re-enable focus revalidation for all of
+ * them. A key is frozen while ANY mounted reader asked to freeze it.
+ */
+const noFocusCounts = new Map<string, number>();
 
 function notify(key: string): void {
   const ls = listeners.get(key);
@@ -60,11 +77,21 @@ function patch(key: string, next: Partial<CacheEntry>): void {
   notify(key);
 }
 
-export function registerFetcher(key: string, fetcher: () => Promise<unknown>): void {
+export function registerFetcher(
+  key: string,
+  fetcher: () => Promise<unknown>,
+  revalidateOnFocus = true,
+): void {
   fetchers.set(key, fetcher);
+  if (!revalidateOnFocus) noFocusCounts.set(key, (noFocusCounts.get(key) ?? 0) + 1);
 }
-export function unregisterFetcher(key: string): void {
+export function unregisterFetcher(key: string, revalidateOnFocus = true): void {
   fetchers.delete(key);
+  if (!revalidateOnFocus) {
+    const n = (noFocusCounts.get(key) ?? 0) - 1;
+    if (n > 0) noFocusCounts.set(key, n);
+    else noFocusCounts.delete(key);
+  }
 }
 
 /**
@@ -156,7 +183,13 @@ export function invalidate(key: string): void {
 
 let wired = false;
 function revalidateAllMounted(): void {
-  for (const [key, fetcher] of fetchers) void revalidate(key, fetcher, 0).catch(() => {});
+  for (const [key, fetcher] of fetchers) {
+    // Skip keys that own their own freshness (realtime) or are meant to stay
+    // put between real loads — refetching them on every focus/back-swipe is the
+    // "message page reloads on swipe back" the owner reported.
+    if (noFocusCounts.has(key)) continue;
+    void revalidate(key, fetcher, 0).catch(() => {});
+  }
 }
 
 // Every key ever queried (every post's comments, every profile visited, …)

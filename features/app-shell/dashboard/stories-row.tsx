@@ -105,7 +105,16 @@ export function StoriesRow({
   // last-known rings persisted on disk rather than an empty strip that fills in
   // seconds later (owner, 2026-07-16 — see lib/social/story-cache.ts). The disk
   // copy self-expires at 24h, so a stale entry can never paint a phantom ring.
-  const { data } = useQuery<StoryGroup[]>("stories", fetchStoryGroups, { initialData: initialGroups });
+  // `revalidateOnFocus: false` — the Stories row must NOT refetch on an iOS
+  // back-swipe / app resume. On /messages it lives in the persistent shell
+  // (InboxMobileChrome) and the owner's report was specifically that Stories
+  // "flash / reload on swipe back" — a focus refetch is what caused it. It still
+  // loads on mount (each /home entry, first /messages entry) and paints
+  // cache-first, so it stays frozen between genuine loads instead of reloading.
+  const { data } = useQuery<StoryGroup[]>("stories", fetchStoryGroups, {
+    initialData: initialGroups,
+    revalidateOnFocus: false,
+  });
   const groups = data ?? [];
 
   // Disk seed, applied AFTER mount — never during render. This component is

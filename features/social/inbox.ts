@@ -58,17 +58,19 @@ export function useInboxRealtime(): void {
         .subscribe();
     });
 
-    // Realtime has no replay: refresh the inbox whenever the app resumes or
-    // comes back online, so unread badges are right even after a long sleep.
-    const onVisible = () => {
-      if (document.visibilityState === "visible") bump();
-    };
-    document.addEventListener("visibilitychange", onVisible);
+    // Refresh the inbox when the network reconnects (a genuine "realtime
+    // restored" event that can carry messages missed while offline) — but NOT on
+    // visibilitychange/resume. A `visibilitychange` bump here fired on every iOS
+    // back-swipe / app resume and refetched the whole conversation list, which
+    // is exactly the "message page reloads on swipe back" the owner reported
+    // (2026-07-21). The live `postgres_changes` subscription above keeps the
+    // inbox current on real activity (a new/edited/removed message bumps
+    // `conversation_members.updated_at`); `online` only ever fires on an actual
+    // connectivity transition, never on a plain back-swipe.
     window.addEventListener("online", bump);
 
     return () => {
       cancelled = true;
-      document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", bump);
       if (channel) void supabase.removeChannel(channel);
     };

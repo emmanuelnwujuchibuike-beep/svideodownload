@@ -2769,3 +2769,75 @@ was needed**: `script-src` and `frame-src` already allow `https:`.
 
 **Verified:** 616 tests, build clean, every marketing route still prerendered,
 and screenshots confirm the under-download card and bottom bar render with no X.
+
+## Enterprise foundation — Constitution, feature flags, experiments (2026-07-21)
+
+A maximal "design the permanent enterprise foundation from scratch" brief
+(Experience OS, Platform Kernel, ~14 registries, ~24 gateways, native apps). The
+honest finding: **almost all of it already existed** under precise names — the
+module registry *is* the kernel (`lib/platform/modules.ts`), and
+ARCHITECTURE/SECURITY/PERFORMANCE/FRENZ_CORE *are* the constitution. Rebuilding
+would have been the ~27-of-43 destructive-duplication trap this project has hit
+before. So the work was: consolidate, then close the genuine gaps.
+
+### docs/CONSTITUTION.md — the one governing document
+
+Seven articles. Article I is the invariants that outrank features (the 2s budget,
+the load-time guarantee, the Reality Ledger, no fabrication, and — the meta-rule —
+*every rule ships with an enforcer that can see it fail*). Article II maps the
+Experience-OS spine to the real file that owns each concern. Article VI is an
+**honest Gap Ledger**: nothing may be described in the present tense until it has
+a proving route. Every path in the document was checked to resolve; one that
+didn't (a `lib/design-tokens.ts` that is only a test) was corrected.
+
+### Feature flags — migration 0091
+
+`lib/platform/flags.ts` is a pure registry + `resolveFlag` + a deterministic
+`bucketOf` (FNV-1a) rollout, deliberately dependency-light so it is safe on
+client or server and a flag that is OFF costs 0 client JS. `flags-store.ts` is
+`server-only`, caches 10s, and **degrades to declared defaults if the table is
+absent** — so the code was safe to ship before the migration ran. Resolution
+order: plan gate → admin preview → manual override (kill switch) → % rollout →
+default. Admin "Feature flags" section (tri-state + rollout %), reachable from
+`/admin`. RLS is admin-only via `is_admin()`; the table is service-role only.
+
+### Experiments (A/B) — migration 0092
+
+`lib/platform/experiments.ts` reuses the flag primitives rather than duplicating
+them: weighted deterministic assignment via the same `bucketOf`, namespaced
+`experiment:<id>` so a visitor's arm is independent of any same-named flag. First
+declared variant is control by convention. Exposures log through the **existing**
+`trackEvent` → `events` pipeline (one new event type), not a parallel one;
+`experiment_exposure_counts()` (an RPC) aggregates them for the panel. Runtime
+overrides: pause (safety) and force-variant (ship the winner). The registry ships
+a `draft` example only — a draft assigns nobody and logs nothing, so the panel is
+populated without fabricating a live test.
+
+### The Constitution as a build gate
+
+`lib/platform/constitution.test.ts` makes Article I.6 real: it guards what types
+don't — flag/experiment registry integrity, and the admin section ↔ panel ↔ icon
+wiring (the unreachable-section defect that has bitten this project three times).
+Each detector is pure and tested twice — against the real data (must be clean) and
+a broken fixture (must be caught) — the reality-ledger suite's "does the gate
+still have teeth?" discipline. It does **not** duplicate proving-routes
+(reality-ledger) or import boundaries (ESLint).
+
+### What was deliberately NOT built
+
+- **The event bus.** A real Gap-Ledger item, but with one publisher/one consumer
+  it is just a function call. Building it now is the architecture-for-its-own-sake
+  the Constitution explicitly rejects; it waits for a genuine second consumer.
+- **Wiring the `smart-assistant-widget` flag to its declared consumer.** The
+  consumer is `app/layout.tsx`, which is intentionally build-time static to keep
+  the marketing routes static under the 2s budget. Reading a runtime flag there
+  would un-static every page and add a Supabase read to the hot path; re-mounting
+  the widget behind a client flag would add a per-page `/api/flags` fetch to hide
+  a dormant feature. Both trade the #1 invariant for a demo, so the flag's
+  consumer stays honestly marked `pending` until there is a surface where a flag
+  read is free (an already-dynamic page or a client island that needs it).
+
+**Verified:** tsc clean, lint clean, **668 tests** across 58 files, three
+production builds green (`/api/admin/flags` and `/api/admin/experiments`
+registered, `server-only` store boundaries held, all 217 pages generated).
+Migrations 0091 + 0092 applied by the owner.

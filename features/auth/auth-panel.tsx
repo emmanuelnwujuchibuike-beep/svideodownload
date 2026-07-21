@@ -5,6 +5,7 @@ import { ArrowLeft, Check, KeyRound, Loader2, Mail, ShieldCheck } from "lucide-r
 import Link from "next/link";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { FLoaderOverlay } from "@/features/app-shell/f-loader";
 import { OtpInput } from "@/features/auth/otp-input";
 import { needsMfaStepUp } from "@/lib/auth/mfa";
 import { createClient } from "@/lib/supabase/client";
@@ -57,6 +58,12 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
   const [busy, setBusy] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState(false);
+  // Set the instant a sign-in commits to leaving this page. Shows the shared F
+  // loader (FLoaderOverlay) so the SAME branded mark stays up from the tap
+  // through the full-document navigation into the destination's BootSplash — one
+  // loader per login, not the old "verifying → you're in" beat plus a separate
+  // splash (owner, 2026-07-21).
+  const [navigating, setNavigating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shakeKey, setShakeKey] = useState(0);
   const [countdown, setCountdown] = useState(0);
@@ -72,6 +79,27 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const callbackUrl = () => `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+
+  /**
+   * Leave the login page for `url`, showing the single F loader on the way out.
+   * `markSignedIn` sets the `frenz_just_signed_in` cookie that BootSplash reads
+   * on the next document to FORCE-show its F splash — so the loader is seamless
+   * and deterministic across the navigation (the password/email-code paths never
+   * hit /auth/callback, which is the only other place this cookie is set). Only
+   * true when landing IN the app; a hop to the MFA challenge is still an auth
+   * step, so it navigates under the loader without claiming "signed in" yet.
+   */
+  const go = (url: string, markSignedIn = false) => {
+    if (markSignedIn) {
+      try {
+        document.cookie = "frenz_just_signed_in=1; path=/";
+      } catch {
+        /* cookies blocked — the loader still shows, just not force-guaranteed on /home */
+      }
+    }
+    setNavigating(true);
+    window.location.assign(url);
+  };
 
   useEffect(() => {
     return () => {
@@ -92,14 +120,19 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
 
   const google = async () => {
     setBusy(true);
+    setNavigating(true);
     setError(null);
     try {
       const supabase = createClient();
+      // signInWithOAuth performs the redirect to Google itself; the F loader
+      // covers that moment, then Google's page takes over. The return trip lands
+      // on /auth/callback, which sets frenz_just_signed_in for the /home splash.
       const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: callbackUrl() } });
       if (error) throw error;
     } catch {
       setError("Google sign-in isn't available right now — use your email instead.");
       setBusy(false);
+      setNavigating(false);
     }
   };
 
@@ -144,10 +177,10 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
           return;
         }
         if (await needsMfaStepUp(supabase)) {
-          window.location.assign(`/login/mfa-challenge?next=${encodeURIComponent(next)}`);
+          go(`/login/mfa-challenge?next=${encodeURIComponent(next)}`);
           return;
         }
-        window.location.assign(next);
+        go(next, true);
       } catch {
         setError("Sign-in is unavailable right now — try a code instead.");
       } finally {
@@ -190,16 +223,21 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
         return;
       }
       setVerified(true);
+      // Hand straight to the single F loader the moment the code is accepted —
+      // no separate green-check "you're in" beat before the splash. If the
+      // step-up check below throws, the catch clears it and surfaces the error.
+      setNavigating(true);
       // A reset lands on Account → Password (verified session) to set the new
       // one; a normal sign-in goes straight in. Either way, an account with a
       // verified 2FA factor clears the step-up challenge first.
       const dest = resetting ? "/account?setPassword=1#password" : next;
       if (await needsMfaStepUp(supabase)) {
-        window.location.assign(`/login/mfa-challenge?next=${encodeURIComponent(dest)}`);
+        go(`/login/mfa-challenge?next=${encodeURIComponent(dest)}`);
         return;
       }
-      window.location.assign(dest);
+      go(dest, true);
     } catch {
+      setNavigating(false);
       setError("Verification failed — check your connection and try again.");
       setShakeKey((k) => k + 1);
     } finally {
@@ -213,7 +251,12 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
   };
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <>
+      {/* The single login loader — same F mark as the cold-start splash. Shown
+          the instant a sign-in commits to navigating, and carried across the
+          full-document redirect into the destination's own BootSplash. */}
+      {navigating ? <FLoaderOverlay /> : null}
+      <AnimatePresence mode="wait" initial={false}>
       {view === "choices" ? (
         <motion.div
           key="choices"
@@ -427,7 +470,8 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
           </button>
         </motion.div>
       )}
-    </AnimatePresence>
+      </AnimatePresence>
+    </>
   );
 }
 

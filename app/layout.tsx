@@ -116,13 +116,22 @@ export const viewport: Viewport = {
   // across the whole app, including the admin pages.
   maximumScale: 1,
   userScalable: false,
-  // Edge-to-edge in the installed app. With statusBarStyle "default" (see
-  // appleWebApp above) iOS reserves the STATUS BAR natively, so the top inset is
-  // handled for us; `cover` is what still extends the view into the BOTTOM
-  // home-indicator area (and the side notches in landscape), which is what keeps
-  // `env(safe-area-inset-bottom)` returning the real value the mobile nav pads
-  // against. Without it iOS would letterbox the bottom inset to zero too.
-  viewportFit: "cover",
+  // viewportFit "auto" (NOT "cover") — owner, 2026-07-21, after "cover" + manual
+  // safe-area padding kept jamming content under the status bar on every page:
+  // "let the margin and padding and everything be zero, let iOS decide, only the
+  // part necessary for full edge be full edge like a native app." `cover` is what
+  // forces the web view UNDER the status bar / home indicator and hands us the job
+  // of padding it back — which is exactly the fight that kept failing (current iOS
+  // reports env(safe-area-inset-top) as 0 in a standalone PWA, so the padding
+  // collapsed). Dropping it lets iOS INSET the content into the safe area itself,
+  // natively, like an app: content sits below the status bar and above the home
+  // indicator with no CSS help, and env(safe-area-inset-*) all resolve to 0 so the
+  // remaining var(--frenz-safe-top)/inset-bottom paddings are harmless no-ops.
+  // Unlike the status-bar style, viewport-fit is read live on every launch, so
+  // this needs NO reinstall. Trade-off: nothing draws under the status bar any
+  // more — immersive media (reels/viewers) fills the safe viewport edge-to-edge,
+  // which is the native look, rather than bleeding under the clock.
+  viewportFit: "auto",
   // Standards-based fix for "the keyboard covers the fixed bottom nav /
   // composer" (iOS 17.4+, Chrome 108+): makes the LAYOUT viewport itself
   // shrink when the on-screen keyboard opens, so `100dvh` containers and

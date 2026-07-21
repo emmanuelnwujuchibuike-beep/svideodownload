@@ -2857,3 +2857,36 @@ that don't use it, and the root layout stays static. The assistant widget's
 re-mount is still a separate product call, but the read path it needs now exists
 and is exercised. Verified: 217 pages still prerendered, `/api/flags` dynamic,
 23 flag tests (incl. an allow-list guard that a server-only flag never leaks).
+
+### System Registries + Service catalogue — the kernel describes itself (2026-07-21)
+
+The brief's "System Registries" (~14) and "Backend Foundation" (~24 gateways) lists,
+materialised WITHOUT fabricating empty services — which would be the "products that
+were never built" failure one level up. Three code catalogues, each honest and
+enforced:
+
+- `lib/platform/registries.ts` — the Registry of Registries: every registry mapped to
+  its real source file with a status. `live` = a declared single-source list;
+  `partial` = a real convention/scattered source (design tokens in Tailwind,
+  permission predicates + RLS, notification types across the social layer);
+  nothing overstated.
+- `lib/platform/services.ts` — the Service Registry: each named gateway → the module
+  that provides the capability. In a modular monolith a "gateway" is a module, not a
+  process. The one genuinely-absent service — the event bus — is `planned`, not
+  implied. `release` points at the in-repo deploy config (`vercel.json`), executed by
+  Vercel/CI.
+- `lib/platform/events-registry.ts` — the Event Registry, now the SINGLE source of
+  `EventType`: `EVENTS as const satisfies readonly EventDef[]` preserves the literal
+  ids, and `lib/analytics/events.ts` re-exports the derived union, so a new event is
+  documented (label, domain, metadata contract) at the moment it's added and can't
+  drift from what `trackEvent` accepts.
+
+Surfaced at `/admin` → **Platform** (a read-only, zero-client-JS catalogue). Kept
+honest by `platform-catalog.test.ts`: every `live`/`partial` source must exist on
+disk, `planned` must not name one — the check has teeth (broken-fixture tests), and
+it already caught a `release` row that claimed `partial` with no source.
+
+**Verified:** tsc clean, lint clean, **676 tests** across 59 files, build green
+(`/admin` 22.2 kB, catalogue is server-rendered so ~0 client cost, all 217 pages
+still prerendered). The `platform` admin section is validated end-to-end by the
+Constitution gate (section ↔ panel ↔ icon).

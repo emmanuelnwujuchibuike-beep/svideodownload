@@ -114,6 +114,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "A/B tests and their live exposure split. Declared in code; paused and shipped from here.",
   },
   {
+    id: "platform",
+    label: "Platform",
+    category: "system",
+    icon: "Boxes",
+    blurb: "The Experience OS described by itself: every registry, service and event, mapped to real code.",
+  },
+  {
     id: "traffic",
     label: "Traffic",
     category: "system",

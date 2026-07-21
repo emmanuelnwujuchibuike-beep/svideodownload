@@ -34,6 +34,10 @@ import { getFlags } from "@/lib/platform/flags";
 import { getFlagOverrides } from "@/lib/platform/flags-store";
 import { getExperiments } from "@/lib/platform/experiments";
 import { getExperimentOverrides, getExperimentStats } from "@/lib/platform/experiments-store";
+import { PlatformCatalog } from "@/features/admin/platform-catalog";
+import { getRegistries } from "@/lib/platform/registries";
+import { getServices } from "@/lib/platform/services";
+import { getEvents } from "@/lib/platform/events-registry";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -240,6 +244,14 @@ export default async function AdminPage() {
             <Suspense fallback={<PanelSkeleton />}>
               <ExperimentsSection />
             </Suspense>
+          </AdminPanel>
+
+          <AdminPanel id="platform">
+            <PlatformCatalog
+              registries={getRegistries()}
+              services={getServices()}
+              events={getEvents()}
+            />
           </AdminPanel>
 
           <AdminPanel id="traffic">

@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  Boxes,
   CreditCard,
   DollarSign,
   Flag,
@@ -58,6 +59,7 @@ import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
   Activity,
+  Boxes,
   CreditCard,
   DollarSign,
   Flag,

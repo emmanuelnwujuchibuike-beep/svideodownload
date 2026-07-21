@@ -4,28 +4,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * Unified, fire-and-forget analytics. Every monetization subsystem funnels
  * through `trackEvent` (the `events` table) plus, where useful, a dedicated
  * counter table. Never throws, never blocks the request.
+ *
+ * `EventType` is the union of every event declared in the Event Registry
+ * (`lib/platform/events-registry.ts`) — the single source of truth. Adding an
+ * event there is what makes `trackEvent` accept it here.
  */
 
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
   !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-export type EventType =
-  | "download"
-  | "ad_impression"
-  | "ad_click"
-  | "affiliate_click"
-  | "subscribe"
-  | "subscribe_cancel"
-  | "api_call"
-  | "api_key_created"
-  | "upgrade_prompt_view"
-  | "pwa_install_prompt_shown"
-  | "pwa_install_accepted"
-  | "pwa_install_dismissed"
-  | "pwa_installed"
-  // Experiment platform: one row per enrolled exposure, metadata { experiment, variant }.
-  | "experiment_exposure";
+export type { EventType } from "@/lib/platform/events-registry";
+import type { EventType } from "@/lib/platform/events-registry";
 
 interface EventInput {
   userId?: string | null;

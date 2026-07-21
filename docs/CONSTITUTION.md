@@ -99,6 +99,18 @@ The kernel is deliberately dependency-light (types + pure predicates) so it impo
 safely into both Server Components (RBAC) and Client Components (nav) without pulling
 weight into any bundle.
 
+**The kernel describes itself.** The brief's "System Registries" and "Backend
+Foundation" lists are materialised as honest catalogues that point at real code:
+[registries.ts](../lib/platform/registries.ts) (the Registry of Registries — every
+registry → its source-of-truth file + status), [services.ts](../lib/platform/services.ts)
+(the Service Registry — every named gateway → the module that provides it), and
+[events-registry.ts](../lib/platform/events-registry.ts) (the Event Registry — the
+single source of `EventType`). They are **catalogues of what exists**, not new
+abstractions: a `live` entry must point at a file that exists, a genuinely-absent
+capability (the event bus) is marked `planned`, and `platform-catalog.test.ts`
+enforces both so the map can't drift into fiction. All three are surfaced at
+`/admin` → **Platform**.
+
 ---
 
 ## Article IV — The Module Contract

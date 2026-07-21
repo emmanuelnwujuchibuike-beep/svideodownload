@@ -48,13 +48,17 @@ function StoryRing({
       <button type="button" onClick={onOpen} className="flex w-[5.1rem] flex-col items-center gap-1.5">
         <span className={cn("rounded-full p-0.5", unseen ? "bg-brand" : "ring-1 ring-inset ring-border/70")}>
           <span className="block overflow-hidden rounded-full bg-background p-0.5">
-            {/* One <Image> for BOTH image stories and (since 0083) video
-                stories, via the stored first-frame poster. A video cover used to
-                render a raw <video preload="metadata"> here, which re-downloaded
-                MP4 data on every mount to paint 68px — the actual cause of "the
-                stories section loads for seconds on every entrance" (owner,
-                reported 3x). next/image serves a ~1-3KB AVIF from the CDN
-                instead, and it comes out of the image cache on remount. */}
+            {/* One <Image> for BOTH image stories and video stories (via the
+                stored first-frame poster, 0083). `bg-secondary` paints a neutral
+                fill the instant the ring mounts, so a video story's cover never
+                sits empty-white while next/image decodes — it reads as instant,
+                exactly like a photo story (owner, 2026-07-21: "video stories take
+                time to show the thumbnail … make it show instant like a picture").
+                We deliberately NEVER stream the MP4 to paint this 68px circle: the
+                old `<video preload="metadata">` fallback for a missing poster
+                downloaded real video data just for the thumbnail — the "loads
+                slow / is large" the owner saw. A video story with no poster now
+                falls straight through to the author's avatar (instant). */}
             {coverImage ? (
               <Image
                 src={coverImage}
@@ -62,16 +66,10 @@ function StoryRing({
                 width={68}
                 height={68}
                 unoptimized={false}
-                className="h-[4.25rem] w-[4.25rem] rounded-full object-cover"
+                className="h-[4.25rem] w-[4.25rem] rounded-full bg-secondary object-cover"
               />
-            ) : cover?.mediaKind === "video" ? (
-              // Legacy fallback: a video story posted before 0083 has no stored
-              // poster. Stories expire after 24h, so this branch empties itself
-              // within a day of the migration and isn't worth a backfill.
-              // eslint-disable-next-line jsx-a11y/media-has-caption
-              <video src={`${cover.mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
             ) : group.avatarUrl ? (
-              <Image src={group.avatarUrl} alt="" width={68} height={68} className="h-[4.25rem] w-[4.25rem] rounded-full object-cover" />
+              <Image src={group.avatarUrl} alt="" width={68} height={68} className="h-[4.25rem] w-[4.25rem] rounded-full bg-secondary object-cover" />
             ) : (
               <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold text-white">
                 {group.displayName.charAt(0).toUpperCase()}

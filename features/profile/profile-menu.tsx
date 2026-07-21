@@ -128,7 +128,7 @@ export function ProfileMenu() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Menu"
-        className="fixed right-3 top-3 z-[60] flex h-10 w-10 items-center justify-center rounded-xl bg-background/70 text-foreground ring-1 ring-inset ring-border/60 backdrop-blur-xl transition hover:bg-secondary lg:hidden"
+        className="fixed right-3 top-[calc(0.75rem+var(--frenz-safe-top))] z-[60] flex h-10 w-10 items-center justify-center rounded-xl bg-background/70 text-foreground ring-1 ring-inset ring-border/60 backdrop-blur-xl transition hover:bg-secondary lg:hidden"
       >
         <LayoutGrid className="h-[18px] w-[18px]" />
       </button>

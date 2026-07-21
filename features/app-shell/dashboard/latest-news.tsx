@@ -84,7 +84,7 @@ function NewsViewer({ item, onClose }: { item: NewsItem; onClose: () => void }) 
 
   return (
     <div className="fixed inset-0 z-[92] flex flex-col bg-black/95 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={item.title}>
-      <button type="button" onClick={onClose} aria-label="Close" className="fixed left-4 top-4 z-10 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20">
+      <button type="button" onClick={onClose} aria-label="Close" className="fixed left-4 top-[calc(1rem+var(--frenz-safe-top))] z-10 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20">
         <X className="h-4 w-4" /> Close
       </button>
       <div className="flex min-h-0 flex-1 items-center justify-center p-4">

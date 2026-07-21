@@ -141,7 +141,7 @@ export default async function ProfilePage({
       {/* Mobile top bar — desktop uses the app shell's sidebar + top bar */}
       <SiteHeader social desktopHidden />
       {/* Add friends — single top-level icon (mobile only; desktop uses the top bar) */}
-      <SuggestionsLauncher className="fixed left-3 top-3 z-[60] bg-background/70 backdrop-blur-xl lg:hidden" />
+      <SuggestionsLauncher className="fixed left-3 top-[calc(0.75rem+var(--frenz-safe-top))] z-[60] bg-background/70 backdrop-blur-xl lg:hidden" />
       <main className="pb-24 pt-14 sm:pt-16 lg:pt-4">
         <div className="mx-auto flex w-full max-w-6xl gap-6">
           <div className="mx-auto min-w-0 max-w-4xl flex-1 sm:px-4">

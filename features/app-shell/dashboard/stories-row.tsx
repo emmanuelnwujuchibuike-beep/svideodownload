@@ -332,7 +332,7 @@ export function StoryViewer({
 
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/95" role="dialog" aria-modal="true">
-      <div className="absolute right-4 top-5 z-20 flex items-center gap-2">
+      <div className="absolute right-4 top-[calc(1.25rem+var(--frenz-safe-top))] z-20 flex items-center gap-2">
         {/* Author: turn resharing on/off for THIS story. Viewer: reshare it —
             but only when the author allows it (owner, 2026-07-16). The row is
             hidden rather than disabled when it's off: a greyed-out "Reshare"
@@ -373,7 +373,7 @@ export function StoryViewer({
       ) : null}
 
       {/* progress segments (current user's stories) */}
-      <div className="absolute inset-x-3 top-3 z-20 flex gap-1">
+      <div className="absolute inset-x-3 top-[calc(0.75rem+var(--frenz-safe-top))] z-20 flex gap-1">
         {group.stories.map((_, idx) => (
           <span key={idx} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
             <span className="block h-full rounded-full bg-white" style={{ width: `${idx < si ? 100 : idx === si ? pct : 0}%` }} />
@@ -382,7 +382,7 @@ export function StoryViewer({
       </div>
 
       {/* author */}
-      <div className="absolute left-4 top-7 z-20 flex items-center gap-2 text-white">
+      <div className="absolute left-4 top-[calc(1.75rem+var(--frenz-safe-top))] z-20 flex items-center gap-2 text-white">
         {group.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={group.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover ring-1 ring-white/30" />

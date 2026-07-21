@@ -2841,3 +2841,19 @@ still have teeth?" discipline. It does **not** duplicate proving-routes
 production builds green (`/api/admin/flags` and `/api/admin/experiments`
 registered, `server-only` store boundaries held, all 217 pages generated).
 Migrations 0091 + 0092 applied by the owner.
+
+### Client-readable flags — the missing half (follow-up, same day)
+
+Flags initially resolved server-only, which meant they could gate a dynamic
+server surface but NOT the static/PWA client surface that is most of this app —
+the exact reason the assistant-widget flag stayed unwired. Closed by a small
+opt-in client path: a `clientReadable` allow-list field on a flag, a public
+`GET /api/flags` that returns ONLY the resolved boolean of allow-listed flags for
+the caller's own context (anon = CDN-cacheable; signed-in = `private, no-store`;
+never the rollout %, override, or another user's assignment), and a `useFlag()`
+hook. The fetch is **lazy and memoised** — a page with no flag consumer makes no
+request, and N consumers share one — so it adds nothing to the hot path of pages
+that don't use it, and the root layout stays static. The assistant widget's
+re-mount is still a separate product call, but the read path it needs now exists
+and is exercised. Verified: 217 pages still prerendered, `/api/flags` dynamic,
+23 flag tests (incl. an allow-list guard that a server-only flag never leaks).

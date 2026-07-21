@@ -5,6 +5,8 @@ import {
   bucketOf,
   type FeatureFlag,
   type FlagContext,
+  getClientReadableFlags,
+  getFlags,
   resolveFlag,
 } from "./flags";
 
@@ -110,6 +112,24 @@ describe("resolveFlag — admin preview", () => {
     // kill switch is read, so a preview admin sees ON. This documents that a kill
     // switch does NOT suppress an adminBypass preview — use plan gating for that.
     expect(resolveFlag(flag({ adminBypass: true }), { enabled: false }, admin)).toBe(true);
+  });
+});
+
+describe("getClientReadableFlags — the exposure allow-list", () => {
+  it("returns only flags marked clientReadable, all of them declared", () => {
+    const all = getFlags();
+    const exposed = getClientReadableFlags();
+    for (const f of exposed) {
+      expect(f.clientReadable, `${f.id} is exposed to the client but not marked clientReadable`).toBe(true);
+      expect(all).toContain(f);
+    }
+  });
+  it("never exposes a server-only flag", () => {
+    for (const f of getFlags()) {
+      if (!f.clientReadable) {
+        expect(getClientReadableFlags(), `${f.id} leaked to the client`).not.toContain(f);
+      }
+    }
   });
 });
 

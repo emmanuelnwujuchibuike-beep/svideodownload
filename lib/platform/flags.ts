@@ -78,6 +78,14 @@ export interface FeatureFlag {
    * so operators can preview a flag before ramping it. Does not affect other users.
    */
   adminBypass?: boolean;
+  /**
+   * May this flag's *resolved boolean* be read on the client, via `GET /api/flags`
+   * + `useFlag()`? Default false ⇒ server-only. Set true for flags that gate a
+   * client island or a statically-generated page (the root layout can't read a
+   * runtime flag without un-static-ing every route). Only the boolean is exposed —
+   * never the rollout %, the override, or another user's assignment.
+   */
+  clientReadable?: boolean;
   /** Where this flag is read. Free text for humans; "pending" until wired. */
   consumer: string;
 }
@@ -93,10 +101,12 @@ export const FLAGS: FeatureFlag[] = [
     category: "product",
     defaultEnabled: false,
     adminBypass: true,
-    // Honest: the consumer re-mount is a follow-up. The flag + admin control +
-    // resolver are real now; wiring layout.tsx to read it is the next step and is
-    // intentionally NOT bundled here (it touches the root layout / 2s budget).
-    consumer: "pending — app/layout.tsx assistant mount",
+    // Client-readable so a client island can gate on it via useFlag() without the
+    // static root layout ever reading a runtime flag. The widget re-mount itself
+    // stays a deliberate follow-up (a product call about a parked feature), but the
+    // read path it would use now exists and is exercised by /api/flags.
+    clientReadable: true,
+    consumer: "client via useFlag('smart-assistant-widget') — widget re-mount pending",
   },
 ];
 
@@ -163,6 +173,14 @@ export function resolveFlag(
 /** All declared flags, in declaration order. */
 export function getFlags(): FeatureFlag[] {
   return FLAGS;
+}
+
+/**
+ * Flags whose resolved boolean may be exposed to the client (`GET /api/flags`).
+ * The allow-list that keeps operational/server-only flags off the wire.
+ */
+export function getClientReadableFlags(): FeatureFlag[] {
+  return FLAGS.filter((f) => f.clientReadable);
 }
 
 /** A flag by its stable id, or undefined. */

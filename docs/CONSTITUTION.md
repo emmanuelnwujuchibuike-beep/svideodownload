@@ -75,7 +75,7 @@ apps because these are singular, not per-product. Each maps to a real owner toda
 | Observability | [lib/observability/*](../lib/observability/diagnostics.ts) (diagnostics, memory-pressure, log-error) | ✅ |
 | Localization | `lib/i18n/*` (load-bearing; export/import pipeline) | ✅ coverage measured, never declared |
 | Payments / entitlements | `lib/paystack/*`, `lib/monetization/*`, `app/api/billing` | ✅ one subscription unlocks Pro everywhere |
-| Feature flags / runtime config | [lib/platform/flags.ts](../lib/platform/flags.ts) + `flags-store.ts`, migration `0091_feature_flags.sql`, admin "Feature flags" section | ✅ declared in code, state in DB; kill switch + % rollout + plan gate; 0 client cost when off |
+| Feature flags / runtime config | [lib/platform/flags.ts](../lib/platform/flags.ts) + `flags-store.ts`, migration `0091_feature_flags.sql`, admin "Feature flags" section | ✅ declared in code, state in DB; kill switch + % rollout + plan gate; 0 client cost when off. **Client-readable** via `GET /api/flags` + `useFlag()` (opt-in, so no per-page cost until a component reads a flag) |
 | Experiments (A/B) | [lib/platform/experiments.ts](../lib/platform/experiments.ts) + `experiments-store.ts`, migration `0092_experiments.sql`, admin "Experiments" section | ✅ deterministic assignment (reuses `bucketOf`); exposure logged through the unified `events` pipeline; pause + ship-the-winner overrides |
 | Audit log | migration `0053_security_audit_log.sql` | ✅ |
 | Developer platform / API | `lib/sdk/*`, `app/api/v1`, `app/api/keys` | ✅ |

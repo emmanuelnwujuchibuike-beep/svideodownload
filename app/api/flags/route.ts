@@ -35,9 +35,15 @@ export async function GET() {
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getUser() can reject on a malformed/expired cookie (a documented failure class
+  // in this codebase). A flag read must degrade to anonymous, never 500.
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    user = null;
+  }
 
   let ctx: FlagContext;
   if (!user) {
@@ -62,6 +68,12 @@ export async function GET() {
     { flags: resolved },
     {
       headers: {
+        // The resolved flags depend on the auth cookie, so any shared cache MUST
+        // key on it — without this a CDN (Cloudflare fronts Vercel here) could hand
+        // a signed-in user an anon-cached result, or the reverse. With Vary:Cookie,
+        // cookieless anon requests still share one edge entry (the win on the static
+        // surface) while authenticated requests miss and go to origin.
+        Vary: "Cookie",
         "Cache-Control": user
           ? "private, no-store"
           : "public, s-maxage=60, stale-while-revalidate=300",

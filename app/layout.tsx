@@ -83,7 +83,24 @@ export const metadata: Metadata = {
   // Home-screen install identity (iOS). With app/manifest.ts + app/apple-icon.png
   // this is what makes "Add to Home Screen" produce a real standalone app — the
   // prerequisite for Web Push on iPhone/iPad (Safari 16.4+).
-  appleWebApp: { capable: true, title: "Frenz", statusBarStyle: "black-translucent" },
+  //
+  // statusBarStyle: "default" — CHANGED from "black-translucent" (owner,
+  // 2026-07-21: "the display on the pwa is going too much up … the current iOS
+  // already supports edge-to-edge native feel so what we tried now compressed at
+  // the top, all the pages"). `black-translucent` forces the web view to draw
+  // UNDER the status bar and makes every page responsible for padding itself back
+  // down by `env(safe-area-inset-top)`. On current iOS that inset was collapsing/
+  // inconsistent, so content jammed up under the clock/battery on EVERY page at
+  // once — one global cause, not a per-page bug. "default" hands the status-bar
+  // area back to iOS: it reserves it natively (the "native edge-to-edge feel" the
+  // owner is describing), positions our content cleanly below it, and makes
+  // `env(safe-area-inset-top)` resolve to 0 in standalone — so every existing
+  // `pt-[env(safe-area-inset-top)]` in the app becomes a harmless no-op rather
+  // than a value that can collapse. The bottom home-indicator inset
+  // (`env(safe-area-inset-bottom)`, used by the mobile nav) is unaffected —
+  // viewport-fit=cover still extends the view to the bottom edge. A normal
+  // browser tab was already 0 on top, so nothing changes there.
+  appleWebApp: { capable: true, title: "Frenz", statusBarStyle: "default" },
   // iOS auto-links number-shaped text (phone numbers, dates, addresses,
   // emails) into tap-to-call/tap-to-mail chips — undesirable inside feed/
   // profile/comment text that isn't actually contact info.
@@ -103,11 +120,12 @@ export const viewport: Viewport = {
   // across the whole app, including the admin pages.
   maximumScale: 1,
   userScalable: false,
-  // Edge-to-edge in the installed app: with statusBarStyle black-translucent
-  // this lets reels/photos draw UNDER the clock/battery/notch (TikTok-style
-  // full bleed). It's also what makes env(safe-area-inset-*) return real
-  // values — without it iOS letterboxes below the status bar and every
-  // safe-area padding in the app evaluates to zero.
+  // Edge-to-edge in the installed app. With statusBarStyle "default" (see
+  // appleWebApp above) iOS reserves the STATUS BAR natively, so the top inset is
+  // handled for us; `cover` is what still extends the view into the BOTTOM
+  // home-indicator area (and the side notches in landscape), which is what keeps
+  // `env(safe-area-inset-bottom)` returning the real value the mobile nav pads
+  // against. Without it iOS would letterbox the bottom inset to zero too.
   viewportFit: "cover",
   // Standards-based fix for "the keyboard covers the fixed bottom nav /
   // composer" (iOS 17.4+, Chrome 108+): makes the LAYOUT viewport itself

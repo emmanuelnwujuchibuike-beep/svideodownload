@@ -5,6 +5,12 @@ import { useEffect, useState } from "react";
 import { isStandalone } from "@/lib/pwa/platform";
 
 /**
+ * RETIRED 2026-07-21 — no longer rendered (removed from app/(app)/layout.tsx).
+ * The app moved from `black-translucent` to native status-bar inset
+ * (statusBarStyle "default", app/layout.tsx), so iOS owns the status-bar strip
+ * and this scrim is unnecessary. Kept as a one-import restore path if the app
+ * ever goes back to drawing under a translucent status bar.
+ *
  * iOS platform constraint, not a bug in our CSS: `apple-mobile-web-app-
  * status-bar-style: black-translucent` (app/layout.tsx) is what lets reels/
  * photos draw edge-to-edge under the Dynamic Island/notch — the only

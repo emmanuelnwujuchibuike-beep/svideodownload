@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { AppOverlays } from "@/features/app-shell/app-overlays";
 import { EdgeSwipeBack } from "@/features/app-shell/edge-swipe-back";
 import { OfflineBanner } from "@/features/app-shell/offline-banner";
-import { StatusBarScrim } from "@/features/app-shell/status-bar-scrim";
 import { ScrollPerfMonitor } from "@/features/perf/scroll-perf-monitor";
 import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
@@ -53,7 +52,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         gated on bandwidth and main-thread work, so chrome that cannot act is
         pure cost there.
       */}
-      <StatusBarScrim />
+      {/* StatusBarScrim retired 2026-07-21: it existed only to soften
+          black-translucent's always-white status-bar icons over a light top.
+          The app now uses native status-bar inset (statusBarStyle "default", see
+          app/layout.tsx) — iOS owns that strip, so a scrim over it is at best a
+          no-op and at worst darkens the top of real content. */}
       <EdgeSwipeBack />
       <OfflineBanner />
       <ScrollPerfMonitor />

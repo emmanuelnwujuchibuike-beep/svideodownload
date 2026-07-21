@@ -46,7 +46,7 @@ export const REGISTRIES: RegistryDef[] = [
   { id: "search", name: "Search Registry", governs: "The cross-surface search index.", source: "lib/search/index.ts", status: "live" },
   { id: "design-tokens", name: "Design Token Registry", governs: "Colours, spacing, type — one token set for the whole app.", source: "tailwind.config.ts", status: "partial", note: "Tokens live in the Tailwind config (guarded by lib/design-tokens.test.ts), not a bespoke registry." },
   { id: "permissions", name: "Permission Registry", governs: "Access predicates at the module boundary + per-row RLS.", source: "lib/platform/module-registry.ts", status: "partial", note: "Predicates (everyone/proOnly/businessOnly/adminOnly) + RLS policies, not one central list." },
-  { id: "notifications", name: "Notification Registry", governs: "Notification kinds and their delivery/settings.", source: "lib/social/notification-sound-prefs.ts", status: "partial", note: "Types are defined across the social layer + migrations, not one declared registry yet." },
+  { id: "notifications", name: "Notification Registry", governs: "Every notification type, its category, grouping and badge rule.", source: "lib/platform/notifications-registry.ts", status: "live" },
   { id: "api", name: "API Registry", governs: "The public developer API surface.", source: "lib/sdk/index.ts", status: "partial", note: "SDK types + app/api/v1 routes; not a single machine-readable manifest yet." },
   { id: "ai-capability", name: "AI Capability Registry", governs: "The assistant's knowledge and capabilities.", source: "lib/assistant/knowledge.ts", status: "partial", note: "Knowledge base exists; a formal capability manifest does not." },
 ];

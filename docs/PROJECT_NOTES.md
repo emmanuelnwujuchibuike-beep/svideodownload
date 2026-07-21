@@ -2890,3 +2890,39 @@ it already caught a `release` row that claimed `partial` with no source.
 (`/admin` 22.2 kB, catalogue is server-rendered so ~0 client cost, all 217 pages
 still prerendered). The `platform` admin section is validated end-to-end by the
 Constitution gate (section ↔ panel ↔ icon).
+
+### Notification Registry (partial → live) + Governance manifest (2026-07-21)
+
+Two more parts of the brief, real not fabricated.
+
+**Notification Registry** — the `partial` notifications entry upgraded to `live`.
+Notification behaviour used to live in FOUR parallel structures in
+`lib/social/notifications.ts` (a 53-member `NotificationType` union, a
+`CATEGORY_BY_TYPE` map, three grouping `Set`s, a badge-exclusion list). Consolidated
+into one declared `lib/platform/notifications-registry.ts`; the union, the category
+map, the grouping sets and the badge rule are all DERIVED from it, and
+`notifications.ts` re-exports them so **no caller changed**. Behaviour preserved
+exactly and pinned by tests, including the two previously-implicit quirks now made
+explicit fields: `system`/`admin_broadcast` are `categoryMutable:false` (muting a
+category never hid them — they were just omitted from the old map), and
+`message`/`message_reaction` are `countsToBadge:false`. Type gotcha: `as const
+satisfies` narrows each entry, so optional fields are read through `NotificationDef`.
+
+**Governance manifest** — the brief's "Engineering Intelligence" / Development
+Workflow / Code Review Standards, made real as data. `lib/platform/governance.ts`
+declares every mandatory gate → the thing that enforces it, with an honest kind:
+`test`/`command`/`config` = automated (a check that fails), `manual` = a required
+review, `planned` = a standard we hold but haven't automated (E2E, tracing, DORA
+metrics — named, never faked). `governance.test.ts` asserts every automated gate
+points at a real test file, a real npm script, or a real config path (it validated
+`.eslintrc.json`, `docs/SECURITY.md`, `lib/rate-limit.ts`, etc. all exist). Surfaced
+as a fourth card in `/admin` → Platform.
+
+The Constitution grew Articles VII–XIII: the AI Development Framework (reuse-first,
+register, never fabricate), architecture/domain/testing/change-management governance,
+and Engineering Intelligence (the manifest is the machine-readable form of the doc —
+"are we following our own rules?" is now a query, asserted by `governance.test.ts`).
+
+**Verified:** tsc clean, lint clean, **687 tests** across 61 files, build compiled
+clean. The notification refactor left `notification-settings.test.ts` green
+(behaviour unchanged), and the Constitution gate validates the enlarged catalogue.

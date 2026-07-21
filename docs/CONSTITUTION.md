@@ -165,7 +165,77 @@ until it appears above the ledger with a proving route (Invariant I.3).
 
 ---
 
-## Article VII — Amendment
+## Article VII — The AI Development Framework
+
+This document is written partly for a non-human contributor. Every contributor —
+human or AI assistant — follows the same loop, and an AI assistant is held to it
+*more* strictly, because it is faster at producing plausible duplication.
+
+1. **Understand the architecture first.** Read the codebase before designing. On this
+   project the recurring, expensive mistake is rebuilding what exists under another
+   name (~27 of 43 "new" services already existed once).
+2. **Reuse before you create** — a component, API route, hook, utility, design token,
+   or database model. Search first; duplicate only with a stated justification.
+3. **If a dependency is missing, complete it:** design → implement → test → document →
+   **register** → integrate. "Register" is literal — it means an entry in the relevant
+   registry (Article III), so the platform knows the thing exists.
+4. **Flag concerns alongside delivery**, never instead of it, and never fabricate to
+   fill a gap — a `planned` marker is always better than a fake.
+
+The registries and the governance manifest exist so that steps 2 and 3 are checkable,
+not aspirational.
+
+## Article VIII — Architecture Governance
+
+One deployable, strictly isolated modules (a modular monolith with a clean per-module
+exit path — [ARCHITECTURE.md](./ARCHITECTURE.md)). Mandatory: API-first,
+component-first, modular, loosely coupled, strong cohesion, single responsibility,
+progressive enhancement, graceful degradation, version-aware evolution. Shared platform
+services (Article II) are **used, never forked**; the dependency arrow is modules → core.
+
+## Article IX — Domain Governance
+
+Each rule below is a row in the governance manifest ([lib/platform/governance.ts](../lib/platform/governance.ts)).
+
+- **Backend:** clear service ownership; `zod` at every external input; RLS per row;
+  rate limiting on mutations and the public API; audit logging of sensitive actions;
+  health checks. See [SECURITY.md](./SECURITY.md).
+- **Frontend:** one design system (no per-module token fork); component reuse;
+  accessibility by default (app-wide reduced-motion baseline); responsive; offline-aware
+  (PWA); localized (i18n catalogue).
+- **Database:** a new table ships its RLS policies in the *same* migration; indexes for
+  hot reads; soft-delete/audit where retention matters. No raw SQL; parameterised RPC only.
+- **API:** versioned (`/api/v1`); authenticated + authorized; validated; rate-limited;
+  consistent response shapes; documented in the API Registry.
+
+## Article X — Testing & Documentation Governance
+
+Pure logic is unit-tested, and **a new guard must be shown able to fail** (the teeth
+discipline — see the reality-ledger and platform-catalog suites). `tsc` + lint + tests +
+build are necessary, never sufficient (Invariant I.6): UI needs visual/behavioural
+verification, error codes need a real request. Every subsystem ships a doc; durable
+records mirror to [PROJECT_NOTES.md](./PROJECT_NOTES.md). End-to-end tests, automated
+accessibility and performance testing, and tracing are **standards we hold but have not
+fully automated** — marked `planned` in the manifest, not claimed as done.
+
+## Article XI — Change Management & Observability
+
+Risky changes ship behind a **feature flag** (kill switch + rollout, Article II);
+product bets are **A/B tested** with logged exposures; both are built and real. Errors
+are captured through the observability layer, never silently swallowed. Distributed
+tracing and DORA-style engineering metrics (deploy frequency, lead time, change-fail
+rate) are `planned` — named here so they are tracked, not implied as existing.
+
+## Article XII — Engineering Intelligence
+
+The governance manifest ([lib/platform/governance.ts](../lib/platform/governance.ts)) is
+the **machine-readable form of this Constitution**: every standard → the thing that
+enforces it, with an honest `automated` / `manual` / `planned` status, surfaced at
+`/admin` → **Platform** and asserted by `governance.test.ts`. "Are we following our own
+rules?" is therefore a query with a definite answer, not a matter of memory or vibe —
+which is the entire point, on a project whose scar tissue is what "we'll remember" costs.
+
+## Article XIII — Amendment
 
 This document changes by pull request, like code. An amendment must: (a) name the
 invariant or article it touches, (b) name the enforcer that keeps it true, and (c) if

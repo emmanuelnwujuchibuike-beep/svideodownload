@@ -38,6 +38,7 @@ import { PlatformCatalog } from "@/features/admin/platform-catalog";
 import { getRegistries } from "@/lib/platform/registries";
 import { getServices } from "@/lib/platform/services";
 import { getEvents } from "@/lib/platform/events-registry";
+import { getGates } from "@/lib/platform/governance";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -251,6 +252,7 @@ export default async function AdminPage() {
               registries={getRegistries()}
               services={getServices()}
               events={getEvents()}
+              gates={getGates()}
             />
           </AdminPanel>
 

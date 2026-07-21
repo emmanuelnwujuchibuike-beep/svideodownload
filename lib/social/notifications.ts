@@ -5,133 +5,23 @@ const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 /**
- * Notification types the app can store. Kept in sync with the DB check constraint
- * (migration 0018). New product areas add types here + a category mapping below.
+ * Notification types, categories, the category map, the grouping rules and the
+ * badge-exclusion list are all declared in the Notification Registry
+ * (`lib/platform/notifications-registry.ts`) — the single source. Imported for
+ * local use and re-exported so every existing importer of these names is unchanged.
+ * The DB-side `type` check constraint (migrations 0018/0059) mirrors the registry.
  */
-export type NotificationType =
-  | "follow"
-  | "like"
-  | "love"
-  | "comment"
-  | "reply"
-  | "mention"
-  | "tag"
-  | "quote"
-  | "repost"
-  | "repost_engagement"
-  /** Someone reshared media you published (a story of yours, or media you
-   *  sent them in chat) out to their own feed/reel/story. */
-  | "reshare"
-  | "comment_reaction"
-  | "share"
-  | "save"
-  | "profile_view"
-  | "invite"
-  | "milestone"
-  | "friend_request"
-  | "friend_accepted"
-  | "friend_reminder"
-  | "message"
-  | "message_reaction"
-  | "message_mention"
-  | "download_complete"
-  | "download_failed"
-  | "download_ready"
-  | "processing_finished"
-  | "community_invite"
-  | "community_accepted"
-  | "community_announcement"
-  | "community_event"
-  | "news_breaking"
-  | "news_trending"
-  | "news_following"
-  | "news_recommended"
-  | "subscription_activated"
-  | "payment_successful"
-  | "renewal_reminder"
-  | "premium_expiring"
-  | "security_login"
-  | "security_new_device"
-  | "security_password"
-  | "security_2fa"
-  | "security_suspicious"
-  | "security_recovery"
-  | "security_2fa_disabled"
-  | "security_recovery_used"
-  | "security_passkey_enrolled"
-  | "security_passkey_removed"
-  | "system"
-  | "admin_broadcast"
-  | "post_under_review"
-  | "moderation_appeal_resolved";
+import {
+  badgeExcludedTypes,
+  CATEGORY_BY_TYPE,
+  categoryForType,
+  type NotificationCategory,
+  type NotificationType,
+  typesGroupedBy,
+} from "@/lib/platform/notifications-registry";
 
-/** Notification Center tab categories. */
-export type NotificationCategory =
-  | "social"
-  | "downloads"
-  | "community"
-  | "news"
-  | "premium"
-  | "security"
-  | "system";
-
-export const CATEGORY_BY_TYPE: Partial<Record<NotificationType, NotificationCategory>> = {
-  follow: "social",
-  like: "social",
-  love: "social",
-  comment: "social",
-  reply: "social",
-  mention: "social",
-  tag: "social",
-  quote: "social",
-  repost: "social",
-  repost_engagement: "social",
-  reshare: "social",
-  comment_reaction: "social",
-  share: "social",
-  save: "social",
-  profile_view: "social",
-  invite: "social",
-  milestone: "social",
-  friend_request: "social",
-  friend_accepted: "social",
-  friend_reminder: "social",
-  message: "social",
-  message_reaction: "social",
-  message_mention: "social",
-  download_complete: "downloads",
-  download_failed: "downloads",
-  download_ready: "downloads",
-  processing_finished: "downloads",
-  community_invite: "community",
-  community_accepted: "community",
-  community_announcement: "community",
-  community_event: "community",
-  news_breaking: "news",
-  news_trending: "news",
-  news_following: "news",
-  news_recommended: "news",
-  subscription_activated: "premium",
-  payment_successful: "premium",
-  renewal_reminder: "premium",
-  premium_expiring: "premium",
-  security_login: "security",
-  security_new_device: "security",
-  security_password: "security",
-  security_2fa: "security",
-  security_suspicious: "security",
-  security_recovery: "security",
-  security_2fa_disabled: "security",
-  security_recovery_used: "security",
-  security_passkey_enrolled: "security",
-  security_passkey_removed: "security",
-  post_under_review: "system",
-  moderation_appeal_resolved: "system",
-};
-
-export function categoryForType(type: NotificationType): NotificationCategory {
-  return CATEGORY_BY_TYPE[type] ?? "system";
-}
+export { CATEGORY_BY_TYPE, categoryForType };
+export type { NotificationCategory, NotificationType };
 
 export interface NotificationActor {
   /** The actor's user id — powers direct actions on a notification card
@@ -164,7 +54,7 @@ interface Row {
 }
 
 /** Message notifications aren't deduped in the DB (every send is a genuine new event — see 0042's own comment); the bell's numeric badge excludes them so a chat burst doesn't drown out real social notifications, while the dropdown LIST still shows them (see notification-bell.tsx). */
-const MESSAGE_TYPES: NotificationType[] = ["message", "message_reaction"];
+const MESSAGE_TYPES: NotificationType[] = badgeExcludedTypes();
 
 export interface NotificationsResult {
   items: NotificationItem[];
@@ -278,9 +168,9 @@ export interface GroupedNotificationsResult {
 // Post-scoped actions collapse per post; relationship signals collapse together;
 // message notifications collapse per conversation (many new messages from the
 // same thread → one card, "Sam sent you 5 messages", not five separate rows).
-const GROUP_BY_POST = new Set<NotificationType>(["like", "love", "comment", "reply", "mention", "comment_reaction", "save", "repost", "repost_engagement", "share", "quote"]);
-const GROUP_TOGETHER = new Set<NotificationType>(["follow", "profile_view"]);
-const GROUP_BY_CONVERSATION = new Set<NotificationType>(["message", "message_reaction", "message_mention"]);
+const GROUP_BY_POST = new Set<NotificationType>(typesGroupedBy("post"));
+const GROUP_TOGETHER = new Set<NotificationType>(typesGroupedBy("together"));
+const GROUP_BY_CONVERSATION = new Set<NotificationType>(typesGroupedBy("conversation"));
 
 function groupKey(it: NotificationItem): string {
   if (GROUP_BY_POST.has(it.type) && it.postId) return `${it.type}:${it.postId}`;

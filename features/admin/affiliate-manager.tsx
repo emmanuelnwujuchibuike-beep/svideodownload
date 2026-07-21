@@ -338,7 +338,7 @@ function AffiliateForm({
         </button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className={label}>Name *</label>
           <input className={input} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Bluehost" />

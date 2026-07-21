@@ -57,7 +57,7 @@ export function PricingEditor({ pricing }: { pricing: Pricing }) {
         amount actually charged is set on your Paystack plan — keep them matched.
       </p>
 
-      <form onSubmit={save} className="grid gap-5 sm:grid-cols-2">
+      <form onSubmit={save} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <TierFields label="Pro" tier={pro} onChange={setPro} />
         <TierFields label="Business" tier={business} onChange={setBusiness} />
         <div className="sm:col-span-2">

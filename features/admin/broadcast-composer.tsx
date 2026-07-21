@@ -62,7 +62,7 @@ export function BroadcastComposer({ initialBroadcasts }: { initialBroadcasts: Br
         notification.
       </p>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className={label}>Title</label>
           <input className={input} value={title} onChange={(e) => setTitle(e.target.value.slice(0, 120))} placeholder="Scheduled maintenance tonight" />

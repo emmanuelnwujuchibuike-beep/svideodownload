@@ -396,7 +396,11 @@ export function StoryViewer({
       <button type="button" aria-label="Previous" onClick={prev} className="absolute inset-y-0 left-0 z-10 w-1/3" />
       <button type="button" aria-label="Next" onClick={next} className="absolute inset-y-0 left-1/3 right-0 z-10" />
 
-      <div className="max-h-[92vh] w-full max-w-md px-2">
+      {/* Full-screen media — edge-to-edge (Instagram/Snapchat style), behind the
+          tap zones and chrome. object-cover fills the whole screen so a story
+          reaches every edge (owner, 2026-07-21) instead of sitting in a centered
+          rounded card with black margins. */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         {story.mediaKind === "video" ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video
@@ -414,14 +418,18 @@ export function StoryViewer({
               if (v.duration) setPct((v.currentTime / v.duration) * 100);
             }}
             onEnded={next}
-            className="max-h-[92vh] w-full rounded-2xl object-contain"
+            className="h-full w-full object-cover"
           />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={`${gi}-${si}`} src={story.mediaUrl} alt="" className="max-h-[92vh] w-full rounded-2xl object-contain" />
+          <img key={`${gi}-${si}`} src={story.mediaUrl} alt="" className="h-full w-full object-cover" />
         )}
-        {story.caption ? <p className="pointer-events-none mt-3 text-center text-sm text-white/90">{story.caption}</p> : null}
       </div>
+      {story.caption ? (
+        <p className="pointer-events-none absolute inset-x-0 bottom-28 z-[15] px-6 text-center text-sm text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
+          {story.caption}
+        </p>
+      ) : null}
 
       {/* Reply bar — text, emojis & stickers (delivered as a DM) */}
       {isOwn ? null : (

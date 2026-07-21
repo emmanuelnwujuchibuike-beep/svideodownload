@@ -5,6 +5,7 @@ import { useEffect } from "react";
 
 import { isCriticalActivityInProgress, onCriticalActivityIdle } from "@/lib/pwa/activity-lock";
 import { BAKED_APP_BUILD, fetchServerBuild } from "@/lib/pwa/app-version";
+import { isStandalone } from "@/lib/pwa/platform";
 
 /** Reloads now, or — if a critical section (e.g. an in-flight upload) is
  * open — waits for it to end first. Never skips the reload outright, since
@@ -95,6 +96,15 @@ async function reloadIfNewDeploy() {
 
 export function RegisterServiceWorker() {
   const router = useRouter();
+
+  // Belt-and-braces standalone flag for the top safe-area inset (--frenz-safe-top,
+  // globals.css floors + a small gap on `.pwa-standalone`). The inline <head>
+  // script in app/layout.tsx sets this before first paint; re-affirming it here
+  // after hydration covers the case where that script didn't run, so the
+  // installed app's buttons/logos always clear the status bar.
+  useEffect(() => {
+    if (isStandalone()) document.documentElement.classList.add("pwa-standalone");
+  }, []);
 
   // Tapping a notification with the app already open hands the destination
   // URL back here (public/sw/push.js's notificationclick handler) instead of

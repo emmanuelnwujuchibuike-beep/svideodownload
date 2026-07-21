@@ -325,6 +325,11 @@
   :root {
     --frenz-safe-top: env(safe-area-inset-top);
   }
+  /* Installed app: the real inset (which DOES work on the owner's device, ~59px
+     on a Dynamic Island — the /messages chrome sits right with it) floored at
+     44px only for an OS that reports 0. No extra gap: /messages already reads
+     correct at the raw inset, so matching it everywhere is what the owner wants.
+     A browser tab keeps the raw env (0). */
   html.pwa-standalone {
     --frenz-safe-top: max(env(safe-area-inset-top), 44px);
   }

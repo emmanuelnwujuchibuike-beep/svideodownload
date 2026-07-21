@@ -63,41 +63,36 @@ html.frenz-boot-off #frenz-boot{display:none}
 // marker — once set, the loader never showed again on that browser. That marker
 // is gone; it can't express "every cold start", only "the first one ever".
 //
-// REVISED AGAIN 2026-07-17: "can you make the F loader only show 3 new start a
-// day instead of a cold start that affects the chat swipe back on ios ... on
-// another phone it showed too delayed reload on swiped back on ios pwa but not
-// on browser."
+// REVISED AGAIN 2026-07-21: "show an F loader when opening on cold start but
+// never on back swipe." The 3/day cap this replaces was a blunt way to stop an
+// iOS back-swipe flashing the loader; the owner now wants the branded moment on
+// EVERY genuine cold open and NEVER on a back-swipe/resume.
 //
-// So a cold start is now capped: the loader shows for the FIRST 3 cold starts of
-// each (local) day and is instant for the rest. Login still always shows and is
-// deliberately NOT counted against that budget — the owner asked to limit "new
-// starts", not logins.
+// The hard part: on iOS, when the OS has killed a backgrounded PWA's process
+// (routine under memory pressure), a back-swipe RELAUNCHES the app as a
+// brand-new document reporting nav.type === 'navigate' — byte-for-byte
+// indistinguishable from a fresh launch via the Navigation Timing API alone.
+// That's the whole reason the cap existed. So we add the one signal the platform
+// won't give us: a "recently active" marker. On every visibilitychange→hidden
+// and pagehide we stamp `frenz-last-active` in localStorage. On boot:
 //
-// Why the cap rather than dropping cold starts entirely: on iOS a back-swipe
-// genuinely IS a cold start whenever the OS has killed the PWA's process (see
-// the note below), so "every cold start" means "every back-swipe on a
-// memory-pressured device" — which is what the owner hit on a second phone and
-// not in a browser, where the tab stays alive. A daily budget keeps the branded
-// moment for the openings that read as real launches, and stops it turning every
-// back gesture into a wait.
+//     justSignedIn cookie          -> a login.                     SHOW (always).
+//     nav.type === 'reload'        -> the user hit refresh.        instant.
+//     nav.type === 'back_forward'  -> in-session back / bfcache.   instant.
+//     nav.type === 'navigate', app active < COLD_GAP_MS ago
+//                                  -> RESUME / back-swipe of a
+//                                     recently-used app.           instant.
+//     nav.type === 'navigate', no recent activity (fresh open, or
+//                              away long enough to read as one)
+//                                  -> a genuine cold launch.       SHOW.
 //
-// Cold start is read from the Navigation Timing API, which distinguishes the
-// three cases at the source instead of inferring them from storage:
-//
-//     nav.type === 'navigate'      -> a fresh entry into the app: PWA launch,
-//                                     new tab, external link, or a login's own
-//                                     window.location.assign().  SHOW (≤3/day).
-//     nav.type === 'reload'        -> the user hit refresh.       instant.
-//     nav.type === 'back_forward'  -> iOS back-gesture / history.  instant.
-//
-// The counter is keyed on the LOCAL calendar date, not UTC: the audience is
-// Africa-primary (UTC+1), where a UTC key would reset the budget at 1am local
-// and hand someone 3 more loaders in the middle of an evening session.
-//
-// Reload and back-gesture stay instant deliberately: they are NOT cold starts,
-// and "the loader shows for seconds on back-gesture" was the owner's own earlier
-// complaint. The revised rule widens the trigger set to every cold start; it
-// doesn't ask for those two back.
+// COLD_GAP_MS is the single knob (30 min): a 'navigate' within it is treated as a
+// resume and stays instant, so a back-swipe seconds-to-minutes after leaving
+// never flashes the loader; a 'navigate' after longer reads as a real launch and
+// shows it. It's a heuristic — the only one available for a process-killed
+// relaunch — deliberately biased toward the owner's "never on back swipe": it
+// errs toward instant when in doubt. Tune COLD_GAP_MS if launches feel too quiet
+// or resumes too loud. The old per-day counter (`frenz-boot-shows`) is gone.
 //
 // Why this also covers "every login" with no extra work: every sign-in path ends
 // in `window.location.assign(next)` — a full document navigation, which reports
@@ -120,9 +115,12 @@ html.frenz-boot-off #frenz-boot{display:none}
 // boot marker from sessionStorage to localStorage, and register-sw.tsx's reload
 // guard before it). When the process is gone, "back" doesn't restore a live
 // page: the OS RELAUNCHES the app, which is a brand-new document reporting
-// 'navigate'. So it is a genuine cold start and this rule shows the loader. In a
-// browser the tab is still alive, so back is a bfcache restore / 'back_forward'
-// and stays instant. Nothing to do with re-login — the session is untouched.
+// 'navigate'. That relaunch is exactly what the `frenz-last-active` marker now
+// disambiguates (2026-07-21): the marker is fresh (the app was in use moments
+// ago), so this 'navigate' is treated as a resume and stays instant — the
+// owner's "never on back swipe". In a browser the tab is still alive, so back is
+// a bfcache restore / 'back_forward' and stays instant either way. Nothing to do
+// with re-login — the session is untouched.
 //
 // DISMISSAL TIMING is what made that feel bad, and it's fixed here rather than
 // by narrowing the rule. The cold path used to fade on DOMContentLoaded, which
@@ -157,11 +155,13 @@ html.frenz-boot-off #frenz-boot{display:none}
 // NOTE for anyone editing the minified body below: the whole thing is ONE
 // function scope, and `var` is function-scoped, so a new `var` here can silently
 // clobber an earlier one. That is not hypothetical — adding `var d=new Date()`
-// for the daily counter reassigned the `var d=document.documentElement` on the
-// first line, so `dismiss()` called `d.classList.add` on a Date, threw, and left
-// the splash STUCK on screen forever. Caught only by a real-browser test. Use
-// distinct names (`dt`), and re-run the boot verification after any edit.
-const JS = `(function(){var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';var show=justSignedIn;if(!show&&coldStart){var dt=new Date();var today=dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate();var n=0;try{var raw=localStorage.getItem('frenz-boot-shows');if(raw){var rec=JSON.parse(raw);if(rec&&rec.d===today)n=rec.n||0}}catch(e){}if(n<3){show=true;try{localStorage.setItem('frenz-boot-shows',JSON.stringify({d:today,n:n+1}))}catch(e){}}}if(!show){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var faded=false;var fade=function(){if(faded)return;faded=true;var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};var shellReady=function(){return !!document.querySelector('main')};if(shellReady()){fade()}else{try{var mo=new MutationObserver(function(){if(shellReady()){mo.disconnect();fade()}});mo.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}document.addEventListener('DOMContentLoaded',fade)}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
+// for the (since-removed) daily counter reassigned the
+// `var d=document.documentElement` on the first line, so `dismiss()` called
+// `d.classList.add` on a Date, threw, and left the splash STUCK on screen
+// forever. Caught only by a real-browser test. Keep every new `var` name
+// distinct from the ones already in scope, and re-run the boot verification
+// after any edit.
+const JS = `(function(){var COLD_GAP_MS=1800000;var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var mark=function(){try{localStorage.setItem('frenz-last-active',String(Date.now()))}catch(e){}};document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')mark()});window.addEventListener('pagehide',mark);var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';var show=justSignedIn;if(!show&&coldStart){var last=0;try{var lraw=localStorage.getItem('frenz-last-active');if(lraw)last=parseInt(lraw,10)||0}catch(e){}if(!last||Date.now()-last>COLD_GAP_MS)show=true}if(!show){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var faded=false;var fade=function(){if(faded)return;faded=true;var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};var shellReady=function(){return !!document.querySelector('main')};if(shellReady()){fade()}else{try{var mo=new MutationObserver(function(){if(shellReady()){mo.disconnect();fade()}});mo.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}document.addEventListener('DOMContentLoaded',fade)}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
 
 // Must run BEFORE the <style> below is evaluated, AND before next-themes'
 // own injected script (rendered later, wherever <ThemeProvider> sits) so the

@@ -107,6 +107,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "Runtime toggles and rollouts. Flags are declared in code; their state is set here.",
   },
   {
+    id: "experiments",
+    label: "Experiments",
+    category: "system",
+    icon: "FlaskConical",
+    blurb: "A/B tests and their live exposure split. Declared in code; paused and shipped from here.",
+  },
+  {
     id: "traffic",
     label: "Traffic",
     category: "system",

@@ -23,7 +23,9 @@ export type EventType =
   | "pwa_install_prompt_shown"
   | "pwa_install_accepted"
   | "pwa_install_dismissed"
-  | "pwa_installed";
+  | "pwa_installed"
+  // Experiment platform: one row per enrolled exposure, metadata { experiment, variant }.
+  | "experiment_exposure";
 
 interface EventInput {
   userId?: string | null;

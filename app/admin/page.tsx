@@ -29,8 +29,11 @@ import { Suspense } from "react";
 import { AdManager } from "@/features/admin/ad-manager";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
 import { FeatureFlagManager } from "@/features/admin/feature-flags-manager";
+import { ExperimentsManager } from "@/features/admin/experiments-manager";
 import { getFlags } from "@/lib/platform/flags";
 import { getFlagOverrides } from "@/lib/platform/flags-store";
+import { getExperiments } from "@/lib/platform/experiments";
+import { getExperimentOverrides, getExperimentStats } from "@/lib/platform/experiments-store";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -233,6 +236,12 @@ export default async function AdminPage() {
             </Suspense>
           </AdminPanel>
 
+          <AdminPanel id="experiments">
+            <Suspense fallback={<PanelSkeleton />}>
+              <ExperimentsSection />
+            </Suspense>
+          </AdminPanel>
+
           <AdminPanel id="traffic">
             <Suspense fallback={<PanelSkeleton />}>
               <TrafficSection />
@@ -309,6 +318,24 @@ async function FlagsSection() {
     };
   });
   return <FeatureFlagManager flags={flags} />;
+}
+
+async function ExperimentsSection() {
+  const [overrides, stats] = await Promise.all([getExperimentOverrides(), getExperimentStats()]);
+  const experiments = getExperiments().map((e) => ({
+    id: e.id,
+    label: e.label,
+    description: e.description,
+    status: e.status,
+    variants: e.variants,
+    plans: e.plans ?? null,
+    override: {
+      paused: overrides[e.id]?.paused ?? null,
+      forceVariant: overrides[e.id]?.forceVariant ?? null,
+    },
+    exposures: stats[e.id] ?? {},
+  }));
+  return <ExperimentsManager experiments={experiments} />;
 }
 
 async function TrafficSection() {

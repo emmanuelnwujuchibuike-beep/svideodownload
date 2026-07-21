@@ -76,6 +76,7 @@ apps because these are singular, not per-product. Each maps to a real owner toda
 | Localization | `lib/i18n/*` (load-bearing; export/import pipeline) | ✅ coverage measured, never declared |
 | Payments / entitlements | `lib/paystack/*`, `lib/monetization/*`, `app/api/billing` | ✅ one subscription unlocks Pro everywhere |
 | Feature flags / runtime config | [lib/platform/flags.ts](../lib/platform/flags.ts) + `flags-store.ts`, migration `0091_feature_flags.sql`, admin "Feature flags" section | ✅ declared in code, state in DB; kill switch + % rollout + plan gate; 0 client cost when off |
+| Experiments (A/B) | [lib/platform/experiments.ts](../lib/platform/experiments.ts) + `experiments-store.ts`, migration `0092_experiments.sql`, admin "Experiments" section | ✅ deterministic assignment (reuses `bucketOf`); exposure logged through the unified `events` pipeline; pause + ship-the-winner overrides |
 | Audit log | migration `0053_security_audit_log.sql` | ✅ |
 | Developer platform / API | `lib/sdk/*`, `app/api/v1`, `app/api/keys` | ✅ |
 | Offline / PWA | `lib/pwa/*`, `lib/offline/*`, `app/manifest.ts`, `sw` | ✅ |
@@ -142,8 +143,8 @@ order rather than fabricated as done:
 | Capability | Reality today | Proposed home |
 |---|---|---|
 | ~~**Runtime feature flags / config**~~ | ✅ **Shipped 2026-07-21.** Proving route: `/admin` → Feature flags. See the spine table above. | Done — `lib/platform/flags.ts` + `feature_flags` (mig `0091`) + admin section + `flags.test.ts`. |
-| **Experiment registry (A/B)** | None. | Builds directly on flags now that they exist: a variant assignment (reuse `bucketOf`) + a variant column on the analytics event. **This is the next natural build.** |
-| **Formal event bus / Event Registry** | Cross-module comms is direct calls + Supabase realtime. ARCHITECTURE.md says "event-driven where beneficial" — aspirational, unbuilt. | A typed `emit()`/subscriber contract in `lib/platform/events.ts`. Only worth it when a second consumer appears — one publisher, one consumer is just a function call. |
+| ~~**Experiment registry (A/B)**~~ | ✅ **Shipped 2026-07-21.** Proving route: `/admin` → Experiments. See the spine table above. | Done — `lib/platform/experiments.ts` + `experiments` (mig `0092`) + exposure via `events` + admin section + `experiments.test.ts`. |
+| **Formal event bus / Event Registry** | Cross-module comms is direct calls + Supabase realtime. ARCHITECTURE.md says "event-driven where beneficial" — aspirational, unbuilt. | A typed `emit()`/subscriber contract in `lib/platform/events.ts`. Only worth it when a second consumer appears — one publisher, one consumer is just a function call. **Next, if a real second consumer exists.** |
 | **Native iOS / Android** | **Do not exist.** This is a Next.js **PWA**. The PWA *is* the mobile app today. | A native shell is a separate repo/toolchain decision (Capacitor wrapper vs. true native), not a file in this one. Flagging, not silently implying it exists. |
 | **This Constitution as a hard gate** | New today. | A `constitution.test.ts` that asserts the registry/reality-ledger invariants stay wired. |
 

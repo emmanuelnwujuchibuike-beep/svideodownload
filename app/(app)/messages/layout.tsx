@@ -43,7 +43,7 @@ export default function MessagesLayout({ children }: { children: ReactNode }) {
     // Mobile height reservation: the global topbar HIDES on /messages below
     // lg, so mobile only reserves the floating-pill nav's own box + its bottom
     // offset — the SAME max(inset−10px, 6px) expression the nav itself uses.
-    <div className="mx-auto flex h-[calc(100dvh-4.3125rem-max(calc(env(safe-area-inset-bottom)-10px),0.375rem))] w-full max-w-[1600px] gap-4 bg-background px-0 pt-[env(safe-area-inset-top)] lg:h-[calc(100dvh-4rem)] lg:bg-transparent lg:px-4 lg:py-4 lg:pt-4">
+    <div className="mx-auto flex h-[calc(100dvh-4.3125rem-max(calc(env(safe-area-inset-bottom)-10px),0.375rem))] w-full max-w-[1600px] gap-4 bg-background px-0 pt-[var(--frenz-safe-top)] lg:h-[calc(100dvh-4rem)] lg:bg-transparent lg:px-4 lg:py-4 lg:pt-4">
       {/* Desktop inbox pane — bg-background (not hardcoded white) blocks the
           root ambient wash while still following real dark/light mode. */}
       <aside className="hidden w-[340px] shrink-0 flex-col overflow-hidden rounded-3xl border border-border/70 bg-background shadow-sm lg:flex">

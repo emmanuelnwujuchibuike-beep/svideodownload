@@ -1025,7 +1025,7 @@ function ReelCard({
 
       {/* Album position dots — this reel has several videos; swipe sideways */}
       {isAlbum ? (
-        <div className="pointer-events-none absolute left-1/2 top-[calc(max(0.75rem,env(safe-area-inset-top))+2.9rem)] z-20 flex -translate-x-1/2 items-center gap-1.5">
+        <div className="pointer-events-none absolute left-1/2 top-[calc(max(0.75rem,var(--frenz-safe-top))+2.9rem)] z-20 flex -translate-x-1/2 items-center gap-1.5">
           {albumVideos.map((_, i) => (
             <span
               key={i}
@@ -1043,7 +1043,7 @@ function ReelCard({
         const scrubbable = native && dur > 0;
         const displayPct = scrubbing ? scrubPct * 100 : progress;
         return (
-          <div className={cn("absolute inset-x-0 top-[env(safe-area-inset-top)] z-40 transition-opacity duration-200", ui || scrubbing ? "opacity-100" : "opacity-0")}>
+          <div className={cn("absolute inset-x-0 top-[var(--frenz-safe-top)] z-40 transition-opacity duration-200", ui || scrubbing ? "opacity-100" : "opacity-0")}>
             <div
               ref={seekBar}
               onPointerDown={scrubbable ? scrubStart : undefined}
@@ -1090,7 +1090,7 @@ function ReelCard({
         onClick={onClose}
         aria-label="Close reels"
         className={cn(
-          "absolute left-4 top-[max(1rem,env(safe-area-inset-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-opacity duration-200 hover:bg-black/60 active:scale-95",
+          "absolute left-4 top-[max(1rem,var(--frenz-safe-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-opacity duration-200 hover:bg-black/60 active:scale-95",
           ui ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >
@@ -1106,7 +1106,7 @@ function ReelCard({
         onClick={() => setMoreOpen(true)}
         aria-label="More options"
         className={cn(
-          "absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-opacity duration-200 hover:bg-black/60 active:scale-95 lg:-right-[4.5rem]",
+          "absolute right-4 top-[max(1rem,var(--frenz-safe-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-opacity duration-200 hover:bg-black/60 active:scale-95 lg:-right-[4.5rem]",
           ui ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >

@@ -29,7 +29,7 @@ export default function ConversationLoading() {
         Loading conversation…
       </span>
       {/* Thread header */}
-      <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-3">
+      <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 pt-[calc(0.75rem+var(--frenz-safe-top))] lg:pt-3">
         <SkeletonAvatar className="h-10 w-10" />
         <div className="space-y-1.5">
           <Skeleton className="h-3.5 w-32" />

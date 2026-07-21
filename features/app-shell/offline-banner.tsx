@@ -39,7 +39,7 @@ export function OfflineBanner() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -48, opacity: 0 }}
           role="status"
-          className="fixed inset-x-0 top-0 z-[150] flex items-center justify-center gap-2 bg-foreground px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-xs font-semibold text-background"
+          className="fixed inset-x-0 top-0 z-[150] flex items-center justify-center gap-2 bg-foreground px-4 py-2 pt-[max(0.5rem,var(--frenz-safe-top))] text-xs font-semibold text-background"
         >
           <WifiOff className="h-3.5 w-3.5" aria-hidden /> You&apos;re offline — some things may be out of date
         </motion.div>
@@ -50,7 +50,7 @@ export function OfflineBanner() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -48, opacity: 0 }}
           role="status"
-          className="fixed inset-x-0 top-0 z-[150] flex items-center justify-center gap-2 bg-emerald-500 px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-xs font-semibold text-white"
+          className="fixed inset-x-0 top-0 z-[150] flex items-center justify-center gap-2 bg-emerald-500 px-4 py-2 pt-[max(0.5rem,var(--frenz-safe-top))] text-xs font-semibold text-white"
         >
           Back online
         </motion.div>

@@ -126,7 +126,7 @@ function Deck({
         type="button"
         onClick={onClose}
         aria-label="Close"
-        className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
+        className="absolute left-4 top-[max(1rem,var(--frenz-safe-top))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
       >
         <X className="h-5 w-5" />
       </button>
@@ -209,7 +209,7 @@ function DiscoverySlide({ item, isActive }: { item: DiscoveryItem; isActive: boo
           type="button"
           onClick={toggleMute}
           aria-label={isMuted ? "Unmute" : "Mute"}
-          className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
+          className="absolute right-4 top-[max(1rem,var(--frenz-safe-top))] z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
         >
           {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
         </button>

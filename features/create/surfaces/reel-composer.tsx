@@ -97,7 +97,7 @@ export function ReelComposer() {
       <input ref={cameraRef} type="file" accept="video/*" capture="user" onChange={onPick} className="sr-only" aria-hidden tabIndex={-1} />
 
       {/* Header — chrome over the stage */}
-      <header className="flex shrink-0 items-center gap-2 px-3 pt-[max(env(safe-area-inset-top),0.5rem)] pb-2">
+      <header className="flex shrink-0 items-center gap-2 px-3 pt-[max(var(--frenz-safe-top),0.5rem)] pb-2">
         <button
           type="button"
           onClick={() => router.back()}

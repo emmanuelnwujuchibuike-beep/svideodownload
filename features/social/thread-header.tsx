@@ -153,7 +153,7 @@ export function ThreadHeader({
         // section must stay fixed "even when the placeholder and keyboard is
         // opened"). The container's re-anchoring to the visual viewport is
         // handled in ThreadAppearanceProvider — see useKeyboardViewportPin.
-        "frenz-thread-header relative z-10 flex shrink-0 items-center gap-3 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-3",
+        "frenz-thread-header relative z-10 flex shrink-0 items-center gap-3 px-4 py-3 pt-[calc(0.75rem+var(--frenz-safe-top))] lg:pt-3",
         wallpaperActive ? "bg-white/55 backdrop-blur-md" : forceLight ? "bg-white" : cn("bg-background", themeHeaderClass),
       )}
     >

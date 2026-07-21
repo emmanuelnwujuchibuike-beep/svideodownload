@@ -84,23 +84,19 @@ export const metadata: Metadata = {
   // this is what makes "Add to Home Screen" produce a real standalone app — the
   // prerequisite for Web Push on iPhone/iPad (Safari 16.4+).
   //
-  // statusBarStyle: "default" — CHANGED from "black-translucent" (owner,
-  // 2026-07-21: "the display on the pwa is going too much up … the current iOS
-  // already supports edge-to-edge native feel so what we tried now compressed at
-  // the top, all the pages"). `black-translucent` forces the web view to draw
-  // UNDER the status bar and makes every page responsible for padding itself back
-  // down by `env(safe-area-inset-top)`. On current iOS that inset was collapsing/
-  // inconsistent, so content jammed up under the clock/battery on EVERY page at
-  // once — one global cause, not a per-page bug. "default" hands the status-bar
-  // area back to iOS: it reserves it natively (the "native edge-to-edge feel" the
-  // owner is describing), positions our content cleanly below it, and makes
-  // `env(safe-area-inset-top)` resolve to 0 in standalone — so every existing
-  // `pt-[env(safe-area-inset-top)]` in the app becomes a harmless no-op rather
-  // than a value that can collapse. The bottom home-indicator inset
-  // (`env(safe-area-inset-bottom)`, used by the mobile nav) is unaffected —
-  // viewport-fit=cover still extends the view to the bottom edge. A normal
-  // browser tab was already 0 on top, so nothing changes there.
-  appleWebApp: { capable: true, title: "Frenz", statusBarStyle: "default" },
+  // statusBarStyle "black-translucent": the app draws edge-to-edge UNDER the
+  // status bar (TikTok-style) and each top chrome pads itself clear of the clock/
+  // battery. The REAL fix for "content pushes too much to the top on every page
+  // in the webapp" (owner, 2026-07-21, reported twice) was NOT this style — I
+  // briefly tried "default" and it didn't help — it's that current iOS reports
+  // `env(safe-area-inset-top)` as 0 in an installed standalone PWA, so every
+  // `pt-[env(safe-area-inset-top)]` collapsed to nothing. That inset is now routed
+  // through the `--frenz-safe-top` variable (globals.css), which floors it at 44px
+  // in standalone mode so content always clears the bar even when iOS reports 0.
+  // Staying on black-translucent (what the installed app already runs — the
+  // status-bar style is cached at INSTALL time) means this CSS-only fix lands with
+  // NO reinstall; CSS is re-read on every launch.
+  appleWebApp: { capable: true, title: "Frenz", statusBarStyle: "black-translucent" },
   // iOS auto-links number-shaped text (phone numbers, dates, addresses,
   // emails) into tap-to-call/tap-to-mail chips — undesirable inside feed/
   // profile/comment text that isn't actually contact info.

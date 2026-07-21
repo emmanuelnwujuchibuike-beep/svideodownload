@@ -311,6 +311,25 @@
   :root {
     --frenz-nav-clearance: calc(4.3125rem + max(calc(env(safe-area-inset-bottom) - 10px), 0.375rem));
   }
+  /* Top safe-area inset, used by every top chrome (app topbar, marketing header,
+     inbox chrome, immersive overlays) instead of a raw env(safe-area-inset-top).
+     WHY (owner, 2026-07-21, reported twice — "content pushes too much to the top
+     on every page in the webapp"): current iOS reports env(safe-area-inset-top)
+     as 0 in an installed standalone PWA even with a status bar overhead, so every
+     pt-[env(safe-area-inset-top)] collapsed and content jammed under the clock/
+     Dynamic Island app-wide. In a normal browser tab this stays the raw env value
+     (0), so nothing changes there; only the INSTALLED app gets a guaranteed floor
+     so content always clears the status bar. 44px = the standard notch status-bar
+     height; max() keeps the real, larger value on any device/OS that does report
+     it (e.g. a 59px Dynamic Island). */
+  :root {
+    --frenz-safe-top: env(safe-area-inset-top);
+  }
+  @media (display-mode: standalone) {
+    :root {
+      --frenz-safe-top: max(env(safe-area-inset-top), 44px);
+    }
+  }
   /* Owner, 2026-07-16: "there is a white background at the bottom covering
      chats, nothing is suppose to be there only the bottom nav."
      The messages layout subtracts the nav's box from its height so the THREAD's

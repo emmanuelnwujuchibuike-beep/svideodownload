@@ -5,12 +5,6 @@ import { useEffect, useState } from "react";
 import { isStandalone } from "@/lib/pwa/platform";
 
 /**
- * RETIRED 2026-07-21 — no longer rendered (removed from app/(app)/layout.tsx).
- * The app moved from `black-translucent` to native status-bar inset
- * (statusBarStyle "default", app/layout.tsx), so iOS owns the status-bar strip
- * and this scrim is unnecessary. Kept as a one-import restore path if the app
- * ever goes back to drawing under a translucent status bar.
- *
  * iOS platform constraint, not a bug in our CSS: `apple-mobile-web-app-
  * status-bar-style: black-translucent` (app/layout.tsx) is what lets reels/
  * photos draw edge-to-edge under the Dynamic Island/notch — the only
@@ -20,7 +14,7 @@ import { isStandalone } from "@/lib/pwa/platform";
  * session. That reads fine over the app's dark theme, but in LIGHT mode the
  * very top of the page (behind the status bar) is light-colored too — white
  * icons over a light background. This renders a barely-there dark gradient
- * strip exactly `env(safe-area-inset-top)` tall, standalone-only (a normal
+ * strip exactly `var(--frenz-safe-top)` tall, standalone-only (a normal
  * Safari tab has its own opaque status bar and doesn't need this — the
  * `env()` value is 0 there anyway, but the standalone check avoids an
  * unnecessary fixed layer). Recommend confirming the exact opacity reads
@@ -40,7 +34,7 @@ export function StatusBarScrim() {
       aria-hidden
       className="pointer-events-none fixed inset-x-0 top-0 z-[200]"
       style={{
-        height: "env(safe-area-inset-top)",
+        height: "var(--frenz-safe-top)",
         background: "linear-gradient(to bottom, rgba(0,0,0,0.32), rgba(0,0,0,0))",
       }}
     />

@@ -97,8 +97,8 @@ export function AppTopbar() {
         // pt safe-area: with viewport-fit=cover the installed app draws under
         // the status bar — the bar pads itself clear of the clock/battery
         // (zero in a normal browser tab, so nothing changes there).
-        "sticky top-0 z-30 flex items-center gap-2 px-4 pt-[env(safe-area-inset-top)] transition-transform duration-300 will-change-transform",
-        "h-[calc(4rem+env(safe-area-inset-top))]",
+        "sticky top-0 z-30 flex items-center gap-2 px-4 pt-[var(--frenz-safe-top)] transition-transform duration-300 will-change-transform",
+        "h-[calc(4rem+var(--frenz-safe-top))]",
         // Owner correction (2026-07-13): the top nav must track the SYSTEM
         // theme like every other surface — white in light mode, blending
         // into the app's own dark background in dark mode ("the top edge

@@ -208,7 +208,7 @@ function ViewerInner({
         type="button"
         onClick={onClose}
         aria-label="Back"
-        className="fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-[90] inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur-md transition hover:bg-white/20 active:scale-95"
+        className="fixed left-4 top-[max(1rem,var(--frenz-safe-top))] z-[90] inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur-md transition hover:bg-white/20 active:scale-95"
       >
         <ArrowLeft className="h-4 w-4" /> Back
       </button>

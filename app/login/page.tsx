@@ -42,7 +42,7 @@ export default async function LoginPage({
       <Link
         href="/"
         aria-label="Back to Frenz"
-        className="fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-20 flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-card/80 text-foreground shadow-md backdrop-blur-md transition hover:bg-secondary active:scale-95"
+        className="fixed left-4 top-[max(1rem,var(--frenz-safe-top))] z-20 flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-card/80 text-foreground shadow-md backdrop-blur-md transition hover:bg-secondary active:scale-95"
       >
         <ArrowLeft className="h-5 w-5" />
       </Link>

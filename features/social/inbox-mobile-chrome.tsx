@@ -62,7 +62,7 @@ export function InboxMobileChrome() {
       // `bg-background` (so the list scrolls UNDER it, never shows through), the
       // same `px-3 pt-3.5` insets, and pinned below the status-bar safe area.
       // `lg:hidden` — desktop keeps the inbox in the Glass Split pane, untouched.
-      className="fixed inset-x-0 top-[env(safe-area-inset-top)] z-30 mx-auto max-w-[1600px] bg-background px-3 pt-3.5 lg:hidden"
+      className="fixed inset-x-0 top-[var(--frenz-safe-top)] z-30 mx-auto max-w-[1600px] bg-background px-3 pt-3.5 lg:hidden"
     >
       <div className="mb-3.5 flex items-start justify-between gap-2">
         <div className="pl-1">

@@ -151,7 +151,7 @@ export function PostComposer({
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-background text-foreground">
       {/* ── Header: FB's close + title + Post pill ─────────────────────────── */}
-      <header className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 pt-[max(env(safe-area-inset-top),0.5rem)] pb-2.5">
+      <header className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 pt-[max(var(--frenz-safe-top),0.5rem)] pb-2.5">
         <button
           type="button"
           onClick={() => router.back()}

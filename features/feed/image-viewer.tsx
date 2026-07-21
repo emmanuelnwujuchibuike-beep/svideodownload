@@ -291,7 +291,7 @@ function ImageStage({
           its own. Absolute children position relative to this padding box, so
           the image/caption also recenter within the narrower space. */}
       <div className="relative h-full flex-1 lg:pr-24">
-        <button type="button" onClick={onClose} aria-label="Close" className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95">
+        <button type="button" onClick={onClose} aria-label="Close" className="absolute left-4 top-[max(1rem,var(--frenz-safe-top))] z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95">
           <X className="h-5 w-5" />
         </button>
 
@@ -301,7 +301,7 @@ function ImageStage({
           type="button"
           onClick={() => setMoreOpen(true)}
           aria-label="More options"
-          className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
+          className="absolute right-4 top-[max(1rem,var(--frenz-safe-top))] z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-black/60 active:scale-95"
         >
           <MoreVertical className="h-5 w-5" />
         </button>
@@ -760,7 +760,7 @@ function AlbumSwipe({
 
       {/* Counter + dots — placed just under the top X / More buttons so they
           never collide with the bottom caption/action rail. */}
-      <div className="pointer-events-none absolute inset-x-0 top-[calc(max(1rem,env(safe-area-inset-top))+3.25rem)] z-[55] flex flex-col items-center gap-2">
+      <div className="pointer-events-none absolute inset-x-0 top-[calc(max(1rem,var(--frenz-safe-top))+3.25rem)] z-[55] flex flex-col items-center gap-2">
         <span className="rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur">
           {index + 1}/{items.length}
         </span>

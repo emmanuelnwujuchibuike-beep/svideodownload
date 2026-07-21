@@ -91,7 +91,7 @@ export function StoryComposer({ avatarUrl }: { avatarUrl: string | null }) {
       <input ref={galleryRef} type="file" accept="image/*,video/*" onChange={onPick} className="sr-only" aria-hidden tabIndex={-1} />
       <input ref={cameraRef} type="file" accept="image/*,video/*" capture="user" onChange={onPick} className="sr-only" aria-hidden tabIndex={-1} />
 
-      <header className="flex shrink-0 items-center gap-2 px-3 pt-[max(env(safe-area-inset-top),0.5rem)] pb-2">
+      <header className="flex shrink-0 items-center gap-2 px-3 pt-[max(var(--frenz-safe-top),0.5rem)] pb-2">
         <button
           type="button"
           onClick={() => router.back()}

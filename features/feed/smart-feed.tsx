@@ -730,7 +730,7 @@ export function SmartFeed({
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="pointer-events-none sticky top-[calc(4.5rem+env(safe-area-inset-top))] z-20 flex justify-center"
+            className="pointer-events-none sticky top-[calc(4.5rem+var(--frenz-safe-top))] z-20 flex justify-center"
           >
             <button
               type="button"

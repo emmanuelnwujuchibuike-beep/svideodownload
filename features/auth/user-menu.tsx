@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Bookmark, Fingerprint, LogOut, MessageCircle, User as UserIcon, UserCircle } from "lucide-react";
+import { Bookmark, Fingerprint, LogOut, MessageCircle, User as UserIcon, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -102,23 +102,19 @@ export function UserMenu() {
       // hover. Everything inherits the global reduced-motion guard.
       <Link
         href="/login?next=/account"
-        className="group relative inline-flex items-center gap-1.5 overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-500/30 transition-all duration-300 hover:shadow-violet-500/50 active:scale-[0.97]"
+        aria-label="Log in"
+        title="Log in"
+        className="group relative inline-flex items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-3 py-2 text-white shadow-lg shadow-violet-500/30 transition-all duration-300 hover:shadow-violet-500/50 active:scale-[0.97]"
       >
         {/* breathing glow behind the pill */}
         <span aria-hidden className="pointer-events-none absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 opacity-40 blur-md motion-safe:animate-pulse" />
         {/* sheen sweep on hover */}
         <span aria-hidden className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full" />
-        {/* Fingerprint, not Sparkles: the button's job is to say "sign in", and a
-            fingerprint reads as authentication instantly while still being the
-            premium mark the header wants. Sparkles said "something magic here",
-            which is decorative, not a login affordance. */}
-        <Fingerprint className="h-4 w-4 transition-transform duration-300 group-hover:scale-110" />
-        {/* "Log in" — owner, 2026-07-21: relabelled from "Launch App" (the mockup
-            copy) so a first-time visitor reads it as sign-in, and now rendered in
-            the MOBILE header too, not just desktop. Same passwordless flow either
-            way — this is also where a new account is created (no separate page). */}
-        Log in
-        <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+        {/* Icon-only (owner, 2026-07-22): "Log in" text + trailing arrow removed to
+            leave just the fingerprint, which reads as "sign in" on its own. The
+            aria-label + title keep it accessible to screen readers and legible on
+            hover. Same passwordless flow — also where a new account is created. */}
+        <Fingerprint className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
       </Link>
     );
   }

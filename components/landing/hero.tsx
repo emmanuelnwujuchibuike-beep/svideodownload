@@ -1,4 +1,4 @@
-import { ArrowRight, Feather, Play, ShieldCheck, Sparkles, WifiOff } from "lucide-react";
+import { ArrowDown, Feather, Play, ShieldCheck, Sparkles, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -71,7 +71,7 @@ export function Hero() {
               href="#download"
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 via-violet-600 to-fuchsia-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/30 transition hover:opacity-95 active:scale-[0.99] sm:w-auto"
             >
-              Download Now <ArrowRight className="h-4 w-4" />
+              Download Now <ArrowDown className="h-4 w-4" />
             </Link>
             <Link
               href="/features"

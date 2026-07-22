@@ -183,7 +183,7 @@ export const DISCOVERY_SURFACES: DiscoverySurface[] = [
   { id: "command-centre", name: "Command centre (⌘K)", source: "features/navigation/command-center.tsx", status: "live", description: "Instant navigation and actions across every workspace." },
   { id: "suggestions", name: "Friend suggestions", source: "features/friends/suggestions-launcher.tsx", status: "live", description: "People-you-may-know recommendations." },
   { id: "search-results", name: "Universal search results", source: "features/search/search-results.tsx", status: "live", description: "The /search page over people and posts." },
-  { id: "related-links", name: "Related content links", source: "lib/content/graph/build.ts", status: "live", description: "Internal links derived from graph traversal rather than hand-written — sibling and next-step relations." },
+  { id: "related-links", name: "Related content links", source: "lib/content/graph/traverse.ts", status: "live", description: "Internal links derived from graph traversal (siblingsOf/relatedFor) rather than hand-written — sibling and next-step relations." },
 ];
 
 /* ─────────────────────────── search types (matrix) ──────────────────────────

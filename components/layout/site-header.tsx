@@ -18,6 +18,7 @@ import { DESTINATIONS } from "@/lib/navigation/registry";
 import type { Destination } from "@/lib/navigation/types";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
+import { signOutClient } from "@/lib/auth/sign-out";
 import { DEFAULT_LOCALE } from "@/lib/i18n/locales";
 import { translator, type MessageKey } from "@/lib/i18n/messages";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
@@ -479,7 +480,19 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
                   >
                     <ModuleIconBadge icon={UserCircle} /> {handle ? "My profile" : "Set up profile"}
                   </Link>
-                  <form action="/auth/signout" method="post">
+                  {/* Client-first sign-out, mirroring UserMenu — clears the
+                      browser session + identity cache locally and hard-navigates
+                      home so the header can't keep painting a signed-in view.
+                      Falls back to the server POST with JS off. */}
+                  <form
+                    action="/auth/signout"
+                    method="post"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      closeMenu();
+                      void signOutClient();
+                    }}
+                  >
                     <button
                       type="submit"
                       className="flex min-h-[44px] w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-[15px] font-medium text-rose-600 transition-colors hover:bg-secondary dark:text-rose-400"

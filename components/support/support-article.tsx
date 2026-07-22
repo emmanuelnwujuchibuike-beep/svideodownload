@@ -38,7 +38,7 @@ export function SupportArticleBody({ article }: { article: SupportArticle }) {
   const related = relatedArticles(article.slug);
 
   return (
-    <article className="container max-w-2xl pb-16 pt-28 sm:pt-32">
+    <article className="container max-w-2xl pb-16 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
       <nav aria-label="Breadcrumb" className="mb-6">
         <ol className="flex items-center gap-2 text-sm text-muted-foreground">
           <li>

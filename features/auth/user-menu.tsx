@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 
 import { MyDiamondCrownBadge } from "@/components/badges/my-diamond-crown-badge";
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
+import { signOutClient } from "@/lib/auth/sign-out";
 
 import { useEntitlements } from "./use-entitlements";
 import { useUser } from "./use-user";
@@ -202,7 +203,20 @@ export function UserMenu() {
           >
             <ModuleIconBadge icon={UserIcon} className="h-6 w-6 rounded-lg" /> Account
           </Link>
-          <form action="/auth/signout" method="post">
+          {/* Client-first sign-out (progressive enhancement): with JS on, this
+              clears the browser session + identity cache locally and hard-navigates
+              home, so the header can't keep painting a signed-in view — the exact
+              bug where an admin "signed out" but still saw their avatar + plan UI.
+              With JS off, the form still POSTs to the server route. */}
+          <form
+            action="/auth/signout"
+            method="post"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setOpen(false);
+              void signOutClient();
+            }}
+          >
             <button
               type="submit"
               role="menuitem"

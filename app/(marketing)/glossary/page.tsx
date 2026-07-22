@@ -52,7 +52,7 @@ export default function GlossaryPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(graph) }} />
       <SiteHeader />
       <main>
-        <section className="border-b border-border/60 pb-12 pt-28 sm:pt-32">
+        <section className="border-b border-border/60 pb-12 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
           <div className="container max-w-3xl">
             <h1 className="text-balance text-[2rem] font-extrabold leading-[1.1] tracking-[-0.03em] sm:text-4xl">
               Glossary

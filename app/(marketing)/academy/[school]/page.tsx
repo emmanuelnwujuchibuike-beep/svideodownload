@@ -86,7 +86,7 @@ export default async function SchoolPage({
       />
       <SiteHeader />
       <main>
-        <section className="border-b border-border/60 pb-12 pt-28 sm:pt-32">
+        <section className="border-b border-border/60 pb-12 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
           <div className="container max-w-4xl">
             {/* A real landmark, not decorative text — breadcrumbs are navigation. */}
             <nav aria-label="Breadcrumb" className="mb-6">

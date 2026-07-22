@@ -33,7 +33,7 @@ export default function LibraryPage() {
   return (
     <div className="bg-background text-foreground">
       <SiteHeader />
-      <main className="pb-24 pt-28 sm:pt-32">
+      <main className="pb-24 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
         <GuestLibrary />
       </main>
       <SiteFooter />

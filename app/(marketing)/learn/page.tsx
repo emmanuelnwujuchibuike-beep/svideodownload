@@ -75,7 +75,7 @@ export default function LearnIndexPage() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(collectionLd) }} />
       <SiteHeader />
-      <main className="container max-w-5xl pb-24 pt-28 sm:pt-32">
+      <main className="container max-w-5xl pb-24 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-600 via-blue-600 to-violet-700 p-8 shadow-elevated sm:p-12">
           <div
             aria-hidden

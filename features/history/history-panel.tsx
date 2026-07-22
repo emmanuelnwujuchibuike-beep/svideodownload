@@ -2,6 +2,7 @@
 
 import {
   Check,
+  Clock,
   Copy,
   Download,
   Heart,
@@ -45,6 +46,24 @@ function timeAgo(ts: number): string {
   const d = h / 24;
   if (d < 7) return `${Math.floor(d)}d ago`;
   return new Date(ts).toLocaleDateString();
+}
+
+/**
+ * Explicit calendar date + clock time, shown on every device (owner ask). Uses
+ * the visitor's locale/timezone; the year is dropped for this year so the common
+ * case stays short ("Jul 21 · 4:54 PM") and only older items carry a year.
+ */
+function formatDateTime(ts: number): { date: string; time: string } {
+  const d = new Date(ts);
+  const thisYear = d.getFullYear() === new Date().getFullYear();
+  return {
+    date: d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      ...(thisYear ? {} : { year: "numeric" }),
+    }),
+    time: d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
+  };
 }
 
 export function HistoryPanel() {
@@ -239,71 +258,97 @@ function HistoryCard({
     setTimeout(() => setRedownloading(false), 1200);
   };
 
-  return (
-    <div className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-2.5 shadow-soft transition hover:border-foreground/15 hover:shadow-card">
-      <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-xl bg-black/40">
-        {item.thumbnail ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.thumbnail} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-            <KindIcon className="h-5 w-5" />
-          </div>
-        )}
-        <span
-          className={cn(
-            "absolute bottom-1 left-1 flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br text-white shadow",
-            platform.accent,
-          )}
-        >
-          {Icon ? <Icon className="h-3 w-3" /> : null}
-        </span>
-      </div>
+  const { date, time } = formatDateTime(item.createdAt);
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold">{item.title}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
-            <KindIcon className="h-2.5 w-2.5" />
-            {item.qualityLabel}
+  return (
+    <div className="group flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 shadow-soft transition hover:border-foreground/15 hover:shadow-card">
+      {/* Top: thumbnail + details. Aligned to the top so a two-line title never
+          shifts the badges around — the old single-row layout got cramped and
+          "scattered" once the title, badges, platform and time all fought for one
+          line on a phone. */}
+      <div className="flex items-start gap-3">
+        <button
+          type="button"
+          onClick={() => openPlayer(item)}
+          aria-label="Watch"
+          className="relative aspect-video w-24 shrink-0 overflow-hidden rounded-xl bg-black/40 sm:w-28"
+        >
+          {item.thumbnail ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={item.thumbnail} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+              <KindIcon className="h-5 w-5" />
+            </div>
+          )}
+          {/* Play affordance on hover/focus — the thumbnail itself opens the player. */}
+          <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100">
+            <Play className="h-6 w-6 fill-white text-white drop-shadow" />
           </span>
-          <span className="text-xs text-muted-foreground">
-            {item.platformName}
+          <span
+            className={cn(
+              "absolute bottom-1 left-1 flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br text-white shadow",
+              platform.accent,
+            )}
+          >
+            {Icon ? <Icon className="h-3 w-3" /> : null}
           </span>
-          <span className="text-xs text-muted-foreground/60">·</span>
-          <span className="text-xs text-muted-foreground/80">
-            {timeAgo(item.createdAt)}
-          </span>
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 text-sm font-semibold leading-snug">{item.title}</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+              <KindIcon className="h-2.5 w-2.5" />
+              {item.qualityLabel}
+            </span>
+            <span className="text-xs font-medium text-muted-foreground">{item.platformName}</span>
+          </div>
+          {/* Explicit date + time on every device (owner ask), with a subtle
+              relative hint. Tabular figures keep the times vertically aligned. */}
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3 shrink-0" />
+            <span className="font-medium text-foreground/80">{date}</span>
+            <span aria-hidden className="text-muted-foreground/50">·</span>
+            <span className="tabular-nums">{time}</span>
+            <span aria-hidden className="text-muted-foreground/40">·</span>
+            <span className="text-muted-foreground/70">{timeAgo(item.createdAt)}</span>
+          </p>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center">
+      {/* Action bar — evenly spread across the card so the controls have room to
+          breathe on any width instead of crowding into the right edge. Watch is
+          the labelled primary; the rest are grouped secondary icons. */}
+      <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-2.5">
         {/* Watch in the in-browser player — the review player is mounted by the
             Downloader on this page, so signed-out visitors can watch from their
             history too (not only re-download). */}
-        <IconButton label="Watch" onClick={() => openPlayer(item)}>
-          <Play className="h-4 w-4" />
-        </IconButton>
-        <IconButton label="Favorite" onClick={onToggleFavorite} active={item.favorite}>
-          <Heart className={cn("h-4 w-4", item.favorite && "fill-current")} />
-        </IconButton>
-        <IconButton label="Copy link" onClick={copyLink}>
-          {copied ? (
-            <Check className="h-4 w-4 text-green-400" />
-          ) : (
-            <Copy className="h-4 w-4" />
-          )}
-        </IconButton>
-        <IconButton label="Re-download" onClick={reDownload} disabled={redownloading}>
-          {redownloading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="h-4 w-4" />
-          )}
-        </IconButton>
-        <IconButton label="Remove" onClick={onRemove}>
-          <Trash2 className="h-4 w-4" />
-        </IconButton>
+        <button
+          type="button"
+          onClick={() => openPlayer(item)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-secondary/70 active:scale-[0.98]"
+        >
+          <Play className="h-3.5 w-3.5" /> Watch
+        </button>
+        <div className="flex items-center gap-0.5">
+          <IconButton label="Favorite" onClick={onToggleFavorite} active={item.favorite}>
+            <Heart className={cn("h-4 w-4", item.favorite && "fill-current")} />
+          </IconButton>
+          <IconButton label="Copy link" onClick={copyLink}>
+            {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+          </IconButton>
+          <IconButton label="Re-download" onClick={reDownload} disabled={redownloading}>
+            {redownloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+          </IconButton>
+          <IconButton label="Remove" onClick={onRemove}>
+            <Trash2 className="h-4 w-4" />
+          </IconButton>
+        </div>
       </div>
     </div>
   );

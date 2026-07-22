@@ -79,7 +79,7 @@ export default async function BlogPostPage({
         dangerouslySetInnerHTML={{ __html: jsonLd(articleLd) }}
       />
       <SiteHeader />
-      <main className="container max-w-3xl pb-24 pt-28 sm:pt-32">
+      <main className="container max-w-3xl pb-24 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
         <Link
           href="/blog"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"

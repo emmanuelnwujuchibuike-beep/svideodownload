@@ -166,7 +166,7 @@ export default async function DownloaderPage({
           hue stays unmistakably branded. Snapchat is the one brand no scrim can
           rescue — see the note on its `accentForeground` in lib/platforms.ts.
         */}
-        <section className="relative overflow-hidden pb-12 pt-28 sm:pt-32">
+        <section className="relative overflow-hidden pb-12 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
           <div className="container max-w-5xl">
             <div
               className={`relative overflow-hidden rounded-[2rem] bg-gradient-to-br ${platform.accent} px-6 py-12 shadow-elevated sm:px-10 sm:py-14`}

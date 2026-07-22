@@ -191,7 +191,7 @@ export default async function TopicPillarPage({
       />
       <SiteHeader />
       <main>
-        <section className="border-b border-border/60 pb-12 pt-28 sm:pt-32">
+        <section className="border-b border-border/60 pb-12 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
           <div className="container max-w-3xl">
             <nav aria-label="Breadcrumb" className="mb-6">
               <ol className="flex items-center gap-2 text-sm text-muted-foreground">

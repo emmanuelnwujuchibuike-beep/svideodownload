@@ -32,7 +32,7 @@ export default function DevelopersPage() {
   return (
     <>
       <SiteHeader />
-      <main className="container max-w-3xl pb-24 pt-28 sm:pt-36">
+      <main className="container max-w-3xl pb-24 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+9rem)]">
         <header className="mb-10">
           <h1 className="text-3xl font-bold tracking-[-0.02em] sm:text-4xl">Developer API</h1>
           <p className="mt-3 text-muted-foreground">

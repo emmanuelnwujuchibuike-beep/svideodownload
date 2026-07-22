@@ -65,7 +65,7 @@ export default function AcademyPage() {
       />
       <SiteHeader />
       <main>
-        <section className="border-b border-border/60 pb-14 pt-28 sm:pt-32">
+        <section className="border-b border-border/60 pb-14 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
           <div className="container max-w-5xl">
             <p className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-primary">
               Knowledge Campus

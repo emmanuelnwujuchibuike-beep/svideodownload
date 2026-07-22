@@ -45,7 +45,7 @@ export default function BlogIndex() {
     <>
       <SiteHeader />
       <main>
-        <section className="container max-w-6xl pt-28 text-center sm:pt-36">
+        <section className="container max-w-6xl pt-[calc(var(--frenz-safe-top)+7rem)] text-center sm:pt-[calc(var(--frenz-safe-top)+9rem)]">
           <span className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500/10 to-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-violet-600 ring-1 ring-inset ring-violet-500/20 dark:text-violet-300">
             <BookOpen className="h-3.5 w-3.5 text-amber-500" /> Latest News & Guides
           </span>

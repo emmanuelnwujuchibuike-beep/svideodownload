@@ -17,7 +17,7 @@ export function PageShell({
   return (
     <>
       <SiteHeader />
-      <main className="container max-w-3xl pb-24 pt-32 sm:pt-40">
+      <main className="container max-w-3xl pb-24 pt-[calc(var(--frenz-safe-top)+8rem)] sm:pt-[calc(var(--frenz-safe-top)+10rem)]">
         <header className="mb-10 border-b border-border/60 pb-8">
           <h1 className="text-4xl font-semibold tracking-[-0.03em] sm:text-5xl">
             {title}

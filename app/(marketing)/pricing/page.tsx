@@ -107,7 +107,7 @@ export default async function PricingPage() {
   return (
     <>
       <SiteHeader />
-      <main className="relative overflow-hidden pb-28 pt-32 sm:pt-40">
+      <main className="relative overflow-hidden pb-28 pt-[calc(var(--frenz-safe-top)+8rem)] sm:pt-[calc(var(--frenz-safe-top)+10rem)]">
 
         <div className="container max-w-5xl">
           <header className="mx-auto mb-14 max-w-2xl text-center">

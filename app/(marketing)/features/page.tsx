@@ -49,7 +49,7 @@ export default function FeaturesPage() {
   return (
     <div className="bg-background text-foreground">
       <SiteHeader />
-      <main className="container max-w-5xl py-28 sm:py-32">
+      <main className="container max-w-5xl pb-28 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pb-32 sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
         <Link
           href="/"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"

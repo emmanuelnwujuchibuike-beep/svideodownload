@@ -241,10 +241,10 @@ export function IosInstallPrompt() {
                 </p>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                   {mode === "android"
-                    ? "A faster experience, quicker access from your Home Screen, and faster downloads — plus notifications if you'd like them. You can turn notifications off anytime in Notification settings."
+                    ? "A full-screen, app-like view with no browser bar, quicker access from your Home Screen, and faster downloads — plus notifications if you'd like them. You can turn notifications off anytime in Notification settings."
                     : mode === "ios-inapp"
-                      ? "This link opened inside an app that can't install web apps. Copy the link below, open it in Safari, then add it to your Home Screen there for a faster experience, quicker access, and faster downloads — with notifications if you'd like them (you can turn them off anytime in Notification settings)."
-                      : `A faster experience, quicker access from your Home Screen, and faster downloads — plus notifications if you'd like them (you can turn them off anytime in Notification settings). Nothing below is a button on this page — Apple requires every website to be added from ${browserName}'s own menu first. No site can skip this step.`}
+                      ? "This link opened inside an app that can't install web apps. Copy the link below, open it in Safari, then add it to your Home Screen there for a full-screen, app-like view with no browser bar, quicker access, and faster downloads — with notifications if you'd like them (you can turn them off anytime in Notification settings)."
+                      : `A full-screen, app-like view with no browser bar, quicker access from your Home Screen, and faster downloads — plus notifications if you'd like them (you can turn them off anytime in Notification settings). Nothing below is a button on this page — Apple requires every website to be added from ${browserName}'s own menu first. No site can skip this step.`}
                 </p>
                 {mode === "android" ? (
                   <button

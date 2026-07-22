@@ -21,6 +21,7 @@ export const AD_ZONES = [
   "reward_video",
   "sidebar",
   "bottom_banner",
+  "download_history_top",
   "download_history_bottom",
   /* Legacy, kept so existing rows stay visible and editable in the admin rather
      than vanishing from the list they were created in. */
@@ -225,6 +226,14 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
     persistent: true,
     supportsSkip: false,
     prefetch: true,
+  },
+  download_history_top: {
+    label: "Download history — above the list",
+    description:
+      "Directly above the download history on the library and Downloads pages. Collapses when empty.",
+    persistent: true,
+    supportsSkip: false,
+    prefetch: false,
   },
   download_history_bottom: {
     label: "Download history — below the list",

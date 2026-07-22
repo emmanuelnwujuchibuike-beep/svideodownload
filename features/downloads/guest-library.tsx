@@ -6,7 +6,9 @@ import Link from "next/link";
 import { Downloader } from "@/features/downloader/downloader";
 import { HistoryPanel } from "@/features/history/history-panel";
 import { useUser } from "@/features/auth/use-user";
-import { AdSurface } from "@/features/monetization/ad-surface";
+import { DownloadHistoryAd } from "@/features/monetization/download-history-ad";
+import { DownloadInterstitial } from "@/features/monetization/download-interstitial";
+import { TiredOfAds } from "@/features/monetization/tired-of-ads";
 import { UsageDashboard } from "./usage-dashboard";
 
 /**
@@ -44,8 +46,11 @@ export function GuestLibrary() {
           a guest never has to leave this page to save another video. */}
       <Downloader />
 
-      {/* Usage analytics + the 5 GB quota meter (or unlimited, when signed in). */}
+      {/* Usage analytics + the plan storage meter (or unlimited, on Business). */}
       <UsageDashboard />
+
+      {/* Admin-managed ad slot ABOVE the history; collapses when empty. */}
+      <DownloadHistoryAd position="top" />
 
       {/* The on-device history list (search / favourite / re-download / remove).
           Returns nothing until there is at least one saved download. */}
@@ -53,7 +58,15 @@ export function GuestLibrary() {
 
       {/* Admin-managed ad slot below the history — insert or remove any ad for
           this zone from the dashboard. Renders nothing until the zone is filled. */}
-      <AdSurface zone="download_history_bottom" maxWidth="max-w-2xl" />
+      <DownloadHistoryAd position="bottom" />
+
+      {/* "Tired of ads → Upgrade to Pro" — free / signed-out only. */}
+      <TiredOfAds />
+
+      {/* Download-flow interstitial: every 3rd download and every 3rd history
+          watch. Idle is left to the marketing IdleInterstitial this page already
+          carries, so the two don't double up (they share a cooldown too). */}
+      <DownloadInterstitial triggers={["download", "watch"]} />
 
 
       {/* Signed-in visitors get the full dashboard; don't duplicate it here. */}

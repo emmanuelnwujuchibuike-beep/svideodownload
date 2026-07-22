@@ -39,11 +39,18 @@ const GLOBAL_CEILING = 340 * 1024;
  * entry (DownloadsEntry) is permanent chrome on every marketing page and costs
  * ~0.35 kB. The 5 GB guest gate that shipped alongside it was pushed OFF the
  * landing entirely — dynamic-imported QuotaGate + a fully lazy, on-tap usage
- * check — so this bump buys the header button, not the feature behind it. It is
- * the smallest step that clears the measured 300.35 kB, per this file's own rule
- * that a justified increase is raised and explained rather than skipped.
+ * check — so this bump buys the header button, not the feature behind it.
+ *
+ * 301 → 302 kB (2026-07-22, later): the download interstitial the owner asked for
+ * fires on "every 3rd download" and "every 3rd history watch", so its trigger
+ * counters live in the shared download manager and player store — both of which
+ * the landing's Downloader already imports. Adding those exports shifted the
+ * landing's shared-chunk composition by a few hundred bytes; the interstitial UI,
+ * the review player and the ad furniture themselves are all code-split off
+ * first-load (ReviewPlayerMount, DeferredAdFurniture, the dynamic interstitial).
+ * This is the smallest step over the measured 301.3 kB. Holding the line here.
  */
-const ENTRY_CEILING = 301 * 1024;
+const ENTRY_CEILING = 302 * 1024;
 
 const ENTRY_ROUTES = [
   "/(marketing)/page",

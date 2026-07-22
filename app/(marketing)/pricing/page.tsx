@@ -52,6 +52,7 @@ function buildTiers(pricing: {
         "Downloads from every supported platform",
         "HD video, MP3 audio & photos",
         "No watermark",
+        "5 GB private cloud storage",
         "Up to 30 downloads/day",
         "Supported by ads",
       ],
@@ -68,8 +69,11 @@ function buildTiers(pricing: {
       features: [
         "Everything in Free",
         "100% ad-free experience",
+        "50 GB private cloud storage",
+        "4K & highest-quality downloads",
         "Faster, priority downloads",
         "Batch downloads",
+        "Watch & re-download on any device",
         "Up to 1,000 downloads/day",
       ],
       cta: `Upgrade to ${pricing.pro.name}`,
@@ -85,6 +89,7 @@ function buildTiers(pricing: {
       icon: Code2,
       features: [
         "Everything in Pro",
+        "Unlimited private cloud storage",
         "Full REST API access",
         "10,000 downloads/day",
         "Higher rate limits",

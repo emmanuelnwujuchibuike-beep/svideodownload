@@ -34,7 +34,7 @@ const REEL_PLATFORMS: PlatformId[] = ["tiktok", "instagram", "snapchat"];
  */
 export const PLAN_LIMIT_BYTES: Record<BillingPlan, number> = {
   free: 5 * 1024 ** 3,
-  pro: 59 * 1024 ** 3,
+  pro: 50 * 1024 ** 3,
   business: Infinity,
 };
 

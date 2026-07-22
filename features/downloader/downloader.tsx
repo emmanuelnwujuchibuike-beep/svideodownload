@@ -23,7 +23,6 @@ import {
   subscribe as subscribeDownloads,
 } from "@/features/downloads/manager";
 import { PublishButton } from "@/features/social/publish-button";
-import { usePlayerQueue } from "@/features/downloads/player-store";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { DownloadCompleteAd } from "@/features/monetization/download-complete-ad";
 import { FetchedAd } from "@/features/monetization/fetched-ad";
@@ -56,11 +55,12 @@ const DiscoveryGateway = dynamic(
 // which the 2-second budget cannot afford; it's mounted lazily on first open.
 const QuotaGate = dynamic(() => import("@/features/downloads/quota-gate").then((m) => m.QuotaGate), { ssr: false });
 
-// The in-browser player for the completion card's "Review video". Mounted here
-// because public pages (landing / library / downloader pages) have no app shell
-// to host it. Gated on an active queue so the chunk loads only when a visitor
-// actually reviews a download — never on a cold landing visit.
-const DownloadPlayer = dynamic(() => import("@/features/downloads/download-player").then((m) => m.DownloadPlayer), { ssr: false });
+// The in-browser player for the completion card's "Review video". Public pages
+// (landing / library / downloader pages) have no app shell to host it. Its own
+// dynamic module keeps `player-store` and the player chunk off the landing's
+// first-load bundle — it loads after hydration, and the player itself only when
+// a download is actually reviewed.
+const ReviewPlayerMount = dynamic(() => import("@/features/downloads/review-player-mount").then((m) => m.ReviewPlayerMount), { ssr: false });
 
 // Cycled through in the input placeholder for a lively, on-brand prompt.
 const PLACEHOLDER_PLATFORMS = [
@@ -127,8 +127,6 @@ export function Downloader({
   const tasks = useSyncExternalStore(subscribeDownloads, getDownloads, getServerDownloads);
   const announced = useRef<Set<string>>(new Set());
   const [completeAdOpen, setCompleteAdOpen] = useState(false);
-  // Only mount the player once something is queued to review (chunk loads on demand).
-  const playerQueue = usePlayerQueue();
 
   useEffect(() => {
     for (const task of tasks) {
@@ -454,8 +452,9 @@ export function Downloader({
           signed-in app shell, which is the only place AppOverlays mounts it. */}
       <FloatingDownloadProgress />
 
-      {/* In-browser review player — mounted only when a download is opened. */}
-      {playerQueue ? <DownloadPlayer /> : null}
+      {/* In-browser review player — loads after hydration, renders only when a
+          download is opened for review (see ReviewPlayerMount). */}
+      <ReviewPlayerMount />
 
       {/* The storage gate — opens when a visitor at their plan ceiling
           taps download. Mounted lazily (code-split) on first open so it costs the

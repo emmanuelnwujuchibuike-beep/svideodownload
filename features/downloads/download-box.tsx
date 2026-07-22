@@ -11,9 +11,12 @@ import { useDownloader } from "@/features/downloader/use-downloader";
 import { PreviewCard } from "@/features/downloader/preview-card";
 import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
 import { QuotaGate } from "@/features/downloads/quota-gate";
-import { startDownload } from "@/features/downloads/manager";
+import { onDownloadCompleted, startDownload } from "@/features/downloads/manager";
 import { useHistory } from "@/features/history/use-history";
 import { limitForPlan, totalUsedBytes } from "@/features/history/usage";
+import { DownloadCompleteAd } from "@/features/monetization/download-complete-ad";
+import { FetchedAd } from "@/features/monetization/fetched-ad";
+import { ResultOffer } from "@/features/monetization/result-offer";
 import { getAutoDownload, getPreferredQuality } from "@/lib/download-hub/auto-download";
 import { buildDownloadContext, pickFormat } from "@/lib/download-hub/context";
 import type { DownloadContext } from "@/lib/download-hub/types";
@@ -53,6 +56,11 @@ export function DownloadBox() {
     count: 0,
     limitBytes: 0,
   });
+
+  // The after-download ad fires on a REAL completion, not the button press —
+  // the manager's completion beat is the only honest signal a transfer finished.
+  const [completeAdOpen, setCompleteAdOpen] = useState(false);
+  useEffect(() => onDownloadCompleted(() => setCompleteAdOpen(true)), []);
 
   const isBusy = status === "fetching";
 
@@ -220,7 +228,12 @@ export function DownloadBox() {
 
       {metadata ? (
         <div className="text-foreground">
+          {/* The download-result ad, above the result — same placement as the
+              landing flow. Renders nothing until the zone is filled. */}
+          <FetchedAd key={`ad-${metadata.id}`} />
           <PreviewCard metadata={metadata} phase="idle" onDownload={onDownload} />
+          {/* Decision-engine offer (ad / affiliate / upgrade), keyed per result. */}
+          <ResultOffer key={metadata.id} />
           {savedContext ? <DiscoveryGateway context={savedContext} /> : null}
         </div>
       ) : null}
@@ -228,6 +241,10 @@ export function DownloadBox() {
       {/* Live progress / completion card (singleton — no-op if the app shell
           already mounted one). */}
       <FloatingDownloadProgress />
+
+      {/* After-download ad — renders nothing until a transfer completes AND the
+          download_complete zone is filled. */}
+      <DownloadCompleteAd open={completeAdOpen} onClose={() => setCompleteAdOpen(false)} />
 
       {/* Plan storage gate — upgrade or clear when over the ceiling. */}
       <QuotaGate

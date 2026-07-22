@@ -1,14 +1,10 @@
 "use client";
 
 import {
-  AlertCircle,
-  CheckCircle2,
   ChevronDown,
   Globe,
   Download,
-  HardDrive,
   Heart,
-  Loader2,
   MoreVertical,
   Pause,
   Play,
@@ -17,7 +13,6 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { DownloadBox } from "@/features/downloads/download-box";
@@ -28,6 +23,11 @@ import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
 import { estimateBytes } from "@/features/history/usage";
 import { AdSurface } from "@/features/monetization/ad-surface";
+import { DownloadHistoryAd } from "@/features/monetization/download-history-ad";
+import { DownloadInterstitial } from "@/features/monetization/download-interstitial";
+import { ExitIntent } from "@/features/monetization/exit-intent";
+import { StickyTopAd } from "@/features/monetization/sticky-top-ad";
+import { TiredOfAds } from "@/features/monetization/tired-of-ads";
 import { UsageDashboard } from "@/features/downloads/usage-dashboard";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord, PlatformId } from "@/types";
@@ -65,7 +65,6 @@ export function DownloadsPage() {
   const [limit, setLimit] = useState(8);
 
   const active = tasks.filter((t) => t.status !== "completed" && t.status !== "canceled");
-  const totalUsed = useMemo(() => items.reduce((s, r) => s + estimateBytes(r), 0), [items]);
 
   const filtered = useMemo(() => {
     let list = items.filter((r) => matchesTab(r, tab));
@@ -79,16 +78,13 @@ export function DownloadsPage() {
     return list;
   }, [items, tab, search, sort]);
 
-  const failed = tasks.filter((t) => t.status === "failed").length;
-
-  // History records completed downloads, so completed = items.length. The rate is
-  // over ATTEMPTS, which is the only denominator that makes the figure mean
-  // anything — and null when there have been none, rather than a fabricated 100%.
-  const attempts = items.length + failed;
-  const completedRate = attempts > 0 ? `${Math.round((items.length / attempts) * 100)}%` : "—";
-
   return (
     <div className="space-y-5 pt-1">
+      {/* The site's persistent banner, brought to the TOP of the download page:
+          sticky, so it stays put while the app top bar slides away on scroll.
+          Serves the bottom_banner zone; collapses when empty. */}
+      <StickyTopAd />
+
       {/* Warms the Gateway chunk and prefetches its destinations on idle, so
           nothing lags the first time it is needed. Renders nothing. */}
       <HubWarmup />
@@ -116,9 +112,14 @@ export function DownloadsPage() {
         </div>
       </section>
 
-      {/* Plan-aware storage: the usage meter (5 GB free · 59 GB Pro · unlimited
+      {/* Under the purple hero — adjusts to whatever ad size the zone serves
+          (AdSurface hugs the unit). The site's highest-attention placement. */}
+      <AdSurface zone="under_download" maxWidth="max-w-3xl" />
+
+      {/* Plan-aware storage: the usage meter (5 GB free · 50 GB Pro · unlimited
           Business), analytics, and the upgrade-or-clear gate — the same feature
-          the public library carries, in the dashboard. */}
+          the public library carries, in the dashboard. This is the page's single
+          stats surface; the old five-card row was redundant with it and is gone. */}
       <UsageDashboard />
 
       {/*
@@ -148,25 +149,6 @@ export function DownloadsPage() {
                 {t}
               </button>
             ))}
-          </div>
-
-          {/*
-            Stat cards. The last one spans both columns on mobile — with five
-            cards in a two-up grid it was otherwise stranded alone on its row,
-            reading as a rendering fault rather than a layout.
-          */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <Stat icon={Download} tint="text-violet-500" label="Total Downloads" value={items.length.toLocaleString()} sub="All time" />
-            {/*
-              `sub` was the literal string "100%", which read "Completed 0 · 100%"
-              on an empty library. It is now the real completion rate over
-              attempts (completed + failed), and an em dash when there have been
-              no attempts to take a rate of.
-            */}
-            <Stat icon={CheckCircle2} tint="text-emerald-500" label="Completed" value={items.length.toLocaleString()} sub={completedRate} />
-            <Stat icon={Loader2} tint="text-blue-500" label="In Progress" value={String(active.length)} sub={active.length ? "Active" : "—"} />
-            <Stat icon={AlertCircle} tint="text-amber-500" label="Failed" value={String(failed)} sub={failed ? "Retry available" : attempts > 0 ? "0%" : "—"} />
-            <Stat className="col-span-2 sm:col-span-1" icon={HardDrive} tint="text-cyan-500" label="Saved Storage" value={formatBytes(totalUsed)} sub="Space used" />
           </div>
 
           {/* Downloading */}
@@ -221,6 +203,9 @@ export function DownloadsPage() {
             </section>
           ) : null}
 
+          {/* Admin-managed ad slot ABOVE the history list; collapses when empty. */}
+          <DownloadHistoryAd position="top" maxWidth="max-w-3xl" />
+
           {/* Downloaded */}
           <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -272,46 +257,25 @@ export function DownloadsPage() {
 
           {/* Admin-managed ad slot below the history list — insert or remove any
               ad for this zone from the dashboard; collapses when empty. */}
-          <AdSurface zone="download_history_bottom" maxWidth="max-w-3xl" />
+          <DownloadHistoryAd position="bottom" maxWidth="max-w-3xl" />
 
-          {/* Premium banner */}
-          <Link href="/pricing" className="relative flex items-center justify-between gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-4 text-white shadow-elevated sm:p-5">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15"><Download className="h-5 w-5" /></span>
-              <div>
-                <p className="text-sm font-bold sm:text-base">Faster Downloads with Frenz Premium</p>
-                <p className="text-xs text-white/80">Download in 4K, no limits, ultra-fast speed and more.</p>
-              </div>
-            </div>
-            <span className="shrink-0 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900">Upgrade Now</span>
-          </Link>
+          {/* "Tired of ads → Upgrade to Pro" — shown only to visitors who see
+              ads (free / signed-out); Pro and Business never see it. */}
+          <TiredOfAds />
         </div>
 
         {/* Storage, Quick Actions, Categories and Learn. A sticky sidebar at
             `xl`, a stacked column everywhere else — see DownloadsRail. */}
         <DownloadsRail />
       </div>
-    </div>
-  );
-}
 
-function Stat({ icon: Icon, tint, label, value, sub, className }: { icon: typeof Download; tint: string; label: string; value: string; sub: string; className?: string }) {
-  return (
-    <div
-      className={cn(
-        "rounded-2xl border border-border/60 bg-card p-4 shadow-soft",
-        // Compositor-only lift. `transition-transform` rather than `transition`
-        // so a hover never animates layout properties.
-        "motion-safe:transition-transform motion-safe:duration-200 motion-safe:hover:-translate-y-0.5",
-        className,
-      )}
-    >
-      <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl bg-secondary", tint)}>
-        <Icon className="h-4 w-4" />
-      </span>
-      <p className="mt-3 text-xl font-extrabold tabular-nums">{value}</p>
-      <p className="truncate text-xs font-medium text-foreground">{label}</p>
-      <p className="truncate text-[11px] text-muted-foreground">{sub}</p>
+      {/* The download-flow interstitial (5s idle · every 3rd download · every 3rd
+          history watch) and the exit-intent unit — the marketing furniture the
+          app shell doesn't carry, brought to the download page. Both render
+          nothing for premium visitors (except the watch-trigger, which a Pro user
+          still sees). */}
+      <DownloadInterstitial />
+      <ExitIntent />
     </div>
   );
 }

@@ -46,6 +46,21 @@ export interface DownloadTask {
 let tasks: DownloadTask[] = [];
 const controllers = new Map<string, AbortController>();
 const listeners = new Set<() => void>();
+
+// A monotonic count of completed downloads this session, with its own listener
+// set — the interstitial fires on "3 consecutive downloads" and only needs the
+// completion beat, not every progress tick the main `listeners` set emits.
+let completedCount = 0;
+const completionListeners = new Set<() => void>();
+/** Total downloads completed this session (never decremented). */
+export function getCompletedCount(): number {
+  return completedCount;
+}
+/** Subscribe to download completions (fires once per finished transfer). */
+export function onDownloadCompleted(cb: () => void): () => void {
+  completionListeners.add(cb);
+  return () => completionListeners.delete(cb);
+}
 // Finished files kept briefly so the completion card's "Save to device" button
 // (iOS — the share sheet requires a user gesture) can hand them over. Capped.
 const finishedBlobs = new Map<string, { blob: Blob; filename: string }>();
@@ -161,6 +176,8 @@ async function run(id: string) {
     if (!ios) saveBlob(blob, filename);
 
     patch(id, { status: "completed", receivedBytes: received, totalBytes: total || received, speed: 0, awaitingSave: ios });
+    completedCount += 1;
+    for (const l of completionListeners) l();
     addDownload({
       url: task.url,
       platform: task.platform,

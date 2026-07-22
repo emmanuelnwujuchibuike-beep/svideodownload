@@ -18,6 +18,7 @@ import {
   Rss,
   ShieldAlert,
   SlidersHorizontal,
+  Telescope,
   Users,
   Wrench,
   type LucideIcon,
@@ -82,6 +83,7 @@ const ICONS: Record<string, LucideIcon> = {
   Rss,
   ShieldAlert,
   SlidersHorizontal,
+  Telescope,
   Users,
   Wrench,
 };

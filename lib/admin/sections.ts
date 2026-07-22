@@ -104,6 +104,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     icon: "Flame",
     blurb: "What the feed promotes, and the broadcast composer.",
   },
+  {
+    id: "discovery",
+    label: "Search & SEO",
+    category: "content",
+    icon: "Telescope",
+    blurb: "The Enterprise Search & Discovery Platform described by itself: every searchable entity, index, ranking signal, SEO asset and discovery surface, mapped to real code.",
+  },
 
   /* ── System ── */
   {

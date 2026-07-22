@@ -48,6 +48,7 @@ export const ENGINEERING_ASSETS: EngineeringAsset[] = [
   { id: "infrastructure", name: "Infrastructure", kind: "doc", source: "docs/INFRASTRUCTURE.md", owner: "devops", description: "Hosting, CDN, storage and the runtime topology.", status: "live" },
   { id: "design-system-doc", name: "Design System", kind: "doc", source: "docs/DESIGN_SYSTEM.md", owner: "design", description: "Tokens, components, motion, a11y and theming.", status: "live" },
   { id: "developer-experience", name: "Developer Experience", kind: "doc", source: "docs/DEVELOPER_EXPERIENCE.md", owner: "platform", description: "This platform: standards, registry, toolkit and AI-assisted development.", status: "live" },
+  { id: "search-platform-doc", name: "Search & Discovery Platform", kind: "doc", source: "docs/SEARCH_PLATFORM.md", owner: "platform", description: "The unified search, ranking, SEO and AI-discovery layer, mapped to real code with a teeth-backed registry.", status: "live" },
 
   /* ── Guides: onboarding for humans + AI ── */
   { id: "agents-guide", name: "AGENTS.md", kind: "guide", source: "AGENTS.md", owner: "platform", description: "How an AI assistant (or a new engineer) navigates the codebase, the standards and the golden rules.", status: "live" },

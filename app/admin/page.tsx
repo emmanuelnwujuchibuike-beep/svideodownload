@@ -65,6 +65,16 @@ import { BRAND_TOKENS, COLOR_TOKENS } from "@/lib/platform/design-tokens";
 import { EngineeringCatalog } from "@/features/admin/engineering-catalog";
 import { ENGINEERING_ASSET_KINDS, getEngineeringAssets } from "@/lib/platform/engineering-registry";
 import { getEngineeringStandards, STANDARD_AREAS } from "@/lib/platform/engineering-standards";
+import { DiscoveryCatalog } from "@/features/admin/discovery-catalog";
+import {
+  getDiscoverySurfaces,
+  getRankingSignals,
+  getSearchableEntities,
+  getSearchCapabilities,
+  getSearchIndexes,
+  getSeoAssets,
+  SEO_ASSET_KINDS,
+} from "@/lib/platform/search-platform";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -265,6 +275,18 @@ export default async function AdminPage() {
             <Suspense fallback={<PanelSkeleton />}>
               <ContentSection />
             </Suspense>
+          </AdminPanel>
+
+          <AdminPanel id="discovery">
+            <DiscoveryCatalog
+              entities={getSearchableEntities()}
+              indexes={getSearchIndexes()}
+              signals={getRankingSignals()}
+              seoAssets={getSeoAssets()}
+              seoKinds={SEO_ASSET_KINDS}
+              surfaces={getDiscoverySurfaces()}
+              capabilities={getSearchCapabilities()}
+            />
           </AdminPanel>
 
           <AdminPanel id="flags">

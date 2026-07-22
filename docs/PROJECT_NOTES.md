@@ -13,6 +13,40 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑22 (batch 6) — Enterprise Search & Discovery Platform
+
+The Search brief asked for a Search Gateway, Indexing Service, Discovery Engine,
+Recommendation Engine, SEO Service, Ranking Service and a "Search Registry™".
+**Almost all of it already existed** — the cross-surface content index
+(`lib/search/index.ts`), privacy-aware people/post search (`lib/social/search.ts`),
+the ⌘K command gateway, the "discover people" feed, the Universal Entity Registry
++ Schema Registry (`lib/discovery/*`), sitemap, robots and veracity-gated
+structured data across the app. The genuine, flagship gap was a **unified,
+operator-facing map** with teeth.
+
+Built (same shape as the Design / Engineering / Data platforms):
+- **`lib/platform/search-platform.ts`** — the Search & Discovery Registry:
+  searchable entities (which index serves each, permission-awareness,
+  indexability), indexes/engines, ranking signals, SEO & AI-discovery assets,
+  discovery surfaces, and the brief's search-type matrix — every live row mapped
+  to the real module that provides it.
+- **`search-platform.test.ts`** — teeth: a `live`/`partial` row must point at a
+  file that exists, a `planned` row must name none; entities must reference a
+  declared index; keyword/full-text must be live and the future modes
+  (semantic/voice/image/video/audio/OCR) must stay `planned` (+13 tests).
+- Admin **Search & SEO** section (`features/admin/discovery-catalog.tsx`);
+  registered in the Registry-of-Registries; `docs/SEARCH_PLATFORM.md`.
+
+Honestly `planned`, not implied as done: semantic/vector search, natural-language
+understanding, voice/image/video/audio/OCR search, sitemap index + image/video
+sitemaps, `llms.txt`, redirect management, aggregate-only query analytics, and a
+learned recommendation model — all phased in `docs/DISCOVERY_PLATFORM_RFC.md`.
+All new code is admin-only (`force-dynamic`), so the landing bundle is untouched
+and the 2-second budget holds. Verified: tsc + lint clean, **818 tests**, build
+clean, budget green post-build.
+
+---
+
 ## 2026‑07‑22 (batch 4) — Review player fixes + the Developer Experience Platform
 
 **Review player.** The landing "Review video" now behaves as asked: it no longer

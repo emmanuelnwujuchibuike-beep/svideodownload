@@ -16,7 +16,7 @@ import {
   subscribe,
   type DownloadTask,
 } from "@/features/downloads/manager";
-import { openPlayer } from "@/features/downloads/player-store";
+import { openPlayer, usePlayerQueue } from "@/features/downloads/player-store";
 import type { DownloadRecord } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -91,11 +91,15 @@ export function FloatingDownloadProgress() {
   const active = tasks.find((t) => t.status === "downloading" || t.status === "queued");
   const finished = tasks.find((t) => t.status === "completed" || t.status === "failed");
   const task = active ?? finished;
+  // Hold the card while the review player is open — closing the player must
+  // return the visitor to the card and its Save to device / Download history
+  // buttons, not to an empty screen because it timed out mid-review.
+  const reviewing = usePlayerQueue() !== null;
   useEffect(() => {
-    if (!task || task.status !== "completed" || task.awaitingSave) return;
+    if (!task || task.status !== "completed" || task.awaitingSave || reviewing) return;
     const t = setTimeout(() => dismissTask(task.id), 6000);
     return () => clearTimeout(t);
-  }, [task]);
+  }, [task, reviewing]);
 
   if (!claimed.current || !task) return null;
 
@@ -196,10 +200,10 @@ export function FloatingDownloadProgress() {
                 {task.status === "completed" ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      openPlayer(taskToRecord(task));
-                      dismissTask(task.id);
-                    }}
+                    // Do NOT dismiss the card — the full-screen player opens over
+                    // it, so closing the player leaves the card (and its Save to
+                    // device / Download history buttons) still there.
+                    onClick={() => openPlayer(taskToRecord(task))}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 px-3 py-2 text-xs font-semibold transition hover:bg-secondary"
                   >
                     <Play className="h-3.5 w-3.5" />{" "}

@@ -1,7 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useEffect } from "react";
 
+import { onDownloadCompleted } from "@/features/downloads/manager";
 import { usePlayerQueue } from "@/features/downloads/player-store";
 
 const DownloadPlayer = dynamic(
@@ -20,5 +22,12 @@ const DownloadPlayer = dynamic(
  */
 export function ReviewPlayerMount() {
   const queue = usePlayerQueue();
+
+  // Warm the player chunk the moment a download finishes — the visitor is about
+  // to see the completion card and is one tap from "Review video", so the import
+  // should already be in flight. Combined with the in-memory media cache, the
+  // first review then opens and plays with no visible load.
+  useEffect(() => onDownloadCompleted(() => void import("@/features/downloads/download-player")), []);
+
   return queue ? <DownloadPlayer /> : null;
 }

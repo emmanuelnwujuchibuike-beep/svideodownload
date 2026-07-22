@@ -13,6 +13,26 @@ import type { MediaKind } from "@/types";
 const DB_NAME = "frenz-media";
 const STORE = "blobs";
 
+/**
+ * A small in-memory cache in FRONT of IndexedDB.
+ *
+ * A just-finished download is saved to IndexedDB, but reading it straight back
+ * out for the "Review video" player still costs an async DB round-trip — enough
+ * to flash a loader. Keeping the last few blobs in memory lets the player replay
+ * them instantly (no DB read, no loading state), which is the "open and play
+ * instantly" the owner asked for. Bounded so it can never grow unbounded.
+ */
+const memoryCache = new Map<string, Blob>();
+const MEMORY_MAX = 4;
+function warmMemory(key: string, blob: Blob): void {
+  memoryCache.set(key, blob);
+  while (memoryCache.size > MEMORY_MAX) {
+    const oldest = memoryCache.keys().next().value;
+    if (oldest === undefined) break;
+    memoryCache.delete(oldest);
+  }
+}
+
 /** Stable key for a download (matches the history dedupe key). */
 export function mediaKey(url: string, formatId: string, kind: MediaKind): string {
   return `${url}|${formatId}|${kind}`;
@@ -35,6 +55,7 @@ function openDb(): Promise<IDBDatabase | null> {
 }
 
 export async function saveMedia(key: string, blob: Blob): Promise<void> {
+  warmMemory(key, blob); // instant replay for the just-downloaded file
   const db = await openDb();
   if (!db) return;
   await new Promise<void>((resolve) => {
@@ -51,6 +72,8 @@ export async function saveMedia(key: string, blob: Blob): Promise<void> {
 }
 
 export async function getMedia(key: string): Promise<Blob | null> {
+  const warm = memoryCache.get(key);
+  if (warm) return warm; // instant path — no IndexedDB round-trip
   const db = await openDb();
   if (!db) return null;
   return new Promise((resolve) => {
@@ -100,6 +123,7 @@ export async function warmMediaCache(payload: { url: string; formatId: string; k
 }
 
 export async function deleteMedia(key: string): Promise<void> {
+  memoryCache.delete(key);
   const db = await openDb();
   if (!db) return;
   await new Promise<void>((resolve) => {

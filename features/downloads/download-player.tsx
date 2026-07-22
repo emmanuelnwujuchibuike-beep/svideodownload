@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MessageCircle, MoreVertical, Pause, Share2, Trash2, X } from "lucide-react";
+import { AlertCircle, Check, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MessageCircle, MoreVertical, Pause, Share2, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -10,7 +10,7 @@ import { closePlayer, playerNext, playerPrev, usePlayerQueue } from "@/features/
 import { SendToChatSheet } from "@/features/downloads/send-to-chat-sheet";
 import { removeDownload, toggleFavorite } from "@/features/history/store";
 import { toast } from "@/features/ui/toast";
-import { downloadUrl, saveBlob } from "@/lib/client-download";
+import { downloadUrl, saveToDevice } from "@/lib/client-download";
 import { springs } from "@/lib/motion/springs";
 import { presignUpload, uploadWithPlan, type UploadPlan } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
@@ -47,6 +47,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   const [moreOpen, setMoreOpen] = useState(false);
   const [sendToChatOpen, setSendToChatOpen] = useState(false);
   const [favorited, setFavorited] = useState(rec.favorite);
+  const [savedToDevice, setSavedToDevice] = useState(false);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0); // 0-100 within the CURRENT item, for the status bar
   const blobRef = useRef<Blob | null>(null);
@@ -208,6 +209,25 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       }
     } catch {
       /* cancelled */
+    }
+  };
+
+  /** Hand the file to the device right from the preview. Uses `saveToDevice`
+   *  (the iOS-aware share-sheet path), reading the blob we already have in memory
+   *  or the on-device library — no re-download. */
+  const saveToDeviceNow = async () => {
+    const blob = blobRef.current ?? (await getMedia(mediaKey(rec.url, rec.formatId, rec.kind)).catch(() => null));
+    if (!blob) {
+      toast("Still preparing — try again in a moment.", "error");
+      return;
+    }
+    const ext = rec.kind === "audio" ? "mp3" : rec.kind === "image" ? "jpg" : "mp4";
+    try {
+      await saveToDevice(blob, `${rec.title || "download"}.${ext}`);
+      setSavedToDevice(true);
+      setTimeout(() => setSavedToDevice(false), 2000);
+    } catch {
+      /* the share sheet was cancelled — nothing to report */
     }
   };
 
@@ -402,6 +422,29 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         ) : null}
       </div>
 
+      {/* Save to device — directly inside the preview (owner's ask), not buried
+          in the ••• menu. The strip is pointer-events-none so only the button
+          itself intercepts taps; the rest passes through to the prev/next zones. */}
+      {url && !error ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-20 flex justify-center px-4">
+          <button
+            type="button"
+            onClick={saveToDeviceNow}
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-elevated transition active:scale-95"
+          >
+            {savedToDevice ? (
+              <>
+                <Check className="h-4 w-4 text-emerald-600" /> Saved
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" /> Save to device
+              </>
+            )}
+          </button>
+        </div>
+      ) : null}
+
       {/* Options (•••) — every action lives here now; no persistent bottom bar. */}
       <AnimatePresence>
         {moreOpen ? (
@@ -434,7 +477,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
                         <MenuItem icon={Globe2} label={publishing ? "Publishing…" : "Publish to everyone"} onClick={() => { if (!publishing) void publish(); }} />
                       )}
                       <MenuItem icon={MessageCircle} label="Send to chat" onClick={() => { setMoreOpen(false); setSendToChatOpen(true); }} />
-                      <MenuItem icon={Download} label="Save to device" onClick={() => { setMoreOpen(false); blobRef.current && saveBlob(blobRef.current, rec.title || "download"); }} />
+                      <MenuItem icon={Download} label="Save to device" onClick={() => { setMoreOpen(false); void saveToDeviceNow(); }} />
                     </>
                   ) : null}
                   <MenuItem icon={Heart} label={favorited ? "Unfavorite" : "Favorite"} active={favorited} onClick={toggleFav} />

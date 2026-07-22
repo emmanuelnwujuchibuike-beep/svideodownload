@@ -70,7 +70,7 @@ apps because these are singular, not per-product. Each maps to a real owner toda
 | Navigation | [lib/navigation/registry.ts](../lib/navigation/registry.ts) + `getModuleNav()` | ✅ derived from the module registry |
 | Search | [lib/search/index.ts](../lib/search/index.ts), `app/api/search` | ✅ (cross-module index still deepening) |
 | Notifications + Push | `lib/social/notifications`, `lib/push/*`, migs `0013/0018/0042–0047/0059` | ✅ realtime, one pipeline |
-| Design system | tokens in `tailwind.config.ts` (guarded by `lib/design-tokens.test.ts`), `lib/theme/theme-mode-client.ts`, `features/ui`, `components` | ✅ one token set; theme default **light** |
+| Design system | tokens declared in [lib/platform/design-tokens.ts](../lib/platform/design-tokens.ts) → `globals.css` custom properties **generated** from it (`npm run tokens:generate`, kept in sync by a test); `features/ui`, `components` | ✅ one typed token set, single source; theme default **light** |
 | Analytics / events | [lib/analytics/events.ts](../lib/analytics/events.ts), `lib/notify.ts` | ✅ |
 | Observability | [lib/observability/*](../lib/observability/diagnostics.ts) (diagnostics, memory-pressure, log-error) | ✅ |
 | Localization | `lib/i18n/*` (load-bearing; export/import pipeline) | ✅ coverage measured, never declared |

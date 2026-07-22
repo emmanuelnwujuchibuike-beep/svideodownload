@@ -2989,3 +2989,28 @@ inter-service network hops is the exact Reality-Ledger failure.
 isolation/observer tests + communication-registry source checks with teeth), build clean
 (`/admin` 22.4 kB, catalogue server-rendered). The Constitution gate validates the new
 `communication` admin section end-to-end.
+
+### Design Token Registry — partial → live, the scalable way (2026-07-21)
+
+The one registry I'd argued should stay `partial` (Tailwind tokens are CSS-var based).
+Owner: do it properly, don't skip. Done as a **single source of truth with codegen**,
+not a duplicated copy:
+
+- `lib/platform/design-tokens.ts` is now the authority — 17 semantic colour tokens
+  (light+dark HSL), 4 brand stops, radius + 5 motion tokens, all typed and importable
+  from TS (so theme-color meta / OG images / charts can read a real value instead of
+  hardcoding a hex).
+- `scripts/design-tokens.mjs` GENERATES the `:root`/`.dark` custom properties into
+  `app/globals.css` between `design-tokens:start/end` markers (Node 24 strips the .ts's
+  types at runtime — no build step). Only the marked block changes; the other ~620
+  lines of hand-tuned theming (glass, rings, gradients, safe-area, boot) are untouched.
+- Every token VALUE is byte-identical to before — zero visual change, confirmed by the
+  build. `npm run tokens:check` + `design-tokens.registry.test.ts` fail on any drift;
+  a `design-tokens` governance gate (kind `command`) points at `tokens:check`.
+
+With this, **all 14 registries are `live`** — the Registry-of-Registries has no
+`partial` rows left. (design-tokens was the last, and it earned it rather than being
+forced: the code registry is genuinely the source now, and the CSS is derived.)
+
+**Verified:** tsc clean, lint clean, **717 tests** across 66 files, `tokens:check` in
+sync, build clean.

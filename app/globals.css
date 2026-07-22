@@ -3,22 +3,14 @@
 @tailwind utilities;
 
 @layer base {
+  /* design-tokens:start — GENERATED from lib/platform/design-tokens.ts. Edit tokens there, then `npm run tokens:generate`. */
   :root {
-    /* Tells the BROWSER ITSELF (not just our own CSS variables) that this
-       page is light — governs the UA's native default background for any
-       moment/region before author CSS has actually applied (a real, if
-       narrow, cause of a dark flash independent of the `dark` class logic:
-       without this, a browser in OS dark mode can paint its own dark
-       default before Tailwind's stylesheet finishes loading/parsing), plus
-       native form controls/scrollbars. Confirmed absent before this fix. */
     color-scheme: light;
-    /* Frenzsave brand palette — Electric Blue #0A84FF + Royal Purple #6C4DFF.
-       Light: pure white base, warm neutral grays. */
     --background: 0 0% 100%;
     --foreground: 240 10% 8%;
     --card: 0 0% 100%;
     --card-foreground: 240 10% 8%;
-    --primary: 210 100% 50%; /* Electric Blue #0A84FF (deepened for white) */
+    --primary: 210 100% 50%; /* Electric Blue #0A84FF */
     --primary-foreground: 0 0% 100%;
     --secondary: 240 5% 95%;
     --secondary-foreground: 240 10% 8%;
@@ -32,15 +24,11 @@
     --input: 240 5% 88%;
     --ring: 250 100% 63%;
     --radius: 0.875rem;
-
-    /* Brand gradient stops (shared source for premium glows + gradients). */
-    --brand-blue: 210 100% 52%; /* #0A84FF */
-    --brand-blue-accent: 210 100% 62%; /* #3EA6FF */
-    --brand-purple: 250 100% 65%; /* #6C4DFF */
-    --brand-purple-accent: 252 100% 71%; /* #8E6BFF */
-
-    /* Motion tokens — one shared easing/timing language across the app. */
-    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --brand-blue: 210 100% 52%;
+    --brand-blue-accent: 210 100% 62%;
+    --brand-purple: 250 100% 65%;
+    --brand-purple-accent: 252 100% 71%;
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* shared easing */
     --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
     --dur-fast: 160ms;
     --dur: 240ms;
@@ -48,34 +36,30 @@
   }
 
   .dark {
-    /* Same reasoning as :root's color-scheme above, flipped. */
     color-scheme: dark;
-    /* Dark — the brand-first theme. Deep space-navy #050816 base, deep-navy
-       cards, Electric Blue #0A84FF primary, Royal Purple #6C4DFF accent. Rich,
-       never flat black; comfortable contrast; premium glow. */
-    --background: 229 55% 5%; /* #050816 */
+    --background: 229 55% 5%;
     --foreground: 220 25% 97%;
     --card: 226 36% 10%;
     --card-foreground: 220 25% 97%;
-    --primary: 210 100% 58%; /* Electric Blue, brighter for dark */
+    --primary: 210 100% 58%; /* Electric Blue #0A84FF */
     --primary-foreground: 0 0% 100%;
     --secondary: 224 30% 14%;
     --secondary-foreground: 220 25% 97%;
     --muted: 224 28% 12%;
     --muted-foreground: 220 15% 68%;
-    --accent: 250 100% 68%; /* Royal Purple */
+    --accent: 250 100% 68%; /* Royal Purple #6C4DFF */
     --accent-foreground: 0 0% 100%;
     --gold: 43 96% 56%;
     --gold-foreground: 30 20% 5%;
     --border: 225 28% 16%;
     --input: 225 28% 18%;
     --ring: 250 100% 68%;
-
     --brand-blue: 210 100% 56%;
     --brand-blue-accent: 210 100% 64%;
     --brand-purple: 250 100% 68%;
     --brand-purple-accent: 252 100% 73%;
   }
+  /* design-tokens:end */
 
   * {
     @apply border-border;

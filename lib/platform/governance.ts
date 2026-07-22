@@ -75,6 +75,7 @@ export const GATES: GovernanceGate[] = [
   /* ── performance & a11y ── */
   { id: "two-second-budget", name: "2-second page budget", requirement: "Cold entry to any page renders in ≤2s; measured on the live site.", domain: "performance", kind: "manual", enforcer: "docs/PERFORMANCE.md" },
   { id: "reduced-motion", name: "Reduced-motion baseline", requirement: "Every animation respects prefers-reduced-motion (app-wide MotionConfig).", domain: "accessibility", kind: "config", enforcer: "app/layout.tsx" },
+  { id: "design-tokens", name: "Design tokens single-source", requirement: "globals.css custom properties are generated from lib/platform/design-tokens.ts, never hand-drifted.", domain: "architecture", kind: "command", enforcer: "tokens:check" },
 
   /* ── change management & observability ── */
   { id: "feature-flags", name: "Change management via flags", requirement: "Risky changes ship behind a flag with a kill switch + rollout.", domain: "change-management", kind: "config", enforcer: "lib/platform/flags.ts" },

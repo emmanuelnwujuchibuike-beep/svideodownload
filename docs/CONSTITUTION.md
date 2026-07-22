@@ -214,9 +214,11 @@ Pure logic is unit-tested, and **a new guard must be shown able to fail** (the t
 discipline — see the reality-ledger and platform-catalog suites). `tsc` + lint + tests +
 build are necessary, never sufficient (Invariant I.6): UI needs visual/behavioural
 verification, error codes need a real request. Every subsystem ships a doc; durable
-records mirror to [PROJECT_NOTES.md](./PROJECT_NOTES.md). End-to-end tests, automated
-accessibility and performance testing, and tracing are **standards we hold but have not
-fully automated** — marked `planned` in the manifest, not claimed as done.
+records mirror to [PROJECT_NOTES.md](./PROJECT_NOTES.md). **End-to-end smoke tests**
+exist ([playwright.config.ts](../playwright.config.ts) + `e2e/`, `npm run test:e2e`) —
+a thin browser layer over the critical journeys, run separately from the unit gate.
+Automated accessibility/performance testing and distributed tracing remain **standards
+we hold but have not fully automated** — marked `planned` in the manifest, not claimed.
 
 ## Article XI — Change Management & Observability
 

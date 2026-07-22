@@ -82,7 +82,7 @@ export const GATES: GovernanceGate[] = [
   { id: "error-capture", name: "Error observability", requirement: "Client/server errors are captured, never swallowed silently.", domain: "observability", kind: "config", enforcer: "lib/observability/diagnostics.ts" },
 
   /* ── honest gaps (standards we hold, not yet automated) ── */
-  { id: "e2e", name: "End-to-end tests", requirement: "Critical user journeys covered by automated E2E.", domain: "testing", kind: "planned", enforcer: "" },
+  { id: "e2e", name: "End-to-end tests", requirement: "Critical user journeys covered by browser smoke tests (Playwright).", domain: "testing", kind: "command", enforcer: "test:e2e" },
   { id: "tracing", name: "Distributed tracing", requirement: "Requests traced across the web tier and the worker.", domain: "observability", kind: "planned", enforcer: "" },
   { id: "eng-metrics", name: "Engineering metrics", requirement: "Deploy frequency, lead time, change-fail rate tracked (DORA).", domain: "process", kind: "planned", enforcer: "" },
 ];

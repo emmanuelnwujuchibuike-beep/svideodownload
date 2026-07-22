@@ -2926,3 +2926,32 @@ and Engineering Intelligence (the manifest is the machine-readable form of the d
 **Verified:** tsc clean, lint clean, **687 tests** across 61 files, build compiled
 clean. The notification refactor left `notification-settings.test.ts` green
 (behaviour unchanged), and the Constitution gate validates the enlarged catalogue.
+
+### Permission + API registries live, and E2E smoke tests (2026-07-21)
+
+- **Permission Registry** (partial → live): the access model — capabilities +
+  `everyone`/`proOnly`/`businessOnly`/`adminOnly` + `Access`/`ANON_ACCESS` — moved out
+  of `module-registry.ts` into `lib/platform/permissions.ts`; module-registry
+  re-exports (`ModuleAccess = Access`) so its many client+server importers are
+  unchanged. Scope kept honest: code-side authz only; per-row RLS stays a separate
+  layer. Grant-matrix test.
+- **API Registry** (partial → live): `lib/platform/api-registry.ts` declares all 28
+  public `/api/v1` endpoints (method/path/auth/category); `api-registry.test.ts`
+  asserts each maps to a route file that actually exports that method. SDK is the
+  typed client over it.
+- **E2E smoke tests** (planned → command): the biggest testing-governance gap closed.
+  `@playwright/test` + `playwright.config.ts` + `e2e/smoke.spec.ts` cover the critical
+  journeys (landing, login, downloads, `/api/health`, `/api/flags`). Written to run
+  WITHOUT a database (static landing, degrading endpoints) so CI needs no secrets.
+  **Ran a real Chromium here: 5/5 green.** Two lessons baked in: use
+  `waitUntil: "domcontentloaded"` (the default `load` hangs on subresources/dev data
+  fetches), and the dev CSP `eval` report-flood is console noise, not a failure.
+  Deliberately NOT added to the blocking `ci.yml` job yet — wire it after a green run
+  in the target env. `e2e/` is excluded from the app tsconfig (Playwright compiles it).
+
+  With this, **12 of 14 registries are `live`**; the two left `partial`
+  (`ai-capability`, `design-tokens`) are honestly better so — the Tailwind config *is*
+  the token source, and the assistant surface is dormant.
+
+**Verified:** tsc clean, lint clean, **698 unit tests** across 63 files, build clean,
+**5/5 E2E** green in a real browser.

@@ -2,8 +2,6 @@
 
 import { FolderDown } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 
 import { IconTile } from "@/components/icons/icon-tile";
 import { useUser } from "@/features/auth/use-user";
@@ -16,18 +14,14 @@ import { useUser } from "@/features/auth/use-user";
  * only "Downloads" affordances pointed everyone at `/downloads`, which walled a
  * guest at the login screen the moment they looked for a file they'd just saved.
  *
- * `router.prefetch(href)` on mount warms the destination the instant the header
- * renders, so the first tap opens with no loading — the brief's "prefetch
- * immediately so it doesn't load at all".
+ * `prefetch` on the Link warms the destination as soon as it's in the viewport
+ * (the header always is), so the first tap opens with no loading — the brief's
+ * "prefetch immediately so it doesn't load at all" — without the extra
+ * `useRouter` a manual prefetch would have cost every page's bundle.
  */
 export function DownloadsEntry({ variant = "icon" }: { variant?: "icon" | "tile" }) {
   const { user } = useUser();
   const href = user ? "/downloads" : "/library";
-  const router = useRouter();
-
-  useEffect(() => {
-    router.prefetch(href);
-  }, [href, router]);
 
   if (variant === "tile") {
     return (

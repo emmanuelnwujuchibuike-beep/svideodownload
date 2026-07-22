@@ -44,6 +44,18 @@ export function estimateBytes(rec: Pick<DownloadRecord, "size" | "kind" | "platf
   return 38 * 1024 * 1024;
 }
 
+/**
+ * Just the total — a cheap sum for the download gate, which only needs to know
+ * whether the ceiling is crossed. Importing this instead of `computeUsage` keeps
+ * the full analytics (and its Maps) out of the landing page's initial bundle,
+ * which the 2-second budget cannot afford.
+ */
+export function totalUsedBytes(items: readonly DownloadRecord[]): number {
+  let total = 0;
+  for (const rec of items) total += estimateBytes(rec);
+  return total;
+}
+
 export interface UsageBreakdownEntry {
   key: string;
   label: string;

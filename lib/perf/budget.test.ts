@@ -34,8 +34,16 @@ const GLOBAL_CEILING = 340 * 1024;
  * These are where the 2-second budget actually applies: a cold visitor arriving
  * from search or a shared link, on a slow connection, with an empty cache. The
  * signed-in app pages are reached after that first paint has already happened.
+ *
+ * 300 → 301 kB (2026-07-22): the owner-requested global "Your downloads" header
+ * entry (DownloadsEntry) is permanent chrome on every marketing page and costs
+ * ~0.35 kB. The 5 GB guest gate that shipped alongside it was pushed OFF the
+ * landing entirely — dynamic-imported QuotaGate + a fully lazy, on-tap usage
+ * check — so this bump buys the header button, not the feature behind it. It is
+ * the smallest step that clears the measured 300.35 kB, per this file's own rule
+ * that a justified increase is raised and explained rather than skipped.
  */
-const ENTRY_CEILING = 300 * 1024;
+const ENTRY_CEILING = 301 * 1024;
 
 const ENTRY_ROUTES = [
   "/(marketing)/page",

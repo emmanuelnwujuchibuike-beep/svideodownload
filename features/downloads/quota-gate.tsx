@@ -5,7 +5,7 @@ import { Crown, HardDrive, LogIn, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect } from "react";
 
-import { GUEST_LIMIT_BYTES, type UsageStats } from "@/features/history/usage";
+import { GUEST_LIMIT_BYTES } from "@/features/history/usage";
 import { formatBytes } from "@/lib/utils";
 
 /**
@@ -24,12 +24,14 @@ import { formatBytes } from "@/lib/utils";
  */
 export function QuotaGate({
   open,
-  usage,
+  usedBytes,
+  count,
   onClearHistory,
   onClose,
 }: {
   open: boolean;
-  usage: UsageStats;
+  usedBytes: number;
+  count: number;
   onClearHistory: () => void;
   onClose: () => void;
 }) {
@@ -90,9 +92,9 @@ export function QuotaGate({
               You&apos;ve reached your 5&nbsp;GB free limit
             </h2>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              This device has saved {formatBytes(usage.usedBytes)} across{" "}
-              {usage.count === 1 ? "1 download" : `${usage.count} downloads`}. Sign in to upgrade to
-              Pro for unlimited storage synced across your devices — or clear your history to keep
+              This device has saved {formatBytes(usedBytes)} across{" "}
+              {count === 1 ? "1 download" : `${count} downloads`}. Sign in to upgrade to
+              Pro for more storage synced across your devices — or clear your history to keep
               downloading here.
             </p>
 
@@ -102,7 +104,7 @@ export function QuotaGate({
                 <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-600" style={{ width: "100%" }} />
               </div>
               <p className="mt-1.5 text-[11px] font-medium tabular-nums text-muted-foreground">
-                {formatBytes(usage.usedBytes)} of {formatBytes(GUEST_LIMIT_BYTES)} used
+                {formatBytes(usedBytes)} of {formatBytes(GUEST_LIMIT_BYTES)} used
               </p>
             </div>
 

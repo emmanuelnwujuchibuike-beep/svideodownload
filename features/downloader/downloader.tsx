@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { type FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { RecommendedToolsClient } from "@/components/monetization/recommended-tools-client";
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
@@ -23,14 +23,11 @@ import {
   subscribe as subscribeDownloads,
 } from "@/features/downloads/manager";
 import { PublishButton } from "@/features/social/publish-button";
-import { QuotaGate } from "@/features/downloads/quota-gate";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { DownloadCompleteAd } from "@/features/monetization/download-complete-ad";
 import { FetchedAd } from "@/features/monetization/fetched-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
 import { useUser } from "@/features/auth/use-user";
-import { useHistory } from "@/features/history/use-history";
-import { computeUsage, GUEST_LIMIT_BYTES } from "@/features/history/usage";
 import { buildDownloadContext } from "@/lib/download-hub/context";
 import type { DownloadContext } from "@/lib/download-hub/types";
 import { PLATFORMS, detectPlatform } from "@/lib/platforms";
@@ -51,6 +48,11 @@ const DiscoveryGateway = dynamic(
   () => import("@/features/download-hub/discovery-gateway").then((m) => m.DiscoveryGateway),
   { ssr: false },
 );
+
+// The 5 GB gate only appears for a signed-out visitor already over the limit — a
+// rare state. Code-split it (and its icons) out of the landing's initial bundle,
+// which the 2-second budget cannot afford; it's mounted lazily on first open.
+const QuotaGate = dynamic(() => import("@/features/downloads/quota-gate").then((m) => m.QuotaGate), { ssr: false });
 
 // Cycled through in the input placeholder for a lively, on-brand prompt.
 const PLACEHOLDER_PLATFORMS = [
@@ -92,19 +94,16 @@ export function Downloader({
 
   /*
     The 5 GB guest gate. A signed-out visitor's downloads count against a local
-    5 GB ceiling (features/history/usage.ts); signed-in users are uncapped
-    (`Infinity`). When a guest at the ceiling taps download, we open the
-    upgrade-or-clear dialog instead of starting the transfer — the file is never
-    silently dropped, the visitor chooses. The rule lives here so the same store
-    that records history is the one that gates it, and the library page's meter
-    can never disagree with what the button enforces.
+    5 GB ceiling (features/history/usage.ts); signed-in users are uncapped. When a
+    guest at the ceiling taps download, the upgrade-or-clear dialog opens instead
+    of starting the transfer — the file is never silently dropped, the visitor
+    chooses. The whole check is LAZY (dynamic-imported on tap): a gate that only a
+    signed-out, over-limit visitor ever hits must not ship the usage code on every
+    cold landing visit, which the 2-second budget cannot afford.
   */
-  const { items: historyItems, clearHistory } = useHistory();
-  const usage = useMemo(
-    () => computeUsage(historyItems, user ? Infinity : GUEST_LIMIT_BYTES),
-    [historyItems, user],
-  );
   const [quotaGateOpen, setQuotaGateOpen] = useState(false);
+  const [quotaGateMounted, setQuotaGateMounted] = useState(false);
+  const [gateInfo, setGateInfo] = useState<{ usedBytes: number; count: number }>({ usedBytes: 0, count: 0 });
 
   /*
     The after-download placement fires on a REAL completion, not on the button
@@ -128,13 +127,9 @@ export function Downloader({
     }
   }, [tasks]);
 
-  const handleDownload = (formatId: string, kind: MediaKind) => {
+  /** Actually start the transfer — reached once any gate has passed. */
+  const startDownload = (formatId: string, kind: MediaKind) => {
     if (!metadata) return;
-    // Guests past 5 GB choose upgrade-or-clear before another download starts.
-    if (usage.overLimit) {
-      setQuotaGateOpen(true);
-      return;
-    }
     const fmt = metadata.formats.find((f) => f.formatId === formatId);
     // In-app background download: streamed with live progress in the floating
     // card, the page stays fully usable, and the user NEVER lands on a raw
@@ -163,6 +158,32 @@ export function Downloader({
         downloadCount: downloadCount + 1,
       }),
     );
+  };
+
+  const handleDownload = (formatId: string, kind: MediaKind) => {
+    if (!metadata) return;
+    // Signed-in visitors are uncapped — start immediately. For a guest, lazily
+    // load the usage code and check the 5 GB ceiling; over it, open the gate
+    // instead of downloading. Nothing here ships on the landing's initial bundle.
+    if (user) {
+      startDownload(formatId, kind);
+      return;
+    }
+    void (async () => {
+      const [{ getSnapshot }, { totalUsedBytes, GUEST_LIMIT_BYTES }] = await Promise.all([
+        import("@/features/history/store"),
+        import("@/features/history/usage"),
+      ]);
+      const items = getSnapshot();
+      const usedBytes = totalUsedBytes(items);
+      if (usedBytes >= GUEST_LIMIT_BYTES) {
+        setGateInfo({ usedBytes, count: items.length });
+        setQuotaGateMounted(true);
+        setQuotaGateOpen(true);
+      } else {
+        startDownload(formatId, kind);
+      }
+    })();
   };
 
   // Share Target (manifest `share_target`) hands us a link from another app
@@ -422,13 +443,17 @@ export function Downloader({
       <FloatingDownloadProgress />
 
       {/* The 5 GB guest gate — opens when a signed-out visitor at the ceiling
-          taps download. Signed-in users never reach it (uncapped usage). */}
-      <QuotaGate
-        open={quotaGateOpen}
-        usage={usage}
-        onClearHistory={clearHistory}
-        onClose={() => setQuotaGateOpen(false)}
-      />
+          taps download. Mounted lazily (code-split) on first open so it costs the
+          landing nothing. Signed-in users never reach it (uncapped usage). */}
+      {quotaGateMounted ? (
+        <QuotaGate
+          open={quotaGateOpen}
+          usedBytes={gateInfo.usedBytes}
+          count={gateInfo.count}
+          onClearHistory={() => void import("@/features/history/store").then((m) => m.clearHistory())}
+          onClose={() => setQuotaGateOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -156,6 +156,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "Everything runtime-configurable without a redeploy — and an audited history of every change.",
   },
   {
+    id: "design",
+    label: "Design system",
+    category: "system",
+    icon: "Palette",
+    blurb: "The Experience OS described by itself: design tokens, every reusable component with its a11y + motion contract, the motion language and themes.",
+  },
+  {
     id: "traffic",
     label: "Traffic",
     category: "system",

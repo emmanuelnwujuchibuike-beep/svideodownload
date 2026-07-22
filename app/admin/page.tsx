@@ -58,6 +58,10 @@ import { fetchRecentActivity } from "@/lib/admin/activity";
 import { ConfigCatalog } from "@/features/admin/config-catalog";
 import { getConfigSurfaces } from "@/lib/platform/config-registry";
 import { listConfigChanges } from "@/lib/platform/config-audit";
+import { DesignCatalog } from "@/features/admin/design-catalog";
+import { COMPONENT_CATEGORIES, getComponentRegistry } from "@/lib/platform/component-registry";
+import { DESIGN_PRINCIPLES, getA11yStandards, getMotionPatterns, getThemes } from "@/lib/platform/design-system";
+import { BRAND_TOKENS, COLOR_TOKENS } from "@/lib/platform/design-tokens";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -303,6 +307,19 @@ export default async function AdminPage() {
             <Suspense fallback={<PanelSkeleton />}>
               <ConfigSection />
             </Suspense>
+          </AdminPanel>
+
+          <AdminPanel id="design">
+            <DesignCatalog
+              components={getComponentRegistry()}
+              categories={COMPONENT_CATEGORIES}
+              principles={DESIGN_PRINCIPLES}
+              motionPatterns={getMotionPatterns()}
+              a11yStandards={getA11yStandards()}
+              themes={getThemes()}
+              colorTokens={COLOR_TOKENS}
+              brandTokens={BRAND_TOKENS}
+            />
           </AdminPanel>
 
           <AdminPanel id="traffic">

@@ -43,6 +43,10 @@ export interface FlagOverride {
   enabled?: boolean | null;
   /** 0–100. Overrides the flag's declared `rollout`. `null`/absent = no override. */
   rolloutPercentage?: number | null;
+  /** Scheduled activation (ISO). The flag can't resolve on before this. */
+  activeFrom?: string | null;
+  /** Scheduled deactivation (ISO). The flag resolves off after this. */
+  activeUntil?: string | null;
 }
 
 export type FlagCategory = "product" | "experiment" | "ops" | "kill-switch";
@@ -78,6 +82,12 @@ export interface FeatureFlag {
    * so operators can preview a flag before ramping it. Does not affect other users.
    */
   adminBypass?: boolean;
+  /**
+   * Flag dependency: this flag can only be ON if the named flag is also ON for the
+   * same visitor. Resolved by `resolveFlagWithDeps` (cycle-guarded). Structural, so
+   * declared here rather than as a runtime override.
+   */
+  requires?: string;
   /**
    * May this flag's *resolved boolean* be read on the client, via `GET /api/flags`
    * + `useFlag()`? Default false ⇒ server-only. Set true for flags that gate a
@@ -146,6 +156,7 @@ export function resolveFlag(
   flag: FeatureFlag,
   override: FlagOverride | undefined,
   ctx: FlagContext,
+  now: number = Date.now(),
 ): boolean {
   // 1. Entitlement gate — hardest rule, not previewable.
   if (flag.plans && !flag.plans.includes(ctx.plan)) return false;
@@ -153,11 +164,16 @@ export function resolveFlag(
   // 2. Admin preview.
   if (flag.adminBypass && ctx.isAdmin) return true;
 
-  // 3. Manual override (kill switch / force-on).
+  // 3. Manual override (kill switch / force-on). Force-on wins over the schedule
+  //    too — an operator testing a not-yet-scheduled flag expects it on.
   if (override?.enabled === true) return true;
   if (override?.enabled === false) return false;
 
-  // 4. Percentage rollout.
+  // 4. Schedule window — scheduled activation / deactivation.
+  if (override?.activeFrom && now < Date.parse(override.activeFrom)) return false;
+  if (override?.activeUntil && now > Date.parse(override.activeUntil)) return false;
+
+  // 5. Percentage rollout.
   const pct =
     override?.rolloutPercentage ??
     flag.rollout ??
@@ -166,6 +182,28 @@ export function resolveFlag(
   if (pct >= 100) return true;
   if (!ctx.userId) return false;
   return bucketOf(flag.id, ctx.userId) < pct;
+}
+
+/**
+ * Resolve a flag including its dependency chain: a flag with `requires` is only ON
+ * when the flag it depends on is also ON for the same visitor. Cycle-guarded via
+ * `seen`. Pure.
+ */
+export function resolveFlagWithDeps(
+  flagId: string,
+  flags: FeatureFlag[],
+  overrides: Record<string, FlagOverride>,
+  ctx: FlagContext,
+  now: number = Date.now(),
+  seen: Set<string> = new Set(),
+): boolean {
+  const flag = flags.find((f) => f.id === flagId);
+  if (!flag) return false;
+  if (flag.requires && !seen.has(flagId)) {
+    seen.add(flagId);
+    if (!resolveFlagWithDeps(flag.requires, flags, overrides, ctx, now, seen)) return false;
+  }
+  return resolveFlag(flag, overrides[flagId], ctx, now);
 }
 
 /* --------------------------------- queries --------------------------------- */

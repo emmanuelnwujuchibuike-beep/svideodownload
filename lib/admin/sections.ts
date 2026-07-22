@@ -149,6 +149,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "Production-readiness: certifications computed from the governance gates, and the test-type coverage.",
   },
   {
+    id: "config",
+    label: "Configuration",
+    category: "system",
+    icon: "SlidersHorizontal",
+    blurb: "Everything runtime-configurable without a redeploy — and an audited history of every change.",
+  },
+  {
     id: "traffic",
     label: "Traffic",
     category: "system",

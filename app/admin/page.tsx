@@ -55,6 +55,9 @@ import { certifyAll } from "@/lib/platform/certification";
 import { getTestTypes } from "@/lib/platform/test-types";
 import { ActivityFeed } from "@/features/admin/activity-feed";
 import { fetchRecentActivity } from "@/lib/admin/activity";
+import { ConfigCatalog } from "@/features/admin/config-catalog";
+import { getConfigSurfaces } from "@/lib/platform/config-registry";
+import { listConfigChanges } from "@/lib/platform/config-audit";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -296,6 +299,12 @@ export default async function AdminPage() {
             <QualityCatalog certifications={certifyAll()} testTypes={getTestTypes()} />
           </AdminPanel>
 
+          <AdminPanel id="config">
+            <Suspense fallback={<PanelSkeleton />}>
+              <ConfigSection />
+            </Suspense>
+          </AdminPanel>
+
           <AdminPanel id="traffic">
             <Suspense fallback={<PanelSkeleton />}>
               <TrafficSection />
@@ -357,6 +366,11 @@ async function ContentSection() {
 async function ActivitySection() {
   const initial = await fetchRecentActivity(40);
   return <ActivityFeed initial={initial} />;
+}
+
+async function ConfigSection() {
+  const changes = await listConfigChanges(50);
+  return <ConfigCatalog surfaces={getConfigSurfaces()} changes={changes} />;
 }
 
 async function FlagsSection() {

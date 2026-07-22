@@ -203,8 +203,8 @@ export const DATA_DOMAINS: DataDomain[] = [
     id: "configuration",
     name: "Configuration",
     owner: "lib/platform",
-    description: "Runtime configuration: feature flags, experiments and global settings.",
-    tables: ["feature_flags", "experiments", "settings"],
+    description: "Runtime configuration: feature flags, experiments, global settings and the config change log.",
+    tables: ["feature_flags", "experiments", "settings", "config_audit_log"],
     storage: ["relational", "cache"],
   },
   {

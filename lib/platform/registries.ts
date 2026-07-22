@@ -56,6 +56,7 @@ export const REGISTRIES: RegistryDef[] = [
   { id: "test-types", name: "Test-Type Registry", governs: "Every kind of automated test the platform runs, and the ones decided-but-planned.", source: "lib/platform/test-types.ts", status: "live" },
   { id: "certifications", name: "Certification Engine", governs: "Production-readiness certifications, computed from the governance gates.", source: "lib/platform/certification.ts", status: "live" },
   { id: "infra-decisions", name: "Infrastructure Decisions", governs: "The chosen technology for each planned capability (ADRs as data).", source: "lib/platform/infra-decisions.ts", status: "live" },
+  { id: "config", name: "Configuration Registry", governs: "Every runtime-configurable surface (flags, experiments, policies, settings, prefs) + its storage/scope.", source: "lib/platform/config-registry.ts", status: "live" },
 ];
 
 export function getRegistries(): RegistryDef[] {

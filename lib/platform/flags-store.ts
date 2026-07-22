@@ -2,13 +2,14 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { recordConfigChange } from "./config-audit";
 import {
   type FeatureFlag,
   type FlagContext,
   type FlagOverride,
   getFlag,
   getFlags,
-  resolveFlag,
+  resolveFlagWithDeps,
 } from "./flags";
 
 /**
@@ -51,16 +52,19 @@ export async function getFlagOverrides(): Promise<OverrideMap> {
   if (!hasSupabase) return {};
   try {
     const db = createAdminClient();
-    const { data, error } = await db
-      .from("feature_flags")
-      .select("id, enabled, rollout_percentage");
+    // `select("*")` is forward/backward compatible: the schedule columns (0093)
+    // come through when present and are simply absent otherwise — so a lagging
+    // migration degrades to "no schedule", not a failed read.
+    const { data, error } = await db.from("feature_flags").select("*");
     // Missing table / any error ⇒ no overrides, defaults win. Never throw.
     if (error || !data) return cache?.value ?? {};
     const map: OverrideMap = {};
-    for (const row of data) {
+    for (const row of data as Record<string, unknown>[]) {
       map[row.id as string] = {
         enabled: (row.enabled as boolean | null) ?? null,
         rolloutPercentage: (row.rollout_percentage as number | null) ?? null,
+        activeFrom: (row.active_from as string | null) ?? null,
+        activeUntil: (row.active_until as string | null) ?? null,
       };
     }
     cache = { at: Date.now(), value: map };
@@ -70,12 +74,10 @@ export async function getFlagOverrides(): Promise<OverrideMap> {
   }
 }
 
-/** Resolve one flag for a visitor. Unknown id ⇒ false (fail closed). */
+/** Resolve one flag for a visitor, honouring its dependency chain. Unknown ⇒ false. */
 export async function isEnabled(flagId: string, ctx: FlagContext): Promise<boolean> {
-  const flag = getFlag(flagId);
-  if (!flag) return false;
   const overrides = await getFlagOverrides();
-  return resolveFlag(flag, overrides[flagId], ctx);
+  return resolveFlagWithDeps(flagId, getFlags(), overrides, ctx);
 }
 
 /** One declared flag, its current override, and how it resolves for `ctx`. */
@@ -89,9 +91,10 @@ export interface FlagState {
 /** Every declared flag with its override + resolved value — for the admin panel. */
 export async function getFlagStates(ctx: FlagContext): Promise<FlagState[]> {
   const overrides = await getFlagOverrides();
-  return getFlags().map((flag) => {
+  const flags = getFlags();
+  return flags.map((flag) => {
     const override = overrides[flag.id] ?? {};
-    return { flag, override, resolved: resolveFlag(flag, override, ctx) };
+    return { flag, override, resolved: resolveFlagWithDeps(flag.id, flags, overrides, ctx) };
   });
 }
 
@@ -105,16 +108,39 @@ export async function setFlagOverride(
   // rows for ids nothing resolves (the admin equivalent of an orphan route).
   if (!getFlag(id)) throw new Error(`Unknown flag: ${id}`);
   const db = createAdminClient();
-  const { error } = await db.from("feature_flags").upsert(
-    {
-      id,
-      enabled: override.enabled ?? null,
-      rollout_percentage: override.rolloutPercentage ?? null,
-      updated_by: updatedBy,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "id" },
-  );
+
+  // Capture the prior value for the audit trail (version history + rollback).
+  const { data: prior } = await db.from("feature_flags").select("*").eq("id", id).maybeSingle();
+  const p = prior as Record<string, unknown> | null;
+
+  const full = {
+    id,
+    enabled: override.enabled ?? null,
+    rollout_percentage: override.rolloutPercentage ?? null,
+    active_from: override.activeFrom ?? null,
+    active_until: override.activeUntil ?? null,
+    updated_by: updatedBy,
+    updated_at: new Date().toISOString(),
+  };
+  let { error } = await db.from("feature_flags").upsert(full, { onConflict: "id" });
+  // If the schedule columns don't exist yet (0093 not applied), persist the rest —
+  // scheduling silently no-ops until the migration lands; on/off/rollout still work.
+  if (error && /active_from|active_until|column/i.test(error.message)) {
+    const { active_from, active_until, ...base } = full;
+    void active_from;
+    void active_until;
+    ({ error } = await db.from("feature_flags").upsert(base, { onConflict: "id" }));
+  }
   if (error) throw new Error(error.message);
+
+  recordConfigChange({
+    actorId: updatedBy,
+    surface: "flag",
+    targetId: id,
+    before: p
+      ? { enabled: p.enabled, rolloutPercentage: p.rollout_percentage, activeFrom: p.active_from ?? null, activeUntil: p.active_until ?? null }
+      : null,
+    after: { enabled: full.enabled, rolloutPercentage: full.rollout_percentage, activeFrom: full.active_from, activeUntil: full.active_until },
+  });
   cache = null;
 }

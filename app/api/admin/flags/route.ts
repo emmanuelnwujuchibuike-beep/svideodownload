@@ -23,17 +23,28 @@ export async function GET() {
     rollout: f.rollout ?? null,
     plans: f.plans ?? null,
     adminBypass: !!f.adminBypass,
+    requires: f.requires ?? null,
     consumer: f.consumer,
-    override: overrides[f.id] ?? { enabled: null, rolloutPercentage: null },
+    override: overrides[f.id] ?? { enabled: null, rolloutPercentage: null, activeFrom: null, activeUntil: null },
   }));
   return NextResponse.json({ flags });
 }
+
+const isoOrNull = z
+  .string()
+  .datetime({ offset: true })
+  .nullable()
+  .optional()
+  .or(z.literal("").transform(() => null));
 
 const schema = z.object({
   id: z.string().trim().min(1),
   // Tri-state: true = force on, false = kill switch, null = defer to rollout/default.
   enabled: z.boolean().nullable().optional(),
   rolloutPercentage: z.number().int().min(0).max(100).nullable().optional(),
+  // Scheduled activation / deactivation (ISO with offset), or null.
+  activeFrom: isoOrNull,
+  activeUntil: isoOrNull,
 });
 
 /** Admin-only: persist one flag's override. */
@@ -58,6 +69,8 @@ export async function POST(request: Request) {
       {
         enabled: parsed.data.enabled ?? null,
         rolloutPercentage: parsed.data.rolloutPercentage ?? null,
+        activeFrom: parsed.data.activeFrom ?? null,
+        activeUntil: parsed.data.activeUntil ?? null,
       },
       admin.id,
     );

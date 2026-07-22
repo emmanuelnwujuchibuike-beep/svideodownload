@@ -8,6 +8,7 @@ import {
   getClientReadableFlags,
   getFlags,
   resolveFlag,
+  resolveFlagWithDeps,
 } from "./flags";
 
 /** A minimal flag; each test overrides only the fields it exercises. */
@@ -112,6 +113,46 @@ describe("resolveFlag — admin preview", () => {
     // kill switch is read, so a preview admin sees ON. This documents that a kill
     // switch does NOT suppress an adminBypass preview — use plan gating for that.
     expect(resolveFlag(flag({ adminBypass: true }), { enabled: false }, admin)).toBe(true);
+  });
+});
+
+describe("resolveFlag — scheduled activation / deactivation", () => {
+  const NOW = 1_700_000_000_000;
+  const DAY = 86_400_000;
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const on = flag({ defaultEnabled: true }); // on absent a schedule
+
+  it("is OFF before its activeFrom", () => {
+    expect(resolveFlag(on, { activeFrom: iso(NOW + DAY) }, free, NOW)).toBe(false);
+  });
+  it("is OFF after its activeUntil", () => {
+    expect(resolveFlag(on, { activeUntil: iso(NOW - DAY) }, free, NOW)).toBe(false);
+  });
+  it("is ON inside the window", () => {
+    expect(resolveFlag(on, { activeFrom: iso(NOW - DAY), activeUntil: iso(NOW + DAY) }, free, NOW)).toBe(true);
+  });
+  it("a manual force-on overrides a not-yet-started schedule (for testing)", () => {
+    expect(resolveFlag(on, { enabled: true, activeFrom: iso(NOW + DAY) }, free, NOW)).toBe(true);
+  });
+});
+
+describe("resolveFlagWithDeps — flag dependencies", () => {
+  const A = flag({ id: "a", defaultEnabled: true, requires: "b" });
+  it("is OFF when its required flag is OFF", () => {
+    const B = flag({ id: "b", defaultEnabled: false });
+    expect(resolveFlagWithDeps("a", [A, B], {}, free)).toBe(false);
+  });
+  it("is ON when both it and its dependency are ON", () => {
+    const B = flag({ id: "b", defaultEnabled: true });
+    expect(resolveFlagWithDeps("a", [A, B], {}, free)).toBe(true);
+  });
+  it("an unknown flag resolves OFF", () => {
+    expect(resolveFlagWithDeps("ghost", [A], {}, free)).toBe(false);
+  });
+  it("a dependency cycle terminates (no infinite recursion)", () => {
+    const x = flag({ id: "x", defaultEnabled: true, requires: "y" });
+    const y = flag({ id: "y", defaultEnabled: true, requires: "x" });
+    expect(resolveFlagWithDeps("x", [x, y], {}, free)).toBe(true);
   });
 });
 

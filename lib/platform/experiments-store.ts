@@ -3,6 +3,8 @@ import "server-only";
 import { trackEvent } from "@/lib/analytics/events";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { recordConfigChange } from "./config-audit";
+
 import {
   assignVariant,
   type Assignment,
@@ -130,6 +132,9 @@ export async function setExperimentOverride(
     throw new Error(`Unknown variant: ${override.forceVariant}`);
   }
   const db = createAdminClient();
+  const { data: prior } = await db.from("experiments").select("*").eq("id", id).maybeSingle();
+  const p = prior as Record<string, unknown> | null;
+
   const { error } = await db.from("experiments").upsert(
     {
       id,
@@ -141,5 +146,13 @@ export async function setExperimentOverride(
     { onConflict: "id" },
   );
   if (error) throw new Error(error.message);
+
+  recordConfigChange({
+    actorId: updatedBy,
+    surface: "experiment",
+    targetId: id,
+    before: p ? { paused: p.paused ?? null, forceVariant: p.force_variant ?? null } : null,
+    after: { paused: override.paused ?? null, forceVariant: override.forceVariant || null },
+  });
   cache = null;
 }

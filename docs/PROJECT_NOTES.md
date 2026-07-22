@@ -3137,3 +3137,32 @@ NOT per-event push/email (that would be spam — milestone alerts already exist)
 
 **Verified:** tsc clean, lint clean, **759 tests** across 74 files, build clean
 (`/api/admin/activity` registered). Constitution gate validates the `activity` section.
+
+### Enterprise Configuration Platform — Runtime Governance (2026-07-22)
+
+Flags (0091) + experiments (0092) already gave the knobs; this made CHANGING them
+governed, and added the flag features the brief listed that we lacked.
+
+- **Config change audit / history / rollback** — the real gap. Migration `0093`
+  adds `config_audit_log` (actor, before → after, indexed). `lib/platform/config-audit.ts`
+  records every flag/experiment override write (fire-and-forget, degrades if unmigrated)
+  and lists recent changes. `setFlagOverride`/`setExperimentOverride` now capture the
+  prior row and log the diff — version history + the exact value to roll back to.
+- **Flag scheduling + dependencies** — `resolveFlag` gained a schedule window
+  (`activeFrom`/`activeUntil` on the override, 0093 columns; a manual force-on still wins
+  for testing), and `resolveFlagWithDeps` adds a `requires` dependency chain
+  (cycle-guarded). The store reads via `select("*")` so a lagging 0093 degrades to
+  "no schedule" rather than a failed read; the write falls back to base columns if the
+  schedule columns are absent. `/api/admin/flags` accepts ISO schedule fields.
+- **Configuration Registry** — `lib/platform/config-registry.ts` catalogues every
+  runtime-configurable surface (flags, experiments, plan-limits/rate policy, monetization
+  settings, notification prefs, home personalization, config history) → source + storage
+  + scope. Approval-workflow, geo/device targeting and native remote-config are honestly
+  `planned`.
+- New `/admin` → **Configuration** section (surfaces + live change history). The
+  data-domains gate caught `config_audit_log` as an orphan table until I catalogued it
+  (the "every table owned by one domain" rule working).
+
+**Verified:** tsc clean, lint clean, **770 tests** across 75 files (incl. flag schedule +
+dependency + cycle-guard tests with teeth), build clean (`/admin` 23.7 kB). Migration
+`0093` must be applied for history + scheduling to persist (degrades safely until then).

@@ -16,6 +16,7 @@ import {
   Radio,
   Rss,
   ShieldAlert,
+  SlidersHorizontal,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -77,6 +78,7 @@ const ICONS: Record<string, LucideIcon> = {
   Radio,
   Rss,
   ShieldAlert,
+  SlidersHorizontal,
   Users,
 };
 

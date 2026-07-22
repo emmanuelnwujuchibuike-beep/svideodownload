@@ -26,6 +26,7 @@ import { HubWarmup } from "@/features/downloads/hub-warmup";
 import { openPlayer } from "@/features/downloads/player-store";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
+import { estimateBytes } from "@/features/history/usage";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord, PlatformId } from "@/types";
 import { cn, formatBytes } from "@/lib/utils";
@@ -34,16 +35,6 @@ const TABS = ["All", "Videos", "Reels", "Audios", "Images", "Files"] as const;
 type Tab = (typeof TABS)[number];
 
 const REEL_PLATFORMS: PlatformId[] = ["tiktok", "instagram", "snapchat"];
-
-/** Exact recorded size when known; otherwise a representative estimate by type
- *  (older records downloaded before size tracking, or via the native path). */
-function itemBytes(rec: DownloadRecord): number {
-  if (rec.size && rec.size > 0) return rec.size;
-  if (rec.kind === "audio") return 5 * 1024 * 1024;
-  if (rec.kind === "image") return 2 * 1024 * 1024;
-  if (REEL_PLATFORMS.includes(rec.platform)) return 12 * 1024 * 1024;
-  return 38 * 1024 * 1024;
-}
 
 function matchesTab(rec: DownloadRecord, tab: Tab): boolean {
   switch (tab) {
@@ -72,7 +63,7 @@ export function DownloadsPage() {
   const [limit, setLimit] = useState(8);
 
   const active = tasks.filter((t) => t.status !== "completed" && t.status !== "canceled");
-  const totalUsed = useMemo(() => items.reduce((s, r) => s + itemBytes(r), 0), [items]);
+  const totalUsed = useMemo(() => items.reduce((s, r) => s + estimateBytes(r), 0), [items]);
 
   const filtered = useMemo(() => {
     let list = items.filter((r) => matchesTab(r, tab));
@@ -347,7 +338,7 @@ function DownloadedRow({ rec, onFavorite, onRemove }: { rec: DownloadRecord; onF
         <p className="truncate text-sm font-semibold">{rec.title}</p>
         <p className="truncate text-xs text-muted-foreground">{rec.platformName}{rec.favorite ? " · ★ Favorite" : ""}</p>
       </button>
-      <span className="hidden text-xs text-muted-foreground sm:block">{formatBytes(itemBytes(rec))}</span>
+      <span className="hidden text-xs text-muted-foreground sm:block">{formatBytes(estimateBytes(rec))}</span>
       <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold uppercase", tint)}>{quality}</span>
       <button type="button" onClick={() => openPlayer(rec)} aria-label="Watch in browser" className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white">
         <Play className="h-4 w-4 fill-white" />

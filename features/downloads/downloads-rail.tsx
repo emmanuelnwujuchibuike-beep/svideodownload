@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { useHistory } from "@/features/history/use-history";
+import { estimateBytes } from "@/features/history/usage";
 import {
   getAutoDownload,
   getPreferredQuality,
@@ -57,13 +58,6 @@ function Panel({
   );
 }
 
-function itemBytes(rec: DownloadRecord): number {
-  if (rec.size && rec.size > 0) return rec.size;
-  if (rec.kind === "audio") return 5 * 1024 * 1024;
-  if (rec.kind === "image") return 2 * 1024 * 1024;
-  if (REEL_PLATFORMS.includes(rec.platform)) return 12 * 1024 * 1024;
-  return 38 * 1024 * 1024;
-}
 type Bucket = "Videos" | "Reels" | "Audios" | "Images" | "Others";
 function bucketOf(rec: DownloadRecord): Bucket {
   if (rec.kind === "audio") return "Audios";
@@ -89,7 +83,7 @@ export function DownloadsRail() {
     let used = 0;
     for (const r of items) {
       const b = bucketOf(r);
-      const sz = itemBytes(r);
+      const sz = estimateBytes(r);
       byBucket[b] += sz;
       counts[b] += 1;
       used += sz;

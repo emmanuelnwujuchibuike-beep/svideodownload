@@ -5,6 +5,7 @@ import { Check, Download, FolderDown, Loader2, RotateCcw, Share, X } from "lucid
 import Link from "next/link";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
+import { useUser } from "@/features/auth/use-user";
 import {
   cancelDownload,
   dismissTask,
@@ -48,6 +49,10 @@ let layerClaimed = false;
 export function FloatingDownloadProgress() {
   const claimed = useRef(false);
   const tasks = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  // Where the "Downloads" button lands: the public library for signed-out
+  // visitors (no login wall), the full dashboard for signed-in ones.
+  const { user } = useUser();
+  const downloadsHref = user ? "/downloads" : "/library";
 
   useEffect(() => {
     if (!layerClaimed) {
@@ -159,7 +164,8 @@ export function FloatingDownloadProgress() {
                 ) : null}
                 {task.status === "completed" ? (
                   <Link
-                    href="/downloads"
+                    href={downloadsHref}
+                    prefetch
                     onClick={() => dismissTask(task.id)}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 px-3 py-2 text-xs font-semibold transition hover:bg-secondary"
                   >

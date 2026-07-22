@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { RecommendedToolsClient } from "@/components/monetization/recommended-tools-client";
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
@@ -23,11 +23,14 @@ import {
   subscribe as subscribeDownloads,
 } from "@/features/downloads/manager";
 import { PublishButton } from "@/features/social/publish-button";
+import { QuotaGate } from "@/features/downloads/quota-gate";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { DownloadCompleteAd } from "@/features/monetization/download-complete-ad";
 import { FetchedAd } from "@/features/monetization/fetched-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
 import { useUser } from "@/features/auth/use-user";
+import { useHistory } from "@/features/history/use-history";
+import { computeUsage, GUEST_LIMIT_BYTES } from "@/features/history/usage";
 import { buildDownloadContext } from "@/lib/download-hub/context";
 import type { DownloadContext } from "@/lib/download-hub/types";
 import { PLATFORMS, detectPlatform } from "@/lib/platforms";
@@ -88,6 +91,22 @@ export function Downloader({
   const { user } = useUser();
 
   /*
+    The 5 GB guest gate. A signed-out visitor's downloads count against a local
+    5 GB ceiling (features/history/usage.ts); signed-in users are uncapped
+    (`Infinity`). When a guest at the ceiling taps download, we open the
+    upgrade-or-clear dialog instead of starting the transfer — the file is never
+    silently dropped, the visitor chooses. The rule lives here so the same store
+    that records history is the one that gates it, and the library page's meter
+    can never disagree with what the button enforces.
+  */
+  const { items: historyItems, clearHistory } = useHistory();
+  const usage = useMemo(
+    () => computeUsage(historyItems, user ? Infinity : GUEST_LIMIT_BYTES),
+    [historyItems, user],
+  );
+  const [quotaGateOpen, setQuotaGateOpen] = useState(false);
+
+  /*
     The after-download placement fires on a REAL completion, not on the button
     press. `enqueueDownload` starts a background transfer; the file lands
     seconds later, and showing "your download has started" over a transfer that
@@ -111,6 +130,11 @@ export function Downloader({
 
   const handleDownload = (formatId: string, kind: MediaKind) => {
     if (!metadata) return;
+    // Guests past 5 GB choose upgrade-or-clear before another download starts.
+    if (usage.overLimit) {
+      setQuotaGateOpen(true);
+      return;
+    }
     const fmt = metadata.formats.find((f) => f.formatId === formatId);
     // In-app background download: streamed with live progress in the floating
     // card, the page stays fully usable, and the user NEVER lands on a raw
@@ -396,6 +420,15 @@ export function Downloader({
           here since Downloader also renders on public pages outside the
           signed-in app shell, which is the only place AppOverlays mounts it. */}
       <FloatingDownloadProgress />
+
+      {/* The 5 GB guest gate — opens when a signed-out visitor at the ceiling
+          taps download. Signed-in users never reach it (uncapped usage). */}
+      <QuotaGate
+        open={quotaGateOpen}
+        usage={usage}
+        onClearHistory={clearHistory}
+        onClose={() => setQuotaGateOpen(false)}
+      />
     </div>
   );
 }

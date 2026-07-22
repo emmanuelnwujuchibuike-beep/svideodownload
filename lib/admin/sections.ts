@@ -75,6 +75,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
 
   /* ── Audience ── */
   {
+    id: "activity",
+    label: "Live activity",
+    category: "audience",
+    icon: "Rss",
+    blurb: "Every notable event as it happens — downloads, ad clicks, subscriptions, installs — including signed-out visitors.",
+  },
+  {
     id: "subscribers",
     label: "Subscribers",
     category: "audience",

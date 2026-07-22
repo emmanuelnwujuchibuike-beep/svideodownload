@@ -14,6 +14,7 @@ import {
   HeartPulse,
   Megaphone,
   Radio,
+  Rss,
   ShieldAlert,
   Users,
   type LucideIcon,
@@ -74,6 +75,7 @@ const ICONS: Record<string, LucideIcon> = {
   HeartPulse,
   Megaphone,
   Radio,
+  Rss,
   ShieldAlert,
   Users,
 };

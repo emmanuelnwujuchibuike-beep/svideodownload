@@ -3113,3 +3113,27 @@ to address (a `--force` fix is breaking) — flagged, not hidden.
 **Verified:** tsc clean, lint clean, **754 tests** across 73 files (incl. certification
 readiness + test-harness existence with teeth), build clean (`/admin` 22.8 kB). New
 admin sections (data, quality) validated end-to-end by the Constitution gate.
+
+### sharp/postcss patch + the admin live activity feed (2026-07-22)
+
+**Security:** the `deps:audit` gate's finding (2 high `sharp` + 1 moderate `postcss`,
+both transitive under next@15.5.19) fixed the NON-breaking way — npm `overrides` pin
+`sharp -> ^0.35.0` (resolved 0.35.3) and `postcss -> $postcss` (direct devDep bumped
+8.4.47 -> 8.5.10, dedupes Next's nested copy to 8.5.21). No Next change. `npm audit`:
+0 vulnerabilities. Verified non-breaking (build exercises sharp's image path).
+
+**Live activity feed — owner-driven.** Owner tested the event bus (downloaded on
+another account, clicked an ad) and got nothing, expecting an admin alert on every
+event. Honest root cause: (1) the domain event bus has **zero producers** — nothing in
+the app calls `emit()`, so it's dormant plumbing; (2) even wired, it's in-process /
+in-memory with no admin surface. What the app DOES record (via `trackEvent` → `events`,
+and the `downloads` table) was only shown as aggregates. Built the real thing:
+`lib/admin/activity.ts` merges the `events` + `downloads` tables newest-first (notable
+types only; anonymous shown as "Anonymous"); `app/api/admin/activity` (admin-guarded,
+`?since=` incremental); `features/admin/activity-feed.tsx` polls every 6s and prepends
+new items with a live pulse. New `/admin` → **Live activity** (audience) section.
+Deliberately POLLING, not a websocket — honest to "events are logged, not pushed"; and
+NOT per-event push/email (that would be spam — milestone alerts already exist).
+
+**Verified:** tsc clean, lint clean, **759 tests** across 74 files, build clean
+(`/api/admin/activity` registered). Constitution gate validates the `activity` section.

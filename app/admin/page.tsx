@@ -53,6 +53,8 @@ import {
 import { QualityCatalog } from "@/features/admin/quality-catalog";
 import { certifyAll } from "@/lib/platform/certification";
 import { getTestTypes } from "@/lib/platform/test-types";
+import { ActivityFeed } from "@/features/admin/activity-feed";
+import { fetchRecentActivity } from "@/lib/admin/activity";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -228,6 +230,12 @@ export default async function AdminPage() {
             />
           </AdminPanel>
 
+          <AdminPanel id="activity">
+            <Suspense fallback={<PanelSkeleton />}>
+              <ActivitySection />
+            </Suspense>
+          </AdminPanel>
+
           <AdminPanel id="subscribers">
             <PlanManager subscribers={subscribers} />
           </AdminPanel>
@@ -344,6 +352,11 @@ async function ContentSection() {
       <BroadcastComposer initialBroadcasts={broadcasts} />
     </>
   );
+}
+
+async function ActivitySection() {
+  const initial = await fetchRecentActivity(40);
+  return <ActivityFeed initial={initial} />;
 }
 
 async function FlagsSection() {

@@ -3035,3 +3035,20 @@ stays `planned`. The seam is real; only the external collector is deferred.
 **Verified:** tsc clean, lint clean, **725 tests** across 67 files (incl. span
 timing/error/bound + exporter isolation + bus-metering idempotency), build clean
 (`instrumentation.ts` picked up).
+
+### Engineering metrics — the last planned gate, DORA from git (2026-07-21)
+
+`lib/platform/engineering-metrics.ts`: pure DORA computation with each metric labelled
+by its true confidence — **deployment frequency** (proxy: commits to main, ~1:1 since
+Vercel auto-deploys main), **change-failure rate** (proxy: reverts + hotfix/rollback —
+deliberately NOT counting every `fix(...)` as a failure, which would over-report),
+**MTTR** (proxy: fault→recovery gap), and **lead-time** marked `needs-signal` because it
+genuinely can't come from git alone (needs deploy timestamps). `scripts/engineering-metrics.mjs`
+feeds it real `git log` and prints the report (`npm run metrics:engineering`). Ran it on
+this repo: 25.96 deploys/day (~7.7-day window), 0.5% change-fail, 0.9h MTTR — real
+numbers, not a fabricated dashboard. Governance `eng-metrics` gate planned → command;
+Service Registry gains `eng-metrics` (partial). **The governance manifest now has no
+`planned` gate left except distributed `tracing`** (needs an OTLP collector).
+
+**Verified:** tsc clean, lint clean, **734 tests** across 68 files, build clean, the
+metrics tool runs green on real history.

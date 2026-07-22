@@ -47,6 +47,7 @@ export const SERVICES: ServiceDef[] = [
   { id: "moderation", name: "Moderation Service", capability: "Reports, appeals, AI assessments, trust scoring.", source: "lib/moderation", status: "live" },
   { id: "ai", name: "AI Gateway", capability: "Assistant backend over the knowledge corpus.", source: "app/api/assistant", status: "partial", note: "Backend live; no user-facing surface mounted (see the `smart` module veracity)." },
   { id: "admin", name: "Platform Administration Service", capability: "Operate products, money, audience, content, system.", source: "app/admin", status: "live" },
+  { id: "eng-metrics", name: "Engineering Metrics", capability: "DORA-style delivery metrics from git history.", source: "lib/platform/engineering-metrics.ts", status: "partial", note: "Proxies from commits (deploy freq, change-fail, MTTR). Lead time + true deploy/incident signals need CI/deploy data." },
   { id: "events-bus", name: "Event Gateway (bus)", capability: "Typed in-process publish/subscribe over the domain-event contracts.", source: "lib/platform/event-bus.ts", status: "live", note: "In-process dispatch (modular monolith). A message broker is the exit-path — see the Integration Registry." },
   { id: "release", name: "Release Service", capability: "Build, deploy, rollback.", source: "vercel.json", status: "partial", note: "Deploy config is in-repo (vercel.json/fly.toml/Dockerfile); execution is Vercel + CI + the CDN." },
 ];

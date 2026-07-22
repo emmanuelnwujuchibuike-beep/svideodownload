@@ -27,7 +27,8 @@
     "i18n:export": "node scripts/i18n.mjs export",
     "i18n:import": "node scripts/i18n.mjs import",
     "tokens:generate": "node scripts/design-tokens.mjs generate",
-    "tokens:check": "node scripts/design-tokens.mjs check"
+    "tokens:check": "node scripts/design-tokens.mjs check",
+    "metrics:engineering": "node scripts/engineering-metrics.mjs"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",

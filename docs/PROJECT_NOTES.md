@@ -3014,3 +3014,24 @@ forced: the code registry is genuinely the source now, and the CSS is derived.)
 
 **Verified:** tsc clean, lint clean, **717 tests** across 66 files, `tokens:check` in
 sync, build clean.
+
+### Observability seam — in-process tracing + event metering (2026-07-21)
+
+Next of the `planned` governance gates, built honestly. `lib/observability/trace.ts`:
+`withSpan(name, fn)` times an operation (ok/error + duration) into a bounded ring
+buffer, `increment`/`metricsSnapshot` meter counters, and `setSpanExporter` is the
+seam a real OTLP collector attaches to. `lib/observability/event-observability.ts`
+wires the domain event bus (`observeEvents`) so every emit is metered — the concrete
+**second consumer** that makes the bus' observer seam real. Installed once via a new
+`instrumentation.ts` (Next's startup hook, Node runtime only) — **zero request-hot-path
+cost, no layout touch, no 2s-budget impact**.
+
+Honest scope: this is **in-process, per-instance** tracing — real spans of server
+operations, NOT distributed tracing across the web tier + worker. So the Service
+Registry gets a `tracing` service marked **partial** (spans live; OTLP export planned),
+a new governance `operation-tracing` gate (config), and the distributed `tracing` gate
+stays `planned`. The seam is real; only the external collector is deferred.
+
+**Verified:** tsc clean, lint clean, **725 tests** across 67 files (incl. span
+timing/error/bound + exporter isolation + bus-metering idempotency), build clean
+(`instrumentation.ts` picked up).

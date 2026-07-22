@@ -81,6 +81,7 @@ export const GATES: GovernanceGate[] = [
   { id: "feature-flags", name: "Change management via flags", requirement: "Risky changes ship behind a flag with a kill switch + rollout.", domain: "change-management", kind: "config", enforcer: "lib/platform/flags.ts" },
   { id: "experiments", name: "Measured rollout", requirement: "Product bets can be A/B tested with logged exposures.", domain: "change-management", kind: "config", enforcer: "lib/platform/experiments.ts" },
   { id: "error-capture", name: "Error observability", requirement: "Client/server errors are captured, never swallowed silently.", domain: "observability", kind: "config", enforcer: "lib/observability/diagnostics.ts" },
+  { id: "operation-tracing", name: "Operation tracing (in-process)", requirement: "Server operations wrapped in timed spans; the event bus is metered at startup.", domain: "observability", kind: "config", enforcer: "lib/observability/trace.ts" },
 
   /* ── honest gaps (standards we hold, not yet automated) ── */
   { id: "e2e", name: "End-to-end tests", requirement: "Critical user journeys covered by browser smoke tests (Playwright).", domain: "testing", kind: "command", enforcer: "test:e2e" },

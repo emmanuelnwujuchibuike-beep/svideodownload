@@ -41,6 +41,7 @@ export const SERVICES: ServiceDef[] = [
   { id: "payments", name: "Payments Service", capability: "Subscriptions/entitlements; one plan unlocks Pro everywhere.", source: "lib/paystack/paystack.ts", status: "live" },
   { id: "audit", name: "Audit Service", capability: "Security audit log of sensitive actions.", source: "lib/security/audit-log.ts", status: "live" },
   { id: "observability", name: "Observability & Logging Service", capability: "Diagnostics, memory pressure, error capture.", source: "lib/observability/diagnostics.ts", status: "live" },
+  { id: "tracing", name: "Tracing Service", capability: "In-process operation spans + event metering, wired at startup.", source: "lib/observability/trace.ts", status: "partial", note: "In-process/per-instance spans + metrics (real). Distributed tracing (OTLP across web tier + worker) is the exporter seam — planned." },
   { id: "health", name: "Health Service", capability: "Liveness + subsystem health for ops.", source: "app/api/health", status: "live" },
   { id: "rate-limit", name: "Rate-Limit Service", capability: "Upstash-backed limiting on mutations and the API.", source: "lib/rate-limit.ts", status: "live" },
   { id: "moderation", name: "Moderation Service", capability: "Reports, appeals, AI assessments, trust scoring.", source: "lib/moderation", status: "live" },

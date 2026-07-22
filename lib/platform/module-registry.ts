@@ -15,13 +15,22 @@
  */
 import type { LucideIcon } from "lucide-react";
 
-import type { BillingPlan } from "@/lib/monetization/types";
+import {
+  ANON_ACCESS,
+  type Access,
+  adminOnly,
+  businessOnly,
+  everyone,
+  proOnly,
+} from "@/lib/platform/permissions";
 
-/** The current visitor's access level, as seen by a module gate. */
-export interface ModuleAccess {
-  plan: BillingPlan;
-  isAdmin: boolean;
-}
+/**
+ * The current visitor's access level, as seen by a module gate. The permission
+ * model — this type plus the access predicates below — is declared by the Permission
+ * Registry (`lib/platform/permissions.ts`) and re-exported here so the module
+ * contract's many importers are unchanged.
+ */
+export type ModuleAccess = Access;
 
 export type ModuleStatus = "live" | "beta" | "soon";
 
@@ -90,11 +99,5 @@ export interface PlatformModule {
 }
 
 /* ----------------------------- access predicates ----------------------------- */
-
-export const everyone = (): boolean => true;
-export const proOnly = (a: ModuleAccess): boolean => a.plan !== "free";
-export const businessOnly = (a: ModuleAccess): boolean => a.plan === "business";
-export const adminOnly = (a: ModuleAccess): boolean => a.isAdmin;
-
-/** Default access used when a caller has no session context yet. */
-export const ANON_ACCESS: ModuleAccess = { plan: "free", isAdmin: false };
+// Declared by the Permission Registry; re-exported so existing importers are unchanged.
+export { ANON_ACCESS, adminOnly, businessOnly, everyone, proOnly };

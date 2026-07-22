@@ -13,6 +13,57 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑22 (later) — Tiered storage, plan gate, review player, activity fixes + the Enterprise Design System
+
+**Tiered storage.** `usage.ts` gained `PLAN_LIMIT_BYTES` as the single source of
+truth — Free/guest **5 GB**, Pro **59 GB**, Business **unlimited** — and
+`limitForPlan(plan)`. The meter, the `UsageDashboard` and the download gate all
+read it, so a plan's ceiling is the same wherever it's shown or enforced. The
+gate (`QuotaGate`) is now plan‑aware in the public `Downloader`, the signed‑in
+`DownloadBox` and the dashboard banner: over the ceiling opens upgrade‑or‑clear —
+a guest signs in to go Pro, a free user goes Pro, a Pro user goes Business;
+Business is never gated. `/downloads` now carries the same `UsageDashboard`.
+
+**Completion card.** "Downloads" became "Download history", and a **"Review
+video"** button opens the in‑browser player. Public pages have no app shell to
+host that player, so the `Downloader` mounts it on demand — gated on an active
+player queue, so the chunk loads only when a download is actually reviewed.
+
+**Ad slot.** A new `download_history_bottom` zone (added to `AD_ZONES`, the
+`AdZone` type and the zone meta together — `ad-slots.test` pins that they agree)
+sits under the history on both pages, so ads can be inserted or removed for it
+from the admin dashboard; it collapses when empty.
+
+**Copy.** "privately on this device" → "privately on your private cloud" (the
+owner's framing; the bytes still live on the device).
+
+**Admin live activity.** Downloads were hardcoded `actor: null`, so a signed‑in
+user's downloads all read "Anonymous" — the operator's complaint. Fixed by
+selecting `downloads.user_id` and resolving it to a handle (guest downloads stay
+Anonymous), with the platform already in the row detail. Added
+`fetchActivityTotals()` — real Postgres counts of downloads, ad impressions and
+ad clicks over 24h · 7d · 30d · 365d, rendered as a grid above the feed. No
+estimates.
+
+**Landing budget.** The guest gate first shipped on the landing's initial bundle
+(302 kB, over the 300 kB cold‑entry ceiling). It's now dynamic‑imported and the
+whole guest check is lazy (loaded on tap, not via a reactive hook), so the gate
+costs the landing nothing; the residual +0.35 kB is the permanent header
+downloads entry, so the ceiling moved 300 → 301 kB with that justification.
+Lesson noted: run the vitest suite **after** `npm run build`, since the budget
+test reads `.next` and a pre‑build run passes against a stale manifest.
+
+**Enterprise Design System.** The tokens/motion/theme/icon layers already
+existed; the genuine gaps were built as real code (see `docs/DESIGN_SYSTEM.md`):
+a **Component Registry** (`lib/platform/component-registry.ts`) documenting every
+reusable component with its source, accessibility contract and motion behaviour
+(three honest statuses — live / convention / planned); a **design‑system layer**
+(principles, motion language, a11y standards, themes); **Design Intelligence**
+(`npm run design:adoption`) measuring real component adoption by counting imports;
+and an admin **Design system** section. +42 tests.
+
+---
+
 ## 2026‑07‑22 — Public `/library` for guests: instant, usage analytics, a 5 GB quota
 
 Signed‑out visitors could already save downloads — history is device‑local in

@@ -47,7 +47,7 @@ export const REGISTRIES: RegistryDef[] = [
   { id: "design-tokens", name: "Design Token Registry", governs: "Colours, spacing, type — one token set for the whole app.", source: "tailwind.config.ts", status: "partial", note: "Tokens live in the Tailwind config (guarded by lib/design-tokens.test.ts), not a bespoke registry." },
   { id: "permissions", name: "Permission Registry", governs: "The access model: capabilities + the predicates that gate modules/nav.", source: "lib/platform/permissions.ts", status: "live", note: "Code-side authz (plan tiers + admin). Per-row RLS is a separate, deliberate layer in the migrations." },
   { id: "notifications", name: "Notification Registry", governs: "Every notification type, its category, grouping and badge rule.", source: "lib/platform/notifications-registry.ts", status: "live" },
-  { id: "api", name: "API Registry", governs: "The public developer API surface.", source: "lib/sdk/index.ts", status: "partial", note: "SDK types + app/api/v1 routes; not a single machine-readable manifest yet." },
+  { id: "api", name: "API Registry", governs: "Every public /api/v1 endpoint: method, path, auth, category.", source: "lib/platform/api-registry.ts", status: "live", note: "Declared manifest, enforced against the real route files. The SDK (lib/sdk) is the typed client over it." },
   { id: "ai-capability", name: "AI Capability Registry", governs: "The assistant's knowledge and capabilities.", source: "lib/assistant/knowledge.ts", status: "partial", note: "Knowledge base exists; a formal capability manifest does not." },
 ];
 

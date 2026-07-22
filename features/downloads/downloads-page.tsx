@@ -27,6 +27,8 @@ import { openPlayer } from "@/features/downloads/player-store";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
 import { estimateBytes } from "@/features/history/usage";
+import { AdSurface } from "@/features/monetization/ad-surface";
+import { UsageDashboard } from "@/features/downloads/usage-dashboard";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord, PlatformId } from "@/types";
 import { cn, formatBytes } from "@/lib/utils";
@@ -113,6 +115,11 @@ export function DownloadsPage() {
           </div>
         </div>
       </section>
+
+      {/* Plan-aware storage: the usage meter (5 GB free · 59 GB Pro · unlimited
+          Business), analytics, and the upgrade-or-clear gate — the same feature
+          the public library carries, in the dashboard. */}
+      <UsageDashboard />
 
       {/*
         The Hub proper: library on the left, panels on the right.
@@ -262,6 +269,10 @@ export function DownloadsPage() {
               </>
             )}
           </section>
+
+          {/* Admin-managed ad slot below the history list — insert or remove any
+              ad for this zone from the dashboard; collapses when empty. */}
+          <AdSurface zone="download_history_bottom" maxWidth="max-w-3xl" />
 
           {/* Premium banner */}
           <Link href="/pricing" className="relative flex items-center justify-between gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-4 text-white shadow-elevated sm:p-5">

@@ -16,8 +16,9 @@ import Link from "next/link";
 import { type ComponentType, useMemo, useState } from "react";
 
 import { useUser } from "@/features/auth/use-user";
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useHistory } from "@/features/history/use-history";
-import { computeUsage, GUEST_LIMIT_BYTES } from "@/features/history/usage";
+import { computeUsage, limitForPlan } from "@/features/history/usage";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { MediaKind } from "@/types";
 import { cn, formatBytes } from "@/lib/utils";
@@ -46,17 +47,23 @@ const KIND_TINT: Record<string, { bar: string; text: string }> = {
  */
 export function UsageDashboard({ onClearHistory }: { onClearHistory?: () => void } = {}) {
   const { user, loading } = useUser();
+  const { plan, isBusiness, ready } = useEntitlements();
   const { items, clearHistory } = useHistory();
   const [confirmClear, setConfirmClear] = useState(false);
 
-  // Signed-in users are never gated — their limit is lifted. While auth is still
-  // resolving we assume the guest cap so a signed-in reload never flashes the
-  // gate; `loading` guards the copy below.
+  // The ceiling follows the plan: 5 GB free/guest, 59 GB Pro, unlimited Business.
+  // `ready`/`loading` guard the gate so a signed-in reload never flashes it.
   const signedIn = !!user;
-  const usage = useMemo(
-    () => computeUsage(items, signedIn ? Infinity : GUEST_LIMIT_BYTES),
-    [items, signedIn],
-  );
+  const limitBytes = limitForPlan(plan);
+  const uncapped = isBusiness || !Number.isFinite(limitBytes);
+  const usage = useMemo(() => computeUsage(items, limitBytes), [items, limitBytes]);
+  const settled = ready && !loading;
+  // Free users are asked to upgrade to Pro; Pro users to Business; guests sign in.
+  const upgrade = !signedIn
+    ? { label: "Sign in to upgrade to Pro", href: "/login?next=/pricing" }
+    : plan === "pro"
+      ? { label: "Upgrade to Business", href: "/pricing" }
+      : { label: "Upgrade to Pro", href: "/pricing" };
 
   const clear = () => {
     clearHistory();
@@ -74,29 +81,28 @@ export function UsageDashboard({ onClearHistory }: { onClearHistory?: () => void
               <HardDrive className="h-4 w-4 text-primary" /> Storage used
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {signedIn
-                ? "Synced to your account across every device."
-                : "Saved privately on this device."}
+              Saved privately on your private cloud
+              {plan === "pro" ? " · Pro" : plan === "business" ? " · Business" : ""}.
             </p>
           </div>
           <div className="shrink-0 text-right">
             <p className="text-2xl font-extrabold tabular-nums leading-none">{formatBytes(usage.usedBytes)}</p>
             <p className="mt-1 text-xs font-medium text-muted-foreground">
-              {signedIn ? (
+              {uncapped ? (
                 <span className="inline-flex items-center gap-1">
                   of <InfinityIcon className="h-3.5 w-3.5" /> unlimited
                 </span>
               ) : (
-                `of ${formatBytes(GUEST_LIMIT_BYTES)}`
+                `of ${formatBytes(limitBytes)}`
               )}
             </p>
           </div>
         </div>
 
         {/* The bar is only meaningful against a real ceiling. */}
-        {signedIn ? (
+        {uncapped ? (
           <div className="mt-4 flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-3.5 py-2.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
-            <Crown className="h-4 w-4" /> Unlimited storage — no download limits on your account.
+            <Crown className="h-4 w-4" /> Unlimited storage — no download limits on Business.
           </div>
         ) : (
           <div className="mt-4">
@@ -121,8 +127,9 @@ export function UsageDashboard({ onClearHistory }: { onClearHistory?: () => void
         )}
       </div>
 
-      {/* The gate — only for signed-out visitors near or over the ceiling. */}
-      {!signedIn && !loading && (usage.overLimit || usage.nearLimit) ? (
+      {/* The gate — any capped plan (free/guest/Pro) near or over the ceiling.
+          Business is uncapped and never sees it. */}
+      {!uncapped && settled && (usage.overLimit || usage.nearLimit) ? (
         <div
           className={cn(
             "rounded-3xl border p-5 shadow-soft",
@@ -133,20 +140,20 @@ export function UsageDashboard({ onClearHistory }: { onClearHistory?: () => void
         >
           <p className="text-sm font-bold">
             {usage.overLimit
-              ? "You've reached your 5 GB free limit"
-              : `You're at ${usage.percentUsed}% of your 5 GB free limit`}
+              ? `You've reached your ${formatBytes(limitBytes)} limit`
+              : `You're at ${usage.percentUsed}% of your ${formatBytes(limitBytes)} limit`}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             {usage.overLimit
-              ? "Sign in to upgrade to Pro for unlimited storage, or clear history to keep downloading."
-              : "Sign in to upgrade to Pro for unlimited storage before you run out of space."}
+              ? `${upgrade.label} for more storage, or clear history to keep downloading.`
+              : `${upgrade.label} for more storage before you run out of space.`}
           </p>
           <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
             <Link
-              href="/login?next=/pricing"
+              href={upgrade.href}
               className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 active:scale-[0.98]"
             >
-              <Crown className="h-4 w-4" /> Upgrade to Pro
+              <Crown className="h-4 w-4" /> {upgrade.label}
             </Link>
             {confirmClear ? (
               <span className="inline-flex items-center gap-2 text-sm">

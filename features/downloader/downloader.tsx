@@ -23,11 +23,13 @@ import {
   subscribe as subscribeDownloads,
 } from "@/features/downloads/manager";
 import { PublishButton } from "@/features/social/publish-button";
+import { usePlayerQueue } from "@/features/downloads/player-store";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { DownloadCompleteAd } from "@/features/monetization/download-complete-ad";
 import { FetchedAd } from "@/features/monetization/fetched-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
 import { useUser } from "@/features/auth/use-user";
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import { buildDownloadContext } from "@/lib/download-hub/context";
 import type { DownloadContext } from "@/lib/download-hub/types";
 import { PLATFORMS, detectPlatform } from "@/lib/platforms";
@@ -53,6 +55,12 @@ const DiscoveryGateway = dynamic(
 // rare state. Code-split it (and its icons) out of the landing's initial bundle,
 // which the 2-second budget cannot afford; it's mounted lazily on first open.
 const QuotaGate = dynamic(() => import("@/features/downloads/quota-gate").then((m) => m.QuotaGate), { ssr: false });
+
+// The in-browser player for the completion card's "Review video". Mounted here
+// because public pages (landing / library / downloader pages) have no app shell
+// to host it. Gated on an active queue so the chunk loads only when a visitor
+// actually reviews a download — never on a cold landing visit.
+const DownloadPlayer = dynamic(() => import("@/features/downloads/download-player").then((m) => m.DownloadPlayer), { ssr: false });
 
 // Cycled through in the input placeholder for a lively, on-brand prompt.
 const PLACEHOLDER_PLATFORMS = [
@@ -91,19 +99,23 @@ export function Downloader({
 
   const { downloadCount, countDownload } = useGatewayMemory();
   const { user } = useUser();
+  const { plan, ready: planReady } = useEntitlements();
 
   /*
-    The 5 GB guest gate. A signed-out visitor's downloads count against a local
-    5 GB ceiling (features/history/usage.ts); signed-in users are uncapped. When a
-    guest at the ceiling taps download, the upgrade-or-clear dialog opens instead
-    of starting the transfer — the file is never silently dropped, the visitor
-    chooses. The whole check is LAZY (dynamic-imported on tap): a gate that only a
-    signed-out, over-limit visitor ever hits must not ship the usage code on every
-    cold landing visit, which the 2-second budget cannot afford.
+    The storage gate. Downloads count against the plan ceiling (usage.ts — 5 GB
+    free/guest, 59 GB Pro, unlimited Business). At the ceiling, the upgrade-or-clear
+    dialog opens instead of starting the transfer — the file is never silently
+    dropped, the visitor chooses. The whole check is LAZY (dynamic-imported on tap):
+    a gate only an over-limit visitor ever hits must not ship the usage code on
+    every cold landing visit, which the 2-second budget cannot afford.
   */
   const [quotaGateOpen, setQuotaGateOpen] = useState(false);
   const [quotaGateMounted, setQuotaGateMounted] = useState(false);
-  const [gateInfo, setGateInfo] = useState<{ usedBytes: number; count: number }>({ usedBytes: 0, count: 0 });
+  const [gateInfo, setGateInfo] = useState<{ usedBytes: number; count: number; limitBytes: number }>({
+    usedBytes: 0,
+    count: 0,
+    limitBytes: 0,
+  });
 
   /*
     The after-download placement fires on a REAL completion, not on the button
@@ -115,6 +127,8 @@ export function Downloader({
   const tasks = useSyncExternalStore(subscribeDownloads, getDownloads, getServerDownloads);
   const announced = useRef<Set<string>>(new Set());
   const [completeAdOpen, setCompleteAdOpen] = useState(false);
+  // Only mount the player once something is queued to review (chunk loads on demand).
+  const playerQueue = usePlayerQueue();
 
   useEffect(() => {
     for (const task of tasks) {
@@ -162,22 +176,20 @@ export function Downloader({
 
   const handleDownload = (formatId: string, kind: MediaKind) => {
     if (!metadata) return;
-    // Signed-in visitors are uncapped — start immediately. For a guest, lazily
-    // load the usage code and check the 5 GB ceiling; over it, open the gate
-    // instead of downloading. Nothing here ships on the landing's initial bundle.
-    if (user) {
-      startDownload(formatId, kind);
-      return;
-    }
+    // Lazily load the usage code and check the plan ceiling on tap; over it, open
+    // the gate instead of downloading. Nothing here ships on the landing's initial
+    // bundle. Business is uncapped, and if entitlements haven't resolved we fail
+    // open (start the download) rather than wrongly gate a paid visitor.
     void (async () => {
-      const [{ getSnapshot }, { totalUsedBytes, GUEST_LIMIT_BYTES }] = await Promise.all([
+      const [{ getSnapshot }, { totalUsedBytes, limitForPlan }] = await Promise.all([
         import("@/features/history/store"),
         import("@/features/history/usage"),
       ]);
       const items = getSnapshot();
       const usedBytes = totalUsedBytes(items);
-      if (usedBytes >= GUEST_LIMIT_BYTES) {
-        setGateInfo({ usedBytes, count: items.length });
+      const limitBytes = planReady ? limitForPlan(plan) : Infinity;
+      if (usedBytes >= limitBytes) {
+        setGateInfo({ usedBytes, count: items.length, limitBytes });
         setQuotaGateMounted(true);
         setQuotaGateOpen(true);
       } else {
@@ -442,7 +454,10 @@ export function Downloader({
           signed-in app shell, which is the only place AppOverlays mounts it. */}
       <FloatingDownloadProgress />
 
-      {/* The 5 GB guest gate — opens when a signed-out visitor at the ceiling
+      {/* In-browser review player — mounted only when a download is opened. */}
+      {playerQueue ? <DownloadPlayer /> : null}
+
+      {/* The storage gate — opens when a visitor at their plan ceiling
           taps download. Mounted lazily (code-split) on first open so it costs the
           landing nothing. Signed-in users never reach it (uncapped usage). */}
       {quotaGateMounted ? (
@@ -450,6 +465,9 @@ export function Downloader({
           open={quotaGateOpen}
           usedBytes={gateInfo.usedBytes}
           count={gateInfo.count}
+          limitBytes={gateInfo.limitBytes}
+          plan={plan}
+          signedIn={!!user}
           onClearHistory={() => void import("@/features/history/store").then((m) => m.clearHistory())}
           onClose={() => setQuotaGateOpen(false)}
         />

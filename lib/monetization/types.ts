@@ -19,6 +19,7 @@ export type AdZone =
   | "reward_video"
   | "sidebar"
   | "bottom_banner"
+  | "download_history_bottom"
   | "mobile_bottom_banner"
   | "exit_intent_popup";
 

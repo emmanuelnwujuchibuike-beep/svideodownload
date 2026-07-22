@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Download, FolderDown, Loader2, RotateCcw, Share, X } from "lucide-react";
+import { Check, Download, History, Loader2, Play, RotateCcw, Share, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
@@ -16,7 +16,28 @@ import {
   subscribe,
   type DownloadTask,
 } from "@/features/downloads/manager";
+import { openPlayer } from "@/features/downloads/player-store";
+import type { DownloadRecord } from "@/types";
 import { cn } from "@/lib/utils";
+
+/** A finished task, in the shape the in-browser player plays (resolves the saved
+ *  file from the on-device library by url+format+kind). */
+function taskToRecord(t: DownloadTask): DownloadRecord {
+  return {
+    id: t.id,
+    url: t.url,
+    platform: t.platform,
+    platformName: t.platformName,
+    title: t.title,
+    thumbnail: t.thumbnail,
+    formatId: t.formatId,
+    kind: t.kind,
+    qualityLabel: t.qualityLabel,
+    size: t.receivedBytes || t.totalBytes || null,
+    createdAt: t.createdAt,
+    favorite: false,
+  };
+}
 
 function fmtBytes(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)} GB`;
@@ -169,8 +190,21 @@ export function FloatingDownloadProgress() {
                     onClick={() => dismissTask(task.id)}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 px-3 py-2 text-xs font-semibold transition hover:bg-secondary"
                   >
-                    <FolderDown className="h-3.5 w-3.5" /> Downloads
+                    <History className="h-3.5 w-3.5" /> Download history
                   </Link>
+                ) : null}
+                {task.status === "completed" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openPlayer(taskToRecord(task));
+                      dismissTask(task.id);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 px-3 py-2 text-xs font-semibold transition hover:bg-secondary"
+                  >
+                    <Play className="h-3.5 w-3.5" />{" "}
+                    {task.kind === "audio" ? "Review audio" : task.kind === "image" ? "View image" : "Review video"}
+                  </button>
                 ) : null}
                 {task.status === "failed" ? (
                   <button

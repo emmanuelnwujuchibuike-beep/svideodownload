@@ -82,7 +82,7 @@ export function HistoryPanel() {
               <History className="h-6 w-6 text-primary" /> Your downloads
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {items.length} saved · stored privately on this device
+              {items.length} saved · stored privately on your private cloud
             </p>
           </div>
 

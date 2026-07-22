@@ -5,11 +5,15 @@ import dynamic from "next/dynamic";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { useUser } from "@/features/auth/use-user";
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
 import { useDownloader } from "@/features/downloader/use-downloader";
 import { PreviewCard } from "@/features/downloader/preview-card";
 import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
+import { QuotaGate } from "@/features/downloads/quota-gate";
 import { startDownload } from "@/features/downloads/manager";
+import { useHistory } from "@/features/history/use-history";
+import { limitForPlan, totalUsedBytes } from "@/features/history/usage";
 import { getAutoDownload, getPreferredQuality } from "@/lib/download-hub/auto-download";
 import { buildDownloadContext, pickFormat } from "@/lib/download-hub/context";
 import type { DownloadContext } from "@/lib/download-hub/types";
@@ -40,6 +44,15 @@ export function DownloadBox() {
   const [savedContext, setSavedContext] = useState<DownloadContext | null>(null);
   const { downloadCount, countDownload } = useGatewayMemory();
   const { user } = useUser();
+  const { plan, ready: planReady } = useEntitlements();
+  const { items: historyItems, clearHistory } = useHistory();
+  // The storage gate for the signed-in paste box, mirroring the public downloader.
+  const [gate, setGate] = useState<{ open: boolean; usedBytes: number; count: number; limitBytes: number }>({
+    open: false,
+    usedBytes: 0,
+    count: 0,
+    limitBytes: 0,
+  });
 
   const isBusy = status === "fetching";
 
@@ -82,6 +95,14 @@ export function DownloadBox() {
 
   const onDownload = (formatId: string, kind: MediaKind) => {
     if (!metadata) return;
+    // Over the plan ceiling → open the upgrade-or-clear gate instead of starting.
+    // Fail open until entitlements resolve so a paid visitor is never wrongly held.
+    const limitBytes = planReady ? limitForPlan(plan) : Infinity;
+    const usedBytes = totalUsedBytes(historyItems);
+    if (usedBytes >= limitBytes) {
+      setGate({ open: true, usedBytes, count: historyItems.length, limitBytes });
+      return;
+    }
     const fmt = metadata.formats.find((f) => f.formatId === formatId);
     // In-app background download: streamed with live progress in the floating
     // card, the page stays fully usable, and the user NEVER lands on a raw
@@ -207,6 +228,18 @@ export function DownloadBox() {
       {/* Live progress / completion card (singleton — no-op if the app shell
           already mounted one). */}
       <FloatingDownloadProgress />
+
+      {/* Plan storage gate — upgrade or clear when over the ceiling. */}
+      <QuotaGate
+        open={gate.open}
+        usedBytes={gate.usedBytes}
+        count={gate.count}
+        limitBytes={gate.limitBytes}
+        plan={plan}
+        signedIn={!!user}
+        onClearHistory={clearHistory}
+        onClose={() => setGate((g) => ({ ...g, open: false }))}
+      />
     </div>
   );
 }

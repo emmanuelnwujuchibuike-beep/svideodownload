@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Downloader } from "@/features/downloader/downloader";
 import { HistoryPanel } from "@/features/history/history-panel";
 import { useUser } from "@/features/auth/use-user";
+import { AdSurface } from "@/features/monetization/ad-surface";
 import { UsageDashboard } from "./usage-dashboard";
 
 /**
@@ -35,7 +36,7 @@ export function GuestLibrary() {
         </h1>
         <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
           Paste a link to grab another video, and track your usage below. Your history is stored{" "}
-          {user ? "on your account and synced across devices" : "privately on this device"}.
+          {user ? "on your private cloud, synced across devices" : "privately on your private cloud"}.
         </p>
       </header>
 
@@ -49,6 +50,11 @@ export function GuestLibrary() {
       {/* The on-device history list (search / favourite / re-download / remove).
           Returns nothing until there is at least one saved download. */}
       <HistoryPanel />
+
+      {/* Admin-managed ad slot below the history — insert or remove any ad for
+          this zone from the dashboard. Renders nothing until the zone is filled. */}
+      <AdSurface zone="download_history_bottom" maxWidth="max-w-2xl" />
+
 
       {/* Signed-in visitors get the full dashboard; don't duplicate it here. */}
       {user ? (

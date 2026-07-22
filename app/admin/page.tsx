@@ -54,7 +54,7 @@ import { QualityCatalog } from "@/features/admin/quality-catalog";
 import { certifyAll } from "@/lib/platform/certification";
 import { getTestTypes } from "@/lib/platform/test-types";
 import { ActivityFeed } from "@/features/admin/activity-feed";
-import { fetchRecentActivity } from "@/lib/admin/activity";
+import { fetchActivityTotals, fetchRecentActivity } from "@/lib/admin/activity";
 import { ConfigCatalog } from "@/features/admin/config-catalog";
 import { getConfigSurfaces } from "@/lib/platform/config-registry";
 import { listConfigChanges } from "@/lib/platform/config-audit";
@@ -381,8 +381,8 @@ async function ContentSection() {
 }
 
 async function ActivitySection() {
-  const initial = await fetchRecentActivity(40);
-  return <ActivityFeed initial={initial} />;
+  const [initial, totals] = await Promise.all([fetchRecentActivity(40), fetchActivityTotals()]);
+  return <ActivityFeed initial={initial} totals={totals} />;
 }
 
 async function ConfigSection() {

@@ -5,36 +5,48 @@ import { Crown, HardDrive, LogIn, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect } from "react";
 
-import { GUEST_LIMIT_BYTES } from "@/features/history/usage";
+import type { BillingPlan } from "@/lib/monetization/types";
 import { formatBytes } from "@/lib/utils";
 
 /**
- * The 5 GB gate.
+ * The storage gate.
  *
- * A signed-out visitor's download history lives on this device and counts
- * against a 5 GB free ceiling (features/history/usage.ts). When they try to
- * download past it, this dialog is the fork the brief asks for: sign in to
- * upgrade to Pro (which lifts the cap and syncs the library across devices), or
- * clear previous history to free the space. It never silently drops a download —
- * the visitor always chooses.
+ * When a visitor tries to download past their plan's ceiling
+ * (features/history/usage.ts — 5 GB free, 59 GB Pro, unlimited Business), this
+ * dialog is the fork: upgrade, or clear previous history to free the space. It
+ * never silently drops a download — the visitor always chooses. The upgrade CTA
+ * follows the plan: a guest signs in to go Pro, a signed-in free user goes Pro,
+ * a Pro user goes Business.
  *
- * Presentation only: the caller owns the "is this guest over the limit"
- * decision (so the same rule guards the paste box and the library page) and
- * passes the two actions in.
+ * Presentation only: the caller owns the "is this over the limit" decision (so
+ * the same rule guards the paste box and the usage page) and passes it in.
  */
+function upgradeCta(plan: BillingPlan, signedIn: boolean): { label: string; href: string } {
+  if (!signedIn) return { label: "Sign in to upgrade to Pro", href: "/login?next=/pricing" };
+  if (plan === "pro") return { label: "Upgrade to Business — unlimited", href: "/pricing" };
+  return { label: "Upgrade to Pro", href: "/pricing" };
+}
+
 export function QuotaGate({
   open,
   usedBytes,
   count,
+  limitBytes,
+  plan,
+  signedIn,
   onClearHistory,
   onClose,
 }: {
   open: boolean;
   usedBytes: number;
   count: number;
+  limitBytes: number;
+  plan: BillingPlan;
+  signedIn: boolean;
   onClearHistory: () => void;
   onClose: () => void;
 }) {
+  const cta = upgradeCta(plan, signedIn);
   // Escape closes; the page behind is scroll-locked while the dialog is up.
   useEffect(() => {
     if (!open) return;
@@ -89,13 +101,12 @@ export function QuotaGate({
             </span>
 
             <h2 id="quota-gate-title" className="mt-4 text-xl font-bold tracking-[-0.02em]">
-              You&apos;ve reached your 5&nbsp;GB free limit
+              You&apos;ve reached your {formatBytes(limitBytes)} limit
             </h2>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              This device has saved {formatBytes(usedBytes)} across{" "}
-              {count === 1 ? "1 download" : `${count} downloads`}. Sign in to upgrade to
-              Pro for more storage synced across your devices — or clear your history to keep
-              downloading here.
+              You&apos;ve saved {formatBytes(usedBytes)} across{" "}
+              {count === 1 ? "1 download" : `${count} downloads`}. {cta.label} for more storage
+              synced across your devices — or clear your history to keep downloading.
             </p>
 
             {/* Full meter, so the reason is visible, not just stated. */}
@@ -104,18 +115,18 @@ export function QuotaGate({
                 <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-600" style={{ width: "100%" }} />
               </div>
               <p className="mt-1.5 text-[11px] font-medium tabular-nums text-muted-foreground">
-                {formatBytes(usedBytes)} of {formatBytes(GUEST_LIMIT_BYTES)} used
+                {formatBytes(usedBytes)} of {formatBytes(limitBytes)} used
               </p>
             </div>
 
             <div className="mt-6 flex flex-col gap-2.5">
               <Link
-                href="/login?next=/pricing"
+                href={cta.href}
                 onClick={onClose}
                 className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:opacity-95 active:scale-[0.98]"
               >
                 <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-                <Crown className="h-4 w-4" /> Sign in to upgrade to Pro
+                <Crown className="h-4 w-4" /> {cta.label}
               </Link>
               <button
                 type="button"
@@ -127,13 +138,15 @@ export function QuotaGate({
               >
                 <Trash2 className="h-4 w-4" /> Clear history &amp; free up space
               </button>
-              <Link
-                href="/login"
-                onClick={onClose}
-                className="mt-0.5 inline-flex items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
-              >
-                <LogIn className="h-3.5 w-3.5" /> Already have an account? Sign in
-              </Link>
+              {!signedIn ? (
+                <Link
+                  href="/login"
+                  onClick={onClose}
+                  className="mt-0.5 inline-flex items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+                >
+                  <LogIn className="h-3.5 w-3.5" /> Already have an account? Sign in
+                </Link>
+              ) : null}
             </div>
           </motion.div>
         </motion.div>

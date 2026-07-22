@@ -1,3 +1,4 @@
+import type { BillingPlan } from "@/lib/monetization/types";
 import type { DownloadRecord, MediaKind, PlatformId } from "@/types";
 
 /**
@@ -24,8 +25,26 @@ import type { DownloadRecord, MediaKind, PlatformId } from "@/types";
  *  exact-size tracking. Kept in sync with the download manager's own list. */
 const REEL_PLATFORMS: PlatformId[] = ["tiktok", "instagram", "snapchat"];
 
-/** The free, signed-out storage ceiling: 5 GB (binary, matching `formatBytes`). */
-export const GUEST_LIMIT_BYTES = 5 * 1024 ** 3;
+/**
+ * The storage ceiling per plan.
+ *
+ * Free (and every signed-out visitor) gets 5 GB; Pro gets 59 GB; Business is
+ * uncapped. These are the numbers the meter shows and the gate enforces, so the
+ * download button and the usage page can never disagree about a plan's limit.
+ */
+export const PLAN_LIMIT_BYTES: Record<BillingPlan, number> = {
+  free: 5 * 1024 ** 3,
+  pro: 59 * 1024 ** 3,
+  business: Infinity,
+};
+
+/** The storage ceiling for a plan (guests are treated as free). */
+export function limitForPlan(plan: BillingPlan): number {
+  return PLAN_LIMIT_BYTES[plan] ?? PLAN_LIMIT_BYTES.free;
+}
+
+/** The free / signed-out ceiling: 5 GB (binary, matching `formatBytes`). */
+export const GUEST_LIMIT_BYTES = PLAN_LIMIT_BYTES.free;
 
 /** Fraction of the limit at which we start warning before the hard block. */
 export const NEAR_LIMIT_FRACTION = 0.8;

@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { ActivityItem } from "@/lib/admin/activity";
-import { cn } from "@/lib/utils";
+import type { ActivityItem, ActivityTotals, MetricTotals } from "@/lib/admin/activity";
+import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
  * Live activity feed — every notable event as it lands, including anonymous.
@@ -38,7 +38,7 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-export function ActivityFeed({ initial }: { initial: ActivityItem[] }) {
+export function ActivityFeed({ initial, totals }: { initial: ActivityItem[]; totals?: ActivityTotals | null }) {
   const [items, setItems] = useState<ActivityItem[]>(initial);
   const [live, setLive] = useState(true);
   // Newest timestamp we've seen — the incremental cursor.
@@ -91,6 +91,9 @@ export function ActivityFeed({ initial }: { initial: ActivityItem[] }) {
         </span>
       </div>
 
+      {/* Real period totals — a Postgres count per cell, never an estimate. */}
+      {totals ? <TotalsGrid totals={totals} /> : null}
+
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No activity yet. Downloads, ad clicks, subscriptions and installs appear here as they
@@ -112,5 +115,45 @@ export function ActivityFeed({ initial }: { initial: ActivityItem[] }) {
         </ul>
       )}
     </section>
+  );
+}
+
+const PERIODS: { key: keyof MetricTotals; label: string }[] = [
+  { key: "day", label: "Day" },
+  { key: "week", label: "Week" },
+  { key: "month", label: "Month" },
+  { key: "year", label: "Year" },
+];
+
+/** Downloads / impressions / ad clicks over rolling 24h · 7d · 30d · 365d. */
+function TotalsGrid({ totals }: { totals: ActivityTotals }) {
+  const rows: { label: string; data: MetricTotals; tint: string }[] = [
+    { label: "Downloads", data: totals.downloads, tint: "text-blue-500" },
+    { label: "Impressions", data: totals.impressions, tint: "text-amber-500" },
+    { label: "Ad clicks", data: totals.adClicks, tint: "text-fuchsia-500" },
+  ];
+  return (
+    <div className="mb-4 overflow-x-auto rounded-2xl border border-border/60 bg-secondary/30">
+      <table className="w-full min-w-[22rem] text-sm">
+        <thead>
+          <tr className="text-[11px] uppercase tracking-wide text-muted-foreground/70">
+            <th className="px-3 py-2 text-left font-semibold">Metric</th>
+            {PERIODS.map((p) => (
+              <th key={p.key} className="px-3 py-2 text-right font-semibold">{p.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label} className="border-t border-border/40">
+              <td className={cn("px-3 py-2 font-medium", r.tint)}>{r.label}</td>
+              {PERIODS.map((p) => (
+                <td key={p.key} className="px-3 py-2 text-right tabular-nums">{formatCompactNumber(r.data[p.key])}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

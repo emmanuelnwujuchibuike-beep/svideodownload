@@ -13,6 +13,51 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑22 — Public `/library` for guests: instant, usage analytics, a 5 GB quota
+
+Signed‑out visitors could already save downloads — history is device‑local in
+`features/history/store.ts` — but had nowhere to *see* them: every "Downloads"
+affordance pointed at `/downloads`, which is auth‑gated (`force-dynamic` + server
+`getUser()` → `/login?next=/downloads`), so a guest hit a login wall the moment
+they looked for a file they'd just grabbed. `HistoryPanel` existed but was
+rendered nowhere.
+
+`/library` is the guest counterpart, and it's **`force-static`**: the shell is
+prerendered and CDN‑served, and everything per‑visitor (their history, usage and
+the meter) hydrates from `localStorage` on the client, so the page opens with
+**no data fetch at all** — the "prefetch immediately so it doesn't load"
+requirement. Any request‑time read here (cookies/auth/searchParams) would
+un‑static it, so the page touches none. It carries the paste box (`Downloader`),
+a usage dashboard and the on‑device history list.
+
+`features/history/usage.ts` is now the single source of truth for used bytes and
+the free ceiling: `estimateBytes` (exact recorded size, else a kind/platform
+fallback — previously copy‑pasted into `downloads-page` and `downloads-rail`, now
+imported by both) and `computeUsage(items, limitBytes)` →
+used / remaining / percent / overLimit / nearLimit(≥80%) plus by‑kind, by‑platform
+and this‑week analytics. Pure (no React/`window`) so it's unit‑tested
+(`usage.test.ts`, +10). `GUEST_LIMIT_BYTES = 5·1024³`.
+
+The 5 GB gate: a signed‑out visitor at the ceiling gets `QuotaGate` — sign in to
+upgrade to Pro (unlimited + cross‑device sync) or clear history — instead of a
+silently‑dropped download. It's enforced in `Downloader.handleDownload`
+(`if (usage.overLimit)` opens the gate) and mirrored by the dashboard meter, so
+the button and the page read one rule. Signed‑in users are uncapped
+(`computeUsage(items, Infinity)`) and are pointed at the richer `/downloads`
+dashboard rather than duplicating it.
+
+Entry points are auth‑aware and prefetched: `DownloadsEntry` (header desktop +
+mobile), the mobile menu's Downloads row, and the completion card all send guests
+to `/library`, signed‑in users to `/downloads`, and `router.prefetch` the target
+on mount so the first tap is instant.
+
+Verified: `tsc` + lint clean, **780 tests** (was 770), build shows `○ /library`
+(5.98 kB) and the prerendered `library.html` carries the shell (heading, the
+"Storage used" meter, the paste box). No live‑browser screenshot tool this
+session — verified against the build artifact. Commit `4339e9e`, pushed.
+
+---
+
 ## 2026‑07‑20 — LCP attributed properly: it is the hydration task, and four cuts
 
 Yesterday's pass measured the block but not its cause. Capturing every LCP

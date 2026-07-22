@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { recordAdClick, recordAdImpression } from "@/lib/analytics/events";
+import { emit } from "@/lib/platform/event-bus";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { clientId, trackLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -53,8 +54,13 @@ export async function POST(request: Request) {
   }
 
   const { kind, zone, adId } = parsed.data;
-  if (kind === "impression") recordAdImpression(zone, adId ?? null, userId);
-  else recordAdClick(zone, adId ?? null, userId);
+  if (kind === "impression") {
+    recordAdImpression(zone, adId ?? null, userId);
+  } else {
+    recordAdClick(zone, adId ?? null, userId);
+    // Domain event (in-process, fire-and-forget) — clicks only; impressions would flood.
+    emit("ad.clicked", { zone, adId: adId ?? null });
+  }
 
   return NextResponse.json({ ok: true });
 }

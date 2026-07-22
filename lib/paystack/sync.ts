@@ -1,4 +1,5 @@
 import { trackEvent } from "@/lib/analytics/events";
+import { emit } from "@/lib/platform/event-bus";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { planForPlanCode, type PaystackEventData } from "./paystack";
@@ -101,4 +102,9 @@ export async function syncPaystackEvent(
     userId,
     metadata: { plan: effectivePlan, status, provider: "paystack" },
   });
+
+  // Domain event (in-process, fire-and-forget) for an activation.
+  if (status !== "canceled" && effectivePlan !== "free") {
+    emit("subscription.activated", { userId, plan: effectivePlan });
+  }
 }

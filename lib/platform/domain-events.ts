@@ -40,6 +40,7 @@ export const DOMAIN_EVENTS = [
   { id: "reaction.added", name: "ReactionAdded", description: "A reaction was added to a post.", domain: "social", payload: ["postId", "actorId", "reaction"] },
   { id: "message.sent", name: "MessageSent", description: "A message was sent in a conversation.", domain: "messaging", payload: ["messageId", "conversationId", "senderId"] },
   { id: "download.completed", name: "DownloadCompleted", description: "A media download finished.", domain: "downloads", payload: ["platform", "userId"] },
+  { id: "ad.clicked", name: "AdClicked", description: "A visitor clicked an ad unit.", domain: "monetization", payload: ["zone", "adId"] },
   { id: "media.processed", name: "MediaProcessed", description: "A worker finished transcoding media.", domain: "media", payload: ["streamUid", "postId"] },
   { id: "notification.delivered", name: "NotificationDelivered", description: "A notification was delivered to a channel.", domain: "notifications" as EventDomain, payload: ["userId", "channel"] },
   { id: "subscription.activated", name: "SubscriptionActivated", description: "A paid subscription became active.", domain: "monetization", payload: ["userId", "plan"] },
@@ -63,6 +64,7 @@ export interface DomainEventPayloads {
   "reaction.added": { postId: string; actorId: string; reaction: string };
   "message.sent": { messageId: string; conversationId: string; senderId: string };
   "download.completed": { platform: string; userId: string | null };
+  "ad.clicked": { zone: string; adId: string | null };
   "media.processed": { streamUid: string; postId: string | null };
   "notification.delivered": { userId: string; channel: "push" | "in-app" };
   "subscription.activated": { userId: string; plan: string };

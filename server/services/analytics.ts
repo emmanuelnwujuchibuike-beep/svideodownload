@@ -1,4 +1,5 @@
 import { alertEmailHtml, sendAdminAlertOnce } from "@/lib/notify";
+import { emit } from "@/lib/platform/event-bus";
 import { detectPlatform } from "@/lib/platforms";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { MediaKind } from "@/types";
@@ -22,8 +23,12 @@ export function recordDownloadEvent(
   kind: MediaKind,
   title?: string,
 ): void {
-  if (!hasSupabase) return;
   const platform = detectPlatform(url);
+  // Publish the domain event (in-process, fire-and-forget) so any consumer —
+  // observability metering today, more later — reacts without this code knowing.
+  emit("download.completed", { platform: platform.id, userId: null });
+
+  if (!hasSupabase) return;
 
   void (async () => {
     try {

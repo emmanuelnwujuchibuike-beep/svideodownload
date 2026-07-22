@@ -77,7 +77,7 @@ import {
 } from "@/lib/platform/search-platform";
 import { MediaCatalog } from "@/features/admin/media-catalog";
 import {
-  getDeliveryCapabilities,
+  getDeliveryCapabilities as getMediaDelivery,
   getMediaAi,
   getMediaObservability,
   getMediaServices,
@@ -85,6 +85,15 @@ import {
   getStorageTiers,
   getSupportedMedia,
 } from "@/lib/platform/media-platform";
+import { NotificationCatalog } from "@/features/admin/notification-catalog";
+import {
+  getDeliveryCapabilities as getNotifDelivery,
+  getNotificationAi,
+  getNotificationChannels,
+  getNotificationPreferences,
+  getNotificationServices,
+  getNotificationSources,
+} from "@/lib/platform/notification-platform";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -304,10 +313,21 @@ export default async function AdminPage() {
               services={getMediaServices()}
               storage={getStorageTiers()}
               pipeline={getPipelineStages()}
-              delivery={getDeliveryCapabilities()}
+              delivery={getMediaDelivery()}
               ai={getMediaAi()}
               observability={getMediaObservability()}
               supported={getSupportedMedia()}
+            />
+          </AdminPanel>
+
+          <AdminPanel id="notifications">
+            <NotificationCatalog
+              services={getNotificationServices()}
+              channels={getNotificationChannels()}
+              sources={getNotificationSources()}
+              delivery={getNotifDelivery()}
+              preferences={getNotificationPreferences()}
+              ai={getNotificationAi()}
             />
           </AdminPanel>
 

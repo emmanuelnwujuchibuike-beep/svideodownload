@@ -13,6 +13,38 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑22 (batch 8) — Enterprise Notification Platform
+
+The brief asked for a Notification Gateway, Delivery Engine, Template/Preference/
+Push/Email/Realtime/Digest/Scheduling services, Delivery Intelligence™ and a
+Notification Registry™. The app shipped a mature notification system over Parts
+6–9, so all of it already runs — VAPID Web/PWA push, smart per-preference
+delivery, quiet hours + priority + digest, sound/vibration prefs, admin
+broadcasts, delivery analytics, and the existing notification *type* registry. The
+genuine gap was the platform-level map with teeth.
+
+Built (same shape as the Search / Media / Data platforms):
+- **`lib/platform/notification-platform.ts`** — the Notification Platform
+  Registry: services, channels, sources, real-time + smart delivery, preferences
+  and the AI layer — every live row mapped to the real module.
+- **`notification-platform.test.ts`** (+11) — teeth: `live`/`partial` rows must
+  point at a real file, `planned` rows name none; **every live source raises under
+  a category that really exists in the Type Registry**; in-app/web-push/email are
+  live and SMS/native/live-activity + the whole AI stack stay `planned`.
+- Admin **Notifications** section (`features/admin/notification-catalog.tsx`);
+  registered in the Registry-of-Registries alongside the existing type registry;
+  `docs/NOTIFICATION_PLATFORM.md`.
+
+Honestly `planned`: SMS, native APNs/FCM push, Live Activities; a versioned
+template/approval service; marketplace/AI-studio/cloud-sync/org sources; a
+dedicated rate-limiter + per-user local-time targeting; and the entire AI layer
+(summarisation, ML priority, personalized timing, delivery optimization). All
+admin-only (`force-dynamic`) — landing untouched. Verified: tsc + lint clean,
+**842 tests**, build clean, budget green post-build. **7th** registry-with-teeth
+platform map (Config, Design, Engineering, Data, Search, Media, Notifications).
+
+---
+
 ## 2026‑07‑22 (batch 7) — Enterprise Media Platform
 
 The Media brief asked for a Media Gateway, Upload Service, Transcoding, Image/

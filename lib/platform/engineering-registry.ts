@@ -50,6 +50,7 @@ export const ENGINEERING_ASSETS: EngineeringAsset[] = [
   { id: "developer-experience", name: "Developer Experience", kind: "doc", source: "docs/DEVELOPER_EXPERIENCE.md", owner: "platform", description: "This platform: standards, registry, toolkit and AI-assisted development.", status: "live" },
   { id: "search-platform-doc", name: "Search & Discovery Platform", kind: "doc", source: "docs/SEARCH_PLATFORM.md", owner: "platform", description: "The unified search, ranking, SEO and AI-discovery layer, mapped to real code with a teeth-backed registry.", status: "live" },
   { id: "media-platform-doc", name: "Media Platform", kind: "doc", source: "docs/MEDIA_PLATFORM.md", owner: "platform", description: "The unified media services, storage, pipeline, delivery, AI and observability layer, mapped to real code with a teeth-backed registry.", status: "live" },
+  { id: "notification-platform-doc", name: "Notification Platform", kind: "doc", source: "docs/NOTIFICATION_PLATFORM.md", owner: "platform", description: "The unified notification services, channels, sources, delivery, preferences and AI layer, mapped to real code with a teeth-backed registry.", status: "live" },
 
   /* ── Guides: onboarding for humans + AI ── */
   { id: "agents-guide", name: "AGENTS.md", kind: "guide", source: "AGENTS.md", owner: "platform", description: "How an AI assistant (or a new engineer) navigates the codebase, the standards and the golden rules.", status: "live" },

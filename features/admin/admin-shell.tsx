@@ -3,6 +3,7 @@
 import {
   Activity,
   BadgeCheck,
+  Bell,
   Boxes,
   Clapperboard,
   CreditCard,
@@ -69,6 +70,7 @@ import { cn } from "@/lib/utils";
 const ICONS: Record<string, LucideIcon> = {
   Activity,
   BadgeCheck,
+  Bell,
   Boxes,
   Clapperboard,
   CreditCard,

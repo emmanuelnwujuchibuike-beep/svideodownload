@@ -118,6 +118,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     icon: "Clapperboard",
     blurb: "The Enterprise Media Platform described by itself: every media service, storage tier, pipeline stage, delivery capability, AI capability and observability signal, mapped to real code.",
   },
+  {
+    id: "notifications",
+    label: "Notifications",
+    category: "system",
+    icon: "Bell",
+    blurb: "The Enterprise Notification Platform described by itself: every service, channel, source, delivery capability, preference and AI capability, mapped to real code.",
+  },
 
   /* ── System ── */
   {

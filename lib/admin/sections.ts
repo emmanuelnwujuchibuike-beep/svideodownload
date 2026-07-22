@@ -111,6 +111,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     icon: "Telescope",
     blurb: "The Enterprise Search & Discovery Platform described by itself: every searchable entity, index, ranking signal, SEO asset and discovery surface, mapped to real code.",
   },
+  {
+    id: "media",
+    label: "Media",
+    category: "content",
+    icon: "Clapperboard",
+    blurb: "The Enterprise Media Platform described by itself: every media service, storage tier, pipeline stage, delivery capability, AI capability and observability signal, mapped to real code.",
+  },
 
   /* ── System ── */
   {

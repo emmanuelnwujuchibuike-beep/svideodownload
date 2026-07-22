@@ -13,6 +13,39 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑22 (batch 7) — Enterprise Media Platform
+
+The Media brief asked for a Media Gateway, Upload Service, Transcoding, Image/
+Video/Audio processing, Thumbnail service, Streaming, CDN Manager, Storage
+Manager and a "Media Registry™". Frenzsave **is** a media pipeline, so all of it
+already runs in production — Cloudflare Stream (ABR/HLS + multi-language captions
++ webhook), R2 with presigned direct upload + immutable CDN caching, the
+yt-dlp/ffmpeg transcode worker, poster/waveform generation, playback QoE beacons
+and live health probes. The genuine, flagship gap was one honest, operator-facing
+map with teeth.
+
+Built (same shape as the Search / Design / Data platforms):
+- **`lib/platform/media-platform.ts`** — the Media Registry: media services,
+  storage tiers, pipeline stages, delivery capabilities, media-AI matrix,
+  observability signals, and the supported-media taxonomy — every live row mapped
+  to the real module.
+- **`media-platform.test.ts`** (+13) — teeth: `live`/`partial` rows must point at
+  a file that exists, `planned` rows name none; every supported kind is handled by
+  a declared service; streaming/upload/captions are live and the enhancement/
+  detection stack + cold archival + hash dedupe stay `planned`.
+- Admin **Media** section (`features/admin/media-catalog.tsx`); registered in the
+  Registry-of-Registries; `docs/MEDIA_PLATFORM.md`.
+
+Honestly `planned`, not implied as done: background removal, upscaling, object/
+face detection, smart cropping, AI tagging/semantic, TTS, AI generation; virus
+scanning, standalone transcription, OCR, scene detection, watermarking, auto
+orientation/colour normalisation; cold archival, content-hash dedupe; signed
+playback URLs for private media; transcode-latency / cache-hit / storage-growth
+rollups; 3D/AR/VR. All admin-only (`force-dynamic`) — landing untouched. Verified:
+tsc + lint clean, **831 tests**, build clean, budget green post-build.
+
+---
+
 ## 2026‑07‑22 (batch 6) — Enterprise Search & Discovery Platform
 
 The Search brief asked for a Search Gateway, Indexing Service, Discovery Engine,

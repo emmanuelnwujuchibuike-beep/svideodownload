@@ -75,6 +75,16 @@ import {
   getSeoAssets,
   SEO_ASSET_KINDS,
 } from "@/lib/platform/search-platform";
+import { MediaCatalog } from "@/features/admin/media-catalog";
+import {
+  getDeliveryCapabilities,
+  getMediaAi,
+  getMediaObservability,
+  getMediaServices,
+  getPipelineStages,
+  getStorageTiers,
+  getSupportedMedia,
+} from "@/lib/platform/media-platform";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -286,6 +296,18 @@ export default async function AdminPage() {
               seoKinds={SEO_ASSET_KINDS}
               surfaces={getDiscoverySurfaces()}
               capabilities={getSearchCapabilities()}
+            />
+          </AdminPanel>
+
+          <AdminPanel id="media">
+            <MediaCatalog
+              services={getMediaServices()}
+              storage={getStorageTiers()}
+              pipeline={getPipelineStages()}
+              delivery={getDeliveryCapabilities()}
+              ai={getMediaAi()}
+              observability={getMediaObservability()}
+              supported={getSupportedMedia()}
             />
           </AdminPanel>
 

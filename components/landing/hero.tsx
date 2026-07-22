@@ -32,7 +32,7 @@ export function Hero() {
      * because neon trails that read as "light travelling" on #050816 read as dirt
      * on white. Same geometry, different palette and much lower intensity.
      */
-    <section className="relative overflow-hidden bg-gradient-to-b from-slate-50 to-indigo-50/60 pb-12 pt-28 text-foreground dark:from-[#050816] dark:to-[#050816] dark:text-white sm:pb-16 sm:pt-32">
+    <section className="relative overflow-hidden bg-gradient-to-b from-slate-50 to-indigo-50/60 pb-12 pt-[calc(var(--frenz-safe-top)+7rem)] text-foreground dark:from-[#050816] dark:to-[#050816] dark:text-white sm:pb-16 sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
       <HeroEffects />
 
       <div className="container relative z-10 grid items-center gap-10 lg:grid-cols-2 lg:gap-8" id="hero">

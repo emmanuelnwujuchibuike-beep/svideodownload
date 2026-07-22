@@ -113,7 +113,7 @@ export default async function CorpusOpsPage() {
   return (
     <>
       <SiteHeader />
-      <main className="container max-w-5xl pb-20 pt-28">
+      <main className="container max-w-5xl pb-20 pt-[calc(var(--frenz-safe-top)+7rem)]">
         <header className="mb-10">
           <h1 className="text-3xl font-extrabold tracking-[-0.02em]">Corpus operations</h1>
           <p className="mt-2 text-muted-foreground">

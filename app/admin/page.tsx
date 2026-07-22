@@ -42,6 +42,13 @@ import { getGates } from "@/lib/platform/governance";
 import { CommunicationCatalog } from "@/features/admin/communication-catalog";
 import { getDomainEvents } from "@/lib/platform/domain-events";
 import { getIntegrations } from "@/lib/platform/integration-registry";
+import { DataCatalog } from "@/features/admin/data-catalog";
+import { getDataDomains } from "@/lib/platform/data-domains";
+import {
+  getKnowledgeFabric,
+  getLifecyclePolicies,
+  getStorageStrategies,
+} from "@/lib/platform/data-platform";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -261,6 +268,15 @@ export default async function AdminPage() {
 
           <AdminPanel id="communication">
             <CommunicationCatalog events={getDomainEvents()} integrations={getIntegrations()} />
+          </AdminPanel>
+
+          <AdminPanel id="data">
+            <DataCatalog
+              domains={getDataDomains()}
+              storage={getStorageStrategies()}
+              lifecycle={getLifecyclePolicies()}
+              fabric={getKnowledgeFabric()}
+            />
           </AdminPanel>
 
           <AdminPanel id="traffic">

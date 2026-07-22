@@ -51,6 +51,8 @@ export const REGISTRIES: RegistryDef[] = [
   { id: "ai-capability", name: "AI Capability Registry", governs: "What the assistant can do, and its true status.", source: "lib/platform/ai-capabilities.ts", status: "live" },
   { id: "domain-events", name: "Domain Event Registry", governs: "Business event contracts (UserCreated, MessageSent, …) + typed payloads.", source: "lib/platform/domain-events.ts", status: "live", note: "Distinct from the analytics Event Registry; the event bus is typed against it." },
   { id: "integration", name: "Integration Registry", governs: "Every communication surface: APIs, events, realtime, webhooks, workflows.", source: "lib/platform/integration-registry.ts", status: "live" },
+  { id: "data-domains", name: "Data Domain Registry", governs: "Every table, grouped by owning domain + storage strategy.", source: "lib/platform/data-domains.ts", status: "live", note: "Enforced against the migrations — every real table is owned by exactly one domain, no orphans." },
+  { id: "knowledge-fabric", name: "Knowledge Fabric", governs: "The governed entity-relationship graph + storage/lifecycle policies over the data domains.", source: "lib/platform/data-platform.ts", status: "live" },
 ];
 
 export function getRegistries(): RegistryDef[] {

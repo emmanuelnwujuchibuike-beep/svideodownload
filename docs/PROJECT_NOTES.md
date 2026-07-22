@@ -3052,3 +3052,34 @@ Service Registry gains `eng-metrics` (partial). **The governance manifest now ha
 
 **Verified:** tsc clean, lint clean, **734 tests** across 68 files, build clean, the
 metrics tool runs green on real history.
+
+### Enterprise Data Platform — the database as one governed asset (2026-07-21)
+
+The brief's data-platform architecture, built as a real catalogue over the ACTUAL
+schema (~100 tables across 90+ migrations), not invented tables.
+
+- **Data Domain Registry** (`lib/platform/data-domains.ts`): all ~100 tables grouped
+  into 13 domains (identity, social, messaging, media, monetization, moderation,
+  notifications, content, learning, localization, analytics, configuration, audit),
+  each **single-owned** with a storage strategy. `data-domains.test.ts` scans the
+  migrations and asserts (a) every catalogued table exists, (b) every real table is
+  catalogued exactly once — **no orphan tables, no double-ownership**. Passed first
+  try, so the catalogue is complete and accurate against the real DB.
+- **Data Platform governance** (`lib/platform/data-platform.ts`): storage strategies
+  (Postgres / R2+Supabase Storage / Upstash / search / event-log all `live`; vector
+  index, OLAP warehouse, cold archive `planned`), lifecycle policies (account-deletion,
+  disappearing-messages, push-log retention all `live` via real crons; data-export +
+  archive `planned`), and the **Knowledge Fabric** (12 governed FK relationships, each
+  `via` a real table, checked).
+- Surfaced at `/admin` → **Data**. Registry-of-Registries gains `data-domains` +
+  `knowledge-fabric` (both live); Service Registry gains data-registry, schema-registry
+  (migrations) and a backup-recovery service marked **partial** (Supabase-managed, no
+  in-repo service — honest, not faked).
+
+Honesty held: no fabricated backup/replication service, no vector/warehouse pretence —
+Supabase manages backups/PITR at the platform level (dashboard-operated), and the
+absent storage tiers are `planned` with the trigger for building them.
+
+**Verified:** tsc clean, lint clean, **745 tests** across 70 files (incl. the
+schema-conformance scan with teeth), build clean (`/admin` 22.6 kB). The Constitution
+gate validates the new `data` admin section end-to-end.

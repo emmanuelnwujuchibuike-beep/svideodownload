@@ -128,6 +128,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "The comms backbone: domain event contracts and every integration surface (APIs, realtime, webhooks, workflows).",
   },
   {
+    id: "data",
+    label: "Data",
+    category: "system",
+    icon: "Database",
+    blurb: "The Enterprise Data Platform: every domain and table, storage strategies, lifecycle policies and the Knowledge Fabric.",
+  },
+  {
     id: "traffic",
     label: "Traffic",
     category: "system",

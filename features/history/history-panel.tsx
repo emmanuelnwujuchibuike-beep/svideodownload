@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Music,
+  Play,
   Search,
   Trash2,
   Video,
@@ -18,6 +19,7 @@ import { type ComponentType, type ReactNode, useMemo, useState } from "react";
 import type { MediaKind } from "@/types";
 
 import { startDownload } from "@/features/downloads/manager";
+import { openPlayer } from "@/features/downloads/player-store";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
@@ -276,6 +278,12 @@ function HistoryCard({
       </div>
 
       <div className="flex shrink-0 items-center">
+        {/* Watch in the in-browser player — the review player is mounted by the
+            Downloader on this page, so signed-out visitors can watch from their
+            history too (not only re-download). */}
+        <IconButton label="Watch" onClick={() => openPlayer(item)}>
+          <Play className="h-4 w-4" />
+        </IconButton>
         <IconButton label="Favorite" onClick={onToggleFavorite} active={item.favorite}>
           <Heart className={cn("h-4 w-4", item.favorite && "fill-current")} />
         </IconButton>

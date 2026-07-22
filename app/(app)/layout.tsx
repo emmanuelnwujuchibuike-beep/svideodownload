@@ -10,6 +10,7 @@ import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { DeviceCheck } from "@/features/app-shell/device-check";
 import { FloatingMessages } from "@/features/app-shell/floating-messages";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
+import { DownloadTopAd } from "@/features/monetization/download-top-ad";
 import { OfflineQueueSync } from "@/features/app-shell/offline-queue-sync";
 import { PinLockGate } from "@/features/account/pin-lock-gate";
 import { InboxMobileChrome } from "@/features/social/inbox-mobile-chrome";
@@ -39,6 +40,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <AppSidebar handle={null} />
       <div className="flex min-w-0 flex-1 flex-col">
         <AppTopbar />
+        {/* Sticky top ad — Downloads page only, mounted here (outside the page
+            transition template) so its sticky pin is reliable. */}
+        <DownloadTopAd />
         {children}
       </div>
       <MobileNav />

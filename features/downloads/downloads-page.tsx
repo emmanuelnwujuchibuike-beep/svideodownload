@@ -26,7 +26,6 @@ import { AdSurface } from "@/features/monetization/ad-surface";
 import { DownloadHistoryAd } from "@/features/monetization/download-history-ad";
 import { DownloadInterstitial } from "@/features/monetization/download-interstitial";
 import { ExitIntent } from "@/features/monetization/exit-intent";
-import { StickyTopAd } from "@/features/monetization/sticky-top-ad";
 import { TiredOfAds } from "@/features/monetization/tired-of-ads";
 import { UsageDashboard } from "@/features/downloads/usage-dashboard";
 import { BRAND_ICONS } from "@/lib/platform-icons";
@@ -80,10 +79,8 @@ export function DownloadsPage() {
 
   return (
     <div className="space-y-5 pt-1">
-      {/* The site's persistent banner, brought to the TOP of the download page:
-          sticky, so it stays put while the app top bar slides away on scroll.
-          Serves the bottom_banner zone; collapses when empty. */}
-      <StickyTopAd />
+      {/* The sticky top banner is mounted in the (app) layout (DownloadTopAd),
+          not here — outside the page-transition template so its pin is reliable. */}
 
       {/* Warms the Gateway chunk and prefetches its destinations on idle, so
           nothing lags the first time it is needed. Renders nothing. */}

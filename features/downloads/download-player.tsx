@@ -1,9 +1,9 @@
 "use client";
 
-import { AlertCircle, Check, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MessageCircle, MoreVertical, Pause, Share2, Trash2, X } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, ChevronRight, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MessageCircle, MoreVertical, Play, Share2, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { closePlayer, playerNext, playerPrev, usePlayerQueue } from "@/features/downloads/player-store";
@@ -16,11 +16,6 @@ import { presignUpload, uploadWithPlan, type UploadPlan } from "@/lib/storage/cl
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { DownloadRecord } from "@/types";
-
-// A tap only counts if the pointer barely moved (matches FeedVideo/reel-viewer's
-// tap-vs-drag tolerance so the gesture language is consistent everywhere).
-const TAP_MOVE_TOLERANCE = 18;
-const HOLD_MS = 300;
 
 export function DownloadPlayer() {
   const queue = usePlayerQueue();
@@ -50,6 +45,8 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   const [savedToDevice, setSavedToDevice] = useState(false);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0); // 0-100 within the CURRENT item, for the status bar
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const blobRef = useRef<Blob | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   // Prefetched the moment the ••• sheet opens (real signal of intent to maybe
@@ -113,12 +110,6 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       }
     })();
 
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closePlayer();
-      else if (e.key === "ArrowRight") playerNext();
-      else if (e.key === "ArrowLeft") playerPrev();
-    };
-    window.addEventListener("keydown", onKey);
     // overflowY only — the `overflow` shorthand also resets overflow-x, undoing
     // the `overflow-x: clip` on <body> that keeps the app sidebar sticky.
     document.body.style.overflowY = "hidden";
@@ -126,7 +117,6 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       alive = false;
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
-      window.removeEventListener("keydown", onKey);
       document.body.style.overflowY = "";
     };
   }, [rec]);
@@ -264,72 +254,57 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     toast("Removed from downloads.", "info", { duration: 2000 });
   };
 
-  /* ── Gesture model (Stories-style, owner spec) ────────────────────────────
-   *  • tap left third   → previous item
-   *  • tap right (rest) → next item
-   *  • press-and-hold   → pause (video only); release resumes
-   *  • video ends       → auto-advance, same as finishing a Story
-   * Guarded so a graze/drag never fires a navigation. */
-  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const holding = useRef(false);
-  const moved = useRef(false);
-  const startPt = useRef<{ x: number; y: number } | null>(null);
-
-  const resumePlay = () => {
-    setPaused(false);
-    void videoRef.current?.play().catch(() => {});
-  };
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    startPt.current = { x: e.clientX, y: e.clientY };
-    moved.current = false;
-    holding.current = false;
-    if (rec.kind !== "video") return;
-    holdTimer.current = setTimeout(() => {
-      if (moved.current) return;
-      holding.current = true;
-      videoRef.current?.pause();
+  /* ── Playback controls (owner spec) ───────────────────────────────────────
+   *  • tap the video     → play / pause
+   *  • drag the scrubber → seek (fast-forward / rewind by swiping)
+   *  • ‹ › (queues only) → previous / next; a video also auto-advances on end.
+   */
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) {
+      void v.play().catch(() => {});
+      setPaused(false);
+    } else {
+      v.pause();
       setPaused(true);
-    }, HOLD_MS);
+    }
   };
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!startPt.current || moved.current) return;
-    if (Math.abs(e.clientX - startPt.current.x) > TAP_MOVE_TOLERANCE || Math.abs(e.clientY - startPt.current.y) > TAP_MOVE_TOLERANCE) {
-      moved.current = true;
-      if (holdTimer.current) clearTimeout(holdTimer.current);
-      if (holding.current) {
-        holding.current = false;
-        resumePlay();
+  const seekTo = (t: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    const clamped = Math.max(0, Math.min(v.duration || t, t));
+    v.currentTime = clamped;
+    setCurrentTime(clamped);
+  };
+  const seekBy = (delta: number) => seekTo((videoRef.current?.currentTime ?? currentTime) + delta);
+
+  // Keyboard: Escape closes everywhere; Space toggles and ← / → scrub 5s on video.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return closePlayer();
+      if (rec.kind !== "video") return;
+      if (e.key === " ") {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.key === "ArrowRight") {
+        seekBy(5);
+      } else if (e.key === "ArrowLeft") {
+        seekBy(-5);
       }
-    }
-  };
-  const onPointerUp = (e: React.PointerEvent) => {
-    if (holdTimer.current) clearTimeout(holdTimer.current);
-    if (holding.current) {
-      holding.current = false;
-      resumePlay();
-      return;
-    }
-    if (moved.current) return; // a drag, not a tap — no navigation
-    const w = typeof window !== "undefined" ? window.innerWidth : 1;
-    if (e.clientX < w * 0.33) playerPrev();
-    else playerNext();
-  };
-  const onPointerCancel = () => {
-    if (holdTimer.current) clearTimeout(holdTimer.current);
-    if (holding.current) {
-      holding.current = false;
-      resumePlay();
-    }
-    startPt.current = null;
-  };
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rec.kind]);
 
   return (
     <div className="fixed inset-0 z-[92] flex flex-col bg-black/95" role="dialog" aria-modal="true" aria-label={rec.title}>
       {/* Status — segmented, like Stories: one bar per queued item, the
-          current one fills with real playback progress. */}
+          current one fills with real playback progress. Cleared of the safe area
+          (Dynamic Island / status bar) via var(--frenz-safe-top). */}
       {total > 1 ? (
-        <div className="absolute inset-x-3 top-3 z-20 flex gap-1">
+        <div className="absolute inset-x-3 top-[calc(0.5rem+var(--frenz-safe-top))] z-20 flex gap-1">
           {Array.from({ length: total }).map((_, i) => (
             <span key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
               <span className="block h-full rounded-full bg-white" style={{ width: `${i < index ? 100 : i === index ? progress : 0}%` }} />
@@ -338,11 +313,13 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         </div>
       ) : null}
 
+      {/* X (dismiss) and ••• (menu) sit on OPPOSITE top corners, both below the
+          safe area so they never jam under the island. */}
       <button
         type="button"
         onClick={closePlayer}
         aria-label="Close"
-        className={cn("fixed left-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur", total > 1 ? "top-8" : "top-4")}
+        className={cn("fixed left-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur", total > 1 ? "top-[calc(1.75rem+var(--frenz-safe-top))]" : "top-[calc(0.75rem+var(--frenz-safe-top))]")}
       >
         <X className="h-5 w-5" />
       </button>
@@ -350,24 +327,21 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         type="button"
         onClick={() => setMoreOpen(true)}
         aria-label="More options"
-        className={cn("fixed right-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur", total > 1 ? "top-8" : "top-4")}
+        className={cn("fixed right-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur", total > 1 ? "top-[calc(1.75rem+var(--frenz-safe-top))]" : "top-[calc(0.75rem+var(--frenz-safe-top))]")}
       >
         <MoreVertical className="h-5 w-5" />
       </button>
 
-      {/* Title / position — where the status bar used to have nothing above it */}
-      <p className={cn("pointer-events-none absolute inset-x-16 z-10 truncate text-center text-sm font-medium text-white/90", total > 1 ? "top-9" : "top-5")}>
+      {/* Title / position */}
+      <p className={cn("pointer-events-none absolute inset-x-16 z-10 truncate text-center text-sm font-medium text-white/90", total > 1 ? "top-[calc(2rem+var(--frenz-safe-top))]" : "top-[calc(1rem+var(--frenz-safe-top))]")}>
         {rec.title}
         {total > 1 ? <span className="text-white/60"> · {index + 1}/{total}</span> : null}
       </p>
 
-      {/* Tap zones (prev/next) + hold-to-pause cover the whole stage */}
+      {/* The stage — a tap on the video toggles play/pause (owner spec). */}
       <div
         className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-6"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerCancel}
+        onClick={rec.kind === "video" && url ? togglePlay : undefined}
       >
         {error ? (
           <div className="max-w-sm text-center text-white">
@@ -405,28 +379,48 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
             playsInline
             className="max-h-full w-full max-w-4xl rounded-2xl bg-black"
             onEnded={() => playerNext()}
+            onPlay={() => setPaused(false)}
+            onPause={() => setPaused(true)}
+            onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
             onTimeUpdate={(e) => {
               const v = e.currentTarget;
+              setCurrentTime(v.currentTime);
               if (v.duration) setProgress((v.currentTime / v.duration) * 100);
             }}
           />
         ) : null}
 
-        {/* Paused-while-holding indicator — same convention as FeedVideo/reels */}
-        {paused ? (
+        {/* Tap-to-play affordance — a big Play glyph while paused. */}
+        {paused && rec.kind === "video" && url ? (
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
-              <Pause className="h-7 w-7 fill-white" />
+              <Play className="ml-0.5 h-7 w-7 fill-white" />
             </span>
           </span>
         ) : null}
       </div>
 
-      {/* Save to device — directly inside the preview (owner's ask), not buried
-          in the ••• menu. The strip is pointer-events-none so only the button
-          itself intercepts taps; the rest passes through to the prev/next zones. */}
+      {/* Bottom controls: the seek scrubber (drag/swipe to fast-forward or
+          rewind), queue ‹ › when there's more than one, and Save to device —
+          directly in the preview. The strip is pointer-events-none so taps pass
+          through to the play/pause stage except on the controls themselves. */}
       {url && !error ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-20 flex justify-center px-4">
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-3 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          {rec.kind === "video" ? (
+            <div className="pointer-events-auto flex w-full max-w-3xl items-center gap-2">
+              {total > 1 ? (
+                <NavBtn label="Previous" onClick={playerPrev} disabled={index === 0}>
+                  <ChevronLeft className="h-5 w-5" />
+                </NavBtn>
+              ) : null}
+              <Scrubber currentTime={currentTime} duration={duration} onSeek={seekTo} />
+              {total > 1 ? (
+                <NavBtn label="Next" onClick={playerNext} disabled={index >= total - 1}>
+                  <ChevronRight className="h-5 w-5" />
+                </NavBtn>
+              ) : null}
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={saveToDeviceNow}
@@ -518,6 +512,81 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         prefetchedPlan={planRef.current}
       />
     </div>
+  );
+}
+
+function fmtTime(s: number): string {
+  if (!isFinite(s) || s < 0) return "0:00";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+/**
+ * Draggable seek bar. Pointer-capture makes a press-and-drag anywhere on the
+ * track scrub the video — the "swipe backwards/forward" the owner asked for —
+ * and `touch-none` stops the browser from scrolling the page during the drag.
+ */
+function Scrubber({
+  currentTime,
+  duration,
+  onSeek,
+}: {
+  currentTime: number;
+  duration: number;
+  onSeek: (t: number) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const seekAt = (clientX: number) => {
+    const el = trackRef.current;
+    if (!el || !duration) return;
+    const rect = el.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    onSeek(frac * duration);
+  };
+  const pct = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
+
+  return (
+    <div className="flex flex-1 items-center gap-2.5 rounded-full bg-black/40 px-3 py-2 backdrop-blur">
+      <span className="text-[11px] font-medium tabular-nums text-white/90">{fmtTime(currentTime)}</span>
+      <div
+        ref={trackRef}
+        role="slider"
+        aria-label="Seek"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(duration)}
+        aria-valuenow={Math.round(currentTime)}
+        tabIndex={0}
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          seekAt(e.clientX);
+        }}
+        onPointerMove={(e) => {
+          if (e.buttons > 0) seekAt(e.clientX);
+        }}
+        className="relative h-6 flex-1 cursor-pointer touch-none"
+      >
+        <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full bg-white/25">
+          <div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
+        </div>
+        <div className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow" style={{ left: `${pct}%` }} />
+      </div>
+      <span className="text-[11px] font-medium tabular-nums text-white/70">{fmtTime(duration)}</span>
+    </div>
+  );
+}
+
+function NavBtn({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20 disabled:opacity-30"
+    >
+      {children}
+    </button>
   );
 }
 

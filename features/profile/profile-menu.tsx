@@ -161,7 +161,9 @@ export function ProfileMenu() {
                 animate={{ x: 0 }}
                 exit={{ x: "100%" }}
                 transition={{ type: "spring", stiffness: 380, damping: 38 }}
-                className="fixed inset-y-0 right-0 z-[80] flex w-[86%] max-w-sm flex-col overflow-y-auto border-l border-border/60 bg-card/95 backdrop-blur-xl lg:hidden"
+                // pt clears the Dynamic Island / status bar so the "Your space"
+                // header never jams under it in the installed PWA.
+                className="fixed inset-y-0 right-0 z-[80] flex w-[86%] max-w-sm flex-col overflow-y-auto border-l border-border/60 bg-card/95 pt-[var(--frenz-safe-top)] backdrop-blur-xl lg:hidden"
                 role="dialog"
                 aria-modal="true"
                 aria-label="Profile menu"

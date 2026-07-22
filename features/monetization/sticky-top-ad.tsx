@@ -11,16 +11,14 @@ import { useShowAds } from "./use-show-ads";
  * The persistent banner, pinned to the TOP of the download page.
  *
  * The owner wanted the site's all-pages bottom banner brought to the top of the
- * download page, under the app top bar, and staying put on scroll while the top
- * bar slides away. The app top bar is `sticky top-0` and hides itself on
- * scroll-down; this is `sticky top-0` too, so once the bar slides up this becomes
- * the pinned top element — exactly that behaviour, with no fixed-positioning
- * fight. Serves the same `bottom_banner` zone the site banner uses, so anything
- * the operator puts there appears here.
- *
- * Premium card treatment (solid, hairline, the page's shadow language), and it
- * collapses to nothing until the zone is filled, so an unconfigured site shows
- * no empty bar.
+ * download page, staying put on scroll while the app top bar slides away — and
+ * NOT sliding up under the Dynamic Island. So it is `sticky` at
+ * `top: var(--frenz-safe-top)` (below the status-bar inset), and it is mounted in
+ * the (app) LAYOUT — OUTSIDE the page-transition template. A transformed ancestor
+ * is a containing block that breaks `position: sticky` mid-transition, which is
+ * why it sometimes "scrolled past" when the page hadn't settled; mounting it
+ * outside that wrapper makes the pin reliable. Serves the `bottom_banner` zone,
+ * and collapses to nothing until the zone is filled.
  */
 export function StickyTopAd() {
   const { showAds, ready } = useShowAds();
@@ -30,7 +28,7 @@ export function StickyTopAd() {
 
   return (
     <div
-      className={cn("sticky top-0 z-20 -mx-3 mb-4 sm:-mx-4", hasAd !== true && "hidden")}
+      className={cn("sticky top-[var(--frenz-safe-top)] z-20", hasAd !== true && "hidden")}
       aria-hidden={hasAd !== true}
     >
       <div className="border-b border-border/60 bg-card/95 px-3 py-2 shadow-soft backdrop-blur-sm">

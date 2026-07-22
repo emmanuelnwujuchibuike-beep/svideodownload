@@ -13,6 +13,30 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑22 (batch 4) — Review player fixes + the Developer Experience Platform
+
+**Review player.** The landing "Review video" now behaves as asked: it no longer
+dismisses the completion card (and the card's auto-dismiss pauses while the player
+is open), so closing the full-screen player — its X calls `closePlayer`, never a
+navigation — returns you to the card with its Save-to-device / Download-history
+buttons. A visible **Save to device** button now lives inside the preview itself
+(iOS-aware, using the blob already in hand), and its strip is pointer-events-none
+so it never blocks tap-to-advance. Instant open: an in-memory cache sits in front
+of IndexedDB so a just-downloaded file replays with no DB round-trip, and the
+player chunk is preloaded the moment a download completes.
+
+**Developer Experience Platform.** The docs, codegen scripts, SDK and
+registry-of-registries already existed; the gaps were built as real code (see
+`docs/DEVELOPER_EXPERIENCE.md`): an **Engineering Registry**
+(`lib/platform/engineering-registry.ts`) cataloguing every doc, generator, SDK,
+standard and registry with its owner; **engineering standards as data**
+(`engineering-standards.ts`) each naming how it's enforced and a real reference;
+an **`AGENTS.md`** at the repo root as the AI + human onboarding entry point; and
+an admin **Engineering** section. +6 teeth tests (every live source and every
+standard reference must exist).
+
+---
+
 ## 2026‑07‑22 (batch 3) — Premium download page, full ad system, download interstitial
 
 The download page (`/downloads`) was repolished for a premium, decluttered feel —

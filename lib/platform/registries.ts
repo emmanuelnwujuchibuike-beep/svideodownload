@@ -58,6 +58,7 @@ export const REGISTRIES: RegistryDef[] = [
   { id: "infra-decisions", name: "Infrastructure Decisions", governs: "The chosen technology for each planned capability (ADRs as data).", source: "lib/platform/infra-decisions.ts", status: "live" },
   { id: "config", name: "Configuration Registry", governs: "Every runtime-configurable surface (flags, experiments, policies, settings, prefs) + its storage/scope.", source: "lib/platform/config-registry.ts", status: "live" },
   { id: "component", name: "Component Registry", governs: "Every reusable UI component, its source, accessibility contract and motion behaviour.", source: "lib/platform/component-registry.ts", status: "live", note: "The design-system layer (principles, motion patterns, a11y standards, themes) is lib/platform/design-system.ts; tokens are the Design Token Registry above." },
+  { id: "engineering", name: "Engineering Registry", governs: "Every engineering asset — docs, generators, SDK, standards, registries — with ownership (the Developer Knowledge Hub).", source: "lib/platform/engineering-registry.ts", status: "live", note: "Engineering standards are lib/platform/engineering-standards.ts; AGENTS.md is the AI + human onboarding entry point." },
 ];
 
 export function getRegistries(): RegistryDef[] {

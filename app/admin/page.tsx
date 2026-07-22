@@ -62,6 +62,9 @@ import { DesignCatalog } from "@/features/admin/design-catalog";
 import { COMPONENT_CATEGORIES, getComponentRegistry } from "@/lib/platform/component-registry";
 import { DESIGN_PRINCIPLES, getA11yStandards, getMotionPatterns, getThemes } from "@/lib/platform/design-system";
 import { BRAND_TOKENS, COLOR_TOKENS } from "@/lib/platform/design-tokens";
+import { EngineeringCatalog } from "@/features/admin/engineering-catalog";
+import { ENGINEERING_ASSET_KINDS, getEngineeringAssets } from "@/lib/platform/engineering-registry";
+import { getEngineeringStandards, STANDARD_AREAS } from "@/lib/platform/engineering-standards";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -319,6 +322,15 @@ export default async function AdminPage() {
               themes={getThemes()}
               colorTokens={COLOR_TOKENS}
               brandTokens={BRAND_TOKENS}
+            />
+          </AdminPanel>
+
+          <AdminPanel id="engineering">
+            <EngineeringCatalog
+              assets={getEngineeringAssets()}
+              kinds={ENGINEERING_ASSET_KINDS}
+              standards={getEngineeringStandards()}
+              areas={STANDARD_AREAS}
             />
           </AdminPanel>
 

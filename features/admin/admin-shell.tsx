@@ -19,6 +19,7 @@ import {
   ShieldAlert,
   SlidersHorizontal,
   Users,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { createContext, useContext, useEffect, useState } from "react";
@@ -82,6 +83,7 @@ const ICONS: Record<string, LucideIcon> = {
   ShieldAlert,
   SlidersHorizontal,
   Users,
+  Wrench,
 };
 
 const SectionContext = createContext<string>(DEFAULT_ADMIN_SECTION);

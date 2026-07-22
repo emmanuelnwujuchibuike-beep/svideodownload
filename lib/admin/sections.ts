@@ -163,6 +163,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "The Experience OS described by itself: design tokens, every reusable component with its a11y + motion contract, the motion language and themes.",
   },
   {
+    id: "engineering",
+    label: "Engineering",
+    category: "system",
+    icon: "Wrench",
+    blurb: "The Developer Experience Platform: every doc, generator, SDK and registry, plus the engineering standards and how each is enforced.",
+  },
+  {
     id: "traffic",
     label: "Traffic",
     category: "system",

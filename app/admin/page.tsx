@@ -39,6 +39,7 @@ import { getRegistries } from "@/lib/platform/registries";
 import { getServices } from "@/lib/platform/services";
 import { getEvents } from "@/lib/platform/events-registry";
 import { getGates } from "@/lib/platform/governance";
+import { getInfraDecisions } from "@/lib/platform/infra-decisions";
 import { CommunicationCatalog } from "@/features/admin/communication-catalog";
 import { getDomainEvents } from "@/lib/platform/domain-events";
 import { getIntegrations } from "@/lib/platform/integration-registry";
@@ -49,6 +50,9 @@ import {
   getLifecyclePolicies,
   getStorageStrategies,
 } from "@/lib/platform/data-platform";
+import { QualityCatalog } from "@/features/admin/quality-catalog";
+import { certifyAll } from "@/lib/platform/certification";
+import { getTestTypes } from "@/lib/platform/test-types";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -263,6 +267,7 @@ export default async function AdminPage() {
               services={getServices()}
               events={getEvents()}
               gates={getGates()}
+              decisions={getInfraDecisions()}
             />
           </AdminPanel>
 
@@ -277,6 +282,10 @@ export default async function AdminPage() {
               lifecycle={getLifecyclePolicies()}
               fabric={getKnowledgeFabric()}
             />
+          </AdminPanel>
+
+          <AdminPanel id="quality">
+            <QualityCatalog certifications={certifyAll()} testTypes={getTestTypes()} />
           </AdminPanel>
 
           <AdminPanel id="traffic">

@@ -2,6 +2,7 @@ import type { RegistryDef } from "@/lib/platform/registries";
 import type { ServiceDef } from "@/lib/platform/services";
 import type { EventDef } from "@/lib/platform/events-registry";
 import type { GovernanceGate } from "@/lib/platform/governance";
+import type { InfraDecision } from "@/lib/platform/infra-decisions";
 import { cn } from "@/lib/utils";
 
 /**
@@ -51,11 +52,13 @@ export function PlatformCatalog({
   services,
   events,
   gates,
+  decisions,
 }: {
   registries: RegistryDef[];
   services: ServiceDef[];
   events: readonly EventDef[];
   gates: GovernanceGate[];
+  decisions: InfraDecision[];
 }) {
   const counts = (items: { status: string }[]) => ({
     live: items.filter((i) => i.status === "live").length,
@@ -128,6 +131,25 @@ export function PlatformCatalog({
             </div>
           );
         })}
+      </Card>
+
+      <Card
+        title={`Infrastructure decisions · ${decisions.length}`}
+        blurb="What each planned capability WILL use — decided, not undecided. Bias: reuse what we run, serverless/managed, vendor-neutral."
+      >
+        {decisions.map((d) => (
+          <div key={d.id} className="border-b border-border/40 pb-2.5 last:border-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">{d.capability}</span>
+              <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {d.status}
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-foreground/80">→ {d.decision}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{d.rationale}</p>
+            <p className="mt-0.5 text-[11px] italic text-muted-foreground/70">Trigger: {d.trigger}</p>
+          </div>
+        ))}
       </Card>
     </div>
   );

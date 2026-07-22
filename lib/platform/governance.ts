@@ -64,6 +64,7 @@ export const GATES: GovernanceGate[] = [
   { id: "typecheck", name: "Type safety", requirement: "The whole project typechecks with no errors.", domain: "process", kind: "command", enforcer: "typecheck" },
   { id: "lint", name: "Lint clean", requirement: "No lint errors.", domain: "process", kind: "command", enforcer: "lint" },
   { id: "unit-tests", name: "Unit tests", requirement: "Pure logic is unit-tested and green.", domain: "testing", kind: "command", enforcer: "test" },
+  { id: "api-contract", name: "API contract tests", requirement: "Every declared /api/v1 endpoint maps to a route exporting that method.", domain: "testing", kind: "test", enforcer: "lib/platform/api-registry.test.ts" },
   { id: "build", name: "Production build", requirement: "The app builds and prerenders without error.", domain: "process", kind: "command", enforcer: "build" },
 
   /* ── security & data ── */
@@ -71,10 +72,15 @@ export const GATES: GovernanceGate[] = [
   { id: "input-validation", name: "Input validation", requirement: "Every external input is parsed with zod before use.", domain: "api", kind: "manual", enforcer: "docs/SECURITY.md" },
   { id: "rate-limit", name: "Rate limiting", requirement: "Mutations and the public API are rate-limited.", domain: "api", kind: "config", enforcer: "lib/rate-limit.ts" },
   { id: "security-review", name: "Security review", requirement: "Auth/data/endpoint changes get a security review before ship.", domain: "security", kind: "manual", enforcer: "docs/SECURITY.md" },
+  { id: "dependency-audit", name: "Dependency audit", requirement: "Dependencies are audited for known high/critical advisories.", domain: "security", kind: "command", enforcer: "deps:audit" },
+  { id: "secret-detection", name: "Secret detection", requirement: "No credentials/keys committed to the repo.", domain: "security", kind: "planned", enforcer: "" },
 
   /* ── performance & a11y ── */
   { id: "two-second-budget", name: "2-second page budget", requirement: "Cold entry to any page renders in ≤2s; measured on the live site.", domain: "performance", kind: "manual", enforcer: "docs/PERFORMANCE.md" },
   { id: "reduced-motion", name: "Reduced-motion baseline", requirement: "Every animation respects prefers-reduced-motion (app-wide MotionConfig).", domain: "accessibility", kind: "config", enforcer: "app/layout.tsx" },
+  { id: "a11y-automation", name: "Automated accessibility checks", requirement: "Key screens pass automated a11y assertions (axe).", domain: "accessibility", kind: "planned", enforcer: "" },
+  { id: "localization", name: "Localization catalogue", requirement: "Locale routing + translation catalogue stay consistent and measured.", domain: "documentation", kind: "test", enforcer: "lib/i18n/i18n.test.ts" },
+  { id: "visual-regression", name: "Visual regression", requirement: "Critical screens are diffed against approved snapshots.", domain: "testing", kind: "planned", enforcer: "" },
   { id: "design-tokens", name: "Design tokens single-source", requirement: "globals.css custom properties are generated from lib/platform/design-tokens.ts, never hand-drifted.", domain: "architecture", kind: "command", enforcer: "tokens:check" },
 
   /* ── change management & observability ── */

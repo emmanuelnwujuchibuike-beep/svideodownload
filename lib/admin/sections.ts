@@ -135,6 +135,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "The Enterprise Data Platform: every domain and table, storage strategies, lifecycle policies and the Knowledge Fabric.",
   },
   {
+    id: "quality",
+    label: "Quality",
+    category: "system",
+    icon: "BadgeCheck",
+    blurb: "Production-readiness: certifications computed from the governance gates, and the test-type coverage.",
+  },
+  {
     id: "traffic",
     label: "Traffic",
     category: "system",

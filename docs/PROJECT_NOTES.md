@@ -3083,3 +3083,33 @@ absent storage tiers are `planned` with the trigger for building them.
 **Verified:** tsc clean, lint clean, **745 tests** across 70 files (incl. the
 schema-conformance scan with teeth), build clean (`/admin` 22.6 kB). The Constitution
 gate validates the new `data` admin section end-to-end.
+
+### Infra decisions + Enterprise Quality Platform (2026-07-21)
+
+**Infra decisions** (`lib/platform/infra-decisions.ts` + `docs/INFRA_DECISIONS.md`):
+turned every `planned` capability from "someday" into a decided ADR. Bias, stated:
+reuse what we run, prefer serverless/managed, stay vendor-neutral. Distributed tracing →
+OTLP → managed backend (the `setSpanExporter` seam is ready); broker → Upstash QStash /
+Supabase pgmq; vector → pgvector on the existing Postgres; warehouse → Postgres
+mat-views first; archive → R2 lifecycle; data-export → in-app job to a signed R2
+archive. Each has a build TRIGGER, so we grow on signal, not diagram. Surfaced at
+`/admin` → Platform.
+
+**Quality Platform**: the brief's quality-gates already existed as the governance
+manifest + CI; the new pieces are `lib/platform/test-types.ts` (the test taxonomy —
+7 live harnesses, the rest decided-but-planned; no fake load/chaos suites) and
+`lib/platform/certification.ts` — the **Certification Engine**. A certification is
+COMPUTED from its backing governance gates, not granted: `automated` (all machine-
+enforced), `attested` (a manual gate needs sign-off), or `gap` (a backing gate is only
+planned). So Architecture reads `automated`, Security `gap` (secret-detection is
+planned), Production-Ready `attested`. Surfaced at `/admin` → **Quality**. Added honest
+gates: `api-contract` (test), `dependency-audit` (command), `localization` (test), and
+`secret-detection`/`a11y-automation`/`visual-regression` (planned).
+
+🔴 **The dependency-audit gate immediately earned its keep:** `npm run deps:audit`
+reports **2 high + 1 moderate** advisories in `sharp` (transitive). Left for the owner
+to address (a `--force` fix is breaking) — flagged, not hidden.
+
+**Verified:** tsc clean, lint clean, **754 tests** across 73 files (incl. certification
+readiness + test-harness existence with teeth), build clean (`/admin` 22.8 kB). New
+admin sections (data, quality) validated end-to-end by the Constitution gate.

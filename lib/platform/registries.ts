@@ -53,6 +53,9 @@ export const REGISTRIES: RegistryDef[] = [
   { id: "integration", name: "Integration Registry", governs: "Every communication surface: APIs, events, realtime, webhooks, workflows.", source: "lib/platform/integration-registry.ts", status: "live" },
   { id: "data-domains", name: "Data Domain Registry", governs: "Every table, grouped by owning domain + storage strategy.", source: "lib/platform/data-domains.ts", status: "live", note: "Enforced against the migrations — every real table is owned by exactly one domain, no orphans." },
   { id: "knowledge-fabric", name: "Knowledge Fabric", governs: "The governed entity-relationship graph + storage/lifecycle policies over the data domains.", source: "lib/platform/data-platform.ts", status: "live" },
+  { id: "test-types", name: "Test-Type Registry", governs: "Every kind of automated test the platform runs, and the ones decided-but-planned.", source: "lib/platform/test-types.ts", status: "live" },
+  { id: "certifications", name: "Certification Engine", governs: "Production-readiness certifications, computed from the governance gates.", source: "lib/platform/certification.ts", status: "live" },
+  { id: "infra-decisions", name: "Infrastructure Decisions", governs: "The chosen technology for each planned capability (ADRs as data).", source: "lib/platform/infra-decisions.ts", status: "live" },
 ];
 
 export function getRegistries(): RegistryDef[] {

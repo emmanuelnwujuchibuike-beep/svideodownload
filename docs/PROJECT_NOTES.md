@@ -13,6 +13,40 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑22 (batch 3) — Premium download page, full ad system, download interstitial
+
+The download page (`/downloads`) was repolished for a premium, decluttered feel —
+the redundant five stat-card row is gone, leaving the plan-aware usage dashboard
+as the single stats surface — and monetised, with the same wired into the public
+library (`/library`).
+
+Ad slots (all premium `AdSurface` cards, all collapsing when empty): a **sticky
+top banner** (the all-pages bottom banner brought to the top of the page, pinned
+so it stays put while the app top bar slides away on scroll); an **under-hero**
+unit that hugs whatever size the zone serves; **above and below the download
+history** (new `download_history_top` zone, both via a `DownloadHistoryAd`
+wrapper so no page names three zone literals — the ad-slots test treats that as a
+second registry); and the **download-result + after-download** ads on the paste
+box. The exit-intent unit was brought to the page too.
+
+The **download interstitial** fires on 5 s idle, every 3rd download, and every
+3rd video watched from the history (trigger counters added to the download
+manager and player store). Idle and the download trigger are ad-visitor only; the
+watch trigger also shows to Pro — never Business — the owner's one exception. It
+shares the site interstitial's cooldown so the two never double-fire. A **"Tired
+of ads → Upgrade to Pro"** banner rounds it out, gated so Pro and Business never
+see an upgrade-to-Pro message (a Pro user is only ever offered Business).
+
+Also: Pro storage 59 → 50 GB, and the pricing page now lists the latest per-tier
+features (private-cloud storage, 4K, cross-device watch/re-download).
+
+Budget note: the interstitial's counters live in the shared manager/player store
+the landing's Downloader imports, so the landing's chunk mix shifted a few hundred
+bytes; `player-store` was moved off first-load (`ReviewPlayerMount`), and the
+cold-entry ceiling moved 301 → 302 kB with that justification.
+
+---
+
 ## 2026‑07‑22 (later) — Tiered storage, plan gate, review player, activity fixes + the Enterprise Design System
 
 **Tiered storage.** `usage.ts` gained `PLAN_LIMIT_BYTES` as the single source of

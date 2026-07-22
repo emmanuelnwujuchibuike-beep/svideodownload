@@ -2955,3 +2955,37 @@ clean. The notification refactor left `notification-settings.test.ts` green
 
 **Verified:** tsc clean, lint clean, **698 unit tests** across 63 files, build clean,
 **5/5 E2E** green in a real browser.
+
+### Enterprise Communication Platform — the comms backbone (2026-07-21)
+
+The brief asked for an event platform, message broker, service mesh, workflow engine.
+Built the parts that are REAL in this stack (Next.js modular monolith + Supabase +
+Upstash + a worker), and marked the genuinely-absent distributed-systems infra
+`planned` with the reason — because faking a service mesh for an app with no
+inter-service network hops is the exact Reality-Ledger failure.
+
+- **Domain Event Registry** (`lib/platform/domain-events.ts`): 12 business-event
+  contracts (UserCreated, MessageSent, PostPublished, …) with **typed payloads**. A
+  compile-time assertion pins every id to a payload and back, so the contract can't drift.
+- **Event bus** (`lib/platform/event-bus.ts`): the item deferred all session, now
+  legitimately commissioned. Typed in-process `emit`/`on` over the registry —
+  fire-and-forget, **per-handler error isolation** (a throwing/rejecting subscriber
+  never breaks `emit` or the producer), an `observeEvents` tap for observability. This
+  is the correct bus for one deployable with no network hops; a broker is the documented
+  **exit path** (marked `planned`), not faked.
+- **Integration Registry** (`lib/platform/integration-registry.ts`): one catalogue of
+  every comms surface — REST, the event bus, Supabase Realtime, the Stream + Paystack
+  webhooks, the 6 cron workflows, the media worker, HLS streaming — each → real code.
+  Message broker, service mesh, workflow orchestrator: `planned`, with why.
+- **AI Capability Registry** (`lib/platform/ai-capabilities.ts`): finished the last
+  useful `partial` — assistant Q&A (`internal`, widget unmounted) + corpus generation
+  (`live`). **design-tokens stays `partial` on purpose**: token values are CSS variables
+  and Tailwind maps to them; a third TS copy would be the drift the Constitution forbids.
+- Surfaced at `/admin` → **Communication** (domain events + integration surfaces);
+  registries now **13 of 14 live** (design-tokens deliberately partial). Service
+  Registry's event bus flipped planned → live; Constitution Gap Ledger closed on the bus.
+
+**Verified:** tsc clean, lint clean, **713 unit tests** across 65 files (incl. event-bus
+isolation/observer tests + communication-registry source checks with teeth), build clean
+(`/admin` 22.4 kB, catalogue server-rendered). The Constitution gate validates the new
+`communication` admin section end-to-end.

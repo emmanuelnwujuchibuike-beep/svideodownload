@@ -77,6 +77,7 @@ apps because these are singular, not per-product. Each maps to a real owner toda
 | Payments / entitlements | `lib/paystack/*`, `lib/monetization/*`, `app/api/billing` | ✅ one subscription unlocks Pro everywhere |
 | Feature flags / runtime config | [lib/platform/flags.ts](../lib/platform/flags.ts) + `flags-store.ts`, migration `0091_feature_flags.sql`, admin "Feature flags" section | ✅ declared in code, state in DB; kill switch + % rollout + plan gate; 0 client cost when off. **Client-readable** via `GET /api/flags` + `useFlag()` (opt-in, so no per-page cost until a component reads a flag) |
 | Experiments (A/B) | [lib/platform/experiments.ts](../lib/platform/experiments.ts) + `experiments-store.ts`, migration `0092_experiments.sql`, admin "Experiments" section | ✅ deterministic assignment (reuses `bucketOf`); exposure logged through the unified `events` pipeline; pause + ship-the-winner overrides |
+| Communication (events + integrations) | [event-bus.ts](../lib/platform/event-bus.ts) + [domain-events.ts](../lib/platform/domain-events.ts) + [integration-registry.ts](../lib/platform/integration-registry.ts), admin "Communication" section | ✅ typed in-process event bus; domain-event contracts; a catalogue of every comms surface (REST/realtime/webhooks/workflows), broker + mesh honestly `planned` |
 | Audit log | migration `0053_security_audit_log.sql` | ✅ |
 | Developer platform / API | `lib/sdk/*`, `app/api/v1`, `app/api/keys` | ✅ |
 | Offline / PWA | `lib/pwa/*`, `lib/offline/*`, `app/manifest.ts`, `sw` | ✅ |
@@ -156,7 +157,7 @@ order rather than fabricated as done:
 |---|---|---|
 | ~~**Runtime feature flags / config**~~ | ✅ **Shipped 2026-07-21.** Proving route: `/admin` → Feature flags. See the spine table above. | Done — `lib/platform/flags.ts` + `feature_flags` (mig `0091`) + admin section + `flags.test.ts`. |
 | ~~**Experiment registry (A/B)**~~ | ✅ **Shipped 2026-07-21.** Proving route: `/admin` → Experiments. See the spine table above. | Done — `lib/platform/experiments.ts` + `experiments` (mig `0092`) + exposure via `events` + admin section + `experiments.test.ts`. |
-| **Formal event bus / Event Registry** | Cross-module comms is direct calls + Supabase realtime. ARCHITECTURE.md says "event-driven where beneficial" — aspirational, unbuilt. | A typed `emit()`/subscriber contract in `lib/platform/events.ts`. Only worth it when a second consumer appears — one publisher, one consumer is just a function call. **Next, if a real second consumer exists.** |
+| ~~**Formal event bus / Event Registry**~~ | ✅ **Shipped 2026-07-21.** Proving route: `/admin` → Communication. | Done — typed in-process bus ([event-bus.ts](../lib/platform/event-bus.ts)) over the Domain Event Registry ([domain-events.ts](../lib/platform/domain-events.ts)); a message broker is the documented exit-path, marked `planned` in the Integration Registry. |
 | **Native iOS / Android** | **Do not exist.** This is a Next.js **PWA**. The PWA *is* the mobile app today. | A native shell is a separate repo/toolchain decision (Capacitor wrapper vs. true native), not a file in this one. Flagging, not silently implying it exists. |
 | **This Constitution as a hard gate** | New today. | A `constitution.test.ts` that asserts the registry/reality-ledger invariants stay wired. |
 

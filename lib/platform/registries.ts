@@ -48,7 +48,9 @@ export const REGISTRIES: RegistryDef[] = [
   { id: "permissions", name: "Permission Registry", governs: "The access model: capabilities + the predicates that gate modules/nav.", source: "lib/platform/permissions.ts", status: "live", note: "Code-side authz (plan tiers + admin). Per-row RLS is a separate, deliberate layer in the migrations." },
   { id: "notifications", name: "Notification Registry", governs: "Every notification type, its category, grouping and badge rule.", source: "lib/platform/notifications-registry.ts", status: "live" },
   { id: "api", name: "API Registry", governs: "Every public /api/v1 endpoint: method, path, auth, category.", source: "lib/platform/api-registry.ts", status: "live", note: "Declared manifest, enforced against the real route files. The SDK (lib/sdk) is the typed client over it." },
-  { id: "ai-capability", name: "AI Capability Registry", governs: "The assistant's knowledge and capabilities.", source: "lib/assistant/knowledge.ts", status: "partial", note: "Knowledge base exists; a formal capability manifest does not." },
+  { id: "ai-capability", name: "AI Capability Registry", governs: "What the assistant can do, and its true status.", source: "lib/platform/ai-capabilities.ts", status: "live" },
+  { id: "domain-events", name: "Domain Event Registry", governs: "Business event contracts (UserCreated, MessageSent, …) + typed payloads.", source: "lib/platform/domain-events.ts", status: "live", note: "Distinct from the analytics Event Registry; the event bus is typed against it." },
+  { id: "integration", name: "Integration Registry", governs: "Every communication surface: APIs, events, realtime, webhooks, workflows.", source: "lib/platform/integration-registry.ts", status: "live" },
 ];
 
 export function getRegistries(): RegistryDef[] {

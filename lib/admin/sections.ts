@@ -121,6 +121,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "The Experience OS described by itself: every registry, service and event, mapped to real code.",
   },
   {
+    id: "communication",
+    label: "Communication",
+    category: "system",
+    icon: "Radio",
+    blurb: "The comms backbone: domain event contracts and every integration surface (APIs, realtime, webhooks, workflows).",
+  },
+  {
     id: "traffic",
     label: "Traffic",
     category: "system",

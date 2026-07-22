@@ -39,6 +39,9 @@ import { getRegistries } from "@/lib/platform/registries";
 import { getServices } from "@/lib/platform/services";
 import { getEvents } from "@/lib/platform/events-registry";
 import { getGates } from "@/lib/platform/governance";
+import { CommunicationCatalog } from "@/features/admin/communication-catalog";
+import { getDomainEvents } from "@/lib/platform/domain-events";
+import { getIntegrations } from "@/lib/platform/integration-registry";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -254,6 +257,10 @@ export default async function AdminPage() {
               events={getEvents()}
               gates={getGates()}
             />
+          </AdminPanel>
+
+          <AdminPanel id="communication">
+            <CommunicationCatalog events={getDomainEvents()} integrations={getIntegrations()} />
           </AdminPanel>
 
           <AdminPanel id="traffic">

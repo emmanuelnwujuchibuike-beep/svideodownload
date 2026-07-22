@@ -123,6 +123,34 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
         ))}
       </div>
 
+      {/* Interstitial skip delay — how long before a full-screen ad can be
+          skipped. Only meaningful with full-screen units on; saves on change. */}
+      {state.interstitial ? (
+        <div className="mt-2.5 flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">Interstitial skip delay</span>
+            <span className="block truncate text-xs text-muted-foreground">How long before a full-screen ad can be skipped.</span>
+          </span>
+          <select
+            value={state.interstitialSkipSeconds}
+            disabled={busy}
+            onChange={async (e) => {
+              const v = Number(e.target.value);
+              const prev = state.interstitialSkipSeconds;
+              const next = { ...state, interstitialSkipSeconds: v };
+              setState(next);
+              const ok = await persist(next);
+              if (!ok) setState((s) => ({ ...s, interstitialSkipSeconds: prev }));
+            }}
+            className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
+          >
+            <option value={0}>Skip immediately</option>
+            <option value={5}>After 5 seconds</option>
+            <option value={10}>After 10 seconds</option>
+          </select>
+        </div>
+      ) : null}
+
       {/*
         Shown only when both are on, and only then — a standing warning about a
         combination nobody has selected is noise that trains people to ignore it.

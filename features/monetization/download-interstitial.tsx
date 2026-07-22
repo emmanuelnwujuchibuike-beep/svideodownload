@@ -10,6 +10,7 @@ import { getWatchCount, onVideoWatched } from "@/features/downloads/player-store
 import { cn } from "@/lib/utils";
 
 import { AdSlot } from "./ad-slot";
+import { useInterstitialSkipSeconds } from "./use-interstitial-skip";
 import { useShowAds } from "./use-show-ads";
 
 /**
@@ -55,8 +56,10 @@ export function DownloadInterstitial({
 }) {
   const { showAds, ready } = useShowAds();
   const { plan } = useEntitlements();
+  const skipSeconds = useInterstitialSkipSeconds();
   const [open, setOpen] = useState(false);
   const [hasAd, setHasAd] = useState<boolean | null>(null);
+  const [remaining, setRemaining] = useState(0);
   const mountedAt = useRef(Date.now());
 
   // Business never sees an interstitial. Free/guest see all triggers; Pro sees
@@ -121,11 +124,31 @@ export function DownloadInterstitial({
   }, [ready, watchAllowed, triggers, show]);
 
   const shown = open && hasAd === true;
+  // The admin-set skip delay: while it counts down the ad can't be dismissed;
+  // at 0 (immediately, if the admin chose 0) it becomes skippable.
+  const canSkip = remaining <= 0;
+
+  // Start the skip countdown when the ad becomes visible.
+  useEffect(() => {
+    if (!shown) return;
+    setRemaining(skipSeconds);
+    if (skipSeconds <= 0) return;
+    const id = window.setInterval(() => {
+      setRemaining((r) => {
+        if (r <= 1) {
+          window.clearInterval(id);
+          return 0;
+        }
+        return r - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [shown, skipSeconds]);
 
   useEffect(() => {
     if (!shown) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape" && canSkip) close();
     };
     window.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;
@@ -134,7 +157,7 @@ export function DownloadInterstitial({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
     };
-  }, [shown, close]);
+  }, [shown, canSkip, close]);
 
   if (!canPreload) return null;
 
@@ -156,24 +179,35 @@ export function DownloadInterstitial({
       aria-modal={shown}
       aria-label="Advertisement"
     >
+      {/* Backdrop dismisses only once the ad is skippable. */}
       <button
         type="button"
         aria-label="Close advertisement"
-        tabIndex={shown ? 0 : -1}
-        onClick={close}
-        className={cn("absolute inset-0 h-full w-full cursor-default bg-background/80 backdrop-blur-sm", !shown && "hidden")}
+        tabIndex={shown && canSkip ? 0 : -1}
+        onClick={() => canSkip && close()}
+        className={cn("absolute inset-0 h-full w-full bg-background/80 backdrop-blur-sm", canSkip ? "cursor-default" : "cursor-not-allowed", !shown && "hidden")}
       />
 
       <div className={cn("relative w-full max-w-lg rounded-3xl border border-border/60 bg-card p-4 shadow-elevated", !shown && "hidden")}>
-        <button
-          type="button"
-          onClick={close}
-          tabIndex={shown ? 0 : -1}
-          aria-label="Close advertisement"
-          className="absolute -right-3 -top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-foreground text-background shadow-elevated ring-2 ring-background transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          <X className="h-5 w-5" strokeWidth={2.5} />
-        </button>
+        {/* Skip control — a countdown while the delay runs, then a real X. */}
+        {canSkip ? (
+          <button
+            type="button"
+            onClick={close}
+            tabIndex={shown ? 0 : -1}
+            aria-label="Skip advertisement"
+            className="absolute -right-3 -top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-foreground text-background shadow-elevated ring-2 ring-background transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <X className="h-5 w-5" strokeWidth={2.5} />
+          </button>
+        ) : (
+          <span
+            aria-live="polite"
+            className="absolute -right-3 -top-3 z-10 inline-flex h-11 items-center gap-1.5 rounded-full bg-foreground/90 px-3.5 text-xs font-semibold text-background shadow-elevated ring-2 ring-background"
+          >
+            Skip in {remaining}s
+          </span>
+        )}
 
         <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">Sponsored</p>
         <AdSlot zone="idle_interstitial" dismissible={false} onResolved={setHasAd} />

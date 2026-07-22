@@ -19,6 +19,11 @@ const schema = z.object({
   affiliates: z.boolean(),
   recommendedTools: z.boolean(),
   interstitial: z.boolean(),
+  // How long before an interstitial can be skipped: 0 / 5 / 10 seconds only.
+  interstitialSkipSeconds: z
+    .number()
+    .refine((v) => [0, 5, 10].includes(v), { message: "Skip delay must be 0, 5 or 10 seconds" })
+    .default(5),
   popunder: z.boolean().default(false),
   /*
     Validated as "empty, or a well-formed publisher id" rather than just a

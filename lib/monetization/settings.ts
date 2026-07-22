@@ -79,6 +79,13 @@ export interface MonetizationSettings {
    */
   interstitial: boolean;
   /**
+   * How long (seconds) before an interstitial can be skipped: 0 = skip
+   * immediately, or 5 / 10 for a countdown first. Applies to the download-flow
+   * interstitial (idle / after N downloads / after N history watches). Only 0, 5
+   * and 10 are offered in the admin; any other value is clamped on read.
+   */
+  interstitialSkipSeconds: number;
+  /**
    * Allow pop-under / OnClick units (the `pop` format).
    *
    * Defaults OFF, unlike the original switch which defaulted ON. These take
@@ -109,8 +116,18 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   affiliates: true,
   recommendedTools: true,
   interstitial: false,
+  interstitialSkipSeconds: 5,
   popunder: false,
 };
+
+/** Interstitial skip delays offered in the admin (seconds). */
+export const INTERSTITIAL_SKIP_OPTIONS = [0, 5, 10] as const;
+
+/** Clamp a stored skip value to an offered option (defends against bad data). */
+export function normalizeSkipSeconds(value: unknown): number {
+  const n = Number(value);
+  return (INTERSTITIAL_SKIP_OPTIONS as readonly number[]).includes(n) ? n : 5;
+}
 
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;

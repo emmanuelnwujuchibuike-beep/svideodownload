@@ -94,6 +94,15 @@ import {
   getNotificationServices,
   getNotificationSources,
 } from "@/lib/platform/notification-platform";
+import { CommerceCatalog } from "@/features/admin/commerce-catalog";
+import {
+  getBillingAndPromotions,
+  getCommerceAi,
+  getCommerceServices,
+  getCommerceTypes,
+  getPaymentCapabilities,
+  getSubscriptionTiers,
+} from "@/lib/platform/commerce-platform";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -266,6 +275,17 @@ export default async function AdminPage() {
                   apiDailyLimit: planLimits.business.apiDailyLimit,
                 },
               }}
+            />
+          </AdminPanel>
+
+          <AdminPanel id="commerce">
+            <CommerceCatalog
+              services={getCommerceServices()}
+              types={getCommerceTypes()}
+              payments={getPaymentCapabilities()}
+              tiers={getSubscriptionTiers()}
+              billing={getBillingAndPromotions()}
+              ai={getCommerceAi()}
             />
           </AdminPanel>
 

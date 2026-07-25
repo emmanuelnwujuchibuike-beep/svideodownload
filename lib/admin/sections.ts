@@ -72,6 +72,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     icon: "CreditCard",
     blurb: "Displayed prices and per-plan limits. Revenue is calculated from these.",
   },
+  {
+    id: "commerce",
+    label: "Commerce",
+    category: "money",
+    icon: "ShoppingBag",
+    blurb: "The Enterprise Commerce Platform described by itself: every service, commerce type, payment capability, plan, billing/promotion feature and AI capability, mapped to real code.",
+  },
 
   /* ── Audience ── */
   {

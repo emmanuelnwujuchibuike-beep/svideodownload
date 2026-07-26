@@ -1,3 +1,4 @@
+import { resolveMonetagTags } from "@/lib/monetization/monetag";
 import { getMonetizationSettings } from "@/lib/monetization/settings";
 
 /**
@@ -5,22 +6,29 @@ import { getMonetizationSettings } from "@/lib/monetization/settings";
  * owner's chosen network alongside AdSense (Adsterra/PropellerAds retired,
  * 2026-07-26).
  *
- * ── Why a parsed snippet, not a raw one ───────────────────────────────────────
+ * ── One tag per Monetag format ────────────────────────────────────────────────
+ *
+ * Monetag's products (Multitag, In-Page Push, Push Notifications, Vignette Banner,
+ * OnClick / Popunder) are each a separate self-placing site-level `<script>` with
+ * its own `data-zone`. This emits ALL of them — the primary Multitag plus every
+ * per-type unit configured in the admin — resolved and de-duplicated by
+ * `resolveMonetagTags`. Turning the `monetag` switch off silences every one.
+ *
+ * ── Why parsed snippets, not raw ones ─────────────────────────────────────────
  *
  * Monetag gives you a `<script src="//…" data-zone="…" …>` snippet. Rendering an
  * admin free-text field into `<head>` as MARKUP would be a stored-XSS primitive —
  * the same reason `verificationTags` are emitted as structured `<meta>` and never
- * as HTML. So this EXTRACTS the `src` (https only) and `data-zone` from whatever
- * the operator pasted and re-emits a structured `<script>`. Anything that isn't a
- * clean https script URL renders nothing.
+ * as HTML. So each snippet is EXTRACTED to its `src` (https only) + `data-zone`
+ * and re-emitted as a structured `<script>`. Anything that isn't a clean https
+ * script URL renders nothing.
  *
  * ── Why it also verifies the site ─────────────────────────────────────────────
  *
  * Monetag's own "file" verification wants `sw.js` at the site root — impossible
  * here, that path is the PWA service worker (offline / push / install). Monetag's
- * "code" method instead looks for this tag in the served HTML, so server-
- * rendering it (like the AdSense site script) satisfies verification too. A
- * meta-tag method, if Monetag offers one, is covered by `verificationTags`.
+ * "code" method instead looks for these tags in the served HTML, so server-
+ * rendering them (like the AdSense site script) satisfies verification too.
  *
  * ── Server-rendered + async ───────────────────────────────────────────────────
  *
@@ -30,26 +38,20 @@ import { getMonetizationSettings } from "@/lib/monetization/settings";
  */
 export async function MonetagScript() {
   const settings = await getMonetizationSettings();
-  if (!settings.monetag) return null;
-
-  const snippet = (settings.monetagSnippet ?? "").trim();
-  if (!snippet) return null;
-
-  const srcMatch = snippet.match(/src\s*=\s*["']([^"']+)["']/i);
-  let src = (srcMatch?.[1] ?? "").trim();
-  if (src.startsWith("//")) src = `https:${src}`;
-  // Only a clean https script URL — never inline code or markup.
-  if (!/^https:\/\/[^\s"'<>]+$/i.test(src)) return null;
-
-  const zone = snippet.match(/data-zone\s*=\s*["']?(\d{1,20})["']?/i)?.[1];
-  const cfAsync = /data-cfasync\s*=\s*["']?false["']?/i.test(snippet);
+  const tags = resolveMonetagTags(settings);
+  if (tags.length === 0) return null;
 
   return (
-    <script
-      async
-      src={src}
-      {...(zone ? { "data-zone": zone } : {})}
-      {...(cfAsync ? { "data-cfasync": "false" } : {})}
-    />
+    <>
+      {tags.map((tag) => (
+        <script
+          key={`${tag.src}|${tag.zone ?? ""}`}
+          async
+          src={tag.src}
+          {...(tag.zone ? { "data-zone": tag.zone } : {})}
+          {...(tag.cfAsync ? { "data-cfasync": "false" } : {})}
+        />
+      ))}
+    </>
   );
 }

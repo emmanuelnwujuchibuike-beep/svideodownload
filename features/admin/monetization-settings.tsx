@@ -4,8 +4,11 @@ import { AlertTriangle, Loader2, ToggleRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import type { MonetagUnit } from "@/lib/monetization/monetag";
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import { cn } from "@/lib/utils";
+
+import { MonetagUnitsEditor } from "./monetag-units-editor";
 
 /*
   Only the boolean switches. `MonetizationSettings` also carries the AdSense
@@ -19,7 +22,7 @@ type ToggleKey = {
 
 const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
   { key: "adsense", label: "Google AdSense", hint: "AdSense banner and video units" },
-  { key: "monetag", label: "Monetag", hint: "Monetag Multitag — one site-wide tag (paste the snippet below first)" },
+  { key: "monetag", label: "Monetag", hint: "Multitag + per-type tags (In-Page Push, Push, Vignette, OnClick) — configure below" },
   { key: "adsterra", label: "Adsterra", hint: "Adsterra network banners (retired — off by default)" },
   { key: "propellerads", label: "PropellerAds", hint: "PropellerAds network units (retired — off by default)" },
   { key: "affiliates", label: "Affiliate offers", hint: "Affiliate CTA on the download-result page" },
@@ -257,6 +260,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
           NOT need Monetag&apos;s &ldquo;upload sw.js&rdquo; method, which can&apos;t be used here
           (that path is the app&apos;s own service worker).
         </p>
+        <label className="block text-xs font-medium text-muted-foreground">Multitag (all formats)</label>
         <textarea
           value={state.monetagSnippet}
           onChange={(e) => setText("monetagSnippet", e.target.value)}
@@ -268,6 +272,18 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
           <code className="font-mono">data-zone</code> are used; anything else in the snippet is
           ignored. Save with the button below.
         </p>
+
+        {/*
+          Per-type Monetag tags. Controlled by the parent state so there is one
+          settings object and one save path — see MonetagUnitsEditor.
+        */}
+        <div className="mt-4 border-t border-border/50 pt-4">
+          <MonetagUnitsEditor
+            units={state.monetagUnits}
+            disabled={busy}
+            onChange={(next: MonetagUnit[]) => setState((s) => ({ ...s, monetagUnits: next }))}
+          />
+        </div>
       </div>
 
       <div className="mt-6 space-y-2 border-t border-border/60 pt-5">
@@ -309,7 +325,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
           disabled={busy}
           className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
         >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save AdSense details
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save Monetag &amp; AdSense details
         </button>
         {msg ? (
           <span className={cn("text-sm", msg.ok ? "text-green-500" : "text-red-400")}>{msg.text}</span>

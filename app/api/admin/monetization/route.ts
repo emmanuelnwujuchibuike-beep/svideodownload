@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
+import { MONETAG_AD_TYPE_IDS } from "@/lib/monetization/monetag";
 import { setMonetizationSettings } from "@/lib/monetization/settings";
 
 export const runtime = "nodejs";
@@ -20,6 +21,21 @@ const schema = z.object({
   monetag: z.boolean().default(false),
   // The pasted Monetag <script> snippet; parsed (not injected) at render time.
   monetagSnippet: z.string().max(4000).default(""),
+  /*
+    Per-type Monetag tags (In-Page Push, Push Notifications, Vignette Banner,
+    OnClick/Popunder, extra Multitags). Each snippet is parsed — never injected —
+    at render time. Capped so a payload can't bloat the settings row; the type is
+    an enum so only known formats are accepted.
+  */
+  monetagUnits: z
+    .array(
+      z.object({
+        type: z.enum(MONETAG_AD_TYPE_IDS),
+        snippet: z.string().max(4000),
+      }),
+    )
+    .max(20)
+    .default([]),
   affiliates: z.boolean(),
   recommendedTools: z.boolean(),
   interstitial: z.boolean(),

@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { isMonetagAdType, type MonetagUnit } from "./monetag";
+
 /**
  * Global monetization switches, stored in the `settings` table under key
  * `monetization` so an admin can flip whole subsystems on/off from the
@@ -81,6 +83,17 @@ export interface MonetizationSettings {
    * worker. See features/monetization/monetag-script.tsx.
    */
   monetagSnippet: string;
+  /**
+   * Per-type Monetag tags, beyond the primary Multitag above.
+   *
+   * Monetag's formats — In-Page Push, Push Notifications, Vignette Banner, OnClick
+   * / Popunder — are each a separate self-placing site-level `<script>` with its
+   * own `data-zone`, distinct from Adsterra's banner-shaped units. Each entry is
+   * `{ type, snippet }`; the snippet is PARSED (never injected) at render time by
+   * `MonetagScript` via `resolveMonetagTags`. All are gated by the `monetag`
+   * master switch. See lib/monetization/monetag.ts.
+   */
+  monetagUnits: MonetagUnit[];
   /** Affiliate offers on the download-result page. */
   affiliates: boolean;
   /** Curated "Recommended Tools" sections (homepage/footer/sidebar/blog). */
@@ -137,12 +150,25 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   propellerads: false,
   monetag: false,
   monetagSnippet: "",
+  monetagUnits: [],
   affiliates: true,
   recommendedTools: true,
   interstitial: false,
   interstitialSkipSeconds: 5,
   popunder: false,
 };
+
+/** Keep only well-formed Monetag units (known type + string snippet), capped. */
+export function normalizeMonetagUnits(value: unknown): MonetagUnit[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(
+      (u): u is MonetagUnit =>
+        !!u && isMonetagAdType((u as MonetagUnit).type) && typeof (u as MonetagUnit).snippet === "string",
+    )
+    .slice(0, 20)
+    .map((u) => ({ type: u.type, snippet: u.snippet.slice(0, 4000) }));
+}
 
 /** Interstitial skip delays offered in the admin (seconds). */
 export const INTERSTITIAL_SKIP_OPTIONS = [0, 5, 10] as const;
@@ -183,6 +209,10 @@ export async function getMonetizationSettings(): Promise<MonetizationSettings> {
       ...DEFAULT_MONETIZATION,
       ...((data?.value ?? {}) as Partial<MonetizationSettings>),
     };
+    // Normalise the Monetag units: a stored array can carry bad data (an unknown
+    // type, a non-string snippet), and a malformed entry must degrade to nothing
+    // rather than reach the head unparsed.
+    merged.monetagUnits = normalizeMonetagUnits(merged.monetagUnits);
     cache = { at: Date.now(), value: merged };
     return merged;
   } catch {

@@ -13,6 +13,48 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑26 (batch 11) — Workspace Framework map + Monetag per-type ad slots
+
+**Enterprise Workspace Framework (10th registry-with-teeth map).** The "build the
+Workspace Framework from scratch" brief maps onto the kernel that ALREADY EXISTS —
+the module registry (`lib/platform/modules.ts` = the Workspace Registry; add a
+product = one entry), the Platform Shell (`features/app-shell/app-shell.tsx`), the
+navigation engine (`lib/navigation/*`) and the service registry. Built
+`lib/platform/workspace-platform.ts` — a `RegisteredWorkspaces` VIEW over the
+Product Genome (a test asserts zero drift + derives claimability/tier from the real
+predicate) + 5 source-backed catalogues (framework services, Platform Shell,
+navigation engine, lifecycle+shared-platform, extensibility+AI). `workspace-platform.test.ts`
+(+16). Admin **Workspaces** section (system, icon `LayoutGrid`), doc, Registry-of-Registries
+entry. 🔴 The whole point is one honesty: **this is a modular MONOLITH** — the shared
+platform (auth/design/analytics/policies) is live by construction; micro-frontend
+independent deployment, the plugin framework and runtime AI reasoning are honestly
+`planned` (the exit-path is in INFRA_DECISIONS). The test caught that `admin` is
+real-but-unclaimable (keeps its proving route) — the one-directional Reality-Ledger
+rule. Now 10 platform maps.
+
+**Monetag per-type ad slots + admin wiring.** Monetag's formats (Multitag, In-Page
+Push, Push Notifications, Vignette Banner, OnClick/Popunder) differ from Adsterra's
+and are **self-placing site-level `<script>` tags** (each its own `data-zone`), NOT
+`ads`-table zone rows — so they live in settings + `MonetagScript`, like the AdSense
+site script. Before, only ONE Multitag (`monetagSnippet`) existed. Added:
+`lib/monetization/monetag.ts` (the `MONETAG_AD_TYPES` registry + `parseMonetagSnippet`
++ `resolveMonetagTags` — combine Multitag + per-type units, validate, de-dup, gate on
+the master switch); `monetagUnits: {type, snippet}[]` on `MonetizationSettings`
+(+`normalizeMonetagUnits` defensive read); `MonetagScript` now renders ALL resolved
+tags; the admin monetization API zod-validates `monetagUnits` (enum type, max 20);
+and a controlled **`MonetagUnitsEditor`** wired into `MonetizationSettings` (admin →
+Ads) so one settings object + one save path (no clobber), with live per-snippet
+parse feedback. 🔴 Security: every snippet is PARSED into a structured `<script>`,
+never injected — only a clean `https` src is accepted (rejects inline/markup/http/
+javascript:, proven by teeth); admin-guarded; the same parse-never-inject discipline
+as the original Multitag. `monetag.test.ts` (+15).
+
+Verified across the session: tsc + lint clean, **903 tests** (was 872), build clean,
+budget green post-build. Security + performance gates: read-only admin map + the
+parse-never-inject Monetag path, both PASS.
+
+---
+
 ## 2026‑07‑26 (batch 10) — Enterprise Globalization Platform
 
 **9th registry-with-teeth map.** The "build the Globalization Platform from

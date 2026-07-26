@@ -6,24 +6,22 @@ import { useEffect, useState } from "react";
 import type { MonetagPlacementTag, MonetagTag } from "@/lib/monetization/monetag";
 
 /**
- * Deferred client host for the Monetag injectors.
+ * Deferred, self-fetching client host for the Monetag injectors.
  *
- * ── Why this exists ───────────────────────────────────────────────────────────
+ * ── Fetches its config, so admin changes show immediately ─────────────────────
  *
- * Monetag runs site-wide from the root layout, so anything it statically imports
- * lands in the shared bundle every page pays for — including the landing page,
- * whose whole budget is a two-second cold open gated on the first hydration task.
- * The injectors (and the path matchers they carry) are not needed at first paint,
- * and Monetag is off by default, so they must not weigh the landing down.
+ * The marketing pages are static (ISR), so a server-baked Monetag tag only updates
+ * when the page regenerates — which is why an admin change appeared not to "take".
+ * This fetches the fresh config from `/api/monetag` on the client instead (the same
+ * freshness the placed ads get from `/api/ads`), so a change shows within seconds,
+ * no rebuild.
  *
- * So the two injectors are code-split (`next/dynamic`) and mounted on the frame
- * AFTER the first paint — the exact pattern `DeferredAdFurniture` uses for the ad
- * furniture. `ssr: false` is safe here for the same reason: they render nothing on
- * the server (they gate on the client-only plan + path), so nothing races the
- * import.
+ * ── Off the landing critical path ─────────────────────────────────────────────
  *
- * The server (`MonetagScript`) still does the parsing and passes only safe,
- * validated data down — this host adds no new trust surface.
+ * The fetch + the injectors are code-split and deferred to the frame after first
+ * paint (double-rAF), like `DeferredAdFurniture` — the landing's two-second budget
+ * pays nothing for Monetag. Premium (Pro/Business ad-free) and page-scope gating
+ * happen inside the injectors, which receive only safe, already-parsed data.
  */
 
 const MonetagTags = dynamic(() => import("./monetag-tags").then((m) => m.MonetagTags), {
@@ -34,33 +32,43 @@ const MonetagPlacements = dynamic(
   { ssr: false },
 );
 
-export function MonetagClient({
-  tags,
-  placements,
-  allPages,
-  surfaces,
-}: {
+interface MonetagConfig {
   tags: MonetagTag[];
   placements: MonetagPlacementTag[];
   allPages: boolean;
   surfaces: string[];
-}) {
-  const [mounted, setMounted] = useState(false);
+}
+
+export function MonetagClient() {
+  const [config, setConfig] = useState<MonetagConfig | null>(null);
 
   useEffect(() => {
-    // Two rAFs: keep the import + hydration off the first paint, but mount within
-    // a frame or two rather than the multiple seconds an idle-callback could cost.
+    let alive = true;
+    // Two rAFs keep the fetch + import off the first paint; then pull the fresh
+    // config so an admin change is reflected without a rebuild.
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => setMounted(true));
+      raf2 = requestAnimationFrame(() => {
+        fetch("/api/monetag")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d: MonetagConfig | null) => {
+            if (alive && d) setConfig(d);
+          })
+          .catch(() => {
+            /* config unavailable — show nothing rather than guess */
+          });
+      });
     });
     return () => {
+      alive = false;
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
     };
   }, []);
 
-  if (!mounted) return null;
+  if (!config) return null;
+  const { tags, placements, allPages, surfaces } = config;
+  if (tags.length === 0 && placements.length === 0) return null;
 
   return (
     <>

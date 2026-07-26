@@ -4,7 +4,13 @@ import { AlertTriangle, Check, Loader2, ToggleRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { MONETAG_PLACEMENTS, MONETAG_SURFACES, parseMonetagSnippet, type MonetagUnit } from "@/lib/monetization/monetag";
+import {
+  MONETAG_PLACEMENTS,
+  MONETAG_SURFACE_GROUPS,
+  MONETAG_SURFACES,
+  parseMonetagSnippet,
+  type MonetagUnit,
+} from "@/lib/monetization/monetag";
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import { cn } from "@/lib/utils";
 
@@ -304,46 +310,53 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
           </button>
 
           {!state.monetagAllPages ? (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Pages Monetag may show on</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {MONETAG_SURFACES.map((surface) => {
-                  const on = state.monetagSurfaces.includes(surface.id);
-                  return (
-                    <button
-                      key={surface.id}
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        setState((s) => ({
-                          ...s,
-                          monetagSurfaces: on
-                            ? s.monetagSurfaces.filter((id) => id !== surface.id)
-                            : [...s.monetagSurfaces, surface.id],
-                        }))
-                      }
-                      className={cn(
-                        "flex items-start gap-2.5 rounded-2xl border p-3 text-left transition disabled:opacity-70",
-                        on ? "border-primary/50 bg-primary/[0.06]" : "border-border/70 bg-secondary/20 hover:border-foreground/20",
-                      )}
-                    >
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                          on ? "border-primary bg-primary text-primary-foreground" : "border-border",
-                        )}
-                      >
-                        {on ? <Check className="h-3 w-3" /> : null}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-medium">{surface.label}</span>
-                        <span className="block text-[11px] text-muted-foreground">{surface.hint}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="space-y-3">
+              <p className="text-xs font-medium text-muted-foreground">
+                Pages Monetag may show on — tick each page (e.g. only the Download page).
+              </p>
+              {MONETAG_SURFACE_GROUPS.map((group) => (
+                <div key={group} className="space-y-1.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">{group}</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {MONETAG_SURFACES.filter((s) => s.group === group).map((surface) => {
+                      const on = state.monetagSurfaces.includes(surface.id);
+                      return (
+                        <button
+                          key={surface.id}
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            setState((s) => ({
+                              ...s,
+                              monetagSurfaces: on
+                                ? s.monetagSurfaces.filter((id) => id !== surface.id)
+                                : [...s.monetagSurfaces, surface.id],
+                            }))
+                          }
+                          className={cn(
+                            "flex items-start gap-2.5 rounded-2xl border p-3 text-left transition disabled:opacity-70",
+                            on ? "border-primary/50 bg-primary/[0.06]" : "border-border/70 bg-secondary/20 hover:border-foreground/20",
+                          )}
+                        >
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                              on ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                            )}
+                          >
+                            {on ? <Check className="h-3 w-3" /> : null}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium">{surface.label}</span>
+                            <span className="block text-[11px] text-muted-foreground">{surface.hint}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
               {state.monetagSurfaces.length === 0 ? (
                 <p className="text-[11px] text-amber-500">
                   Nothing ticked — Monetag will not show anywhere until you select a page or turn

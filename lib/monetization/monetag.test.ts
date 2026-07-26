@@ -8,6 +8,7 @@ import {
   MONETAG_AD_TYPE_IDS,
   MONETAG_MOMENT_EVENTS,
   MONETAG_PLACEMENTS,
+  MONETAG_SURFACE_GROUPS,
   MONETAG_SURFACES,
   isMonetagAdType,
   isMonetagPlacementId,
@@ -204,7 +205,7 @@ describe("normalizeMonetagUnits — defend the stored row", () => {
 });
 
 describe("Monetag page scope — resolveMonetagSurface", () => {
-  it("maps the clear surfaces", () => {
+  it("maps the clear surfaces, each app page to its OWN surface", () => {
     expect(resolveMonetagSurface("/")).toBe("home");
     expect(resolveMonetagSurface("/blog")).toBe("content");
     expect(resolveMonetagSurface("/blog/how-to")).toBe("content");
@@ -212,9 +213,12 @@ describe("Monetag page scope — resolveMonetagSurface", () => {
     expect(resolveMonetagSurface("/help/article")).toBe("content");
     expect(resolveMonetagSurface("/pricing")).toBe("info");
     expect(resolveMonetagSurface("/trust/x")).toBe("info");
-    expect(resolveMonetagSurface("/home")).toBe("app");
-    expect(resolveMonetagSurface("/messages/123")).toBe("app");
-    expect(resolveMonetagSurface("/downloads")).toBe("app");
+    // Each signed-in page is its own surface so the owner can target just one.
+    expect(resolveMonetagSurface("/downloads")).toBe("app-download");
+    expect(resolveMonetagSurface("/home")).toBe("app-home");
+    expect(resolveMonetagSurface("/reels")).toBe("app-reels");
+    expect(resolveMonetagSurface("/messages/123")).toBe("app-messages");
+    expect(resolveMonetagSurface("/create")).toBe("app-account");
   });
 
   it("treats a top-level slug as a downloader/SEO page", () => {
@@ -228,15 +232,19 @@ describe("Monetag page scope — resolveMonetagSurface", () => {
     }
   });
 
-  it("every surface has an id, label and hint; ids are unique + valid", () => {
+  it("every surface has an id, label, hint + known group; ids are unique + valid", () => {
     const ids = MONETAG_SURFACES.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const s of MONETAG_SURFACES) {
       expect(isMonetagSurfaceId(s.id)).toBe(true);
       expect(s.label.length).toBeGreaterThan(2);
       expect(s.hint.length).toBeGreaterThan(5);
+      expect((MONETAG_SURFACE_GROUPS as readonly string[]).includes(s.group)).toBe(true);
     }
     expect(isMonetagSurfaceId("nope")).toBe(false);
+    // The old coarse "app" surface was split into per-page surfaces.
+    expect(isMonetagSurfaceId("app")).toBe(false);
+    expect(isMonetagSurfaceId("app-download")).toBe(true);
   });
 });
 
@@ -261,11 +269,20 @@ describe("Monetag page scope — monetagAllowedOnPath", () => {
     }
   });
 
-  it("a system page is never allowed even if all pages is on? (no — allPages wins)", () => {
-    // allPages is a blunt override by design; the surface gate is the finer tool.
+  it("can target ONE app page (e.g. only the Download page, not the rest of the app)", () => {
+    const scope = { monetagAllPages: false, monetagSurfaces: ["app-download"] };
+    expect(monetagAllowedOnPath("/downloads", scope)).toBe(true);
+    // …and NOT the other signed-in pages.
+    expect(monetagAllowedOnPath("/home", scope)).toBe(false);
+    expect(monetagAllowedOnPath("/reels", scope)).toBe(false);
+    expect(monetagAllowedOnPath("/messages", scope)).toBe(false);
+  });
+
+  it("a system page resolves to no surface, so it's excluded under surface scope", () => {
+    // allPages is a blunt override; the surface gate is the finer tool.
     expect(monetagAllowedOnPath("/admin", { monetagAllPages: true, monetagSurfaces: [] })).toBe(true);
-    // …but under surface scope, /admin resolves to no surface, so it's excluded.
-    expect(monetagAllowedOnPath("/admin", { monetagAllPages: false, monetagSurfaces: ["home", "downloader", "content", "info", "app"] })).toBe(false);
+    const everything = MONETAG_SURFACES.map((s) => s.id);
+    expect(monetagAllowedOnPath("/admin", { monetagAllPages: false, monetagSurfaces: everything })).toBe(false);
   });
 });
 

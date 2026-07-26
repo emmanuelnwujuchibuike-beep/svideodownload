@@ -99,12 +99,26 @@ export interface MonetagUnit {
  */
 
 export const MONETAG_SURFACES = [
-  { id: "home", label: "Home page", hint: "The landing page (/)." },
-  { id: "downloader", label: "Downloader pages", hint: "Every per-platform download & SEO page — the highest-traffic ad surface." },
-  { id: "content", label: "Blog, Academy & Help", hint: "/blog, /academy, /learn, /glossary, /topics, /help." },
-  { id: "info", label: "Info & legal", hint: "/about, /contact, /pricing, /features, /developers, /privacy, /terms, /dmca, /trust, /library." },
-  { id: "app", label: "The app (signed-in)", hint: "/home, /downloads, /reels, messaging, and the rest of the app." },
+  // Public
+  { id: "home", label: "Home page", hint: "The landing page (/).", group: "Public" },
+  { id: "downloader", label: "Downloader pages", hint: "Every per-platform download & SEO page — the highest-traffic ad surface.", group: "Public" },
+  { id: "content", label: "Blog, Academy & Help", hint: "/blog, /academy, /learn, /glossary, /topics, /help.", group: "Public" },
+  { id: "info", label: "Info & legal", hint: "/about, /pricing, /features, /developers and the legal pages.", group: "Public" },
+  // App (signed-in) — each page individually, so the owner can target e.g. only Download.
+  { id: "app-download", label: "Download page", hint: "/downloads — the signed-in downloader.", group: "App (signed-in)" },
+  { id: "app-home", label: "Home feed", hint: "/home — the signed-in feed.", group: "App (signed-in)" },
+  { id: "app-reels", label: "Reels", hint: "/reels.", group: "App (signed-in)" },
+  { id: "app-explore", label: "Explore", hint: "/explore.", group: "App (signed-in)" },
+  { id: "app-messages", label: "Messages", hint: "/messages.", group: "App (signed-in)" },
+  { id: "app-friends", label: "Friends", hint: "/friends.", group: "App (signed-in)" },
+  { id: "app-saved", label: "Saved", hint: "/saved.", group: "App (signed-in)" },
+  { id: "app-search", label: "Search", hint: "/search.", group: "App (signed-in)" },
+  { id: "app-notifications", label: "Notifications", hint: "/notifications.", group: "App (signed-in)" },
+  { id: "app-account", label: "Account & settings", hint: "/account, /create.", group: "App (signed-in)" },
 ] as const;
+
+/** Distinct surface groups, in display order, for the admin checklist. */
+export const MONETAG_SURFACE_GROUPS = ["Public", "App (signed-in)"] as const;
 
 export type MonetagSurfaceId = (typeof MONETAG_SURFACES)[number]["id"];
 
@@ -119,22 +133,38 @@ export function isMonetagSurfaceId(value: unknown): value is MonetagSurfaceId {
 
 const CONTENT_RE = /^\/(blog|academy|learn|glossary|topics|help)(\/|$)/;
 const INFO_RE = /^\/(about|contact|pricing|features|developers|privacy|terms|dmca|trust|library)(\/|$)/;
-const APP_RE = /^\/(home|downloads|reels|explore|friends|messages|notifications|saved|search|account|create)(\/|$)/;
 // Operator, auth and dynamic entity pages are never a Monetag surface.
 const SYSTEM_RE = /^\/(admin|login|welcome|auth|api|p|u)(\/|$)/;
 
+/** First path segment → its specific app surface. `create` shares Account. */
+const APP_SEGMENT_TO_SURFACE: Record<string, MonetagSurfaceId> = {
+  downloads: "app-download",
+  home: "app-home",
+  reels: "app-reels",
+  explore: "app-explore",
+  messages: "app-messages",
+  friends: "app-friends",
+  saved: "app-saved",
+  search: "app-search",
+  notifications: "app-notifications",
+  account: "app-account",
+  create: "app-account",
+};
+
 /**
  * Which surface a path belongs to, or null for a page Monetag never shows on
- * (system/auth/operator pages). A single top-level segment that isn't a known
- * static route is a per-platform downloader/SEO page — those render at `/<slug>`
- * from SEO_SLUGS, and are the main ad surface.
+ * (system/auth/operator pages). The app pages resolve to their OWN surface so the
+ * owner can target one page (e.g. only Download) without lighting up the rest. A
+ * single top-level segment that isn't a known static route is a per-platform
+ * downloader/SEO page — those render at `/<slug>` from SEO_SLUGS.
  */
 export function resolveMonetagSurface(pathname: string): MonetagSurfaceId | null {
   const p = pathname || "/";
   if (p === "/") return "home";
   if (CONTENT_RE.test(p)) return "content";
   if (INFO_RE.test(p)) return "info";
-  if (APP_RE.test(p)) return "app";
+  const seg = p.match(/^\/([^/]+)/)?.[1] ?? "";
+  if (APP_SEGMENT_TO_SURFACE[seg]) return APP_SEGMENT_TO_SURFACE[seg];
   if (SYSTEM_RE.test(p)) return null;
   if (/^\/[^/]+\/?$/.test(p)) return "downloader";
   return null;

@@ -16,6 +16,10 @@ const schema = z.object({
   adsense: z.boolean(),
   adsterra: z.boolean(),
   propellerads: z.boolean(),
+  // Monetag (Multitag) — the owner's network alongside AdSense.
+  monetag: z.boolean().default(false),
+  // The pasted Monetag <script> snippet; parsed (not injected) at render time.
+  monetagSnippet: z.string().max(4000).default(""),
   affiliates: z.boolean(),
   recommendedTools: z.boolean(),
   interstitial: z.boolean(),

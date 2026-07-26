@@ -65,6 +65,22 @@ export interface MonetizationSettings {
   adsterra: boolean;
   /** PropellerAds networks. */
   propellerads: boolean;
+  /**
+   * Monetag — a single site-wide "Multitag" that serves all Monetag formats
+   * (in-page push, interstitial, vignette, etc.) from one script. The owner's
+   * chosen network alongside AdSense (Adsterra/PropellerAds retired).
+   */
+  monetag: boolean;
+  /**
+   * The Monetag Multitag <script> snippet, pasted verbatim from the Monetag
+   * dashboard. It is PARSED server-side into a structured <script> (src +
+   * data-zone) — never injected as raw markup — so an admin field can't become a
+   * stored-XSS primitive. Also satisfies Monetag's "code" verification method,
+   * because the tag is server-rendered where Monetag's crawler can see it. The
+   * FILE method (sw.js at root) is impossible here — that path is the PWA service
+   * worker. See features/monetization/monetag-script.tsx.
+   */
+  monetagSnippet: string;
   /** Affiliate offers on the download-result page. */
   affiliates: boolean;
   /** Curated "Recommended Tools" sections (homepage/footer/sidebar/blog). */
@@ -111,8 +127,16 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   adsensePublisherId: "",
   adsTxt: "",
   verificationTags: "",
-  adsterra: true,
-  propellerads: true,
+  /*
+    Adsterra + PropellerAds default OFF (owner, 2026-07-26: "use just Monetag and
+    AdSense"). They remain fully wired so a site can re-enable them from the admin,
+    but a fresh site now leans on AdSense + Monetag. Monetag itself defaults off
+    until its Multitag snippet is pasted in the admin.
+  */
+  adsterra: false,
+  propellerads: false,
+  monetag: false,
+  monetagSnippet: "",
   affiliates: true,
   recommendedTools: true,
   interstitial: false,

@@ -19,8 +19,9 @@ type ToggleKey = {
 
 const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
   { key: "adsense", label: "Google AdSense", hint: "AdSense banner and video units" },
-  { key: "adsterra", label: "Adsterra", hint: "Adsterra network banners" },
-  { key: "propellerads", label: "PropellerAds", hint: "PropellerAds network units" },
+  { key: "monetag", label: "Monetag", hint: "Monetag Multitag — one site-wide tag (paste the snippet below first)" },
+  { key: "adsterra", label: "Adsterra", hint: "Adsterra network banners (retired — off by default)" },
+  { key: "propellerads", label: "PropellerAds", hint: "PropellerAds network units (retired — off by default)" },
   { key: "affiliates", label: "Affiliate offers", hint: "Affiliate CTA on the download-result page" },
   { key: "recommendedTools", label: "Recommended tools", hint: "Curated tool sections (home/footer/sidebar)" },
   {
@@ -46,7 +47,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const setText = (key: "adsensePublisherId" | "adsTxt" | "verificationTags", value: string) =>
+  const setText = (key: "adsensePublisherId" | "adsTxt" | "verificationTags" | "monetagSnippet", value: string) =>
     setState((s) => ({ ...s, [key]: value }));
 
   const persist = async (next: MonetizationSettings) => {
@@ -244,6 +245,29 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
             as soon as you save — add other networks&apos; lines here too, one per line.
           </p>
         </div>
+      </div>
+
+      <div className="mt-6 space-y-2 border-t border-border/60 pt-5">
+        <h3 className="text-sm font-semibold">Monetag</h3>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Paste the Multitag <code className="font-mono">&lt;script&gt;</code> snippet from your
+          Monetag dashboard, then turn the <strong>Monetag</strong> switch above on. It&apos;s parsed
+          into a safe script tag in the page head (never injected as raw HTML) and, being
+          server-rendered, also satisfies Monetag&apos;s &ldquo;code&rdquo; verification — so you do
+          NOT need Monetag&apos;s &ldquo;upload sw.js&rdquo; method, which can&apos;t be used here
+          (that path is the app&apos;s own service worker).
+        </p>
+        <textarea
+          value={state.monetagSnippet}
+          onChange={(e) => setText("monetagSnippet", e.target.value)}
+          placeholder={'<script src="//example.monetag.com/tag.min.js" data-zone="1234567" async data-cfasync="false"></script>'}
+          className="min-h-[80px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+        />
+        <p className="text-xs text-muted-foreground">
+          Only the <code className="font-mono">https</code> script URL and{" "}
+          <code className="font-mono">data-zone</code> are used; anything else in the snippet is
+          ignored. Save with the button below.
+        </p>
       </div>
 
       <div className="mt-6 space-y-2 border-t border-border/60 pt-5">

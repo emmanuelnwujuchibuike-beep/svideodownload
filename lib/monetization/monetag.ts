@@ -88,6 +88,72 @@ export interface MonetagUnit {
   snippet: string;
 }
 
+/* ─────────────────────────────── page scope ─────────────────────────────────
+ * Which pages Monetag may show on. The owner asked to pick pages rather than run
+ * it site-wide, so Monetag is scoped to named SURFACES. The plan gate already
+ * decides WHO sees ads (free/anon only); this decides WHERE.
+ *
+ * Matching is done on the CLIENT against `usePathname()` (the same reason the plan
+ * gate is client-side — the server `<head>` can't read the path without
+ * un-static-ing the marketing pages). So these matchers are pure + tested.
+ */
+
+export const MONETAG_SURFACES = [
+  { id: "home", label: "Home page", hint: "The landing page (/)." },
+  { id: "downloader", label: "Downloader pages", hint: "Every per-platform download & SEO page — the highest-traffic ad surface." },
+  { id: "content", label: "Blog, Academy & Help", hint: "/blog, /academy, /learn, /glossary, /topics, /help." },
+  { id: "info", label: "Info & legal", hint: "/about, /contact, /pricing, /features, /developers, /privacy, /terms, /dmca, /trust, /library." },
+  { id: "app", label: "The app (signed-in)", hint: "/home, /downloads, /reels, messaging, and the rest of the app." },
+] as const;
+
+export type MonetagSurfaceId = (typeof MONETAG_SURFACES)[number]["id"];
+
+export const MONETAG_SURFACE_IDS = MONETAG_SURFACES.map((s) => s.id) as [MonetagSurfaceId, ...MonetagSurfaceId[]];
+
+const SURFACE_SET = new Set<string>(MONETAG_SURFACE_IDS);
+
+/** Whether a value is a known Monetag surface id. */
+export function isMonetagSurfaceId(value: unknown): value is MonetagSurfaceId {
+  return typeof value === "string" && SURFACE_SET.has(value);
+}
+
+const CONTENT_RE = /^\/(blog|academy|learn|glossary|topics|help)(\/|$)/;
+const INFO_RE = /^\/(about|contact|pricing|features|developers|privacy|terms|dmca|trust|library)(\/|$)/;
+const APP_RE = /^\/(home|downloads|reels|explore|friends|messages|notifications|saved|search|account|create)(\/|$)/;
+// Operator, auth and dynamic entity pages are never a Monetag surface.
+const SYSTEM_RE = /^\/(admin|login|welcome|auth|api|p|u)(\/|$)/;
+
+/**
+ * Which surface a path belongs to, or null for a page Monetag never shows on
+ * (system/auth/operator pages). A single top-level segment that isn't a known
+ * static route is a per-platform downloader/SEO page — those render at `/<slug>`
+ * from SEO_SLUGS, and are the main ad surface.
+ */
+export function resolveMonetagSurface(pathname: string): MonetagSurfaceId | null {
+  const p = pathname || "/";
+  if (p === "/") return "home";
+  if (CONTENT_RE.test(p)) return "content";
+  if (INFO_RE.test(p)) return "info";
+  if (APP_RE.test(p)) return "app";
+  if (SYSTEM_RE.test(p)) return null;
+  if (/^\/[^/]+\/?$/.test(p)) return "downloader";
+  return null;
+}
+
+/**
+ * Whether Monetag may show on this path given the owner's page scope. `allPages`
+ * (the default) shows everywhere; otherwise only the selected surfaces. A page
+ * that resolves to no surface (system/auth) never shows Monetag.
+ */
+export function monetagAllowedOnPath(
+  pathname: string,
+  scope: { monetagAllPages: boolean; monetagSurfaces: string[] },
+): boolean {
+  if (scope.monetagAllPages) return true;
+  const surface = resolveMonetagSurface(pathname);
+  return surface !== null && (scope.monetagSurfaces ?? []).includes(surface);
+}
+
 /** A resolved, renderable Monetag tag. */
 export interface MonetagTag {
   type: MonetagAdType;

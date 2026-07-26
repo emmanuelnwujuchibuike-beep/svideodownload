@@ -1,10 +1,17 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
   MONETAG_AD_TYPES,
   MONETAG_AD_TYPE_IDS,
+  MONETAG_SURFACES,
   isMonetagAdType,
+  isMonetagSurfaceId,
+  monetagAllowedOnPath,
   parseMonetagSnippet,
+  resolveMonetagSurface,
   resolveMonetagTags,
   type MonetagUnit,
 } from "./monetag";
@@ -157,5 +164,114 @@ describe("normalizeMonetagUnits — defend the stored row", () => {
   it("caps the number of units", () => {
     const many = Array.from({ length: 40 }, () => ({ type: "in_page_push", snippet: "x" }));
     expect(normalizeMonetagUnits(many).length).toBeLessThanOrEqual(20);
+  });
+});
+
+describe("Monetag page scope — resolveMonetagSurface", () => {
+  it("maps the clear surfaces", () => {
+    expect(resolveMonetagSurface("/")).toBe("home");
+    expect(resolveMonetagSurface("/blog")).toBe("content");
+    expect(resolveMonetagSurface("/blog/how-to")).toBe("content");
+    expect(resolveMonetagSurface("/academy")).toBe("content");
+    expect(resolveMonetagSurface("/help/article")).toBe("content");
+    expect(resolveMonetagSurface("/pricing")).toBe("info");
+    expect(resolveMonetagSurface("/trust/x")).toBe("info");
+    expect(resolveMonetagSurface("/home")).toBe("app");
+    expect(resolveMonetagSurface("/messages/123")).toBe("app");
+    expect(resolveMonetagSurface("/downloads")).toBe("app");
+  });
+
+  it("treats a top-level slug as a downloader/SEO page", () => {
+    expect(resolveMonetagSurface("/tiktok-video-downloader")).toBe("downloader");
+    expect(resolveMonetagSurface("/youtube")).toBe("downloader");
+  });
+
+  it("never shows on system/auth/operator pages", () => {
+    for (const p of ["/admin", "/admin/whatever", "/login", "/auth/callback", "/api/ads", "/p/abc", "/u/emily", "/welcome"]) {
+      expect(resolveMonetagSurface(p), `${p} must not be a Monetag surface`).toBeNull();
+    }
+  });
+
+  it("every surface has an id, label and hint; ids are unique + valid", () => {
+    const ids = MONETAG_SURFACES.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const s of MONETAG_SURFACES) {
+      expect(isMonetagSurfaceId(s.id)).toBe(true);
+      expect(s.label.length).toBeGreaterThan(2);
+      expect(s.hint.length).toBeGreaterThan(5);
+    }
+    expect(isMonetagSurfaceId("nope")).toBe(false);
+  });
+});
+
+describe("Monetag page scope — monetagAllowedOnPath", () => {
+  it("shows everywhere when allPages is true", () => {
+    for (const p of ["/", "/tiktok", "/admin", "/home"]) {
+      expect(monetagAllowedOnPath(p, { monetagAllPages: true, monetagSurfaces: [] })).toBe(true);
+    }
+  });
+
+  it("shows only on the selected surfaces when allPages is false", () => {
+    const scope = { monetagAllPages: false, monetagSurfaces: ["downloader", "home"] };
+    expect(monetagAllowedOnPath("/", scope)).toBe(true); // home
+    expect(monetagAllowedOnPath("/tiktok", scope)).toBe(true); // downloader
+    expect(monetagAllowedOnPath("/blog", scope)).toBe(false); // content not selected
+    expect(monetagAllowedOnPath("/home", scope)).toBe(false); // app not selected
+  });
+
+  it("nothing selected + not all pages = shows nowhere (fails closed)", () => {
+    for (const p of ["/", "/tiktok", "/blog"]) {
+      expect(monetagAllowedOnPath(p, { monetagAllPages: false, monetagSurfaces: [] })).toBe(false);
+    }
+  });
+
+  it("a system page is never allowed even if all pages is on? (no — allPages wins)", () => {
+    // allPages is a blunt override by design; the surface gate is the finer tool.
+    expect(monetagAllowedOnPath("/admin", { monetagAllPages: true, monetagSurfaces: [] })).toBe(true);
+    // …but under surface scope, /admin resolves to no surface, so it's excluded.
+    expect(monetagAllowedOnPath("/admin", { monetagAllPages: false, monetagSurfaces: ["home", "downloader", "content", "info", "app"] })).toBe(false);
+  });
+});
+
+describe("Monetag is plan-gated — Pro/Business are ad-free", () => {
+  const ROOT = path.resolve(__dirname, "../..");
+  const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
+
+  it("injects the tags on the client, gated on the entitlements showAds signal", () => {
+    /*
+     * The bug this pins: the site-level Monetag script rendered in <head> for
+     * EVERY visitor, so paying (Pro/Business) users — who are ad-free — got
+     * Monetag's popunder/push/vignette anyway. The gate can't be server-side
+     * without un-static-ing the marketing pages, so it lives on the client via
+     * useEntitlements, exactly like every placed ad.
+     */
+    const src = read("features/monetization/monetag-tags.tsx");
+    expect(src).toContain("useEntitlements");
+    expect(src).toMatch(/showAds/);
+    // Waits for the truth before injecting, so a premium user is never served in
+    // the gap before /api/me answers.
+    expect(src).toMatch(/!ready|ready &&/);
+  });
+
+  it("also gates by page — only injects on the owner's selected surfaces", () => {
+    const src = read("features/monetization/monetag-tags.tsx");
+    expect(src).toContain("usePathname");
+    expect(src).toContain("monetagAllowedOnPath");
+  });
+
+  it("injects via a real script element with a validated src, never innerHTML", () => {
+    const src = read("features/monetization/monetag-tags.tsx");
+    expect(src).toContain('createElement("script")');
+    expect(src).toMatch(/\.src\s*=\s*tag\.src/);
+    // The whole point of parse-never-inject: no markup sink reaches the client.
+    expect(src).not.toMatch(/innerHTML|dangerouslySetInnerHTML/);
+  });
+
+  it("the server component renders no raw <script> — it delegates to the gated client", () => {
+    const src = read("features/monetization/monetag-script.tsx");
+    expect(src).toContain("MonetagTags");
+    expect(src, "MonetagScript must not server-render a <script> (that bypasses the plan gate)").not.toMatch(
+      /<script\b/,
+    );
   });
 });

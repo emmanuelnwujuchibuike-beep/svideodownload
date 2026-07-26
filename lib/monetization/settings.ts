@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { isMonetagAdType, type MonetagUnit } from "./monetag";
+import { isMonetagAdType, isMonetagSurfaceId, type MonetagUnit } from "./monetag";
 
 /**
  * Global monetization switches, stored in the `settings` table under key
@@ -94,6 +94,17 @@ export interface MonetizationSettings {
    * master switch. See lib/monetization/monetag.ts.
    */
   monetagUnits: MonetagUnit[];
+  /**
+   * Whether Monetag shows on every page (the default) or only the selected
+   * surfaces. When false, `monetagSurfaces` lists where it may appear.
+   */
+  monetagAllPages: boolean;
+  /**
+   * The page surfaces Monetag may show on when `monetagAllPages` is false —
+   * surface ids from `MONETAG_SURFACES` (home / downloader / content / info /
+   * app). Matched on the client against the current path. See monetag.ts.
+   */
+  monetagSurfaces: string[];
   /** Affiliate offers on the download-result page. */
   affiliates: boolean;
   /** Curated "Recommended Tools" sections (homepage/footer/sidebar/blog). */
@@ -151,6 +162,10 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   monetag: false,
   monetagSnippet: "",
   monetagUnits: [],
+  // Back-compat: an existing site keeps showing Monetag everywhere until the
+  // owner narrows it. `monetagSurfaces` only applies when this is false.
+  monetagAllPages: true,
+  monetagSurfaces: [],
   affiliates: true,
   recommendedTools: true,
   interstitial: false,
@@ -213,6 +228,10 @@ export async function getMonetizationSettings(): Promise<MonetizationSettings> {
     // type, a non-string snippet), and a malformed entry must degrade to nothing
     // rather than reach the head unparsed.
     merged.monetagUnits = normalizeMonetagUnits(merged.monetagUnits);
+    // Keep only known surface ids, so a stale/garbage entry can't widen scope.
+    merged.monetagSurfaces = Array.isArray(merged.monetagSurfaces)
+      ? merged.monetagSurfaces.filter(isMonetagSurfaceId)
+      : [];
     cache = { at: Date.now(), value: merged };
     return merged;
   } catch {

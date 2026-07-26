@@ -256,16 +256,18 @@ export default function RootLayout({
           set one up ships no third-party script at all.
         */}
         <AdSenseSiteScript />
-        {/* Monetag Multitag (site-wide) — the owner's network alongside AdSense.
-            Parsed from the admin snippet into a structured <script>; also serves
-            as Monetag's "code" verification since it's server-rendered. */}
-        <MonetagScript />
         {/* Ownership verification for any network that offers a meta-tag method —
             which is the method this site supports, because the FILE method
             collides with the PWA service worker at /sw.js. */}
         <VerificationTags />
       </head>
       <body className={`${displaySans.variable} font-sans`}>
+        {/* Monetag (site-wide) — the owner's network alongside AdSense. The admin
+            snippets are parsed server-side into safe tags, then injected on the
+            client ONLY for visitors who should see ads, so Pro/Business stay
+            ad-free without un-static-ing the marketing pages. Lives in <body>
+            because it renders no server markup — it injects into <head> itself. */}
+        <MonetagScript />
         {/* Branded boot loader baked into the first HTML so cold entries never
             flash an empty page; it fades itself out once the document is ready. */}
         <BootSplash />

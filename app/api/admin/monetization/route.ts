@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
-import { MONETAG_AD_TYPE_IDS } from "@/lib/monetization/monetag";
+import { MONETAG_AD_TYPE_IDS, MONETAG_SURFACE_IDS } from "@/lib/monetization/monetag";
 import { setMonetizationSettings } from "@/lib/monetization/settings";
 
 export const runtime = "nodejs";
@@ -36,6 +36,9 @@ const schema = z.object({
     )
     .max(20)
     .default([]),
+  // Page scope: show Monetag everywhere (default) or only on selected surfaces.
+  monetagAllPages: z.boolean().default(true),
+  monetagSurfaces: z.array(z.enum(MONETAG_SURFACE_IDS)).max(20).default([]),
   affiliates: z.boolean(),
   recommendedTools: z.boolean(),
   interstitial: z.boolean(),

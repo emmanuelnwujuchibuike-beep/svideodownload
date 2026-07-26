@@ -13,6 +13,39 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑26 (batch 9) — Commerce Platform, Monetag+AdSense, Google hidden, browser fullscreen
+
+**Enterprise Commerce Platform** (8th registry-with-teeth map). Real revenue —
+Paystack subscriptions + advertising + affiliates + API billing — mapped honestly
+in `lib/platform/commerce-platform.ts` (services, commerce types, payments,
+subscription tiers, billing/promotions, AI) with `commerce-platform.test.ts`
+teeth, an admin **Commerce** section and `docs/COMMERCE_PLATFORM.md`. Marketplace,
+creator payouts, invoices, refund workflows, promotions and the AI layer are
+`planned`. The teeth caught a self-overstatement (a `partial` receipts row with no
+source → `planned`).
+
+**Ads → Monetag + AdSense only.** Owner retired Adsterra/PropellerAds. Added
+`monetag` + `monetagSnippet` settings, `MonetagScript` (parses the pasted Multitag
+snippet into a structured `<script>` in `<head>` — never raw HTML; also satisfies
+Monetag's code verification), admin toggle + field, and flipped Adsterra/
+PropellerAds defaults off (still wired to re-enable). 🔴 Monetag's `sw.js` FILE
+verification is impossible — `/sw.js` is the PWA service worker; use the code or
+meta-tag method. Removed a stray root `sw m.js`.
+
+**Google sign-in hidden** in `auth-panel.tsx` (the login page) + `login-form.tsx`,
+everything preserved in comments, re-enable once Google OAuth is configured.
+
+**Browser "native fullscreen":** a website can't remove the browser address bar
+(iOS constraint) — the installed PWA is the only true fullscreen. The install
+prompt now leads with that benefit. The blurred nav already fills the safe area
+wherever the browser exposes one; flooring it in-browser would double-gap, so it's
+not done.
+
+Verified across the session: tsc + lint clean, **853 tests**, build clean, budget
+green.
+
+---
+
 ## 2026‑07‑22 (batch 8) — Enterprise Notification Platform
 
 The brief asked for a Notification Gateway, Delivery Engine, Template/Preference/

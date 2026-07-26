@@ -13,6 +13,38 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑26 (batch 12) — Monetag: who / where / when controls
+
+Owner reported Monetag showing to Pro/Business + on all pages, and asked to control
+which MOMENTS a Monetag ad shows.
+
+- **WHO (ad-free for Pro/Business).** The placed `/api/ads` zones already gate premium,
+  but the site-level Monetag `<script>` in `<head>` ran for everyone. The plan can't be
+  read server-side without un-static-ing the marketing pages, so gate on the CLIENT like
+  every placed ad: `MonetagScript` (server) parses the tags and hands them to `MonetagTags`
+  (client), which injects only for `useEntitlements().showAds` (free/anon), waiting for
+  `ready` so a premium user is never served in the gap.
+- **WHERE (selected pages).** `MONETAG_SURFACES` (home / downloader / content / info /
+  app) with tested matchers + `monetagAllowedOnPath`; `monetagAllPages` toggle +
+  `monetagSurfaces` list on settings (default: all pages) + an admin page selector.
+  `MonetagTags` gates injection by `usePathname`.
+- **WHEN (moment placements).** `MONETAG_PLACEMENTS` (download-complete, rewarded,
+  interstitial, idle, return, back-swipe) + a `MonetagPlacements` client engine that owns
+  the browser moments (interstitial=navigation, idle+return=visibilitychange,
+  back-swipe=popstate) and listens for download-complete + rewarded window events the
+  existing overlays now dispatch. Per-moment admin toggle + tag. Monetag self-places, so a
+  placement LOADS the tag at that moment; Monetag shows on its own schedule.
+- **Perf.** The injectors are code-split + mounted after first paint (`MonetagClient`,
+  `next/dynamic` + double-rAF, like `DeferredAdFurniture`), and the two flow-moment event
+  constants live in a tiny `monetag-events.ts` so the homepage download/reward overlays
+  don't drag the whole matcher file onto the landing page (that pushed it to 303 kB, over
+  the 302 ceiling). Same parse-never-inject (https-only src) discipline throughout.
+
+Verified: tsc + lint clean, **924 tests**, build clean, budget green. Commits `fab75d6`
+(who/where) + `4aa02ca` (when).
+
+---
+
 ## 2026‑07‑26 (batch 11) — Workspace Framework map + Monetag per-type ad slots
 
 **Enterprise Workspace Framework (10th registry-with-teeth map).** The "build the

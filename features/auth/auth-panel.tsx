@@ -118,6 +118,13 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
     }, 1000);
   };
 
+  /*
+    GOOGLE SIGN-IN — TEMPORARILY DISABLED (owner, 2026-07-26).
+    Hidden until the Google OAuth provider is configured in Supabase + the Google
+    Cloud console; until then it would only redirect to an error. NOTHING is
+    removed — to re-enable, un-comment this handler, the "Continue with Google"
+    button in the JSX below, and the <GoogleG /> component at the bottom.
+
   const google = async () => {
     setBusy(true);
     setNavigating(true);
@@ -135,6 +142,7 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
       setNavigating(false);
     }
   };
+  */
 
   const sendCode = async (target: string) => {
     setBusy(true);
@@ -278,6 +286,12 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
             <Mail className="h-[18px] w-[18px]" /> Continue with Email
           </button>
 
+          {/*
+            GOOGLE SIGN-IN — TEMPORARILY HIDDEN (owner, 2026-07-26) until Google
+            OAuth is configured in Supabase + Google console. Nothing removed —
+            un-comment this button (and the `google` handler + GoogleG component)
+            to restore. Email sign-in below is unaffected.
+
           <button
             type="button"
             onClick={google}
@@ -286,6 +300,7 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
           >
             <GoogleG /> Continue with Google
           </button>
+          */}
 
           <button
             type="button"
@@ -486,6 +501,9 @@ function Field({ icon, children }: { icon: React.ReactNode; children: React.Reac
   );
 }
 
+/*
+  GOOGLE "G" — kept for when Google sign-in is re-enabled (owner, 2026-07-26).
+
 function GoogleG() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" aria-hidden="true">
@@ -496,3 +514,4 @@ function GoogleG() {
     </svg>
   );
 }
+*/

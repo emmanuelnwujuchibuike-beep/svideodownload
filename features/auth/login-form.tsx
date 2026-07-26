@@ -35,6 +35,13 @@ export function LoginForm({
     setStatus("error");
   };
 
+  /*
+    GOOGLE SIGN-IN — TEMPORARILY DISABLED (owner, 2026-07-26).
+    Hidden until the Google OAuth provider is configured in Supabase + the Google
+    Cloud console; until then it would only redirect to an error. NOTHING is
+    removed — to re-enable, un-comment this handler, the "Continue with Google"
+    button + divider in the JSX below, and the <GoogleG /> component at the bottom.
+
   // Google OAuth — wired now; works as soon as the Google provider is enabled in
   // Supabase. Redirects the browser, so there's no follow-up here on success.
   const signInWithGoogle = async () => {
@@ -52,6 +59,7 @@ export function LoginForm({
       fail(err, "Google sign-in isn't available yet. Try email for now.");
     }
   };
+  */
 
   const sendMagicLink = async (e: FormEvent) => {
     e.preventDefault();
@@ -147,7 +155,12 @@ export function LoginForm({
 
   return (
     <div className="rounded-3xl border border-border/70 bg-card/80 p-5 shadow-elevated backdrop-blur sm:p-6">
-      {/* Continue with Google */}
+      {/*
+        GOOGLE SIGN-IN — TEMPORARILY HIDDEN (owner, 2026-07-26) until Google OAuth
+        is configured in Supabase + Google console. Nothing removed — un-comment
+        this button + divider (and the signInWithGoogle handler + GoogleG above/
+        below) to restore. The email magic-link + password flows below are unaffected.
+
       <button
         type="button"
         onClick={signInWithGoogle}
@@ -158,12 +171,12 @@ export function LoginForm({
         {isSignUp ? "Sign up with Google" : "Continue with Google"}
       </button>
 
-      {/* Divider */}
       <div className="my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
         <span className="h-px flex-1 bg-border/70" />
         or use email
         <span className="h-px flex-1 bg-border/70" />
       </div>
+      */}
 
       {/* Method toggle */}
       <div className="mb-4 grid grid-cols-2 gap-1 rounded-2xl bg-secondary/60 p-1 text-sm font-medium">
@@ -328,7 +341,10 @@ function SubmitButton({ busy, label }: { busy: boolean; label: string }) {
   );
 }
 
-/** The official multi-colour Google "G" (inline SVG — no icon dependency). */
+/*
+  GOOGLE "G" — kept for when Google sign-in is re-enabled (owner, 2026-07-26).
+  The official multi-colour Google "G" (inline SVG — no icon dependency).
+
 function GoogleG() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" aria-hidden="true">
@@ -339,3 +355,4 @@ function GoogleG() {
     </svg>
   );
 }
+*/

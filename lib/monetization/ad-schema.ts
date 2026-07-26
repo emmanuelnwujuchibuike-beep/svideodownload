@@ -220,9 +220,9 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
     prefetch: false,
   },
   bottom_banner: {
-    label: "Fixed bottom banner (all pages)",
+    label: "Top banner (all pages)",
     description:
-      "Pinned to the bottom of the viewport on every page, on a solid card so it reads as part of the chrome. Not dismissible.",
+      "Pinned to the top of the viewport on every marketing page, directly under the header, on a solid card so it reads as part of the chrome. Not dismissible. (Zone id kept as bottom_banner for back-compat.)",
     persistent: true,
     supportsSkip: false,
     prefetch: true,

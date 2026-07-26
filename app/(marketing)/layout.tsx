@@ -1,3 +1,4 @@
+import { MobileAppNav } from "@/components/landing/mobile-app-nav";
 import { DeferredAdFurniture } from "@/features/monetization/deferred-ad-furniture";
 
 /**
@@ -31,6 +32,10 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
   return (
     <>
       {children}
+      {/* App-style liquid-glass bottom nav on every marketing page (mobile only),
+          and a spacer so a page's last content clears the floating pill. */}
+      <div aria-hidden className="h-24 lg:hidden" />
+      <MobileAppNav />
       <DeferredAdFurniture />
     </>
   );

@@ -7,6 +7,11 @@ import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
 import { Downloader } from "@/features/downloader/downloader";
 import { SharedLinkDownloader } from "@/features/downloader/shared-link-downloader";
+import { BRAND_ICONS } from "@/lib/platform-icons";
+import type { PlatformId } from "@/types";
+
+/** Platform marks shown under the "Download anything" card (public/newlanding.jpg). */
+const SUPPORTED: PlatformId[] = ["tiktok", "twitter", "snapchat", "instagram", "facebook", "pinterest"];
 
 /**
  * The reference checklist beneath the CTAs (public/newlandingfull.jpg). Every one
@@ -135,19 +140,39 @@ export function Hero() {
         </div>
       </div>
 
-      {/* Premium paste-link & download bar — floats below the phone flagship */}
-      <div id="download" className="container relative z-10 mt-12 max-w-2xl scroll-mt-24 sm:mt-14">
-        <div className="mb-3 flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-white/50">
-          <span className="h-px w-8 bg-slate-300 dark:bg-white/20" /> Paste a link to download <span className="h-px w-8 bg-slate-300 dark:bg-white/20" />
+      {/* "Download anything" card — the purple paste-and-download panel from
+          public/newlanding.jpg, sitting between the hero phone and the download
+          mockup below. */}
+      <div id="download" className="container relative z-10 mt-12 max-w-3xl scroll-mt-24 sm:mt-14">
+        <div className="relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-blue-600 via-violet-600 to-fuchsia-600 p-5 shadow-elevated sm:p-7">
+          <div aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
+          <div className="relative text-center text-white">
+            <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">Download anything</h2>
+            <p className="mt-1.5 text-sm text-white/80">Paste a link from any platform and download instantly.</p>
+          </div>
+          {/* The tool is prerendered into the static HTML by the fallback, then
+              swapped for the identical tool pre-filled from a Share Target
+              hand-off. Same markup either way, so nothing shifts — and the
+              boundary is what lets `/` prerender at all (useSearchParams()
+              suspends). See features/downloader/shared-link-downloader.tsx. */}
+          <div className="relative mt-5">
+            <Suspense fallback={<Downloader />}>
+              <SharedLinkDownloader />
+            </Suspense>
+          </div>
+          {/* Supported platforms, per the reference card. */}
+          <div className="relative mt-4 flex flex-wrap items-center justify-center gap-2">
+            <span className="text-xs font-semibold text-white/80">Supported Platforms:</span>
+            {SUPPORTED.map((id) => {
+              const Icon = BRAND_ICONS[id];
+              return Icon ? (
+                <span key={id} className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm">
+                  <Icon className="h-3.5 w-3.5" />
+                </span>
+              ) : null;
+            })}
+          </div>
         </div>
-        {/* The tool is prerendered into the static HTML by the fallback, then
-            swapped for the identical tool pre-filled from a Share Target
-            hand-off. Same markup either way, so nothing shifts — and the
-            boundary is what lets `/` prerender at all (useSearchParams()
-            suspends). See features/downloader/shared-link-downloader.tsx. */}
-        <Suspense fallback={<Downloader />}>
-          <SharedLinkDownloader />
-        </Suspense>
       </div>
     </section>
   );

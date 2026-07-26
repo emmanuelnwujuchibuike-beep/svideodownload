@@ -2,12 +2,18 @@ import { Suspense } from "react";
 
 import { CreatorsSection } from "@/components/landing/creators-section";
 import { CtaBanner } from "@/components/landing/cta-banner";
+import { DownloadMockup } from "@/components/landing/download-mockup";
 import { Faq } from "@/components/landing/faq";
+import { FeaturesGrid } from "@/components/landing/features-grid";
 import { Hero } from "@/components/landing/hero";
-import { MobileAppNav } from "@/components/landing/mobile-app-nav";
+import { HowItWorks } from "@/components/landing/how-it-works";
+import { MarketplaceSection } from "@/components/landing/marketplace-section";
 import { ProductGrid } from "@/components/landing/product-grid";
 import { PlatformShowcase } from "@/components/landing/platform-showcase";
+import { RewardSection } from "@/components/landing/reward-section";
 import { StatsCounter } from "@/components/landing/stats-counter";
+import { StudioSection } from "@/components/landing/studio-section";
+import { Testimonials } from "@/components/landing/testimonials";
 import { TrustBar } from "@/components/landing/trust-bar";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -119,18 +125,35 @@ export default function HomePage() {
           today's behaviour on browsers that do not support it.
         */}
         <div className="[contain-intrinsic-size:auto_900px] [content-visibility:auto]">
-        {/* Supported-platform marks, per the mockup. */}
+        {/* The second phone (Downloads screen) with the six feature cards — the
+            "download section mockup" from public/newlanding.jpg, right after the
+            "Download anything" card in the hero. */}
+        <DownloadMockup />
+
+        {/* The admin-controlled 2×2 image grid — moved UP to sit directly below the
+            download mockup (owner). Each tile opens full screen + downloads. */}
+        <Suspense fallback={<section className="min-h-[560px]" />}>
+          <CreatorsSection />
+        </Suspense>
+
+        {/* Supported-platform marks. */}
         <TrustBar />
-        {/* Rendered from the Product Genome — see components/landing/product-grid.tsx */}
+
+        {/* Stats band (four-up icons). */}
+        <StatsCounter />
+
+        {/* Everything you need — the six-feature grid. */}
+        <FeaturesGrid />
+
+        {/* How it works — 3 simple steps. */}
+        <HowItWorks />
+
+        {/* Ecosystem grid (Product Genome). */}
         <ProductGrid />
 
         {/*
-          Ad slot — same zone, now on the shared premium surface.
-
-          `AdSurface` supersedes the old `empty:hidden` wrapper: it renders
-          nothing at all until the slot confirms an ad, which collapses the band
-          of dead space this section was reported for AND gives the unit the same
-          card, label and rhythm as every other placement on the site.
+          Ad slot — same zone, on the shared premium surface. Renders nothing until
+          the slot confirms an ad.
         */}
         <div className="container max-w-5xl py-2">
           <AdSurface zone="homepage_top" maxWidth="max-w-3xl" />
@@ -138,8 +161,13 @@ export default function HomePage() {
 
         <PlatformShowcase />
 
-        {/* Stats band */}
-        <StatsCounter />
+        {/* Marketplace · Rewards · Studio. */}
+        <MarketplaceSection />
+        <RewardSection />
+        <StudioSection />
+
+        {/* What our users are saying. */}
+        <Testimonials />
 
         {/* Admin-managed recommended tools (renders nothing when empty) */}
         <Suspense fallback={null}>
@@ -150,12 +178,6 @@ export default function HomePage() {
           />
         </Suspense>
 
-        {/* "Built for Creators" — now data-backed (real published covers), so it
-            streams like the other DB-reading sections instead of blocking TTFB. */}
-        <Suspense fallback={<section className="min-h-[560px]" />}>
-          <CreatorsSection />
-        </Suspense>
-
         <CtaBanner />
 
         {/* SEO link surface */}
@@ -164,11 +186,6 @@ export default function HomePage() {
         </div>
         </main>
         <SiteFooter />
-        {/* Native-app bottom nav (mobile only). A spacer keeps the footer's last
-            row clear of the fixed pill, which otherwise covers exactly the strip
-            the legal links sit in. */}
-        <div aria-hidden className="h-24 lg:hidden" />
-        <MobileAppNav />
       </div>
       {/*
         The bottom banner, the idle interstitial and the page-level script tag

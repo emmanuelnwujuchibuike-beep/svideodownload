@@ -161,6 +161,20 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  /*
+    Publish the header's bottom edge so the top ad bar can sit DIRECTLY BELOW it
+    (owner: "make the ad slot … be below the top header"). When the header is
+    hidden by scroll, this collapses to 0 so the ad slides up to just under the
+    safe-area inset (the ad's own `top` maxes with `--frenz-safe-top`, so it never
+    enters the notch). Header height = the safe-area pad + the h-16 (4rem) bar.
+  */
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--frenz-header-bottom",
+      hidden && !open ? "0px" : "calc(var(--frenz-safe-top) + 4rem)",
+    );
+  }, [hidden, open]);
+
   /**
    * Pending unmount from a close that is still animating. Held so a tap during
    * the slide-out can cancel it and slide the sheet back in.
@@ -225,18 +239,11 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
     <>
     <header
       style={{
-        // Sit BELOW the top ad bar when one is present (it publishes its height as
-        // --frenz-topad-h). When there's no ad the var is 0, so this is top:0 —
-        // exactly as before.
-        top: "var(--frenz-topad-h, 0px)",
-        // The ad bar already clears the safe-area inset when present, so only add
-        // the header's own inset padding when there is no ad above it.
-        paddingTop: "max(0px, calc(var(--frenz-safe-top) - var(--frenz-topad-h, 0px)))",
-        // Slide up behind the ad on scroll-down; kept visible while the drawer is open.
+        // Slide up out of view on scroll-down; kept visible while the drawer is open.
         transform: hidden && !open ? "translateY(-100%)" : undefined,
       }}
       className={cn(
-        "fixed inset-x-0 z-50 backdrop-blur-xl transition-transform duration-300",
+        "fixed inset-x-0 top-0 z-50 pt-[var(--frenz-safe-top)] backdrop-blur-xl transition-transform duration-300",
         desktopHidden && "lg:hidden",
         social ? "border-b border-border/20 bg-background/60" : "border-b border-border/40 bg-background/85 supports-[backdrop-filter]:bg-background/70",
       )}

@@ -9,34 +9,37 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * The landing page's app-style bottom nav — a fixed bar pinned to the bottom on
- * mobile, matching `public/newlanding.jpg` (owner chose the "fixed overlay"
- * treatment). It gives the marketing page a native-app feel and hands a
- * signed-out visitor the four doors the app opens with.
+ * The app-style bottom nav for the marketing site — a premium LIQUID-GLASS bar
+ * (iOS 26 / WhatsApp style: translucent, heavily blurred + saturated, floating low)
+ * pinned to the bottom on mobile, on EVERY marketing page (owner: "the bottom nav is
+ * supposed to be in all pages … make it premium liquid glass just like ios whatsapp
+ * … go more below to match native-app feel"). Mounted from the marketing layout.
  *
  * ── Real routes only ──────────────────────────────────────────────────────────
- * Reels → the full-screen deck; History → the download library; Home → here;
- * Profile → sign-in (a signed-out visitor has no profile yet). A nav item that
+ * Reels → the full-screen deck; History → the download library; Home → the landing;
+ * Profile → the landing profile page (which routes on to /login). A nav item that
  * 404s is the chrome version of the defect the Reality Ledger catches in copy.
  *
- * Mobile only (`lg:hidden`): desktop already has the full header. The wrapper is
- * click-through (`pointer-events-none`) except the pill itself, so it never traps
- * a tap on the page behind it, and it clears the home-indicator inset.
+ * Mobile only (`lg:hidden`): desktop has the full header. The wrapper is
+ * click-through except the pill, and it clears the home-indicator inset while
+ * sitting as low as the safe area allows.
  */
 const ITEMS = [
   { href: "/reels", label: "Reels", icon: FrenzReelsOutline },
   { href: "/library", label: "History", icon: History },
   { href: "/", label: "Home", icon: FrenzHomeSolid, active: true },
-  { href: "/login", label: "Profile", icon: FrenzPersonSolid },
+  { href: "/profile", label: "Profile", icon: FrenzPersonSolid },
 ] as const;
 
 export function MobileAppNav() {
   return (
     <nav
       aria-label="App"
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-30 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-3 pb-[max(0.35rem,env(safe-area-inset-bottom))] lg:hidden"
     >
-      <div className="pointer-events-auto mx-auto flex max-w-sm items-center justify-around rounded-full border border-border/60 bg-card/95 px-2 py-1.5 shadow-2xl backdrop-blur-md">
+      {/* Liquid glass: translucent card, heavy blur + saturation, a bright hairline
+          top edge (the "glass" highlight) and a soft floating shadow. */}
+      <div className="pointer-events-auto mx-auto flex max-w-sm items-center justify-around gap-1 rounded-[1.9rem] border border-white/50 bg-white/55 px-2 py-1.5 shadow-[0_10px_40px_-8px_rgba(15,23,42,0.28)] ring-1 ring-black/[0.04] backdrop-blur-2xl backdrop-saturate-[1.8] dark:border-white/10 dark:bg-neutral-900/45 dark:ring-white/10">
         {ITEMS.map((item) => {
           const active = "active" in item && item.active;
           return (
@@ -44,14 +47,14 @@ export function MobileAppNav() {
               key={item.label}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              className="flex flex-1 flex-col items-center gap-1 rounded-2xl py-1.5"
+              className="flex flex-1 flex-col items-center gap-1 rounded-2xl py-1"
             >
               <span
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-full transition",
                   active
                     ? "bg-brand text-white shadow-lg shadow-violet-500/30"
-                    : "text-muted-foreground",
+                    : "text-neutral-500 dark:text-neutral-300",
                 )}
               >
                 <item.icon className="h-5 w-5" />
@@ -59,7 +62,7 @@ export function MobileAppNav() {
               <span
                 className={cn(
                   "text-[10px] font-semibold leading-none",
-                  active ? "text-primary" : "text-muted-foreground",
+                  active ? "text-primary" : "text-neutral-500 dark:text-neutral-300",
                 )}
               >
                 {item.label}

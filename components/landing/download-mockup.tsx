@@ -1,15 +1,19 @@
-import { ArrowDownToLine, ClipboardPaste, Cloud, Download, FileVideo, Infinity as InfinityIcon, Wifi } from "lucide-react";
+import { ArrowDownToLine, Box, ClipboardPaste, Cloud, Download, Infinity as InfinityIcon, ShoppingBag, Wifi } from "lucide-react";
 
 import { FEATURES } from "@/components/landing/features-grid";
 
 /**
  * The second phone mockup — the "Downloads" app screen — with the six product
- * features floating around it, per `public/newlanding.jpg`. It follows the
- * "Download anything" paste card in the page flow, exactly as the reference shows.
+ * features around it, per `public/newlanding.jpg`. It follows the "Download
+ * anything" paste card in the page flow.
  *
- * A decorative illustration (the numbers are the same illustrative kind the hero
- * phone uses — storage/size figures for a made-up account, never presented as site
- * stats). Server component, zero client JS, no `will-change`.
+ * Layout: on desktop the six cards flank the phone (3 left · phone · 3 right, as in
+ * the reference). On a narrow phone that doesn't fit, so the phone leads and the six
+ * cards drop into ONE even 2×3 grid — never two lopsided 3-in-a-2-col grids.
+ *
+ * A decorative illustration (storage/size figures are the same illustrative kind the
+ * hero phone uses — a made-up account, never presented as site stats). Server
+ * component, zero client JS.
  */
 
 function FeatureCard({ feature }: { feature: (typeof FEATURES)[number] }) {
@@ -25,119 +29,127 @@ function FeatureCard({ feature }: { feature: (typeof FEATURES)[number] }) {
   );
 }
 
+const Phone = (
+  <div className="relative mx-auto w-full max-w-[290px]">
+    <div aria-hidden className="absolute inset-0 -z-10 scale-105 rounded-[3rem] bg-gradient-to-br from-blue-500/20 via-violet-500/15 to-purple-600/20 blur-3xl" />
+    <div className="relative aspect-[776/1630] rounded-[2.6rem] border-[3px] border-neutral-800 bg-neutral-900 p-[3px] shadow-[0_30px_60px_-20px_rgba(0,0,0,0.5)]">
+      <div className="relative h-full overflow-hidden rounded-[2.35rem] border-[4px] border-black bg-neutral-50">
+        {/* Dynamic Island */}
+        <div className="absolute left-1/2 top-2 z-20 h-[1.3rem] w-[4.6rem] -translate-x-1/2 rounded-full bg-black" />
+
+        <div className="flex h-full flex-col gap-2.5 px-3 pb-3 pt-2.5 text-neutral-900">
+          {/* status bar */}
+          <div className="flex items-center justify-between px-2 text-[10px] font-semibold text-neutral-900">
+            <span>12:20</span>
+            <span className="flex items-center gap-1.5">
+              <Wifi className="h-3 w-3" strokeWidth={2.5} />
+              <span className="relative h-[10px] w-[20px] rounded-[3px] ring-1 ring-neutral-900/70">
+                <span className="absolute inset-[1.5px] right-[3px] rounded-[1px] bg-neutral-900" />
+              </span>
+            </span>
+          </div>
+
+          {/* header — "Downloads" + light lavender download button */}
+          <div className="flex items-center justify-between px-1 pt-1">
+            <span className="text-base font-extrabold tracking-tight">Downloads</span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-300">
+              <ArrowDownToLine className="h-4 w-4" />
+            </span>
+          </div>
+
+          {/* paste bar */}
+          <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-2.5 py-2 shadow-sm">
+            <span className="flex-1 truncate text-[10px] text-neutral-400">Paste any link here</span>
+            <span className="inline-flex items-center gap-1 rounded-lg bg-neutral-100 px-2 py-1 text-[9px] font-semibold text-neutral-600">
+              <ClipboardPaste className="h-2.5 w-2.5" /> Paste
+            </span>
+          </div>
+
+          {/* storage card */}
+          <div className="rounded-2xl border border-neutral-200 bg-white p-2.5 shadow-sm">
+            <div className="flex items-start justify-between">
+              <span>
+                <span className="flex items-center gap-1 text-[10px] font-bold">
+                  <Cloud className="h-3 w-3 text-violet-500" /> Storage used
+                </span>
+                <span className="mt-0.5 block text-[8px] leading-tight text-neutral-400">Saved privately on your<br />private cloud · Business.</span>
+              </span>
+              <span className="text-right">
+                <span className="block text-sm font-extrabold">495 MB</span>
+                <span className="flex items-center justify-end gap-0.5 text-[8px] text-neutral-400">
+                  of <InfinityIcon className="h-2.5 w-2.5" /> unlimited
+                </span>
+              </span>
+            </div>
+            <div className="mt-2 flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1.5 text-[8px] font-medium text-emerald-700">
+              <ShoppingBag className="h-2.5 w-2.5 shrink-0" /> Unlimited storage — no download limits on Business.
+            </div>
+          </div>
+
+          {/* two tiles */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-2xl border border-neutral-200 bg-white p-2.5 shadow-sm">
+              <Download className="h-3.5 w-3.5 text-violet-500" />
+              <p className="mt-1.5 text-base font-extrabold leading-none">60</p>
+              <p className="text-[9px] font-semibold text-neutral-500">Downloads</p>
+              <p className="text-[8px] text-neutral-400">All time</p>
+            </div>
+            <div className="rounded-2xl border border-neutral-200 bg-white p-2.5 shadow-sm">
+              <Box className="h-3.5 w-3.5 text-blue-500" />
+              <p className="mt-1.5 text-base font-extrabold leading-none">495 MB</p>
+              <p className="text-[9px] font-semibold text-neutral-500">Total size</p>
+              <p className="text-[8px] text-neutral-400">avg 8.3 MB</p>
+            </div>
+          </div>
+
+          {/* recent */}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between px-0.5">
+              <span className="text-[10px] font-bold">Recent Downloads</span>
+              <span className="text-[9px] font-semibold text-violet-500">See all</span>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-1.5 shadow-sm">
+              <span className="h-9 w-9 shrink-0 rounded-lg bg-gradient-to-br from-rose-400 to-fuchsia-500" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[10px] font-semibold">Video.mp4</span>
+                <span className="block text-[8px] text-neutral-400">12.5 MB · MP4</span>
+              </span>
+              <ArrowDownToLine className="h-3.5 w-3.5 text-violet-500" />
+            </div>
+          </div>
+
+          <div className="flex-1" />
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 export function DownloadMockup() {
   const left = FEATURES.slice(0, 3);
   const right = FEATURES.slice(3, 6);
 
   return (
     <section className="container max-w-6xl py-8 sm:py-12">
-      <div className="grid items-center gap-6 lg:grid-cols-[1fr_auto_1fr] lg:gap-8">
-        {/* Left feature cards */}
-        <div className="order-2 grid grid-cols-2 gap-4 lg:order-1 lg:grid-cols-1">
+      {/* Mobile / tablet: phone on top, all six cards in one even 2×3 grid. */}
+      <div className="lg:hidden">
+        {Phone}
+        <div className="mt-8 grid grid-cols-2 gap-4">
+          {FEATURES.map((f) => (
+            <FeatureCard key={f.title} feature={f} />
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop: 3 cards · phone · 3 cards. */}
+      <div className="hidden items-center gap-8 lg:grid lg:grid-cols-[1fr_auto_1fr]">
+        <div className="space-y-4">
           {left.map((f) => (
             <FeatureCard key={f.title} feature={f} />
           ))}
         </div>
-
-        {/* Phone — Downloads screen */}
-        <div className="order-1 mx-auto w-full max-w-[300px] lg:order-2">
-          <div className="relative">
-            <div aria-hidden className="absolute inset-0 -z-10 scale-105 rounded-[3rem] bg-gradient-to-br from-blue-500/20 via-violet-500/15 to-purple-600/20 blur-3xl" />
-            <div className="relative aspect-[776/1630] rounded-[2.6rem] border-[3px] border-neutral-800 bg-neutral-900 p-[3px] shadow-[0_30px_60px_-20px_rgba(0,0,0,0.5)]">
-              <div className="relative h-full overflow-hidden rounded-[2.35rem] border-[4px] border-black bg-neutral-50">
-                {/* Dynamic Island */}
-                <div className="absolute left-1/2 top-2 z-20 h-[1.3rem] w-[4.6rem] -translate-x-1/2 rounded-full bg-black" />
-
-                <div className="flex h-full flex-col gap-2.5 px-3 pb-3 pt-2.5 text-neutral-900">
-                  {/* status bar */}
-                  <div className="flex items-center justify-between px-2 text-[10px] font-semibold text-neutral-900">
-                    <span>12:20</span>
-                    <span className="flex items-center gap-1.5">
-                      <Wifi className="h-3 w-3" strokeWidth={2.5} />
-                      <span className="relative h-[10px] w-[20px] rounded-[3px] ring-1 ring-neutral-900/70">
-                        <span className="absolute inset-[1.5px] right-[3px] rounded-[1px] bg-neutral-900" />
-                      </span>
-                    </span>
-                  </div>
-
-                  {/* header */}
-                  <div className="flex items-center justify-between px-1 pt-1">
-                    <span className="text-base font-extrabold tracking-tight">Downloads</span>
-                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow">
-                      <ArrowDownToLine className="h-4 w-4" />
-                    </span>
-                  </div>
-
-                  {/* paste bar */}
-                  <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-2.5 py-2 shadow-sm">
-                    <span className="flex-1 truncate text-[10px] text-neutral-400">Paste any link here</span>
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-neutral-100 px-2 py-1 text-[9px] font-semibold text-neutral-600">
-                      <ClipboardPaste className="h-2.5 w-2.5" /> Paste
-                    </span>
-                  </div>
-
-                  {/* storage card */}
-                  <div className="rounded-2xl border border-neutral-200 bg-white p-2.5 shadow-sm">
-                    <div className="flex items-start justify-between">
-                      <span>
-                        <span className="flex items-center gap-1 text-[10px] font-bold">
-                          <Cloud className="h-3 w-3 text-violet-500" /> Storage used
-                        </span>
-                        <span className="mt-0.5 block text-[8px] text-neutral-400">Saved privately on your cloud · Business</span>
-                      </span>
-                      <span className="text-right">
-                        <span className="block text-sm font-extrabold">495 MB</span>
-                        <span className="flex items-center justify-end gap-0.5 text-[8px] text-neutral-400">
-                          of <InfinityIcon className="h-2.5 w-2.5" /> unlimited
-                        </span>
-                      </span>
-                    </div>
-                    <div className="mt-2 rounded-lg bg-emerald-50 px-2 py-1.5 text-[8px] font-medium text-emerald-700">
-                      Unlimited storage — no download limits on Business.
-                    </div>
-                  </div>
-
-                  {/* two tiles */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-2xl border border-neutral-200 bg-white p-2.5 shadow-sm">
-                      <Download className="h-3.5 w-3.5 text-violet-500" />
-                      <p className="mt-1.5 text-base font-extrabold leading-none">60</p>
-                      <p className="text-[9px] font-semibold text-neutral-500">Downloads</p>
-                      <p className="text-[8px] text-neutral-400">All time</p>
-                    </div>
-                    <div className="rounded-2xl border border-neutral-200 bg-white p-2.5 shadow-sm">
-                      <FileVideo className="h-3.5 w-3.5 text-blue-500" />
-                      <p className="mt-1.5 text-base font-extrabold leading-none">495 MB</p>
-                      <p className="text-[9px] font-semibold text-neutral-500">Total size</p>
-                      <p className="text-[8px] text-neutral-400">avg 8.3 MB</p>
-                    </div>
-                  </div>
-
-                  {/* recent */}
-                  <div>
-                    <div className="mb-1.5 flex items-center justify-between px-0.5">
-                      <span className="text-[10px] font-bold">Recent Downloads</span>
-                      <span className="text-[9px] font-semibold text-violet-500">See all</span>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-1.5 shadow-sm">
-                      <span className="h-9 w-9 shrink-0 rounded-lg bg-gradient-to-br from-rose-400 to-fuchsia-500" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[10px] font-semibold">Video.mp4</span>
-                        <span className="block text-[8px] text-neutral-400">12.5 MB · MP4</span>
-                      </span>
-                      <ArrowDownToLine className="h-3.5 w-3.5 text-violet-500" />
-                    </div>
-                  </div>
-
-                  <div className="flex-1" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right feature cards */}
-        <div className="order-3 grid grid-cols-2 gap-4 lg:grid-cols-1">
+        {Phone}
+        <div className="space-y-4">
           {right.map((f) => (
             <FeatureCard key={f.title} feature={f} />
           ))}

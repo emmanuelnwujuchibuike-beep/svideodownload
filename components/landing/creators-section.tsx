@@ -1,6 +1,7 @@
-import { ArrowRight, Check, Gem, Heart, MessageCircle, Play, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Gem, MessageCircle, Sparkles } from "lucide-react";
 import Link from "next/link";
 
+import { FeedGridGallery } from "@/components/landing/feed-grid-gallery";
 import { getLandingSettings } from "@/lib/landing/settings";
 
 /**
@@ -23,25 +24,6 @@ import { getLandingSettings } from "@/lib/landing/settings";
  * Same rules as the hero: no images, compositor-only motion, no `will-change`.
  */
 
-/** Compact view count — 1.2K rather than 1234. */
-function compactCount(n: number): string {
-  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
-}
-
-/*
-  @sourced illustrative — decorative engagement for this aria-hidden showcase panel
-  ONLY, the documented exception (lib/content/showcase-stats.ts). The tiles now show
-  ADMIN-uploaded marketing images, not real user posts, so these counts dress the
-  design the way the reference does; they are never presented as, or written as,
-  real statistics.
-*/
-const FALLBACK = [
-  { views: 41200, likes: 3800 },
-  { views: 28400, likes: 2100 },
-  { views: 63100, likes: 5400 },
-  { views: 19700, likes: 1500 },
-];
-
 const BENEFITS = [
   "Lightning fast downloads",
   "Cross-device sync",
@@ -52,93 +34,34 @@ const BENEFITS = [
 ];
 
 /**
- * The left-hand visual.
+ * The left-hand visual — a 4:5 panel filled with the PRODUCT: the admin feed-grid
+ * images (now an interactive, downloadable gallery), a completed-download card, a
+ * chat bubble and a rewards chip — the same surfaces the checklist beside it
+ * describes.
  *
- * First version was three abstract plates on a gradient and read as unfinished
- * (owner: "the container next to built for creators looks too empty"). Abstract
- * shapes cannot fill a 4:5 panel — there is nothing for the eye to land on.
- *
- * This version fills it with the PRODUCT instead: a reels grid, a completed
- * download, a chat bubble and a rewards chip — the same surfaces the checklist
- * beside it is describing. It is denser, it is on-brand, and it says something
- * true about the app rather than being decoration.
- *
- * Still zero images and compositor-only motion, so it costs nothing against the
- * page budget. When the mockup's rendered artwork exists, swap this whole
- * component for an <Image>; the 4:5 ratio is reserved so nothing shifts.
+ * The gallery is the one interactive part (a client island); everything else is
+ * decorative (`aria-hidden`) gradient/glow, compositor-only motion, no
+ * `will-change`, so the panel still costs little against the page budget.
  */
 function ArtPanel({ images }: { images: string[] }) {
   return (
-    <div
-      aria-hidden
-      className="relative aspect-[4/5] overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-[#070b1c]"
-    >
-      <div className="absolute inset-0 bg-[radial-gradient(90%_70%_at_50%_15%,rgba(167,139,250,0.28)_0%,rgba(191,219,254,0.35)_45%,transparent_75%)] dark:bg-[radial-gradient(90%_70%_at_50%_15%,rgba(139,92,246,0.4)_0%,rgba(30,27,75,0.5)_45%,transparent_75%)]" />
-      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(to_top,rgba(56,189,248,0.22)_0%,rgba(168,85,247,0.12)_40%,transparent_100%)] dark:bg-[linear-gradient(to_top,rgba(56,189,248,0.35)_0%,rgba(168,85,247,0.18)_40%,transparent_100%)]" />
+    <div className="relative aspect-[4/5] overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-[#070b1c]">
+      <div aria-hidden className="absolute inset-0 bg-[radial-gradient(90%_70%_at_50%_15%,rgba(167,139,250,0.28)_0%,rgba(191,219,254,0.35)_45%,transparent_75%)] dark:bg-[radial-gradient(90%_70%_at_50%_15%,rgba(139,92,246,0.4)_0%,rgba(30,27,75,0.5)_45%,transparent_75%)]" />
+      <div aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(to_top,rgba(56,189,248,0.22)_0%,rgba(168,85,247,0.12)_40%,transparent_100%)] dark:bg-[linear-gradient(to_top,rgba(56,189,248,0.35)_0%,rgba(168,85,247,0.18)_40%,transparent_100%)]" />
 
       {/*
         Laid out in FLOW, not absolutely.
 
-        The first attempt positioned the grid absolutely and the two bottom tiles
-        overflowed the panel and were clipped, with the download card landing on
-        top of them. A padded flex column cannot overflow: the grid takes the space
-        it needs, the card sits under it, and the panel's 4:5 box stays authoritative
-        at every width.
+        A padded flex column cannot overflow: the grid takes the space it needs, the
+        card sits under it, and the panel's 4:5 box stays authoritative at every
+        width. The grid itself is now the interactive FeedGridGallery — each admin
+        image opens full screen with a Download button (owner, 2026-07-26).
       */}
       <div className="absolute inset-0 flex flex-col justify-center gap-3 p-[9%]">
-        <div className="grid grid-cols-2 gap-2.5">
-          {[
-            "from-rose-500/70 to-fuchsia-600/70",
-            "from-blue-500/70 to-indigo-600/70",
-            "from-violet-500/70 to-purple-600/70",
-            "from-sky-500/70 to-cyan-600/70",
-          ].map((tint, i) => (
-            <span
-              key={i}
-              className={`relative flex aspect-[4/5] items-end overflow-hidden rounded-xl bg-gradient-to-br ${tint} shadow-lg ring-1 ring-white/20`}
-            >
-              {/*
-                An ADMIN-uploaded marketing image (Admin → Landing page) when the
-                slot is set, with the gradient behind it as the fallback — so an
-                unfilled slot or an image that fails to load degrades to the design
-                rather than a broken tile. Owner (2026-07-26): this grid shows ONLY
-                admin images, never real user posts.
-
-                Raw <img>, not next/image: the poster may be a Supabase public URL
-                or own-hosted media, and next/image's server-side fetch is answered
-                403 by some source CDNs (documented on the phone deck).
-              */}
-              {images[i] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={images[i]!}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              ) : null}
-              <span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/45 to-transparent" />
-              {/* Illustrative engagement (see FALLBACK) — decorative chrome on this
-                  aria-hidden marketing panel, matching the reference design. Not
-                  real post statistics. */}
-              <span className="relative m-2 flex items-center gap-2 text-[9px] font-semibold text-white/90">
-                <span className="flex items-center gap-1">
-                  <Play className="h-2.5 w-2.5 fill-white/90" />
-                  {compactCount(FALLBACK[i]!.views)}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Heart className="h-2.5 w-2.5 fill-white/90" />
-                  {compactCount(FALLBACK[i]!.likes)}
-                </span>
-              </span>
-
-            </span>
-          ))}
-        </div>
+        <FeedGridGallery images={images} />
 
         {/* Download-complete card. */}
-        <div className="flex items-center gap-2 rounded-2xl border border-white/20 bg-white/85 p-2.5 shadow-xl backdrop-blur dark:bg-white/10">
+        <div aria-hidden className="flex items-center gap-2 rounded-2xl border border-white/20 bg-white/85 p-2.5 shadow-xl backdrop-blur dark:bg-white/10">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500 text-white">
             <Check className="h-4 w-4" strokeWidth={3} />
           </span>
@@ -151,12 +74,14 @@ function ArtPanel({ images }: { images: string[] }) {
 
       {/* Chat bubble + rewards chip, for depth at the edges. */}
       <span
+        aria-hidden
         className="frenz-float absolute left-[4%] top-[46%] flex items-center gap-1.5 rounded-full border border-white/20 bg-white/85 px-2.5 py-1.5 text-[10px] font-semibold text-slate-900 shadow-lg backdrop-blur dark:bg-white/10 dark:text-white"
         style={{ animationDelay: "-2s" }}
       >
         <MessageCircle className="h-3 w-3 text-blue-500" /> Nice one!
       </span>
       <span
+        aria-hidden
         className="frenz-float absolute right-[3%] top-[30%] flex items-center gap-1.5 rounded-full border border-white/20 bg-white/85 px-2.5 py-1.5 text-[10px] font-semibold text-slate-900 shadow-lg backdrop-blur dark:bg-white/10 dark:text-white"
         style={{ animationDelay: "-4s" }}
       >

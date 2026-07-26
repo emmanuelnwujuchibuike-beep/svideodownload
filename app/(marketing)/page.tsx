@@ -8,7 +8,6 @@ import { MobileAppNav } from "@/components/landing/mobile-app-nav";
 import { ProductGrid } from "@/components/landing/product-grid";
 import { PlatformShowcase } from "@/components/landing/platform-showcase";
 import { StatsCounter } from "@/components/landing/stats-counter";
-import { TrendingToday } from "@/components/landing/trending-today";
 import { TrustBar } from "@/components/landing/trust-bar";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -138,12 +137,6 @@ export default function HomePage() {
         </div>
 
         <PlatformShowcase />
-
-        {/* Data-backed sections stream in behind the hero so the page paints
-            instantly instead of blocking the first byte on their DB queries. */}
-        <Suspense fallback={<section className="min-h-[280px]" />}>
-          <TrendingToday />
-        </Suspense>
 
         {/* Stats band */}
         <StatsCounter />

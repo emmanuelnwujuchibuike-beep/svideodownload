@@ -143,6 +143,8 @@ import { fetchMessagingStats } from "@/lib/social/messaging-stats";
 import { listReportedTargets } from "@/lib/social/moderation";
 import { fetchPushDeliveryStats } from "@/lib/social/push-delivery-stats";
 import { listAds } from "@/lib/monetization/ads";
+import { LandingEditor } from "@/features/admin/landing-editor";
+import { getLandingSettings } from "@/lib/landing/settings";
 import { getPlanLimits } from "@/lib/monetization/plan";
 import { getPricing } from "@/lib/monetization/pricing";
 import { getMonetizationSettings } from "@/lib/monetization/settings";
@@ -335,6 +337,12 @@ export default async function AdminPage() {
             </Suspense>
           </AdminPanel>
 
+          <AdminPanel id="landing">
+            <Suspense fallback={<PanelSkeleton />}>
+              <LandingSection />
+            </Suspense>
+          </AdminPanel>
+
           <AdminPanel id="discovery">
             <DiscoveryCatalog
               entities={getSearchableEntities()}
@@ -503,6 +511,11 @@ async function ModerationSection() {
       <AppealsQueue appeals={pendingAppeals} />
     </>
   );
+}
+
+async function LandingSection() {
+  const landing = await getLandingSettings();
+  return <LandingEditor settings={landing} />;
 }
 
 async function ContentSection() {

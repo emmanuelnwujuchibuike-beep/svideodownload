@@ -1,25 +1,33 @@
-import { ArrowDown, Feather, Play, ShieldCheck, Sparkles, WifiOff } from "lucide-react";
+import { ArrowDown, CheckCircle2, Play, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
 import { HeroEffects } from "@/components/landing/hero-effects";
+import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
 import { Downloader } from "@/features/downloader/downloader";
 import { SharedLinkDownloader } from "@/features/downloader/shared-link-downloader";
 
 /**
- * The four capability chips beneath the CTAs, per `public/main landing page.jpg`.
- *
- * Every one is a checkable product fact, not a scale claim: no app store (the PWA
- * is the product), offline via the service worker, no native install, and the
- * privacy posture already documented in the genome. They pass the Reality Ledger
- * for the same reason the stats band does — they describe what the thing IS.
+ * The reference checklist beneath the CTAs (public/newlandingfull.jpg). Every one
+ * is a checkable product fact, not a scale claim — no account needed to download,
+ * the downloader is free, and it is fast + secure — so they pass the Reality
+ * Ledger for the same reason the stats band does: they describe what the thing IS.
  */
-const CHIPS = [
-  { icon: WifiOff, title: "Works Offline", sub: "Smart Caching" },
-  { icon: Feather, title: "Lightweight", sub: "Save Data & Storage" },
-  { icon: ShieldCheck, title: "Secure", sub: "Your Data, Our Priority" },
-];
+const CHECKS = ["No sign up required", "100% Free to use", "Fast & Secure"];
+
+/**
+ * The avatar stack's illustrated faces — cartoon avatars only, never a real
+ * person's photo (this is public marketing). Deliberately NOT captioned with a
+ * user count or a star rating: both would be unsourceable scale claims the ledger
+ * fails the build on, and neither has a system behind it to make true.
+ */
+const FACES = [
+  { name: "Amara", female: true, from: "from-rose-500 to-pink-500" },
+  { name: "Kwame", female: false, from: "from-blue-500 to-indigo-500" },
+  { name: "Lena", female: true, from: "from-violet-500 to-purple-500" },
+  { name: "Diego", female: false, from: "from-emerald-500 to-teal-500" },
+] as const;
 
 export function Hero() {
   return (
@@ -40,22 +48,25 @@ export function Hero() {
         <div className="text-center lg:text-left">
           <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
             <Sparkles className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
-            All-in-One Platform
+            All-in-One Downloader &amp; Social Hub
           </span>
 
+          {/* "Download. Connect. Enjoy." — the reference H1, middle word in the
+              brand gradient (public/newlandingfull.jpg). */}
           <h1 className="text-5xl font-extrabold leading-[1.02] tracking-[-0.04em] text-slate-900 dark:text-white sm:text-6xl lg:text-[4.25rem]">
-            Everything You Love.
+            Download.
             <br />
-            <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400 text-transparent">
-              All in One
-            </span>{" "}
-            Place.
+            <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
+              Connect.
+            </span>
+            <br />
+            Enjoy.
           </h1>
 
           <p className="mx-auto mt-6 max-w-lg text-pretty text-base leading-relaxed text-slate-600 dark:text-white/70 sm:text-lg lg:mx-0">
-            Frenz is your super app for downloading, watching, creating, sharing and
-            connecting. Save content. Create more. Earn rewards. All{" "}
-            <span className="font-medium text-blue-600 dark:text-blue-300">without consuming your phone storage.</span>
+            Frenz lets you download videos, photos, stories and reels from the
+            platforms you already use — then share, connect and enjoy, all in{" "}
+            <span className="font-medium text-blue-600 dark:text-blue-300">one beautiful app.</span>
           </p>
 
           {/* CTAs */}
@@ -71,25 +82,46 @@ export function Hero() {
               href="#download"
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 via-violet-600 to-fuchsia-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/30 transition hover:opacity-95 active:scale-[0.99] sm:w-auto"
             >
-              Download Now <ArrowDown className="h-4 w-4" />
+              Start Downloading <ArrowDown className="h-4 w-4" />
             </Link>
             <Link
               href="/features"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-7 py-3.5 text-sm font-semibold text-slate-900 shadow-soft transition hover:border-slate-400 dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur dark:hover:border-white/30 active:scale-[0.99] sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-7 py-3.5 text-sm font-semibold text-slate-900 shadow-soft transition hover:border-slate-400 active:scale-[0.99] dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur dark:hover:border-white/30 sm:w-auto"
             >
               <Play className="h-4 w-4" /> Explore Features
             </Link>
           </div>
 
-          {/* Four capability chips */}
-          <div className="mt-10 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:gap-x-4">
-            {CHIPS.map((chip) => (
-              <div key={chip.title} className="text-left">
-                <chip.icon className="h-4 w-4 text-blue-600 dark:text-blue-300" />
-                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">{chip.title}</p>
-                <p className="text-[11px] leading-tight text-slate-500 dark:text-white/50">{chip.sub}</p>
-              </div>
+          {/* Reference checklist — three checkable product facts (no scale claims,
+              so the Reality Ledger passes): no account needed, the downloader is
+              free, and it is fast + secure. */}
+          <ul className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-3 lg:justify-start">
+            {CHECKS.map((label) => (
+              <li key={label} className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-white/80">
+                <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                {label}
+              </li>
             ))}
+          </ul>
+
+          {/* Social proof — the reference's avatar stack, but WITHOUT a fabricated
+              "50,000+ Happy Users" count or an invented star rating (there is no
+              review system to source one). Illustrative cartoon avatars, never real
+              faces, and an honest number-free line. See the Reality Ledger. */}
+          <div className="mt-8 flex items-center justify-center gap-3 lg:justify-start">
+            <div className="flex -space-x-2.5">
+              {FACES.map((f) => (
+                <span
+                  key={f.name}
+                  className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br ${f.from} ring-2 ring-background`}
+                >
+                  <BitmojiAvatar seed={f.name} female={f.female} className="h-full w-full" />
+                </span>
+              ))}
+            </div>
+            <p className="text-sm font-medium text-slate-600 dark:text-white/70">
+              Built for creators &amp; everyday downloaders
+            </p>
           </div>
         </div>
 

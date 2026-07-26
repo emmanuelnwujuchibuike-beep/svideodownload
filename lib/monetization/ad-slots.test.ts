@@ -357,13 +357,13 @@ describe("Ad slots — no decorated empty boxes", () => {
     const furniture = stripComments(
       readFileSync(path.join(ROOT, "features/monetization/deferred-ad-furniture.tsx"), "utf8"),
     );
-    expect(furniture).toMatch(/<StickyBottomAd\b/);
+    expect(furniture).toMatch(/<TopBannerAd\b/);
     expect(furniture).toMatch(/<IdleInterstitial\b/);
 
-    // Mounting them in BOTH places is the other failure — two bottom bars and
+    // Mounting them in BOTH places is the other failure — two banners and
     // two idle timers on the one page that has them inline.
     const home = stripComments(readFileSync(path.join(ROOT, "app/(marketing)/page.tsx"), "utf8"));
-    expect(home, "landing page mounts a second bottom banner").not.toMatch(/<StickyBottomAd\b/);
+    expect(home, "landing page mounts a second top banner").not.toMatch(/<TopBannerAd\b/);
     expect(home, "landing page mounts a second idle interstitial").not.toMatch(/<IdleInterstitial\b/);
   });
 

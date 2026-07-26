@@ -112,6 +112,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "What the feed promotes, and the broadcast composer.",
   },
   {
+    id: "landing",
+    label: "Landing page",
+    category: "content",
+    icon: "Home",
+    blurb: "The public front door — the hero reels-mockup poster and the 2×2 feed-grid images every visitor sees. Only these images are admin-driven; the rest is baked in for speed.",
+  },
+  {
     id: "discovery",
     label: "Search & SEO",
     category: "content",

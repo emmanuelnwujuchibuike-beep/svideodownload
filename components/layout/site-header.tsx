@@ -133,6 +133,35 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
   }, [open]);
 
   /**
+   * Auto-hide on scroll-DOWN, reveal on scroll-UP (owner, 2026-07-26: "make the
+   * header … doesn't show on scrolling downwards, only the ad shows"). The top ad
+   * bar (features/monetization/top-banner-ad.tsx) is the topmost chrome and stays;
+   * the header slides up behind it, so a scroll-down leaves only the ad.
+   *
+   * Read behind one rAF so a burst of scroll events collapses to a single state
+   * change per frame, and never hidden near the very top — a header that vanishes
+   * on the first pixel of scroll reads as a glitch.
+   */
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    let last = window.scrollY;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        if (y > last + 4 && y > 140) setHidden(true);
+        else if (y < last - 4) setHidden(false);
+        last = y;
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  /**
    * Pending unmount from a close that is still animating. Held so a tap during
    * the slide-out can cancel it and slide the sheet back in.
    */
@@ -194,7 +223,24 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
 
   return (
     <>
-    <header className={cn("fixed inset-x-0 top-0 z-50 pt-[var(--frenz-safe-top)] backdrop-blur-xl", desktopHidden && "lg:hidden", social ? "border-b border-border/20 bg-background/60" : "border-b border-border/40 bg-background/85 supports-[backdrop-filter]:bg-background/70")}>
+    <header
+      style={{
+        // Sit BELOW the top ad bar when one is present (it publishes its height as
+        // --frenz-topad-h). When there's no ad the var is 0, so this is top:0 —
+        // exactly as before.
+        top: "var(--frenz-topad-h, 0px)",
+        // The ad bar already clears the safe-area inset when present, so only add
+        // the header's own inset padding when there is no ad above it.
+        paddingTop: "max(0px, calc(var(--frenz-safe-top) - var(--frenz-topad-h, 0px)))",
+        // Slide up behind the ad on scroll-down; kept visible while the drawer is open.
+        transform: hidden && !open ? "translateY(-100%)" : undefined,
+      }}
+      className={cn(
+        "fixed inset-x-0 z-50 backdrop-blur-xl transition-transform duration-300",
+        desktopHidden && "lg:hidden",
+        social ? "border-b border-border/20 bg-background/60" : "border-b border-border/40 bg-background/85 supports-[backdrop-filter]:bg-background/70",
+      )}
+    >
       <div className="container flex h-16 items-center justify-between">
         {/* Brand — hidden on mobile social surfaces (plain, full-bleed top bar) */}
         <Link href="/" className={cn("items-center", social ? "hidden lg:flex" : "flex")} onClick={() => setOpen(false)}>
@@ -348,7 +394,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
             aria-label="Close menu"
             onClick={closeMenu}
             className={cn(
-              "fixed inset-0 z-40 bg-background/60 backdrop-blur-sm transition-opacity duration-300 lg:hidden",
+              "fixed inset-0 z-[65] bg-background/60 backdrop-blur-sm transition-opacity duration-300 lg:hidden",
               shown ? "opacity-100" : "opacity-0",
             )}
           />
@@ -357,7 +403,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
             aria-modal="true"
             aria-label="Menu"
             className={cn(
-              "fixed bottom-0 right-0 top-0 z-50 flex w-[88%] min-w-[18rem] max-w-sm flex-col border-l border-border/60 bg-background shadow-2xl lg:hidden",
+              "fixed bottom-0 right-0 top-0 z-[70] flex w-[88%] min-w-[18rem] max-w-sm flex-col border-l border-border/60 bg-background shadow-2xl lg:hidden",
               "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
               shown ? "translate-x-0" : "translate-x-full",
             )}

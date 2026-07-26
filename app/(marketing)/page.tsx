@@ -4,6 +4,7 @@ import { CreatorsSection } from "@/components/landing/creators-section";
 import { CtaBanner } from "@/components/landing/cta-banner";
 import { Faq } from "@/components/landing/faq";
 import { Hero } from "@/components/landing/hero";
+import { MobileAppNav } from "@/components/landing/mobile-app-nav";
 import { ProductGrid } from "@/components/landing/product-grid";
 import { PlatformShowcase } from "@/components/landing/platform-showcase";
 import { StatsCounter } from "@/components/landing/stats-counter";
@@ -170,6 +171,11 @@ export default function HomePage() {
         </div>
         </main>
         <SiteFooter />
+        {/* Native-app bottom nav (mobile only). A spacer keeps the footer's last
+            row clear of the fixed pill, which otherwise covers exactly the strip
+            the legal links sit in. */}
+        <div aria-hidden className="h-24 lg:hidden" />
+        <MobileAppNav />
       </div>
       {/*
         The bottom banner, the idle interstitial and the page-level script tag

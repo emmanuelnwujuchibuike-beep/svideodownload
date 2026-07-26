@@ -12,7 +12,7 @@ import { prefetchZones } from "./ad-cache";
  *
  * ── Why defer it ──────────────────────────────────────────────────────────────
  *
- * The bottom banner, the idle interstitial, the exit unit and the page-level
+ * The top banner, the idle interstitial, the exit unit and the page-level
  * script loader live on every marketing page — including the landing page,
  * whose whole budget is a two-second cold open and whose LCP is gated on the
  * first hydration task finishing. Hydrating four more client components as part
@@ -21,7 +21,8 @@ import { prefetchZones } from "./ad-cache";
  *
  * None of it is needed at first PAINT. So all four are code-split out of the
  * initial bundle (`dynamic`) and mounted on the frame AFTER the first paint,
- * not during it.
+ * not during it. The top banner is `fixed` and only appears once its zone
+ * fills, so mounting it late still never shifts the hero.
  *
  * ── Data first, components a frame later ──────────────────────────────────────
  *
@@ -45,8 +46,8 @@ import { prefetchZones } from "./ad-cache";
  * render immediately; here they are deliberately mounted late, so there is
  * nothing racing the import.
  */
-const StickyBottomAd = dynamic(
-  () => import("./sticky-bottom-ad").then((m) => m.StickyBottomAd),
+const TopBannerAd = dynamic(
+  () => import("./top-banner-ad").then((m) => m.TopBannerAd),
   { ssr: false },
 );
 const IdleInterstitial = dynamic(
@@ -91,7 +92,7 @@ export function DeferredAdFurniture() {
 
   return (
     <>
-      <StickyBottomAd />
+      <TopBannerAd />
       <IdleInterstitial />
       <ExitIntent />
       <AdScripts />

@@ -179,13 +179,24 @@ export function parseMonetagSnippet(snippet: string | null | undefined): {
   const s = (snippet ?? "").trim();
   if (!s) return null;
 
-  const srcMatch = s.match(/src\s*=\s*["']([^"']+)["']/i);
+  // Monetag hands out the src as an attribute (`src="…"`) OR in its inline loader
+  // (`s.src='…'`). Match either — both are `src=<quote>URL<quote>`.
+  const srcMatch = s.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
   let src = (srcMatch?.[1] ?? "").trim();
   if (src.startsWith("//")) src = `https:${src}`;
   // Only a clean https script URL — never inline code, markup or http.
   if (!/^https:\/\/[^\s"'<>]+$/i.test(src)) return null;
 
-  const zone = s.match(/data-zone\s*=\s*["']?(\d{1,20})["']?/i)?.[1] ?? null;
+  /*
+    The zone can arrive three ways, and MISSING it is the "valid tag but no ad"
+    bug: the loader has no zone, so Monetag serves nothing.
+      1. as an attribute: `data-zone="12345"`
+      2. in Monetag's inline loader: `s.dataset.zone='12345'`
+      3. in the src query itself: `…/tag.min.js?z=12345` (already carried by `src`)
+    Cases 1 + 2 must be lifted onto the re-emitted script; case 3 rides along in
+    the URL, so `zone` staying null there is correct.
+  */
+  const zone = s.match(/(?:data-zone|dataset\.zone)\s*=\s*["']?(\d{1,20})/i)?.[1] ?? null;
   const cfAsync = /data-cfasync\s*=\s*["']?false["']?/i.test(s);
   return { src, zone, cfAsync };
 }

@@ -83,6 +83,37 @@ describe("parseMonetagSnippet — only a clean https script tag", () => {
     }
   });
 
+  it("carries the zone from Monetag's INLINE loader (the 'valid tag but no ad' bug)", () => {
+    // The exact shapes from the owner's per-type tags. The inline form sets the
+    // zone via `s.dataset.zone`, NOT a data-zone attribute — dropping it made the
+    // script load with no zone, so Monetag served nothing.
+    const inPagePush =
+      "<script>(function(s){s.dataset.zone='11414359',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>";
+    const vignette =
+      "<script>(function(s){s.dataset.zone='11414431',s.src='https://n6wxm.com/vignette.min.js'})</script>";
+
+    expect(parseMonetagSnippet(inPagePush)).toEqual({
+      src: "https://nap5k.com/tag.min.js",
+      zone: "11414359",
+      cfAsync: false,
+    });
+    expect(parseMonetagSnippet(vignette)).toEqual({
+      src: "https://n6wxm.com/vignette.min.js",
+      zone: "11414431",
+      cfAsync: false,
+    });
+  });
+
+  it("accepts a tag whose zone rides in the src query (?z=…)", () => {
+    // Push Notifications tag: zone is in the URL, not a data-zone attribute.
+    const push = '<script src="https://5gvci.com/act/files/tag.min.js?z=11414717" data-cfasync="false" async></script>';
+    const parsed = parseMonetagSnippet(push);
+    expect(parsed?.src).toBe("https://5gvci.com/act/files/tag.min.js?z=11414717");
+    expect(parsed?.cfAsync).toBe(true);
+    // zone stays null because it's carried in the URL — the re-emitted src keeps it.
+    expect(parsed?.zone).toBeNull();
+  });
+
   it("never returns a non-https src", () => {
     // Property, not example: whatever parses, its src starts https://
     for (const s of [TAG, '<script src="//a.b/c.js" data-zone="9">', 'src="//d.e/f.js"']) {

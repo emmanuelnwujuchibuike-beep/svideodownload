@@ -13,6 +13,47 @@ _Last updated: 2026‑07‑14 (batch 63 — owner's next round: wallpaper still 
 
 ---
 
+## 2026‑07‑26 (batch 10) — Enterprise Globalization Platform
+
+**9th registry-with-teeth map.** The "build the Globalization Platform from
+scratch" brief maps onto the i18n substrate made load-bearing on 07‑19 — read the
+code first, don't rebuild. What EXISTS and is honestly `live`: the locale registry
+with availability DERIVED from measured coverage + Accept-Language negotiation
+(`lib/i18n/locales.ts`), the typed UI-string catalogue with per-key English
+fallback (`lib/i18n/messages/*`), Intl formatting (`lib/i18n/format.ts`), honest
+hreflang (`lib/i18n/alternates.ts`), and the export/import pipeline with **no
+machine-translation step** (`scripts/i18n.mjs`).
+
+**Built:** `lib/platform/globalization-platform.ts` — 6 source-backed catalogues
+(services, regional formats, currency, timezone, localized surfaces, AI) sharing
+`{id, source, status}`, plus a `SupportedLocales` VIEW whose honesty is structural
+(availability derived from coverage, not maintained). `globalization-platform.test.ts`
+(+19) reuses the `sourceProblems` teeth + a fail-closed locale rule (English live,
+any 0-coverage locale planned). Admin **Globalization** section (System, icon
+`Languages`), read-only `features/admin/globalization-catalog.tsx` with a per-locale
+coverage bar. Registered in the Registry-of-Registries + engineering doc asset +
+`docs/GLOBALIZATION_PLATFORM.md`.
+
+**Honestly `partial`/`planned`, not overstated:** content translation is the 0086
+`translations`/`locales` schema — applied but **read by no code**, so `partial`
+(data-plane only), not live. Currency = formatting live, multi-currency/FX/tax
+planned. Timezone = quiet-hours are a **UTC-hour window** (`isWithinQuietHours`),
+NOT per-user zones — auto-detection/preference/scheduling planned. Native iOS/
+Android surfaces `planned` and noted as non-existent (Frenz is a PWA). The whole
+AI layer is planned, and the absent machine-translation is a **deliberate**
+position (0086: `machine` needs human review).
+
+🔴 **My own cross-catalogue uniqueness teeth caught `admin` used as both a service
+id and a surface id** → renamed the surface to `admin-platform`. All new code is
+admin-only (`/admin` is force-dynamic) → landing bundle + 2‑second budget untouched.
+
+Verified: tsc + lint clean, **872 tests** (was 853), build clean, budget green
+post-build. Security + performance gates: read-only static registry, no new
+surface, PASS. Now 9 platform maps: Config, Design, Engineering, Data, Search,
+Media, Notifications, Commerce, Globalization.
+
+---
+
 ## 2026‑07‑26 (batch 9) — Commerce Platform, Monetag+AdSense, Google hidden, browser fullscreen
 
 **Enterprise Commerce Platform** (8th registry-with-teeth map). Real revenue —

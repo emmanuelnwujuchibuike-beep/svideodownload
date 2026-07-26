@@ -103,6 +103,16 @@ import {
   getPaymentCapabilities,
   getSubscriptionTiers,
 } from "@/lib/platform/commerce-platform";
+import { GlobalizationCatalog } from "@/features/admin/globalization-catalog";
+import {
+  getCurrencyCapabilities,
+  getGlobalizationAi,
+  getGlobalizationServices,
+  getLocalizationSurfaces,
+  getRegionalFormats,
+  getSupportedLocales,
+  getTimezoneCapabilities,
+} from "@/lib/platform/globalization-platform";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -348,6 +358,18 @@ export default async function AdminPage() {
               delivery={getNotifDelivery()}
               preferences={getNotificationPreferences()}
               ai={getNotificationAi()}
+            />
+          </AdminPanel>
+
+          <AdminPanel id="globalization">
+            <GlobalizationCatalog
+              locales={getSupportedLocales()}
+              services={getGlobalizationServices()}
+              formats={getRegionalFormats()}
+              currency={getCurrencyCapabilities()}
+              timezone={getTimezoneCapabilities()}
+              surfaces={getLocalizationSurfaces()}
+              ai={getGlobalizationAi()}
             />
           </AdminPanel>
 

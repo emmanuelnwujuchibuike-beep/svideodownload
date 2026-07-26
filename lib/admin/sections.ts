@@ -142,6 +142,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "The Enterprise Globalization Platform described by itself: every locale, localization service, regional format, currency and timezone capability, localized surface and AI capability, mapped to real code. Locale coverage is measured, never declared.",
   },
   {
+    id: "workspaces",
+    label: "Workspaces",
+    category: "system",
+    icon: "LayoutGrid",
+    blurb: "The Enterprise Workspace Framework described by itself: every registered workspace, framework service, Platform Shell capability, navigation capability, lifecycle/shared-platform capability and extensibility/AI capability, mapped to real code. A modular monolith — micro-frontends and plugins are honestly planned.",
+  },
+  {
     id: "flags",
     label: "Feature flags",
     category: "system",

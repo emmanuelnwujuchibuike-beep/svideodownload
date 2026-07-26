@@ -35,7 +35,8 @@ export interface RegistryDef {
 }
 
 export const REGISTRIES: RegistryDef[] = [
-  { id: "product", name: "Product / Workspace / Feature Registry", governs: "Every product module — nav, RBAC, launcher, search all derive from it.", source: "lib/platform/modules.ts", status: "live" },
+  { id: "product", name: "Product / Workspace / Feature Registry", governs: "Every product module — nav, RBAC, launcher, search all derive from it.", source: "lib/platform/modules.ts", status: "live", note: "The workspace source of truth. The platform-level map of the shell, navigation engine, lifecycle, shared platform and extensibility is the Workspace Framework Registry below." },
+  { id: "workspace-platform", name: "Workspace Framework Registry", governs: "The Enterprise Workspace Framework mapped: registered workspaces, framework services, the Platform Shell, the navigation engine, lifecycle + shared-platform capabilities and the plugin/AI extensibility layer.", source: "lib/platform/workspace-platform.ts", status: "live", note: "A catalogue over what EXISTS — the module registry (kernel), the app shell, the nav engine and the service registry. Honest that this is a modular MONOLITH: independent deployment, version compatibility, the plugin framework and runtime AI reasoning are planned — docs/WORKSPACE_PLATFORM.md." },
   { id: "navigation", name: "Navigation Registry", governs: "Destinations, commands and workspaces for the command centre and nav.", source: "lib/navigation/registry.ts", status: "live" },
   { id: "feature-flags", name: "Feature-Flag Registry", governs: "Runtime toggles: kill switches, % rollouts, plan gates.", source: "lib/platform/flags.ts", status: "live" },
   { id: "experiments", name: "Experiment Registry", governs: "A/B tests: variants, weights, deterministic assignment.", source: "lib/platform/experiments.ts", status: "live" },

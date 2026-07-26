@@ -113,6 +113,15 @@ import {
   getSupportedLocales,
   getTimezoneCapabilities,
 } from "@/lib/platform/globalization-platform";
+import { WorkspaceCatalog } from "@/features/admin/workspace-catalog";
+import {
+  getExtensibilityAndAi,
+  getFrameworkServices,
+  getLifecycleAndPlatform,
+  getNavigationEngine,
+  getRegisteredWorkspaces,
+  getShellCapabilities,
+} from "@/lib/platform/workspace-platform";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
@@ -370,6 +379,17 @@ export default async function AdminPage() {
               timezone={getTimezoneCapabilities()}
               surfaces={getLocalizationSurfaces()}
               ai={getGlobalizationAi()}
+            />
+          </AdminPanel>
+
+          <AdminPanel id="workspaces">
+            <WorkspaceCatalog
+              workspaces={getRegisteredWorkspaces()}
+              services={getFrameworkServices()}
+              shell={getShellCapabilities()}
+              navigation={getNavigationEngine()}
+              lifecycle={getLifecycleAndPlatform()}
+              extensibility={getExtensibilityAndAi()}
             />
           </AdminPanel>
 

@@ -1,5 +1,5 @@
-import { MonetagTags } from "@/features/monetization/monetag-tags";
-import { resolveMonetagTags } from "@/lib/monetization/monetag";
+import { MonetagClient } from "@/features/monetization/monetag-client";
+import { resolveMonetagPlacements, resolveMonetagTags } from "@/lib/monetization/monetag";
 import { getMonetizationSettings } from "@/lib/monetization/settings";
 
 /**
@@ -34,11 +34,13 @@ import { getMonetizationSettings } from "@/lib/monetization/settings";
 export async function MonetagScript() {
   const settings = await getMonetizationSettings();
   const tags = resolveMonetagTags(settings);
-  if (tags.length === 0) return null;
+  const placements = resolveMonetagPlacements(settings);
+  if (tags.length === 0 && placements.length === 0) return null;
 
   return (
-    <MonetagTags
+    <MonetagClient
       tags={tags}
+      placements={placements}
       allPages={settings.monetagAllPages}
       surfaces={settings.monetagSurfaces}
     />

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Download, Lock, Pause, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { MONETAG_MOMENT_EVENTS } from "@/lib/monetization/monetag-events";
 import type { AdSlotData } from "@/lib/monetization/types";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +80,12 @@ export function RewardedAdGate({
   useEffect(() => {
     if (ad && ad.id) beacon("impression", ad.id);
   }, [ad]);
+
+  // Signal the "rewarded" moment so a Monetag placement can load then (no-op
+  // unless the owner configured it + the visitor should see ads).
+  useEffect(() => {
+    if (open) window.dispatchEvent(new Event(MONETAG_MOMENT_EVENTS.rewarded));
+  }, [open]);
 
   // Timer mode (non-video network ad, or video that errored): wall-clock.
   useEffect(() => {

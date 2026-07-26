@@ -190,6 +190,82 @@ export function parseMonetagSnippet(snippet: string | null | undefined): {
   return { src, zone, cfAsync };
 }
 
+/* ───────────────────────────── moment placements ────────────────────────────
+ * WHEN a Monetag tag loads. The owner asked to place a Monetag ad at specific
+ * moments — after a download, on the HD reward, a full-screen interstitial, idle,
+ * return and back-swipe. Monetag's formats are self-placing, so a "placement"
+ * lazily LOADS the assigned Monetag zone's tag when the moment fires (deduped +
+ * cooled-down on the client); Monetag then shows its ad on its own schedule.
+ *
+ * The browser moments (interstitial-on-nav, idle, return, back-swipe) are owned by
+ * the MonetagPlacements client component directly; the flow moments (download
+ * complete, rewarded) fire from the existing overlays via a window event.
+ */
+
+export const MONETAG_PLACEMENTS = [
+  { id: "download_complete", label: "After a download completes", hint: "When a file finishes downloading." },
+  { id: "rewarded", label: "Rewarded (unlock HD / standard)", hint: "When the visitor unlocks a higher-quality download." },
+  { id: "interstitial", label: "Full-screen interstitial", hint: "On a page change (navigation)." },
+  { id: "idle", label: "When the visitor goes idle", hint: "After a few seconds with no interaction." },
+  { id: "return", label: "On return", hint: "When the tab / app becomes visible again after being away." },
+  { id: "backswipe", label: "On back-swipe", hint: "When the visitor taps or swipes back." },
+] as const;
+
+export type MonetagPlacementId = (typeof MONETAG_PLACEMENTS)[number]["id"];
+
+export const MONETAG_PLACEMENT_IDS = MONETAG_PLACEMENTS.map((p) => p.id) as [
+  MonetagPlacementId,
+  ...MonetagPlacementId[],
+];
+
+const PLACEMENT_SET = new Set<string>(MONETAG_PLACEMENT_IDS);
+
+export function isMonetagPlacementId(value: unknown): value is MonetagPlacementId {
+  return typeof value === "string" && PLACEMENT_SET.has(value);
+}
+
+/**
+ * The flow-moment window events. Re-exported from a tiny standalone module so the
+ * homepage download/reward overlays can import just the two strings without
+ * pulling this whole file (and its matchers) into the landing bundle.
+ */
+export { MONETAG_MOMENT_EVENTS } from "./monetag-events";
+
+/** One configured moment placement: a moment + the Monetag tag to load then. */
+export interface MonetagPlacement {
+  moment: MonetagPlacementId;
+  snippet: string;
+}
+
+/** A resolved placement — the moment plus its parsed, safe tag. */
+export interface MonetagPlacementTag {
+  moment: MonetagPlacementId;
+  src: string;
+  zone: string | null;
+  cfAsync: boolean;
+}
+
+/**
+ * Resolve the configured moment placements — one tag per moment, parsed and
+ * validated. Returns nothing when the master `monetag` switch is off.
+ */
+export function resolveMonetagPlacements(input: {
+  monetag: boolean;
+  monetagPlacements: MonetagPlacement[];
+}): MonetagPlacementTag[] {
+  if (!input.monetag) return [];
+  const out: MonetagPlacementTag[] = [];
+  const seen = new Set<string>();
+  for (const p of input.monetagPlacements ?? []) {
+    if (!isMonetagPlacementId(p?.moment) || seen.has(p.moment)) continue;
+    const parsed = parseMonetagSnippet(p?.snippet ?? "");
+    if (!parsed) continue;
+    seen.add(p.moment);
+    out.push({ moment: p.moment, ...parsed });
+  }
+  return out;
+}
+
 /**
  * Resolve every renderable Monetag tag from the settings — the legacy Multitag
  * (`monetagSnippet`) plus each `monetagUnits` entry — parsed, validated and

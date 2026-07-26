@@ -4,7 +4,7 @@ import { AlertTriangle, Check, Loader2, ToggleRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { MONETAG_SURFACES, type MonetagUnit } from "@/lib/monetization/monetag";
+import { MONETAG_PLACEMENTS, MONETAG_SURFACES, parseMonetagSnippet, type MonetagUnit } from "@/lib/monetization/monetag";
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import { cn } from "@/lib/utils";
 
@@ -352,6 +352,87 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
               ) : null}
             </div>
           ) : null}
+        </div>
+      </div>
+
+      {/* Monetag moment placements — WHEN a Monetag tag loads. Controlled by the
+          parent state (one save path). */}
+      <div className="mt-6 space-y-3 border-t border-border/60 pt-5">
+        <div>
+          <h3 className="text-sm font-semibold">Monetag ad placements</h3>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Choose the moments a Monetag ad loads. Tick a moment and paste the Monetag tag to show
+            then. Monetag places its own ad once loaded, so this controls which tag activates and
+            roughly when. Pro/Business never see them, and the page scope above still applies.
+          </p>
+        </div>
+        <div className="space-y-2.5">
+          {MONETAG_PLACEMENTS.map((pl) => {
+            const current = state.monetagPlacements.find((p) => p.moment === pl.id);
+            const on = !!current;
+            const parsed = current ? parseMonetagSnippet(current.snippet) : null;
+            return (
+              <div
+                key={pl.id}
+                className={cn(
+                  "rounded-2xl border p-3.5",
+                  on ? "border-primary/40 bg-primary/[0.04]" : "border-border/70 bg-secondary/20",
+                )}
+              >
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    setState((s) => ({
+                      ...s,
+                      monetagPlacements: on
+                        ? s.monetagPlacements.filter((p) => p.moment !== pl.id)
+                        : [...s.monetagPlacements, { moment: pl.id, snippet: "" }],
+                    }))
+                  }
+                  className="flex w-full items-center justify-between gap-3 text-left disabled:opacity-70"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{pl.label}</span>
+                    <span className="block text-[11px] text-muted-foreground">{pl.hint}</span>
+                  </span>
+                  <Switch on={on} />
+                </button>
+                {on ? (
+                  <div className="mt-3 space-y-1.5">
+                    <textarea
+                      value={current!.snippet}
+                      disabled={busy}
+                      onChange={(e) =>
+                        setState((s) => ({
+                          ...s,
+                          monetagPlacements: s.monetagPlacements.map((p) =>
+                            p.moment === pl.id ? { ...p, snippet: e.target.value } : p,
+                          ),
+                        }))
+                      }
+                      placeholder={'<script src="//example.monetag.com/tag.min.js" data-zone="1234567"></script>'}
+                      className="min-h-[56px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+                    />
+                    {current!.snippet.trim() ? (
+                      parsed ? (
+                        <p className="flex items-center gap-1.5 text-[11px] text-green-500">
+                          <Check className="h-3.5 w-3.5" /> Valid tag{parsed.zone ? ` · zone ${parsed.zone}` : ""}.
+                        </p>
+                      ) : (
+                        <p className="flex items-start gap-1.5 text-[11px] text-amber-500">
+                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Not a Monetag script
+                          tag — nothing will load until fixed.
+                        </p>
+                      )
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground/70">Paste the Monetag tag for this moment.</p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </div>
 

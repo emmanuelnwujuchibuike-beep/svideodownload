@@ -1,6 +1,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { isMonetagAdType, isMonetagSurfaceId, type MonetagUnit } from "./monetag";
+import {
+  isMonetagAdType,
+  isMonetagPlacementId,
+  isMonetagSurfaceId,
+  type MonetagPlacement,
+  type MonetagUnit,
+} from "./monetag";
 
 /**
  * Global monetization switches, stored in the `settings` table under key
@@ -105,6 +111,13 @@ export interface MonetizationSettings {
    * app). Matched on the client against the current path. See monetag.ts.
    */
   monetagSurfaces: string[];
+  /**
+   * Moment placements: a Monetag tag to load at a specific moment (after a
+   * download, on the HD reward, a full-screen interstitial, idle, return, back-
+   * swipe). One tag per moment; loaded lazily on the client when the moment fires.
+   * See lib/monetization/monetag.ts and features/monetization/monetag-placements.tsx.
+   */
+  monetagPlacements: MonetagPlacement[];
   /** Affiliate offers on the download-result page. */
   affiliates: boolean;
   /** Curated "Recommended Tools" sections (homepage/footer/sidebar/blog). */
@@ -166,6 +179,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   // owner narrows it. `monetagSurfaces` only applies when this is false.
   monetagAllPages: true,
   monetagSurfaces: [],
+  monetagPlacements: [],
   affiliates: true,
   recommendedTools: true,
   interstitial: false,
@@ -183,6 +197,21 @@ export function normalizeMonetagUnits(value: unknown): MonetagUnit[] {
     )
     .slice(0, 20)
     .map((u) => ({ type: u.type, snippet: u.snippet.slice(0, 4000) }));
+}
+
+/** Keep one well-formed placement per moment (known moment + string snippet). */
+export function normalizeMonetagPlacements(value: unknown): MonetagPlacement[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: MonetagPlacement[] = [];
+  for (const p of value) {
+    const moment = (p as MonetagPlacement)?.moment;
+    const snippet = (p as MonetagPlacement)?.snippet;
+    if (!isMonetagPlacementId(moment) || typeof snippet !== "string" || seen.has(moment)) continue;
+    seen.add(moment);
+    out.push({ moment, snippet: snippet.slice(0, 4000) });
+  }
+  return out;
 }
 
 /** Interstitial skip delays offered in the admin (seconds). */
@@ -232,6 +261,7 @@ export async function getMonetizationSettings(): Promise<MonetizationSettings> {
     merged.monetagSurfaces = Array.isArray(merged.monetagSurfaces)
       ? merged.monetagSurfaces.filter(isMonetagSurfaceId)
       : [];
+    merged.monetagPlacements = normalizeMonetagPlacements(merged.monetagPlacements);
     cache = { at: Date.now(), value: merged };
     return merged;
   } catch {

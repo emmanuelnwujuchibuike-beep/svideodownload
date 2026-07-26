@@ -6,16 +6,21 @@ import { describe, expect, it } from "vitest";
 import {
   MONETAG_AD_TYPES,
   MONETAG_AD_TYPE_IDS,
+  MONETAG_MOMENT_EVENTS,
+  MONETAG_PLACEMENTS,
   MONETAG_SURFACES,
   isMonetagAdType,
+  isMonetagPlacementId,
   isMonetagSurfaceId,
   monetagAllowedOnPath,
   parseMonetagSnippet,
+  resolveMonetagPlacements,
   resolveMonetagSurface,
   resolveMonetagTags,
+  type MonetagPlacement,
   type MonetagUnit,
 } from "./monetag";
-import { normalizeMonetagUnits } from "./settings";
+import { normalizeMonetagPlacements, normalizeMonetagUnits } from "./settings";
 
 /**
  * Monetag is site-level, self-placing script tags — so the risk here is the same
@@ -233,6 +238,102 @@ describe("Monetag page scope — monetagAllowedOnPath", () => {
   });
 });
 
+describe("Monetag moment placements", () => {
+  const TAG = '<script src="//p.monetag.com/t.js" data-zone="99"></script>';
+
+  it("declares the moments the owner asked for, with unique valid ids", () => {
+    const ids = MONETAG_PLACEMENTS.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const expected of ["download_complete", "rewarded", "interstitial", "idle", "return", "backswipe"]) {
+      expect(ids).toContain(expected);
+      expect(isMonetagPlacementId(expected)).toBe(true);
+    }
+    expect(isMonetagPlacementId("nope")).toBe(false);
+  });
+
+  it("resolves one parsed tag per configured moment, gated on the master switch", () => {
+    const input = {
+      monetag: true,
+      monetagPlacements: [
+        { moment: "download_complete", snippet: TAG },
+        { moment: "backswipe", snippet: '<script src="//x.co/y.js" data-zone="7"></script>' },
+      ] as MonetagPlacement[],
+    };
+    const resolved = resolveMonetagPlacements(input);
+    expect(resolved.map((r) => r.moment)).toEqual(["download_complete", "backswipe"]);
+    expect(resolved[0]!.src).toBe("https://p.monetag.com/t.js");
+    // master off → nothing
+    expect(resolveMonetagPlacements({ ...input, monetag: false })).toEqual([]);
+  });
+
+  it("drops an invalid snippet and an unknown moment", () => {
+    const resolved = resolveMonetagPlacements({
+      monetag: true,
+      monetagPlacements: [
+        { moment: "idle", snippet: "not a tag" }, // invalid → dropped
+        { moment: "bogus" as MonetagPlacement["moment"], snippet: TAG }, // unknown → dropped
+        { moment: "return", snippet: TAG }, // valid → kept
+      ],
+    });
+    expect(resolved.map((r) => r.moment)).toEqual(["return"]);
+  });
+
+  it("keeps one tag per moment — a valid duplicate is de-duped (first wins)", () => {
+    const resolved = resolveMonetagPlacements({
+      monetag: true,
+      monetagPlacements: [
+        { moment: "return", snippet: TAG },
+        { moment: "return", snippet: '<script src="//other.co/z.js" data-zone="2"></script>' },
+      ],
+    });
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0]!.src).toBe("https://p.monetag.com/t.js");
+  });
+
+  it("the flow-moment event names are shared constants (dispatcher can't drift)", () => {
+    expect(MONETAG_MOMENT_EVENTS.download_complete).toBe("frenz:monetag:download-complete");
+    expect(MONETAG_MOMENT_EVENTS.rewarded).toBe("frenz:monetag:rewarded");
+  });
+});
+
+describe("normalizeMonetagPlacements — one per moment, defend the row", () => {
+  it("keeps well-formed, drops bad, dedupes by moment, caps snippet length", () => {
+    const clean = normalizeMonetagPlacements([
+      { moment: "idle", snippet: "a" },
+      { moment: "idle", snippet: "b" }, // dup moment
+      { moment: "bogus", snippet: "c" },
+      { moment: "return", snippet: 5 },
+      null,
+    ]);
+    expect(clean).toEqual([{ moment: "idle", snippet: "a" }]);
+    expect(normalizeMonetagPlacements("x")).toEqual([]);
+  });
+});
+
+describe("the placement trigger engine wires each moment", () => {
+  const ROOT = path.resolve(__dirname, "../..");
+  const src = readFileSync(path.join(ROOT, "features/monetization/monetag-placements.tsx"), "utf8");
+
+  it("owns the browser moments and listens for the flow moments", () => {
+    expect(src).toContain("popstate"); // back-swipe
+    expect(src).toContain("visibilitychange"); // return / idle
+    expect(src).toContain("usePathname"); // interstitial on nav
+    expect(src).toContain("MONETAG_MOMENT_EVENTS"); // download_complete + rewarded
+  });
+
+  it("gates on plan + page scope before loading anything", () => {
+    expect(src).toContain("useEntitlements");
+    expect(src).toContain("monetagAllowedOnPath");
+  });
+
+  it("the download + reward overlays dispatch the flow-moment events", () => {
+    const dl = readFileSync(path.join(ROOT, "features/monetization/download-complete-ad.tsx"), "utf8");
+    const rw = readFileSync(path.join(ROOT, "features/monetization/rewarded-ad.tsx"), "utf8");
+    expect(dl).toContain("MONETAG_MOMENT_EVENTS.download_complete");
+    expect(rw).toContain("MONETAG_MOMENT_EVENTS.rewarded");
+  });
+});
+
 describe("Monetag is plan-gated — Pro/Business are ad-free", () => {
   const ROOT = path.resolve(__dirname, "../..");
   const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
@@ -269,7 +370,7 @@ describe("Monetag is plan-gated — Pro/Business are ad-free", () => {
 
   it("the server component renders no raw <script> — it delegates to the gated client", () => {
     const src = read("features/monetization/monetag-script.tsx");
-    expect(src).toContain("MonetagTags");
+    expect(src).toContain("MonetagClient");
     expect(src, "MonetagScript must not server-render a <script> (that bypasses the plan gate)").not.toMatch(
       /<script\b/,
     );

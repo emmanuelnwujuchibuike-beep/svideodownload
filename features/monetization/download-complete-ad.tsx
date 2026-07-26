@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { MONETAG_MOMENT_EVENTS } from "@/lib/monetization/monetag-events";
+
 import { AdSlot } from "./ad-slot";
 import { useShowAds } from "./use-show-ads";
 
@@ -77,6 +79,13 @@ export function DownloadCompleteAd({
       alive = false;
     };
   }, [open, config]);
+
+  // Signal the "after a download completes" moment so a Monetag placement can
+  // load then (no-op unless the owner configured that placement + the visitor
+  // should see ads — MonetagPlacements gates both).
+  useEffect(() => {
+    if (open && showAds) window.dispatchEvent(new Event(MONETAG_MOMENT_EVENTS.download_complete));
+  }, [open, showAds]);
 
   // Countdown begins only once there is genuinely an ad on screen.
   useEffect(() => {

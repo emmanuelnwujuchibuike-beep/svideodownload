@@ -1,4 +1,4 @@
-/* Frenz service worker v11 — entry point only. Each concern lives in its own
+/* Frenz service worker v12 — entry point only. Each concern lives in its own
  * module under /sw/, loaded via importScripts() (classic-worker-compatible
  * across every browser this app targets, incl. Safari, which doesn't fully
  * support `{ type: "module" }` service workers) and wired together through
@@ -37,3 +37,31 @@ importScripts(
   "/sw/push.js",
   "/sw/background-sync.js",
 );
+
+/*
+  ── Monetag verification + Multitag push (owner, 2026-07-26) ──────────────────
+  Monetag's "file" ownership check wants ITS sw.js served at /sw.js — but that
+  path is THIS file, the PWA service worker (offline, push, install). Overwriting
+  it would destroy the installed-app experience, so Monetag's snippet is MERGED
+  here instead, which is exactly what Monetag documents for sites that already run
+  a service worker. The verification strings below appear verbatim, so Monetag's
+  crawler check on /sw.js passes; the site id is public (it ships in this file
+  either way), not a secret.
+
+  GUARDED on purpose: importScripts() is synchronous and THROWS if the remote
+  script can't be fetched — an un-guarded call would abort the ENTIRE service
+  worker on any Monetag/CDN hiccup, taking offline mode + our own Web Push down
+  with it. The try/catch keeps a Monetag outage from ever breaking the Frenz PWA.
+*/
+try {
+  // Reproduced verbatim from Monetag's downloaded sw.js so their crawler's
+  // content check matches exactly (single quotes, quoted keys included).
+  self.options = {
+    "domain": "5gvci.com",
+    "zoneId": 11391266
+  };
+  self.lary = "";
+  importScripts('https://5gvci.com/act/files/service-worker.min.js?r=sw');
+} catch (e) {
+  /* Monetag SW unavailable — never let a third-party outage break the PWA. */
+}

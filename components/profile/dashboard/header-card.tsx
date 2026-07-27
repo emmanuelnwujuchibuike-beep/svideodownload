@@ -123,12 +123,12 @@ export function ProfileHeaderCard() {
             <Avatar />
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <SoonButton
-              feature="Edit profile"
+            <Link
+              href="/account#profile"
               className="hidden rounded-xl border border-border px-4 py-2 text-sm font-semibold transition hover:bg-secondary lg:inline-flex"
             >
               Edit Profile
-            </SoonButton>
+            </Link>
             <SoonButton
               feature="Share profile"
               ariaLabel="Share profile"

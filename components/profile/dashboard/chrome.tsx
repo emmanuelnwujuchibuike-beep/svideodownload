@@ -1,57 +1,10 @@
-import {
-  Bell,
-  Bookmark,
-  Clapperboard,
-  Cloud,
-  Compass,
-  Crown,
-  DollarSign,
-  Download,
-  Film,
-  Home,
-  type LucideIcon,
-  Menu,
-  MessageCircle,
-  Newspaper,
-  Package,
-  Plus,
-  Radio,
-  Search,
-  TrendingUp,
-  User,
-  Users,
-} from "lucide-react";
+import { Bell, Crown, Home, MessageCircle, Plus, Search, User, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 
 import { FrenzWordmark } from "@/components/brand/frenz-logo";
+import { PRIMARY, SPACES, type NavRow } from "@/components/profile/dashboard/nav-data";
 import { MaybeLink, SoonButton } from "@/components/profile/dashboard/soon";
 import { cn } from "@/lib/utils";
-
-/* ── Primary sidebar nav ──────────────────────────────────────────────────────
-   `href` set → the route is built and navigates; `href` omitted → the feature is
-   still coming, so it announces "coming soon" instead of dead-ending. */
-type NavRow = { label: string; icon: LucideIcon; href?: string; badge?: string; live?: boolean };
-
-const PRIMARY: NavRow[] = [
-  { label: "Home", icon: Home, href: "/home" },
-  { label: "Explore", icon: Compass, href: "/explore" },
-  { label: "Trending", icon: TrendingUp, href: "/explore?sort=trending" },
-  { label: "Reels", icon: Film, href: "/reels" },
-  { label: "News", icon: Newspaper, href: "/blog" },
-  { label: "Communities", icon: Users },
-  { label: "Friends", icon: Users, href: "/friends" },
-  { label: "Chats", icon: MessageCircle, href: "/messages", badge: "8" },
-  { label: "Downloads", icon: Download, href: "/downloads" },
-  { label: "Saved", icon: Bookmark, href: "/saved" },
-];
-
-const SPACES: NavRow[] = [
-  { label: "My Cloud", icon: Cloud },
-  { label: "My Studio", icon: Clapperboard },
-  { label: "My Products", icon: Package },
-  { label: "My Earnings", icon: DollarSign },
-  { label: "My Live", icon: Radio, live: true },
-];
 
 function SidebarRow({ row }: { row: NavRow }) {
   const inner = (
@@ -66,9 +19,7 @@ function SidebarRow({ row }: { row: NavRow }) {
         </span>
       ) : null}
       {row.live ? (
-        <span className="rounded-md bg-rose-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-          Live
-        </span>
+        <span className="rounded-md bg-rose-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Live</span>
       ) : null}
     </>
   );
@@ -82,6 +33,27 @@ function SidebarRow({ row }: { row: NavRow }) {
     <SoonButton feature={row.label} className={cn(cls, "w-full text-left")}>
       {inner}
     </SoonButton>
+  );
+}
+
+/** Shared "Frenz Premium" upsell (sidebar + mobile menu). */
+export function PremiumCard() {
+  return (
+    <div className="rounded-3xl border border-violet-500/20 bg-gradient-to-br from-blue-600/10 via-violet-600/10 to-purple-600/10 p-4">
+      <p className="flex items-center gap-2 text-sm font-bold">
+        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white">
+          <Crown className="h-3.5 w-3.5 fill-white" />
+        </span>
+        Frenz Premium
+      </p>
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Unlock all features and grow your brand faster.</p>
+      <Link
+        href="/pricing"
+        className="mt-3 flex items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 py-2 text-xs font-bold text-white shadow-md shadow-violet-500/30 transition hover:opacity-95"
+      >
+        Upgrade Now
+      </Link>
+    </div>
   );
 }
 
@@ -102,9 +74,7 @@ export function ProfileSidebar() {
             ))}
           </nav>
 
-          <p className="mb-1 mt-6 px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground/60">
-            My Spaces
-          </p>
+          <p className="mb-1 mt-6 px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground/60">My Spaces</p>
           <nav className="flex flex-col gap-0.5">
             {SPACES.map((r) => (
               <SidebarRow key={r.label} row={r} />
@@ -112,23 +82,8 @@ export function ProfileSidebar() {
           </nav>
         </div>
 
-        {/* Premium upsell — pinned to the bottom */}
-        <div className="mt-3 shrink-0 rounded-3xl border border-violet-500/20 bg-gradient-to-br from-blue-600/10 via-violet-600/10 to-purple-600/10 p-4">
-          <p className="flex items-center gap-2 text-sm font-bold">
-            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white">
-              <Crown className="h-3.5 w-3.5 fill-white" />
-            </span>
-            Frenz Premium
-          </p>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Unlock all features and grow your brand faster.
-          </p>
-          <Link
-            href="/pricing"
-            className="mt-3 flex items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 py-2 text-xs font-bold text-white shadow-md shadow-violet-500/30 transition hover:opacity-95"
-          >
-            Upgrade Now
-          </Link>
+        <div className="mt-3 shrink-0">
+          <PremiumCard />
         </div>
       </aside>
     </>
@@ -136,7 +91,7 @@ export function ProfileSidebar() {
 }
 
 /** Small counter badge for the top-bar action icons. */
-function ActionBadge({ count }: { count: number }) {
+export function ActionBadge({ count }: { count: number }) {
   return (
     <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-card">
       {count}
@@ -169,9 +124,7 @@ export function ProfileTopbar() {
       >
         <Search className="h-[18px] w-[18px]" />
         <span className="flex-1">Search videos, people, hashtags…</span>
-        <kbd className="hidden rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium md:block">
-          ⌘K
-        </kbd>
+        <kbd className="hidden rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium md:block">⌘K</kbd>
       </Link>
 
       <div className="flex shrink-0 items-center gap-3">
@@ -205,37 +158,6 @@ export function ProfileTopbar() {
   );
 }
 
-/** Mobile top bar — logo + search/notifications/chats/menu. */
-export function ProfileMobileHeader() {
-  return (
-    <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-border/60 bg-card/90 px-4 pt-[var(--frenz-safe-top)] backdrop-blur-xl lg:hidden">
-      <Link href="/" className="flex items-center">
-        <FrenzWordmark size={28} textClassName="text-base" priority />
-      </Link>
-      <div className="flex items-center gap-1">
-        <Link href="/search" aria-label="Search" className="flex h-10 w-10 items-center justify-center text-foreground">
-          <Search className="h-[22px] w-[22px]" />
-        </Link>
-        <Link href="/notifications" aria-label="Notifications" className="relative flex h-10 w-10 items-center justify-center text-foreground">
-          <Bell className="h-[22px] w-[22px]" />
-          <ActionBadge count={6} />
-        </Link>
-        <Link href="/messages" aria-label="Messages" className="relative flex h-10 w-10 items-center justify-center text-foreground">
-          <MessageCircle className="h-[22px] w-[22px]" />
-          <ActionBadge count={3} />
-        </Link>
-        <SoonButton
-          feature="Menu"
-          ariaLabel="Menu"
-          className="ml-1 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 text-foreground"
-        >
-          <Menu className="h-[22px] w-[22px]" />
-        </SoonButton>
-      </div>
-    </header>
-  );
-}
-
 /* ── Mobile bottom nav ────────────────────────────────────────────────────────
    Home · Friends · (Create) · Chats · Profile — Profile is the active tab here. */
 export function ProfileBottomNav() {
@@ -248,18 +170,18 @@ export function ProfileBottomNav() {
         <BottomTab label="Home" href="/home" icon={Home} />
         <BottomTab label="Friends" href="/friends" icon={Users} />
 
-        {/* Create — the signature raised gradient circle */}
-        <SoonButton feature="Create" ariaLabel="Create" className="-mt-6 self-center">
+        {/* Create — the signature raised gradient circle (opens the post composer) */}
+        <Link href="/create/post" aria-label="Create" className="-mt-6 self-center">
           <span className="relative flex h-[52px] w-[52px] items-center justify-center">
             <span aria-hidden className="bg-brand absolute inset-0 rounded-full opacity-45 blur-[10px]" />
             <span className="bg-brand relative flex h-[52px] w-[52px] items-center justify-center rounded-full text-white shadow-lg shadow-violet-500/30 ring-[3px] ring-card/80">
               <Plus className="h-6 w-6" strokeWidth={2.4} />
             </span>
           </span>
-        </SoonButton>
+        </Link>
 
         <BottomTab label="Chats" href="/messages" icon={MessageCircle} badge={5} />
-        <BottomTab label="Profile" href="/profile" icon={User} active />
+        <BottomTab label="Profile" href="/me" icon={User} active />
       </nav>
     </div>
   );
@@ -288,9 +210,7 @@ function BottomTab({
           </span>
         ) : null}
       </span>
-      <span className={cn("text-[10px] font-medium transition-colors", active ? "text-primary" : "text-muted-foreground")}>
-        {label}
-      </span>
+      <span className={cn("text-[10px] font-medium transition-colors", active ? "text-primary" : "text-muted-foreground")}>{label}</span>
     </Link>
   );
 }

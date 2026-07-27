@@ -21,7 +21,6 @@ import { Toaster } from "@/features/ui/toast";
 import { LivingGlow } from "@/features/profile/living-glow";
 import { ProfileMenu } from "@/features/profile/profile-menu";
 import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
-import { ProfileCompletion } from "@/features/profile/profile-completion";
 import { ShareProfileButton } from "@/features/profile/share-profile-button";
 import { FollowButton } from "@/features/social/follow-button";
 import { ProfileActions } from "@/features/social/profile-actions";
@@ -132,6 +131,21 @@ async function topFriends(viewerId: string): Promise<{ name: string; handle: str
   }
 }
 
+/** Does this profile follow the viewer back? Powers the "Follows you" relationship
+ *  signal (Identity Presence™). A single count query; fails closed to false. */
+async function followsViewer(profileId: string, viewerId: string): Promise<boolean> {
+  try {
+    const { count } = await createAdminClient()
+      .from("follows")
+      .select("follower_id", { head: true, count: "exact" })
+      .eq("follower_id", profileId)
+      .eq("following_id", viewerId);
+    return (count ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
 export default async function ProfilePage({
   params,
   searchParams,
@@ -147,7 +161,7 @@ export default async function ProfilePage({
   // The profile header renders immediately; the (heavier) posts grid streams in
   // behind a skeleton so the page never blocks on the post query.
   const isViewer = !!me && !profile.isOwner;
-  const [plan, friendState, mutuals, friendTotal, postsTotal, privacy, collectionsN] = await Promise.all([
+  const [plan, friendState, mutuals, friendTotal, postsTotal, privacy, collectionsN, followsYou] = await Promise.all([
     getUserPlan(profile.id),
     isViewer ? friendshipState(me!, profile.id) : Promise.resolve("none" as const),
     isViewer ? mutualFriendsCount(me!, profile.id) : Promise.resolve(0),
@@ -155,6 +169,7 @@ export default async function ProfilePage({
     publishedPostsCount(profile.id, profile.isOwner),
     getPrivacySettings(profile.id),
     viewableCollectionsCount(profile.id, me, profile.isFollowing),
+    isViewer ? followsViewer(profile.id, me!) : Promise.resolve(false),
   ]);
 
   // Per-tab visibility: activity tabs appear only when the viewer is allowed to
@@ -370,56 +385,46 @@ export default async function ProfilePage({
       <main className="pb-24 pt-14 sm:pt-16 lg:pt-4">
         <div className="mx-auto flex w-full max-w-6xl gap-6">
           <div className="mx-auto min-w-0 max-w-4xl flex-1 sm:px-4">
-          {/* Banner + Living Profile time-of-day glow. Full-bleed on mobile,
-              a contained rounded hero on larger screens (professional, balanced). */}
-          <div className="relative h-40 w-full overflow-hidden bg-gradient-to-br from-blue-600/30 via-violet-500/15 to-purple-500/20 sm:h-56 sm:rounded-3xl md:h-64">
-            {profile.bannerUrl ? (
-              <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 896px) 100vw, 896px" className="object-cover" />
-            ) : null}
-            <LivingGlow />
-          </div>
+          {/* Hero — cover + glass Identity Card + Identity Presence™ (Profile Header · Part 2).
+              The same premium surface as the owner hero, now for visitors, with real
+              relationship signals (friends / follows-you / following / mutuals) — never faked. */}
+          <div className="relative">
+            {/* Cover — Living Profile light or the member's own banner */}
+            <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-blue-600/30 via-violet-500/15 to-purple-500/20 sm:h-60 sm:rounded-3xl md:h-64">
+              {profile.bannerUrl ? (
+                <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 896px) 100vw, 896px" className="object-cover" />
+              ) : null}
+              <LivingGlow />
+              <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/25" />
+            </div>
 
-          <div className="px-4 sm:px-6">
-            {/* Avatar + actions — avatar stacks above a full-width wrapping action
-                bar on mobile; sits inline with right-aligned actions on desktop. */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="relative -mt-12 w-fit sm:-mt-20">
-                <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
-                  {profile.avatarUrl ? (
-                    <Image
-                      src={profile.avatarUrl}
-                      alt=""
-                      width={128}
-                      height={128}
-                      priority
-                      className="block h-24 w-24 rounded-full object-cover ring-4 ring-background sm:h-32 sm:w-32"
-                    />
-                  ) : (
-                    <span className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-3xl font-bold text-white ring-4 ring-background sm:h-32 sm:w-32 sm:text-4xl">
-                      {profile.displayName.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </IdentityRing>
-                <DiamondCrownBadge plan={plan} size="md" className="absolute bottom-1 right-1 z-10 ring-2 ring-background" />
-              </div>
+            {/* Identity Card™ — the premium glass surface */}
+            <div className="relative z-10 px-3 sm:px-4">
+              <div className="glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7">
+                {/* Avatar + adaptive action bar */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="relative -mt-14 w-fit sm:-mt-[4.5rem]">
+                    <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
+                      {profile.avatarUrl ? (
+                        <Image
+                          src={profile.avatarUrl}
+                          alt=""
+                          width={128}
+                          height={128}
+                          priority
+                          className="block h-24 w-24 rounded-full object-cover ring-4 ring-background sm:h-32 sm:w-32"
+                        />
+                      ) : (
+                        <span className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-3xl font-bold text-white ring-4 ring-background sm:h-32 sm:w-32 sm:text-4xl">
+                          {profile.displayName.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </IdentityRing>
+                    <DiamondCrownBadge plan={plan} size="md" className="absolute bottom-1 right-1 z-10 ring-2 ring-background" />
+                  </div>
 
-              {/* Edge-to-edge scrollable action bar on mobile (every button
-                  reachable, no cramped wrapping); right-aligned inline on desktop. */}
-              <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:mb-2 sm:justify-end sm:overflow-visible sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {profile.isOwner ? (
-                  <>
-                    <Link
-                      href="/account#profile"
-                      className="inline-flex shrink-0 items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary"
-                    >
-                      Edit profile
-                    </Link>
-                    <span className="shrink-0">
-                      <ShareProfileButton handle={profile.handle} name={profile.displayName} />
-                    </span>
-                  </>
-                ) : (
-                  <>
+                  {/* Edge-to-edge scrollable action bar on mobile; right-aligned inline on desktop. */}
+                  <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:mb-1 sm:justify-end sm:overflow-visible sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     {me && friendState !== "self" ? (
                       <AddFriendButton
                         targetId={profile.id}
@@ -461,95 +466,123 @@ export default async function ProfilePage({
                         <ShareProfileButton handle={profile.handle} name={profile.displayName} />
                       </span>
                     )}
+                  </div>
+                </div>
+
+                {/* Identity */}
+                <div className="mt-4">
+                  <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
+                    {profile.displayName}
+                    {profile.isVerified ? <BadgeCheck className="h-5 w-5 text-primary sm:h-6 sm:w-6" /> : null}
+                    <DiamondCrownBadge plan={plan} size="sm" showLabel />
+                  </h1>
+                  <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
+                </div>
+
+                {/* Identity Presence™ — independent relationship signals, real data only.
+                    Rendered only for signed-in visitors when a genuine relationship exists. */}
+                {isViewer &&
+                (friendState === "friends" ||
+                  friendState === "incoming" ||
+                  friendState === "outgoing" ||
+                  followsYou ||
+                  profile.isFollowing ||
+                  mutuals > 0) ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {friendState === "friends" ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/12 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Friends
+                      </span>
+                    ) : friendState === "incoming" ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/12 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Sent you a request
+                      </span>
+                    ) : friendState === "outgoing" ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" /> Request sent
+                      </span>
+                    ) : null}
+                    {followsYou ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/12 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500" /> Follows you
+                      </span>
+                    ) : null}
+                    {profile.isFollowing ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                        <BadgeCheck className="h-3.5 w-3.5" /> Following
+                      </span>
+                    ) : null}
+                    {mutuals > 0 ? (
+                      <span className="inline-flex items-center rounded-full bg-gradient-to-r from-blue-500/15 to-violet-500/15 px-2.5 py-1 text-xs font-semibold text-violet-600 dark:text-violet-300">
+                        {mutuals} mutual friend{mutuals === 1 ? "" : "s"}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {profile.restricted ? (
+                  <div className="mt-6 rounded-2xl border border-border/60 bg-card/50 p-8 text-center ring-hairline">
+                    <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
+                    <p className="mt-3 font-semibold">This account is private</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {me ? "Follow to request access to their activity." : "Sign in and follow to see more."}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {profile.bio ? <p className="mt-4 max-w-2xl leading-relaxed">{profile.bio}</p> : null}
+
+                    <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                      {profile.website ? (
+                        <a
+                          href={profile.website}
+                          target="_blank"
+                          rel="nofollow noopener"
+                          className="inline-flex items-center gap-1.5 text-primary hover:underline"
+                        >
+                          <LinkIcon className="h-4 w-4" />
+                          {profile.website.replace(/^https?:\/\//, "")}
+                        </a>
+                      ) : null}
+                      <span className="inline-flex items-center gap-1.5">
+                        <CalendarDays className="h-4 w-4" />
+                        Joined {new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                      </span>
+                    </div>
+
+                    {/* Live stats — divided glass panel; Following/Followers link through */}
+                    <div className="mt-5 grid grid-cols-4 divide-x divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card/50 ring-hairline">
+                      <Link
+                        href={`/u/${profile.handle}/following`}
+                        className="px-2 py-4 text-center transition hover:bg-secondary/40 sm:py-5"
+                      >
+                        <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(profile.followingCount)}</span>
+                        <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Following</span>
+                      </Link>
+                      <Link
+                        href={`/u/${profile.handle}/followers`}
+                        className="px-2 py-4 text-center transition hover:bg-secondary/40 sm:py-5"
+                      >
+                        <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(profile.followersCount)}</span>
+                        <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Followers</span>
+                      </Link>
+                      <div className="px-2 py-4 text-center sm:py-5">
+                        <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(friendTotal)}</span>
+                        <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Friends</span>
+                      </div>
+                      <div className="px-2 py-4 text-center sm:py-5">
+                        <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(postsTotal)}</span>
+                        <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Posts</span>
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
             </div>
 
-            {/* Identity */}
-            <div className="mt-4">
-              <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
-                {profile.displayName}
-                {profile.isVerified ? <BadgeCheck className="h-5 w-5 text-primary sm:h-6 sm:w-6" /> : null}
-                <DiamondCrownBadge plan={plan} size="sm" showLabel />
-              </h1>
-              <p className="mt-0.5 text-muted-foreground">
-                @{profile.handle}
-                {isViewer && mutuals > 0 ? (
-                  <span className="ml-2 rounded-full bg-gradient-to-r from-blue-500/15 to-violet-500/15 px-2 py-0.5 text-xs font-semibold text-violet-500 dark:text-violet-300">
-                    {mutuals} mutual friend{mutuals === 1 ? "" : "s"}
-                  </span>
-                ) : null}
-              </p>
-            </div>
-
-            {profile.isOwner ? (
-              <ProfileCompletion
-                hasAvatar={!!profile.avatarUrl}
-                hasBio={!!profile.bio}
-                hasBanner={!!profile.bannerUrl}
-                hasWebsite={!!profile.website}
-              />
-            ) : null}
-
-            {profile.restricted ? (
-              <div className="mt-8 rounded-2xl border border-border bg-card p-8 text-center">
-                <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
-                <p className="mt-3 font-semibold">This account is private</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {me ? "Follow to request access to their activity." : "Sign in and follow to see more."}
-                </p>
-              </div>
-            ) : (
-              <>
-                {profile.bio ? <p className="mt-4 max-w-2xl leading-relaxed">{profile.bio}</p> : null}
-
-                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                  {profile.website ? (
-                    <a
-                      href={profile.website}
-                      target="_blank"
-                      rel="nofollow noopener"
-                      className="inline-flex items-center gap-1.5 text-primary hover:underline"
-                    >
-                      <LinkIcon className="h-4 w-4" />
-                      {profile.website.replace(/^https?:\/\//, "")}
-                    </a>
-                  ) : null}
-                  <span className="inline-flex items-center gap-1.5">
-                    <CalendarDays className="h-4 w-4" />
-                    Joined {new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                  </span>
-                </div>
-
-                {/* Live stats — one premium glass panel, divided into columns */}
-                <div className="mt-6 grid grid-cols-4 divide-x divide-border/50 overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-b from-card/80 to-card/40 shadow-soft ring-1 ring-inset ring-white/5 backdrop-blur">
-                  <Link
-                    href={`/u/${profile.handle}/following`}
-                    className="px-2 py-4 text-center transition hover:bg-secondary/40 sm:py-5"
-                  >
-                    <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(profile.followingCount)}</span>
-                    <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Following</span>
-                  </Link>
-                  <Link
-                    href={`/u/${profile.handle}/followers`}
-                    className="px-2 py-4 text-center transition hover:bg-secondary/40 sm:py-5"
-                  >
-                    <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(profile.followersCount)}</span>
-                    <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Followers</span>
-                  </Link>
-                  <div className="px-2 py-4 text-center sm:py-5">
-                    <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(friendTotal)}</span>
-                    <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Friends</span>
-                  </div>
-                  <div className="px-2 py-4 text-center sm:py-5">
-                    <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(postsTotal)}</span>
-                    <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Posts</span>
-                  </div>
-                </div>
-
-                {/* Content tabs — all datasets are fetched once and switched
-                    instantly client-side (never reloads on tab change). */}
+            {/* Content tabs — fetched once, switched instantly client-side. Hidden for private accounts. */}
+            {!profile.restricted ? (
+              <div className="mt-6 px-4 sm:px-6">
                 <Suspense fallback={<PostGridSkeleton count={6} />}>
                   <ProfileTabsLoader
                     profileId={profile.id}
@@ -560,8 +593,8 @@ export default async function ProfilePage({
                     initialTab={activeTab}
                   />
                 </Suspense>
-              </>
-            )}
+              </div>
+            ) : null}
           </div>
           </div>
           {/* Owner feature panel — docked open on desktop, a toggle drawer on mobile */}

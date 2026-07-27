@@ -174,6 +174,20 @@ export function NotificationLiveToast() {
                   </span>
                   <span className="mt-0.5 block text-[11px] text-muted-foreground">just now · tap to reply</span>
                 </>
+              ) : item.n.broadcast ? (
+                <>
+                  {/* An admin broadcast / AD shows its OWN content + a clear label,
+                      never "from Frenz" like a personal message. */}
+                  <span className="flex items-center gap-1.5">
+                    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                      {item.n.broadcast.sponsored ? "Ad" : "News"}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{item.n.broadcast.title}</span>
+                  </span>
+                  {item.n.broadcast.body ? (
+                    <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">{item.n.broadcast.body}</span>
+                  ) : null}
+                </>
               ) : (
                 <>
                   <span className="block truncate text-sm leading-snug">

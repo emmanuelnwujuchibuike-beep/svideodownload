@@ -32,6 +32,14 @@ export interface NotificationActor {
   avatarUrl: string | null;
 }
 
+/** An admin broadcast / AD's own content, carried on the notification's `data`
+ *  so the in-app card shows the real ad + a "Sponsored" label. */
+export interface NotificationBroadcast {
+  title: string;
+  body: string;
+  sponsored: boolean;
+}
+
 export interface NotificationItem {
   id: string;
   type: NotificationType;
@@ -41,6 +49,8 @@ export interface NotificationItem {
   postId: string | null;
   postTitle: string | null;
   conversationId: string | null;
+  /** Present on admin_broadcast rows — the ad/announcement content + sponsored flag. */
+  broadcast: NotificationBroadcast | null;
 }
 
 interface Row {
@@ -51,6 +61,25 @@ interface Row {
   conversation_id: string | null;
   read: boolean;
   created_at: string;
+  data?: { title?: string; body?: string; sponsored?: boolean } | null;
+}
+
+// `notifications.data` arrives with migration 0094 — probe once per server
+// instance and only select it when present, so a lagging migration never breaks
+// the whole notifications read.
+let dataColumnKnown: boolean | null = null;
+async function selectCols(db: ReturnType<typeof createAdminClient>): Promise<string> {
+  const cols = "id, actor_id, type, post_id, conversation_id, read, created_at";
+  if (dataColumnKnown === null) {
+    const { error } = await db.from("notifications").select("data").limit(1);
+    dataColumnKnown = !error;
+  }
+  return dataColumnKnown ? `${cols}, data` : cols;
+}
+
+function broadcastOf(r: Row): NotificationBroadcast | null {
+  if (r.type !== "admin_broadcast" || !r.data || !r.data.title) return null;
+  return { title: r.data.title, body: r.data.body ?? "", sponsored: !!r.data.sponsored };
 }
 
 /** Message notifications aren't deduped in the DB (every send is a genuine new event — see 0042's own comment); the bell's numeric badge excludes them so a chat burst doesn't drown out real social notifications, while the dropdown LIST still shows them (see notification-bell.tsx). */
@@ -96,6 +125,7 @@ async function enrichRows(db: ReturnType<typeof createAdminClient>, rows: Row[])
     postId: r.post_id,
     postTitle: r.post_id ? titleById.get(r.post_id) ?? null : null,
     conversationId: r.conversation_id,
+    broadcast: broadcastOf(r),
   }));
 }
 
@@ -120,7 +150,7 @@ export async function listNotifications(userId: string, limit = 20): Promise<Not
     const excluded = [...new Set([...MESSAGE_TYPES, ...muted])];
     let listQuery = db
       .from("notifications")
-      .select("id, actor_id, type, post_id, conversation_id, read, created_at")
+      .select(await selectCols(db))
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -132,7 +162,7 @@ export async function listNotifications(userId: string, limit = 20): Promise<Not
     if (muted.length > 0) listQuery = listQuery.not("type", "in", `(${muted.join(",")})`);
     countQuery = countQuery.not("type", "in", `(${excluded.join(",")})`);
     const [{ data }, { count }] = await Promise.all([listQuery, countQuery]);
-    const items = await enrichRows(db, (data as Row[]) ?? []);
+    const items = await enrichRows(db, (data as unknown as Row[]) ?? []);
     return { items, unread: count ?? 0 };
   } catch {
     return { items: [], unread: 0 };
@@ -158,6 +188,8 @@ export interface NotificationGroup {
   postTitle: string | null;
   conversationId: string | null;
   notificationIds: string[];
+  /** Present on admin_broadcast groups — the ad/announcement content. */
+  broadcast: NotificationBroadcast | null;
 }
 
 export interface GroupedNotificationsResult {
@@ -193,7 +225,7 @@ export async function listGroupedNotifications(userId: string, limit = 60): Prom
     const muted = mutedTypesFor(settings, CATEGORY_BY_TYPE);
     let listQuery = db
       .from("notifications")
-      .select("id, actor_id, type, post_id, conversation_id, read, created_at")
+      .select(await selectCols(db))
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -207,7 +239,7 @@ export async function listGroupedNotifications(userId: string, limit = 60): Prom
       countQuery = countQuery.not("type", "in", `(${muted.join(",")})`);
     }
     const [{ data }, { count }] = await Promise.all([listQuery, countQuery]);
-    const items = await enrichRows(db, (data as Row[]) ?? []);
+    const items = await enrichRows(db, (data as unknown as Row[]) ?? []);
 
     const byKey = new Map<string, NotificationGroup>();
     const seenActors = new Map<string, Set<string>>();
@@ -230,6 +262,7 @@ export async function listGroupedNotifications(userId: string, limit = 60): Prom
           postTitle: it.postTitle,
           conversationId: it.conversationId,
           notificationIds: [],
+          broadcast: it.broadcast,
         };
         byKey.set(key, g);
         seenActors.set(key, new Set());

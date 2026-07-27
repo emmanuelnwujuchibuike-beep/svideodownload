@@ -141,11 +141,25 @@ function NotificationCardImpl({
 
       {/* Text */}
       <div className="min-w-0 flex-1 pr-1">
-        <p className="text-sm leading-snug text-foreground">
-          {actorLed ? <span className="font-semibold">{summary}</span> : null}{" "}
-          <span className={cn(actorLed ? "text-muted-foreground" : "font-semibold")}>{verbFor(group.type)}</span>
-          {group.postTitle ? <span className="text-muted-foreground"> · {group.postTitle}</span> : null}
-        </p>
+        {group.broadcast ? (
+          /* An admin broadcast / AD shows its OWN content + a clear "Ad" label,
+             never a generic "Frenz announcement" that reads like a message. */
+          <>
+            <p className="flex items-center gap-1.5 text-sm leading-snug text-foreground">
+              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                {group.broadcast.sponsored ? "Ad" : "News"}
+              </span>
+              <span className="min-w-0 flex-1 truncate font-semibold">{group.broadcast.title}</span>
+            </p>
+            {group.broadcast.body ? <p className="mt-0.5 text-sm leading-snug text-muted-foreground">{group.broadcast.body}</p> : null}
+          </>
+        ) : (
+          <p className="text-sm leading-snug text-foreground">
+            {actorLed ? <span className="font-semibold">{summary}</span> : null}{" "}
+            <span className={cn(actorLed ? "text-muted-foreground" : "font-semibold")}>{verbFor(group.type)}</span>
+            {group.postTitle ? <span className="text-muted-foreground"> · {group.postTitle}</span> : null}
+          </p>
+        )}
         {/* Relative time differs by a second between server render + hydration. */}
         <p className="mt-1 text-[11px] font-medium text-muted-foreground" suppressHydrationWarning>
           {timeAgo(group.createdAt)} ago

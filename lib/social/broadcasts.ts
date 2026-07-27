@@ -97,21 +97,34 @@ export async function prepareBroadcast(
     if (insertErr || !broadcast) return empty;
 
     // In-app notification rows (batch inserts — fast; the push is what's slow).
+    // Each row carries the ad's own title/body/sponsored in `data`, so the in-app
+    // card shows the REAL ad + a "Sponsored" label instead of a generic "Frenz
+    // announcement" that reads like a personal message. `data` arrives with
+    // migration 0094 — fall back to a plain insert until it's applied.
+    const rowData = { title: cleanTitle, body: cleanBody, sponsored };
+    let dataOk = true;
     for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
       const chunk = targetIds.slice(i, i + CHUNK_SIZE);
-      await db.from("notifications").insert(
-        chunk.map((userId) => ({ user_id: userId, actor_id: null, type: "admin_broadcast", post_id: null })),
-      );
+      const base = chunk.map((userId) => ({ user_id: userId, actor_id: null, type: "admin_broadcast", post_id: null }));
+      if (dataOk) {
+        const { error } = await db.from("notifications").insert(base.map((r) => ({ ...r, data: rowData })));
+        if (error?.code === "42703") {
+          dataOk = false;
+          await db.from("notifications").insert(base);
+        }
+      } else {
+        await db.from("notifications").insert(base);
+      }
     }
     await db.from("notification_broadcasts").update({ sent_count: targetIds.length }).eq("id", broadcast.id);
 
-    // Sponsored/ad pushes lead with a clear "Sponsored" label — the honest,
-    // professional marking (never "this is a non-personalised generic ad"). Done
-    // server-side so it shows even on a client whose service worker is a build
-    // behind; `sponsored` also rides along for richer SW rendering.
+    // The PUSH leads with a clear "Sponsored" marker IN THE TITLE (the most
+    // visible line), then the ad's full title + body — so it reads as an ad, not
+    // a plain "from Frenz" message. Done server-side so it shows even on a client
+    // whose service worker is a build behind; `sponsored` also rides along.
     const push: PushPayload = {
-      title: cleanTitle,
-      body: sponsored ? `Sponsored · ${cleanBody}` : cleanBody,
+      title: sponsored ? `Sponsored · ${cleanTitle}` : cleanTitle,
+      body: cleanBody,
       url: "/notifications",
       tag: `broadcast:${broadcast.id}`,
       ...(sponsored ? { sponsored: true } : {}),

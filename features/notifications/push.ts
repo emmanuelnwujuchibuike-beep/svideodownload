@@ -187,15 +187,29 @@ export async function syncPush(userId?: string | null): Promise<void> {
   if (!pushSupported() || Notification.permission !== "granted") return;
   const KEY = "frenz:push-synced-uid";
   try {
-    if (userId && sessionStorage.getItem(KEY) === userId) return;
-  } catch {
-    /* ignore */
-  }
-  try {
     const reg = await navigator.serviceWorker.register("/sw.js");
     await navigator.serviceWorker.ready;
-    // Reclaims the slot from a foreign (ad-network) subscription if needed, so
-    // a device hijacked while Monetag push was live re-homes to our key here.
+
+    // Is the browser's single push slot currently held by a FOREIGN party (an
+    // ad network's push SW — Monetag, historically)? If so we must reclaim it
+    // NOW, regardless of the per-session throttle: a device hijacked while
+    // Monetag push was live would otherwise keep missing every app push,
+    // because the routine throttle below would early-return on the very
+    // session that needs healing (the flag was set when it synced the WRONG,
+    // Monetag, endpoint). Only skip when the slot is already OURS and this
+    // exact account was synced this session.
+    const current = await reg.pushManager.getSubscription();
+    const foreign = !!current && !subscriptionIsOurs(current);
+    let alreadySynced = false;
+    try {
+      alreadySynced = !!userId && sessionStorage.getItem(KEY) === userId;
+    } catch {
+      /* ignore */
+    }
+    if (current && !foreign && alreadySynced) return;
+
+    // Reclaims the slot from a foreign subscription if needed, then returns the
+    // app's OWN subscription and re-homes the server row to it.
     const sub = await acquireOurSubscription(reg);
     const json = sub.toJSON();
     const res = await fetch("/api/push/subscribe", {
@@ -203,7 +217,13 @@ export async function syncPush(userId?: string | null): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
     });
-    if (res.ok && userId) sessionStorage.setItem(KEY, userId);
+    if (res.ok && userId) {
+      try {
+        sessionStorage.setItem(KEY, userId);
+      } catch {
+        /* ignore */
+      }
+    }
   } catch {
     /* best-effort — the enable button remains the explicit path */
   }

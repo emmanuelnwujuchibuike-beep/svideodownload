@@ -76,9 +76,9 @@ export function PostEditButton({
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Edit post"
-        className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border px-3 text-sm font-semibold transition hover:bg-secondary"
+        className="inline-flex h-11 items-center gap-2 rounded-2xl border border-border/70 bg-card/70 px-4 text-sm font-semibold shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-px hover:border-border hover:bg-secondary/70 hover:shadow-md active:translate-y-0 active:scale-[0.98]"
       >
-        <Pencil className="h-4 w-4" /> Edit
+        <Pencil className="h-[18px] w-[18px]" /> Edit
       </button>
 
       {open ? (

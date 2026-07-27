@@ -253,8 +253,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           </p>
         ) : null}
 
-        {/* Engagement + reach */}
-        <div className="mt-5">
+        {/* Engagement + reach — one premium glass panel */}
+        <div className="mt-6 rounded-3xl border border-border/60 bg-gradient-to-b from-card/80 to-card/40 p-4 shadow-soft ring-1 ring-inset ring-white/5 backdrop-blur sm:p-5">
           <PostEngagement
             postId={post.id}
             loggedIn={!!me}
@@ -267,24 +267,24 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               comments: post.comments_count,
             }}
           />
-          <p className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <Eye className="h-3.5 w-3.5" /> {formatCompactNumber(post.views_count)} views
+          <div className="mt-4 flex items-center gap-2 border-t border-border/50 pt-4">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+              <Eye className="h-3.5 w-3.5 text-sky-500" /> {formatCompactNumber(post.views_count)} views
             </span>
-            <span className="inline-flex items-center gap-1">
-              <Download className="h-3.5 w-3.5" /> {formatCompactNumber(post.downloads_count)} downloads
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+              <Download className="h-3.5 w-3.5 text-violet-500" /> {formatCompactNumber(post.downloads_count)} downloads
             </span>
-          </p>
+          </div>
         </div>
 
         {/* Creator */}
-        <div className="mt-6 flex items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-soft">
-          <Link href={`/u/${post.publisher.handle}`} className="shrink-0">
+        <div className="mt-6 flex items-center gap-3 rounded-3xl border border-border/60 bg-gradient-to-br from-card to-card/50 p-4 shadow-soft ring-1 ring-inset ring-white/5 transition-shadow hover:shadow-md">
+          <Link href={`/u/${post.publisher.handle}`} className="shrink-0" prefetch>
             {post.publisher.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={post.publisher.avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover" />
+              <img src={post.publisher.avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover ring-2 ring-violet-500/30 ring-offset-2 ring-offset-card" />
             ) : (
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-cyan-400 text-lg font-bold text-white">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-lg font-bold text-white ring-2 ring-violet-500/30 ring-offset-2 ring-offset-card">
                 {post.publisher.displayName.charAt(0).toUpperCase()}
               </span>
             )}

@@ -88,20 +88,28 @@ export function PostEngagement({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Pill active={liked} onClick={() => react("like")} activeClass="border-red-500/40 bg-red-500/10 text-red-500">
-        <Heart className={cn("h-4 w-4", liked && "fill-current")} /> {formatCompactNumber(likes)}
+      <Pill
+        active={liked}
+        onClick={() => react("like")}
+        activeClass="border-transparent bg-gradient-to-br from-rose-500/15 to-red-500/10 text-rose-500 shadow-sm shadow-rose-500/20 ring-1 ring-inset ring-rose-500/30"
+      >
+        <Heart className={cn("h-[18px] w-[18px] transition-transform", liked && "scale-110 fill-current")} /> {formatCompactNumber(likes)}
       </Pill>
-      <Pill active={saved} onClick={() => react("save")} activeClass="border-primary/40 bg-primary/10 text-primary">
-        <Bookmark className={cn("h-4 w-4", saved && "fill-current")} /> {formatCompactNumber(saves)}
+      <Pill
+        active={saved}
+        onClick={() => react("save")}
+        activeClass="border-transparent bg-gradient-to-br from-blue-500/15 to-violet-500/10 text-primary shadow-sm shadow-primary/20 ring-1 ring-inset ring-primary/30"
+      >
+        <Bookmark className={cn("h-[18px] w-[18px] transition-transform", saved && "scale-110 fill-current")} /> {formatCompactNumber(saves)}
       </Pill>
       <Pill onClick={share}>
-        {copied ? <Check className="h-4 w-4 text-green-500" /> : <Share2 className="h-4 w-4" />} {formatCompactNumber(shares)}
+        {copied ? <Check className="h-[18px] w-[18px] text-emerald-500" /> : <Share2 className="h-[18px] w-[18px]" />} {formatCompactNumber(shares)}
       </Pill>
       <a
         href="#comments"
-        className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+        className="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-border/70 bg-card/70 px-4 text-sm font-semibold text-muted-foreground shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-px hover:text-foreground hover:shadow-md active:translate-y-0"
       >
-        <MessageCircle className="h-4 w-4" /> {formatCompactNumber(initial.comments)}
+        <MessageCircle className="h-[18px] w-[18px]" /> {formatCompactNumber(initial.comments)}
       </a>
     </div>
   );
@@ -124,8 +132,10 @@ function Pill({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold tabular-nums transition active:scale-95",
-        active && activeClass ? activeClass : "border-border text-muted-foreground hover:bg-secondary hover:text-foreground",
+        "inline-flex h-10 items-center gap-1.5 rounded-2xl border px-4 text-sm font-semibold tabular-nums shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-px active:translate-y-0 active:scale-95",
+        active && activeClass
+          ? activeClass
+          : "border-border/70 bg-card/70 text-muted-foreground hover:text-foreground hover:shadow-md",
       )}
     >
       {children}

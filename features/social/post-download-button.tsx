@@ -48,9 +48,15 @@ export function PostDownloadButton({
       <button
         type="button"
         onClick={onClick}
-        className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 transition hover:opacity-95 active:scale-[0.99]"
+        className="group relative inline-flex h-11 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-6 text-sm font-bold text-white shadow-lg shadow-violet-600/30 ring-1 ring-inset ring-white/15 transition-all duration-200 hover:-translate-y-px hover:shadow-xl hover:shadow-violet-600/40 active:translate-y-0 active:scale-[0.98]"
       >
-        <Download className="h-4 w-4" /> Download
+        {/* Luxury sheen that sweeps across on hover */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full"
+        />
+        <Download className="relative h-[18px] w-[18px]" strokeWidth={2.5} />
+        <span className="relative">Download</span>
       </button>
       {/* Progress card for public pages outside the app shell (singleton). */}
       <FloatingDownloadProgress />

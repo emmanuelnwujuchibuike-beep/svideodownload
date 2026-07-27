@@ -53,13 +53,13 @@ export function PostDeleteButton({ postId, redirectTo = "/home" }: { postId: str
       disabled={busy}
       aria-label={armed ? "Confirm delete post" : "Delete post"}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition disabled:opacity-60",
+        "inline-flex h-11 items-center gap-2 rounded-2xl px-4 text-sm font-semibold shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-px active:translate-y-0 active:scale-[0.98] disabled:opacity-60",
         armed
-          ? "border border-rose-500/50 bg-rose-500/10 text-rose-500"
-          : "border border-border bg-card text-muted-foreground hover:border-rose-500/40 hover:text-rose-500",
+          ? "border border-rose-500/50 bg-rose-500/15 text-rose-500 shadow-rose-500/20"
+          : "border border-border/70 bg-card/70 text-muted-foreground hover:border-rose-500/40 hover:text-rose-500 hover:shadow-md",
       )}
     >
-      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+      {busy ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Trash2 className="h-[18px] w-[18px]" />}
       {armed ? "Delete post?" : "Delete"}
     </button>
   );

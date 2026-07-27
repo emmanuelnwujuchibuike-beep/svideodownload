@@ -473,13 +473,21 @@ export default async function ProfilePage({
                       targetId={profile.id}
                       initialFollowing={profile.isFollowing}
                       canFollow={!!me}
+                      followsYou={followsYou}
                       className="shrink-0"
                     />
                     {me ? (
                       <>
+                        {/* Adaptive Relationship Engine (Part 7): messaging a friend is
+                            the natural primary action, so Message leads (filled) between
+                            friends and stays a calm secondary otherwise. */}
                         <Link
                           href={`/messages/new/${profile.id}`}
-                          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-semibold transition hover:bg-secondary"
+                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                            friendState === "friends"
+                              ? "bg-primary text-primary-foreground hover:opacity-90"
+                              : "border border-border hover:bg-secondary"
+                          }`}
                         >
                           <MessageCircle className="h-4 w-4" /> Message
                         </Link>

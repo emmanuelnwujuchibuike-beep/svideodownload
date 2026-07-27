@@ -10,16 +10,24 @@ import { cn } from "@/lib/utils";
 /**
  * Follow / Following toggle. Optimistic, reverts on error. Anonymous viewers are
  * routed to sign-in (we never expose a follow action without auth).
+ *
+ * Relationship-aware (Adaptive Relationship Engine · Part 7): when this person
+ * already follows the viewer and the viewer doesn't follow back yet, the label
+ * becomes "Follow back" — the button understands the relationship instead of
+ * showing the same static text for everyone.
  */
 export function FollowButton({
   targetId,
   initialFollowing,
   canFollow,
+  followsYou = false,
   className,
 }: {
   targetId: string;
   initialFollowing: boolean;
   canFollow: boolean;
+  /** This profile already follows the viewer — surfaces a "Follow back" label. */
+  followsYou?: boolean;
   className?: string;
 }) {
   const router = useRouter();
@@ -69,7 +77,7 @@ export function FollowButton({
       ) : (
         <UserPlus className="h-4 w-4" />
       )}
-      {following ? "Following" : "Follow"}
+      {following ? "Following" : followsYou ? "Follow back" : "Follow"}
     </button>
   );
 }

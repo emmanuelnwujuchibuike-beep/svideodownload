@@ -8,7 +8,7 @@ import { Skeleton, SkeletonAvatar } from "@/features/ui/skeleton";
  */
 export default function PostLoading() {
   return (
-    <main className="container max-w-3xl pb-24 pt-28 sm:pt-32">
+    <main className="container max-w-3xl pb-24 pt-[calc(var(--frenz-safe-top)+1.25rem)] lg:pt-24">
       <span role="status" aria-live="polite" className="sr-only">
         Loading post…
       </span>

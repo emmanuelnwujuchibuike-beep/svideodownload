@@ -125,7 +125,7 @@ export function ProfileMobileMenu() {
           inside a fixed h-14 (that squeezes the wordmark/icons up into the
           notch and down over the page, the "header goes into the safe areas"
           bug). Total height = safe-top + the 3.5rem bar. */}
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-border/60 bg-background/95 pt-[var(--frenz-safe-top)] backdrop-blur-xl lg:hidden">
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-border/40 bg-background/70 pt-[var(--frenz-safe-top)] backdrop-blur-2xl backdrop-saturate-150 lg:hidden">
         <div className="flex h-14 items-center justify-between px-4">
           <Link href="/home" className="flex items-center">
             <FrenzWordmark size={28} textClassName="text-base" priority />

@@ -248,7 +248,13 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
         social ? "border-b border-border/20 bg-background/60" : "border-b border-border/40 bg-background/85 supports-[backdrop-filter]:bg-background/70",
       )}
     >
-      <div className="container flex h-16 items-center justify-between">
+      {/* On mobile SOCIAL surfaces (posts/profiles) the bar has no content — the
+          brand, nav and actions are all desktop-only there, since the bottom
+          MobileNav owns navigation. Rendering a full h-16 bar just laid a fat
+          translucent band over the top of the post ("header too fat, covering
+          the post"). Collapse it to the bare safe-area strip on mobile; the full
+          bar returns at lg+ where the desktop nav actually lives. */}
+      <div className={cn("container flex items-center justify-between", social ? "h-0 lg:h-16" : "h-16")}>
         {/* Brand — hidden on mobile social surfaces (plain, full-bleed top bar) */}
         <Link href="/" className={cn("items-center", social ? "hidden lg:flex" : "flex")} onClick={() => setOpen(false)}>
           <FrenzWordmark size={32} priority />

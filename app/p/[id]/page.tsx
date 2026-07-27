@@ -201,7 +201,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
       <SiteHeader social />
-      <main className="container max-w-3xl pb-24 pt-28 sm:pt-32">
+      {/* Clears the header precisely: on mobile the header is just the safe-area
+          strip (so safe-top + a small gap); at lg+ the full h-16 bar is back. */}
+      <main className="container max-w-3xl pb-24 pt-[calc(var(--frenz-safe-top)+1.25rem)] lg:pt-24">
         {post.status !== "published" ? (
           <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
             This post is <strong>{post.status.replace("_", " ")}</strong> and isn&apos;t publicly visible.

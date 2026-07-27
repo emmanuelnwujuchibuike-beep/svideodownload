@@ -1,4 +1,4 @@
-import { BadgeCheck, CalendarDays, Link as LinkIcon, Lock, MessageCircle } from "lucide-react";
+import { BadgeCheck, CalendarDays, Camera, Link as LinkIcon, Lock, MessageCircle, MoreHorizontal, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Image from "next/image";
@@ -8,11 +8,14 @@ import { Suspense } from "react";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteHeader } from "@/components/layout/site-header";
-import { OwnerProfileDashboard } from "@/components/profile/dashboard/owner-dashboard";
 import { jsonLd } from "@/lib/seo/json-ld";
+import { CreatorRail } from "@/features/profile/creator-rail";
 import { ProfileTabs } from "@/features/profile/profile-tabs";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
+import { friendIdSet } from "@/lib/social/friend-ids";
+import { SoonButton } from "@/components/profile/dashboard/soon";
+import { Toaster } from "@/features/ui/toast";
 import { LivingGlow } from "@/features/profile/living-glow";
 import { ProfileMenu } from "@/features/profile/profile-menu";
 import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
@@ -88,6 +91,45 @@ async function publishedPostsCount(profileId: string, isOwner: boolean): Promise
   }
 }
 
+/** Total likes + views across a creator's published posts (the two extra stats
+ *  the creator profile shows beyond posts/followers/following). */
+async function creatorTotals(profileId: string): Promise<{ likes: number; views: number }> {
+  try {
+    const { data } = await createAdminClient()
+      .from("posts")
+      .select("likes_count, views_count")
+      .eq("publisher_id", profileId)
+      .eq("status", "published");
+    let likes = 0;
+    let views = 0;
+    for (const r of (data ?? []) as { likes_count: number | null; views_count: number | null }[]) {
+      likes += r.likes_count ?? 0;
+      views += r.views_count ?? 0;
+    }
+    return { likes, views };
+  } catch {
+    return { likes: 0, views: 0 };
+  }
+}
+
+/** A few real friends for the creator rail's "Top Friends". */
+async function topFriends(viewerId: string): Promise<{ name: string; handle: string; avatarUrl: string | null }[]> {
+  try {
+    const ids = [...(await friendIdSet(viewerId))].slice(0, 8);
+    if (ids.length === 0) return [];
+    const { data } = await createAdminClient()
+      .from("profiles")
+      .select("handle, display_name, avatar_url")
+      .in("id", ids)
+      .limit(5);
+    return ((data ?? []) as { handle: string | null; display_name: string | null; avatar_url: string | null }[])
+      .filter((p) => p.handle)
+      .map((p) => ({ name: p.display_name || `@${p.handle}`, handle: p.handle as string, avatarUrl: p.avatar_url }));
+  } catch {
+    return [];
+  }
+}
+
 export default async function ProfilePage({
   params,
   searchParams,
@@ -136,32 +178,119 @@ export default async function ProfilePage({
     },
   };
 
-  // The OWNER sees the restructured profile DASHBOARD (public/profile.jpg). It
-  // renders inside the same app shell (app/u/layout.tsx) as everything else, so
-  // this is content only. Visitors fall through to the public profile below —
-  // that path is deliberately left untouched.
+  // OWNER — the creator profile (design: public/mainprofile.jpg): the shared app
+  // sidebar + top bar (from the layout), a center column (cover · identity ·
+  // Creator badge · 5 stats · real posts tabs) and a right rail (About Me ·
+  // Creator Tools · Achievements · Top Friends · Recent Activity). Everything is
+  // the viewer's REAL data; tools without a backend announce "coming soon".
   if (profile.isOwner) {
+    const [totals, friends] = await Promise.all([creatorTotals(profile.id), topFriends(profile.id)]);
+    const joined = `Joined ${new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`;
+    const stats: { label: string; value: number }[] = [
+      { label: "Posts", value: postsTotal },
+      { label: "Followers", value: profile.followersCount },
+      { label: "Following", value: profile.followingCount },
+      { label: "Likes", value: totals.likes },
+      { label: "Views", value: totals.views },
+    ];
     return (
       <>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
         <SiteHeader social desktopHidden />
+        <SuggestionsLauncher className="fixed left-3 top-[calc(0.75rem+var(--frenz-safe-top))] z-[60] bg-background/70 backdrop-blur-xl lg:hidden" />
         <main className="pb-24 pt-14 sm:pt-16 lg:pt-4">
-          <OwnerProfileDashboard
-            name={profile.displayName}
-            handle={profile.handle}
-            avatarUrl={profile.avatarUrl}
-            bannerUrl={profile.bannerUrl}
-            verified={profile.isVerified}
-            plan={plan}
-            bio={profile.bio}
-            website={profile.website}
-            joined={`Joined ${new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`}
-            followers={profile.followersCount}
-            following={profile.followingCount}
-            friends={friendTotal}
-            posts={postsTotal}
-          />
+          <div className="mx-auto flex w-full max-w-7xl gap-6 px-0 sm:px-4">
+            <div className="min-w-0 flex-1">
+              {/* Cover */}
+              <div className="relative h-40 w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:h-52 sm:rounded-3xl">
+                {profile.bannerUrl ? (
+                  <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 1024px) 100vw, 900px" className="object-cover" />
+                ) : (
+                  <LivingGlow />
+                )}
+                <div className="absolute right-3 top-3 flex items-center gap-2 pt-[var(--frenz-safe-top)] sm:pt-0">
+                  <SoonButton feature="Edit cover" className="inline-flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/55">
+                    <Camera className="h-4 w-4" /> Edit Cover
+                  </SoonButton>
+                  <SoonButton feature="More options" ariaLabel="More options" className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/40 text-white backdrop-blur-md transition hover:bg-black/55">
+                    <MoreHorizontal className="h-5 w-5" />
+                  </SoonButton>
+                </div>
+              </div>
+
+              <div className="px-4 sm:px-6">
+                {/* Avatar + actions */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="relative -mt-12 w-fit sm:-mt-16">
+                    <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
+                      {profile.avatarUrl ? (
+                        <Image src={profile.avatarUrl} alt="" width={128} height={128} priority className="block h-24 w-24 rounded-full object-cover ring-4 ring-background sm:h-28 sm:w-28" />
+                      ) : (
+                        <span className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-3xl font-bold text-white ring-4 ring-background sm:h-28 sm:w-28">
+                          {profile.displayName.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </IdentityRing>
+                    <Link href="/account#profile" aria-label="Change photo" className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-card text-foreground shadow-md ring-1 ring-border transition hover:bg-secondary">
+                      <Camera className="h-4 w-4" />
+                    </Link>
+                  </div>
+                  <div className="flex items-center gap-2 sm:mb-2">
+                    <Link href="/account#profile" className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-semibold transition hover:bg-secondary">
+                      Edit Profile
+                    </Link>
+                    <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                  </div>
+                </div>
+
+                {/* Identity */}
+                <div className="mt-4">
+                  <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
+                    {profile.displayName}
+                    {profile.isVerified ? <BadgeCheck className="h-6 w-6 fill-blue-500 text-white" /> : null}
+                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/12 px-2.5 py-0.5 text-xs font-semibold text-violet-600 dark:text-violet-300">
+                      <Sparkles className="h-3.5 w-3.5" /> Creator
+                    </span>
+                  </h1>
+                  <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
+                </div>
+
+                {profile.bio ? <p className="mt-3 max-w-2xl leading-relaxed">{profile.bio}</p> : null}
+
+                <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                  {profile.website ? (
+                    <a href={profile.website} target="_blank" rel="nofollow noopener" className="inline-flex items-center gap-1.5 text-primary hover:underline">
+                      <LinkIcon className="h-4 w-4" />
+                      {profile.website.replace(/^https?:\/\//, "")}
+                    </a>
+                  ) : null}
+                  <span className="inline-flex items-center gap-1.5">
+                    <CalendarDays className="h-4 w-4" />
+                    {joined}
+                  </span>
+                </div>
+
+                {/* 5 stats */}
+                <div className="mt-6 grid grid-cols-5 divide-x divide-border/50 overflow-hidden rounded-3xl border border-border/60 bg-card shadow-soft">
+                  {stats.map((s) => (
+                    <div key={s.label} className="px-1 py-4 text-center">
+                      <span className="block text-base font-extrabold tracking-tight sm:text-2xl">{formatCompactNumber(s.value)}</span>
+                      <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground sm:text-[11px]">{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Real posts — Videos / Reels / Liked / Saved / Collections (grid + list) */}
+                <Suspense fallback={<PostGridSkeleton count={6} />}>
+                  <ProfileTabsLoader profileId={profile.id} handle={profile.handle} viewerId={me} isOwner tabs={tabs} initialTab={activeTab} />
+                </Suspense>
+              </div>
+            </div>
+
+            <CreatorRail bio={profile.bio} website={profile.website} joined={joined} friends={friends} />
+          </div>
         </main>
+        <Toaster />
       </>
     );
   }

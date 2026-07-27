@@ -524,13 +524,11 @@ async function loadHomeFeed(
       .eq("visibility", "public")
       .limit(Math.min(want, 400));
     if (sort === "following") q = q.in("publisher_id", followingIds);
-    // Feed and Reels are separate products: each surface sees only its own
-    // format (no duplicated content). Pre-migration-0031 both fall back to
-    // the shared pool, with reels keeping its videos-only behavior below.
-    const formatSplit = await hasFormatColumn(db);
-    if (formatSplit) {
-      q = format === "reel" ? q.eq("format", "reel") : q.neq("format", "reel");
-    } else if (format === "reel") {
+    // Feed and Reels OVERLAP on video (owner: "videos should appear on both reels
+    // and feed"). Reels = every public VIDEO, whichever surface it was posted to;
+    // the Feed shows everything (images, videos incl. reels, text). So a video
+    // lives in both, an image only in the feed — they're not mutually exclusive.
+    if (format === "reel") {
       q = q.eq("media_kind", "video");
     }
     // Base fetch order is newest-first for "following"/"recent" (an unranked,

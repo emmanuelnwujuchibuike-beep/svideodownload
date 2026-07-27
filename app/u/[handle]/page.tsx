@@ -267,7 +267,7 @@ export default async function ProfilePage({
                   {profile.bannerUrl ? (
                     <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 1024px) 100vw, 900px" className="object-cover" />
                   ) : (
-                    <LivingGlow />
+                    <LivingGlow joinedAt={profile.createdAt} />
                   )}
                   {/* Top gloss + bottom scrim so the overlapping card reads cleanly over any cover */}
                   <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/25" />
@@ -427,7 +427,7 @@ export default async function ProfilePage({
               {profile.bannerUrl ? (
                 <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 896px) 100vw, 896px" className="object-cover" />
               ) : null}
-              <LivingGlow />
+              <LivingGlow joinedAt={profile.createdAt} />
               <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/25" />
             </div>
 

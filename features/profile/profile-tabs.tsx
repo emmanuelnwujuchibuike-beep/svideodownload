@@ -112,11 +112,14 @@ export function ProfileTabs({
 
   return (
     <div className="mt-8">
-      <div className="mb-5 flex items-center justify-between gap-3 border-b border-border/60">
-        {/* Tabs — icon rail with a gradient underline. No sideways slide.
-            Scrolls horizontally instead of inflating (and overflowing) the
-            column when every tab can't fit — e.g. beside the creator rail. */}
-        <div className="flex min-w-0 flex-1 items-center overflow-x-auto pb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="mb-6 flex items-center gap-2">
+        {/* Smart Navigation Dock™ (Profile · Part 3) — a premium glass segmented
+            control that replaces the old text-tab rail. Each section is one tap
+            away; the active section lifts into a brand pill while inactive sections
+            stay calm icons (labelled on wider screens, icon-only on mobile so every
+            tab fits). Scrolls horizontally beside the creator rail. Behaviour is
+            unchanged: instant client-side switching, URL kept in sync, no reload. */}
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-2xl border border-border/60 bg-card/60 p-1 shadow-sm backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((id) => {
             const Icon = TAB_ICON[id];
             const isActive = active === id;
@@ -128,26 +131,22 @@ export function ProfileTabs({
                 aria-pressed={isActive}
                 title={TAB_LABEL[id]}
                 className={cn(
-                  "group relative flex shrink-0 items-center gap-2 px-2.5 py-3 text-sm font-semibold transition-colors sm:px-3.5",
-                  isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                  "group relative flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition",
+                  isActive
+                    ? "bg-brand-tile text-white shadow-sm"
+                    : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
                 )}
               >
-                <Icon className="h-[19px] w-[19px] shrink-0 transition-transform group-active:scale-90" />
-                <span className="hidden sm:inline">{TAB_LABEL[id]}</span>
-                {isActive ? (
-                  <span
-                    aria-hidden
-                    className="absolute inset-x-1.5 -bottom-px h-[3px] rounded-full bg-gradient-to-r from-blue-600 to-violet-600 shadow-[0_0_10px] shadow-violet-500/40"
-                  />
-                ) : null}
+                <Icon className="h-[18px] w-[18px] shrink-0 transition-transform group-active:scale-90" />
+                <span className={isActive ? "inline" : "hidden sm:inline"}>{TAB_LABEL[id]}</span>
               </button>
             );
           })}
         </div>
 
-        {/* Grid ⇄ list view toggle — always on the right, never touching the tabs */}
+        {/* Grid ⇄ list view toggle — always separated from the dock */}
         {showViewToggle ? (
-          <div className="mb-2 flex shrink-0 items-center gap-0.5 rounded-xl border border-border/60 bg-card/70 p-0.5 shadow-sm backdrop-blur">
+          <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-border/60 bg-card/70 p-0.5 shadow-sm backdrop-blur">
             {(
               [
                 { v: "grid" as const, Icon: LayoutGrid, label: "Grid view" },

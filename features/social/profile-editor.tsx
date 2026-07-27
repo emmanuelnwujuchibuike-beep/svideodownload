@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ImageUpload } from "@/components/social/image-upload";
-import { PROFILE_MOODS, type OwnProfile, type Visibility } from "@/lib/social/profile";
+import { PROFILE_ACCENTS, PROFILE_MOODS, type OwnProfile, type Visibility } from "@/lib/social/profile";
 import { cn } from "@/lib/utils";
 
 const VISIBILITY: { value: Visibility; label: string; hint: string; icon: typeof Globe }[] = [
@@ -20,7 +20,7 @@ export function ProfileEditor({
   extras,
 }: {
   profile: OwnProfile;
-  extras?: { status: string | null; mood: string | null };
+  extras?: { status: string | null; mood: string | null; accent: string | null };
 }) {
   const router = useRouter();
   const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl ?? "");
@@ -31,6 +31,7 @@ export function ProfileEditor({
   const [website, setWebsite] = useState(profile.website ?? "");
   const [status, setStatus] = useState(extras?.status ?? "");
   const [mood, setMood] = useState(extras?.mood ?? "");
+  const [accent, setAccent] = useState(extras?.accent ?? "");
   const [visibility, setVisibility] = useState<Visibility>(profile.visibility);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -52,6 +53,7 @@ export function ProfileEditor({
           visibility,
           status: status.trim() || null,
           mood: mood || null,
+          accent: accent || null,
         }),
       });
       const json = await res.json();
@@ -132,6 +134,37 @@ export function ProfileEditor({
               </option>
             ))}
           </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label className={label}>Accent colour <span className="font-normal text-muted-foreground/70">· shown on your profile</span></label>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAccent("")}
+              aria-pressed={accent === ""}
+              className={cn(
+                "inline-flex h-9 items-center rounded-xl border px-3 text-xs font-semibold transition",
+                accent === "" ? "border-primary text-primary" : "border-border/70 text-muted-foreground hover:border-foreground/20",
+              )}
+            >
+              Default
+            </button>
+            {PROFILE_ACCENTS.map((a) => (
+              <button
+                key={a.key}
+                type="button"
+                onClick={() => setAccent(a.key)}
+                aria-pressed={accent === a.key}
+                aria-label={a.label}
+                title={a.label}
+                className={cn(
+                  "h-9 w-9 rounded-xl ring-2 ring-offset-2 ring-offset-background transition",
+                  accent === a.key ? "ring-foreground" : "ring-transparent hover:ring-border",
+                )}
+                style={{ background: a.hex }}
+              />
+            ))}
+          </div>
         </div>
         <div className="sm:col-span-2">
           <label className={label}>Business link <span className="font-normal text-muted-foreground/70">· optional</span></label>

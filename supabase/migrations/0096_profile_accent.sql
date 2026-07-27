@@ -1,0 +1,12 @@
+-- 0096 — Profile theme accent (Feature 18 · Premium Profile Platform).
+--
+-- A member's chosen accent colour (a key like 'violet' / 'emerald'; the app maps
+-- it to a brand-safe hex). Drives a subtle accent line on their Identity Card so
+-- the profile feels personal without touching global theme tokens. Nullable, no
+-- default, so existing rows are unaffected.
+--
+-- Read/written DEFENSIVELY and INDEPENDENTLY of the 0095 status/mood columns: the
+-- reader tries status+mood+accent and falls back to status+mood, and writes go in
+-- a separate best-effort UPDATE — so applying 0095 and 0096 in either order (or
+-- not yet) never breaks the profile or the editor.
+alter table public.profiles add column if not exists accent text;

@@ -223,30 +223,56 @@ export const PROFILE_MOODS = [
 ] as const;
 export type ProfileMood = (typeof PROFILE_MOODS)[number];
 
+/** The profile accent palette (migration 0096). Stored as the key; mapped to a
+ *  brand-safe hex here. Drives a subtle accent line on the Identity Card. */
+export const PROFILE_ACCENTS = [
+  { key: "blue", label: "Electric Blue", hex: "#0A84FF" },
+  { key: "violet", label: "Royal Purple", hex: "#6C4DFF" },
+  { key: "emerald", label: "Emerald", hex: "#10b981" },
+  { key: "rose", label: "Rose", hex: "#f43f5e" },
+  { key: "amber", label: "Amber", hex: "#f59e0b" },
+  { key: "cyan", label: "Cyan", hex: "#06b6d4" },
+] as const;
+export const PROFILE_ACCENT_KEYS = ["blue", "violet", "emerald", "rose", "amber", "cyan"] as const;
+
+/** The hex for a stored accent key, or null (unset / unknown key). */
+export function accentHex(key: string | null | undefined): string | null {
+  if (!key) return null;
+  return PROFILE_ACCENTS.find((a) => a.key === key)?.hex ?? null;
+}
+
 export interface ProfileExtras {
   status: string | null;
   mood: string | null;
+  accent: string | null;
 }
 
 /**
- * A profile's optional status + mood, read through a DEDICATED query so the
- * profile and account pages never break if migration 0095 hasn't been applied
- * yet: a missing column (or any error) simply degrades to nulls rather than
- * failing the whole profile load the way adding these to the main SELECT would.
+ * A profile's optional status + mood + accent, read through a DEDICATED query so
+ * the profile and account pages never break if migrations 0095/0096 haven't been
+ * applied yet. It first tries all three; if `accent` (0096) isn't there it falls
+ * back to status+mood (0095); if those aren't there either it degrades to nulls —
+ * so the two migrations are fully independent and any order is safe.
  */
 export async function getProfileExtras(profileId: string): Promise<ProfileExtras> {
-  if (!hasSupabase) return { status: null, mood: null };
+  if (!hasSupabase) return { status: null, mood: null, accent: null };
+  const db = createAdminClient();
   try {
-    const { data, error } = await createAdminClient()
-      .from("profiles")
-      .select("status, mood")
-      .eq("id", profileId)
-      .maybeSingle();
-    if (error) return { status: null, mood: null };
-    const row = data as { status: string | null; mood: string | null } | null;
-    return { status: row?.status?.trim() || null, mood: row?.mood || null };
+    const { data, error } = await db.from("profiles").select("status, mood, accent").eq("id", profileId).maybeSingle();
+    if (!error && data) {
+      const r = data as { status: string | null; mood: string | null; accent: string | null };
+      return { status: r.status?.trim() || null, mood: r.mood || null, accent: r.accent || null };
+    }
   } catch {
-    return { status: null, mood: null };
+    /* accent column missing — fall back to status+mood below */
+  }
+  try {
+    const { data, error } = await db.from("profiles").select("status, mood").eq("id", profileId).maybeSingle();
+    if (error) return { status: null, mood: null, accent: null };
+    const r = data as { status: string | null; mood: string | null } | null;
+    return { status: r?.status?.trim() || null, mood: r?.mood || null, accent: null };
+  } catch {
+    return { status: null, mood: null, accent: null };
   }
 }
 

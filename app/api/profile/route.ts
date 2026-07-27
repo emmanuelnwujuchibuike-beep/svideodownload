@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { normalizeHandle, PROFILE_MOODS } from "@/lib/social/profile";
+import { normalizeHandle, PROFILE_ACCENT_KEYS, PROFILE_MOODS } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -25,9 +25,10 @@ const schema = z.object({
   banner_url: httpUrl,
   website: httpUrl,
   visibility: z.enum(["public", "followers", "private"]).optional(),
-  // Status + mood (migration 0095) — saved separately, best-effort (below).
+  // Status + mood (0095) and accent (0096) — saved separately, best-effort (below).
   status: z.string().trim().max(80).nullable().optional().or(z.literal("").transform(() => null)),
   mood: z.enum(PROFILE_MOODS).nullable().optional().or(z.literal("").transform(() => null)),
+  accent: z.enum(PROFILE_ACCENT_KEYS).nullable().optional().or(z.literal("").transform(() => null)),
 });
 
 /** PATCH /api/profile — update the signed-in user's social profile. */
@@ -67,14 +68,20 @@ export async function PATCH(request: Request) {
     if (parsed.data[k] !== undefined) update[k] = parsed.data[k];
   }
 
-  // Status + mood live behind migration 0095. They're written in a SEPARATE,
-  // best-effort update so a not-yet-applied column can never fail the core
-  // profile save (name/bio/etc. must always be able to save).
-  const extras: Record<string, unknown> = {};
-  if (parsed.data.status !== undefined) extras.status = parsed.data.status;
-  if (parsed.data.mood !== undefined) extras.mood = parsed.data.mood;
+  // Status/mood (0095) and accent (0096) are written in SEPARATE, best-effort
+  // updates so a not-yet-applied column for one can never fail the core profile
+  // save (name/bio/etc.) — nor block the other extra.
+  const statusMood: Record<string, unknown> = {};
+  if (parsed.data.status !== undefined) statusMood.status = parsed.data.status;
+  if (parsed.data.mood !== undefined) statusMood.mood = parsed.data.mood;
+  const accentUpdate: Record<string, unknown> = {};
+  if (parsed.data.accent !== undefined) accentUpdate.accent = parsed.data.accent;
 
-  if (Object.keys(update).length === 0 && Object.keys(extras).length === 0) {
+  if (
+    Object.keys(update).length === 0 &&
+    Object.keys(statusMood).length === 0 &&
+    Object.keys(accentUpdate).length === 0
+  ) {
     return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
   }
 
@@ -88,11 +95,10 @@ export async function PATCH(request: Request) {
     }
   }
 
-  if (Object.keys(extras).length > 0) {
-    // Best-effort: swallow a missing-column error (42703 / PGRST204) so status
-    // and mood save once 0095 is applied without ever blocking the rest.
-    await supabase.from("profiles").update(extras).eq("id", user.id);
-  }
+  // Best-effort: a missing column (before 0095/0096 apply) is swallowed so the
+  // rest of the save still succeeds.
+  if (Object.keys(statusMood).length > 0) await supabase.from("profiles").update(statusMood).eq("id", user.id);
+  if (Object.keys(accentUpdate).length > 0) await supabase.from("profiles").update(accentUpdate).eq("id", user.id);
 
   return NextResponse.json({ ok: true });
 }

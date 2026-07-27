@@ -169,6 +169,54 @@ export default async function AccountPage() {
               </div>
             </div>
 
+            {/* Settings Control Center — organized workspaces. Real destinations
+                are prefetched (prefetch) so they open instantly with no loading,
+                per the instant-navigation standard. */}
+            <div className="border-b border-border/60 p-6 sm:p-8">
+              <div className="mb-4">
+                <h2 className="text-base font-semibold">Control Center</h2>
+                <p className="text-xs text-muted-foreground">Everything about your identity, organized into workspaces.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                {[
+                  { href: "#profile", Icon: Sparkles, title: "Identity", sub: "Name · status · accent" },
+                  { href: "/account/privacy", Icon: Lock, title: "Privacy", sub: "Who sees what", prefetch: true },
+                  { href: "/account/security", Icon: ShieldCheck, title: "Security", sub: "2FA · devices", prefetch: true },
+                  { href: "/account/analytics", Icon: BarChart3, title: "Analytics", sub: "Your performance", prefetch: true },
+                ].map((w) => (
+                  <Link
+                    key={w.title}
+                    href={w.href}
+                    prefetch={w.prefetch ?? undefined}
+                    className="group flex items-center gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-3.5 transition hover:bg-secondary/40"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground transition group-hover:text-foreground">
+                      <w.Icon className="h-[18px] w-[18px]" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold">{w.title}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">{w.sub}</span>
+                    </span>
+                  </Link>
+                ))}
+                {[
+                  { Icon: Crown, title: "Creator" },
+                  { Icon: Gem, title: "Business" },
+                  { Icon: Code2, title: "Developer" },
+                ].map((w) => (
+                  <div key={w.title} className="flex items-center gap-3 rounded-2xl border border-dashed border-border/60 p-3.5 opacity-70">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
+                      <w.Icon className="h-[18px] w-[18px]" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold">{w.title}</span>
+                      <span className="block text-[11px] text-muted-foreground">Coming soon</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Public profile */}
             {ownProfile ? <ProfileEditor profile={ownProfile} extras={profileExtras} /> : null}
 

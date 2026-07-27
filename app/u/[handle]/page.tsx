@@ -31,7 +31,7 @@ import { friendsCount, friendshipState, mutualFriendsCount } from "@/lib/social/
 import { createAdminClient } from "@/lib/supabase/admin";
 import { viewableCollectionsCount } from "@/lib/social/collections";
 import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "@/lib/social/posts";
-import { getPrivacySettings, getProfileExtras, getPublicProfile, tabVisible } from "@/lib/social/profile";
+import { accentHex, getPrivacySettings, getProfileExtras, getPublicProfile, tabVisible } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
 
@@ -203,6 +203,8 @@ export default async function ProfilePage({
     isViewer ? followsViewer(profile.id, me!) : Promise.resolve(false),
     getProfileExtras(profile.id),
   ]);
+  // The member's chosen accent (migration 0096), mapped to a hex, or null.
+  const heroAccent = accentHex(profileExtras.accent);
 
   // Per-tab visibility: activity tabs appear only when the viewer is allowed to
   // see them (owner always; public → everyone; followers → the viewer follows).
@@ -267,9 +269,11 @@ export default async function ProfilePage({
                 <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:h-60 sm:rounded-3xl">
                   {profile.bannerUrl ? (
                     <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 1024px) 100vw, 900px" className="object-cover" />
-                  ) : (
-                    <LivingGlow joinedAt={profile.createdAt} />
-                  )}
+                  ) : null}
+                  {/* Living Profile lighting always overlays (even over a banner), so
+                      the time-of-day / seasonal / anniversary glow is visible to the
+                      owner too — not just when they have no banner. */}
+                  <LivingGlow joinedAt={profile.createdAt} />
                   {/* Top gloss + bottom scrim so the overlapping card reads cleanly over any cover */}
                   <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/25" />
                   <div className="absolute right-3 top-3 flex items-center gap-2 pt-[var(--frenz-safe-top)] sm:pt-0">
@@ -284,7 +288,9 @@ export default async function ProfilePage({
 
                 {/* Identity Card™ — the premium glass surface */}
                 <div className="relative z-10 px-3 sm:px-4">
-                  <div className="glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7">
+                  <div className="relative glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7">
+                    {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
+                    {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1 w-16 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                       <div className="min-w-0">
                         {/* Avatar straddling the cover edge — Identity Ring shows live presence + verification */}
@@ -441,7 +447,9 @@ export default async function ProfilePage({
 
             {/* Identity Card™ — the premium glass surface */}
             <div className="relative z-10 px-3 sm:px-4">
-              <div className="glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7">
+              <div className="relative glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7">
+                {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
+                {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1 w-16 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
                 {/* Avatar + adaptive action bar */}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                   <div className="relative -mt-14 w-fit sm:-mt-[4.5rem]">

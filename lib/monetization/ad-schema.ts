@@ -311,6 +311,17 @@ const HIJACK_MARKERS = [
 export function looksLikeHijackScript(scriptCode: string | null | undefined): boolean {
   if (!scriptCode) return false;
   const s = scriptCode.toLowerCase();
+  /*
+    A VISIBLE banner renders into its own element and is perfectly safe in the
+    display iframe, even when it shares a host with the pop / Social Bar scripts.
+    Adsterra's NATIVE BANNER ships a `<div id="container-…">` fed by `invoke.js`;
+    the classic banner declares an `atOptions` block. Neither is a click-hijacker,
+    so they must NOT be flagged — doing so was blocking a real native banner from
+    being saved as a banner (owner report). Only the bare self-injecting
+    `<script src>` (Social Bar / OnClick / pop-under — no container, no atOptions)
+    should trip the warning.
+  */
+  if (s.includes("atoptions") || /id\s*=\s*["']?container-/.test(s)) return false;
   return HIJACK_MARKERS.some((marker) => s.includes(marker));
 }
 

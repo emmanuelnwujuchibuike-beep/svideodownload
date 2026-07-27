@@ -41,7 +41,7 @@ const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
       called "Pop-under" is one nobody would turn on to make a Social Bar work.
     */
     label: "In-page scripts",
-    hint: "Social Bar, pop-under and OnClick units. Off by default — see the warning below.",
+    hint: "Enables self-injecting scripts — Social Bar, Native, OnClick. It does NOT create a pop-under by itself; that depends on which network zone you paste. Off by default.",
   },
   {
     key: "interstitial",

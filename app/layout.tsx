@@ -198,18 +198,17 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* Standalone (installed-PWA) AND iOS detection, set BEFORE first paint so
-            the top-inset variable (--frenz-safe-top, globals.css) is already
-            floored when the chrome lays out — no reflow. `navigator.standalone`
-            is the signal iOS actually honours (@media display-mode:standalone
-            proved unreliable in the installed app). The `ios` class covers the
-            BROWSER too: with viewport-fit=cover the page draws under the status
-            bar / Dynamic Island, but iOS Safari reports env(safe-area-inset-top)
-            as 0 for that web content, so top chrome jammed into the safe area in
-            the plain webapp (owner: "still goes to the safe area in webapp"). */}
+        {/* Standalone (installed-PWA) detection, set BEFORE first paint so the
+            top-inset variable (--frenz-safe-top, globals.css) is already floored
+            when the chrome lays out — no reflow. Driven by `navigator.standalone`
+            (the signal iOS actually honours) because @media (display-mode:
+            standalone) proved unreliable in the installed app, which is why the
+            buttons kept jamming under the status bar. Deliberately NOT applied to
+            the plain iOS browser — env() is already correct (adaptive) there, and
+            flooring it fattened the landing header. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var d=document.documentElement;var s=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches;if(s||navigator.standalone===true){d.classList.add('pwa-standalone')}var ua=navigator.userAgent||'';var iOS=/iP(hone|od|ad)/.test(ua)||(navigator.platform==='MacIntel'&&(navigator.maxTouchPoints||0)>1);if(iOS){d.classList.add('ios')}}catch(e){}})();`,
+            __html: `(function(){try{var s=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches;if(s||navigator.standalone===true){document.documentElement.classList.add('pwa-standalone')}}catch(e){}})();`,
           }}
         />
         {/* Theme class MUST be set from <head>, before any first paint — a

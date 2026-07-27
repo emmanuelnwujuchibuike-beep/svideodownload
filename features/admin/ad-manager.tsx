@@ -236,7 +236,7 @@ export function AdManager({ ads }: { ads: AdRecord[] }) {
                 {r.format === "display" && looksLikeHijackScript(r.script_code) ? (
                   <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
                     <AlertTriangle aria-hidden className="h-3.5 w-3.5 shrink-0" />
-                    OnClick/pop-under script — renders blank, earns nothing here
+                    In-page script in a Banner slot — renders blank. Change Format, or use a Banner/Video here.
                   </p>
                 ) : null}
               </div>
@@ -396,18 +396,23 @@ function AdForm({
               <p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
                 <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
-                  This is a <strong>self-injecting script</strong>, not a banner. Banners run in a
-                  sandboxed frame, and a script like this cannot attach itself from inside one — so
-                  the slot renders <strong>blank</strong>.
+                  This is a <strong>self-injecting script</strong> (Social Bar, Native, interstitial
+                  or OnClick — Adsterra&apos;s single <code className="font-mono">&lt;script&gt;</code>{" "}
+                  family), not a banner. A banner runs in a sandboxed frame and a script like this
+                  cannot attach itself from inside one, so the slot renders <strong>blank</strong>.
+                  Pick one of these:
                   <br />
-                  <strong className="mt-1 inline-block">If this is a Social Bar</strong> (or any
-                  visible in-page unit), change Format to{" "}
-                  <em>{AD_FORMAT_META.pop.label}</em> and turn on the in-page script switch in
-                  Monetization controls.
+                  <strong className="mt-1 inline-block">Full-screen interstitial or reward slot?</strong>{" "}
+                  Use a <strong>Banner</strong> here instead — the network invocation containing{" "}
+                  <code className="font-mono">atOptions</code> (set size e.g. 300×600) — or, for a
+                  reward, a direct <strong>Video (.mp4) URL</strong>. Both render inside the slot and{" "}
+                  <em>don&apos;t</em> need the in-page-scripts switch.
                   <br />
-                  <strong className="mt-1 inline-block">If you wanted a banner</strong>, use the
-                  banner invocation from your network instead — for Adsterra that is the one
-                  containing <code className="font-mono">atOptions</code>.
+                  <strong className="mt-1 inline-block">Social Bar / other in-page unit?</strong>{" "}
+                  Change Format to <em>{AD_FORMAT_META.pop.label}</em> and turn on{" "}
+                  <strong>In-page scripts</strong> in Monetization controls. That switch does{" "}
+                  <em>not</em> create a pop-under — the behaviour comes from which network zone you
+                  made, so a Social Bar zone stays a Social Bar.
                 </span>
               </p>
             ) : null}

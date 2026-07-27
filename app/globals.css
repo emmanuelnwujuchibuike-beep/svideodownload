@@ -322,17 +322,13 @@
       --frenz-safe-top: max(env(safe-area-inset-top), 44px);
     }
   }
-  /* iOS browser (plain webapp), viewport-fit=cover: the page draws under the
-     status bar / Dynamic Island, but iOS Safari reports env(safe-area-inset-top)
-     as 0 for that web content, so any top chrome pinned with --frenz-safe-top
-     (the profile mobile menu, the profile video player's controls) sat under the
-     clock/island — the owner's repeated "still goes to the safe area in webapp".
-     Floor it on iOS exactly like standalone above; the `.ios` class is set from
-     the head script before first paint, so there's no reflow. Non-iOS platforms
-     (Android, desktop) keep the raw env, so nothing changes there. */
-  html.ios {
-    --frenz-safe-top: max(env(safe-area-inset-top), 44px);
-  }
+  /* NOTE: do NOT floor --frenz-safe-top for the plain iOS BROWSER. env() there is
+     adaptive — 0 while Safari's URL bar already places content below the status
+     bar, ~59px once scrolled under a Dynamic Island — so a hard 44px minimum
+     added a fat gap above the marketing header on the landing page (owner report).
+     Overlays that must always clear the bar (the profile video player) offset by
+     env() directly, which is correct in the browser; only the installed PWA
+     (above) needs the floor, because iOS reports 0 there permanently. */
   /* Owner, 2026-07-16: "there is a white background at the bottom covering
      chats, nothing is suppose to be there only the bottom nav."
      The messages layout subtracts the nav's box from its height so the THREAD's

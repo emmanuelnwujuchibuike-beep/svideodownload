@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { HeroEffects } from "@/components/landing/hero-effects";
 import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
+import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { Downloader } from "@/features/downloader/downloader";
 import { SharedLinkDownloader } from "@/features/downloader/shared-link-downloader";
 import { BRAND_ICONS } from "@/lib/platform-icons";
@@ -157,7 +158,7 @@ export function Hero() {
               boundary is what lets `/` prerender at all (useSearchParams()
               suspends). See features/downloader/shared-link-downloader.tsx. */}
           <div className="relative mt-5">
-            <Suspense fallback={<Downloader />}>
+            <Suspense fallback={<Downloader hideDisclaimer />}>
               <SharedLinkDownloader />
             </Suspense>
           </div>
@@ -174,6 +175,9 @@ export function Hero() {
             })}
           </div>
         </div>
+        {/* Trademark / non-affiliation disclaimer — below the card, where the muted
+            colour reads (the tool inside hides its own copy on the landing). */}
+        <DownloadDisclaimer />
       </div>
     </section>
   );

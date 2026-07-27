@@ -13,6 +13,7 @@ import {
 import dynamic from "next/dynamic";
 import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { RecommendedToolsClient } from "@/components/monetization/recommended-tools-client";
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
 import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
@@ -76,7 +77,8 @@ const PLACEHOLDER_PLATFORMS = [
 export function Downloader({
   initialUrl,
   platformId,
-}: { initialUrl?: string; platformId?: PlatformId } = {}) {
+  hideDisclaimer,
+}: { initialUrl?: string; platformId?: PlatformId; hideDisclaimer?: boolean } = {}) {
   const [url, setUrl] = useState(initialUrl ?? "");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [phIndex, setPhIndex] = useState(0);
@@ -380,6 +382,11 @@ export function Downloader({
           />
         </a>
       </div>
+
+      {/* Trademark / non-affiliation disclaimer — below the download box on every
+          page that renders this tool. The landing hides it here and shows it below
+          its purple card instead (where the muted colour reads). */}
+      {!hideDisclaimer ? <DownloadDisclaimer /> : null}
 
       {/* Renders nothing until a transfer genuinely completes AND the zone is
           filled. Mounted here so it is scoped to the downloader flow rather

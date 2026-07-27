@@ -29,5 +29,7 @@ export function SharedLinkDownloader() {
     url: params.get("url"),
     text: params.get("text"),
   });
-  return <Downloader initialUrl={initialUrl} />;
+  // The landing shows the disclaimer below its purple card (see the hero), not
+  // inside the tool where it would sit on the purple gradient.
+  return <Downloader initialUrl={initialUrl} hideDisclaimer />;
 }

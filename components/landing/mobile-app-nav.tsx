@@ -1,5 +1,8 @@
+"use client";
+
 import { History } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import {
   FrenzHomeSolid,
@@ -20,6 +23,11 @@ import { cn } from "@/lib/utils";
  * Profile → the landing profile page (which routes on to /login). A nav item that
  * 404s is the chrome version of the defect the Reality Ledger catches in copy.
  *
+ * The active item is derived from the CURRENT path (usePathname) — like the
+ * signed-in bottom nav — so the highlight moves with you as you navigate, instead
+ * of being pinned to Home (the previous bug: `active: true` hardcoded on Home, so
+ * it never showed the real page and looked like tapping "didn't move" anywhere).
+ *
  * Mobile only (`lg:hidden`): desktop has the full header. The wrapper is
  * click-through except the pill, and it clears the home-indicator inset while
  * sitting as low as the safe area allows.
@@ -27,11 +35,19 @@ import { cn } from "@/lib/utils";
 const ITEMS = [
   { href: "/reels", label: "Reels", icon: FrenzReelsOutline },
   { href: "/library", label: "History", icon: History },
-  { href: "/", label: "Home", icon: FrenzHomeSolid, active: true },
+  { href: "/", label: "Home", icon: FrenzHomeSolid },
   { href: "/profile", label: "Profile", icon: FrenzPersonSolid },
 ] as const;
 
+/** Is `href` the active route for the current path? Home matches only exactly;
+ *  the others match their section (so /reels/123 still lights up Reels). */
+function isActive(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function MobileAppNav() {
+  const pathname = usePathname() || "/";
   return (
     <nav
       aria-label="App"
@@ -41,19 +57,20 @@ export function MobileAppNav() {
           top edge (the "glass" highlight) and a soft floating shadow. */}
       <div className="pointer-events-auto mx-auto flex max-w-sm items-center justify-around gap-1 rounded-[1.9rem] border border-white/50 bg-white/55 px-2 py-1.5 shadow-[0_10px_40px_-8px_rgba(15,23,42,0.28)] ring-1 ring-black/[0.04] backdrop-blur-2xl backdrop-saturate-[1.8] dark:border-white/10 dark:bg-neutral-900/45 dark:ring-white/10">
         {ITEMS.map((item) => {
-          const active = "active" in item && item.active;
+          const active = isActive(pathname, item.href);
           return (
             <Link
               key={item.label}
               href={item.href}
               aria-current={active ? "page" : undefined}
+              prefetch
               className="flex flex-1 flex-col items-center gap-1 rounded-2xl py-1"
             >
               <span
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-full transition",
+                  "flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200",
                   active
-                    ? "bg-brand text-white shadow-lg shadow-violet-500/30"
+                    ? "scale-105 bg-brand text-white shadow-lg shadow-violet-500/30"
                     : "text-neutral-500 dark:text-neutral-300",
                 )}
               >
@@ -61,7 +78,7 @@ export function MobileAppNav() {
               </span>
               <span
                 className={cn(
-                  "text-[10px] font-semibold leading-none",
+                  "text-[10px] font-semibold leading-none transition-colors",
                   active ? "text-primary" : "text-neutral-500 dark:text-neutral-300",
                 )}
               >

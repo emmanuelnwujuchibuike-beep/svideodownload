@@ -262,9 +262,10 @@ export function useTypingIndicator(
         if (entry.clearTimer) clearTimeout(entry.clearTimer);
         if (entry.heartbeatTimer) clearInterval(entry.heartbeatTimer);
         entry.isTyping = false;
-        const payload: TypingPayload = { typing: false, at: Date.now(), name: viewerNameRef.current };
-        entry.desired = payload;
-        if (entry.joined) void entry.channel.track(payload);
+        // Untrack (leave), matching trackState(false) — so returning to the
+        // thread and typing again is a fresh join, not a dropped in-place update.
+        entry.desired = null;
+        if (entry.joined) void entry.channel.untrack();
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -274,9 +275,22 @@ export function useTypingIndicator(
   const trackState = useCallback((typing: boolean) => {
     const entry = entryRef.current;
     if (!entry) return;
-    const payload: TypingPayload = { typing, at: Date.now(), name: viewerNameRef.current };
-    entry.desired = payload;
-    if (entry.joined) void entry.channel.track(payload);
+    if (typing) {
+      const payload: TypingPayload = { typing: true, at: Date.now(), name: viewerNameRef.current };
+      entry.desired = payload;
+      if (entry.joined) void entry.channel.track(payload);
+    } else {
+      // STOP = untrack (leave), NOT track({typing:false}). Keeping a
+      // `typing:false` presence entry alive meant the sender's key never left
+      // the roster, so the NEXT typing burst was an in-place presence UPDATE
+      // (a "sync" diff) rather than a "join" — and in practice only join/leave
+      // events reach the receiver reliably; the in-place update for the 2nd,
+      // 3rd… burst was routinely dropped, which is the "typing shows once, then
+      // never again until I exit and come back (re-subscribe)" report. Leaving
+      // the roster on stop makes every new burst a fresh, reliable JOIN.
+      entry.desired = null;
+      if (entry.joined) void entry.channel.untrack();
+    }
   }, []);
 
   /**

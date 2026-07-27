@@ -434,9 +434,14 @@ export async function bustHomeFeedCache(viewerId: string): Promise<void> {
   const sorts: HomeFeedSort[] = ["for_you", "following", "recent", "trending"];
   const formats = ["feed", "reel"];
   const limits = [8, 12, 24];
+  // The live cache key ends with a `:${seed ?? "-"}` segment (see getHomeFeed).
+  // Omitting it — as this did — deleted keys that never exist, so a publisher's
+  // brand-new post sat behind the 20s TTL instead of appearing at once. The
+  // no-seed variant (`:-`) covers SSR + the plain-order sorts; a seeded "for_you"
+  // refresh mints a new seed and so misses the cache anyway (already fresh).
   await Promise.all(
     sorts.flatMap((s) =>
-      formats.flatMap((f) => limits.map((l) => cacheDelete(`homefeed:${viewerId}:${s}:${f}:0:${l}`))),
+      formats.flatMap((f) => limits.map((l) => cacheDelete(`homefeed:${viewerId}:${s}:${f}:0:${l}:-`))),
     ),
   ).catch(() => {});
 }
@@ -497,8 +502,21 @@ async function loadHomeFeed(
       return { items: [], nextOffset: null };
     }
 
-    // Over-fetch to absorb privacy/diversity filtering + the requested offset.
-    const want = (offset + limit) * 3 + limit;
+    // Candidate window.
+    //
+    // For a RANKED feed ("for_you") the candidate set MUST be identical on every
+    // page. Offset pagination re-runs this query per page; when the window GROWS
+    // with the offset, a deeper page ranks a LARGER set, a high-engagement OLDER
+    // post slots into the middle of the order, and slicing `[offset, offset+limit]`
+    // then SKIPS items shifted past the boundary and REPEATS ones shifted in. On
+    // the client that reads as "reels dead-ends while there are more below" (the
+    // skipped tail is never requested once nextOffset goes null) and "posts
+    // disappear from the feed". So for_you ranks a FIXED window — the whole recent
+    // candidate pool, once — and every page slices the same stable order. The
+    // plain-order sorts (following/recent/trending) never reshuffle, so their
+    // cheaper grows-with-offset over-fetch stays correct.
+    const RANKED_WINDOW = 400;
+    const want = sort === "for_you" ? RANKED_WINDOW : (offset + limit) * 3 + limit;
     let q = db
       .from("posts")
       .select(SELECT)

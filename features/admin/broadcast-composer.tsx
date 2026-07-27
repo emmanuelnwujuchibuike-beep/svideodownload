@@ -19,6 +19,7 @@ export function BroadcastComposer({ initialBroadcasts }: { initialBroadcasts: Br
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [target, setTarget] = useState<BroadcastTargetPlan>("all");
+  const [sponsored, setSponsored] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -30,7 +31,7 @@ export function BroadcastComposer({ initialBroadcasts }: { initialBroadcasts: Br
       const res = await fetch("/api/admin/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), body: body.trim(), targetPlan: target }),
+        body: JSON.stringify({ title: title.trim(), body: body.trim(), targetPlan: target, sponsored }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -87,6 +88,21 @@ export function BroadcastComposer({ initialBroadcasts }: { initialBroadcasts: Br
           placeholder="Frenz will be briefly unavailable at 2am UTC for an upgrade."
         />
       </div>
+
+      <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl border border-border/70 bg-background/50 p-3">
+        <input
+          type="checkbox"
+          checked={sponsored}
+          onChange={(e) => setSponsored(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-primary"
+        />
+        <span className="text-sm">
+          <span className="font-medium">Sponsored / Ad</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            Delivers with a clear “Sponsored” label on the notification. Leave off for a normal Frenz announcement.
+          </span>
+        </span>
+      </label>
 
       <div className="mt-4 flex items-center gap-3">
         <button

@@ -1,4 +1,5 @@
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
+import type { PushPayload } from "@/lib/push/web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -43,16 +44,37 @@ export async function listBroadcasts(limit = 20): Promise<Broadcast[]> {
   }
 }
 
-/** Creates + fans out a broadcast: one `notifications` row + a best-effort push per targeted user. */
-export async function createAndSendBroadcast(
+export interface PreparedBroadcast {
+  ok: boolean;
+  /** Recipients whose in-app notification rows were written (the "sent" count). */
+  sent: number;
+  /** Fan the push out to these (see `fanOutBroadcastPush`) — deferred off the
+   * request so the admin isn't held while thousands of pushes go out. */
+  targetIds: string[];
+  push: PushPayload;
+}
+
+/**
+ * Creates the broadcast + the in-app notification rows synchronously (fast batch
+ * inserts) and returns the push payload + recipients for the caller to fan out
+ * AFTER the response (`fanOutBroadcastPush`, via next/server `after()`).
+ *
+ * Splitting it this way is why the ad push no longer makes the admin "wait very
+ * long": the slow part is the per-recipient push, and it now runs in the
+ * background instead of blocking the Send request. `sponsored` marks it as an ad
+ * so the delivered push is clearly, professionally labelled "Sponsored".
+ */
+export async function prepareBroadcast(
   adminId: string,
   title: string,
   body: string,
   targetPlan: BroadcastTargetPlan,
-): Promise<{ ok: boolean; sent: number }> {
+  sponsored = false,
+): Promise<PreparedBroadcast> {
+  const empty: PreparedBroadcast = { ok: false, sent: 0, targetIds: [], push: { title: "", body: "" } };
   const cleanTitle = title.trim().slice(0, 120);
   const cleanBody = body.trim().slice(0, 500);
-  if (!cleanTitle || !cleanBody) return { ok: false, sent: 0 };
+  if (!cleanTitle || !cleanBody) return empty;
 
   try {
     const db = createAdminClient();
@@ -65,30 +87,60 @@ export async function createAndSendBroadcast(
     if (targetPlan !== "all") query = query.eq("plan", targetPlan);
     const { data: targets } = await query;
     const targetIds = ((targets ?? []) as { id: string }[]).map((t) => t.id);
-    if (targetIds.length === 0) return { ok: false, sent: 0 };
+    if (targetIds.length === 0) return empty;
 
     const { data: broadcast, error: insertErr } = await db
       .from("notification_broadcasts")
       .insert({ title: cleanTitle, body: cleanBody, target_plan: targetPlan, created_by: adminId })
       .select("id")
       .single();
-    if (insertErr || !broadcast) return { ok: false, sent: 0 };
+    if (insertErr || !broadcast) return empty;
 
-    let sent = 0;
+    // In-app notification rows (batch inserts — fast; the push is what's slow).
     for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
       const chunk = targetIds.slice(i, i + CHUNK_SIZE);
       await db.from("notifications").insert(
         chunk.map((userId) => ({ user_id: userId, actor_id: null, type: "admin_broadcast", post_id: null })),
       );
-      await Promise.all(
-        chunk.map((userId) => sendSmartPush(userId, { title: cleanTitle, body: cleanBody, url: "/notifications", tag: `broadcast:${broadcast.id}` }, "high", "system")),
-      );
-      sent += chunk.length;
     }
+    await db.from("notification_broadcasts").update({ sent_count: targetIds.length }).eq("id", broadcast.id);
 
-    await db.from("notification_broadcasts").update({ sent_count: sent }).eq("id", broadcast.id);
-    return { ok: true, sent };
+    // Sponsored/ad pushes lead with a clear "Sponsored" label — the honest,
+    // professional marking (never "this is a non-personalised generic ad"). Done
+    // server-side so it shows even on a client whose service worker is a build
+    // behind; `sponsored` also rides along for richer SW rendering.
+    const push: PushPayload = {
+      title: cleanTitle,
+      body: sponsored ? `Sponsored · ${cleanBody}` : cleanBody,
+      url: "/notifications",
+      tag: `broadcast:${broadcast.id}`,
+      ...(sponsored ? { sponsored: true } : {}),
+    };
+    return { ok: true, sent: targetIds.length, targetIds, push };
   } catch {
-    return { ok: false, sent: 0 };
+    return empty;
   }
+}
+
+/** Fans a prepared broadcast's push out to every recipient — best-effort, chunked,
+ *  settings/DND-aware (via sendSmartPush). Call AFTER the response. */
+export async function fanOutBroadcastPush(targetIds: string[], push: PushPayload): Promise<void> {
+  for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
+    const chunk = targetIds.slice(i, i + CHUNK_SIZE);
+    await Promise.all(chunk.map((userId) => sendSmartPush(userId, push, "high", "system")));
+  }
+}
+
+/** Convenience: prepare + fan out awaited. Route handlers should instead call
+ *  `prepareBroadcast` and defer `fanOutBroadcastPush` with `after()`. */
+export async function createAndSendBroadcast(
+  adminId: string,
+  title: string,
+  body: string,
+  targetPlan: BroadcastTargetPlan,
+  sponsored = false,
+): Promise<{ ok: boolean; sent: number }> {
+  const prep = await prepareBroadcast(adminId, title, body, targetPlan, sponsored);
+  if (prep.ok) await fanOutBroadcastPush(prep.targetIds, prep.push);
+  return { ok: prep.ok, sent: prep.sent };
 }

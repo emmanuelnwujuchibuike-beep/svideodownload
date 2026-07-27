@@ -51,6 +51,11 @@ export interface PushPayload {
    * actual text) — stripped before the payload is ever sent, never itself
    * delivered. See sendSmartPush. */
   genericBody?: string;
+  /** Marks a sponsored/ad push so the client (service worker) renders a clear
+   * "Sponsored" label — the honest, professional ad marking, without ever
+   * saying "this is a non-personalised generic ad". Rides in the delivered
+   * payload (unlike genericBody). */
+  sponsored?: boolean;
 }
 
 interface SubRow {

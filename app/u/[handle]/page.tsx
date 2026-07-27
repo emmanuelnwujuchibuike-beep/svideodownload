@@ -10,6 +10,7 @@ import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteHeader } from "@/components/layout/site-header";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { CreatorRail } from "@/features/profile/creator-rail";
+import type { TopContent } from "@/features/profile/identity-analytics";
 import { notificationsToActivity } from "@/features/profile/activity-map";
 import { listNotifications } from "@/lib/social/notifications";
 import { ProfileTabs } from "@/features/profile/profile-tabs";
@@ -92,24 +93,54 @@ async function publishedPostsCount(profileId: string, isOwner: boolean): Promise
   }
 }
 
-/** Total likes + views across a creator's published posts (the two extra stats
- *  the creator profile shows beyond posts/followers/following). */
-async function creatorTotals(profileId: string): Promise<{ likes: number; views: number }> {
+/** Engagement totals across a creator's published posts. Likes + views drive the
+ *  hero stats; comments/shares/saves + the highest-viewed post feed the Identity
+ *  Analytics panel. Everything is summed from real rows — no fabricated numbers. */
+async function creatorTotals(profileId: string): Promise<{
+  likes: number;
+  views: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  topPost: TopContent | null;
+}> {
   try {
     const { data } = await createAdminClient()
       .from("posts")
-      .select("likes_count, views_count")
+      .select("id, title, thumbnail_url, media_url, likes_count, views_count, comments_count, shares_count, saves_count")
       .eq("publisher_id", profileId)
       .eq("status", "published");
     let likes = 0;
     let views = 0;
-    for (const r of (data ?? []) as { likes_count: number | null; views_count: number | null }[]) {
-      likes += r.likes_count ?? 0;
-      views += r.views_count ?? 0;
+    let comments = 0;
+    let shares = 0;
+    let saves = 0;
+    let topPost: TopContent | null = null;
+    for (const r of (data ?? []) as {
+      id: string;
+      title: string | null;
+      thumbnail_url: string | null;
+      media_url: string | null;
+      likes_count: number | null;
+      views_count: number | null;
+      comments_count: number | null;
+      shares_count: number | null;
+      saves_count: number | null;
+    }[]) {
+      const v = r.views_count ?? 0;
+      const l = r.likes_count ?? 0;
+      likes += l;
+      views += v;
+      comments += r.comments_count ?? 0;
+      shares += r.shares_count ?? 0;
+      saves += r.saves_count ?? 0;
+      if (!topPost || v > topPost.views) {
+        topPost = { id: r.id, title: r.title, thumbnailUrl: r.thumbnail_url ?? r.media_url, views: v, likes: l };
+      }
     }
-    return { likes, views };
+    return { likes, views, comments, shares, saves, topPost };
   } catch {
-    return { likes: 0, views: 0 };
+    return { likes: 0, views: 0, comments: 0, shares: 0, saves: 0, topPost: null };
   }
 }
 
@@ -366,6 +397,8 @@ export default async function ProfilePage({
                 friends={friends}
                 activity={activity}
                 stats={{ posts: postsTotal, followers: profile.followersCount, likes: totals.likes, views: totals.views }}
+                analytics={{ views: totals.views, likes: totals.likes, comments: totals.comments, shares: totals.shares, saves: totals.saves }}
+                topContent={totals.topPost}
               />
             </div>
           </div>

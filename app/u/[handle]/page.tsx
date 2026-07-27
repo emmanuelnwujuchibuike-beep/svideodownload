@@ -211,89 +211,135 @@ export default async function ProfilePage({
           <div className="frenz-profile-shell mx-auto w-full max-w-7xl px-0 sm:px-4">
             <div className="frenz-profile-cols flex flex-col gap-6">
               <div className="min-w-0 flex-1">
-              {/* Cover */}
-              <div className="relative h-40 w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:h-52 sm:rounded-3xl">
-                {profile.bannerUrl ? (
-                  <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 1024px) 100vw, 900px" className="object-cover" />
-                ) : (
-                  <LivingGlow />
-                )}
-                <div className="absolute right-3 top-3 flex items-center gap-2 pt-[var(--frenz-safe-top)] sm:pt-0">
-                  <Link href="/account#profile" className="inline-flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/55">
-                    <Camera className="h-4 w-4" /> Edit Cover
-                  </Link>
-                  <Link href="/account" aria-label="More options" className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/40 text-white backdrop-blur-md transition hover:bg-black/55">
-                    <MoreHorizontal className="h-5 w-5" />
-                  </Link>
-                </div>
-              </div>
-
-              <div className="px-4 sm:px-6">
-                {/* Avatar + actions */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="relative -mt-12 w-fit sm:-mt-16">
-                    <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
-                      {profile.avatarUrl ? (
-                        <Image src={profile.avatarUrl} alt="" width={128} height={128} priority className="block h-24 w-24 rounded-full object-cover ring-4 ring-background sm:h-28 sm:w-28" />
-                      ) : (
-                        <span className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-3xl font-bold text-white ring-4 ring-background sm:h-28 sm:w-28">
-                          {profile.displayName.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </IdentityRing>
-                    <Link href="/account#profile" aria-label="Change photo" className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-card text-foreground shadow-md ring-1 ring-border transition hover:bg-secondary">
-                      <Camera className="h-4 w-4" />
+              {/* Hero — cover + glass Identity Card (Profile · Part 1). The
+                  approved creator spine is kept; the craft is raised: the identity
+                  now lives on a `.glass-strong` prestige card straddled by the
+                  avatar, with an honest Photo/Video/Avatar mode control. */}
+              <div className="relative">
+                {/* Cover — Living Profile light or the creator's own banner */}
+                <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:h-60 sm:rounded-3xl">
+                  {profile.bannerUrl ? (
+                    <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 1024px) 100vw, 900px" className="object-cover" />
+                  ) : (
+                    <LivingGlow />
+                  )}
+                  {/* Top gloss + bottom scrim so the overlapping card reads cleanly over any cover */}
+                  <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/25" />
+                  <div className="absolute right-3 top-3 flex items-center gap-2 pt-[var(--frenz-safe-top)] sm:pt-0">
+                    <Link href="/account#profile" className="inline-flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/55">
+                      <Camera className="h-4 w-4" /> Edit Cover
+                    </Link>
+                    <Link href="/account" aria-label="More options" className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/40 text-white backdrop-blur-md transition hover:bg-black/55">
+                      <MoreHorizontal className="h-5 w-5" />
                     </Link>
                   </div>
-                  <div className="flex items-center gap-2 sm:mb-2">
-                    <Link href="/account#profile" className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-semibold transition hover:bg-secondary">
-                      Edit Profile
-                    </Link>
-                    <ShareProfileButton handle={profile.handle} name={profile.displayName} />
-                  </div>
                 </div>
 
-                {/* Identity */}
-                <div className="mt-4">
-                  <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
-                    {profile.displayName}
-                    {profile.isVerified ? <BadgeCheck className="h-6 w-6 fill-blue-500 text-white" /> : null}
-                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/12 px-2.5 py-0.5 text-xs font-semibold text-violet-600 dark:text-violet-300">
-                      <Sparkles className="h-3.5 w-3.5" /> Creator
-                    </span>
-                  </h1>
-                  <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
-                </div>
+                {/* Identity Card™ — the premium glass surface */}
+                <div className="relative z-10 px-3 sm:px-4">
+                  <div className="glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                      <div className="min-w-0">
+                        {/* Avatar straddling the cover edge — Identity Ring shows live presence + verification */}
+                        <div className="relative -mt-14 w-fit sm:-mt-[4.5rem]">
+                          <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
+                            {profile.avatarUrl ? (
+                              <Image src={profile.avatarUrl} alt="" width={128} height={128} priority className="block h-24 w-24 rounded-full object-cover ring-4 ring-background sm:h-28 sm:w-28" />
+                            ) : (
+                              <span className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-3xl font-bold text-white ring-4 ring-background sm:h-28 sm:w-28">
+                                {profile.displayName.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                          </IdentityRing>
+                          <Link href="/account#profile" aria-label="Change photo" className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-card text-foreground shadow-md ring-1 ring-border transition hover:bg-secondary">
+                            <Camera className="h-4 w-4" />
+                          </Link>
+                        </div>
 
-                {profile.bio ? <p className="mt-3 max-w-2xl leading-relaxed">{profile.bio}</p> : null}
+                        {/* Identity mode — Photo is live; Video & Avatar arrive with the
+                            media pipeline and Avatar Studio (marked, never faked). */}
+                        <div className="mt-3 inline-flex items-center gap-1 rounded-2xl border border-border/60 bg-card/60 p-1 backdrop-blur">
+                          <span aria-current="true" className="rounded-xl bg-brand px-3 py-1.5 text-xs font-bold text-white">Photo</span>
+                          <span className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                            Video <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">Soon</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                            Avatar <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">Soon</span>
+                          </span>
+                        </div>
+                      </div>
 
-                <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                  {profile.website ? (
-                    <a href={profile.website} target="_blank" rel="nofollow noopener" className="inline-flex items-center gap-1.5 text-primary hover:underline">
-                      <LinkIcon className="h-4 w-4" />
-                      {profile.website.replace(/^https?:\/\//, "")}
-                    </a>
-                  ) : null}
-                  <span className="inline-flex items-center gap-1.5">
-                    <CalendarDays className="h-4 w-4" />
-                    {joined}
-                  </span>
-                </div>
-
-                {/* 5 stats */}
-                <div className="mt-6 grid grid-cols-5 divide-x divide-border/50 overflow-hidden rounded-3xl border border-border/60 bg-card shadow-soft">
-                  {stats.map((s) => (
-                    <div key={s.label} className="px-1 py-4 text-center">
-                      <span className="block text-base font-extrabold tracking-tight sm:text-2xl">{formatCompactNumber(s.value)}</span>
-                      <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground sm:text-[11px]">{s.label}</span>
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 pt-1 sm:pt-0">
+                        <Link href="/account#profile" className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-semibold transition hover:bg-secondary">
+                          Edit Profile
+                        </Link>
+                        <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                      </div>
                     </div>
-                  ))}
+
+                    {/* Name + trust badges */}
+                    <div className="mt-4">
+                      <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
+                        {profile.displayName}
+                        {profile.isVerified ? <BadgeCheck className="h-6 w-6 fill-blue-500 text-white" /> : null}
+                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/12 px-2.5 py-0.5 text-xs font-semibold text-violet-600 dark:text-violet-300">
+                          <Sparkles className="h-3.5 w-3.5" /> Creator
+                        </span>
+                      </h1>
+                      <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
+                    </div>
+
+                    {profile.bio ? <p className="mt-3 max-w-2xl leading-relaxed">{profile.bio}</p> : null}
+
+                    <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                      {profile.website ? (
+                        <a href={profile.website} target="_blank" rel="nofollow noopener" className="inline-flex items-center gap-1.5 text-primary hover:underline">
+                          <LinkIcon className="h-4 w-4" />
+                          {profile.website.replace(/^https?:\/\//, "")}
+                        </a>
+                      ) : null}
+                      <span className="inline-flex items-center gap-1.5">
+                        <CalendarDays className="h-4 w-4" />
+                        {joined}
+                      </span>
+                    </div>
+
+                    {/* 5 live stats — one divided glass panel; Followers/Following link through */}
+                    <div className="mt-5 grid grid-cols-5 divide-x divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card/50 ring-hairline">
+                      {stats.map((s) => {
+                        const href =
+                          s.label === "Followers"
+                            ? `/u/${profile.handle}/followers`
+                            : s.label === "Following"
+                              ? `/u/${profile.handle}/following`
+                              : null;
+                        const inner = (
+                          <>
+                            <span className="block text-base font-extrabold tracking-tight sm:text-2xl">{formatCompactNumber(s.value)}</span>
+                            <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground sm:text-[11px]">{s.label}</span>
+                          </>
+                        );
+                        return href ? (
+                          <Link key={s.label} href={href} className="px-1 py-4 text-center transition hover:bg-secondary/40">
+                            {inner}
+                          </Link>
+                        ) : (
+                          <div key={s.label} className="px-1 py-4 text-center">
+                            {inner}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Real posts — Videos / Reels / Liked / Saved / Collections (grid + list) */}
-                <Suspense fallback={<PostGridSkeleton count={6} />}>
-                  <ProfileTabsLoader profileId={profile.id} handle={profile.handle} viewerId={me} isOwner tabs={tabs} initialTab={activeTab} />
-                </Suspense>
+                <div className="mt-6 px-4 sm:px-6">
+                  <Suspense fallback={<PostGridSkeleton count={6} />}>
+                    <ProfileTabsLoader profileId={profile.id} handle={profile.handle} viewerId={me} isOwner tabs={tabs} initialTab={activeTab} />
+                  </Suspense>
+                </div>
               </div>
             </div>
 

@@ -116,16 +116,20 @@ function Inner({ posts, startIndex, onClose }: { posts: PostCard[]; startIndex: 
       aria-modal="true"
       aria-label={post.title}
     >
-      <div className={cn("absolute inset-x-0 top-0 z-30 h-0.5 bg-white/15 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
+      <div
+        className={cn("absolute inset-x-0 z-30 h-0.5 bg-white/15 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}
+        style={{ top: "var(--frenz-safe-top)" }}
+      >
         <div className="h-full bg-white" style={{ width: `${progress}%` }} />
       </div>
 
-      {/* Back — always visible */}
+      {/* Back — always visible, clear of the status bar / Dynamic Island */}
       <button
         type="button"
         onClick={onClose}
         aria-label="Back"
-        className="absolute left-4 top-4 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition hover:bg-white/20"
+        style={{ top: "calc(0.75rem + var(--frenz-safe-top))" }}
+        className="absolute left-4 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition hover:bg-white/20"
       >
         <X className="h-5 w-5" />
       </button>

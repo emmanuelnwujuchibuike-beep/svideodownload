@@ -10,6 +10,8 @@ import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteHeader } from "@/components/layout/site-header";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { CreatorRail } from "@/features/profile/creator-rail";
+import { notificationsToActivity } from "@/features/profile/activity-map";
+import { listNotifications } from "@/lib/social/notifications";
 import { ProfileTabs } from "@/features/profile/profile-tabs";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
@@ -184,7 +186,12 @@ export default async function ProfilePage({
   // Creator Tools · Achievements · Top Friends · Recent Activity). Everything is
   // the viewer's REAL data; tools without a backend announce "coming soon".
   if (profile.isOwner) {
-    const [totals, friends] = await Promise.all([creatorTotals(profile.id), topFriends(profile.id)]);
+    const [totals, friends, notifs] = await Promise.all([
+      creatorTotals(profile.id),
+      topFriends(profile.id),
+      listNotifications(profile.id, 12),
+    ]);
+    const activity = notificationsToActivity(notifs.items);
     const joined = `Joined ${new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`;
     const stats: { label: string; value: number }[] = [
       { label: "Posts", value: postsTotal },
@@ -198,8 +205,12 @@ export default async function ProfilePage({
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
         <ProfileMobileMenu />
         <main className="pb-24 pt-[calc(var(--frenz-safe-top)+4rem)] lg:pt-4">
-          <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-0 sm:px-4 xl:flex-row">
-            <div className="min-w-0 flex-1">
+          {/* `frenz-profile-shell/cols/rail` (globals.css) put the rail beside
+              the center only when the wrapper's OWN width — inside the app
+              sidebar — passes 62rem, so it never clips on a laptop. */}
+          <div className="frenz-profile-shell mx-auto w-full max-w-7xl px-0 sm:px-4">
+            <div className="frenz-profile-cols flex flex-col gap-6">
+              <div className="min-w-0 flex-1">
               {/* Cover */}
               <div className="relative h-40 w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:h-52 sm:rounded-3xl">
                 {profile.bannerUrl ? (
@@ -286,7 +297,16 @@ export default async function ProfilePage({
               </div>
             </div>
 
-            <CreatorRail bio={profile.bio} website={profile.website} joined={joined} friends={friends} />
+              <CreatorRail
+                className="frenz-profile-rail"
+                bio={profile.bio}
+                website={profile.website}
+                joined={joined}
+                friends={friends}
+                activity={activity}
+                stats={{ posts: postsTotal, followers: profile.followersCount, likes: totals.likes, views: totals.views }}
+              />
+            </div>
           </div>
         </main>
         <Toaster />

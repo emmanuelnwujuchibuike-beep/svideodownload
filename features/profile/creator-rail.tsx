@@ -2,41 +2,54 @@ import {
   BarChart3,
   Cake,
   DollarSign,
-  Eye,
   Flame,
   LayoutDashboard,
   Link as LinkIcon,
+  Lock,
   MapPin,
   Megaphone,
   MessageCircle,
-  Play,
-  Sparkles,
   TrendingUp,
   Trophy,
-  UserPlus,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 
 import { SoonButton } from "@/components/profile/dashboard/soon";
-import { cn } from "@/lib/utils";
+import { CreatorActivity } from "@/features/profile/creator-activity";
+import type { ActivityRow } from "@/features/profile/activity-map";
+import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
  * The creator profile's right rail (design: public/mainprofile.jpg) — About Me,
- * Creator Tools, Achievements, Top Friends and Recent Activity. "About Me" uses
- * the viewer's REAL profile; Analytics links to the real page; tools without a
- * backend yet announce "coming soon". Achievements / Recent Activity mirror the
- * design's sample content until their backends ship.
+ * Creator Tools, Achievements, Top Friends and Recent Activity. Everything is
+ * REAL: About Me is the owner's profile, Top Friends are real friends, Recent
+ * Activity is the owner's live notification stream, and each Achievement lights
+ * up only once the owner's REAL stats reach its milestone (locked otherwise — no
+ * fabricated accomplishments). Only product-ecosystem tools (Monetization / Ad
+ * Center) announce "coming soon".
  */
+
+export interface CreatorStats {
+  posts: number;
+  followers: number;
+  likes: number;
+  views: number;
+}
 
 export interface CreatorRailProps {
   bio: string | null;
   location?: string | null;
   website?: string | null;
   joined: string;
+  className?: string;
   /** Real top friends (avatar initials + handle); empty renders a friendly hint. */
   friends?: { name: string; handle: string; avatarUrl: string | null }[];
+  /** The owner's REAL recent notifications, mapped to activity rows (server-seeded). */
+  activity?: ActivityRow[];
+  /** The owner's REAL totals — drive which achievements are earned vs locked. */
+  stats: CreatorStats;
 }
 
 function Card({ title, viewAll, children }: { title: string; viewAll?: { feature: string; href?: string }; children: React.ReactNode }) {
@@ -64,18 +77,14 @@ const TOOLS: { title: string; sub: string; icon: LucideIcon; tile: string; href?
   { title: "Ad Center", sub: "Create and manage ads", icon: Megaphone, tile: "from-amber-500 to-orange-600", feature: "Ad Center" },
 ];
 
-const ACHIEVEMENTS: { title: string; sub: string; icon: LucideIcon; tile: string }[] = [
-  { title: "Top Creator", sub: "1M views", icon: Trophy, tile: "from-violet-500 to-purple-700" },
-  { title: "Trend Setter", sub: "For trending content", icon: TrendingUp, tile: "from-blue-500 to-indigo-700" },
-  { title: "Viral Star", sub: "For 100K likes", icon: Flame, tile: "from-amber-400 to-orange-600" },
-];
-
-/* @sourced illustrative — the design's sample activity, until an events backend exists. */
-const ACTIVITY: { icon: LucideIcon; text: string; time: string; tint: string }[] = [
-  { icon: Eye, text: "You reached 20K views on your reel", time: "2h ago", tint: "text-sky-500" },
-  { icon: UserPlus, text: "You gained 120 new followers", time: "5h ago", tint: "text-emerald-500" },
-  { icon: TrendingUp, text: "Your reel is trending", time: "1d ago", tint: "text-violet-500" },
-  { icon: Play, text: "Your video reached 10K views", time: "1d ago", tint: "text-rose-500" },
+// Each badge lights up only when the owner's REAL stat reaches its milestone —
+// `earned` is computed from live totals, never assumed. A brand-new creator sees
+// them honestly locked (with the target), not falsely awarded.
+type Achievement = { title: string; icon: LucideIcon; tile: string; need: number; stat: keyof CreatorStats; unit: string };
+const ACHIEVEMENTS: Achievement[] = [
+  { title: "Top Creator", icon: Trophy, tile: "from-violet-500 to-purple-700", need: 1_000_000, stat: "views", unit: "views" },
+  { title: "Trend Setter", icon: TrendingUp, tile: "from-blue-500 to-indigo-700", need: 1_000, stat: "followers", unit: "followers" },
+  { title: "Viral Star", icon: Flame, tile: "from-amber-400 to-orange-600", need: 100_000, stat: "likes", unit: "likes" },
 ];
 
 function Avatar({ name, url }: { name: string; url: string | null }) {
@@ -92,9 +101,9 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
   );
 }
 
-export function CreatorRail({ bio, location, website, joined, friends = [] }: CreatorRailProps) {
+export function CreatorRail({ bio, location, website, joined, friends = [], activity = [], stats, className }: CreatorRailProps) {
   return (
-    <aside className="w-full shrink-0 space-y-4 xl:w-[320px]">
+    <aside className={cn("w-full space-y-4", className)}>
       {/* About Me */}
       <Card title="About Me">
         {bio ? <p className="text-sm leading-relaxed">{bio}</p> : null}
@@ -142,19 +151,35 @@ export function CreatorRail({ bio, location, website, joined, friends = [] }: Cr
         </ul>
       </Card>
 
-      {/* Achievements */}
-      <Card title="Achievements" viewAll={{ feature: "Achievements" }}>
+      {/* Achievements — earned/locked from REAL totals */}
+      <Card title="Achievements">
         <div className="grid grid-cols-3 gap-2">
-          {ACHIEVEMENTS.map((a) => (
-            <div key={a.title} className="flex flex-col items-center gap-2 text-center">
-              <span className="relative flex h-12 w-12 items-center justify-center">
-                <span className={cn("absolute inset-0 rounded-full bg-gradient-to-br shadow-md ring-1 ring-inset ring-white/20", a.tile)} />
-                <a.icon className="relative h-5 w-5 text-white" />
-              </span>
-              <span className="block text-[11px] font-semibold leading-tight">{a.title}</span>
-              <span className="-mt-1.5 block text-[10px] text-muted-foreground">{a.sub}</span>
-            </div>
-          ))}
+          {ACHIEVEMENTS.map((a) => {
+            const have = stats[a.stat];
+            const earned = have >= a.need;
+            return (
+              <div key={a.title} className="flex flex-col items-center gap-2 text-center">
+                <span className="relative flex h-12 w-12 items-center justify-center">
+                  <span
+                    className={cn(
+                      "absolute inset-0 rounded-full bg-gradient-to-br shadow-md ring-1 ring-inset ring-white/20",
+                      earned ? a.tile : "from-muted to-muted opacity-60 grayscale",
+                    )}
+                  />
+                  <a.icon className={cn("relative h-5 w-5", earned ? "text-white" : "text-muted-foreground")} />
+                  {!earned ? (
+                    <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-card ring-1 ring-border">
+                      <Lock className="h-2.5 w-2.5 text-muted-foreground" />
+                    </span>
+                  ) : null}
+                </span>
+                <span className="block text-[11px] font-semibold leading-tight">{a.title}</span>
+                <span className="-mt-1.5 block text-[10px] text-muted-foreground">
+                  {earned ? "Earned" : `${formatCompactNumber(a.need)} ${a.unit}`}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </Card>
 
@@ -182,24 +207,9 @@ export function CreatorRail({ bio, location, website, joined, friends = [] }: Cr
         )}
       </Card>
 
-      {/* Recent Activity */}
+      {/* Recent Activity — the owner's REAL notifications, updated live */}
       <Card title="Recent Activity" viewAll={{ feature: "Activity", href: "/notifications" }}>
-        <ul className="space-y-3">
-          {ACTIVITY.map((a, i) => (
-            <li key={i} className="flex items-start gap-3">
-              <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary/70", a.tint)}>
-                <a.icon className="h-4 w-4" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm leading-snug">{a.text}</span>
-                <span className="block text-xs text-muted-foreground">{a.time}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-          <Sparkles className="h-3 w-3" /> Activity preview — live updates coming soon
-        </p>
+        <CreatorActivity initial={activity} />
       </Card>
     </aside>
   );

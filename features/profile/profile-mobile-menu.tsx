@@ -121,23 +121,29 @@ export function ProfileMobileMenu() {
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-border/60 bg-background/95 px-4 pt-[var(--frenz-safe-top)] backdrop-blur-xl lg:hidden">
-        <Link href="/home" className="flex items-center">
-          <FrenzWordmark size={28} textClassName="text-base" priority />
-        </Link>
-        <div className="flex items-center gap-0.5">
-          <IconLink href="/search" label="Search" icon={Search} />
-          <IconLink href="/notifications" label="Notifications" icon={Bell} />
-          <IconLink href="/messages" label="Messages" icon={MessageCircle} />
-          <button
-            type="button"
-            aria-label="Menu"
-            aria-expanded={open}
-            onClick={() => setOpen(true)}
-            className="ml-0.5 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 text-foreground"
-          >
-            <Menu className="h-[22px] w-[22px]" />
-          </button>
+      {/* Safe-area padding sits OUTSIDE a fixed-height bar — never as padding
+          inside a fixed h-14 (that squeezes the wordmark/icons up into the
+          notch and down over the page, the "header goes into the safe areas"
+          bug). Total height = safe-top + the 3.5rem bar. */}
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-border/60 bg-background/95 pt-[var(--frenz-safe-top)] backdrop-blur-xl lg:hidden">
+        <div className="flex h-14 items-center justify-between px-4">
+          <Link href="/home" className="flex items-center">
+            <FrenzWordmark size={28} textClassName="text-base" priority />
+          </Link>
+          <div className="flex items-center gap-0.5">
+            <IconLink href="/search" label="Search" icon={Search} />
+            <IconLink href="/notifications" label="Notifications" icon={Bell} />
+            <IconLink href="/messages" label="Messages" icon={MessageCircle} />
+            <button
+              type="button"
+              aria-label="Menu"
+              aria-expanded={open}
+              onClick={() => setOpen(true)}
+              className="ml-0.5 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 text-foreground"
+            >
+              <Menu className="h-[22px] w-[22px]" />
+            </button>
+          </div>
         </div>
       </header>
 

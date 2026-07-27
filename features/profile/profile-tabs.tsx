@@ -113,8 +113,10 @@ export function ProfileTabs({
   return (
     <div className="mt-8">
       <div className="mb-5 flex items-center justify-between gap-3 border-b border-border/60">
-        {/* Tabs — icon rail with a gradient underline. No sideways slide. */}
-        <div className="flex items-center">
+        {/* Tabs — icon rail with a gradient underline. No sideways slide.
+            Scrolls horizontally instead of inflating (and overflowing) the
+            column when every tab can't fit — e.g. beside the creator rail. */}
+        <div className="flex min-w-0 flex-1 items-center overflow-x-auto pb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((id) => {
             const Icon = TAB_ICON[id];
             const isActive = active === id;
@@ -126,7 +128,7 @@ export function ProfileTabs({
                 aria-pressed={isActive}
                 title={TAB_LABEL[id]}
                 className={cn(
-                  "group relative flex items-center gap-2 px-2.5 py-3 text-sm font-semibold transition-colors sm:px-3.5",
+                  "group relative flex shrink-0 items-center gap-2 px-2.5 py-3 text-sm font-semibold transition-colors sm:px-3.5",
                   isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >

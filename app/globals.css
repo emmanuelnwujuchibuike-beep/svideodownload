@@ -680,3 +680,20 @@
   0%, 100% { opacity: 0.55; transform: scale(0.97); }
   50%      { opacity: 0.9;  transform: scale(1.03); }
 }
+
+/* ── Creator profile layout (design: public/mainprofile.jpg) ──────────────────
+   The right rail sits BESIDE the center only when the profile's own content
+   column is genuinely wide enough — not merely when the viewport is. This page
+   renders inside the app shell's 16rem sidebar, so a viewport breakpoint (xl,
+   1280px) fires while the real content width is viewport − sidebar, jamming the
+   rail beside a full-width center and clipping it (the "laptop not responsive"
+   bug). A container query keyed to the wrapper's OWN inline size is immune to
+   that: it switches to two columns only once the wrapper itself passes 62rem. */
+.frenz-profile-shell {
+  container-type: inline-size;
+  container-name: frenzProfile;
+}
+@container frenzProfile (min-width: 62rem) {
+  .frenz-profile-cols { flex-direction: row; }
+  .frenz-profile-rail { width: 340px; flex: 0 0 340px; }
+}

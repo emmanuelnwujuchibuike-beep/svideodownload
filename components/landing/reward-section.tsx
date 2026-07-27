@@ -1,9 +1,9 @@
-import { ArrowRight, BadgeCheck, Coins, Gift, Landmark, ShieldCheck, Sparkles, TrendingUp, Wallet } from "lucide-react";
+import { ArrowRight, BadgeCheck, Coins, Gift, ShieldCheck, Sparkles, TrendingUp, Wallet } from "lucide-react";
 
 /**
  * Reward section — per `public/rewardsection.jpg`. Left: pill, headline, copy, three
  * feature rows and the conversion-rate card. Right: a Rewards profile mockup. Below:
- * the earn → convert → withdraw steps and a "top earners" banner.
+ * the earn → convert → withdraw steps.
  *
  * NOTE (honesty): the token economy shown is illustrative design content
  * (owner-requested to match the provided design), not sourced live figures.
@@ -29,13 +29,6 @@ const STEPS = [
   { icon: Gift, title: "Earn Tokens", desc: "Complete tasks and collect reward tokens." },
   { icon: Coins, title: "Convert", desc: "100 tokens = $1.00 real cash value." },
   { icon: Wallet, title: "Withdraw", desc: "Withdraw to your preferred payment method." },
-];
-
-/* @sourced illustrative leaderboard — design mock, not real earners. */
-const EARNERS = [
-  { name: "Alex T.", amt: "32,450", from: "from-blue-500 to-indigo-600" },
-  { name: "Sarah K.", amt: "28,600", from: "from-rose-500 to-pink-600" },
-  { name: "John D.", amt: "21,300", from: "from-emerald-500 to-teal-600" },
 ];
 
 export function RewardSection() {
@@ -172,31 +165,6 @@ export function RewardSection() {
         ))}
       </div>
 
-      {/* Top earners banner */}
-      <div className="mt-4 grid items-center gap-6 overflow-hidden rounded-3xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 text-white sm:grid-cols-[1fr_auto] sm:p-8">
-        <div className="flex flex-wrap items-center gap-6">
-          <div>
-            <p className="text-lg font-extrabold">Top Earners This Month</p>
-            <span className="mt-2 inline-flex rounded-xl bg-white/15 px-4 py-2 text-xs font-semibold">View Leaderboard</span>
-          </div>
-          <div className="flex gap-4">
-            {EARNERS.map((e, i) => (
-              <div key={e.name} className="text-center">
-                <span className={`relative mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br ${e.from} text-xs font-bold`}>
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-[8px] text-black">{i + 1}</span>
-                </span>
-                <span className="mt-1 block text-[10px] font-semibold">{e.name}</span>
-                <span className="block text-[9px] text-white/70">{e.amt}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl bg-white/10 p-4 text-center">
-          <Landmark className="mx-auto h-5 w-5" />
-          <p className="mt-1 text-2xl font-extrabold">$24,532</p>
-          <p className="text-[11px] text-white/70">Total Paid Out</p>
-        </div>
-      </div>
     </section>
   );
 }

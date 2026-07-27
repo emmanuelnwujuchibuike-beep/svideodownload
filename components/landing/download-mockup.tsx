@@ -32,13 +32,16 @@ function FeatureCard({ feature }: { feature: (typeof FEATURES)[number] }) {
 
 export function DownloadMockup() {
   return (
-    <section className="container max-w-6xl py-10 sm:py-16">
+    <section className="relative overflow-hidden bg-gradient-to-b from-violet-50/60 via-white to-slate-50 pb-14 pt-2 dark:from-[#0b0b1e] dark:via-[#070713] dark:to-[#050816] sm:pb-20 sm:pt-4">
+      {/* Premium radial glow behind the device. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(62%_48%_at_50%_16%,rgba(139,92,246,0.16),transparent_72%)]" />
+      <div className="container relative max-w-6xl">
       {/* Phone alone — 3D angled, tilted the opposite way to the hero feed phone. */}
       <div className="relative mx-auto w-full max-w-[300px]">
         <div aria-hidden className="absolute inset-0 -z-10 scale-105 rounded-[3rem] bg-gradient-to-br from-blue-500/25 via-violet-500/18 to-purple-600/25 blur-3xl" />
         <div aria-hidden className="absolute inset-x-8 bottom-1 -z-10 h-10 rounded-[50%] bg-black/30 blur-2xl dark:bg-black/60" />
 
-        <div className="[transform:perspective(1600px)_rotateX(4deg)_rotateY(15deg)_rotateZ(-2deg)] [transform-style:preserve-3d]">
+        <div className="[transform:perspective(1700px)_rotateX(2deg)_rotateY(8deg)_rotateZ(-1deg)] [transform-style:preserve-3d]">
           {/* Titanium frame */}
           <div className="relative aspect-[776/1630] rounded-[2.6rem] bg-[linear-gradient(260deg,#fafafa_0%,#d4d4d8_4%,#71717a_13%,#3f3f46_34%,#27272a_50%,#3f3f46_66%,#71717a_87%,#d4d4d8_96%,#fafafa_100%)] p-[3px] shadow-[0_0_0_0.5px_rgba(255,255,255,0.35),inset_0_1px_1px_rgba(255,255,255,0.6),0_18px_30px_-8px_rgba(0,0,0,0.4),0_40px_60px_-16px_rgba(0,0,0,0.5),0_70px_100px_-30px_rgba(0,0,0,0.55)]">
             <div className="relative h-full overflow-hidden rounded-[2.45rem] border-[4px] border-black bg-neutral-50">
@@ -138,6 +141,7 @@ export function DownloadMockup() {
         {FEATURES.map((f) => (
           <FeatureCard key={f.title} feature={f} />
         ))}
+      </div>
       </div>
     </section>
   );

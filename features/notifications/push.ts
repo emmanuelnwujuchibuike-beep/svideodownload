@@ -72,6 +72,49 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return out;
 }
 
+/**
+ * Whether an existing browser subscription was created with OUR VAPID key.
+ *
+ * A service-worker registration allows exactly ONE push subscription. If a
+ * third party (an ad network's push SW — Monetag's, historically merged into
+ * /sw.js) subscribed the browser to ITS server, it took the single slot, and
+ * every app push then missed this device while the app's `push_subscriptions`
+ * row pointed at a now-stale endpoint. Comparing the subscription's
+ * `applicationServerKey` to ours is how we detect that a foreign party holds
+ * the slot so we can reclaim it (see `acquireOurSubscription`).
+ */
+function subscriptionIsOurs(sub: PushSubscription): boolean {
+  try {
+    const key = sub.options?.applicationServerKey;
+    if (!key) return false;
+    const got = new Uint8Array(key as ArrayBuffer);
+    const ours = urlBase64ToUint8Array(VAPID_PUBLIC_KEY!);
+    if (got.length !== ours.length) return false;
+    for (let i = 0; i < ours.length; i++) if (got[i] !== ours[i]) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The app's OWN push subscription — reclaiming the single push slot if some
+ *  other party currently holds it (so a previously-hijacked device self-heals
+ *  the next time the app loads). */
+async function acquireOurSubscription(reg: ServiceWorkerRegistration): Promise<PushSubscription> {
+  let existing = await reg.pushManager.getSubscription();
+  if (existing && !subscriptionIsOurs(existing)) {
+    // A foreign subscription owns the one slot — drop it so ours can take over,
+    // otherwise every app push keeps missing this device.
+    await existing.unsubscribe().catch(() => {});
+    existing = null;
+  }
+  if (existing) return existing;
+  return reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!) as BufferSource,
+  });
+}
+
 /** Register SW, request permission, subscribe, and persist server-side. */
 export async function enablePush(): Promise<PushState> {
   if (!pushSupported()) return "unsupported";
@@ -81,21 +124,17 @@ export async function enablePush(): Promise<PushState> {
   const reg = await navigator.serviceWorker.register("/sw.js");
   await navigator.serviceWorker.ready;
 
-  const existing = await reg.pushManager.getSubscription();
-  let sub = existing;
-  if (!sub) {
-    try {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!) as BufferSource,
-      });
-    } catch (err) {
-      // Distinct from the fetch failure below — this never reached our
-      // server at all, so "check your connection" (the old, one-size-fits-
-      // all copy) was misleading whenever this was really a bad VAPID key or
-      // the push service rejecting the browser outright.
-      throw new PushSubscribeFailedError(err);
-    }
+  let sub: PushSubscription;
+  try {
+    // Reclaims the single push slot if a third party (e.g. an ad-network push
+    // SW) currently holds it, then returns the app's OWN subscription.
+    sub = await acquireOurSubscription(reg);
+  } catch (err) {
+    // Distinct from the fetch failure below — this never reached our
+    // server at all, so "check your connection" (the old, one-size-fits-
+    // all copy) was misleading whenever this was really a bad VAPID key or
+    // the push service rejecting the browser outright.
+    throw new PushSubscribeFailedError(err);
   }
 
   const json = sub.toJSON();
@@ -155,12 +194,9 @@ export async function syncPush(userId?: string | null): Promise<void> {
   try {
     const reg = await navigator.serviceWorker.register("/sw.js");
     await navigator.serviceWorker.ready;
-    const sub =
-      (await reg.pushManager.getSubscription()) ??
-      (await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!) as BufferSource,
-      }));
+    // Reclaims the slot from a foreign (ad-network) subscription if needed, so
+    // a device hijacked while Monetag push was live re-homes to our key here.
+    const sub = await acquireOurSubscription(reg);
     const json = sub.toJSON();
     const res = await fetch("/api/push/subscribe", {
       method: "POST",

@@ -1,4 +1,4 @@
-/* Frenz service worker v12 — entry point only. Each concern lives in its own
+/* Frenz service worker v13 — entry point only. Each concern lives in its own
  * module under /sw/, loaded via importScripts() (classic-worker-compatible
  * across every browser this app targets, incl. Safari, which doesn't fully
  * support `{ type: "module" }` service workers) and wired together through
@@ -39,29 +39,24 @@ importScripts(
 );
 
 /*
-  ── Monetag verification + Multitag push (owner, 2026-07-26) ──────────────────
-  Monetag's "file" ownership check wants ITS sw.js served at /sw.js — but that
-  path is THIS file, the PWA service worker (offline, push, install). Overwriting
-  it would destroy the installed-app experience, so Monetag's snippet is MERGED
-  here instead, which is exactly what Monetag documents for sites that already run
-  a service worker. The verification strings below appear verbatim, so Monetag's
-  crawler check on /sw.js passes; the site id is public (it ships in this file
-  either way), not a secret.
+  ── Monetag PUSH disabled — the app owns the push subscription (owner, 2026-07-27)
+  Monetag's push service-worker (imported here previously) subscribes the browser
+  to MONETAG's push server. A service-worker registration allows exactly ONE push
+  subscription, so Monetag's subscribe() REPLACED the app's own VAPID subscription:
+  the app's likes/comments/messages/broadcast pushes then landed on a stale
+  endpoint and never arrived, while Monetag kept sending ad pushes independent of
+  the in-app ad toggle (owner: "i turned off the ad but still get the push, and no
+  interaction/message push comes"). The two cannot coexist on one SW — a hard
+  web-platform limit — so the owner chose to keep the platform's OWN push and drop
+  Monetag PUSH. Every OTHER Monetag format (Multitag, in-page push widget, vignette,
+  popunder) is an in-page <script> tag emitted by MonetagScript and is unaffected.
 
-  GUARDED on purpose: importScripts() is synchronous and THROWS if the remote
-  script can't be fetched — an un-guarded call would abort the ENTIRE service
-  worker on any Monetag/CDN hiccup, taking offline mode + our own Web Push down
-  with it. The try/catch keeps a Monetag outage from ever breaking the Frenz PWA.
+  The `importScripts('https://5gvci.com/.../service-worker.min.js')` line that
+  loaded Monetag's push code is intentionally REMOVED. The verification strings are
+  kept as inert globals (they do nothing without the script) so Monetag's file-
+  ownership crawler check on /sw.js still matches. To re-enable Monetag push, restore
+  the guarded importScripts call below — but it WILL take the app's own push down again.
 */
-try {
-  // Reproduced verbatim from Monetag's downloaded sw.js so their crawler's
-  // content check matches exactly (single quotes, quoted keys included).
-  self.options = {
-    "domain": "5gvci.com",
-    "zoneId": 11391266
-  };
-  self.lary = "";
-  importScripts('https://5gvci.com/act/files/service-worker.min.js?r=sw');
-} catch (e) {
-  /* Monetag SW unavailable — never let a third-party outage break the PWA. */
-}
+self.options = { "domain": "5gvci.com", "zoneId": 11391266 };
+self.lary = "";
+// importScripts('https://5gvci.com/act/files/service-worker.min.js?r=sw'); // DISABLED — hijacks the app's push subscription (see above)

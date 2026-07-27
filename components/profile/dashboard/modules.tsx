@@ -31,7 +31,7 @@ const TOOLS: Tool[] = [
   { title: "Creator Hub", sub: "Build your brand", icon: Rocket, tile: "from-indigo-500 to-blue-600" },
   { title: "Analytics", sub: "Track everything", icon: BarChart3, tile: "from-cyan-500 to-blue-600", href: "/account/analytics" },
   { title: "Live Streaming", sub: "Go live & earn", icon: Radio, tile: "from-red-500 to-rose-600" },
-  { title: "Communities", sub: "Connect & share", icon: Users, tile: "from-emerald-500 to-teal-600" },
+  { title: "Communities", sub: "Connect & share", icon: Users, tile: "from-emerald-500 to-teal-600", href: "/explore" },
   { title: "Business Suite", sub: "Grow your business", icon: Briefcase, tile: "from-blue-500 to-indigo-600" },
 ];
 
@@ -39,7 +39,7 @@ export function ProductsTools() {
   return (
     <section className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-base font-bold">My Products &amp; Tools</h2>
+        <h2 className="text-sm font-bold">My Products &amp; Tools</h2>
         <ViewAll feature="Products & Tools" />
       </div>
       <div className="grid grid-cols-5 gap-2 lg:gap-3">
@@ -88,7 +88,7 @@ export function Achievements({ className }: { className?: string }) {
   return (
     <section className={cn("rounded-3xl border border-border/70 bg-card p-5 shadow-card", className)}>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-base font-bold">Achievements</h2>
+        <h2 className="text-sm font-bold">Achievements</h2>
         <ViewAll feature="Achievements" />
       </div>
       <div className="grid grid-cols-4 gap-2 lg:gap-3">
@@ -118,7 +118,7 @@ export function RecentPosts({ className }: { className?: string }) {
   return (
     <section className={cn("rounded-3xl border border-border/70 bg-card p-5 shadow-card", className)}>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-base font-bold">Recent Posts</h2>
+        <h2 className="text-sm font-bold">Recent Posts</h2>
         <ViewAll feature="Recent Posts" href="/downloads" />
       </div>
       <div className="flex gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] lg:grid lg:grid-cols-4 lg:overflow-visible [&::-webkit-scrollbar]:hidden">

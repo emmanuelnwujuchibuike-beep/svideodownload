@@ -17,14 +17,14 @@ export function MyWallet({ className }: { className?: string }) {
   return (
     <section className={cn("flex flex-col rounded-3xl border border-border/70 bg-card p-5 shadow-card", className)}>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-bold">My Wallet</h2>
+        <h2 className="text-sm font-bold">My Wallet</h2>
         <ViewAll feature="Wallet" />
       </div>
 
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">Balance</p>
-          <p className="mt-1 text-2xl font-extrabold tracking-tight">₦245,000.50</p>
+          <p className="mt-1 text-xl font-bold tracking-tight">₦245,000.50</p>
           <p className="mt-0.5 text-xs">
             <span className="font-semibold text-emerald-500">+12.4%</span>{" "}
             <span className="text-muted-foreground">this month</span>
@@ -70,7 +70,7 @@ export function RecentTransactions({ className }: { className?: string }) {
   return (
     <section className={cn("rounded-3xl border border-border/70 bg-card p-5 shadow-card", className)}>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-bold">Recent Transactions</h2>
+        <h2 className="text-sm font-bold">Recent Transactions</h2>
         <ViewAll feature="Transactions" />
       </div>
       <ul className="divide-y divide-border/60">
@@ -104,7 +104,7 @@ export function WhoToFollow({ className }: { className?: string }) {
   return (
     <section className={cn("rounded-3xl border border-border/70 bg-card p-5 shadow-card", className)}>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-bold">Who to Follow</h2>
+        <h2 className="text-sm font-bold">Who to Follow</h2>
         <ViewAll feature="Suggestions" href="/friends/discover" />
       </div>
       <ul className="space-y-1">

@@ -18,9 +18,9 @@ export const metadata: Metadata = {
  * prerenders like the rest of the marketing group; the middleware sends a
  * signed-in visitor on to their real profile.
  *
- * The signed-in profile DASHBOARD is a separate page (see app/me) — it must never
- * appear here (owner, 2026-07-27: "i dont want any users to login and see that fake
- * profile page in the landing page").
+ * The signed-in profile DASHBOARD is the owner's own /u/[handle] view — it must
+ * never appear here (owner, 2026-07-27: "i dont want any users to login and see
+ * that fake profile page in the landing page").
  */
 export default function ProfilePage() {
   return (

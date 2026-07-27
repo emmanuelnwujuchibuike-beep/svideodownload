@@ -8,6 +8,7 @@ import { Suspense } from "react";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteHeader } from "@/components/layout/site-header";
+import { OwnerProfileDashboard } from "@/components/profile/dashboard/owner-dashboard";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { ProfileTabs } from "@/features/profile/profile-tabs";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
@@ -134,6 +135,36 @@ export default async function ProfilePage({
       ...(profile.avatarUrl ? { image: profile.avatarUrl } : {}),
     },
   };
+
+  // The OWNER sees the restructured profile DASHBOARD (public/profile.jpg). It
+  // renders inside the same app shell (app/u/layout.tsx) as everything else, so
+  // this is content only. Visitors fall through to the public profile below —
+  // that path is deliberately left untouched.
+  if (profile.isOwner) {
+    return (
+      <>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
+        <SiteHeader social desktopHidden />
+        <main className="pb-24 pt-14 sm:pt-16 lg:pt-4">
+          <OwnerProfileDashboard
+            name={profile.displayName}
+            handle={profile.handle}
+            avatarUrl={profile.avatarUrl}
+            bannerUrl={profile.bannerUrl}
+            verified={profile.isVerified}
+            plan={plan}
+            bio={profile.bio}
+            website={profile.website}
+            joined={`Joined ${new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`}
+            followers={profile.followersCount}
+            following={profile.followingCount}
+            friends={friendTotal}
+            posts={postsTotal}
+          />
+        </main>
+      </>
+    );
+  }
 
   return (
     <>

@@ -31,7 +31,7 @@ import { friendsCount, friendshipState, mutualFriendsCount } from "@/lib/social/
 import { createAdminClient } from "@/lib/supabase/admin";
 import { viewableCollectionsCount } from "@/lib/social/collections";
 import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "@/lib/social/posts";
-import { getPrivacySettings, getPublicProfile, tabVisible } from "@/lib/social/profile";
+import { getPrivacySettings, getProfileExtras, getPublicProfile, tabVisible } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
 
@@ -192,7 +192,7 @@ export default async function ProfilePage({
   // The profile header renders immediately; the (heavier) posts grid streams in
   // behind a skeleton so the page never blocks on the post query.
   const isViewer = !!me && !profile.isOwner;
-  const [plan, friendState, mutuals, friendTotal, postsTotal, privacy, collectionsN, followsYou] = await Promise.all([
+  const [plan, friendState, mutuals, friendTotal, postsTotal, privacy, collectionsN, followsYou, profileExtras] = await Promise.all([
     getUserPlan(profile.id),
     isViewer ? friendshipState(me!, profile.id) : Promise.resolve("none" as const),
     isViewer ? mutualFriendsCount(me!, profile.id) : Promise.resolve(0),
@@ -201,6 +201,7 @@ export default async function ProfilePage({
     getPrivacySettings(profile.id),
     viewableCollectionsCount(profile.id, me, profile.isFollowing),
     isViewer ? followsViewer(profile.id, me!) : Promise.resolve(false),
+    getProfileExtras(profile.id),
   ]);
 
   // Per-tab visibility: activity tabs appear only when the viewer is allowed to
@@ -334,6 +335,13 @@ export default async function ProfilePage({
                         </span>
                       </h1>
                       <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
+                      {/* Status + Mood (Part 9) — read defensively; empty until migration 0095 applies. */}
+                      {profileExtras.status || profileExtras.mood ? (
+                        <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
+                          {profileExtras.mood ? <span className="font-semibold text-primary">{profileExtras.mood}</span> : null}
+                          {profileExtras.status ? <span className="text-muted-foreground">{profileExtras.status}</span> : null}
+                        </div>
+                      ) : null}
                     </div>
 
                     {profile.bio ? <p className="mt-3 max-w-2xl leading-relaxed">{profile.bio}</p> : null}
@@ -518,6 +526,14 @@ export default async function ProfilePage({
                     <DiamondCrownBadge plan={plan} size="sm" showLabel />
                   </h1>
                   <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
+                  {/* Status + Mood (Part 9) — the member's own expression, read
+                      defensively so it stays empty until migration 0095 is applied. */}
+                  {profileExtras.status || profileExtras.mood ? (
+                    <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
+                      {profileExtras.mood ? <span className="font-semibold text-primary">{profileExtras.mood}</span> : null}
+                      {profileExtras.status ? <span className="text-muted-foreground">{profileExtras.status}</span> : null}
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Identity Presence™ — independent relationship signals, real data only.

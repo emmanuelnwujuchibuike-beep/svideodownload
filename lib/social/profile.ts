@@ -208,6 +208,48 @@ export async function getOwnProfile(userId: string): Promise<OwnProfile | null> 
   }
 }
 
+/** The moods a member may set (Feature 18 · Part 9). Stored as the label itself,
+ *  so the profile can render it with no lookup. No emoji — labels only, per the
+ *  brand's no-emoji design rule. */
+export const PROFILE_MOODS = [
+  "Inspired",
+  "Focused",
+  "Relaxed",
+  "Excited",
+  "Creative",
+  "Celebrating",
+  "Motivated",
+  "Peaceful",
+] as const;
+export type ProfileMood = (typeof PROFILE_MOODS)[number];
+
+export interface ProfileExtras {
+  status: string | null;
+  mood: string | null;
+}
+
+/**
+ * A profile's optional status + mood, read through a DEDICATED query so the
+ * profile and account pages never break if migration 0095 hasn't been applied
+ * yet: a missing column (or any error) simply degrades to nulls rather than
+ * failing the whole profile load the way adding these to the main SELECT would.
+ */
+export async function getProfileExtras(profileId: string): Promise<ProfileExtras> {
+  if (!hasSupabase) return { status: null, mood: null };
+  try {
+    const { data, error } = await createAdminClient()
+      .from("profiles")
+      .select("status, mood")
+      .eq("id", profileId)
+      .maybeSingle();
+    if (error) return { status: null, mood: null };
+    const row = data as { status: string | null; mood: string | null } | null;
+    return { status: row?.status?.trim() || null, mood: row?.mood || null };
+  } catch {
+    return { status: null, mood: null };
+  }
+}
+
 export interface PrivacySettings {
   activity_visibility: Visibility;
   followers_visibility: Visibility;

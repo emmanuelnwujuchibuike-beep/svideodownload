@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ImageUpload } from "@/components/social/image-upload";
-import type { OwnProfile, Visibility } from "@/lib/social/profile";
+import { PROFILE_MOODS, type OwnProfile, type Visibility } from "@/lib/social/profile";
 import { cn } from "@/lib/utils";
 
 const VISIBILITY: { value: Visibility; label: string; hint: string; icon: typeof Globe }[] = [
@@ -15,7 +15,13 @@ const VISIBILITY: { value: Visibility; label: string; hint: string; icon: typeof
   { value: "private", label: "Private", hint: "Only you", icon: Lock },
 ];
 
-export function ProfileEditor({ profile }: { profile: OwnProfile }) {
+export function ProfileEditor({
+  profile,
+  extras,
+}: {
+  profile: OwnProfile;
+  extras?: { status: string | null; mood: string | null };
+}) {
   const router = useRouter();
   const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl ?? "");
   const [bannerUrl, setBannerUrl] = useState(profile.bannerUrl ?? "");
@@ -23,6 +29,8 @@ export function ProfileEditor({ profile }: { profile: OwnProfile }) {
   const [displayName, setDisplayName] = useState(profile.displayName ?? "");
   const [bio, setBio] = useState(profile.bio ?? "");
   const [website, setWebsite] = useState(profile.website ?? "");
+  const [status, setStatus] = useState(extras?.status ?? "");
+  const [mood, setMood] = useState(extras?.mood ?? "");
   const [visibility, setVisibility] = useState<Visibility>(profile.visibility);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -42,6 +50,8 @@ export function ProfileEditor({ profile }: { profile: OwnProfile }) {
           avatar_url: avatarUrl || null,
           banner_url: bannerUrl || null,
           visibility,
+          status: status.trim() || null,
+          mood: mood || null,
         }),
       });
       const json = await res.json();
@@ -107,6 +117,21 @@ export function ProfileEditor({ profile }: { profile: OwnProfile }) {
             placeholder="Tell people about yourself (max 280 characters)"
             className="min-h-[80px] w-full rounded-xl bg-background p-3.5 text-sm outline-none ring-1 ring-inset ring-border transition focus:ring-2 focus:ring-primary"
           />
+        </div>
+        <div>
+          <label className={label}>Status <span className="font-normal text-muted-foreground/70">· optional</span></label>
+          <input className={input} value={status} onChange={(e) => setStatus(e.target.value)} maxLength={80} placeholder="What are you up to?" />
+        </div>
+        <div>
+          <label className={label}>Mood <span className="font-normal text-muted-foreground/70">· optional</span></label>
+          <select className={cn(input, "appearance-none")} value={mood} onChange={(e) => setMood(e.target.value)}>
+            <option value="">None</option>
+            {PROFILE_MOODS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="sm:col-span-2">
           <label className={label}>Business link <span className="font-normal text-muted-foreground/70">· optional</span></label>

@@ -16,7 +16,7 @@ import { getPlanLimits } from "@/lib/monetization/plan";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { getHomePreferences } from "@/lib/social/home-preferences";
 import { getNotificationSettings } from "@/lib/social/notification-settings";
-import { getOwnProfile } from "@/lib/social/profile";
+import { getOwnProfile, getProfileExtras } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -92,10 +92,11 @@ export default async function AccountPage() {
 
   // Social profile + Home/feed + notification preferences. Privacy settings
   // + blocked/muted accounts moved to their own page (/account/privacy).
-  const [ownProfile, homePrefs, notificationSettings] = await Promise.all([
+  const [ownProfile, homePrefs, notificationSettings, profileExtras] = await Promise.all([
     getOwnProfile(user.id),
     getHomePreferences(user.id),
     getNotificationSettings(user.id),
+    getProfileExtras(user.id),
   ]);
 
   return (
@@ -169,7 +170,7 @@ export default async function AccountPage() {
             </div>
 
             {/* Public profile */}
-            {ownProfile ? <ProfileEditor profile={ownProfile} /> : null}
+            {ownProfile ? <ProfileEditor profile={ownProfile} extras={profileExtras} /> : null}
 
             {/* Home layout + feed behavior preferences */}
             <HomeModulesEditor preferences={homePrefs} />

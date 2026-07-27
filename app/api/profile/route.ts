@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { normalizeHandle } from "@/lib/social/profile";
+import { normalizeHandle, PROFILE_MOODS } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -25,6 +25,9 @@ const schema = z.object({
   banner_url: httpUrl,
   website: httpUrl,
   visibility: z.enum(["public", "followers", "private"]).optional(),
+  // Status + mood (migration 0095) — saved separately, best-effort (below).
+  status: z.string().trim().max(80).nullable().optional().or(z.literal("").transform(() => null)),
+  mood: z.enum(PROFILE_MOODS).nullable().optional().or(z.literal("").transform(() => null)),
 });
 
 /** PATCH /api/profile — update the signed-in user's social profile. */
@@ -63,16 +66,33 @@ export async function PATCH(request: Request) {
   for (const k of ["display_name", "bio", "avatar_url", "banner_url", "website", "visibility"] as const) {
     if (parsed.data[k] !== undefined) update[k] = parsed.data[k];
   }
-  if (Object.keys(update).length === 0) {
+
+  // Status + mood live behind migration 0095. They're written in a SEPARATE,
+  // best-effort update so a not-yet-applied column can never fail the core
+  // profile save (name/bio/etc. must always be able to save).
+  const extras: Record<string, unknown> = {};
+  if (parsed.data.status !== undefined) extras.status = parsed.data.status;
+  if (parsed.data.mood !== undefined) extras.mood = parsed.data.mood;
+
+  if (Object.keys(update).length === 0 && Object.keys(extras).length === 0) {
     return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
   }
 
-  const { error } = await supabase.from("profiles").update(update).eq("id", user.id);
-  if (error) {
-    if (error.code === "23505") {
-      return NextResponse.json({ error: "That handle is already taken." }, { status: 409 });
+  if (Object.keys(update).length > 0) {
+    const { error } = await supabase.from("profiles").update(update).eq("id", user.id);
+    if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json({ error: "That handle is already taken." }, { status: 409 });
+      }
+      return NextResponse.json({ error: "Couldn't save profile." }, { status: 500 });
     }
-    return NextResponse.json({ error: "Couldn't save profile." }, { status: 500 });
   }
+
+  if (Object.keys(extras).length > 0) {
+    // Best-effort: swallow a missing-column error (42703 / PGRST204) so status
+    // and mood save once 0095 is applied without ever blocking the rest.
+    await supabase.from("profiles").update(extras).eq("id", user.id);
+  }
+
   return NextResponse.json({ ok: true });
 }

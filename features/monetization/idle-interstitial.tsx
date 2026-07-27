@@ -1,11 +1,8 @@
 "use client";
 
-import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { cn } from "@/lib/utils";
-
-import { AdSlot } from "./ad-slot";
+import { FullscreenInterstitial } from "./fullscreen-interstitial";
 import { useShowAds } from "./use-show-ads";
 
 /**
@@ -201,56 +198,11 @@ export function IdleInterstitial() {
     never intercept a click on the page behind it.
   */
   return (
-    <div
-      className={cn(
-        "fixed inset-0 z-[60] flex items-center justify-center p-4",
-        shown ? "opacity-100" : "pointer-events-none opacity-0",
-      )}
-      // `hidden` for assistive tech and to stop the backdrop showing, without
-      // unmounting the slot that is preloading inside.
-      aria-hidden={!shown}
-      role="dialog"
-      aria-modal={shown}
-      aria-label="Advertisement"
-    >
-      <button
-        type="button"
-        aria-label="Close advertisement"
-        tabIndex={shown ? 0 : -1}
-        onClick={close}
-        className={cn(
-          "absolute inset-0 h-full w-full cursor-default bg-background/80 backdrop-blur-sm",
-          !shown && "hidden",
-        )}
-      />
-
-      <div
-        className={cn(
-          "relative w-full max-w-lg rounded-3xl border border-border/60 bg-card p-4 shadow-card",
-          !shown && "hidden",
-        )}
-      >
-        {/*
-          The dismiss control. Solid primary fill, at the ad's top-right corner,
-          present from the first frame the overlay is shown — the "X should show
-          when the ad shows" ask. Large enough to be an easy tap target (44px),
-          and lifted slightly outside the card so it never sits over the unit.
-        */}
-        <button
-          type="button"
-          onClick={close}
-          tabIndex={shown ? 0 : -1}
-          aria-label="Close advertisement"
-          className="absolute -right-3 -top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-foreground text-background shadow-elevated ring-2 ring-background transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          <X className="h-5 w-5" strokeWidth={2.5} />
-        </button>
-
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-          Sponsored
-        </p>
-        <AdSlot zone="idle_interstitial" dismissible={false} onResolved={setHasAd} />
-      </div>
-    </div>
+    <FullscreenInterstitial
+      zone="idle_interstitial"
+      shown={shown}
+      onClose={close}
+      onResolved={setHasAd}
+    />
   );
 }

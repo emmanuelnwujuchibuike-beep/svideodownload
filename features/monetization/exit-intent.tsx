@@ -1,9 +1,8 @@
 "use client";
 
-import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AdSlot } from "./ad-slot";
+import { FullscreenInterstitial } from "./fullscreen-interstitial";
 import { useShowAds } from "./use-show-ads";
 
 /**
@@ -125,34 +124,11 @@ export function ExitIntent() {
     full-screen scale, on the way out of the site.
   */
   return (
-    <div
-      className={hasAd === true ? "fixed inset-0 z-[60] flex items-center justify-center p-4" : "hidden"}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Advertisement"
-    >
-      <button
-        type="button"
-        aria-label="Close advertisement"
-        onClick={close}
-        className="absolute inset-0 h-full w-full cursor-default bg-background/80 backdrop-blur-sm"
-      />
-
-      <div className="relative w-full max-w-lg rounded-3xl border border-border/60 bg-card p-4 shadow-card">
-        <button
-          type="button"
-          onClick={close}
-          aria-label="Close advertisement"
-          className="absolute -right-3 -top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-card transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          <X className="h-4 w-4" />
-        </button>
-
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-          Sponsored
-        </p>
-        <AdSlot zone="exit_intent_popup" dismissible={false} onResolved={setHasAd} />
-      </div>
-    </div>
+    <FullscreenInterstitial
+      zone="exit_intent_popup"
+      shown={hasAd === true}
+      onClose={close}
+      onResolved={setHasAd}
+    />
   );
 }

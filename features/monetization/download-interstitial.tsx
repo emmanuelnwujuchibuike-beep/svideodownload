@@ -1,15 +1,12 @@
 "use client";
 
-import { Crown, X } from "lucide-react";
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { getCompletedCount, onDownloadCompleted } from "@/features/downloads/manager";
 import { getWatchCount, onVideoWatched } from "@/features/downloads/player-store";
-import { cn } from "@/lib/utils";
 
-import { AdSlot } from "./ad-slot";
+import { FullscreenInterstitial } from "./fullscreen-interstitial";
 import { useInterstitialSkipSeconds } from "./use-interstitial-skip";
 import { useShowAds } from "./use-show-ads";
 
@@ -169,58 +166,14 @@ export function DownloadInterstitial({
       : { text: "Tired of ads?", cta: "Upgrade to Pro", href: "/pricing" };
 
   return (
-    <div
-      className={cn(
-        "fixed inset-0 z-[60] flex items-center justify-center p-4",
-        shown ? "opacity-100" : "pointer-events-none opacity-0",
-      )}
-      aria-hidden={!shown}
-      role="dialog"
-      aria-modal={shown}
-      aria-label="Advertisement"
-    >
-      {/* Backdrop dismisses only once the ad is skippable. */}
-      <button
-        type="button"
-        aria-label="Close advertisement"
-        tabIndex={shown && canSkip ? 0 : -1}
-        onClick={() => canSkip && close()}
-        className={cn("absolute inset-0 h-full w-full bg-background/80 backdrop-blur-sm", canSkip ? "cursor-default" : "cursor-not-allowed", !shown && "hidden")}
-      />
-
-      <div className={cn("relative w-full max-w-lg rounded-3xl border border-border/60 bg-card p-4 shadow-elevated", !shown && "hidden")}>
-        {/* Skip control — a countdown while the delay runs, then a real X. */}
-        {canSkip ? (
-          <button
-            type="button"
-            onClick={close}
-            tabIndex={shown ? 0 : -1}
-            aria-label="Skip advertisement"
-            className="absolute -right-3 -top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-foreground text-background shadow-elevated ring-2 ring-background transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <X className="h-5 w-5" strokeWidth={2.5} />
-          </button>
-        ) : (
-          <span
-            aria-live="polite"
-            className="absolute -right-3 -top-3 z-10 inline-flex h-11 items-center gap-1.5 rounded-full bg-foreground/90 px-3.5 text-xs font-semibold text-background shadow-elevated ring-2 ring-background"
-          >
-            Skip in {remaining}s
-          </span>
-        )}
-
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">Sponsored</p>
-        <AdSlot zone="idle_interstitial" dismissible={false} onResolved={setHasAd} />
-
-        {/* Premium upsell — a Pro user never sees "upgrade to Pro". */}
-        <Link
-          href={upsell.href}
-          onClick={close}
-          className="group mt-3 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 active:scale-[0.98]"
-        >
-          <Crown className="h-4 w-4" /> {upsell.text} <span className="underline decoration-white/40 underline-offset-2">{upsell.cta}</span>
-        </Link>
-      </div>
-    </div>
+    <FullscreenInterstitial
+      zone="idle_interstitial"
+      shown={shown}
+      onClose={close}
+      onResolved={setHasAd}
+      canSkip={canSkip}
+      remaining={remaining}
+      upsell={upsell}
+    />
   );
 }

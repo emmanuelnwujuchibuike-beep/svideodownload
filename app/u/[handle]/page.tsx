@@ -14,7 +14,7 @@ import { ProfileTabs } from "@/features/profile/profile-tabs";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
 import { friendIdSet } from "@/lib/social/friend-ids";
-import { SoonButton } from "@/components/profile/dashboard/soon";
+import { ProfileMobileMenu } from "@/features/profile/profile-mobile-menu";
 import { Toaster } from "@/features/ui/toast";
 import { LivingGlow } from "@/features/profile/living-glow";
 import { ProfileMenu } from "@/features/profile/profile-menu";
@@ -196,10 +196,9 @@ export default async function ProfilePage({
     return (
       <>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
-        <SiteHeader social desktopHidden />
-        <SuggestionsLauncher className="fixed left-3 top-[calc(0.75rem+var(--frenz-safe-top))] z-[60] bg-background/70 backdrop-blur-xl lg:hidden" />
-        <main className="pb-24 pt-14 sm:pt-16 lg:pt-4">
-          <div className="mx-auto flex w-full max-w-7xl gap-6 px-0 sm:px-4">
+        <ProfileMobileMenu />
+        <main className="pb-24 pt-[calc(var(--frenz-safe-top)+4rem)] lg:pt-4">
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-0 sm:px-4 xl:flex-row">
             <div className="min-w-0 flex-1">
               {/* Cover */}
               <div className="relative h-40 w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:h-52 sm:rounded-3xl">
@@ -209,12 +208,12 @@ export default async function ProfilePage({
                   <LivingGlow />
                 )}
                 <div className="absolute right-3 top-3 flex items-center gap-2 pt-[var(--frenz-safe-top)] sm:pt-0">
-                  <SoonButton feature="Edit cover" className="inline-flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/55">
+                  <Link href="/account#profile" className="inline-flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/55">
                     <Camera className="h-4 w-4" /> Edit Cover
-                  </SoonButton>
-                  <SoonButton feature="More options" ariaLabel="More options" className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/40 text-white backdrop-blur-md transition hover:bg-black/55">
+                  </Link>
+                  <Link href="/account" aria-label="More options" className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/40 text-white backdrop-blur-md transition hover:bg-black/55">
                     <MoreHorizontal className="h-5 w-5" />
-                  </SoonButton>
+                  </Link>
                 </div>
               </div>
 

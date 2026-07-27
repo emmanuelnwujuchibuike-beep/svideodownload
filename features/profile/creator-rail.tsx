@@ -58,7 +58,7 @@ function Card({ title, viewAll, children }: { title: string; viewAll?: { feature
 }
 
 const TOOLS: { title: string; sub: string; icon: LucideIcon; tile: string; href?: string; feature: string }[] = [
-  { title: "Creator Dashboard", sub: "Manage your profile", icon: LayoutDashboard, tile: "from-violet-500 to-purple-600", feature: "Creator Dashboard" },
+  { title: "Creator Dashboard", sub: "Manage your profile", icon: LayoutDashboard, tile: "from-violet-500 to-purple-600", href: "/account", feature: "Creator Dashboard" },
   { title: "Analytics", sub: "Track performance", icon: BarChart3, tile: "from-sky-500 to-blue-600", href: "/account/analytics", feature: "Analytics" },
   { title: "Monetization", sub: "Earn from your content", icon: DollarSign, tile: "from-emerald-500 to-teal-600", feature: "Monetization" },
   { title: "Ad Center", sub: "Create and manage ads", icon: Megaphone, tile: "from-amber-500 to-orange-600", feature: "Ad Center" },
@@ -94,7 +94,7 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
 
 export function CreatorRail({ bio, location, website, joined, friends = [] }: CreatorRailProps) {
   return (
-    <aside className="hidden w-[320px] shrink-0 space-y-4 xl:block">
+    <aside className="w-full shrink-0 space-y-4 xl:w-[320px]">
       {/* About Me */}
       <Card title="About Me">
         {bio ? <p className="text-sm leading-relaxed">{bio}</p> : null}

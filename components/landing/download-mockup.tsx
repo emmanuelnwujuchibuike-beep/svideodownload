@@ -19,12 +19,12 @@ import { FEATURES } from "@/components/landing/features-grid";
 function FeatureCard({ feature }: { feature: (typeof FEATURES)[number] }) {
   const Icon = feature.icon;
   return (
-    <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-soft">
-      <span className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br ${feature.tint} text-white shadow-sm`}>
+    <div className="rounded-2xl border border-border/70 bg-card p-3 shadow-soft sm:p-4">
+      <span className={`flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br ${feature.tint} text-white shadow-sm sm:h-9 sm:w-9`}>
         {feature.title === "HD Quality" ? <span className="text-[11px] font-extrabold">HD</span> : <Icon className="h-4 w-4" />}
       </span>
-      <p className="mt-3 text-sm font-bold tracking-tight text-slate-900 dark:text-white">{feature.title}</p>
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{feature.desc}</p>
+      <p className="mt-2.5 text-xs font-bold leading-tight tracking-tight text-slate-900 dark:text-white sm:mt-3 sm:text-sm">{feature.title}</p>
+      <p className="mt-1 hidden text-xs leading-relaxed text-muted-foreground sm:block">{feature.desc}</p>
     </div>
   );
 }
@@ -131,25 +131,18 @@ export function DownloadMockup() {
 
   return (
     <section className="container max-w-6xl py-8 sm:py-12">
-      {/* Mobile / tablet: phone on top, all six cards in one even 2×3 grid. */}
-      <div className="lg:hidden">
-        {Phone}
-        <div className="mt-8 grid grid-cols-2 gap-4">
-          {FEATURES.map((f) => (
-            <FeatureCard key={f.title} feature={f} />
-          ))}
-        </div>
-      </div>
-
-      {/* Desktop: 3 cards · phone · 3 cards. */}
-      <div className="hidden items-center gap-8 lg:grid lg:grid-cols-[1fr_auto_1fr]">
-        <div className="space-y-4">
+      {/* Three columns at every size — cards · phone · cards — as in the reference
+          (owner: "grid cols 3, not flex full screen"). The middle column is wider so
+          the phone stays legible; card copy collapses to icon + title on the narrow
+          side columns and gains its description from `sm` up. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.55fr)_minmax(0,1fr)] items-center gap-2 sm:gap-5 lg:gap-8">
+        <div className="min-w-0 space-y-2.5 sm:space-y-4">
           {left.map((f) => (
             <FeatureCard key={f.title} feature={f} />
           ))}
         </div>
-        {Phone}
-        <div className="space-y-4">
+        <div className="min-w-0">{Phone}</div>
+        <div className="min-w-0 space-y-2.5 sm:space-y-4">
           {right.map((f) => (
             <FeatureCard key={f.title} feature={f} />
           ))}

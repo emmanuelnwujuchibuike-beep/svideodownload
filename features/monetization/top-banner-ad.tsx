@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -34,14 +34,37 @@ export function TopBannerAd() {
   const { showAds, ready } = useShowAds();
   const [hasPrimary, setHasPrimary] = useState<boolean | null>(null);
   const [hasLegacy, setHasLegacy] = useState<boolean | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null);
 
   const visible = hasPrimary === true || hasLegacy === true;
   const askLegacy = hasPrimary === false;
+
+  // Publish the bar's height so the marketing layout can RESERVE that much space
+  // and the page content clears the ad instead of hiding under it (owner: "the top
+  // ad is covering the top of the hero"). 0 when hidden, so an ad-free site keeps
+  // its exact layout.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!visible || !barRef.current) {
+      root.style.setProperty("--frenz-topad-h", "0px");
+      return;
+    }
+    const bar = barRef.current;
+    const setH = () => root.style.setProperty("--frenz-topad-h", `${bar.offsetHeight}px`);
+    setH();
+    const ro = new ResizeObserver(setH);
+    ro.observe(bar);
+    return () => {
+      ro.disconnect();
+      root.style.setProperty("--frenz-topad-h", "0px");
+    };
+  }, [visible]);
 
   if (!ready || !showAds) return null;
 
   return (
     <div
+      ref={barRef}
       style={{
         top: "max(var(--frenz-safe-top), var(--frenz-header-bottom, calc(var(--frenz-safe-top) + 4rem)))",
       }}

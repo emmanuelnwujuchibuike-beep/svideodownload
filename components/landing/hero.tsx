@@ -56,7 +56,7 @@ export function Hero() {
             All-in-One Downloader &amp; Social Hub
           </span>
 
-          {/* "Download. Connect. Enjoy." — the reference H1, middle word in the
+          {/* "Download. Connect. Explore." — the reference H1, middle word in the
               brand gradient (public/newlandingfull.jpg). */}
           <h1 className="text-5xl font-extrabold leading-[1.02] tracking-[-0.04em] text-slate-900 dark:text-white sm:text-6xl lg:text-[4.25rem]">
             Download.
@@ -65,13 +65,14 @@ export function Hero() {
               Connect.
             </span>
             <br />
-            Enjoy.
+            Explore.
           </h1>
 
           <p className="mx-auto mt-6 max-w-lg text-pretty text-base leading-relaxed text-slate-600 dark:text-white/70 sm:text-lg lg:mx-0">
-            Frenz lets you download videos, photos, stories and reels from the
-            platforms you already use — then share, connect and enjoy, all in{" "}
-            <span className="font-medium text-blue-600 dark:text-blue-300">one beautiful app.</span>
+            Frenz lets you download videos, photos, stories and reels — no watermark,
+            full HD, completely free — from the platforms you already use. Then share,
+            connect and explore, all in{" "}
+            <span className="font-medium text-blue-600 dark:text-blue-300">one super app.</span>
           </p>
 
           {/* CTAs */}

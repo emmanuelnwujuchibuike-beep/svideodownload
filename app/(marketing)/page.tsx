@@ -14,7 +14,6 @@ import { RewardSection } from "@/components/landing/reward-section";
 import { StatsCounter } from "@/components/landing/stats-counter";
 import { StudioSection } from "@/components/landing/studio-section";
 import { Testimonials } from "@/components/landing/testimonials";
-import { TrustBar } from "@/components/landing/trust-bar";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
@@ -135,9 +134,6 @@ export default function HomePage() {
         <Suspense fallback={<section className="min-h-[560px]" />}>
           <CreatorsSection />
         </Suspense>
-
-        {/* Supported-platform marks. */}
-        <TrustBar />
 
         {/* Stats band (four-up icons). */}
         <StatsCounter />

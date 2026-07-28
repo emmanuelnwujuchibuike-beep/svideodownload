@@ -144,8 +144,12 @@ export function Hero() {
 
       {/* "Download anything" card — the purple paste-and-download panel from
           public/newlanding.jpg, sitting between the hero phone and the download
-          mockup below. */}
-      <div id="download" className="container relative z-10 mt-12 max-w-3xl scroll-mt-24 sm:mt-14">
+          mockup below.
+          Uses its own (narrower) side padding instead of `container`'s 24px —
+          the default made the card read as "tightly pressed" on phones; a
+          smaller margin lets it spread closer to both edges, SnapTik-style,
+          while keeping the same max-w-3xl cap everything else on the page uses. */}
+      <div id="download" className="relative z-10 mx-auto mt-12 max-w-3xl scroll-mt-24 px-3 sm:mt-14 sm:px-6">
         <div className="relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-blue-600 via-violet-600 to-fuchsia-600 p-5 shadow-elevated sm:p-7">
           <div aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
           <div className="relative text-center text-white">

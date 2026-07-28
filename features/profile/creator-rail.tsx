@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 
 import { SoonButton } from "@/components/profile/dashboard/soon";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { AchievementsShowcase } from "@/features/profile/achievements-showcase";
 import { CreatorActivity } from "@/features/profile/creator-activity";
 import { IdentityAnalytics, type IdentityAnalyticsData, type TopContent } from "@/features/profile/identity-analytics";
@@ -110,6 +111,16 @@ export function CreatorRail({ bio, location, website, joined, friends = [], acti
           ) : null}
           <li className="flex items-center gap-2.5"><Cake className="h-4 w-4 shrink-0" /> {joined}</li>
         </ul>
+      </Card>
+
+      {/* Appearance — dark / light / system theme. Restored to the owner rail:
+          the creator profile returns before the ProfileMenu that used to host it,
+          so it lived nowhere on the owner's own profile after the redesign. */}
+      <Card title="Appearance">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm text-muted-foreground">Theme</span>
+          <ThemeToggle />
+        </div>
       </Card>
 
       {/* Reputation™ — derived rank, trust index + progress toward next rank */}

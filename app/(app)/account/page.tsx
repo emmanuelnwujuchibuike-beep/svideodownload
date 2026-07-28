@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, Code2, Crown, Gem, Lock, LogOut, Mail, ShieldCheck, Sparkles } from "lucide-react";
+import { BarChart3, Bell, CalendarDays, Code2, Crown, Download, Gem, Lock, LogOut, Mail, Palette, ShieldCheck, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -8,6 +8,7 @@ import { AppContent } from "@/features/app-shell/app-content";
 import { ApiKeys } from "@/features/api/api-keys";
 import { ManageBillingButton } from "@/features/monetization/manage-billing-button";
 import { ProfileEditor } from "@/features/social/profile-editor";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { HomeModulesEditor } from "@/features/account/home-modules-editor";
 import { NotificationSettingsEditor } from "@/features/account/notification-settings-editor";
 import { PasswordEditor } from "@/features/account/password-editor";
@@ -180,9 +181,13 @@ export default async function AccountPage() {
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {[
                   { href: "#profile", Icon: Sparkles, title: "Identity", sub: "Name · status · accent" },
+                  { href: "#appearance", Icon: Palette, title: "Appearance", sub: "Theme · dark & light" },
+                  { href: "#notifications", Icon: Bell, title: "Notifications", sub: "Alerts & activity" },
                   { href: "/account/privacy", Icon: Lock, title: "Privacy", sub: "Who sees what", prefetch: true },
                   { href: "/account/security", Icon: ShieldCheck, title: "Security", sub: "2FA · devices", prefetch: true },
                   { href: "/account/analytics", Icon: BarChart3, title: "Analytics", sub: "Your performance", prefetch: true },
+                  { href: "/downloads", Icon: Download, title: "Downloads", sub: "Your library", prefetch: true },
+                  { href: "#plan", Icon: Crown, title: "Plan", sub: "Billing & upgrade" },
                 ].map((w) => (
                   <Link
                     key={w.title}
@@ -220,11 +225,26 @@ export default async function AccountPage() {
             {/* Public profile */}
             {ownProfile ? <ProfileEditor profile={ownProfile} extras={profileExtras} /> : null}
 
+            {/* Appearance — theme (light / dark / system). Given a permanent home
+                in Settings so the control can never go missing again. */}
+            <div id="appearance" className="scroll-mt-24 border-b border-border/60 p-6 sm:p-8">
+              <div className="mb-4">
+                <h2 className="text-base font-semibold">Appearance</h2>
+                <p className="text-xs text-muted-foreground">Choose how Frenz looks on this device.</p>
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-4">
+                <span className="text-sm font-medium">Theme</span>
+                <ThemeToggle />
+              </div>
+            </div>
+
             {/* Home layout + feed behavior preferences */}
             <HomeModulesEditor preferences={homePrefs} />
 
             {/* Notification settings (Part 6) */}
-            <NotificationSettingsEditor initial={notificationSettings} />
+            <div id="notifications" className="scroll-mt-24">
+              <NotificationSettingsEditor initial={notificationSettings} />
+            </div>
 
             {/* Optional password (second way in + what "Forgot password?" resets) */}
             <PasswordEditor />
@@ -269,7 +289,7 @@ export default async function AccountPage() {
             </div>
 
             {/* Plan / billing */}
-            <div className="border-b border-border/60 p-6 sm:p-8">
+            <div id="plan" className="scroll-mt-24 border-b border-border/60 p-6 sm:p-8">
               <div
                 className={cn(
                   "flex flex-wrap items-center gap-4 rounded-2xl border p-4",

@@ -1,20 +1,57 @@
 "use client";
 
-import { ExternalLink, Globe, Loader2, Lock, Users } from "lucide-react";
+import { AtSign, Check, ExternalLink, Eye, FileText, Globe, Image as ImageIcon, Link as LinkIcon, Loader2, Lock, Palette, Pencil, Smile, Sparkles, UserRound, Users, Video } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { ImageUpload } from "@/components/social/image-upload";
+import { SETTINGS_TINTS, SettingsGroup } from "@/features/account/settings-ui";
 import { ProfileVideoUpload } from "@/features/social/profile-video-upload";
 import { PROFILE_ACCENTS, PROFILE_MOODS, type IdentityMode, type OwnProfile, type Visibility } from "@/lib/social/profile";
 import { cn } from "@/lib/utils";
 
-const VISIBILITY: { value: Visibility; label: string; hint: string; icon: typeof Globe }[] = [
-  { value: "public", label: "Public", hint: "Anyone can view", icon: Globe },
-  { value: "followers", label: "Followers", hint: "Approved followers", icon: Users },
-  { value: "private", label: "Private", hint: "Only you", icon: Lock },
+const VISIBILITY: { value: Visibility; label: string; icon: typeof Globe }[] = [
+  { value: "public", label: "Public", icon: Globe },
+  { value: "followers", label: "Followers", icon: Users },
+  { value: "private", label: "Private", icon: Lock },
 ];
+
+/** A settings field presented like the reference (public/profile settings.jpg):
+ *  a tinted icon tile + title/description, with the editing control below it. */
+function FieldRow({
+  icon: Icon,
+  tint,
+  title,
+  tag,
+  description,
+  children,
+}: {
+  icon: typeof Globe;
+  tint: string;
+  title: string;
+  tag?: string;
+  description?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="px-4 py-4">
+      <div className="flex items-center gap-3.5">
+        <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-1 ring-inset", SETTINGS_TINTS[tint] ?? SETTINGS_TINTS.slate)}>
+          <Icon className="h-[21px] w-[21px]" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[15px] font-semibold">{title}</span>
+            {tag ? <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{tag}</span> : null}
+          </div>
+          {description ? <p className="mt-0.5 text-sm leading-snug text-muted-foreground">{description}</p> : null}
+        </div>
+      </div>
+      {children ? <div className="mt-3">{children}</div> : null}
+    </div>
+  );
+}
 
 export function ProfileEditor({
   profile,
@@ -77,83 +114,76 @@ export function ProfileEditor({
 
   const input =
     "h-11 w-full rounded-xl bg-background px-3.5 text-sm outline-none ring-1 ring-inset ring-border transition focus:ring-2 focus:ring-primary";
-  const label = "mb-1.5 block text-xs font-medium text-muted-foreground";
+  const seg = (active: boolean) =>
+    cn(
+      "flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-sm font-semibold capitalize transition",
+      active ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground hover:border-foreground/20",
+    );
 
   return (
-    <div id="profile" className="scroll-mt-24 border-b border-border/60 p-6 sm:p-8">
-      <div className="mb-5 flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">Edit profile</h2>
-        {handle ? (
-          <Link href={`/u/${handle}`} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-            View profile <ExternalLink className="h-3 w-3" />
+    <div>
+      {/* Hero — cover + avatar + identity + view profile (design: profile settings.jpg) */}
+      <div className="relative">
+        <ImageUpload kind="banner" value={bannerUrl || null} onChange={setBannerUrl} />
+        <div className="absolute -bottom-8 left-3">
+          <ImageUpload kind="avatar" value={avatarUrl || null} onChange={setAvatarUrl} />
+        </div>
+      </div>
+      <div className="mb-1 mt-10 flex items-end justify-between gap-3 px-1">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-1.5 truncate text-lg font-bold tracking-[-0.01em]">
+            {displayName || "Your name"}
+            {profile.handle ? <Sparkles className="h-4 w-4 shrink-0 text-violet-500" /> : null}
+          </h2>
+          <p className="text-sm text-muted-foreground">@{handle || "username"}</p>
+        </div>
+        {profile.handle ? (
+          <Link href={`/u/${profile.handle}`} className="btn-lux btn-lux-secondary shrink-0">
+            View profile <ExternalLink className="h-3.5 w-3.5" />
           </Link>
         ) : null}
       </div>
 
-      {/* Cover + avatar */}
-      <div className="relative mb-12">
-        <ImageUpload kind="banner" value={bannerUrl || null} onChange={setBannerUrl} />
-        <div className="absolute -bottom-9 left-4">
-          <ImageUpload kind="avatar" value={avatarUrl || null} onChange={setAvatarUrl} />
-        </div>
-      </div>
-      <p className="mb-5 text-xs text-muted-foreground">
-        Tap the cover or photo to upload from your device.
-      </p>
-
-      {/* Digital identity — Photo / Video / Avatar (Avatar Studio · Profile Video) */}
-      <div className="mb-6 rounded-2xl border border-border/60 bg-secondary/20 p-4">
-        <p className="mb-3 text-xs font-medium text-muted-foreground">Digital identity — what your profile shows</p>
-        <div className="grid gap-4 sm:grid-cols-2">
+      {/* Digital identity */}
+      <SettingsGroup label="DIGITAL IDENTITY" description="Customize the elements that define you.">
+        <FieldRow icon={Video} tint="violet" title="Profile video" tag="Optional" description="A ~3-second clip. Silent, loops. Under 20 MB.">
           <ProfileVideoUpload value={profileVideoUrl || null} onChange={setProfileVideoUrl} />
-          <div>
-            <p className="mb-1.5 text-sm font-medium">
-              Avatar image <span className="font-normal text-muted-foreground/70">· optional</span>
-            </p>
-            <ImageUpload kind="avatar" value={profileAvatarUrl || null} onChange={setProfileAvatarUrl} />
-          </div>
-        </div>
-        <div className="mt-4">
-          <label className={label}>Show on your profile</label>
+        </FieldRow>
+        <FieldRow icon={UserRound} tint="blue" title="Avatar image" tag="Optional" description="Show your style with an avatar image.">
+          <ImageUpload kind="avatar" value={profileAvatarUrl || null} onChange={setProfileAvatarUrl} />
+        </FieldRow>
+        <FieldRow icon={ImageIcon} tint="purple" title="Show on your profile" description="Which identity visitors see by default.">
           <div className="grid grid-cols-3 gap-2">
             {(["photo", "video", "avatar"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setIdentityMode(m)}
-                aria-pressed={identityMode === m}
-                className={cn(
-                  "rounded-xl border p-2.5 text-sm font-semibold capitalize transition",
-                  identityMode === m ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground hover:border-foreground/20",
-                )}
-              >
+              <button key={m} type="button" onClick={() => setIdentityMode(m)} aria-pressed={identityMode === m} className={seg(identityMode === m)}>
                 {m}
               </button>
             ))}
           </div>
-        </div>
-      </div>
+        </FieldRow>
+        <FieldRow icon={Eye} tint="emerald" title="Profile visibility" description="Choose who can see your profile.">
+          <div className="grid grid-cols-3 gap-2">
+            {VISIBILITY.map((v) => (
+              <button key={v.value} type="button" onClick={() => setVisibility(v.value)} aria-pressed={visibility === v.value} className={seg(visibility === v.value)}>
+                <v.icon className="h-4 w-4" /> {v.label}
+              </button>
+            ))}
+          </div>
+        </FieldRow>
+      </SettingsGroup>
 
-      {/* Fields */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className={label}>Display name</label>
+      {/* Details */}
+      <SettingsGroup label="DETAILS">
+        <FieldRow icon={Pencil} tint="amber" title="Name">
           <input className={input} value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Your name" />
-        </div>
-        <div>
-          <label className={label}>Username</label>
+        </FieldRow>
+        <FieldRow icon={AtSign} tint="purple" title="Username">
           <div className="flex h-11 items-center rounded-xl bg-background ring-1 ring-inset ring-border transition focus-within:ring-2 focus-within:ring-primary">
             <span className="pl-3.5 text-sm text-muted-foreground">@</span>
-            <input
-              value={handle}
-              onChange={(e) => setHandle(e.target.value.toLowerCase())}
-              placeholder="yourname"
-              className="h-full w-full rounded-xl bg-transparent px-1.5 text-sm outline-none"
-            />
+            <input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase())} placeholder="yourname" className="h-full w-full rounded-xl bg-transparent px-1.5 text-sm outline-none" />
           </div>
-        </div>
-        <div className="sm:col-span-2">
-          <label className={label}>Bio</label>
+        </FieldRow>
+        <FieldRow icon={FileText} tint="blue" title="Bio">
           <textarea
             value={bio}
             onChange={(e) => setBio(e.target.value)}
@@ -161,33 +191,27 @@ export function ProfileEditor({
             placeholder="Tell people about yourself (max 280 characters)"
             className="min-h-[80px] w-full rounded-xl bg-background p-3.5 text-sm outline-none ring-1 ring-inset ring-border transition focus:ring-2 focus:ring-primary"
           />
-        </div>
-        <div>
-          <label className={label}>Status <span className="font-normal text-muted-foreground/70">· optional</span></label>
-          <input className={input} value={status} onChange={(e) => setStatus(e.target.value)} maxLength={80} placeholder="What are you up to?" />
-        </div>
-        <div>
-          <label className={label}>Mood <span className="font-normal text-muted-foreground/70">· optional</span></label>
-          <select className={cn(input, "appearance-none")} value={mood} onChange={(e) => setMood(e.target.value)}>
-            <option value="">None</option>
-            {PROFILE_MOODS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="sm:col-span-2">
-          <label className={label}>Accent colour <span className="font-normal text-muted-foreground/70">· shown on your profile</span></label>
+        </FieldRow>
+        <FieldRow icon={Smile} tint="rose" title="Status & mood" description="A short line about what you're up to.">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input className={input} value={status} onChange={(e) => setStatus(e.target.value)} maxLength={80} placeholder="What are you up to?" />
+            <select className={cn(input, "appearance-none")} value={mood} onChange={(e) => setMood(e.target.value)}>
+              <option value="">No mood</option>
+              {PROFILE_MOODS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+        </FieldRow>
+        <FieldRow icon={Palette} tint="violet" title="Accent colour" description="Shown on your profile.">
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setAccent("")}
               aria-pressed={accent === ""}
-              className={cn(
-                "inline-flex h-9 items-center rounded-xl border px-3 text-xs font-semibold transition",
-                accent === "" ? "border-primary text-primary" : "border-border/70 text-muted-foreground hover:border-foreground/20",
-              )}
+              className={cn("inline-flex h-9 items-center rounded-xl border px-3 text-xs font-semibold transition", accent === "" ? "border-primary text-primary" : "border-border/70 text-muted-foreground hover:border-foreground/20")}
             >
               Default
             </button>
@@ -199,54 +223,23 @@ export function ProfileEditor({
                 aria-pressed={accent === a.key}
                 aria-label={a.label}
                 title={a.label}
-                className={cn(
-                  "h-9 w-9 rounded-xl ring-2 ring-offset-2 ring-offset-background transition",
-                  accent === a.key ? "ring-foreground" : "ring-transparent hover:ring-border",
-                )}
+                className={cn("h-9 w-9 rounded-xl ring-2 ring-offset-2 ring-offset-background transition", accent === a.key ? "ring-foreground" : "ring-transparent hover:ring-border")}
                 style={{ background: a.hex }}
               />
             ))}
           </div>
-        </div>
-        <div className="sm:col-span-2">
-          <label className={label}>Business link <span className="font-normal text-muted-foreground/70">· optional</span></label>
+        </FieldRow>
+        <FieldRow icon={LinkIcon} tint="cyan" title="Links" description="Add your website or business link.">
           <input className={input} value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://your-business.com" />
-        </div>
-      </div>
+        </FieldRow>
+      </SettingsGroup>
 
-      {/* Visibility */}
-      <div className="mt-5">
-        <label className={label}>Who can see your profile</label>
-        <div className="grid grid-cols-3 gap-2">
-          {VISIBILITY.map((v) => (
-            <button
-              key={v.value}
-              type="button"
-              onClick={() => setVisibility(v.value)}
-              aria-pressed={visibility === v.value}
-              className={cn(
-                "flex flex-col items-center gap-1 rounded-xl border p-3 text-center transition",
-                visibility === v.value ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground hover:border-foreground/20",
-              )}
-            >
-              <v.icon className="h-4 w-4" />
-              <span className="text-sm font-semibold">{v.label}</span>
-              <span className="text-[10px]">{v.hint}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
+      {/* Save */}
       <div className="mt-6 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={save}
-          disabled={busy}
-          className="btn-lux btn-lux-primary"
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save profile
+        <button type="button" onClick={save} disabled={busy} className="btn-lux btn-lux-primary">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Save changes
         </button>
-        {msg ? <span className={cn("text-sm", msg.ok ? "text-green-500" : "text-red-400")}>{msg.text}</span> : null}
+        {msg ? <span className={cn("text-sm font-medium", msg.ok ? "text-green-500" : "text-red-400")}>{msg.text}</span> : null}
       </div>
     </div>
   );

@@ -14,10 +14,13 @@ export function SettingsPage({
   title,
   description,
   children,
+  bare,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
+  /** Skip the single card wrapper so the page can compose its own cards/groups. */
+  bare?: boolean;
 }) {
   return (
     <AppContent>
@@ -36,7 +39,7 @@ export function SettingsPage({
             {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
           </div>
         </div>
-        <div className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card">{children}</div>
+        {bare ? children : <div className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card">{children}</div>}
       </div>
     </AppContent>
   );

@@ -23,7 +23,7 @@ export default async function IdentitySettingsPage() {
   ]);
 
   return (
-    <SettingsPage title="Identity" description="Name, photo, video, avatar, status, accent & links.">
+    <SettingsPage title="Identity" description="Manage how you appear across Frenzsave." bare>
       {ownProfile ? <ProfileEditor profile={ownProfile} extras={extras} media={media} /> : null}
     </SettingsPage>
   );

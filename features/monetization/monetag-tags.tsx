@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
+import { useMonetagInPagePush } from "@/features/monetization/use-monetag-inpage-push";
 import { monetagAllowedOnPath, type MonetagTag } from "@/lib/monetization/monetag";
 
 /**
@@ -36,6 +37,18 @@ import { monetagAllowedOnPath, type MonetagTag } from "@/lib/monetization/moneta
  * is optimistically `true` but `ready` is false, so a premium user is never served
  * a tag in the gap before `/api/me` answers. Failing closed (no ad) is the safe
  * direction; the signed-out fast path keeps it instant for everyone else.
+ *
+ * ── In-Page Push gets an EXTRA daily frequency cap ────────────────────────────
+ *
+ * Every other Monetag format above loads unconditionally (once per page load) —
+ * Monetag's own self-placing logic decides how often it actually shows an ad
+ * from there. In-Page Push is different: the owner wants a hard ceiling of at
+ * most `DEFAULT_IN_PAGE_PUSH_DAILY_LIMIT` (5) SCRIPT LOADS per visitor per local
+ * day, since reloading its script on every page view is what let it show far
+ * more often than intended. So `in_page_push` tags are split out of the
+ * unconditional loop and routed through `useMonetagInPagePush` instead (see that
+ * file for the full frequency-cap mechanism) — every other format is completely
+ * unaffected by this change.
  */
 
 const injected = new Set<string>();
@@ -52,28 +65,51 @@ export function MonetagTags({
   const { showAds, ready } = useEntitlements();
   const pathname = usePathname();
 
-  useEffect(() => {
-    if (!ready || !showAds || tags.length === 0) return;
-    if (typeof document === "undefined") return;
-    // WHERE: only on the pages the owner scoped Monetag to (all pages by default).
-    if (!monetagAllowedOnPath(pathname ?? "/", { monetagAllPages: allPages, monetagSurfaces: surfaces })) return;
+  // Shared by both the standard-tags effect below AND the In-Page Push gate —
+  // computed once so the two paths can never disagree about whether this
+  // visitor, on this page, should see Monetag at all.
+  const allowed = ready && showAds && monetagAllowedOnPath(pathname ?? "/", { monetagAllPages: allPages, monetagSurfaces: surfaces });
 
-    for (const tag of tags) {
+  const inPagePushTags = useMemo(() => tags.filter((t) => t.type === "in_page_push"), [tags]);
+  const standardTags = useMemo(() => tags.filter((t) => t.type !== "in_page_push"), [tags]);
+
+  // Every Monetag format EXCEPT In-Page Push — unchanged from before: loads
+  // once per page load, no daily cap (Monetag's own logic governs cadence).
+  useEffect(() => {
+    if (!allowed || standardTags.length === 0) return;
+    if (typeof document === "undefined") return;
+
+    for (const tag of standardTags) {
       const key = `${tag.src}|${tag.zone ?? ""}`;
       if (injected.has(key)) continue;
       injected.add(key);
 
       const el = document.createElement("script");
       el.async = true;
-      // `tag.src` is a server-validated https URL (see parseMonetagSnippet); a raw
-      // snippet never reaches the client, so this cannot inject anything.
       el.src = tag.src;
       el.setAttribute("data-monetag", tag.type);
       if (tag.zone) el.setAttribute("data-zone", tag.zone);
       if (tag.cfAsync) el.setAttribute("data-cfasync", "false");
       document.head.appendChild(el);
     }
-  }, [ready, showAds, tags, pathname, allPages, surfaces]);
+  }, [allowed, standardTags]);
 
+  return (
+    <>
+      {inPagePushTags.map((tag) => (
+        <InPagePushGate key={`${tag.src}|${tag.zone ?? ""}`} tag={tag} enabled={allowed} />
+      ))}
+    </>
+  );
+}
+
+/**
+ * One In-Page Push tag, frequency-capped at `DEFAULT_IN_PAGE_PUSH_DAILY_LIMIT`
+ * loads per local day. A separate component (rather than calling the hook
+ * inline in `MonetagTags`) so the number of tags can vary at runtime without
+ * ever violating the rules of hooks — each tag gets its own hook instance.
+ */
+function InPagePushGate({ tag, enabled }: { tag: MonetagTag; enabled: boolean }) {
+  useMonetagInPagePush(tag, { enabled });
   return null;
 }

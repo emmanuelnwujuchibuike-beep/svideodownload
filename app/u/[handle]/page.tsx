@@ -34,7 +34,8 @@ import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "
 import { accentHex, getPrivacySettings, getProfileExtras, getProfileMedia, getPublicProfile, getReputationBonus, tabVisible } from "@/lib/social/profile";
 import { IdentityMedia } from "@/features/profile/identity-media";
 import { computeReputation } from "@/lib/social/reputation";
-import { computeAchievements } from "@/lib/social/achievements";
+import { computeAchievements, earnedCount } from "@/lib/social/achievements";
+import { buildLifeJourney } from "@/lib/social/life-journey";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
 
@@ -93,6 +94,25 @@ async function publishedPostsCount(profileId: string, isOwner: boolean): Promise
     return count ?? 0;
   } catch {
     return 0;
+  }
+}
+
+/** The creator's earliest published post — the "First post" Life Journey milestone. */
+async function firstPublishedPost(profileId: string): Promise<{ id: string; title: string | null; thumbnailUrl: string | null; createdAt: string } | null> {
+  try {
+    const { data } = await createAdminClient()
+      .from("posts")
+      .select("id, title, thumbnail_url, media_url, created_at")
+      .eq("publisher_id", profileId)
+      .eq("status", "published")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (!data) return null;
+    const row = data as { id: string; title: string | null; thumbnail_url: string | null; media_url: string | null; created_at: string };
+    return { id: row.id, title: row.title, thumbnailUrl: row.thumbnail_url ?? row.media_url, createdAt: row.created_at };
+  } catch {
+    return null;
   }
 }
 
@@ -240,11 +260,12 @@ export default async function ProfilePage({
   // Creator Tools · Achievements · Top Friends · Recent Activity). Everything is
   // the viewer's REAL data; tools without a backend announce "coming soon".
   if (profile.isOwner) {
-    const [totals, friends, notifs, repBonus] = await Promise.all([
+    const [totals, friends, notifs, repBonus, firstPost] = await Promise.all([
       creatorTotals(profile.id),
       topFriends(profile.id),
       listNotifications(profile.id, 12),
       getReputationBonus(profile.id),
+      firstPublishedPost(profile.id),
     ]);
     const activity = notificationsToActivity(notifs.items);
     const joined = `Joined ${new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`;
@@ -272,6 +293,16 @@ export default async function ProfilePage({
       collections: collectionsN,
       verified: profile.isVerified,
       reputationScore: reputation.score,
+    });
+    // Life Journey™ — real dated milestones (joined, first post) + current-state
+    // highlights (posts, friends, rank, achievements). No invented events.
+    const journey = buildLifeJourney({
+      joinedAt: profile.createdAt,
+      firstPost,
+      rankName: reputation.rank.name,
+      achievementsEarned: earnedCount(achievements),
+      postsCount: postsTotal,
+      friendsCount: friendTotal,
     });
     const stats: { label: string; value: number }[] = [
       { label: "Posts", value: postsTotal },
@@ -459,6 +490,7 @@ export default async function ProfilePage({
                 analytics={{ views: totals.views, likes: totals.likes, comments: totals.comments, shares: totals.shares, saves: totals.saves }}
                 topContent={totals.topPost}
                 reputation={reputation}
+                journey={journey}
               />
             </div>
           </div>

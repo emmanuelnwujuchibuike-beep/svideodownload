@@ -18,9 +18,11 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { AchievementsShowcase } from "@/features/profile/achievements-showcase";
 import { CreatorActivity } from "@/features/profile/creator-activity";
 import { IdentityAnalytics, type IdentityAnalyticsData, type TopContent } from "@/features/profile/identity-analytics";
+import { LifeJourneyCard } from "@/features/profile/life-journey-card";
 import { ReputationCard } from "@/features/profile/reputation-card";
 import type { ActivityRow } from "@/features/profile/activity-map";
 import type { EarnedAchievement } from "@/lib/social/achievements";
+import type { JourneyEntry } from "@/lib/social/life-journey";
 import type { Reputation } from "@/lib/social/reputation";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +54,8 @@ export interface CreatorRailProps {
   topContent?: TopContent | null;
   /** The owner's derived Reputation (rank, trust index, progress). */
   reputation?: Reputation;
+  /** The owner's Life Journey™ — real dated milestones + current-state highlights. */
+  journey?: JourneyEntry[];
 }
 
 function Card({ title, viewAll, children }: { title: string; viewAll?: { feature: string; href?: string }; children: React.ReactNode }) {
@@ -94,7 +98,7 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
   );
 }
 
-export function CreatorRail({ bio, location, website, joined, friends = [], activity = [], achievements, analytics, topContent = null, reputation, className }: CreatorRailProps) {
+export function CreatorRail({ bio, location, website, joined, friends = [], activity = [], achievements, analytics, topContent = null, reputation, journey, className }: CreatorRailProps) {
   return (
     <aside className={cn("w-full space-y-4", className)}>
       {/* About Me */}
@@ -127,6 +131,9 @@ export function CreatorRail({ bio, location, website, joined, friends = [], acti
 
       {/* Reputation™ — derived rank, trust index + progress toward next rank */}
       {reputation ? <ReputationCard reputation={reputation} /> : null}
+
+      {/* Life Journey™ — real dated milestones + current-state highlights */}
+      {journey ? <LifeJourneyCard entries={journey} /> : null}
 
       {/* Identity Analytics™ — REAL engagement (animated) + best content */}
       {analytics ? <IdentityAnalytics data={analytics} topContent={topContent} /> : null}

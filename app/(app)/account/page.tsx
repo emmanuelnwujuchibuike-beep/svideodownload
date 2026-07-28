@@ -105,9 +105,11 @@ export default async function AccountPage() {
 
   return (
     <AppContent>
-      <div className="mx-auto max-w-2xl pt-[calc(var(--frenz-safe-top))] sm:pt-0">
-        <header className="mb-6">
-          <h1 className="text-3xl font-bold tracking-[-0.03em] sm:text-4xl">Settings</h1>
+      {/* No extra safe-area padding — AppTopbar (the sticky app header) already
+          reserves it; adding it again doubled the top gap on notch devices. */}
+      <div className="mx-auto max-w-2xl">
+        <header className="mb-4">
+          <h1 className="text-2xl font-bold tracking-[-0.02em] sm:text-3xl">Settings</h1>
         </header>
 
         {/* Profile hero */}

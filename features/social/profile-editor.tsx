@@ -35,20 +35,20 @@ function FieldRow({
   children?: ReactNode;
 }) {
   return (
-    <div className="px-4 py-4">
-      <div className="flex items-center gap-3.5">
-        <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-1 ring-inset", SETTINGS_TINTS[tint] ?? SETTINGS_TINTS.slate)}>
-          <Icon className="h-[21px] w-[21px]" />
+    <div className="px-3.5 py-3">
+      <div className="flex items-center gap-3">
+        <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset", SETTINGS_TINTS[tint] ?? SETTINGS_TINTS.slate)}>
+          <Icon className="h-[19px] w-[19px]" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-[15px] font-semibold">{title}</span>
-            {tag ? <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{tag}</span> : null}
+            <span className="text-sm font-semibold">{title}</span>
+            {tag ? <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{tag}</span> : null}
           </div>
-          {description ? <p className="mt-0.5 text-sm leading-snug text-muted-foreground">{description}</p> : null}
+          {description ? <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{description}</p> : null}
         </div>
       </div>
-      {children ? <div className="mt-3">{children}</div> : null}
+      {children ? <div className="mt-2.5">{children}</div> : null}
     </div>
   );
 }
@@ -113,25 +113,39 @@ export function ProfileEditor({
   };
 
   const input =
-    "h-11 w-full rounded-xl bg-background px-3.5 text-sm outline-none ring-1 ring-inset ring-border transition focus:ring-2 focus:ring-primary";
+    "h-10 w-full rounded-xl bg-background px-3.5 text-sm outline-none ring-1 ring-inset ring-border transition focus:ring-2 focus:ring-primary";
   const seg = (active: boolean) =>
     cn(
-      "flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-sm font-semibold capitalize transition",
+      "flex items-center justify-center gap-1.5 rounded-xl border py-2 text-sm font-semibold capitalize transition",
       active ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground hover:border-foreground/20",
     );
+
+  // Uploading a video or avatar makes it what visitors see, immediately — the
+  // owner shouldn't have to separately flip a "show as" switch after uploading.
+  // Removing the active one falls back to your photo.
+  const onVideoChange = (url: string) => {
+    setProfileVideoUrl(url);
+    if (url) setIdentityMode("video");
+    else if (identityMode === "video") setIdentityMode("photo");
+  };
+  const onAvatarMediaChange = (url: string) => {
+    setProfileAvatarUrl(url);
+    if (url) setIdentityMode("avatar");
+    else if (identityMode === "avatar") setIdentityMode("photo");
+  };
 
   return (
     <div>
       {/* Hero — cover + avatar + identity + view profile (design: profile settings.jpg) */}
       <div className="relative">
         <ImageUpload kind="banner" value={bannerUrl || null} onChange={setBannerUrl} />
-        <div className="absolute -bottom-8 left-3">
+        <div className="absolute -bottom-7 left-3">
           <ImageUpload kind="avatar" value={avatarUrl || null} onChange={setAvatarUrl} />
         </div>
       </div>
-      <div className="mb-1 mt-10 flex items-end justify-between gap-3 px-1">
+      <div className="mb-1 mt-9 flex items-end justify-between gap-3 px-1">
         <div className="min-w-0">
-          <h2 className="flex items-center gap-1.5 truncate text-lg font-bold tracking-[-0.01em]">
+          <h2 className="flex items-center gap-1.5 truncate text-base font-bold tracking-[-0.01em]">
             {displayName || "Your name"}
             {profile.handle ? <Sparkles className="h-4 w-4 shrink-0 text-violet-500" /> : null}
           </h2>
@@ -145,12 +159,12 @@ export function ProfileEditor({
       </div>
 
       {/* Digital identity */}
-      <SettingsGroup label="DIGITAL IDENTITY" description="Customize the elements that define you.">
+      <SettingsGroup label="DIGITAL IDENTITY" description="Uploading a video or avatar makes it your profile display right away.">
         <FieldRow icon={Video} tint="violet" title="Profile video" tag="Optional" description="A ~3-second clip. Silent, loops. Under 20 MB.">
-          <ProfileVideoUpload value={profileVideoUrl || null} onChange={setProfileVideoUrl} />
+          <ProfileVideoUpload value={profileVideoUrl || null} onChange={onVideoChange} />
         </FieldRow>
         <FieldRow icon={UserRound} tint="blue" title="Avatar image" tag="Optional" description="Show your style with an avatar image.">
-          <ImageUpload kind="avatar" value={profileAvatarUrl || null} onChange={setProfileAvatarUrl} />
+          <ImageUpload kind="avatar" value={profileAvatarUrl || null} onChange={onAvatarMediaChange} />
         </FieldRow>
         <FieldRow icon={ImageIcon} tint="purple" title="Show on your profile" description="Which identity visitors see by default.">
           <div className="grid grid-cols-3 gap-2">

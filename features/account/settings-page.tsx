@@ -24,18 +24,20 @@ export function SettingsPage({
 }) {
   return (
     <AppContent>
-      <div className="mx-auto max-w-2xl pt-[calc(var(--frenz-safe-top))] sm:pt-0">
-        <div className="mb-6 flex items-center gap-3">
+      {/* No extra safe-area padding here — AppTopbar (the sticky app header) already
+          reserves it; adding it again doubled the top gap on notch devices. */}
+      <div className="mx-auto max-w-2xl">
+        <div className="mb-4 flex items-center gap-3">
           <Link
             href="/account"
             prefetch
             aria-label="Back to settings"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border text-muted-foreground transition hover:bg-secondary hover:text-foreground"
           >
             <ChevronLeft className="h-5 w-5" />
           </Link>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold tracking-[-0.02em]">{title}</h1>
+            <h1 className="truncate text-xl font-bold tracking-[-0.02em]">{title}</h1>
             {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
           </div>
         </div>

@@ -35,10 +35,10 @@ export function SettingsGroup({
   className?: string;
 }) {
   return (
-    <section className={cn("mt-6", className)}>
-      {label ? <p className="px-1.5 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">{label}</p> : null}
-      {description ? <p className="mt-1 px-1.5 text-sm text-muted-foreground">{description}</p> : null}
-      <div className={cn("overflow-hidden rounded-3xl border border-border/70 bg-card shadow-sm", (label || description) && "mt-3")}>
+    <section className={cn("mt-5", className)}>
+      {label ? <p className="px-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{label}</p> : null}
+      {description ? <p className="mt-0.5 px-1.5 text-xs text-muted-foreground">{description}</p> : null}
+      <div className={cn("overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm", (label || description) && "mt-2")}>
         <div className="divide-y divide-border/60">{children}</div>
       </div>
     </section>
@@ -70,21 +70,21 @@ export function SettingsRow({
 }) {
   const inner = (
     <>
-      <span className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ring-1 ring-inset", SETTINGS_TINTS[tint] ?? SETTINGS_TINTS.slate)}>
-        <Icon className="h-[22px] w-[22px]" />
+      <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset", SETTINGS_TINTS[tint] ?? SETTINGS_TINTS.slate)}>
+        <Icon className="h-[19px] w-[19px]" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="truncate text-[15px] font-semibold">{title}</span>
-          {tag ? <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{tag}</span> : null}
+          <span className="truncate text-sm font-semibold">{title}</span>
+          {tag ? <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{tag}</span> : null}
         </span>
-        {description ? <span className="mt-0.5 block text-sm leading-snug text-muted-foreground">{description}</span> : null}
+        {description ? <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{description}</span> : null}
       </span>
       {right ? <span className="flex shrink-0 items-center gap-1.5 text-sm font-semibold">{right}</span> : null}
-      {chevron ? <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" /> : null}
+      {chevron ? <ChevronRight className="h-[18px] w-[18px] shrink-0 text-muted-foreground" /> : null}
     </>
   );
-  const cls = "flex w-full items-center gap-3.5 px-4 py-4 text-left transition hover:bg-secondary/40";
+  const cls = "flex w-full items-center gap-3 px-3.5 py-3 text-left transition hover:bg-secondary/40";
   if (href) {
     return (
       <Link href={href} className={cls}>
@@ -99,5 +99,5 @@ export function SettingsRow({
       </button>
     );
   }
-  return <div className="flex items-center gap-3.5 px-4 py-4">{inner}</div>;
+  return <div className="flex items-center gap-3 px-3.5 py-3">{inner}</div>;
 }

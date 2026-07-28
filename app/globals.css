@@ -241,6 +241,131 @@
       0 4px 24px hsl(43 96% 56% / 0.12);
   }
 
+  /* ── Premium "alive" buttons ──────────────────────────────────────────────
+     The enterprise button language: rounded-full pills (never flat blocks),
+     brand-gradient primaries with a soft glow + top sheen, frosted-glass
+     secondaries with a luminous edge, and a spring press. Used across the
+     profile action bars, visitor profile and settings. `.btn-lux` is the base;
+     compose it with `-primary` / `-secondary`, or use `.btn-lux-icon`. */
+  .btn-lux {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    padding: 0.6rem 1.15rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    transition:
+      transform 0.18s var(--ease-spring),
+      box-shadow 0.22s var(--ease-out),
+      background-color 0.22s ease,
+      border-color 0.22s ease,
+      opacity 0.2s ease;
+    will-change: transform;
+  }
+  .btn-lux:active {
+    transform: scale(0.955);
+  }
+  @media (hover: hover) {
+    .btn-lux:hover {
+      transform: translateY(-1.5px);
+    }
+  }
+  .btn-lux:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  .btn-lux:disabled {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  .btn-lux-primary {
+    color: #fff;
+    background-image: linear-gradient(115deg, hsl(var(--brand-blue)), hsl(var(--brand-purple)));
+    box-shadow:
+      0 10px 26px -10px hsl(var(--brand-purple) / 0.55),
+      0 2px 8px -3px hsl(var(--brand-blue) / 0.5),
+      inset 0 1px 0 hsl(0 0% 100% / 0.28);
+  }
+  @media (hover: hover) {
+    .btn-lux-primary:hover {
+      box-shadow:
+        0 16px 34px -10px hsl(var(--brand-purple) / 0.65),
+        0 4px 10px -3px hsl(var(--brand-blue) / 0.55),
+        inset 0 1px 0 hsl(0 0% 100% / 0.34);
+    }
+  }
+
+  .btn-lux-secondary {
+    color: hsl(var(--foreground));
+    background-image: linear-gradient(180deg, hsl(var(--card) / 0.92), hsl(var(--card) / 0.6));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.55),
+      0 6px 16px -10px hsl(240 12% 12% / 0.28);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+  .dark .btn-lux-secondary {
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.08),
+      0 6px 16px -10px hsl(0 0% 0% / 0.55);
+  }
+  @media (hover: hover) {
+    .btn-lux-secondary:hover {
+      border-color: hsl(var(--brand-purple) / 0.35);
+      background-image: linear-gradient(180deg, hsl(var(--card)), hsl(var(--card) / 0.82));
+    }
+  }
+
+  .btn-lux-icon {
+    position: relative;
+    display: inline-flex;
+    height: 2.5rem;
+    width: 2.5rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    color: hsl(var(--muted-foreground));
+    background-image: linear-gradient(180deg, hsl(var(--card) / 0.92), hsl(var(--card) / 0.6));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.55),
+      0 6px 16px -10px hsl(240 12% 12% / 0.28);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    transition:
+      transform 0.18s var(--ease-spring),
+      color 0.2s ease,
+      border-color 0.2s ease;
+    will-change: transform;
+  }
+  .dark .btn-lux-icon {
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.08),
+      0 6px 16px -10px hsl(0 0% 0% / 0.55);
+  }
+  .btn-lux-icon:active {
+    transform: scale(0.92);
+  }
+  @media (hover: hover) {
+    .btn-lux-icon:hover {
+      transform: translateY(-1.5px);
+      color: hsl(var(--foreground));
+      border-color: hsl(var(--brand-purple) / 0.35);
+    }
+  }
+  .btn-lux-icon:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
   /* Messaging's visual language is deliberately contained to the inbox and
      thread. It adds depth and tactile hierarchy without depending on message
      data or client-side state. */

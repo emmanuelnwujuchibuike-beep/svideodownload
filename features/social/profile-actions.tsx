@@ -66,7 +66,7 @@ export function ProfileActions({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="More options"
-        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+        className="btn-lux-icon"
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>

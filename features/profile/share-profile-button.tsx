@@ -35,7 +35,7 @@ export function ShareProfileButton({ handle, name }: { handle: string; name: str
       type="button"
       onClick={share}
       aria-label="Share profile"
-      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+      className="btn-lux-icon"
     >
       {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Share2 className="h-4 w-4" />}
     </button>

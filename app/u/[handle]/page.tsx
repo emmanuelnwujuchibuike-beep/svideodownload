@@ -308,7 +308,7 @@ export default async function ProfilePage({
                   {/* Top gloss + bottom scrim so the overlapping card reads cleanly over any cover */}
                   <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/25" />
                   <div className="absolute right-3 top-3 flex items-center gap-2 pt-[var(--frenz-safe-top)] sm:pt-0">
-                    <Link href="/account#profile" className="inline-flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/55">
+                    <Link href="/account/identity" className="inline-flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/55">
                       <Camera className="h-4 w-4" /> Edit Cover
                     </Link>
                     <Link href="/account" aria-label="More options" className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/40 text-white backdrop-blur-md transition hover:bg-black/55">
@@ -338,7 +338,7 @@ export default async function ProfilePage({
                               className="h-24 w-24 ring-4 ring-background sm:h-28 sm:w-28"
                             />
                           </IdentityRing>
-                          <Link href="/account#profile" aria-label="Change photo" className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-card text-foreground shadow-md ring-1 ring-border transition hover:bg-secondary">
+                          <Link href="/account/identity" aria-label="Change photo" className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-card text-foreground shadow-md ring-1 ring-border transition hover:bg-secondary">
                             <Camera className="h-4 w-4" />
                           </Link>
                         </div>
@@ -350,7 +350,7 @@ export default async function ProfilePage({
                           {(["photo", "video", "avatar"] as const).map((m) => (
                             <Link
                               key={m}
-                              href="/account#profile"
+                              href="/account/identity"
                               aria-current={profileMedia.identityMode === m ? "true" : undefined}
                               className={`rounded-xl px-3 py-1.5 text-xs capitalize transition ${
                                 profileMedia.identityMode === m
@@ -366,7 +366,7 @@ export default async function ProfilePage({
 
                       {/* Actions */}
                       <div className="flex items-center gap-2 pt-1 sm:pt-0">
-                        <Link href="/account#profile" className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-semibold transition hover:bg-secondary">
+                        <Link href="/account/identity" className="btn-lux btn-lux-secondary">
                           Edit Profile
                         </Link>
                         <ShareProfileButton handle={profile.handle} name={profile.displayName} />
@@ -543,11 +543,7 @@ export default async function ProfilePage({
                             friends and stays a calm secondary otherwise. */}
                         <Link
                           href={`/messages/new/${profile.id}`}
-                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                            friendState === "friends"
-                              ? "bg-primary text-primary-foreground hover:opacity-90"
-                              : "border border-border hover:bg-secondary"
-                          }`}
+                          className={`btn-lux shrink-0 ${friendState === "friends" ? "btn-lux-primary" : "btn-lux-secondary"}`}
                         >
                           <MessageCircle className="h-4 w-4" /> Message
                         </Link>

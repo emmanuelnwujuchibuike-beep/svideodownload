@@ -111,8 +111,7 @@ export function AddFriendButton({
   // was slow — "Add Friend" only opens the modal — but with no press response
   // and no haptic there was nothing to confirm the tap registered, which reads
   // as lag.
-  const base =
-    "inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition duration-150 active:scale-[0.97] disabled:opacity-60";
+  const base = "btn-lux";
 
   return (
     <>
@@ -123,11 +122,7 @@ export function AddFriendButton({
             haptic("selection");
             setModal(true);
           }}
-          className={cn(
-            base,
-            "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25 hover:opacity-95",
-            className,
-          )}
+          className={cn(base, "btn-lux-primary", className)}
         >
           <UserPlus className="h-4 w-4" /> Add Friend
         </button>
@@ -136,13 +131,7 @@ export function AddFriendButton({
           type="button"
           onClick={remove}
           disabled={busy}
-          className={cn(
-            base,
-            armed
-              ? "border border-rose-500/50 bg-rose-500/10 text-rose-500"
-              : "border border-border bg-card text-foreground hover:bg-secondary",
-            className,
-          )}
+          className={cn(base, armed ? "border border-rose-500/50 bg-rose-500/10 text-rose-500" : "btn-lux-secondary", className)}
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : armed ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}
           {armed ? "Cancel request?" : "Requested"}
@@ -153,7 +142,7 @@ export function AddFriendButton({
             type="button"
             onClick={() => respond("accept")}
             disabled={busy}
-            className={cn(base, "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25 hover:opacity-95")}
+            className={cn(base, "btn-lux-primary")}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCheck className="h-4 w-4" />} Accept
           </button>
@@ -161,7 +150,7 @@ export function AddFriendButton({
             type="button"
             onClick={() => respond("decline")}
             disabled={busy}
-            className={cn(base, "border border-border bg-card text-muted-foreground hover:bg-secondary")}
+            className={cn(base, "btn-lux-secondary")}
           >
             Decline
           </button>
@@ -171,13 +160,7 @@ export function AddFriendButton({
           type="button"
           onClick={remove}
           disabled={busy}
-          className={cn(
-            base,
-            armed
-              ? "border border-rose-500/50 bg-rose-500/10 text-rose-500"
-              : "border border-border bg-card text-foreground hover:bg-secondary",
-            className,
-          )}
+          className={cn(base, armed ? "border border-rose-500/50 bg-rose-500/10 text-rose-500" : "btn-lux-secondary", className)}
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : armed ? <X className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
           {armed ? "Remove friend?" : "Friends"}

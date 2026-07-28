@@ -242,7 +242,7 @@ export function ProfileEditor({
           type="button"
           onClick={save}
           disabled={busy}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+          className="btn-lux btn-lux-primary"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save profile
         </button>

@@ -36,13 +36,7 @@ export function FollowButton({
 
   if (!canFollow) {
     return (
-      <a
-        href="/login?next=/account"
-        className={cn(
-          "inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90",
-          className,
-        )}
-      >
+      <a href="/login?next=/account" className={cn("btn-lux btn-lux-primary", className)}>
         <UserPlus className="h-4 w-4" /> Follow
       </a>
     );
@@ -62,13 +56,7 @@ export function FollowButton({
       onClick={toggle}
       disabled={busy}
       aria-pressed={following}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
-        following
-          ? "border border-border bg-card text-foreground hover:border-red-500/40 hover:text-red-400"
-          : "bg-primary text-primary-foreground hover:opacity-90",
-        className,
-      )}
+      className={cn("btn-lux", following ? "btn-lux-secondary" : "btn-lux-primary", className)}
     >
       {busy ? (
         <Loader2 className="h-4 w-4 animate-spin" />

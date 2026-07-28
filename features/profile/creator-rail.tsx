@@ -19,7 +19,9 @@ import Link from "next/link";
 import { SoonButton } from "@/components/profile/dashboard/soon";
 import { CreatorActivity } from "@/features/profile/creator-activity";
 import { IdentityAnalytics, type IdentityAnalyticsData, type TopContent } from "@/features/profile/identity-analytics";
+import { ReputationCard } from "@/features/profile/reputation-card";
 import type { ActivityRow } from "@/features/profile/activity-map";
+import type { Reputation } from "@/lib/social/reputation";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
@@ -55,6 +57,8 @@ export interface CreatorRailProps {
   analytics?: IdentityAnalyticsData;
   /** The owner's highest-viewed post, for the Content Performance highlight. */
   topContent?: TopContent | null;
+  /** The owner's derived Reputation (rank, trust index, progress). */
+  reputation?: Reputation;
 }
 
 function Card({ title, viewAll, children }: { title: string; viewAll?: { feature: string; href?: string }; children: React.ReactNode }) {
@@ -106,7 +110,7 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
   );
 }
 
-export function CreatorRail({ bio, location, website, joined, friends = [], activity = [], stats, analytics, topContent = null, className }: CreatorRailProps) {
+export function CreatorRail({ bio, location, website, joined, friends = [], activity = [], stats, analytics, topContent = null, reputation, className }: CreatorRailProps) {
   return (
     <aside className={cn("w-full space-y-4", className)}>
       {/* About Me */}
@@ -126,6 +130,9 @@ export function CreatorRail({ bio, location, website, joined, friends = [], acti
           <li className="flex items-center gap-2.5"><Cake className="h-4 w-4 shrink-0" /> {joined}</li>
         </ul>
       </Card>
+
+      {/* Reputation™ — derived rank, trust index + progress toward next rank */}
+      {reputation ? <ReputationCard reputation={reputation} /> : null}
 
       {/* Identity Analytics™ — REAL engagement (animated) + best content */}
       {analytics ? <IdentityAnalytics data={analytics} topContent={topContent} /> : null}

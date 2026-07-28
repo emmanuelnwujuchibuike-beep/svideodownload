@@ -95,7 +95,7 @@ export function IdentityAnalytics({ data, topContent }: { data: IdentityAnalytic
       <div className="mt-3 flex items-center gap-2 rounded-2xl border border-dashed border-border/60 p-2.5 text-xs text-muted-foreground">
         <Award className="h-4 w-4 shrink-0" />
         <span>
-          Reputation, growth trends &amp; AI insights — <span className="font-semibold text-foreground/80">coming soon</span>
+          Growth trends &amp; AI insights — <span className="font-semibold text-foreground/80">coming soon</span>
         </span>
       </div>
     </section>

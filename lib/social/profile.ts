@@ -276,6 +276,23 @@ export async function getProfileExtras(profileId: string): Promise<ProfileExtras
   }
 }
 
+/** The admin reputation adjustment (migration 0097). Read fail-closed so the
+ *  profile works before it's applied — a missing column degrades to 0. */
+export async function getReputationBonus(profileId: string): Promise<number> {
+  if (!hasSupabase) return 0;
+  try {
+    const { data, error } = await createAdminClient()
+      .from("profiles")
+      .select("reputation_bonus")
+      .eq("id", profileId)
+      .maybeSingle();
+    if (error) return 0;
+    return (data as { reputation_bonus: number | null } | null)?.reputation_bonus ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export interface PrivacySettings {
   activity_visibility: Visibility;
   followers_visibility: Visibility;

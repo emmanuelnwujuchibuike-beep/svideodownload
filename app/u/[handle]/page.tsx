@@ -31,7 +31,8 @@ import { friendsCount, friendshipState, mutualFriendsCount } from "@/lib/social/
 import { createAdminClient } from "@/lib/supabase/admin";
 import { viewableCollectionsCount } from "@/lib/social/collections";
 import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "@/lib/social/posts";
-import { accentHex, getPrivacySettings, getProfileExtras, getPublicProfile, tabVisible } from "@/lib/social/profile";
+import { accentHex, getPrivacySettings, getProfileExtras, getPublicProfile, getReputationBonus, tabVisible } from "@/lib/social/profile";
+import { computeReputation } from "@/lib/social/reputation";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
 
@@ -235,13 +236,27 @@ export default async function ProfilePage({
   // Creator Tools · Achievements · Top Friends · Recent Activity). Everything is
   // the viewer's REAL data; tools without a backend announce "coming soon".
   if (profile.isOwner) {
-    const [totals, friends, notifs] = await Promise.all([
+    const [totals, friends, notifs, repBonus] = await Promise.all([
       creatorTotals(profile.id),
       topFriends(profile.id),
       listNotifications(profile.id, 12),
+      getReputationBonus(profile.id),
     ]);
     const activity = notificationsToActivity(notifs.items);
     const joined = `Joined ${new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`;
+    // Reputation — DERIVED from real signals (transparent formula, no fabrication)
+    // plus the persisted admin adjustment. See lib/social/reputation.ts.
+    const reputation = computeReputation({
+      accountAgeDays: Math.max(0, Math.floor((Date.now() - new Date(profile.createdAt).getTime()) / 86_400_000)),
+      posts: postsTotal,
+      followers: profile.followersCount,
+      friends: friendTotal,
+      engagementReceived: totals.likes + totals.comments + totals.shares + totals.saves,
+      views: totals.views,
+      collections: collectionsN,
+      verified: profile.isVerified,
+      bonus: repBonus,
+    });
     const stats: { label: string; value: number }[] = [
       { label: "Posts", value: postsTotal },
       { label: "Followers", value: profile.followersCount },
@@ -418,6 +433,7 @@ export default async function ProfilePage({
                 stats={{ posts: postsTotal, followers: profile.followersCount, likes: totals.likes, views: totals.views }}
                 analytics={{ views: totals.views, likes: totals.likes, comments: totals.comments, shares: totals.shares, saves: totals.saves }}
                 topContent={totals.topPost}
+                reputation={reputation}
               />
             </div>
           </div>

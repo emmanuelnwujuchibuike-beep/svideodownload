@@ -1,0 +1,11 @@
+-- 0097 — Reputation admin adjustment (Feature 18 · Reputation Platform).
+--
+-- The Reputation SCORE is otherwise DERIVED live from real signals (account age,
+-- contributions, engagement received, friends, verification — see
+-- lib/social/reputation.ts). This column is the single PERSISTED input: a manual
+-- admin award or penalty added to that derived base, so administrators can
+-- recognise outstanding members or correct abuse without a full points ledger yet.
+--
+-- Read fail-closed (a dedicated try/caught query defaulting to 0), so the profile
+-- and reputation card work correctly whether or not this has been applied.
+alter table public.profiles add column if not exists reputation_bonus integer not null default 0;

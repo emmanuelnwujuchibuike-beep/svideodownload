@@ -78,7 +78,7 @@ export function LifeJourneyCard({ entries }: { entries: JourneyEntry[] }) {
       <div className="mt-4 flex items-center gap-2.5 rounded-2xl border border-dashed border-border/60 p-3 text-xs text-muted-foreground">
         <Lock className="h-4 w-4 shrink-0" />
         <span>
-          Time Capsule, Year in Review &amp; your Private Journal — <span className="font-semibold text-foreground/80">coming soon</span>
+          Year in Review — <span className="font-semibold text-foreground/80">coming soon</span>. Time Capsule &amp; your Private Journal are below.
         </span>
       </div>
     </section>

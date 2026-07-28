@@ -80,6 +80,14 @@ export const DATA_DOMAINS: DataDomain[] = [
     storage: ["relational", "object"],
   },
   {
+    id: "life-memories",
+    name: "Life Memories",
+    owner: "lib/social (time-capsules, journal)",
+    description: "Time Capsule™ and the Private Journal — sealed/private planes over a member's own life story, never shown to anyone else.",
+    tables: ["time_capsules", "journal_entries"],
+    storage: ["relational"],
+  },
+  {
     id: "messaging",
     name: "Messaging",
     owner: "lib/social (messages)",

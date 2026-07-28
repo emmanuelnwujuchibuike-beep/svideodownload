@@ -37,6 +37,8 @@ import { IdentityMediaViewer } from "@/features/profile/identity-media-viewer";
 import { computeReputation } from "@/lib/social/reputation";
 import { computeAchievements, earnedCount } from "@/lib/social/achievements";
 import { buildLifeJourney } from "@/lib/social/life-journey";
+import { getTimeCapsules } from "@/lib/social/time-capsules";
+import { getJournalEntries } from "@/lib/social/journal";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
 
@@ -261,12 +263,14 @@ export default async function ProfilePage({
   // Creator Tools · Achievements · Top Friends · Recent Activity). Everything is
   // the viewer's REAL data; tools without a backend announce "coming soon".
   if (profile.isOwner) {
-    const [totals, friends, notifs, repBonus, firstPost] = await Promise.all([
+    const [totals, friends, notifs, repBonus, firstPost, timeCapsules, journalEntries] = await Promise.all([
       creatorTotals(profile.id),
       topFriends(profile.id),
       listNotifications(profile.id, 12),
       getReputationBonus(profile.id),
       firstPublishedPost(profile.id),
+      getTimeCapsules(profile.id),
+      getJournalEntries(profile.id),
     ]);
     const activity = notificationsToActivity(notifs.items);
     const joined = `Joined ${new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`;
@@ -500,6 +504,8 @@ export default async function ProfilePage({
                 topContent={totals.topPost}
                 reputation={reputation}
                 journey={journey}
+                timeCapsules={timeCapsules}
+                journalEntries={journalEntries}
               />
             </div>
           </div>

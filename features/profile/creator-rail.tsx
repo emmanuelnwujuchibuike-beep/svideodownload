@@ -19,11 +19,15 @@ import { AchievementsShowcase } from "@/features/profile/achievements-showcase";
 import { CreatorActivity } from "@/features/profile/creator-activity";
 import { IdentityAnalytics, type IdentityAnalyticsData, type TopContent } from "@/features/profile/identity-analytics";
 import { LifeJourneyCard } from "@/features/profile/life-journey-card";
+import { PrivateJournalCard } from "@/features/profile/private-journal-card";
 import { ReputationCard } from "@/features/profile/reputation-card";
+import { TimeCapsuleCard } from "@/features/profile/time-capsule-card";
 import type { ActivityRow } from "@/features/profile/activity-map";
 import type { EarnedAchievement } from "@/lib/social/achievements";
+import type { JournalEntry } from "@/lib/social/journal";
 import type { JourneyEntry } from "@/lib/social/life-journey";
 import type { Reputation } from "@/lib/social/reputation";
+import type { TimeCapsule } from "@/lib/social/time-capsules";
 import { cn } from "@/lib/utils";
 
 /**
@@ -56,6 +60,10 @@ export interface CreatorRailProps {
   reputation?: Reputation;
   /** The owner's Life Journey™ — real dated milestones + current-state highlights. */
   journey?: JourneyEntry[];
+  /** The owner's real, persisted Time Capsules (locked ones carry no message). */
+  timeCapsules?: TimeCapsule[];
+  /** The owner's real, persisted private journal entries. Never shown to a visitor. */
+  journalEntries?: JournalEntry[];
 }
 
 function Card({ title, viewAll, children }: { title: string; viewAll?: { feature: string; href?: string }; children: React.ReactNode }) {
@@ -98,7 +106,22 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
   );
 }
 
-export function CreatorRail({ bio, location, website, joined, friends = [], activity = [], achievements, analytics, topContent = null, reputation, journey, className }: CreatorRailProps) {
+export function CreatorRail({
+  bio,
+  location,
+  website,
+  joined,
+  friends = [],
+  activity = [],
+  achievements,
+  analytics,
+  topContent = null,
+  reputation,
+  journey,
+  timeCapsules,
+  journalEntries,
+  className,
+}: CreatorRailProps) {
   return (
     <aside className={cn("w-full space-y-4", className)}>
       {/* About Me */}
@@ -134,6 +157,12 @@ export function CreatorRail({ bio, location, website, joined, friends = [], acti
 
       {/* Life Journey™ — real dated milestones + current-state highlights */}
       {journey ? <LifeJourneyCard entries={journey} /> : null}
+
+      {/* Time Capsule™ — real, persisted, sealed until a future date */}
+      {timeCapsules ? <TimeCapsuleCard initialCapsules={timeCapsules} /> : null}
+
+      {/* Private Journal — real, persisted, never shown to a visitor */}
+      {journalEntries ? <PrivateJournalCard initialEntries={journalEntries} /> : null}
 
       {/* Identity Analytics™ — REAL engagement (animated) + best content */}
       {analytics ? <IdentityAnalytics data={analytics} topContent={topContent} /> : null}

@@ -29,6 +29,10 @@ const schema = z.object({
   status: z.string().trim().max(80).nullable().optional().or(z.literal("").transform(() => null)),
   mood: z.enum(PROFILE_MOODS).nullable().optional().or(z.literal("").transform(() => null)),
   accent: z.enum(PROFILE_ACCENT_KEYS).nullable().optional().or(z.literal("").transform(() => null)),
+  // Digital Identity media (0098) — profile video, avatar image, chosen mode.
+  profile_video_url: httpUrl,
+  profile_avatar_url: httpUrl,
+  identity_mode: z.enum(["photo", "video", "avatar"]).optional(),
 });
 
 /** PATCH /api/profile — update the signed-in user's social profile. */
@@ -76,11 +80,17 @@ export async function PATCH(request: Request) {
   if (parsed.data.mood !== undefined) statusMood.mood = parsed.data.mood;
   const accentUpdate: Record<string, unknown> = {};
   if (parsed.data.accent !== undefined) accentUpdate.accent = parsed.data.accent;
+  // Digital Identity media (0098).
+  const media: Record<string, unknown> = {};
+  if (parsed.data.profile_video_url !== undefined) media.profile_video_url = parsed.data.profile_video_url;
+  if (parsed.data.profile_avatar_url !== undefined) media.profile_avatar_url = parsed.data.profile_avatar_url;
+  if (parsed.data.identity_mode !== undefined) media.identity_mode = parsed.data.identity_mode;
 
   if (
     Object.keys(update).length === 0 &&
     Object.keys(statusMood).length === 0 &&
-    Object.keys(accentUpdate).length === 0
+    Object.keys(accentUpdate).length === 0 &&
+    Object.keys(media).length === 0
   ) {
     return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
   }
@@ -99,6 +109,7 @@ export async function PATCH(request: Request) {
   // rest of the save still succeeds.
   if (Object.keys(statusMood).length > 0) await supabase.from("profiles").update(statusMood).eq("id", user.id);
   if (Object.keys(accentUpdate).length > 0) await supabase.from("profiles").update(accentUpdate).eq("id", user.id);
+  if (Object.keys(media).length > 0) await supabase.from("profiles").update(media).eq("id", user.id);
 
   return NextResponse.json({ ok: true });
 }

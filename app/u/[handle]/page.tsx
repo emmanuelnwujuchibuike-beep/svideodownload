@@ -31,7 +31,8 @@ import { friendsCount, friendshipState, mutualFriendsCount } from "@/lib/social/
 import { createAdminClient } from "@/lib/supabase/admin";
 import { viewableCollectionsCount } from "@/lib/social/collections";
 import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "@/lib/social/posts";
-import { accentHex, getPrivacySettings, getProfileExtras, getPublicProfile, getReputationBonus, tabVisible } from "@/lib/social/profile";
+import { accentHex, getPrivacySettings, getProfileExtras, getProfileMedia, getPublicProfile, getReputationBonus, tabVisible } from "@/lib/social/profile";
+import { IdentityMedia } from "@/features/profile/identity-media";
 import { computeReputation } from "@/lib/social/reputation";
 import { computeAchievements } from "@/lib/social/achievements";
 import { createClient } from "@/lib/supabase/server";
@@ -205,6 +206,8 @@ export default async function ProfilePage({
     isViewer ? followsViewer(profile.id, me!) : Promise.resolve(false),
     getProfileExtras(profile.id),
   ]);
+  // Digital Identity media (migration 0098) — the identity the profile displays.
+  const profileMedia = await getProfileMedia(profile.id);
   // The member's chosen accent (migration 0096), mapped to a hex, or null.
   const heroAccent = accentHex(profileExtras.accent);
 
@@ -326,13 +329,14 @@ export default async function ProfilePage({
                     {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute -inset-2.5 rounded-full opacity-50 blur-xl" style={{ background: heroAccent }} /> : null}
                           <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
-                            {profile.avatarUrl ? (
-                              <Image src={profile.avatarUrl} alt="" width={128} height={128} priority className="block h-24 w-24 rounded-full object-cover ring-4 ring-background sm:h-28 sm:w-28" />
-                            ) : (
-                              <span className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-3xl font-bold text-white ring-4 ring-background sm:h-28 sm:w-28">
-                                {profile.displayName.charAt(0).toUpperCase()}
-                              </span>
-                            )}
+                            <IdentityMedia
+                              mode={profileMedia.identityMode}
+                              photo={profile.avatarUrl}
+                              video={profileMedia.videoUrl}
+                              avatar={profileMedia.avatarUrl}
+                              name={profile.displayName}
+                              className="h-24 w-24 ring-4 ring-background sm:h-28 sm:w-28"
+                            />
                           </IdentityRing>
                           <Link href="/account#profile" aria-label="Change photo" className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-card text-foreground shadow-md ring-1 ring-border transition hover:bg-secondary">
                             <Camera className="h-4 w-4" />
@@ -341,14 +345,22 @@ export default async function ProfilePage({
 
                         {/* Identity mode — Photo is live; Video & Avatar arrive with the
                             media pipeline and Avatar Studio (marked, never faked). */}
+                        {/* Identity mode — reflects the active mode; tap to set it up in Settings. */}
                         <div className="mt-3 inline-flex items-center gap-1 rounded-2xl border border-border/60 bg-card/60 p-1 backdrop-blur">
-                          <span aria-current="true" className="rounded-xl bg-brand px-3 py-1.5 text-xs font-bold text-white">Photo</span>
-                          <span className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-                            Video <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">Soon</span>
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-                            Avatar <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">Soon</span>
-                          </span>
+                          {(["photo", "video", "avatar"] as const).map((m) => (
+                            <Link
+                              key={m}
+                              href="/account#profile"
+                              aria-current={profileMedia.identityMode === m ? "true" : undefined}
+                              className={`rounded-xl px-3 py-1.5 text-xs capitalize transition ${
+                                profileMedia.identityMode === m
+                                  ? "bg-brand font-bold text-white"
+                                  : "font-semibold text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              {m}
+                            </Link>
+                          ))}
                         </div>
                       </div>
 
@@ -490,20 +502,14 @@ export default async function ProfilePage({
                     {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute -inset-2.5 rounded-full opacity-50 blur-xl" style={{ background: heroAccent }} /> : null}
                     <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
-                      {profile.avatarUrl ? (
-                        <Image
-                          src={profile.avatarUrl}
-                          alt=""
-                          width={128}
-                          height={128}
-                          priority
-                          className="block h-24 w-24 rounded-full object-cover ring-4 ring-background sm:h-32 sm:w-32"
-                        />
-                      ) : (
-                        <span className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-3xl font-bold text-white ring-4 ring-background sm:h-32 sm:w-32 sm:text-4xl">
-                          {profile.displayName.charAt(0).toUpperCase()}
-                        </span>
-                      )}
+                      <IdentityMedia
+                        mode={profileMedia.identityMode}
+                        photo={profile.avatarUrl}
+                        video={profileMedia.videoUrl}
+                        avatar={profileMedia.avatarUrl}
+                        name={profile.displayName}
+                        className="h-24 w-24 ring-4 ring-background sm:h-32 sm:w-32"
+                      />
                     </IdentityRing>
                     <DiamondCrownBadge plan={plan} size="md" className="absolute bottom-1 right-1 z-10 ring-2 ring-background" />
                   </div>

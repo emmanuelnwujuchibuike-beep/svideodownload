@@ -17,7 +17,7 @@ import { getPlanLimits } from "@/lib/monetization/plan";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { getHomePreferences } from "@/lib/social/home-preferences";
 import { getNotificationSettings } from "@/lib/social/notification-settings";
-import { getOwnProfile, getProfileExtras } from "@/lib/social/profile";
+import { getOwnProfile, getProfileExtras, getProfileMedia } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -93,11 +93,12 @@ export default async function AccountPage() {
 
   // Social profile + Home/feed + notification preferences. Privacy settings
   // + blocked/muted accounts moved to their own page (/account/privacy).
-  const [ownProfile, homePrefs, notificationSettings, profileExtras] = await Promise.all([
+  const [ownProfile, homePrefs, notificationSettings, profileExtras, profileMedia] = await Promise.all([
     getOwnProfile(user.id),
     getHomePreferences(user.id),
     getNotificationSettings(user.id),
     getProfileExtras(user.id),
+    getProfileMedia(user.id),
   ]);
 
   return (
@@ -223,7 +224,7 @@ export default async function AccountPage() {
             </div>
 
             {/* Public profile */}
-            {ownProfile ? <ProfileEditor profile={ownProfile} extras={profileExtras} /> : null}
+            {ownProfile ? <ProfileEditor profile={ownProfile} extras={profileExtras} media={profileMedia} /> : null}
 
             {/* Appearance — theme (light / dark / system). Given a permanent home
                 in Settings so the control can never go missing again. */}

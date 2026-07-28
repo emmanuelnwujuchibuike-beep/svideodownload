@@ -276,6 +276,35 @@ export async function getProfileExtras(profileId: string): Promise<ProfileExtras
   }
 }
 
+export type IdentityMode = "photo" | "video" | "avatar";
+
+export interface ProfileMedia {
+  videoUrl: string | null;
+  avatarUrl: string | null;
+  identityMode: IdentityMode;
+}
+
+/** The profile's Digital Identity media (migration 0098): a short profile video,
+ *  a chosen avatar image, and which identity the profile displays. Read fail-closed
+ *  and independently of the other extras, so a missing column degrades to photo/null. */
+export async function getProfileMedia(profileId: string): Promise<ProfileMedia> {
+  if (!hasSupabase) return { videoUrl: null, avatarUrl: null, identityMode: "photo" };
+  try {
+    const { data, error } = await createAdminClient()
+      .from("profiles")
+      .select("profile_video_url, profile_avatar_url, identity_mode")
+      .eq("id", profileId)
+      .maybeSingle();
+    if (error) return { videoUrl: null, avatarUrl: null, identityMode: "photo" };
+    const r = data as { profile_video_url: string | null; profile_avatar_url: string | null; identity_mode: string | null } | null;
+    const m = r?.identity_mode;
+    const identityMode: IdentityMode = m === "video" || m === "avatar" ? m : "photo";
+    return { videoUrl: r?.profile_video_url || null, avatarUrl: r?.profile_avatar_url || null, identityMode };
+  } catch {
+    return { videoUrl: null, avatarUrl: null, identityMode: "photo" };
+  }
+}
+
 /** The admin reputation adjustment (migration 0097). Read fail-closed so the
  *  profile works before it's applied — a missing column degrades to 0. */
 export async function getReputationBonus(profileId: string): Promise<number> {

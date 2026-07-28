@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ImageUpload } from "@/components/social/image-upload";
-import { PROFILE_ACCENTS, PROFILE_MOODS, type OwnProfile, type Visibility } from "@/lib/social/profile";
+import { ProfileVideoUpload } from "@/features/social/profile-video-upload";
+import { PROFILE_ACCENTS, PROFILE_MOODS, type IdentityMode, type OwnProfile, type Visibility } from "@/lib/social/profile";
 import { cn } from "@/lib/utils";
 
 const VISIBILITY: { value: Visibility; label: string; hint: string; icon: typeof Globe }[] = [
@@ -18,9 +19,11 @@ const VISIBILITY: { value: Visibility; label: string; hint: string; icon: typeof
 export function ProfileEditor({
   profile,
   extras,
+  media,
 }: {
   profile: OwnProfile;
   extras?: { status: string | null; mood: string | null; accent: string | null };
+  media?: { videoUrl: string | null; avatarUrl: string | null; identityMode: IdentityMode };
 }) {
   const router = useRouter();
   const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl ?? "");
@@ -32,6 +35,9 @@ export function ProfileEditor({
   const [status, setStatus] = useState(extras?.status ?? "");
   const [mood, setMood] = useState(extras?.mood ?? "");
   const [accent, setAccent] = useState(extras?.accent ?? "");
+  const [profileVideoUrl, setProfileVideoUrl] = useState(media?.videoUrl ?? "");
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState(media?.avatarUrl ?? "");
+  const [identityMode, setIdentityMode] = useState<IdentityMode>(media?.identityMode ?? "photo");
   const [visibility, setVisibility] = useState<Visibility>(profile.visibility);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -54,6 +60,9 @@ export function ProfileEditor({
           status: status.trim() || null,
           mood: mood || null,
           accent: accent || null,
+          profile_video_url: profileVideoUrl || null,
+          profile_avatar_url: profileAvatarUrl || null,
+          identity_mode: identityMode,
         }),
       });
       const json = await res.json();
@@ -91,6 +100,39 @@ export function ProfileEditor({
       <p className="mb-5 text-xs text-muted-foreground">
         Tap the cover or photo to upload from your device.
       </p>
+
+      {/* Digital identity — Photo / Video / Avatar (Avatar Studio · Profile Video) */}
+      <div className="mb-6 rounded-2xl border border-border/60 bg-secondary/20 p-4">
+        <p className="mb-3 text-xs font-medium text-muted-foreground">Digital identity — what your profile shows</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <ProfileVideoUpload value={profileVideoUrl || null} onChange={setProfileVideoUrl} />
+          <div>
+            <p className="mb-1.5 text-sm font-medium">
+              Avatar image <span className="font-normal text-muted-foreground/70">· optional</span>
+            </p>
+            <ImageUpload kind="avatar" value={profileAvatarUrl || null} onChange={setProfileAvatarUrl} />
+          </div>
+        </div>
+        <div className="mt-4">
+          <label className={label}>Show on your profile</label>
+          <div className="grid grid-cols-3 gap-2">
+            {(["photo", "video", "avatar"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setIdentityMode(m)}
+                aria-pressed={identityMode === m}
+                className={cn(
+                  "rounded-xl border p-2.5 text-sm font-semibold capitalize transition",
+                  identityMode === m ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground hover:border-foreground/20",
+                )}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* Fields */}
       <div className="grid gap-4 sm:grid-cols-2">

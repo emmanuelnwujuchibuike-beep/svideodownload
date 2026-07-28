@@ -290,11 +290,13 @@ export default async function ProfilePage({
                 <div className="relative z-10 px-3 sm:px-4">
                   <div className="relative glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7">
                     {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
-                    {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1 w-16 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
+                    {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                       <div className="min-w-0">
                         {/* Avatar straddling the cover edge — Identity Ring shows live presence + verification */}
                         <div className="relative -mt-14 w-fit sm:-mt-[4.5rem]">
+                    {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
+                    {heroAccent ? <span aria-hidden className="pointer-events-none absolute -inset-2.5 rounded-full opacity-50 blur-xl" style={{ background: heroAccent }} /> : null}
                           <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
                             {profile.avatarUrl ? (
                               <Image src={profile.avatarUrl} alt="" width={128} height={128} priority className="block h-24 w-24 rounded-full object-cover ring-4 ring-background sm:h-28 sm:w-28" />
@@ -336,7 +338,10 @@ export default async function ProfilePage({
                       <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
                         {profile.displayName}
                         {profile.isVerified ? <BadgeCheck className="h-6 w-6 fill-blue-500 text-white" /> : null}
-                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/12 px-2.5 py-0.5 text-xs font-semibold text-violet-600 dark:text-violet-300">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${heroAccent ? "" : "bg-violet-500/12 text-violet-600 dark:text-violet-300"}`}
+                          style={heroAccent ? { backgroundColor: `${heroAccent}1f`, color: heroAccent } : undefined}
+                        >
                           <Sparkles className="h-3.5 w-3.5" /> Creator
                         </span>
                       </h1>
@@ -344,7 +349,7 @@ export default async function ProfilePage({
                       {/* Status + Mood (Part 9) — read defensively; empty until migration 0095 applies. */}
                       {profileExtras.status || profileExtras.mood ? (
                         <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
-                          {profileExtras.mood ? <span className="font-semibold text-primary">{profileExtras.mood}</span> : null}
+                          {profileExtras.mood ? <span className="font-semibold text-primary" style={heroAccent ? { color: heroAccent } : undefined}>{profileExtras.mood}</span> : null}
                           {profileExtras.status ? <span className="text-muted-foreground">{profileExtras.status}</span> : null}
                         </div>
                       ) : null}
@@ -449,10 +454,12 @@ export default async function ProfilePage({
             <div className="relative z-10 px-3 sm:px-4">
               <div className="relative glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7">
                 {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
-                {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1 w-16 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
+                {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
                 {/* Avatar + adaptive action bar */}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                   <div className="relative -mt-14 w-fit sm:-mt-[4.5rem]">
+                    {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
+                    {heroAccent ? <span aria-hidden className="pointer-events-none absolute -inset-2.5 rounded-full opacity-50 blur-xl" style={{ background: heroAccent }} /> : null}
                     <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
                       {profile.avatarUrl ? (
                         <Image
@@ -538,7 +545,7 @@ export default async function ProfilePage({
                       defensively so it stays empty until migration 0095 is applied. */}
                   {profileExtras.status || profileExtras.mood ? (
                     <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
-                      {profileExtras.mood ? <span className="font-semibold text-primary">{profileExtras.mood}</span> : null}
+                      {profileExtras.mood ? <span className="font-semibold text-primary" style={heroAccent ? { color: heroAccent } : undefined}>{profileExtras.mood}</span> : null}
                       {profileExtras.status ? <span className="text-muted-foreground">{profileExtras.status}</span> : null}
                     </div>
                   ) : null}

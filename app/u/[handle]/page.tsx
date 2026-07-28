@@ -33,6 +33,7 @@ import { viewableCollectionsCount } from "@/lib/social/collections";
 import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "@/lib/social/posts";
 import { accentHex, getPrivacySettings, getProfileExtras, getProfileMedia, getPublicProfile, getReputationBonus, tabVisible } from "@/lib/social/profile";
 import { IdentityMedia } from "@/features/profile/identity-media";
+import { IdentityMediaViewer } from "@/features/profile/identity-media-viewer";
 import { computeReputation } from "@/lib/social/reputation";
 import { computeAchievements, earnedCount } from "@/lib/social/achievements";
 import { buildLifeJourney } from "@/lib/social/life-journey";
@@ -360,14 +361,22 @@ export default async function ProfilePage({
                     {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute -inset-2.5 rounded-full opacity-50 blur-xl" style={{ background: heroAccent }} /> : null}
                           <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
-                            <IdentityMedia
+                            <IdentityMediaViewer
                               mode={profileMedia.identityMode}
                               photo={profile.avatarUrl}
                               video={profileMedia.videoUrl}
                               avatar={profileMedia.avatarUrl}
                               name={profile.displayName}
-                              className="h-24 w-24 ring-4 ring-background sm:h-28 sm:w-28"
-                            />
+                            >
+                              <IdentityMedia
+                                mode={profileMedia.identityMode}
+                                photo={profile.avatarUrl}
+                                video={profileMedia.videoUrl}
+                                avatar={profileMedia.avatarUrl}
+                                name={profile.displayName}
+                                className="h-24 w-24 ring-4 ring-background sm:h-28 sm:w-28"
+                              />
+                            </IdentityMediaViewer>
                           </IdentityRing>
                           <Link href="/account/identity" aria-label="Change photo" className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-card text-foreground shadow-md ring-1 ring-border transition hover:bg-secondary">
                             <Camera className="h-4 w-4" />
@@ -534,14 +543,22 @@ export default async function ProfilePage({
                     {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute -inset-2.5 rounded-full opacity-50 blur-xl" style={{ background: heroAccent }} /> : null}
                     <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
-                      <IdentityMedia
+                      <IdentityMediaViewer
                         mode={profileMedia.identityMode}
                         photo={profile.avatarUrl}
                         video={profileMedia.videoUrl}
                         avatar={profileMedia.avatarUrl}
                         name={profile.displayName}
-                        className="h-24 w-24 ring-4 ring-background sm:h-32 sm:w-32"
-                      />
+                      >
+                        <IdentityMedia
+                          mode={profileMedia.identityMode}
+                          photo={profile.avatarUrl}
+                          video={profileMedia.videoUrl}
+                          avatar={profileMedia.avatarUrl}
+                          name={profile.displayName}
+                          className="h-24 w-24 ring-4 ring-background sm:h-32 sm:w-32"
+                        />
+                      </IdentityMediaViewer>
                     </IdentityRing>
                     <DiamondCrownBadge plan={plan} size="md" className="absolute bottom-1 right-1 z-10 ring-2 ring-background" />
                   </div>

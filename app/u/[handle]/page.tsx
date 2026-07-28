@@ -33,6 +33,7 @@ import { viewableCollectionsCount } from "@/lib/social/collections";
 import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "@/lib/social/posts";
 import { accentHex, getPrivacySettings, getProfileExtras, getPublicProfile, getReputationBonus, tabVisible } from "@/lib/social/profile";
 import { computeReputation } from "@/lib/social/reputation";
+import { computeAchievements } from "@/lib/social/achievements";
 import { createClient } from "@/lib/supabase/server";
 import { formatCompactNumber } from "@/lib/utils";
 
@@ -244,10 +245,11 @@ export default async function ProfilePage({
     ]);
     const activity = notificationsToActivity(notifs.items);
     const joined = `Joined ${new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`;
-    // Reputation — DERIVED from real signals (transparent formula, no fabrication)
-    // plus the persisted admin adjustment. See lib/social/reputation.ts.
+    // Reputation + Achievements — both DERIVED from the same real signals (no
+    // fabrication). See lib/social/reputation.ts and lib/social/achievements.ts.
+    const accountAgeDays = Math.max(0, Math.floor((Date.now() - new Date(profile.createdAt).getTime()) / 86_400_000));
     const reputation = computeReputation({
-      accountAgeDays: Math.max(0, Math.floor((Date.now() - new Date(profile.createdAt).getTime()) / 86_400_000)),
+      accountAgeDays,
       posts: postsTotal,
       followers: profile.followersCount,
       friends: friendTotal,
@@ -256,6 +258,17 @@ export default async function ProfilePage({
       collections: collectionsN,
       verified: profile.isVerified,
       bonus: repBonus,
+    });
+    const achievements = computeAchievements({
+      accountAgeDays,
+      posts: postsTotal,
+      followers: profile.followersCount,
+      friends: friendTotal,
+      likes: totals.likes,
+      views: totals.views,
+      collections: collectionsN,
+      verified: profile.isVerified,
+      reputationScore: reputation.score,
     });
     const stats: { label: string; value: number }[] = [
       { label: "Posts", value: postsTotal },
@@ -430,7 +443,7 @@ export default async function ProfilePage({
                 joined={joined}
                 friends={friends}
                 activity={activity}
-                stats={{ posts: postsTotal, followers: profile.followersCount, likes: totals.likes, views: totals.views }}
+                achievements={achievements}
                 analytics={{ views: totals.views, likes: totals.likes, comments: totals.comments, shares: totals.shares, saves: totals.saves }}
                 topContent={totals.topPost}
                 reputation={reputation}

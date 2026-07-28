@@ -2,27 +2,25 @@ import {
   BarChart3,
   Cake,
   DollarSign,
-  Flame,
   LayoutDashboard,
   Link as LinkIcon,
-  Lock,
   MapPin,
   Megaphone,
   MessageCircle,
-  TrendingUp,
-  Trophy,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 
 import { SoonButton } from "@/components/profile/dashboard/soon";
+import { AchievementsShowcase } from "@/features/profile/achievements-showcase";
 import { CreatorActivity } from "@/features/profile/creator-activity";
 import { IdentityAnalytics, type IdentityAnalyticsData, type TopContent } from "@/features/profile/identity-analytics";
 import { ReputationCard } from "@/features/profile/reputation-card";
 import type { ActivityRow } from "@/features/profile/activity-map";
+import type { EarnedAchievement } from "@/lib/social/achievements";
 import type { Reputation } from "@/lib/social/reputation";
-import { cn, formatCompactNumber } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 /**
  * The creator profile's right rail (design: public/mainprofile.jpg) — About Me,
@@ -34,13 +32,6 @@ import { cn, formatCompactNumber } from "@/lib/utils";
  * Center) announce "coming soon".
  */
 
-export interface CreatorStats {
-  posts: number;
-  followers: number;
-  likes: number;
-  views: number;
-}
-
 export interface CreatorRailProps {
   bio: string | null;
   location?: string | null;
@@ -51,8 +42,8 @@ export interface CreatorRailProps {
   friends?: { name: string; handle: string; avatarUrl: string | null }[];
   /** The owner's REAL recent notifications, mapped to activity rows (server-seeded). */
   activity?: ActivityRow[];
-  /** The owner's REAL totals — drive which achievements are earned vs locked. */
-  stats: CreatorStats;
+  /** Derived achievements (earned/locked from real signals) — the trophy showcase. */
+  achievements?: EarnedAchievement[];
   /** REAL engagement totals for the Identity Analytics™ panel (owner-only). */
   analytics?: IdentityAnalyticsData;
   /** The owner's highest-viewed post, for the Content Performance highlight. */
@@ -86,16 +77,6 @@ const TOOLS: { title: string; sub: string; icon: LucideIcon; tile: string; href?
   { title: "Ad Center", sub: "Create and manage ads", icon: Megaphone, tile: "from-amber-500 to-orange-600", feature: "Ad Center" },
 ];
 
-// Each badge lights up only when the owner's REAL stat reaches its milestone —
-// `earned` is computed from live totals, never assumed. A brand-new creator sees
-// them honestly locked (with the target), not falsely awarded.
-type Achievement = { title: string; icon: LucideIcon; tile: string; need: number; stat: keyof CreatorStats; unit: string };
-const ACHIEVEMENTS: Achievement[] = [
-  { title: "Top Creator", icon: Trophy, tile: "from-violet-500 to-purple-700", need: 1_000_000, stat: "views", unit: "views" },
-  { title: "Trend Setter", icon: TrendingUp, tile: "from-blue-500 to-indigo-700", need: 1_000, stat: "followers", unit: "followers" },
-  { title: "Viral Star", icon: Flame, tile: "from-amber-400 to-orange-600", need: 100_000, stat: "likes", unit: "likes" },
-];
-
 function Avatar({ name, url }: { name: string; url: string | null }) {
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "U";
   return (
@@ -110,7 +91,7 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
   );
 }
 
-export function CreatorRail({ bio, location, website, joined, friends = [], activity = [], stats, analytics, topContent = null, reputation, className }: CreatorRailProps) {
+export function CreatorRail({ bio, location, website, joined, friends = [], activity = [], achievements, analytics, topContent = null, reputation, className }: CreatorRailProps) {
   return (
     <aside className={cn("w-full space-y-4", className)}>
       {/* About Me */}
@@ -166,37 +147,8 @@ export function CreatorRail({ bio, location, website, joined, friends = [], acti
         </ul>
       </Card>
 
-      {/* Achievements — earned/locked from REAL totals */}
-      <Card title="Achievements">
-        <div className="grid grid-cols-3 gap-2">
-          {ACHIEVEMENTS.map((a) => {
-            const have = stats[a.stat];
-            const earned = have >= a.need;
-            return (
-              <div key={a.title} className="flex flex-col items-center gap-2 text-center">
-                <span className="relative flex h-12 w-12 items-center justify-center">
-                  <span
-                    className={cn(
-                      "absolute inset-0 rounded-full bg-gradient-to-br shadow-md ring-1 ring-inset ring-white/20",
-                      earned ? a.tile : "from-muted to-muted opacity-60 grayscale",
-                    )}
-                  />
-                  <a.icon className={cn("relative h-5 w-5", earned ? "text-white" : "text-muted-foreground")} />
-                  {!earned ? (
-                    <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-card ring-1 ring-border">
-                      <Lock className="h-2.5 w-2.5 text-muted-foreground" />
-                    </span>
-                  ) : null}
-                </span>
-                <span className="block text-[11px] font-semibold leading-tight">{a.title}</span>
-                <span className="-mt-1.5 block text-[10px] text-muted-foreground">
-                  {earned ? "Earned" : `${formatCompactNumber(a.need)} ${a.unit}`}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
+      {/* Achievements — premium digital-trophy showcase, earned/locked from REAL signals */}
+      {achievements ? <AchievementsShowcase achievements={achievements} /> : null}
 
       {/* Top Friends */}
       <Card title="Top Friends" viewAll={{ feature: "Friends", href: "/friends" }}>

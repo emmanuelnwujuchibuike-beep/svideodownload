@@ -514,8 +514,10 @@ export default async function ProfilePage({
                     <DiamondCrownBadge plan={plan} size="md" className="absolute bottom-1 right-1 z-10 ring-2 ring-background" />
                   </div>
 
-                  {/* Edge-to-edge scrollable action bar on mobile; right-aligned inline on desktop. */}
-                  <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:mb-1 sm:justify-end sm:overflow-visible sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {/* Action bar — every button always visible, no scrolling on any
+                      device: it wraps to a second row on narrow screens rather than
+                      scrolling sideways (which also clipped the ••• menu). */}
+                  <div className="flex flex-wrap items-center gap-2 sm:mb-1 sm:justify-end">
                     {me && friendState !== "self" ? (
                       <AddFriendButton
                         targetId={profile.id}

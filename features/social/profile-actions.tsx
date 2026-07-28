@@ -74,7 +74,7 @@ export function ProfileActions({
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-10 mt-2 w-44 overflow-hidden rounded-2xl border border-border/70 bg-card p-1.5 shadow-elevated"
+          className="absolute right-0 z-30 mt-2 w-44 overflow-hidden rounded-2xl border border-border/70 bg-card p-1.5 shadow-elevated"
         >
           <button
             type="button"

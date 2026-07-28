@@ -1,37 +1,50 @@
-import { BarChart3, Bell, CalendarDays, Code2, Crown, Download, Gem, Lock, LogOut, Mail, Palette, ShieldCheck, Sparkles } from "lucide-react";
+import {
+  BarChart3,
+  Bell,
+  Bookmark,
+  ChevronRight,
+  Code2,
+  Crown,
+  Download,
+  KeyRound,
+  Lock,
+  LogOut,
+  Palette,
+  ShieldCheck,
+  Sparkles,
+  UserCog,
+  type LucideIcon,
+} from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { AppContent } from "@/features/app-shell/app-content";
-import { ApiKeys } from "@/features/api/api-keys";
-import { ManageBillingButton } from "@/features/monetization/manage-billing-button";
-import { ProfileEditor } from "@/features/social/profile-editor";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { HomeModulesEditor } from "@/features/account/home-modules-editor";
-import { NotificationSettingsEditor } from "@/features/account/notification-settings-editor";
-import { PasswordEditor } from "@/features/account/password-editor";
 import { isAdmin } from "@/lib/admin";
-import { getPlanLimits } from "@/lib/monetization/plan";
 import type { BillingPlan } from "@/lib/monetization/types";
-import { getHomePreferences } from "@/lib/social/home-preferences";
-import { getNotificationSettings } from "@/lib/social/notification-settings";
-import { getOwnProfile, getProfileExtras, getProfileMedia } from "@/lib/social/profile";
+import { getOwnProfile } from "@/lib/social/profile";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Your account",
+  title: "Settings",
   robots: { index: false, follow: false },
 };
 
 const hasSupabase =
-  !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+type Row = { href: string; Icon: LucideIcon; title: string; sub: string };
+
+/**
+ * Settings — a premium, professional LIST menu (Snapchat/TikTok-style): every
+ * category is its OWN page, so nothing is packed on one long scrolling page.
+ * Each row is a prefetched <Link>, so opening Settings warms every category and
+ * they open instantly with no loading spinner.
+ */
 export default async function AccountPage() {
   if (!hasSupabase) redirect("/login");
 
@@ -41,414 +54,170 @@ export default async function AccountPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, avatar_url, created_at")
-    .eq("id", user.id)
-    .single();
-
-  const { data: sub } = await supabase
-    .from("subscriptions")
-    .select("plan, status, current_period_end, cancel_at_period_end, subscription_ref")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, { data: sub }, ownProfile] = await Promise.all([
+    supabase.from("profiles").select("role, avatar_url").eq("id", user.id).single(),
+    supabase.from("subscriptions").select("plan, status").eq("user_id", user.id).maybeSingle(),
+    getOwnProfile(user.id),
+  ]);
 
   const planActive = sub?.status === "active" || sub?.status === "trialing";
   const plan = (planActive ? sub?.plan : "free") ?? "free";
   const planLabel = plan === "business" ? "Business" : plan === "pro" ? "Pro" : "Free";
-  const canManage = !!sub?.subscription_ref;
   const isPremium = plan !== "free";
-
   const email = user.email ?? "—";
-  const avatar =
-    (user.user_metadata?.avatar_url as string | undefined) ||
-    profile?.avatar_url ||
-    null;
+  const avatar = (user.user_metadata?.avatar_url as string | undefined) || profile?.avatar_url || null;
   const admin = isAdmin(profile?.role, user.email);
-  const created = profile?.created_at ?? user.created_at;
   const initial = email.charAt(0).toUpperCase();
 
-  // Effective API cap for this plan + today's usage (RLS lets a user read their
-  // own api_usage rows) so they can monitor their daily API consumption.
-  const apiDailyLimit = (await getPlanLimits())[plan as BillingPlan].apiDailyLimit;
-  const todayUtc = new Date().toISOString().slice(0, 10);
-  const { count: apiUsedToday } = await supabase
-    .from("api_usage")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .eq("day", todayUtc);
-
-  // Business-only: 7-day API usage for the enhanced analytics card.
-  const isBusiness = plan === "business";
-  let apiUsed7d = 0;
-  if (isBusiness) {
-    const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
-    const { count } = await supabase
-      .from("api_usage")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .gte("created_at", weekAgo);
-    apiUsed7d = count ?? 0;
-  }
-
-  // Social profile + Home/feed + notification preferences. Privacy settings
-  // + blocked/muted accounts moved to their own page (/account/privacy).
-  const [ownProfile, homePrefs, notificationSettings, profileExtras, profileMedia] = await Promise.all([
-    getOwnProfile(user.id),
-    getHomePreferences(user.id),
-    getNotificationSettings(user.id),
-    getProfileExtras(user.id),
-    getProfileMedia(user.id),
-  ]);
+  const groups: { heading: string; items: Row[] }[] = [
+    {
+      heading: "Profile",
+      items: [
+        { href: "/account/identity", Icon: UserCog, title: "Identity", sub: "Name, photo, video, avatar, status" },
+        { href: "/account/appearance", Icon: Palette, title: "Appearance", sub: "Theme, home & feed layout" },
+        { href: "/account/notifications", Icon: Bell, title: "Notifications", sub: "Alerts & activity" },
+      ],
+    },
+    {
+      heading: "Privacy & security",
+      items: [
+        { href: "/account/privacy", Icon: Lock, title: "Privacy", sub: "Who can see & contact you" },
+        { href: "/account/security", Icon: ShieldCheck, title: "Security", sub: "2FA, passkeys, devices" },
+        { href: "/account/password", Icon: KeyRound, title: "Password", sub: "Change your password" },
+      ],
+    },
+    {
+      heading: "Content & insights",
+      items: [
+        { href: "/downloads", Icon: Download, title: "Downloads", sub: "Your saved library" },
+        { href: "/saved", Icon: Bookmark, title: "Saved", sub: "Posts you bookmarked" },
+        { href: "/account/analytics", Icon: BarChart3, title: "Analytics", sub: "Your performance" },
+      ],
+    },
+    {
+      heading: "Plan & developer",
+      items: [
+        { href: "/account/plan", Icon: Crown, title: "Plan", sub: `${planLabel} plan · billing` },
+        { href: "/account/developer", Icon: Code2, title: "Developer", sub: "API keys & usage" },
+      ],
+    },
+  ];
 
   return (
     <AppContent>
-      <div className="mx-auto max-w-2xl">
-          <header className="mb-10">
-            <h1 className="text-3xl font-bold tracking-[-0.03em] sm:text-4xl">
-              Your account
-            </h1>
-            <p className="mt-2 text-muted-foreground">
-              Manage your profile, plan, and API access.
-            </p>
-          </header>
+      <div className="mx-auto max-w-2xl pt-[calc(var(--frenz-safe-top))] sm:pt-0">
+        <header className="mb-6">
+          <h1 className="text-3xl font-bold tracking-[-0.03em] sm:text-4xl">Settings</h1>
+        </header>
 
-          <div className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card">
-            {/* Profile hero — cover + avatar */}
-            <div className="border-b border-border/60">
-              <div className="h-28 w-full bg-gradient-to-br from-blue-600/30 via-sky-500/15 to-cyan-400/20 sm:h-36">
-                {ownProfile?.bannerUrl ? (
+        {/* Profile hero */}
+        <div className="mb-5 overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card">
+          <div className="h-24 w-full bg-gradient-to-br from-blue-600/30 via-sky-500/15 to-cyan-400/20 sm:h-28">
+            {ownProfile?.bannerUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={ownProfile.bannerUrl} alt="" className="h-full w-full object-cover" />
+            ) : null}
+          </div>
+          <div className="px-5 pb-5 sm:px-6">
+            <div className="-mt-9 flex items-end justify-between gap-3">
+              <div className="relative">
+                {avatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={ownProfile.bannerUrl} alt="" className="h-full w-full object-cover" />
-                ) : null}
-              </div>
-              <div className="px-6 pb-6 sm:px-8">
-                <div className="-mt-10 flex items-end justify-between gap-3">
-                  <div className="relative">
-                    {avatar ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={avatar} alt="" className="h-20 w-20 rounded-full object-cover ring-4 ring-card" />
-                    ) : (
-                      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-2xl font-bold text-white ring-4 ring-card">
-                        {initial}
-                      </div>
-                    )}
-                    <DiamondCrownBadge plan={plan as BillingPlan} size="md" className="absolute -bottom-1 -right-1 ring-2 ring-card" />
+                  <img src={avatar} alt="" className="h-[72px] w-[72px] rounded-full object-cover ring-4 ring-card" />
+                ) : (
+                  <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-2xl font-bold text-white ring-4 ring-card">
+                    {initial}
                   </div>
-                  {ownProfile?.handle ? (
-                    <Link href={`/u/${ownProfile.handle}`} className="mb-1 inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">
-                      View profile
-                    </Link>
-                  ) : (
-                    <Link href="#profile" className="mb-1 inline-flex items-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90">
-                      Set up profile
-                    </Link>
-                  )}
-                </div>
-                <div className="mt-3">
-                  <div className="flex items-center gap-2">
-                    <h2 className="truncate text-xl font-bold tracking-[-0.02em]">{ownProfile?.displayName || email}</h2>
-                    <DiamondCrownBadge plan={plan as BillingPlan} size="sm" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">{ownProfile?.handle ? `@${ownProfile.handle}` : email}</p>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                    {admin ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                        <ShieldCheck className="h-3 w-3" /> Admin
-                      </span>
-                    ) : null}
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
-                        isPremium ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-secondary text-muted-foreground",
-                      )}
-                    >
-                      {isPremium ? <Crown className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
-                      {planLabel}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Settings Control Center — organized workspaces. Real destinations
-                are prefetched (prefetch) so they open instantly with no loading,
-                per the instant-navigation standard. */}
-            <div className="border-b border-border/60 p-6 sm:p-8">
-              <div className="mb-4">
-                <h2 className="text-base font-semibold">Control Center</h2>
-                <p className="text-xs text-muted-foreground">Everything about your identity, organized into workspaces.</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                {[
-                  { href: "#profile", Icon: Sparkles, title: "Identity", sub: "Name · status · accent" },
-                  { href: "#appearance", Icon: Palette, title: "Appearance", sub: "Theme · dark & light" },
-                  { href: "#notifications", Icon: Bell, title: "Notifications", sub: "Alerts & activity" },
-                  { href: "/account/privacy", Icon: Lock, title: "Privacy", sub: "Who sees what", prefetch: true },
-                  { href: "/account/security", Icon: ShieldCheck, title: "Security", sub: "2FA · devices", prefetch: true },
-                  { href: "/account/analytics", Icon: BarChart3, title: "Analytics", sub: "Your performance", prefetch: true },
-                  { href: "/downloads", Icon: Download, title: "Downloads", sub: "Your library", prefetch: true },
-                  { href: "#plan", Icon: Crown, title: "Plan", sub: "Billing & upgrade" },
-                ].map((w) => (
-                  <Link
-                    key={w.title}
-                    href={w.href}
-                    prefetch={w.prefetch ?? undefined}
-                    className="group flex items-center gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-3.5 transition hover:bg-secondary/40"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground transition group-hover:text-foreground">
-                      <w.Icon className="h-[18px] w-[18px]" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold">{w.title}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">{w.sub}</span>
-                    </span>
-                  </Link>
-                ))}
-                {[
-                  { Icon: Crown, title: "Creator" },
-                  { Icon: Gem, title: "Business" },
-                  { Icon: Code2, title: "Developer" },
-                ].map((w) => (
-                  <div key={w.title} className="flex items-center gap-3 rounded-2xl border border-dashed border-border/60 p-3.5 opacity-70">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
-                      <w.Icon className="h-[18px] w-[18px]" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold">{w.title}</span>
-                      <span className="block text-[11px] text-muted-foreground">Coming soon</span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Public profile */}
-            {ownProfile ? <ProfileEditor profile={ownProfile} extras={profileExtras} media={profileMedia} /> : null}
-
-            {/* Appearance — theme (light / dark / system). Given a permanent home
-                in Settings so the control can never go missing again. */}
-            <div id="appearance" className="scroll-mt-24 border-b border-border/60 p-6 sm:p-8">
-              <div className="mb-4">
-                <h2 className="text-base font-semibold">Appearance</h2>
-                <p className="text-xs text-muted-foreground">Choose how Frenz looks on this device.</p>
-              </div>
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-4">
-                <span className="text-sm font-medium">Theme</span>
-                <ThemeToggle />
-              </div>
-            </div>
-
-            {/* Home layout + feed behavior preferences */}
-            <HomeModulesEditor preferences={homePrefs} />
-
-            {/* Notification settings (Part 6) */}
-            <div id="notifications" className="scroll-mt-24">
-              <NotificationSettingsEditor initial={notificationSettings} />
-            </div>
-
-            {/* Optional password (second way in + what "Forgot password?" resets) */}
-            <PasswordEditor />
-
-            {/* Two-factor auth, passkeys, PIN, active sessions, security activity;
-                privacy settings, blocked/muted accounts, and data controls each
-                moved to their own dedicated page (11a/11c) — this page was getting
-                crowded, same reasoning both times. */}
-            <div className="space-y-3 border-b border-border/60 p-6 sm:p-8">
-              <Link
-                href="/account/security"
-                className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-4 transition hover:bg-secondary/40"
-              >
-                <span className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
-                    <ShieldCheck className="h-5 w-5" />
-                  </span>
-                  <span>
-                    <span className="block text-sm font-semibold">Security</span>
-                    <span className="block text-xs text-muted-foreground">
-                      Two-factor authentication, passkeys, devices &amp; activity
-                    </span>
-                  </span>
-                </span>
-              </Link>
-              <Link
-                href="/account/privacy"
-                className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-4 transition hover:bg-secondary/40"
-              >
-                <span className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
-                    <Lock className="h-5 w-5" />
-                  </span>
-                  <span>
-                    <span className="block text-sm font-semibold">Privacy</span>
-                    <span className="block text-xs text-muted-foreground">
-                      Who can see your stuff, blocked &amp; muted accounts, your data
-                    </span>
-                  </span>
-                </span>
-              </Link>
-            </div>
-
-            {/* Plan / billing */}
-            <div id="plan" className="scroll-mt-24 border-b border-border/60 p-6 sm:p-8">
-              <div
-                className={cn(
-                  "flex flex-wrap items-center gap-4 rounded-2xl border p-4",
-                  isPremium
-                    ? "border-amber-500/20 bg-amber-500/[0.04]"
-                    : "border-border/60 bg-secondary/30",
                 )}
-              >
+                <DiamondCrownBadge plan={plan as BillingPlan} size="md" className="absolute -bottom-1 -right-1 ring-2 ring-card" />
+              </div>
+              {ownProfile?.handle ? (
+                <Link href={`/u/${ownProfile.handle}`} prefetch className="mb-1 inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary">
+                  View profile
+                </Link>
+              ) : (
+                <Link href="/account/identity" prefetch className="mb-1 inline-flex items-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90">
+                  Set up profile
+                </Link>
+              )}
+            </div>
+            <div className="mt-3">
+              <h2 className="truncate text-xl font-bold tracking-[-0.02em]">{ownProfile?.displayName || email}</h2>
+              <p className="text-sm text-muted-foreground">{ownProfile?.handle ? `@${ownProfile.handle}` : email}</p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                {admin ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                    <ShieldCheck className="h-3 w-3" /> Admin
+                  </span>
+                ) : null}
                 <span
                   className={cn(
-                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-sm",
-                    isPremium
-                      ? "bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-amber-500/25"
-                      : "bg-secondary text-muted-foreground",
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
+                    isPremium ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-secondary text-muted-foreground",
                   )}
                 >
-                  <Crown className="h-5 w-5" />
+                  {isPremium ? <Crown className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
+                  {planLabel}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">{planLabel} plan</p>
-                  <p className="text-xs text-muted-foreground">
-                    {plan === "free"
-                      ? "Upgrade for an ad-free, faster experience."
-                      : sub?.cancel_at_period_end
-                        ? `Cancels on ${sub?.current_period_end ? new Date(sub.current_period_end).toLocaleDateString() : "period end"}`
-                        : sub?.current_period_end
-                          ? `Renews ${new Date(sub.current_period_end).toLocaleDateString()}`
-                          : "Active"}
-                  </p>
-                </div>
-                {plan === "free" ? (
-                  <Link
-                    href="/pricing"
-                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/25 transition hover:shadow-amber-500/40"
-                  >
-                    <Crown className="h-4 w-4" /> Upgrade
-                  </Link>
-                ) : canManage ? (
-                  <ManageBillingButton className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-secondary disabled:opacity-60" />
-                ) : null}
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* Business tools & analytics — enhanced tier */}
-            {isBusiness ? (
-              <div className="border-b border-border/60 bg-gradient-to-br from-amber-500/[0.05] to-transparent p-6 sm:p-8">
-                <div className="mb-4 flex items-center gap-2">
-                  <Gem className="h-5 w-5 text-amber-500" />
-                  <h2 className="text-sm font-semibold">Business tools &amp; analytics</h2>
-                  <DiamondCrownBadge plan="business" size="sm" showLabel className="ml-auto" />
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <BizStat label="API calls today" value={(apiUsedToday ?? 0).toLocaleString()} />
-                  <BizStat label="API calls (7d)" value={apiUsed7d.toLocaleString()} />
-                  <BizStat label="Daily limit" value={apiDailyLimit.toLocaleString()} />
-                  <BizStat label="Plan" value="Business" accent />
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Link
-                    href="/account/analytics"
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-                  >
-                    <BarChart3 className="h-4 w-4" /> Creator analytics
-                  </Link>
-                  <Link
-                    href="/developers"
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary"
-                  >
-                    <Code2 className="h-4 w-4" /> API docs
-                  </Link>
-                  <Link
-                    href="/pricing#business"
-                    className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-secondary"
-                  >
-                    Manage plan
-                  </Link>
+        {/* Category list — each row is its own page, all prefetched on open */}
+        <div className="space-y-5">
+          {groups.map((g) => (
+            <div key={g.heading}>
+              <p className="mb-1.5 px-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{g.heading}</p>
+              <div className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-sm">
+                <div className="divide-y divide-border/60">
+                  {g.items.map((it) => (
+                    <Link key={it.href} href={it.href} prefetch className="flex items-center gap-3 px-4 py-3.5 transition hover:bg-secondary/40">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground ring-1 ring-inset ring-border/60">
+                        <it.Icon className="h-[18px] w-[18px]" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold">{it.title}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{it.sub}</span>
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </Link>
+                  ))}
                 </div>
               </div>
-            ) : null}
-
-            {/* API keys */}
-            <div className="border-b border-border/60 p-6 sm:p-8">
-              <ApiKeys dailyLimit={apiDailyLimit} usedToday={apiUsedToday ?? 0} />
             </div>
+          ))}
 
-            {/* Detail fields */}
-            <dl className="grid gap-5 p-6 sm:grid-cols-2 sm:p-8">
-              <Detail icon={Mail} label="Email" value={email} />
-              <Detail
-                icon={CalendarDays}
-                label="Member since"
-                value={created ? new Date(created).toLocaleDateString() : "—"}
-              />
-            </dl>
-
-            {/* Actions */}
-            <div className="flex flex-wrap items-center gap-3 border-t border-border/60 p-6 sm:p-8">
-              <Link
-                href="/#download"
-                className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 transition hover:shadow-primary/35 hover:opacity-95"
-              >
-                Download a video
-              </Link>
+          {/* Admin + sign out */}
+          <div className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-sm">
+            <div className="divide-y divide-border/60">
               {admin ? (
-                <Link
-                  href="/admin"
-                  className="inline-flex items-center justify-center rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition hover:bg-secondary"
-                >
-                  Admin dashboard
+                <Link href="/admin" className="flex items-center gap-3 px-4 py-3.5 transition hover:bg-secondary/40">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground ring-1 ring-inset ring-border/60">
+                    <ShieldCheck className="h-[18px] w-[18px]" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">Admin dashboard</span>
+                    <span className="block truncate text-xs text-muted-foreground">Platform controls</span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                 </Link>
               ) : null}
-              <form action="/auth/signout" method="post" className="ml-auto">
-                <button
-                  type="submit"
-                  className="inline-flex items-center gap-2 rounded-xl border border-border/70 px-4 py-2.5 text-sm font-medium text-muted-foreground transition hover:border-red-500/40 hover:text-red-400"
-                >
-                  <LogOut className="h-4 w-4" /> Sign out
+              <form action="/auth/signout" method="post">
+                <button type="submit" className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-secondary/40">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground ring-1 ring-inset ring-border/60">
+                    <LogOut className="h-[18px] w-[18px]" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-red-500">Sign out</span>
+                    <span className="block truncate text-xs text-muted-foreground">{email}</span>
+                  </span>
                 </button>
               </form>
             </div>
           </div>
         </div>
-    </AppContent>
-  );
-}
-
-function BizStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div
-      className={cn(
-        "rounded-2xl border p-3.5",
-        accent ? "border-amber-500/30 bg-amber-500/[0.06]" : "border-border/60 bg-card",
-      )}
-    >
-      <p className="text-lg font-bold tracking-tight">{value}</p>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">{label}</p>
-    </div>
-  );
-}
-
-function Detail({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Mail;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
-        <Icon className="h-4 w-4" />
-      </span>
-      <div className="min-w-0">
-        <dt className="text-xs text-muted-foreground">{label}</dt>
-        <dd className="truncate text-sm font-semibold">{value}</dd>
       </div>
-    </div>
+    </AppContent>
   );
 }

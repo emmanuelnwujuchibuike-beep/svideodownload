@@ -20,6 +20,7 @@ import {
   Radio,
   Rocket,
   Search,
+  Settings,
   Sparkles,
   Store,
   TrendingUp,
@@ -48,6 +49,7 @@ const PRIMARY: Row[] = [
   { label: "Chats", icon: MessageCircle, href: "/messages" },
   { label: "Downloads", icon: Download, href: "/downloads" },
   { label: "Saved", icon: Bookmark, href: "/saved" },
+  { label: "Settings", icon: Settings, href: "/account" },
 ];
 
 const PRODUCTS: Row[] = [

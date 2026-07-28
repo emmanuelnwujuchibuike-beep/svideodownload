@@ -6,10 +6,13 @@ import { useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 /**
- * Upload a short (≈3s) profile video straight to Supabase Storage (bucket
- * `media`, user-scoped folder) — the same path the avatar/banner uploader uses.
- * Silent, loops. Returns the public URL via onChange; onChange("") clears it.
+ * Upload a short (≈3s) profile video to Supabase Storage. Uses the `post-media`
+ * bucket (not `media`) because `media` only allows image MIME types + 5 MB —
+ * `post-media` already permits video/mp4·webm·quicktime up to 100 MB with the
+ * same user-scoped RLS (post-media/<uid>/…). Silent, loops. Returns the public
+ * URL via onChange; onChange("") clears it.
  */
+const VIDEO_BUCKET = "post-media";
 export function ProfileVideoUpload({ value, onChange }: { value: string | null; onChange: (url: string) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -35,16 +38,16 @@ export function ProfileVideoUpload({ value, onChange }: { value: string | null; 
       }
       const ext = (file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
       const path = `${user.id}/profile-video-${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from("media").upload(path, file, {
+      const { error } = await supabase.storage.from(VIDEO_BUCKET).upload(path, file, {
         upsert: true,
         cacheControl: "3600",
         contentType: file.type,
       });
       if (error) {
-        setErr("Upload failed — try a shorter clip.");
+        setErr(error.message || "Upload failed — try a shorter clip.");
         return;
       }
-      const { data } = supabase.storage.from("media").getPublicUrl(path);
+      const { data } = supabase.storage.from(VIDEO_BUCKET).getPublicUrl(path);
       onChange(`${data.publicUrl}?v=${Date.now()}`);
     } catch {
       setErr("Upload failed.");

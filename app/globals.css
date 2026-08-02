@@ -584,41 +584,6 @@
     .shimmer::after { animation: none; }
   }
 
-  /* Route progress — the slim stripe under the top bar shown during navigations
-     and while a route's skeleton streams (owner, 2026-08: "show a stripe loader
-     under the top header ... so everything dont always show white"). Two forms:
-     a DETERMINATE trickle driven by React (RouteProgress, width via inline style)
-     and a server-safe INDETERMINATE segment (RouteLoaderStripe, in each
-     loading.tsx skeleton) that slides for the whole time the skeleton is up. */
-  .frenz-route-indeterminate {
-    position: relative;
-    overflow: hidden;
-  }
-  .frenz-route-indeterminate::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: 40%;
-    border-radius: inherit;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      hsl(var(--primary)),
-      hsl(var(--primary)),
-      transparent
-    );
-    animation: frenz-route-slide 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  }
-  @keyframes frenz-route-slide {
-    0% { transform: translateX(-120%); }
-    100% { transform: translateX(360%); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .frenz-route-indeterminate::before { animation-duration: 2.4s; }
-  }
-
   /* Reusable entrance animations — GPU-friendly (transform + opacity only),
      driven by the shared motion tokens. */
   @keyframes fade-up {

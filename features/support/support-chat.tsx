@@ -92,7 +92,7 @@ export function SupportChat() {
   if (status === "loading") {
     return (
       <div className="flex h-[60vh] min-h-[26rem] items-center justify-center rounded-3xl border border-border/60 bg-card">
-        <div className="frenz-route-indeterminate h-1 w-40 rounded-full bg-primary/10" />
+        <div className="h-1 w-40 animate-pulse rounded-full bg-primary/20" />
       </div>
     );
   }

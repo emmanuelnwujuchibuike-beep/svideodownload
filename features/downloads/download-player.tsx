@@ -13,14 +13,47 @@ import { toast } from "@/features/ui/toast";
 import { downloadUrl, saveToDevice } from "@/lib/client-download";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
+import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { presignUpload, uploadWithPlan, type UploadPlan } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { DownloadRecord } from "@/types";
 
+/** Warm a record's media into the on-device cache WITHOUT displaying it, so the
+ *  next/previous clip in the queue plays instantly (owner: the next video should
+ *  "never load at all or show loading"). Best-effort and no-op when already cached. */
+async function prefetchMedia(rec: DownloadRecord): Promise<void> {
+  try {
+    const key = mediaKey(rec.url, rec.formatId, rec.kind);
+    if (await getMedia(key)) return; // already on device
+    const res = await fetch(downloadUrl({ url: rec.url, formatId: rec.formatId, kind: rec.kind, title: rec.title }));
+    if (!res.ok) return;
+    const blob = await res.blob();
+    void saveMedia(key, blob);
+  } catch {
+    /* best-effort warm-up — the item still streams on demand if this fails */
+  }
+}
+
 export function DownloadPlayer() {
   const queue = usePlayerQueue();
   const rec = queue?.items[queue.index];
+
+  // Preload the neighbours (next first, then previous) a beat after the current
+  // clip is showing, so swiping through history is instant. Skipped on a slow /
+  // data-saver connection so a low-end device never over-fetches (owner's perf rule).
+  useEffect(() => {
+    if (!queue || isSlowConnection()) return;
+    const { items, index } = queue;
+    const next = items[index + 1];
+    const prev = items[index - 1];
+    const id = window.setTimeout(() => {
+      if (next) void prefetchMedia(next);
+      if (prev) void prefetchMedia(prev);
+    }, 500);
+    return () => window.clearTimeout(id);
+  }, [queue]);
+
   if (!queue || !rec) return null;
   return <PlayerInner key={rec.id} rec={rec} index={queue.index} total={queue.items.length} />;
 }

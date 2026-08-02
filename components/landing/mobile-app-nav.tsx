@@ -3,6 +3,7 @@
 import { History, Headset } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 
 import {
   FrenzHomeSolid,
@@ -50,8 +51,28 @@ function isActive(pathname: string, href: string): boolean {
 
 export function MobileAppNav() {
   const pathname = usePathname() || "/";
+  const navRef = useRef<HTMLElement | null>(null);
+
+  // Publish the nav's height (which already includes the home-indicator safe-area
+  // pad) so the fixed bottom ad bar can dock directly above it. On desktop this nav
+  // is display:none, so offsetHeight is 0 and the ad rests on the safe-area inset.
+  useEffect(() => {
+    const el = navRef.current;
+    const root = document.documentElement;
+    if (!el) return;
+    const setH = () => root.style.setProperty("--frenz-bottomnav-h", `${el.offsetHeight}px`);
+    setH();
+    const ro = new ResizeObserver(setH);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.setProperty("--frenz-bottomnav-h", "0px");
+    };
+  }, []);
+
   return (
     <nav
+      ref={navRef}
       aria-label="App"
       // Edge-to-edge, flush with the true bottom of the viewport — the bar itself
       // owns the safe-area inset (home-indicator on installed devices; zero extra

@@ -8,27 +8,27 @@ import { AdSlot } from "./ad-slot";
 import { useShowAds } from "./use-show-ads";
 
 /**
- * The marketing pages' persistent ad bar — pinned to the top, DIRECTLY BELOW the
- * header (owner, 2026-07-26: "put it at the top", then "make the ad slot … be below
- * the top header"). It replaces the old fixed BOTTOM banner across the marketing
- * group; the bottom is now the app-style nav.
+ * The marketing pages' persistent ad bar — pinned to the BOTTOM of the viewport,
+ * DIRECTLY ABOVE the app-style bottom nav (owner, 2026-08-02: "move the top header
+ * banner ad to the bottom on the bottom nav"). It previously sat under the header;
+ * the header now stays fixed on scroll and this bar docks above MobileAppNav.
  *
  * `fixed`, not `sticky`: it is mounted from the marketing LAYOUT *after* the page
  * content (and is deferred), so it has no top-of-flow anchor for `sticky`, and
  * `fixed` also means mounting it late never shifts the LCP-critical hero.
  *
- * ── Where it sits, and the header auto-hide ───────────────────────────────────
+ * ── Where it sits ─────────────────────────────────────────────────────────────
  *
- * Its `top` follows the header's published bottom edge (`--frenz-header-bottom`),
- * so it hugs the underside of the header. When the header auto-hides on scroll-down
- * that var collapses to 0, and `max(--frenz-safe-top, …)` slides the bar up to just
- * under the notch — so scrolling down leaves only the ad, and the ad SLOT never
- * enters the safe-area inset (owner: "in webapp the ad slot shouldn't go to the
- * safe area").
+ * Its `bottom` rests just above the bottom nav: `max(env(safe-area-inset-bottom),
+ * --frenz-bottomnav-h)`. MobileAppNav publishes its own height (which already
+ * includes the home-indicator safe-area pad) as `--frenz-bottomnav-h`; on desktop
+ * the nav is `display:none`, so that height is 0 and the bar instead rests on the
+ * safe-area inset at the very bottom. The bar publishes its OWN height as
+ * `--frenz-bottomad-h` so the layout reserves that much space and content clears it.
  *
  * The zone id stays `bottom_banner` — a config key an operator already filled, not a
  * position — and `isPersistentZone` still treats it as chrome (no dismiss control).
- * Its DISPLAY name in the admin is "Top banner" (see lib/monetization/ad-schema).
+ * Its DISPLAY name in the admin is "Bottom banner" (see lib/monetization/ad-schema).
  */
 export function TopBannerAd() {
   const { showAds, ready } = useShowAds();
@@ -39,24 +39,23 @@ export function TopBannerAd() {
   const visible = hasPrimary === true || hasLegacy === true;
   const askLegacy = hasPrimary === false;
 
-  // Publish the bar's height so the marketing layout can RESERVE that much space
-  // and the page content clears the ad instead of hiding under it (owner: "the top
-  // ad is covering the top of the hero"). 0 when hidden, so an ad-free site keeps
-  // its exact layout.
+  // Publish the bar's height so the marketing layout can RESERVE that much space at
+  // the bottom and the page content clears the ad instead of hiding under it. 0 when
+  // hidden, so an ad-free site keeps its exact layout.
   useEffect(() => {
     const root = document.documentElement;
     if (!visible || !barRef.current) {
-      root.style.setProperty("--frenz-topad-h", "0px");
+      root.style.setProperty("--frenz-bottomad-h", "0px");
       return;
     }
     const bar = barRef.current;
-    const setH = () => root.style.setProperty("--frenz-topad-h", `${bar.offsetHeight}px`);
+    const setH = () => root.style.setProperty("--frenz-bottomad-h", `${bar.offsetHeight}px`);
     setH();
     const ro = new ResizeObserver(setH);
     ro.observe(bar);
     return () => {
       ro.disconnect();
-      root.style.setProperty("--frenz-topad-h", "0px");
+      root.style.setProperty("--frenz-bottomad-h", "0px");
     };
   }, [visible]);
 
@@ -66,11 +65,16 @@ export function TopBannerAd() {
     <div
       ref={barRef}
       style={{
-        top: "max(var(--frenz-safe-top), var(--frenz-header-bottom, calc(var(--frenz-safe-top) + 4rem)))",
+        // Sit above the bottom nav (its height already includes the safe-area pad);
+        // on desktop the nav is display:none so the var is 0 and the bar rests on the
+        // safe-area inset at the very bottom instead.
+        bottom: "max(env(safe-area-inset-bottom), var(--frenz-bottomnav-h, 0px))",
       }}
       className={cn(
         // z-40: below the header (z-50) and the mobile drawer (z-[70]), above content.
-        "fixed inset-x-0 z-40 border-b border-border/60 bg-card/95 backdrop-blur-sm transition-[top] duration-300",
+        // Solid, no blur — matches the de-glassed nav/header chrome. A top border
+        // divides it from the content above; the nav below carries its own border.
+        "fixed inset-x-0 z-40 border-t border-border/60 bg-card",
         !visible && "hidden",
       )}
       aria-hidden={!visible}

@@ -54,14 +54,13 @@ export default async function MarketingLayout({ children }: { children: React.Re
   const reelUrls = await firstReelUrls();
   return (
     <>
-      {/* Reserve room for the fixed top ad bar (below the header) when one is
-          filling, so the page content clears it instead of hiding under it. The bar
-          publishes its height as --frenz-topad-h (0 when there's no ad, so an
-          ad-free page keeps its exact layout). The fixed header/nav/ad ignore this
-          padding — only the in-flow content shifts. */}
-      <div style={{ paddingTop: "var(--frenz-topad-h, 0px)" }} className="transition-[padding] duration-200">
-        {children}
-      </div>
+      {children}
+      {/* Reserve room for the fixed BOTTOM ad bar (it now sits above the bottom nav
+          — see top-banner-ad.tsx), so a page's last content clears it instead of
+          hiding under it. The bar publishes its height as --frenz-bottomad-h (0 when
+          there's no ad, so an ad-free page keeps its exact layout). The fixed
+          header/nav/ad ignore this spacer — only the in-flow content shifts. */}
+      <div aria-hidden style={{ height: "var(--frenz-bottomad-h, 0px)" }} className="transition-[height] duration-200" />
       {/* App-style edge-to-edge bottom nav on every marketing page (mobile only),
           and a spacer so a page's last content clears the fixed bar. */}
       <div aria-hidden className="h-20 lg:hidden" />

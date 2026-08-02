@@ -233,6 +233,22 @@ export default async function ProfilePage({
   const profileMedia = await getProfileMedia(profile.id);
   // The member's chosen accent (migration 0096), mapped to a hex, or null.
   const heroAccent = accentHex(profileExtras.accent);
+  // The accent wraps the whole Identity Card as a premium glowing STRIPE + shadow
+  // (owner: "make the accent colour go round the hero card like a stripe premium
+  // luxury glow and shadow"). The first two shadows mirror .glass-strong's own base
+  // shadow so the glass look is preserved (inline box-shadow would otherwise replace
+  // it); then an accent ring, a soft accent glow and an accent-tinted drop shadow.
+  const heroCardStyle = heroAccent
+    ? {
+        boxShadow: [
+          "inset 0 1px 0 hsl(0 0% 100% / 0.08)",
+          "0 24px 60px -24px hsl(229 55% 3% / 0.5)",
+          `0 0 0 1.5px ${heroAccent}b3`,
+          `0 0 30px -2px ${heroAccent}59`,
+          `0 22px 55px -18px ${heroAccent}4d`,
+        ].join(", "),
+      }
+    : undefined;
 
   // Per-tab visibility: activity tabs appear only when the viewer is allowed to
   // see them (owner always; public → everyone; followers → the viewer follows).
@@ -355,7 +371,7 @@ export default async function ProfilePage({
 
                 {/* Identity Card™ — the premium glass surface */}
                 <div className="relative z-10 px-3 sm:px-4">
-                  <div className="relative glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7">
+                  <div className="relative glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7" style={heroCardStyle}>
                     {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

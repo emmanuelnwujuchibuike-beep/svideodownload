@@ -9,6 +9,7 @@ import { Suspense } from "react";
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { SiteHeader } from "@/components/layout/site-header";
 import { jsonLd } from "@/lib/seo/json-ld";
+import { AppModeSwitcher } from "@/features/app-shell/app-mode-switcher";
 import { CreatorRail } from "@/features/profile/creator-rail";
 import type { TopContent } from "@/features/profile/identity-analytics";
 import { notificationsToActivity } from "@/features/profile/activity-map";
@@ -505,6 +506,12 @@ export default async function ProfilePage({
                       })}
                     </div>
                   </div>
+                </div>
+
+                {/* Downloader ⇄ Full Bleed experience switch (owner) — on your own
+                    profile only. The profile itself is identical in both modes. */}
+                <div className="mt-4 px-4 sm:px-6">
+                  <AppModeSwitcher />
                 </div>
 
                 {/* Real posts — Videos / Reels / Liked / Saved / Collections (grid + list) */}

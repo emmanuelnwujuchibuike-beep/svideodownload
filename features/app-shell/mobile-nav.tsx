@@ -16,6 +16,8 @@ import {
   FrenzInboxSolid,
   FrenzPersonSolid,
 } from "@/components/icons/frenz-icons";
+import { useAppMode } from "@/features/app-shell/use-app-mode";
+import { promptFullBleed } from "@/features/app-shell/switch-mode-prompt";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { CreateActionSheet } from "@/features/create/create-action-sheet";
 import { useQuery } from "@/features/data";
@@ -62,6 +64,7 @@ export function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
+  const mode = useAppMode();
   const { handle, avatarUrl } = useEntitlements();
   // Cached-first: shows the last-known unread count instantly, updates live via
   // the realtime inbox subscription (InboxRealtimeTracker). `revalidateOnFocus:
@@ -121,6 +124,12 @@ export function MobileNav() {
             onClick={() => {
               haptic("selection");
               playSound("tap");
+              // Downloader mode can share downloads, but posting / uploading from the
+              // gallery is a Full Bleed feature (owner) — offer the switch instead.
+              if (mode === "downloader") {
+                promptFullBleed("Creating a post or uploading from your gallery");
+                return;
+              }
               setCreateOpen(true);
             }}
             aria-label="Create"
@@ -145,6 +154,9 @@ export function MobileNav() {
           active={pathname.startsWith("/messages")}
           badge={unread}
           onWarm={router.prefetch}
+          // Chatting is a Full Bleed feature — in Downloader mode, offer the switch
+          // instead of opening the inbox (owner).
+          guard={mode === "downloader" ? () => promptFullBleed("Chatting with people") : undefined}
         />
 
         {/* Profile (avatar-in-circle) — active state is now a colored ring
@@ -235,6 +247,7 @@ function NavTab({
   active,
   badge = 0,
   onWarm,
+  guard,
 }: {
   label: string;
   href: string;
@@ -243,13 +256,23 @@ function NavTab({
   active: boolean;
   badge?: number;
   onWarm?: (href: string) => void;
+  /** When set, intercepts the tap: prevents navigation and runs the guard instead
+   *  (used to offer the Full Bleed switch for a gated Downloader-mode tab). */
+  guard?: () => void;
 }) {
   const Glyph = active ? ActiveIcon : Icon;
   return (
     <Link
       href={href}
-      onPointerDown={() => onWarm?.(href)}
-      onClick={() => {
+      onPointerDown={guard ? undefined : () => onWarm?.(href)}
+      onClick={(e) => {
+        if (guard) {
+          e.preventDefault();
+          haptic("light");
+          playSound("tap");
+          guard();
+          return;
+        }
         haptic("light");
         playSound("tap");
       }}

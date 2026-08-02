@@ -53,8 +53,13 @@ export async function middleware(request: NextRequest) {
   // those to /home would swallow every "share into Frenz" from a signed-in
   // user — which is most of them. Keep this in sync with lib/share-target.ts
   // and manifest.ts's share_target.action if the tool ever moves.
+  // Downloader mode (owner, 2026-08-02) keeps `/` as the signed-in user's
+  // PERSONALIZED home, so it is NOT redirected to /home. Full Bleed (the default)
+  // redirects as before. A cheap cookie read at the edge — no DB, no per-render cost.
+  const downloaderMode = request.cookies.get("frenz_mode")?.value === "downloader";
   const isLandingRedirect =
     path === "/" &&
+    !downloaderMode &&
     !request.nextUrl.searchParams.has("url") &&
     !request.nextUrl.searchParams.has("text");
   const toHome = () => NextResponse.redirect(new URL("/home", request.url));

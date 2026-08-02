@@ -7,13 +7,19 @@ import { usePathname } from "next/navigation";
 import { type ComponentType, type ReactNode, useEffect, useRef } from "react";
 
 import {
+  FrenzFriendsOutline,
+  FrenzFriendsSolid,
   FrenzHomeOutline,
   FrenzHomeSolid,
+  FrenzInboxOutline,
+  FrenzInboxSolid,
   FrenzPersonSolid,
   FrenzReelsOutline,
   FrenzReelsSolid,
 } from "@/components/icons/frenz-icons";
 import { PressIcon } from "@/components/motion/press-icon";
+import { useAppMode } from "@/features/app-shell/use-app-mode";
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -36,10 +42,16 @@ import { cn } from "@/lib/utils";
  * bar itself is a touch taller. Active still reads as a flat inline color change
  * (muted → brand blue), Facebook/Snapchat style, never a raised gradient badge.
  *
- * ── Real routes only ──────────────────────────────────────────────────────────
- * Home → the landing; Reels → the full-screen deck; History → the download library;
- * Support → the help + 1:1 admin-chat page; Profile → the landing profile doorway.
- * The active item is derived from the CURRENT path (usePathname). Mobile only.
+ * ── Mode-aware destinations (owner, 2026-08-02) ───────────────────────────────
+ * The bar STICKS with the viewer's experience mode so a marketing page (e.g.
+ * Support) never dumps a Full-Bleed user back into the landing chrome:
+ *   • signed-in + Full Bleed → the app destinations (Home, Friends, Reels, Chats,
+ *     Profile) so they stay "in the app".
+ *   • Downloader mode / signed-out → the downloader destinations (Home, Reels,
+ *     History, Support, Profile).
+ * A signed-in user's Profile always points at their REAL profile (/u/handle), not
+ * the sign-in doorway (owner: "the profile page in the landing should be the user's
+ * profile"). The active item is derived from the CURRENT path (usePathname).
  *
  * ── Perf ──────────────────────────────────────────────────────────────────────
  * No idle animation anywhere — only NavLift's active spring and PressIcon's tap
@@ -47,14 +59,28 @@ import { cn } from "@/lib/utils";
  * once per state), so it never costs a frame on a low-end device.
  */
 type NavGlyph = ComponentType<{ className?: string; strokeWidth?: number | string }>;
+type NavItem = { href: string; label: string; icon: NavGlyph; activeIcon: NavGlyph };
 
-const ITEMS: { href: string; label: string; icon: NavGlyph; activeIcon: NavGlyph }[] = [
-  { href: "/", label: "Home", icon: FrenzHomeOutline, activeIcon: FrenzHomeSolid },
-  { href: "/reels", label: "Reels", icon: FrenzReelsOutline, activeIcon: FrenzReelsSolid },
-  { href: "/library", label: "History", icon: History, activeIcon: History },
-  { href: "/support", label: "Support", icon: Headset, activeIcon: Headset },
-  { href: "/profile", label: "Profile", icon: FrenzPersonSolid, activeIcon: FrenzPersonSolid },
-];
+/** The destinations for the viewer's mode. `profileHref` is their real profile
+ *  when signed in, else the sign-in doorway. */
+function navItems(fullBleed: boolean, profileHref: string): NavItem[] {
+  if (fullBleed) {
+    return [
+      { href: "/home", label: "Home", icon: FrenzHomeOutline, activeIcon: FrenzHomeSolid },
+      { href: "/friends", label: "Friends", icon: FrenzFriendsOutline, activeIcon: FrenzFriendsSolid },
+      { href: "/reels", label: "Reels", icon: FrenzReelsOutline, activeIcon: FrenzReelsSolid },
+      { href: "/messages", label: "Chats", icon: FrenzInboxOutline, activeIcon: FrenzInboxSolid },
+      { href: profileHref, label: "Profile", icon: FrenzPersonSolid, activeIcon: FrenzPersonSolid },
+    ];
+  }
+  return [
+    { href: "/", label: "Home", icon: FrenzHomeOutline, activeIcon: FrenzHomeSolid },
+    { href: "/reels", label: "Reels", icon: FrenzReelsOutline, activeIcon: FrenzReelsSolid },
+    { href: "/library", label: "History", icon: History, activeIcon: History },
+    { href: "/support", label: "Support", icon: Headset, activeIcon: Headset },
+    { href: profileHref, label: "Profile", icon: FrenzPersonSolid, activeIcon: FrenzPersonSolid },
+  ];
+}
 
 // Subtle "3D" depth on the glyph so it sits raised off the flat bar — the active
 // tab glows in the brand hue, the inactive ones carry a barely-there emboss. Shared
@@ -72,6 +98,12 @@ function isActive(pathname: string, href: string): boolean {
 export function MobileAppNav() {
   const pathname = usePathname() || "/";
   const navRef = useRef<HTMLElement | null>(null);
+  const mode = useAppMode();
+  const { handle } = useEntitlements();
+  const profileHref = handle ? `/u/${handle}` : "/profile";
+  // Signed-in + Full Bleed → app destinations; Downloader / signed-out → downloader
+  // destinations. So Support (and every marketing page) keeps the viewer's mode.
+  const items = navItems(!!handle && mode === "full", profileHref);
 
   // Publish the nav's height (which already includes the home-indicator safe-area
   // pad) so the fixed bottom ad bar can dock directly above it. On desktop this nav
@@ -98,7 +130,7 @@ export function MobileAppNav() {
       // owns the safe-area inset. A touch taller than before (owner ask).
       className="fixed inset-x-0 bottom-0 z-30 flex items-end justify-around border-t border-border/60 bg-background px-1 pb-[max(env(safe-area-inset-bottom),0.6rem)] pt-2.5 lg:hidden"
     >
-      {ITEMS.map((item) => (
+      {items.map((item) => (
         <NavTab key={item.label} {...item} active={isActive(pathname, item.href)} />
       ))}
     </nav>

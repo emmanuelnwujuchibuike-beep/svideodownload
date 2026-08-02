@@ -33,6 +33,17 @@ import { clearIdentity } from "./identity-cache";
 export async function signOutClient(): Promise<void> {
   clearIdentity();
 
+  // Clear the "just signed in" splash cookie so the hard navigation to `/` below
+  // can never make BootSplash force its F loader on sign-out (owner, 2026-08-02:
+  // "the F loader also shows on sign out, which i don't want"). It's normally a
+  // one-shot session cookie the boot script clears, but a sign-out must never
+  // depend on that having happened.
+  try {
+    document.cookie = "frenz_just_signed_in=; Max-Age=0; path=/";
+  } catch {
+    /* cookies blocked — nothing to clear */
+  }
+
   try {
     await createClient().auth.signOut({ scope: "local" });
   } catch {

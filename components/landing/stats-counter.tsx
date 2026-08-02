@@ -45,7 +45,7 @@ const PROOF: Proof[] = [
 
 export function StatsCounter() {
   return (
-    <section className="container max-w-6xl py-6">
+    <section className="frenz-reveal container max-w-6xl py-6">
       <div className="grid grid-cols-2 gap-x-4 gap-y-7 rounded-[1.75rem] border border-border/50 bg-gradient-to-b from-card to-card/55 p-7 shadow-card ring-1 ring-inset ring-border/40 sm:grid-cols-4 sm:gap-4 sm:p-10">
         {PROOF.map(({ icon: Icon, value, label }) => (
           <div key={label} className="flex flex-col items-center gap-2.5 text-center sm:flex-row sm:gap-3 sm:text-left">

@@ -36,7 +36,7 @@ export const FEATURES: Feature[] = [
  */
 export function FeaturesGrid() {
   return (
-    <section id="features" className="container max-w-6xl scroll-mt-24 py-14 sm:py-20">
+    <section id="features" className="frenz-reveal container max-w-6xl scroll-mt-24 py-14 sm:py-20">
       <div className="mx-auto max-w-2xl text-center">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
           <Sparkles className="h-3.5 w-3.5" /> Powerful Features

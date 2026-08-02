@@ -35,7 +35,7 @@ export function ProductGrid() {
   const profiles = getClaimableProfiles().filter(({ platform }) => platform.id !== "admin");
 
   return (
-    <section id="products" className="container max-w-6xl scroll-mt-24 py-10 sm:py-14">
+    <section id="products" className="frenz-reveal container max-w-6xl scroll-mt-24 py-10 sm:py-14">
       <div className="text-center">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-violet-500 dark:text-violet-300">
           All-in-One Platform
@@ -56,7 +56,7 @@ export function ProductGrid() {
             <Link
               key={platform.id}
               href={platform.veracity.provingRoute ?? platform.basePath}
-              className="group rounded-2xl border border-border/70 bg-card p-6 shadow-soft transition-all duration-300 hover:-translate-y-1 hover:border-foreground/15 hover:shadow-card"
+              className="group rounded-2xl border border-border/70 bg-card p-6 shadow-soft transition-all duration-300 hover:-translate-y-1 hover:border-foreground/15 hover:shadow-card active:scale-[0.98]"
             >
               <span className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${platform.accent} text-white shadow-md transition-transform duration-300 group-hover:scale-110`}>
                 <Icon className="h-5 w-5" />

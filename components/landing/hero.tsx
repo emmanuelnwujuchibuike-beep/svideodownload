@@ -87,13 +87,13 @@ export function Hero() {
             */}
             <Link
               href="#download"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 via-violet-600 to-fuchsia-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/30 transition hover:opacity-95 active:scale-[0.99] sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 via-violet-600 to-fuchsia-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/30 transition duration-200 hover:-translate-y-0.5 hover:opacity-95 hover:shadow-xl hover:shadow-violet-600/40 active:scale-[0.99] sm:w-auto"
             >
               Start Downloading <ArrowDown className="h-4 w-4" />
             </Link>
             <Link
               href="/features"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-7 py-3.5 text-sm font-semibold text-slate-900 shadow-soft transition hover:border-slate-400 active:scale-[0.99] dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur dark:hover:border-white/30 sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-7 py-3.5 text-sm font-semibold text-slate-900 shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-card active:scale-[0.99] dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur dark:hover:border-white/30 sm:w-auto"
             >
               <Play className="h-4 w-4" /> Explore Features
             </Link>

@@ -810,6 +810,35 @@
   .frenz-drift { animation: none; }
 }
 
+/* ── Scroll-reveal — the landing "alive on scroll" (owner) ─────────────────────
+   A zero-JS, compositor-only reveal: a section fades + rises as it scrolls into
+   view, driven entirely by a CSS scroll-progress timeline (animation-timeline:
+   view()). No IntersectionObserver and no hydration cost — which is load-bearing
+   on `/`, whose LCP is hydration-gated under a 2-second budget and which already
+   leans on content-visibility:auto for the same reason. Behind @supports so a
+   browser WITHOUT scroll timelines shows every section fully visible (an
+   opacity:0 must never be baked into the static HTML — the "170 static pages
+   baked a slide animation" regression). Behind prefers-reduced-motion so it stops
+   for those who ask. transform + opacity only; NO will-change (its
+   containing-block trap has broken position:fixed on this site before). */
+@keyframes frenz-reveal {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: none; }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .frenz-reveal {
+      animation: frenz-reveal linear both;
+      animation-timeline: view();
+      /* Reveal while the element enters from the viewport's bottom edge up to
+         ~40% in, so it is fully shown well before it reaches center. An element
+         already on screen at load is past this range, so `both` holds it visible —
+         above-the-fold content (and the LCP hero) never starts hidden. */
+      animation-range: entry 0% entry 40%;
+    }
+  }
+}
+
 /* ── Login hero constellation ──────────────────────────────────────────────
    A slow ring rotation, a per-tile counter-bob that keeps each logo upright,
    and a breathing aura behind the mark. Registered as Tailwind animate-* via

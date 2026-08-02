@@ -122,13 +122,18 @@ export default function HomePage() {
         <div className="[contain-intrinsic-size:auto_900px] [content-visibility:auto]">
         {/* The second phone (Downloads screen) with the six feature cards — the
             "download section mockup" from public/newlanding.jpg, right after the
-            "Download anything" card in the hero. */}
-        <DownloadMockup />
+            "Download anything" card in the hero. Wrapped in the zero-JS scroll
+            reveal (see .frenz-reveal in globals.css) so it rises in on scroll. */}
+        <div className="frenz-reveal">
+          <DownloadMockup />
+        </div>
 
         {/* The admin-controlled 2×2 image grid — moved UP to sit directly below the
             download mockup (owner). Each tile opens full screen + downloads. */}
         <Suspense fallback={<section className="min-h-[560px]" />}>
-          <CreatorsSection />
+          <div className="frenz-reveal">
+            <CreatorsSection />
+          </div>
         </Suspense>
 
         {/* Stats band (four-up icons). */}

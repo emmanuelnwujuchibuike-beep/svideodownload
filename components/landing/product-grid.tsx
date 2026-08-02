@@ -1,7 +1,7 @@
 import { ArrowRight, LayoutGrid } from "lucide-react";
 import Link from "next/link";
 
-import { getProfiles } from "@/lib/content/genome/queries";
+import { getClaimableProfiles } from "@/lib/content/genome/queries";
 
 /**
  * The ecosystem product grid — rendered entirely from the Product Genome.
@@ -18,17 +18,21 @@ import { getProfiles } from "@/lib/content/genome/queries";
  * Smart suite's only UI surface is commented out of `app/layout.tsx`. Linking them
  * would ship three 404s from the front door and claim three products we don't have.
  *
- * So the grid keeps the mockup's shape — all six, same layout — and lets veracity
- * decide the treatment: claimable products are links with "Explore"; unbuilt ones
- * are inert cards marked "Coming soon". The design intent survives; the claim does
- * not. This is enforced by `lib/content/reality-ledger.test.ts` and the genome
- * audit, so it cannot regress silently.
+ * A homepage full of mockup cards for products that don't exist is exactly the
+ * "doesn't exist / low value" content that gets a site flagged — so this grid now
+ * shows ONLY claimable products (`getClaimableProfiles()`, not `getProfiles()`):
+ * Studio, Cloud and the Smart suite never appear here at all, not even as an inert
+ * "Coming soon" card. The full roadmap still lives on `/features`, where planned
+ * work is clearly labelled as planned — the front door only shows what's real.
+ * Enforced by `lib/content/reality-ledger.test.ts` and the genome audit.
  *
  * Server component — zero client JS on a page under a 2-second budget.
  */
 export function ProductGrid() {
-  // Admin is real but internal — never a marketing card.
-  const profiles = getProfiles().filter(({ platform }) => platform.id !== "admin");
+  // Admin is real but internal — never a marketing card. (getClaimableProfiles
+  // already excludes every unbuilt product; admin still needs its own filter
+  // since it IS claimable, just not something to advertise.)
+  const profiles = getClaimableProfiles().filter(({ platform }) => platform.id !== "admin");
 
   return (
     <section id="products" className="container max-w-6xl scroll-mt-24 py-10 sm:py-14">
@@ -47,53 +51,26 @@ export function ProductGrid() {
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {profiles.map(({ platform, genome }) => {
           const Icon = platform.icon;
-          const live = platform.veracity.claimable;
 
-          const card = (
-            <>
-              <span
-                className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${platform.accent} text-white shadow-md transition-transform duration-300 ${live ? "group-hover:scale-110" : ""}`}
-              >
-                <Icon className="h-5 w-5" />
-              </span>
-
-              <div className="mt-4 flex items-center gap-2">
-                <h3 className="text-lg font-bold tracking-tight">{platform.name}</h3>
-                {!live ? (
-                  <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Coming soon
-                  </span>
-                ) : null}
-              </div>
-
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{genome.purpose}</p>
-
-              {live ? (
-                <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
-                  Explore
-                  <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
-                </span>
-              ) : null}
-            </>
-          );
-
-          const shell =
-            "rounded-2xl border border-border/70 bg-card p-6 shadow-soft transition-all duration-300";
-
-          return live ? (
+          return (
             <Link
               key={platform.id}
               href={platform.veracity.provingRoute ?? platform.basePath}
-              className={`group ${shell} hover:-translate-y-1 hover:border-foreground/15 hover:shadow-card`}
+              className="group rounded-2xl border border-border/70 bg-card p-6 shadow-soft transition-all duration-300 hover:-translate-y-1 hover:border-foreground/15 hover:shadow-card"
             >
-              {card}
+              <span className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${platform.accent} text-white shadow-md transition-transform duration-300 group-hover:scale-110`}>
+                <Icon className="h-5 w-5" />
+              </span>
+
+              <h3 className="mt-4 text-lg font-bold tracking-tight">{platform.name}</h3>
+
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{genome.purpose}</p>
+
+              <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
+                Explore
+                <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
+              </span>
             </Link>
-          ) : (
-            // Not a link: there is nothing to open. Announced to assistive tech as
-            // a plain group rather than a control that does nothing when activated.
-            <div key={platform.id} className={`${shell} opacity-70`}>
-              {card}
-            </div>
           );
         })}
       </div>

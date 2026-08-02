@@ -7,13 +7,9 @@ import { Faq } from "@/components/landing/faq";
 import { FeaturesGrid } from "@/components/landing/features-grid";
 import { Hero } from "@/components/landing/hero";
 import { HowItWorks } from "@/components/landing/how-it-works";
-import { MarketplaceSection } from "@/components/landing/marketplace-section";
 import { ProductGrid } from "@/components/landing/product-grid";
 import { PlatformShowcase } from "@/components/landing/platform-showcase";
-import { RewardSection } from "@/components/landing/reward-section";
 import { StatsCounter } from "@/components/landing/stats-counter";
-import { StudioSection } from "@/components/landing/studio-section";
-import { Testimonials } from "@/components/landing/testimonials";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
@@ -156,14 +152,6 @@ export default function HomePage() {
         </div>
 
         <PlatformShowcase />
-
-        {/* Marketplace · Rewards · Studio. */}
-        <MarketplaceSection />
-        <RewardSection />
-        <StudioSection />
-
-        {/* What our users are saying. */}
-        <Testimonials />
 
         {/* Admin-managed recommended tools (renders nothing when empty) */}
         <Suspense fallback={null}>

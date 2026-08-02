@@ -1,12 +1,8 @@
 import { Cloud, Gauge, Layers, MonitorSmartphone, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-/**
- * The six product features, per `public/newlandingfull.jpg` ("Everything you need.
- * All in one place.") and shown again as the floating cards around the download
- * phone in `public/newlanding.jpg`. Exported so both surfaces render the SAME set
- * and cannot drift.
- */
+import { SHOWCASE_PLATFORMS } from "@/lib/platforms";
+
 export interface Feature {
   icon: LucideIcon;
   title: string;
@@ -14,10 +10,21 @@ export interface Feature {
   tint: string;
 }
 
+/**
+ * The six product features, per `public/newlandingfull.jpg` ("Everything you need.
+ * All in one place.") and shown again as the floating cards around the download
+ * phone in `public/newlanding.jpg` (`download-mockup.tsx`). Exported so both
+ * surfaces render the SAME set and cannot drift.
+ *
+ * The platform-count card derives its number from `SHOWCASE_PLATFORMS.length`
+ * (the same source `PlatformShowcase` already uses) instead of a hand-typed
+ * "100+" — that hardcoded figure had drifted far from the real, much smaller
+ * registry, exactly the kind of unsourced claim that reads as low-value content.
+ */
 export const FEATURES: Feature[] = [
   { icon: ShieldCheck, title: "No Watermark", desc: "Download videos without a watermark, in high quality.", tint: "from-sky-500 to-blue-600" },
   { icon: Zap, title: "Ultra Fast", desc: "Blazing-fast servers that deliver at lightning speed.", tint: "from-violet-500 to-purple-600" },
-  { icon: Layers, title: "100+ Platforms", desc: "Support for almost every social and media platform you use.", tint: "from-fuchsia-500 to-pink-600" },
+  { icon: Layers, title: `${SHOWCASE_PLATFORMS.length} Platforms`, desc: "Support for every major social and media platform, plus any public video link.", tint: "from-fuchsia-500 to-pink-600" },
   { icon: Gauge, title: "HD Quality", desc: "Download in the highest quality available.", tint: "from-blue-500 to-indigo-600" },
   { icon: ShieldCheck, title: "Privacy First", desc: "We respect your privacy. No data is stored.", tint: "from-emerald-500 to-teal-600" },
   { icon: MonitorSmartphone, title: "Cross Device", desc: "Works perfectly on mobile, tablet and desktop.", tint: "from-amber-500 to-orange-600" },

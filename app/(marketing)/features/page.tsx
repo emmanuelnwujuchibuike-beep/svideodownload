@@ -1,10 +1,10 @@
-import { ArrowLeft, Check, Clock } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
-import { getProfiles, isRealStage } from "@/lib/content/genome/queries";
+import { getClaimableProfiles, isRealStage } from "@/lib/content/genome/queries";
 import { SHOWCASE_PLATFORMS } from "@/lib/platforms";
 
 /*
@@ -17,18 +17,20 @@ import { SHOWCASE_PLATFORMS } from "@/lib/platforms";
 export const dynamic = "force-static";
 
 /**
- * "Everything Frenz is built for" — the full capability list.
+ * "Everything Frenz is built for" — the full REAL capability list.
  *
  * Rendered entirely from the Product Genome, so this page cannot drift from what
  * the product actually does. Adding a capability to the genome adds it here, to the
  * product card, to the JSON-LD and to the Experience Graph at once; there is no
  * hand-maintained feature list to forget.
  *
- * Shipped capabilities and planned ones are visually separated rather than mixed:
- * a reader scanning this page is deciding whether to sign up, and a list that
- * blends "you can do this today" with "we intend to build this" answers the wrong
- * question. Every entry's stage comes from `veracity`, so the split is structural
- * and cannot be fudged by copy.
+ * Only claimable products appear (`getClaimableProfiles()`), and only their SHIPPED
+ * capabilities are listed — no "Coming soon" products, no "Planned" capability
+ * lists. This page used to show both, clearly labelled, on the theory that an
+ * honestly-marked roadmap is fine to publish. It still is in principle, but a whole
+ * page of "here's what we intend to build" reads as padding next to the actual
+ * product, and that's exactly the kind of thin/aspirational content this pass is
+ * removing site-wide. What Frenz does today is substantial enough to stand alone.
  */
 export const metadata: Metadata = {
   title: "Features — everything Frenz is built for",
@@ -38,8 +40,9 @@ export const metadata: Metadata = {
 };
 
 export default function FeaturesPage() {
-  // Admin is real but internal — never a marketing surface.
-  const profiles = getProfiles().filter(({ platform }) => platform.id !== "admin");
+  // Admin is real but internal — never a marketing surface. (getClaimableProfiles
+  // already excludes every unbuilt product.)
+  const profiles = getClaimableProfiles().filter(({ platform }) => platform.id !== "admin");
 
   const shippedCount = profiles.reduce(
     (n, { genome }) => n + genome.capabilities.filter((c) => isRealStage(c.stage)).length,
@@ -62,12 +65,11 @@ export default function FeaturesPage() {
             Everything Frenz is built for
           </span>
           <h1 className="mt-4 text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">
-            {shippedCount} features, across {profiles.filter((p) => p.platform.veracity.claimable).length} products.
+            {shippedCount} features, across {profiles.length} products.
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted-foreground">
             Save from {SHOWCASE_PLATFORMS.length} platforms, watch and post, message your people, and
-            keep it all without filling your phone. Here is the whole list — what works today, and
-            what is still coming.
+            keep it all without filling your phone. Here is everything that works today.
           </p>
         </header>
 
@@ -75,7 +77,6 @@ export default function FeaturesPage() {
           {profiles.map(({ platform, genome }) => {
             const Icon = platform.icon;
             const shipped = genome.capabilities.filter((c) => isRealStage(c.stage));
-            const planned = genome.capabilities.filter((c) => !isRealStage(c.stage));
             const features = [...genome.features.core, ...genome.features.optional].filter((f) =>
               isRealStage(f.stage),
             );
@@ -89,14 +90,7 @@ export default function FeaturesPage() {
                     <Icon className="h-5 w-5" />
                   </span>
                   <div>
-                    <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight">
-                      {platform.name}
-                      {!platform.veracity.claimable ? (
-                        <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Coming soon
-                        </span>
-                      ) : null}
-                    </h2>
+                    <h2 className="text-xl font-bold tracking-tight">{platform.name}</h2>
                     <p className="text-sm text-muted-foreground">{genome.purpose}</p>
                   </div>
                 </div>
@@ -133,29 +127,6 @@ export default function FeaturesPage() {
                       </li>
                     ))}
                   </ul>
-                ) : null}
-
-                {planned.length > 0 ? (
-                  <div className="mt-4 rounded-2xl border border-dashed border-border p-4">
-                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      <Clock className="h-3.5 w-3.5" /> Planned
-                    </p>
-                    <ul className="mt-2 flex flex-wrap gap-2">
-                      {planned.map((cap) => (
-                        <li key={cap.id} className="text-xs text-muted-foreground">
-                          {cap.name}
-                          <span className="mx-1.5 text-border">·</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-
-                {shipped.length === 0 && planned.length === 0 ? (
-                  <p className="mt-4 rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-                    Not built yet — nothing to list. This entry is here so the roadmap is visible,
-                    not to imply the product exists.
-                  </p>
                 ) : null}
               </section>
             );

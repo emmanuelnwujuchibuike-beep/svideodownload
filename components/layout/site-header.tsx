@@ -243,9 +243,13 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
         transform: hidden && !open ? "translateY(-100%)" : undefined,
       }}
       className={cn(
-        "fixed inset-x-0 top-0 z-50 pt-[var(--frenz-safe-top)] backdrop-blur-xl transition-transform duration-300",
+        // Pure, opaque bg-background — no blur, no transparency (owner,
+        // 2026-08: "make it pure white and dark in dark mode... remove the
+        // glass feel and transparent look"). Matches AppTopbar's already-solid
+        // treatment so every top bar in the app looks the same material.
+        "fixed inset-x-0 top-0 z-50 border-b border-border/40 bg-background pt-[var(--frenz-safe-top)] transition-transform duration-300",
         desktopHidden && "lg:hidden",
-        social ? "border-b border-border/20 bg-background/60" : "border-b border-border/40 bg-background/85 supports-[backdrop-filter]:bg-background/70",
+        social && "border-b-border/20",
       )}
     >
       {/* On mobile SOCIAL surfaces (posts/profiles) the bar has no content — the

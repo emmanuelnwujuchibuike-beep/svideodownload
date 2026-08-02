@@ -27,24 +27,29 @@ import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { cn } from "@/lib/utils";
 
 /**
- * Floating pill bottom navigation. Inactive tabs are plain, muted outline
- * icons with a label; the ACTIVE tab swaps to its solid glyph in the brand
- * blue (`text-primary`) — a flat inline color change, Facebook/Snapchat
- * style, corrected 2026-07-12 from an earlier raised-circle-with-glow-halo
- * treatment the owner found sat "too far up" and read as immature. Only a
- * couple of px of spring-animated lift remain (see NavLift) — never a
- * floating badge. The Create button is the one deliberately different
- * element: a permanently-raised gradient circle, untouched by this
- * correction. Destinations are this app's real ones (the mockup's
- * placeholder "Market"→Friends, "Save"→Chats per the owner's explicit ask).
- * Every tab tap fires the shared haptic + the soft nav "tap" tone.
+ * Bottom navigation — a plain, OPAQUE, edge-to-edge bar (owner, 2026-08:
+ * "remove the glass feel and transparent look and make it edge to edge, only
+ * native apps will have glass floating nav"). Reference: a native-style app's
+ * bottom tab bar sits flush with the viewport's full width, pure background
+ * color, a hairline top border, no rounding, no blur, no floating margins —
+ * the same solid, no-blur treatment `AppTopbar` already uses. The previous
+ * `.glass-strong` floating rounded pill (frosted, inset margins, drop shadow)
+ * is gone; that "floating glass dock" look is reserved for an eventual real
+ * native app shell, not the web/PWA chrome.
+ *
+ * Inactive tabs are plain, muted outline icons with a label; the ACTIVE tab
+ * swaps to its solid glyph in the brand blue (`text-primary`) — a flat inline
+ * color change, Facebook/Snapchat style. Only a couple of px of spring-
+ * animated lift remain (see NavLift) — never a floating badge. The Create
+ * button is the one deliberately different element: a permanently-raised
+ * gradient circle. Destinations are this app's real ones. Every tab tap fires
+ * the shared haptic + the soft nav "tap" tone.
  *
  * Perf: no idle animation anywhere in this bar — only the micro-lift spring
- * and PressIcon's tap spring ever animate, both input-driven. The pill hugs
- * the bottom with `max(safe-area − 10px, 2px)` — on iOS standalone that's
- * the home-indicator inset; a plain browser tab now sits almost flush with
- * the viewport edge (owner: "bring it down more to fit well on webapp like
- * tiktok").
+ * and PressIcon's tap spring ever animate, both input-driven. The bar sits
+ * flush with the true bottom of the viewport; only the safe-area inset (the
+ * home-indicator on notched/installed devices) pads it, never an artificial
+ * gap on a plain browser tab.
  */
 export function MobileNav() {
   const pathname = usePathname();
@@ -80,18 +85,16 @@ export function MobileNav() {
   }, [router, profileHref]);
 
   return (
-    // Safe-area handling (owner, 2nd pass — the first 6px→2px nudge was too
-    // small to actually notice: "bring the bottom nav down more to fit well
-    // on webapp like tiktok"). Now fully flush with the viewport edge on a
-    // plain browser tab (0 gap, was a 6px floor) — the pill still tucks INTO
-    // the home-indicator inset on a notched/installed device the same way.
-    <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(calc(env(safe-area-inset-bottom)-10px),0px)] lg:hidden">
+    // Edge-to-edge, no floating margins — the bar itself owns the safe-area
+    // padding (home-indicator inset on notched/installed devices; zero extra
+    // gap on a plain browser tab) rather than sitting inset inside a wrapper.
+    <div className="fixed inset-x-0 bottom-0 z-40 lg:hidden">
       <nav
         aria-label="Primary"
-        // backdrop-blur-lg (not -2xl): this bar sits over scrolling content on
-        // every mobile page for the app's whole lifetime — the same perf trim
-        // already applied to the feed's sticky segmented control (smart-feed.tsx).
-        className="glass-strong relative mx-auto flex max-w-md items-end justify-around rounded-full px-2 pb-1 pt-2 backdrop-blur-lg"
+        // Pure opaque background (matches AppTopbar's bg-background, no blur)
+        // and a hairline top border — a native tab-bar look, not a frosted
+        // floating dock. Full width, square corners, flush with the bottom.
+        className="relative flex items-end justify-around border-t border-border/60 bg-background px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2"
       >
         <NavTab label="Home" href="/home" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/home"} onWarm={router.prefetch} />
         <NavTab label="Friends" href="/friends" icon={FrenzFriendsOutline} activeIcon={FrenzFriendsSolid} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />

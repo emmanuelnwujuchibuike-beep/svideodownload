@@ -211,8 +211,9 @@ export const DATA_DOMAINS: DataDomain[] = [
     id: "analytics",
     name: "Analytics",
     owner: "lib/analytics",
-    description: "The unified event stream and derived traffic/engagement rollups.",
-    tables: ["events", "analytics", "traffic_logs", "platform_stats"],
+    description:
+      "The unified event stream and derived traffic/engagement rollups, plus the enterprise analytics event pipeline: an append-only, exactly-once event log (analytics_events) and a canonical per-download record (analytics_downloads) for accurate, dedup-safe counting.",
+    tables: ["events", "analytics", "traffic_logs", "platform_stats", "analytics_events", "analytics_downloads"],
     storage: ["relational", "event-log"],
   },
   {

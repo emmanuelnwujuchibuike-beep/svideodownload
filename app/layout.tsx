@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { ThemeCacheSync } from "@/components/theme-cache-sync";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AnalyticsTracker } from "@/features/analytics/analytics-tracker";
 import { BootHead, BootSplash, ThemeBootScript } from "@/features/app-shell/boot-splash";
 import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
@@ -333,6 +334,9 @@ export default function RootLayout({
             <RegisterServiceWorker />
             <GlobalErrorCapture />
             <WebVitals />
+            {/* Enterprise Analytics — fires page_view / session events. Passive
+                (reads usePathname only), flushed on a debounce well after LCP. */}
+            <AnalyticsTracker />
           </MotionConfig>
         </ThemeProvider>
       </body>

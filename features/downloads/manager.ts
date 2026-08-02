@@ -1,5 +1,6 @@
 "use client";
 
+import { trackDownload } from "@/lib/analytics/client";
 import { addDownload } from "@/features/history/store";
 import { mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { toast } from "@/features/ui/toast";
@@ -125,6 +126,8 @@ async function run(id: string) {
   const controller = new AbortController();
   controllers.set(id, controller);
   patch(id, { status: "downloading", error: null, receivedBytes: 0, speed: 0 });
+  const startedAt = performance.now();
+  trackDownload("started", { downloadId: task.id, platform: task.platform, mediaKind: task.kind, quality: task.qualityLabel });
 
   // Held for the actual byte transfer — a service-worker-driven reload mid-
   // download would silently drop it with no way to resume (the stream isn't
@@ -178,6 +181,14 @@ async function run(id: string) {
     patch(id, { status: "completed", receivedBytes: received, totalBytes: total || received, speed: 0, awaitingSave: ios });
     completedCount += 1;
     for (const l of completionListeners) l();
+    trackDownload("completed", {
+      downloadId: task.id,
+      platform: task.platform,
+      mediaKind: task.kind,
+      quality: task.qualityLabel,
+      fileSize: received,
+      durationMs: Math.round(performance.now() - startedAt),
+    });
     addDownload({
       url: task.url,
       platform: task.platform,
@@ -192,7 +203,9 @@ async function run(id: string) {
     if (!ios) toast("Download complete — saved to your device & library", "success");
   } catch (err) {
     if (controller.signal.aborted) return; // paused/canceled handled elsewhere
-    patch(id, { status: "failed", error: err instanceof Error ? err.message : "Download failed" });
+    const reason = err instanceof Error ? err.message : "Download failed";
+    patch(id, { status: "failed", error: reason });
+    trackDownload("failed", { downloadId: task.id, platform: task.platform, mediaKind: task.kind, quality: task.qualityLabel, errorReason: reason });
     toast("Download failed — tap retry", "error");
   } finally {
     controllers.delete(id);
@@ -244,6 +257,9 @@ export function startDownload(input: {
     ...tasks,
   ];
   emit();
+  // Analytics: the download was REQUESTED (one canonical row per download_id, so a
+  // refresh/retry never double-counts). `started`/`completed`/`failed` follow in run().
+  trackDownload("requested", { downloadId: id, platform: input.platform, mediaKind: input.kind, quality: input.qualityLabel });
   // No "started" toast — the floating progress card IS the notification.
   void run(id);
   return id;

@@ -584,6 +584,20 @@
     .shimmer::after { animation: none; }
   }
 
+  /* Loading stripe — the indeterminate bar shown inside a route's loading.tsx
+     (Next Suspense fallback) by PageLoader. Pure CSS; nothing here or in that
+     component touches navigation/prefetch. */
+  @keyframes frenz-loader-bar {
+    0% { transform: translateX(-110%); }
+    100% { transform: translateX(360%); }
+  }
+  .frenz-loader-bar {
+    animation: frenz-loader-bar 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .frenz-loader-bar { animation-duration: 2.4s; }
+  }
+
   /* Reusable entrance animations — GPU-friendly (transform + opacity only),
      driven by the shared motion tokens. */
   @keyframes fade-up {

@@ -143,6 +143,14 @@ export const DATA_DOMAINS: DataDomain[] = [
     storage: ["relational"],
   },
   {
+    id: "support",
+    name: "Support",
+    owner: "lib/support",
+    description: "1:1 support conversations between members and the admin team — one running thread per member and its messages.",
+    tables: ["support_threads", "support_messages"],
+    storage: ["relational"],
+  },
+  {
     id: "notifications",
     name: "Notifications",
     owner: "lib/social (notifications), lib/push",

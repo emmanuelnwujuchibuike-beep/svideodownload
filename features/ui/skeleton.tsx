@@ -1,3 +1,4 @@
+import { RouteLoaderStripe } from "@/features/ui/route-loader-stripe";
 import { cn } from "@/lib/utils";
 
 /**
@@ -32,11 +33,28 @@ export function SkeletonText({ lines = 2, className }: { lines?: number; classNa
  * Accessible wrapper for a skeleton region: screen readers hear "Loading…"
  * once (polite) while sighted users see the shimmer — wrap each loading.tsx
  * body in one so the loading state is announced, not silent.
+ *
+ * It also renders the indeterminate route stripe under the top bar for the whole
+ * time the skeleton is up (owner, 2026-08). SkeletonSection is used ONLY by route
+ * `loading.tsx` files, never mid-page, so the fixed stripe is always correct here.
+ * Pages whose loading state should NOT show the stripe (a rare in-page region) can
+ * pass `stripe={false}`.
  */
-export function SkeletonSection({ label = "Loading", className, children }: { label?: string; className?: string; children: React.ReactNode }) {
+export function SkeletonSection({
+  label = "Loading",
+  className,
+  stripe = true,
+  children,
+}: {
+  label?: string;
+  className?: string;
+  stripe?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div role="status" aria-live="polite" className={className}>
       <span className="sr-only">{label}…</span>
+      {stripe ? <RouteLoaderStripe /> : null}
       {children}
     </div>
   );

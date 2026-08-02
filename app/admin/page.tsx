@@ -28,6 +28,7 @@ import { Suspense } from "react";
 
 import { AdManager } from "@/features/admin/ad-manager";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
+import { SupportInbox } from "@/features/admin/support-inbox";
 import { FeatureFlagManager } from "@/features/admin/feature-flags-manager";
 import { ExperimentsManager } from "@/features/admin/experiments-manager";
 import { getFlags } from "@/lib/platform/flags";
@@ -331,6 +332,12 @@ export default async function AdminPage() {
             <Suspense fallback={<PanelSkeleton />}>
               <ModerationSection />
             </Suspense>
+          </AdminPanel>
+
+          {/* Support inbox — a client island that loads its own data through
+              getAdminUser-guarded actions, so it needs no server-side query here. */}
+          <AdminPanel id="support">
+            <SupportInbox />
           </AdminPanel>
 
           <AdminPanel id="trending">

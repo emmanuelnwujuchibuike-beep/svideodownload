@@ -62,9 +62,9 @@ export default async function MarketingLayout({ children }: { children: React.Re
       <div style={{ paddingTop: "var(--frenz-topad-h, 0px)" }} className="transition-[padding] duration-200">
         {children}
       </div>
-      {/* App-style liquid-glass bottom nav on every marketing page (mobile only),
-          and a spacer so a page's last content clears the floating pill. */}
-      <div aria-hidden className="h-24 lg:hidden" />
+      {/* App-style edge-to-edge bottom nav on every marketing page (mobile only),
+          and a spacer so a page's last content clears the fixed bar. */}
+      <div aria-hidden className="h-20 lg:hidden" />
       <MobileAppNav />
       {/* Buffer the first reels ahead of a tap (after idle, good connections only). */}
       <ReelsWarmup urls={reelUrls} />

@@ -102,6 +102,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     icon: "ShieldAlert",
     blurb: "Reported content and accounts, and the appeals queue.",
   },
+  {
+    id: "support",
+    label: "Support inbox",
+    category: "audience",
+    icon: "LifeBuoy",
+    blurb: "1:1 support conversations with members. Reply here — members are notified by push and email.",
+  },
 
   /* ── Content ── */
   {

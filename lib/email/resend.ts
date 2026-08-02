@@ -118,3 +118,63 @@ export function sendOtpEmail(to: string, code: string): Promise<boolean> {
 
   return send(to, `${code} is your Frenz sign-in code`, html, text);
 }
+
+/**
+ * A general branded transactional email — product notices like a support reply.
+ * Same premium shell as the sign-in code email (brand mark, gradient rule,
+ * optional CTA button, support footer), so every email the product sends looks
+ * like one family. No-ops cleanly when RESEND_API_KEY is unset.
+ */
+export function sendProductEmail(
+  to: string,
+  opts: { subject: string; heading: string; intro: string; body?: string; ctaLabel?: string; ctaHref?: string },
+): Promise<boolean> {
+  const year = new Date().getFullYear();
+  const cta =
+    opts.ctaLabel && opts.ctaHref
+      ? `<tr><td style="padding:24px 40px 0;text-align:center;">
+          <a href="${opts.ctaHref}" style="display:inline-block;background:#0A84FF;color:#ffffff;font-family:${FONT};font-size:14px;font-weight:700;text-decoration:none;padding:12px 26px;border-radius:12px;">${opts.ctaLabel}</a>
+        </td></tr>`
+      : "";
+  const body = opts.body
+    ? `<tr><td style="padding:22px 40px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f6ff;border:1px solid #ece9fb;border-radius:14px;">
+          <tr><td style="padding:16px 18px;font-family:${FONT};font-size:14px;line-height:1.6;color:#3b3b46;white-space:pre-wrap;">${opts.body}</td></tr>
+        </table>
+      </td></tr>`
+    : "";
+
+  const html = `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${opts.heading}</title></head>
+<body style="margin:0;padding:0;background:#eef0f7;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef0f7;padding:40px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;background:#ffffff;border-radius:24px;border:1px solid #ececf2;overflow:hidden;">
+        <tr><td style="height:5px;background:linear-gradient(90deg,#0A84FF,#6C4DFF,#c026d3);font-size:0;line-height:0;">&nbsp;</td></tr>
+        <tr><td style="padding:40px 40px 0;text-align:center;">
+          <img src="${SITE_URL}/brand/frenz-logo.png" width="52" height="52" alt="Frenz" style="display:block;margin:0 auto 14px;border-radius:13px;">
+          <span style="font-family:${FONT};font-size:20px;font-weight:800;letter-spacing:-0.02em;"><span style="color:#17171c;">Frenz</span><span style="color:#0A84FF;">Save</span></span>
+        </td></tr>
+        <tr><td style="padding:26px 40px 0;text-align:center;font-family:${FONT};">
+          <p style="margin:0;font-size:19px;font-weight:800;color:#111116;">${opts.heading}</p>
+          <p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#6b6b76;">${opts.intro}</p>
+        </td></tr>
+        ${body}
+        ${cta}
+        <tr><td style="padding:28px 40px 32px;font-family:${FONT};">
+          <p style="margin:0;border-top:1px solid #ececf2;padding-top:16px;font-size:12px;line-height:1.6;color:#a0a0aa;">
+            Need more help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color:#6C4DFF;text-decoration:none;">${SUPPORT_EMAIL}</a><br>
+            &copy; ${year} Frenz. All rights reserved.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `${opts.heading}\n\n${opts.intro}${opts.body ? `\n\n${opts.body}` : ""}${opts.ctaHref ? `\n\n${opts.ctaLabel ?? "Open"}: ${opts.ctaHref}` : ""}\n\nNeed more help? ${SUPPORT_EMAIL}\n(c) ${year} Frenz.`;
+
+  return send(to, opts.subject, html, text);
+}

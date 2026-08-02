@@ -132,48 +132,25 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
     return () => cancelAnimationFrame(id);
   }, [open]);
 
-  /**
-   * Auto-hide on scroll-DOWN, reveal on scroll-UP (owner, 2026-07-26: "make the
-   * header … doesn't show on scrolling downwards, only the ad shows"). The top ad
-   * bar (features/monetization/top-banner-ad.tsx) is the topmost chrome and stays;
-   * the header slides up behind it, so a scroll-down leaves only the ad.
-   *
-   * Read behind one rAF so a burst of scroll events collapses to a single state
-   * change per frame, and never hidden near the very top — a header that vanishes
-   * on the first pixel of scroll reads as a glitch.
-   */
-  const [hidden, setHidden] = useState(false);
-  useEffect(() => {
-    let last = window.scrollY;
-    let ticking = false;
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        const y = window.scrollY;
-        if (y > last + 4 && y > 140) setHidden(true);
-        else if (y < last - 4) setHidden(false);
-        last = y;
-        ticking = false;
-      });
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  /*
+    The header stays PINNED on scroll (owner, 2026-08-02: "make the top header
+    fixed even on scroll"). The earlier auto-hide-on-scroll-down existed so a
+    scroll-down left only the top ad bar visible; that ad now lives at the BOTTOM
+    of the viewport (above the bottom nav — see top-banner-ad.tsx), so there is
+    nothing for the header to slide up behind. It simply remains fixed at the top.
+  */
 
   /*
-    Publish the header's bottom edge so the top ad bar can sit DIRECTLY BELOW it
-    (owner: "make the ad slot … be below the top header"). When the header is
-    hidden by scroll, this collapses to 0 so the ad slides up to just under the
-    safe-area inset (the ad's own `top` maxes with `--frenz-safe-top`, so it never
-    enters the notch). Header height = the safe-area pad + the h-16 (4rem) bar.
+    Publish the header's constant bottom edge so any chrome that anchors to it can
+    read it. Header height = the safe-area pad + the h-16 (4rem) bar; it no longer
+    collapses to 0 because the header no longer hides.
   */
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--frenz-header-bottom",
-      hidden && !open ? "0px" : "calc(var(--frenz-safe-top) + 4rem)",
+      "calc(var(--frenz-safe-top) + 4rem)",
     );
-  }, [hidden, open]);
+  }, []);
 
   /**
    * Pending unmount from a close that is still animating. Held so a tap during
@@ -238,16 +215,13 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
   return (
     <>
     <header
-      style={{
-        // Slide up out of view on scroll-down; kept visible while the drawer is open.
-        transform: hidden && !open ? "translateY(-100%)" : undefined,
-      }}
       className={cn(
         // Pure, opaque bg-background — no blur, no transparency (owner,
         // 2026-08: "make it pure white and dark in dark mode... remove the
         // glass feel and transparent look"). Matches AppTopbar's already-solid
         // treatment so every top bar in the app looks the same material.
-        "fixed inset-x-0 top-0 z-50 border-b border-border/40 bg-background pt-[var(--frenz-safe-top)] transition-transform duration-300",
+        // Fixed and pinned on scroll (owner, 2026-08-02) — no hide-on-scroll.
+        "fixed inset-x-0 top-0 z-50 border-b border-border/40 bg-background pt-[var(--frenz-safe-top)]",
         desktopHidden && "lg:hidden",
         social && "border-b-border/20",
       )}

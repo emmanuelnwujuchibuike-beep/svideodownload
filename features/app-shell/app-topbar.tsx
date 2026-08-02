@@ -9,7 +9,7 @@ import { PressIcon } from "@/components/motion/press-icon";
 import { IconTile } from "@/components/icons/icon-tile";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
-import { isTopbarLocked, setTopbarHidden, useTopbarLocked } from "@/features/app-shell/topbar-visibility";
+import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { UserMenu } from "@/features/auth/user-menu";
 import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
@@ -21,7 +21,6 @@ export function AppTopbar() {
   const router = useRouter();
   const pathname = usePathname();
   const [q, setQ] = useState("");
-  const [hidden, setHidden] = useState(false);
   // The owner's Messages mockup starts straight at the big "Messages" title —
   // no global topbar above it on mobile. That page carries its own header
   // (compose + tools circles), so the topbar hides there below lg; every
@@ -46,44 +45,16 @@ export function AppTopbar() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Auto-hide on scroll-down, reveal on scroll-up (mobile only — forced back
-  // visible on large screens via the `lg:` override on the header below).
-  // Direction-based (not position-based) so it reacts instantly to intent,
-  // with a small dead zone near the top so it never hides before there's
-  // anywhere meaningful to scroll. Pages that lock the topbar (the feed, so
-  // its sticky tab bar never slides) keep it pinned visible.
+  // The topbar stays PINNED on scroll (owner, 2026-08-02: "make the top header
+  // fixed even on scroll") — the earlier auto-hide-on-scroll-down is gone. It is
+  // `sticky top-0`, so it already rides the top of the scroll container and
+  // nothing translates it out of view any more. Broadcast a constant "visible"
+  // so any far-away sticky element that keyed off the topbar's hidden state
+  // stays put rather than compensating for a hide that never happens.
   useEffect(() => {
-    let lastY = window.scrollY;
-    let ticking = false;
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        const y = window.scrollY;
-        const delta = y - lastY;
-        if (isTopbarLocked() || y < 72) setHidden(false);
-        else if (delta > 4) setHidden(true);
-        else if (delta < -4) setHidden(false);
-        lastY = y;
-        ticking = false;
-      });
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    setTopbarHidden(false);
+    return () => setTopbarHidden(false);
   }, []);
-
-  // If a page engages the lock while the bar is already hidden, surface it.
-  const locked = useTopbarLocked();
-  useEffect(() => {
-    if (locked) setHidden(false);
-  }, [locked]);
-
-  // Broadcast so far-away sticky elements can react to the topbar's own
-  // hidden state without prop-drilling.
-  useEffect(() => {
-    setTopbarHidden(hidden);
-  }, [hidden]);
-  useEffect(() => () => setTopbarHidden(false), []);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -97,7 +68,7 @@ export function AppTopbar() {
         // pt safe-area: with viewport-fit=cover the installed app draws under
         // the status bar — the bar pads itself clear of the clock/battery
         // (zero in a normal browser tab, so nothing changes there).
-        "sticky top-0 z-30 flex items-center gap-2 px-4 pt-[var(--frenz-safe-top)] transition-transform duration-300 will-change-transform",
+        "sticky top-0 z-30 flex items-center gap-2 px-4 pt-[var(--frenz-safe-top)]",
         "h-[calc(4rem+var(--frenz-safe-top))]",
         // Owner correction (2026-07-13): the top nav must track the SYSTEM
         // theme like every other surface — white in light mode, blending
@@ -112,7 +83,6 @@ export function AppTopbar() {
         // previous `bg-background/60 backdrop-blur-xl` frosted-glass look let
         // scrolled content show through instead of a clean solid bar).
         "border-b border-border/20 bg-background",
-        hidden ? "-translate-y-full lg:translate-y-0" : "translate-y-0",
         onMessagesIndex && "hidden lg:flex",
       )}
     >

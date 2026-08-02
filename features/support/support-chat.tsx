@@ -130,7 +130,7 @@ export function SupportChat() {
         </span>
         <div className="min-w-0">
           <p className="text-sm font-bold leading-tight">FrenzSave Support</p>
-          <p className="text-xs text-muted-foreground">Typically replies within a day</p>
+          <p className="text-xs text-muted-foreground">Typically replies within a minute</p>
         </div>
       </div>
 

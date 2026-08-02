@@ -3,10 +3,12 @@
  * initial HTML so a genuine cold start or the post-login redirect never
  * flashes an empty page before content paints.
  *
- * CURRENT RULE (owner, 2026-07-16 — supersedes the 07-12 and earlier 07-16
- * rules): the F loader shows on EVERY login and EVERY cold start. Never on a
- * refresh, an iOS back-gesture, or an SPA navigation — those fall through to
- * each page's own colorless Suspense skeleton (the "Skeleton loading standard").
+ * CURRENT RULE (owner, 2026-08-02 — supersedes the 07-16 rule): the F loader shows
+ * on EVERY login (browser and installed PWA), and on a cold start ONLY in the
+ * installed PWA. A plain browser tab NEVER shows it on an ordinary cold entry or a
+ * reload — only a fresh sign-in does. Never on a refresh, an iOS back-gesture, or an
+ * SPA navigation — those fall through to each page's own colorless Suspense skeleton
+ * (the "Skeleton loading standard").
  *
  * The full decision, and why it's read from the Navigation Timing API rather
  * than a storage marker, is documented on `JS` below. Short version: a marker
@@ -84,7 +86,8 @@ html.frenz-boot-off #frenz-boot{display:none}
 //                                     recently-used app.           instant.
 //     nav.type === 'navigate', no recent activity (fresh open, or
 //                              away long enough to read as one)
-//                                  -> a genuine cold launch.       SHOW.
+//                                  -> a genuine cold launch.       SHOW (installed
+//                                                                  PWA only).
 //
 // COLD_GAP_MS is the single knob (30 min): a 'navigate' within it is treated as a
 // resume and stays instant, so a back-swipe seconds-to-minutes after leaving
@@ -94,10 +97,15 @@ html.frenz-boot-off #frenz-boot{display:none}
 // errs toward instant when in doubt. Tune COLD_GAP_MS if launches feel too quiet
 // or resumes too loud. The old per-day counter (`frenz-boot-shows`) is gone.
 //
-// 2026-08-02: a briefly-tried variant that showed the F on EVERY browser 'navigate'
-// (dropping the gap outside standalone) was REVERTED — it made the loader appear on
-// ordinary page entries, not just genuine cold starts. The 30-min gap applies
-// everywhere again: F on a real cold start, instant on a resume / quick re-entry.
+// 2026-08-02 (revised again, owner: "the browser now shows F on every entry and
+// reload … no F loader while using the browser, only when a user just signed in and
+// entering the signed in page"): the cold-start F is now INSTALLED-PWA ONLY. In a
+// plain browser tab NO ordinary entry or reload shows the F — only a fresh sign-in
+// does, via the `frenz_just_signed_in` cookie, which force-shows regardless of nav
+// type or display mode. So the cold-launch branch below is gated on `standalone`
+// (display-mode: standalone / navigator.standalone). The 30-min resume gap still
+// applies within the installed PWA. An earlier variant that showed the F on every
+// browser 'navigate' was reverted for the same "appears on ordinary entries" reason.
 //
 // Why this also covers "every login" with no extra work: every sign-in path ends
 // in `window.location.assign(next)` — a full document navigation, which reports
@@ -166,7 +174,7 @@ html.frenz-boot-off #frenz-boot{display:none}
 // forever. Caught only by a real-browser test. Keep every new `var` name
 // distinct from the ones already in scope, and re-run the boot verification
 // after any edit.
-const JS = `(function(){var COLD_GAP_MS=1800000;var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var mark=function(){try{localStorage.setItem('frenz-last-active',String(Date.now()))}catch(e){}};document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')mark()});window.addEventListener('pagehide',mark);var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';var show=justSignedIn;if(!show&&coldStart){var last=0;try{var lraw=localStorage.getItem('frenz-last-active');if(lraw)last=parseInt(lraw,10)||0}catch(e){}if(!last||Date.now()-last>COLD_GAP_MS)show=true}if(!show){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var faded=false;var fade=function(){if(faded)return;faded=true;var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};var shellReady=function(){return !!document.querySelector('main')};if(shellReady()){fade()}else{try{var mo=new MutationObserver(function(){if(shellReady()){mo.disconnect();fade()}});mo.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}document.addEventListener('DOMContentLoaded',fade)}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
+const JS = `(function(){var COLD_GAP_MS=1800000;var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var mark=function(){try{localStorage.setItem('frenz-last-active',String(Date.now()))}catch(e){}};document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')mark()});window.addEventListener('pagehide',mark);var instant=false;var standalone=false;try{standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true}catch(e){}try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';var show=justSignedIn;if(!show&&coldStart&&standalone){var last=0;try{var lraw=localStorage.getItem('frenz-last-active');if(lraw)last=parseInt(lraw,10)||0}catch(e){}if(!last||Date.now()-last>COLD_GAP_MS)show=true}if(!show){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var faded=false;var fade=function(){if(faded)return;faded=true;var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};var shellReady=function(){return !!document.querySelector('main')};if(shellReady()){fade()}else{try{var mo=new MutationObserver(function(){if(shellReady()){mo.disconnect();fade()}});mo.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}document.addEventListener('DOMContentLoaded',fade)}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
 
 // Must run BEFORE the <style> below is evaluated, AND before next-themes'
 // own injected script (rendered later, wherever <ThemeProvider> sits) so the

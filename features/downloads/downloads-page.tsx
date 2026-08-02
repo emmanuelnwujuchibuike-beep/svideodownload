@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { DownloadBox } from "@/features/downloads/download-box";
 import { DownloadsRail } from "@/features/downloads/downloads-rail";
 import { HubWarmup } from "@/features/downloads/hub-warmup";
@@ -54,6 +55,11 @@ export function DownloadsPage() {
 
   const [tab, setTab] = useState<Tab>("All");
   const [search, setSearch] = useState("");
+  const mode = useAppMode();
+  // The history section lives on THIS page only in Full Bleed (its nav has no
+  // History tab). In Downloader mode the nav has a dedicated History page, so the
+  // history is hidden here to avoid duplicating it (owner).
+  const showHistory = mode !== "downloader";
 
   const active = tasks.filter((t) => t.status !== "completed" && t.status !== "canceled");
 
@@ -121,23 +127,25 @@ export function DownloadsPage() {
       */}
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
         <div className="min-w-0 space-y-5">
-          {/* Filter tabs */}
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {TABS.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                aria-pressed={tab === t}
-                className={cn(
-                  "shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition",
-                  tab === t ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white" : "bg-secondary text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+          {/* Filter tabs — history browsing, so Full Bleed only. */}
+          {showHistory ? (
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {TABS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  aria-pressed={tab === t}
+                  className={cn(
+                    "shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition",
+                    tab === t ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white" : "bg-secondary text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           {/* Downloading */}
           {active.length > 0 ? (
@@ -194,32 +202,33 @@ export function DownloadsPage() {
           {/* Admin-managed ad slot ABOVE the history list; collapses when empty. */}
           <DownloadHistoryAd position="top" maxWidth="max-w-3xl" />
 
-          {/* Downloaded — the SAME iOS-Photos gallery the landing history uses
-              (grid by default, column-count picker, sort, grid/list toggle). The
-              type tabs above and this search still filter; the gallery owns the
-              sort + view. Publishing/quality/etc. stay reachable by tapping a tile
-              into the review player's ••• menu. */}
-          <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-base font-bold">Downloaded ({filtered.length})</h2>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search"
-                  aria-label="Search downloads"
-                  className="h-9 w-32 rounded-lg bg-secondary/60 pl-8 pr-2 text-sm text-foreground outline-none ring-1 ring-inset ring-transparent transition focus:w-44 focus:bg-background focus:ring-primary sm:w-40"
-                />
+          {/* Downloaded — the SAME iOS-Photos gallery the landing history uses.
+              Full Bleed ONLY: its bottom nav has no History tab, so the history
+              lives here. Downloader mode has a dedicated History page, so this is
+              hidden there to avoid duplicating it (owner). */}
+          {showHistory ? (
+            <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-base font-bold">Downloaded ({filtered.length})</h2>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search"
+                    aria-label="Search downloads"
+                    className="h-9 w-32 rounded-lg bg-secondary/60 pl-8 pr-2 text-sm text-foreground outline-none ring-1 ring-inset ring-transparent transition focus:w-44 focus:bg-background focus:ring-primary sm:w-40"
+                  />
+                </div>
               </div>
-            </div>
-            <MediaGallery
-              items={filtered}
-              onToggleFavorite={toggleFavorite}
-              onRemove={removeDownload}
-              emptyText="No downloads yet — paste a link above to download your first video."
-            />
-          </section>
+              <MediaGallery
+                items={filtered}
+                onToggleFavorite={toggleFavorite}
+                onRemove={removeDownload}
+                emptyText="No downloads yet — paste a link above to download your first video."
+              />
+            </section>
+          ) : null}
 
           {/* Admin-managed ad slot below the history list — insert or remove any
               ad for this zone from the dashboard; collapses when empty. */}

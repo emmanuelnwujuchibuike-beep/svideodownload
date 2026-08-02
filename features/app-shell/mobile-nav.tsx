@@ -51,6 +51,13 @@ import { cn } from "@/lib/utils";
  * home-indicator on notched/installed devices) pads it, never an artificial
  * gap on a plain browser tab.
  */
+// Subtle "3D" depth on the glyph so it sits raised off the flat bar — the active
+// tab glows in the brand hue, the inactive ones carry a barely-there emboss. Shared
+// verbatim with the marketing nav (components/landing/mobile-app-nav.tsx) so both
+// bars read as the same material.
+const GLYPH_ACTIVE = "text-primary [filter:drop-shadow(0_2px_6px_rgba(79,70,229,0.5))]";
+const GLYPH_INACTIVE = "text-muted-foreground [filter:drop-shadow(0_1px_1.5px_rgba(2,6,23,0.14))]";
+
 export function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
@@ -94,7 +101,7 @@ export function MobileNav() {
         // Pure opaque background (matches AppTopbar's bg-background, no blur)
         // and a hairline top border — a native tab-bar look, not a frosted
         // floating dock. Full width, square corners, flush with the bottom.
-        className="relative flex items-end justify-around border-t border-border/60 bg-background px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2"
+        className="relative flex items-end justify-around border-t border-border/60 bg-background px-2 pb-[max(env(safe-area-inset-bottom),0.65rem)] pt-2.5"
       >
         <NavTab label="Home" href="/home" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/home"} onWarm={router.prefetch} />
         <NavTab label="Friends" href="/friends" icon={FrenzFriendsOutline} activeIcon={FrenzFriendsSolid} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />
@@ -161,7 +168,7 @@ export function MobileNav() {
             <PressIcon active={profileActive}>
               <span
                 className={cn(
-                  "flex h-6 w-6 items-center justify-center rounded-full transition",
+                  "flex h-7 w-7 items-center justify-center rounded-full transition",
                   // No avatar → the plain person glyph, no colored tile behind
                   // it (owner, 2026-07-16). It follows the same active/inactive
                   // contrast as every other tab rather than sitting on a blue
@@ -178,12 +185,12 @@ export function MobileNav() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <FrenzPersonSolid className="h-[22px] w-[22px]" />
+                  <FrenzPersonSolid className={cn("h-6 w-6", profileActive ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
                 )}
               </span>
             </PressIcon>
           </NavLift>
-          <span className={cn("text-[10px] font-medium transition-colors", profileActive ? "text-primary" : "text-muted-foreground")}>Profile</span>
+          <span className={cn("text-[10px] font-semibold transition-colors", profileActive ? "text-primary" : "text-muted-foreground")}>Profile</span>
         </Link>
       </nav>
 
@@ -231,8 +238,8 @@ function NavTab({
 }: {
   label: string;
   href: string;
-  icon: ComponentType<{ className?: string }>;
-  activeIcon: ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string; strokeWidth?: number | string }>;
+  activeIcon: ComponentType<{ className?: string; strokeWidth?: number | string }>;
   active: boolean;
   badge?: number;
   onWarm?: (href: string) => void;
@@ -250,7 +257,7 @@ function NavTab({
     >
       <NavLift active={active}>
         <PressIcon active={active} className="relative">
-          <Glyph className={cn("h-[22px] w-[22px] transition-colors", active ? "text-primary" : "text-muted-foreground")} />
+          <Glyph strokeWidth={2.1} className={cn("h-6 w-6 transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
           {badge > 0 ? (
             <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-card">
               {badge > 9 ? "9+" : badge}
@@ -258,7 +265,7 @@ function NavTab({
           ) : null}
         </PressIcon>
       </NavLift>
-      <span className={cn("text-[10px] font-medium transition-colors", active ? "text-primary" : "text-muted-foreground")}>{label}</span>
+      <span className={cn("text-[10px] font-semibold transition-colors", active ? "text-primary" : "text-muted-foreground")}>{label}</span>
     </Link>
   );
 }

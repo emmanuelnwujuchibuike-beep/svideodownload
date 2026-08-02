@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, UserCheck, UserPlus } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -36,9 +37,9 @@ export function FollowButton({
 
   if (!canFollow) {
     return (
-      <a href="/login?next=/account" className={cn("btn-lux btn-lux-primary", className)}>
+      <Link href="/login?next=/account" className={cn("btn-lux btn-lux-primary", className)}>
         <UserPlus className="h-4 w-4" /> Follow
-      </a>
+      </Link>
     );
   }
 

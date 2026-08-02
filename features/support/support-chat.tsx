@@ -1,6 +1,6 @@
 "use client";
 
-import { LifeBuoy, Send } from "lucide-react";
+import { Headset, Send } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -101,7 +101,7 @@ export function SupportChat() {
     return (
       <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-border/60 bg-card px-6 py-14 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-lg shadow-violet-500/30">
-          <LifeBuoy className="h-7 w-7" />
+          <Headset className="h-7 w-7" />
         </span>
         <div>
           <h3 className="text-lg font-bold tracking-tight">Chat with our team</h3>
@@ -125,7 +125,7 @@ export function SupportChat() {
       {/* Agent header */}
       <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
         <span className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-white">
-          <LifeBuoy className="h-5 w-5" />
+          <Headset className="h-5 w-5" />
           <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card bg-emerald-500" />
         </span>
         <div className="min-w-0">
@@ -139,7 +139,7 @@ export function SupportChat() {
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
-              <LifeBuoy className="h-6 w-6" />
+              <Headset className="h-6 w-6" />
             </span>
             <p className="text-sm font-semibold">How can we help?</p>
             <p className="max-w-xs text-xs text-muted-foreground">

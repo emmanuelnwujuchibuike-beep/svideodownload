@@ -12,7 +12,7 @@ import { SITE_URL } from "@/lib/site";
 
 const API_KEY = process.env.RESEND_API_KEY;
 const FROM = process.env.RESEND_FROM || "Frenz <login@frenzsave.com>";
-const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "nwujuchriss@gmail.com";
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@frenzsave.com";
 // Keep in sync with Supabase Auth's "Email OTP expiration" setting.
 const EXPIRY_MINUTES = Number(process.env.OTP_EXPIRY_MINUTES || 60);
 

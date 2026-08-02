@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, LifeBuoy, Mail, MessageSquare } from "lucide-react";
+import { ArrowRight, BookOpen, Headset, Mail, MessageSquare } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/support", ...localeAlternates("/support") },
 };
 
-const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "nwujuchriss@gmail.com";
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@frenzsave.com";
 
 /**
  * Support — one page for every way to reach us: a live 1:1 chat with the team,
@@ -59,8 +59,8 @@ export default function SupportPage() {
         {/* Hero */}
         <section className="border-b border-border/60 bg-gradient-to-b from-slate-50 to-indigo-50/50 pb-12 pt-[calc(var(--frenz-safe-top)+7rem)] dark:from-[#050816] dark:to-[#050816] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
           <div className="container max-w-4xl text-center">
-            <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
-              <LifeBuoy className="h-3.5 w-3.5" /> Support
+            <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
+              <Headset className="h-3.5 w-3.5" /> Support
             </span>
             <h1 className="text-balance text-4xl font-extrabold tracking-[-0.03em] text-slate-900 dark:text-white sm:text-5xl">
               We&rsquo;re here to help
@@ -91,8 +91,8 @@ export default function SupportPage() {
                   href={`mailto:${SUPPORT_EMAIL}`}
                   className="group flex flex-col gap-2 rounded-3xl border border-border/60 bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-card"
                 >
-                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-md">
-                    <Mail className="h-5 w-5" />
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-lg shadow-blue-500/30 ring-1 ring-inset ring-white/30">
+                    <Mail className="h-5 w-5 drop-shadow-sm" />
                   </span>
                   <span className="mt-1 text-sm font-bold">Email support</span>
                   <span className="text-xs leading-relaxed text-muted-foreground">
@@ -107,8 +107,8 @@ export default function SupportPage() {
                   href="/help"
                   className="group flex flex-col gap-2 rounded-3xl border border-border/60 bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-card"
                 >
-                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-md">
-                    <BookOpen className="h-5 w-5" />
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-400 to-purple-600 text-white shadow-lg shadow-violet-500/30 ring-1 ring-inset ring-white/30">
+                    <BookOpen className="h-5 w-5 drop-shadow-sm" />
                   </span>
                   <span className="mt-1 text-sm font-bold">Help Center</span>
                   <span className="text-xs leading-relaxed text-muted-foreground">

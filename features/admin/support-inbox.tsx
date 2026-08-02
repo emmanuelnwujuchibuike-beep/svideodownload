@@ -1,6 +1,6 @@
 "use client";
 
-import { LifeBuoy, Send } from "lucide-react";
+import { Headset, Send } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -122,7 +122,7 @@ export function SupportInbox() {
         <div className="max-h-[32rem] overflow-y-auto">
           {loaded && threads.length === 0 ? (
             <div className="flex flex-col items-center gap-2 px-4 py-12 text-center text-muted-foreground">
-              <LifeBuoy className="h-6 w-6" />
+              <Headset className="h-6 w-6" />
               <p className="text-sm">No support conversations yet.</p>
             </div>
           ) : (
@@ -242,7 +242,7 @@ export function SupportInbox() {
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
-            <LifeBuoy className="h-7 w-7" />
+            <Headset className="h-7 w-7" />
             <p className="text-sm">{loaded ? "Select a conversation" : "Loading…"}</p>
           </div>
         )}

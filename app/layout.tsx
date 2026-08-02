@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ThemeCacheSync } from "@/components/theme-cache-sync";
+import { ThemeColorSync } from "@/components/theme-color-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { BootHead, BootSplash, ThemeBootScript } from "@/features/app-shell/boot-splash";
 import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
@@ -301,6 +302,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <ThemeCacheSync />
+          {/* Keep the iOS/Android system-bar tint matched to the app's chosen
+              theme, so the plain browser blends into the safe area like the PWA. */}
+          <ThemeColorSync />
           {/* App-wide reduced-motion: every framer-motion animation anywhere in
               the app (hundreds of hand-authored transitions across dozens of
               files) automatically respects the OS/browser "reduce motion"

@@ -1,6 +1,6 @@
 "use client";
 
-import { History, LifeBuoy } from "lucide-react";
+import { History, Headset } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -37,7 +37,7 @@ const ITEMS = [
   { href: "/", label: "Home", icon: FrenzHomeSolid },
   { href: "/reels", label: "Reels", icon: FrenzReelsOutline },
   { href: "/library", label: "History", icon: History },
-  { href: "/support", label: "Support", icon: LifeBuoy },
+  { href: "/support", label: "Support", icon: Headset },
   { href: "/profile", label: "Profile", icon: FrenzPersonSolid },
 ] as const;
 

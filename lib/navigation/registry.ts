@@ -7,7 +7,9 @@
  * at. Nav that 404s is the chrome-level version of a claim we can't honour.
  */
 import {
+  Bell,
   Bookmark,
+  BookOpen,
   Cloud,
   Compass,
   CreditCard,
@@ -16,11 +18,11 @@ import {
   FileText,
   GraduationCap,
   Hash,
+  Headset,
   Home,
   Image as ImageIcon,
   KeyRound,
   LayoutGrid,
-  LifeBuoy,
   LogOut,
   MessageCircle,
   Moon,
@@ -103,7 +105,7 @@ export const DESTINATIONS: Destination[] = [
   { id: "reels", label: "Reels", href: "/reels", kind: "page", icon: Film, workspace: "social", keywords: ["videos", "shorts", "watch"], canAccess: everyone },
   { id: "messages", label: "Messages", href: "/messages", kind: "page", icon: MessageCircle, workspace: "social", keywords: ["chat", "dm", "inbox", "conversations"], canAccess: everyone, requiresAuth: true },
   { id: "friends", label: "Friends", href: "/friends", kind: "page", icon: Users, workspace: "social", keywords: ["people", "following", "followers", "connections"], canAccess: everyone, requiresAuth: true },
-  { id: "notifications", label: "Notifications", href: "/notifications", kind: "page", icon: LifeBuoy, workspace: "social", keywords: ["alerts", "activity"], canAccess: everyone, requiresAuth: true },
+  { id: "notifications", label: "Notifications", href: "/notifications", kind: "page", icon: Bell, workspace: "social", keywords: ["alerts", "activity"], canAccess: everyone, requiresAuth: true },
 
   { id: "downloads", label: "Downloads", href: "/downloads", kind: "product", icon: Download, workspace: "creator", keywords: ["save", "history", "library", "files"], canAccess: everyone },
   { id: "saved", label: "Saved", href: "/saved", kind: "page", icon: Bookmark, workspace: "creator", keywords: ["bookmarks", "collections", "favourites", "favorites"], canAccess: everyone, requiresAuth: true },
@@ -130,7 +132,7 @@ export const DESTINATIONS: Destination[] = [
   { id: "academy", label: "Academy", href: "/academy", kind: "docs", icon: GraduationCap, workspace: "learning", keywords: ["school", "course", "curriculum", "learn", "creator", "community", "security", "developer", "training"], canAccess: everyone },
   /* Keywords are what people actually type when they are stuck. Nobody searches
      "Help Center"; they search "not working", "no sound", "add to home screen". */
-  { id: "help", label: "Help Center", href: "/help", kind: "docs", icon: LifeBuoy, keywords: ["help", "support", "how to download", "not working", "won't download", "failed", "error", "install app", "add to home screen", "no sound", "quality", "sign in code", "getting started", "troubleshooting"], canAccess: everyone },
+  { id: "help", label: "Help Center", href: "/help", kind: "docs", icon: BookOpen, keywords: ["help", "support", "how to download", "not working", "won't download", "failed", "error", "install app", "add to home screen", "no sound", "quality", "sign in code", "getting started", "troubleshooting"], canAccess: everyone },
   { id: "trust", label: "Trust Center", href: "/trust", kind: "docs", icon: Shield, keywords: ["security", "privacy", "safety", "delete account", "export data", "block", "report", "appeal", "passkey", "2fa", "who can see"], canAccess: everyone },
   { id: "glossary", label: "Glossary", href: "/glossary", kind: "docs", icon: FileText, keywords: ["definition", "meaning", "jargon", "bitrate", "rendition", "captions", "watermark", "what is"], canAccess: everyone },
   /* Keywords are the SUBJECTS, not the word "topics" — nobody searches for a
@@ -138,7 +140,7 @@ export const DESTINATIONS: Destination[] = [
      the pillar that answers it. */
   { id: "topics", label: "Topics", href: "/topics", kind: "docs", icon: Hash, keywords: ["topic", "subject", "guides by subject", "video quality", "captions", "subtitles", "editing", "privacy", "audience", "saving video", "api"], canAccess: everyone },
   { id: "blog", label: "Blog", href: "/blog", kind: "docs", icon: Newspaper, keywords: ["news", "articles", "updates"], canAccess: everyone },
-  { id: "contact", label: "Support", href: "/contact", kind: "docs", icon: LifeBuoy, keywords: ["help", "contact", "support", "problem", "bug"], canAccess: everyone },
+  { id: "contact", label: "Support", href: "/contact", kind: "docs", icon: Headset, keywords: ["help", "contact", "support", "problem", "bug"], canAccess: everyone },
   { id: "terms", label: "Terms of Service", href: "/terms", kind: "docs", icon: FileText, keywords: ["legal", "tos"], canAccess: everyone },
   { id: "privacy", label: "Privacy Policy", href: "/privacy", kind: "docs", icon: Shield, keywords: ["legal", "data", "gdpr"], canAccess: everyone },
 

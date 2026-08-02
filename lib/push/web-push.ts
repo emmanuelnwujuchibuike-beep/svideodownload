@@ -14,7 +14,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-const SUBJECT = process.env.VAPID_SUBJECT || "mailto:nwujuchriss@gmail.com";
+const SUBJECT = process.env.VAPID_SUBJECT || "mailto:support@frenzsave.com";
 
 export const hasWebPush = !!PUBLIC_KEY && !!PRIVATE_KEY;
 

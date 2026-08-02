@@ -8,7 +8,7 @@ import {
   ChevronRight,
   Download,
   LayoutGrid,
-  LifeBuoy,
+  Headset,
   LogOut,
   Settings,
   Sparkles,
@@ -29,7 +29,7 @@ const ITEMS: Item[] = [
   { label: "My downloads", sub: "Everything you've saved", href: "/downloads", icon: Download },
   { label: "Notifications", sub: "Activity & alerts", href: "/notifications", icon: Bell },
   { label: "Settings", sub: "Account, privacy & security", href: "/account", icon: Settings },
-  { label: "Support", sub: "Help, FAQ & chat with us", href: "/support", icon: LifeBuoy },
+  { label: "Support", sub: "Help, FAQ & chat with us", href: "/support", icon: Headset },
 ];
 
 /** Shared panel body — used by both the desktop dock and the mobile drawer. */

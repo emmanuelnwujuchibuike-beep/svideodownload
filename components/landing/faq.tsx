@@ -1,4 +1,5 @@
 import { ChevronDown, HelpCircle } from "lucide-react";
+import Link from "next/link";
 
 import { Reveal } from "@/components/ui/reveal";
 import { jsonLd } from "@/lib/seo/json-ld";
@@ -65,9 +66,9 @@ export function Faq() {
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground">
             Everything you might want to know before you start. Still stuck?{" "}
-            <a href="/support" className="font-semibold text-primary underline-offset-4 hover:underline">
+            <Link href="/support" className="font-semibold text-primary underline-offset-4 hover:underline">
               Chat with our team
-            </a>
+            </Link>
             .
           </p>
         </Reveal>

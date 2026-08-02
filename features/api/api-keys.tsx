@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Copy, KeyRound, Loader2, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 interface ApiKey {
@@ -162,9 +163,9 @@ export function ApiKeys({
           {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           New key
         </button>
-        <a href="/developers" className="text-xs font-medium text-primary hover:underline">
+        <Link href="/developers" className="text-xs font-medium text-primary hover:underline">
           API docs →
-        </a>
+        </Link>
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ import {
   Film,
   Gift,
   Home,
+  Headset,
   type LucideIcon,
   Menu,
   MessageCircle,
@@ -49,6 +50,7 @@ const PRIMARY: Row[] = [
   { label: "Chats", icon: MessageCircle, href: "/messages" },
   { label: "Downloads", icon: Download, href: "/downloads" },
   { label: "Saved", icon: Bookmark, href: "/saved" },
+  { label: "Support", icon: Headset, href: "/support" },
   { label: "Settings", icon: Settings, href: "/account" },
 ];
 

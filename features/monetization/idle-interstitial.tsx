@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { isPlayerOpen } from "@/features/downloads/player-store";
+
 import { FullscreenInterstitial } from "./fullscreen-interstitial";
 import { useShowAds } from "./use-show-ads";
 
@@ -117,6 +119,10 @@ export function IdleInterstitial() {
     /** Whether an interstitial may be shown right now. */
     const canShow = () => {
       if (open) return false;
+      // Never over a clip the visitor is watching in the review player (owner: the
+      // interstitial "shouldn't [show] while video is playing"). The review player
+      // can be open on marketing surfaces too (the landing download history).
+      if (isPlayerOpen()) return false;
       if (Date.now() - mountedAt.current < MIN_GAP_MS) return false;
       return Date.now() - lastShown() >= COOLDOWN_MS;
     };

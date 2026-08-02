@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
-import { closePlayer, playerNext, playerPrev, usePlayerQueue } from "@/features/downloads/player-store";
+import { closePlayer, playerClipEnded, playerNext, playerPrev, usePlayerQueue } from "@/features/downloads/player-store";
 import { SendToChatSheet } from "@/features/downloads/send-to-chat-sheet";
 import { removeDownload, toggleFavorite } from "@/features/history/store";
 import { toast } from "@/features/ui/toast";
@@ -447,7 +447,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
             autoPlay
             playsInline
             className="h-full w-full bg-black object-contain"
-            onEnded={() => playerNext()}
+            onEnded={() => playerClipEnded()}
             onPlay={() => setPaused(false)}
             onPause={() => setPaused(true)}
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}

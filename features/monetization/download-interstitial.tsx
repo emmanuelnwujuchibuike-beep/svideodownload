@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { getCompletedCount, onDownloadCompleted } from "@/features/downloads/manager";
-import { getWatchCount, onVideoWatched } from "@/features/downloads/player-store";
+import { getWatchCount, isPlayerOpen, onVideoWatched } from "@/features/downloads/player-store";
 
 import { FullscreenInterstitial } from "./fullscreen-interstitial";
 import { useInterstitialSkipSeconds } from "./use-interstitial-skip";
@@ -91,9 +91,13 @@ export function DownloadInterstitial({
 
     if (triggers.includes("idle")) {
       let timer: number | undefined;
+      // Never over a clip the visitor is actively watching (owner: the interstitial
+      // "shouldn't [show] while video is playing"). The review player being open is
+      // the signal — the idle timer would otherwise run down while a video plays
+      // (watching isn't "activity") and pop the ad over it.
       const arm = () => {
         window.clearTimeout(timer);
-        if (document.visibilityState === "visible") timer = window.setTimeout(show, IDLE_MS);
+        if (document.visibilityState === "visible") timer = window.setTimeout(() => { if (!isPlayerOpen()) show(); }, IDLE_MS);
       };
       for (const e of ACTIVITY) window.addEventListener(e, arm, { passive: true });
       arm();
@@ -105,6 +109,7 @@ export function DownloadInterstitial({
 
     if (triggers.includes("download")) {
       offs.push(onDownloadCompleted(() => {
+        if (isPlayerOpen()) return; // never interrupt a clip mid-watch
         if (getCompletedCount() % EVERY === 0) show();
       }));
     }

@@ -1,9 +1,9 @@
 "use client";
 
-import { AlertCircle, Check, ChevronLeft, ChevronRight, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MessageCircle, MoreVertical, Play, Share2, Trash2, X } from "lucide-react";
+import { AlertCircle, Check, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MessageCircle, MoreVertical, Play, Rewind, FastForward, Share2, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { closePlayer, playerNext, playerPrev, usePlayerQueue } from "@/features/downloads/player-store";
@@ -11,6 +11,7 @@ import { SendToChatSheet } from "@/features/downloads/send-to-chat-sheet";
 import { removeDownload, toggleFavorite } from "@/features/history/store";
 import { toast } from "@/features/ui/toast";
 import { downloadUrl, saveToDevice } from "@/lib/client-download";
+import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { presignUpload, uploadWithPlan, type UploadPlan } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
@@ -47,8 +48,15 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   const [progress, setProgress] = useState(0); // 0-100 within the CURRENT item, for the status bar
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  // Transient "−10s / +10s" pill shown on a double-tap seek (the top segmented bar
+  // already signals prev/next, so no separate nav flash is needed). Auto-clears.
+  const [seekFlash, setSeekFlash] = useState<-1 | 1 | null>(null);
   const blobRef = useRef<Blob | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  // Pending single-tap on a side zone, held ~260ms so a second tap on the same
+  // side upgrades it to a double-tap seek instead of firing prev/next.
+  const tapRef = useRef<{ side: "left" | "right"; timer: number } | null>(null);
+  const flashTimer = useRef<number | null>(null);
   // Prefetched the moment the ••• sheet opens (real signal of intent to maybe
   // publish) — by the time "Publish to everyone" is actually tapped, the
   // presign round-trip and the auth check are usually already resolved, so
@@ -254,11 +262,17 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     toast("Removed from downloads.", "info", { duration: 2000 });
   };
 
-  /* ── Playback controls (owner spec) ───────────────────────────────────────
-   *  • tap the video     → play / pause
-   *  • drag the scrubber → seek (fast-forward / rewind by swiping)
-   *  • ‹ › (queues only) → previous / next; a video also auto-advances on end.
+  /* ── Playback controls — iOS-gallery / WhatsApp-status gestures (owner spec) ──
+   *  On a full-screen video:
+   *    • tap LEFT third   → previous clip   · double-tap LEFT  → −10s
+   *    • tap CENTER third → play / pause
+   *    • tap RIGHT third  → next clip        · double-tap RIGHT → +10s
+   *  On an image, left/right jump prev/next instantly (no seek). A clip also
+   *  auto-advances when it ends. Keyboard mirrors this (Space / ← / → / Esc).
    */
+  const SEEK_STEP = 10;
+  const DOUBLE_TAP_MS = 260;
+
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
@@ -279,39 +293,93 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   };
   const seekBy = (delta: number) => seekTo((videoRef.current?.currentTime ?? currentTime) + delta);
 
-  // Keyboard: Escape closes everywhere; Space toggles and ← / → scrub 5s on video.
+  const doSeek = (dir: -1 | 1) => {
+    seekBy(dir * SEEK_STEP);
+    haptic("light");
+    if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    setSeekFlash(dir);
+    flashTimer.current = window.setTimeout(() => {
+      setSeekFlash(null);
+      flashTimer.current = null;
+    }, 550);
+  };
+  const goPrev = () => {
+    if (index === 0) return;
+    haptic("light");
+    playerPrev();
+  };
+  const goNext = () => {
+    if (index >= total - 1) return; // tap never dismisses; only a finished clip advances past the end
+    haptic("light");
+    playerNext();
+  };
+
+  /** A tap on a side zone. Images jump instantly; video waits ~260ms so a second
+   *  tap on the same side upgrades to a ±10s seek instead of prev/next. */
+  const onSideTap = (side: "left" | "right") => {
+    if (rec.kind !== "video") {
+      side === "left" ? goPrev() : goNext();
+      return;
+    }
+    const pending = tapRef.current;
+    if (pending && pending.side === side) {
+      window.clearTimeout(pending.timer);
+      tapRef.current = null;
+      doSeek(side === "left" ? -1 : 1);
+      return;
+    }
+    if (pending) window.clearTimeout(pending.timer);
+    const timer = window.setTimeout(() => {
+      tapRef.current = null;
+      side === "left" ? goPrev() : goNext();
+    }, DOUBLE_TAP_MS);
+    tapRef.current = { side, timer };
+  };
+
+  // Clear any pending tap/flash timers on unmount so they never fire late.
+  useEffect(() => {
+    return () => {
+      if (tapRef.current) window.clearTimeout(tapRef.current.timer);
+      if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    };
+  }, []);
+
+  // Keyboard: Escape closes; Space toggles; ← / → seek 10s; on non-video ← / →
+  // move between clips.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") return closePlayer();
-      if (rec.kind !== "video") return;
-      if (e.key === " ") {
+      if (e.key === " " && rec.kind === "video") {
         e.preventDefault();
         togglePlay();
       } else if (e.key === "ArrowRight") {
-        seekBy(5);
+        rec.kind === "video" ? doSeek(1) : goNext();
       } else if (e.key === "ArrowLeft") {
-        seekBy(-5);
+        rec.kind === "video" ? doSeek(-1) : goPrev();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rec.kind]);
+  }, [rec.kind, index, total]);
 
   return (
     <div className="fixed inset-0 z-[92] flex flex-col bg-black/95" role="dialog" aria-modal="true" aria-label={rec.title}>
-      {/* Status — segmented, like Stories: one bar per queued item, the
-          current one fills with real playback progress. Cleared of the safe area
+      {/* Status — segmented, like Stories/WhatsApp: one bar per queued item, the
+          current one fills with real playback progress (a non-video item reads as
+          complete). Always shown — a single segment for a lone clip — so even one
+          video gets a status-style progress line. Cleared of the safe area
           (Dynamic Island / status bar) via var(--frenz-safe-top). */}
-      {total > 1 ? (
-        <div className="absolute inset-x-3 top-[calc(0.5rem+var(--frenz-safe-top))] z-20 flex gap-1">
-          {Array.from({ length: total }).map((_, i) => (
-            <span key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
-              <span className="block h-full rounded-full bg-white" style={{ width: `${i < index ? 100 : i === index ? progress : 0}%` }} />
-            </span>
-          ))}
-        </div>
-      ) : null}
+      <div className="absolute inset-x-3 top-[calc(0.5rem+var(--frenz-safe-top))] z-20 flex gap-1">
+        {Array.from({ length: total }).map((_, i) => (
+          <span key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
+            <span
+              className="block h-full rounded-full bg-white"
+              style={{ width: `${i < index ? 100 : i === index ? (rec.kind === "video" ? progress : 100) : 0}%` }}
+            />
+          </span>
+        ))}
+      </div>
 
       {/* X (dismiss) and ••• (menu) sit on OPPOSITE top corners, both below the
           safe area so they never jam under the island. */}
@@ -319,7 +387,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         type="button"
         onClick={closePlayer}
         aria-label="Close"
-        className={cn("fixed left-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur", total > 1 ? "top-[calc(1.75rem+var(--frenz-safe-top))]" : "top-[calc(0.75rem+var(--frenz-safe-top))]")}
+        className="fixed left-4 top-[calc(1.75rem+var(--frenz-safe-top))] z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur"
       >
         <X className="h-5 w-5" />
       </button>
@@ -327,30 +395,31 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         type="button"
         onClick={() => setMoreOpen(true)}
         aria-label="More options"
-        className={cn("fixed right-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur", total > 1 ? "top-[calc(1.75rem+var(--frenz-safe-top))]" : "top-[calc(0.75rem+var(--frenz-safe-top))]")}
+        className="fixed right-4 top-[calc(1.75rem+var(--frenz-safe-top))] z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur"
       >
         <MoreVertical className="h-5 w-5" />
       </button>
 
       {/* Title / position */}
-      <p className={cn("pointer-events-none absolute inset-x-16 z-10 truncate text-center text-sm font-medium text-white/90", total > 1 ? "top-[calc(2rem+var(--frenz-safe-top))]" : "top-[calc(1rem+var(--frenz-safe-top))]")}>
+      <p className="pointer-events-none absolute inset-x-16 top-[calc(2rem+var(--frenz-safe-top))] z-10 truncate text-center text-sm font-medium text-white/90">
         {rec.title}
         {total > 1 ? <span className="text-white/60"> · {index + 1}/{total}</span> : null}
       </p>
 
-      {/* The stage — a tap on the video toggles play/pause (owner spec). */}
-      <div
-        className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-6"
-        onClick={rec.kind === "video" && url ? togglePlay : undefined}
-      >
+      {/* The stage — full-bleed media. object-contain never crops the width or
+          over-stretches beyond the source: it letterboxes on black and extends into
+          the safe area (owner: "full screen … to the safe area but never crop off
+          the width, never stretch more than it can"). iOS-gallery tap zones sit over
+          the media, under the chrome. */}
+      <div className="relative flex min-h-0 flex-1 items-center justify-center">
         {error ? (
-          <div className="max-w-sm text-center text-white">
+          <div className="max-w-sm px-6 text-center text-white">
             <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10"><AlertCircle className="h-7 w-7" /></span>
             <p className="text-lg font-semibold">Couldn&apos;t load this video</p>
             <p className="mt-1 text-sm text-white/70">The source may be unavailable. Try again later.</p>
           </div>
         ) : cachePct !== null && !url ? (
-          <div className="w-full max-w-xs text-center text-white">
+          <div className="w-full max-w-xs px-6 text-center text-white">
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-white/70" />
             <p className="mt-3 text-sm font-medium">Loading video… {cachePct}%</p>
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-white transition-all" style={{ width: `${cachePct}%` }} /></div>
@@ -358,7 +427,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         ) : loading ? (
           <Loader2 className="h-8 w-8 animate-spin text-white/70" />
         ) : url && rec.kind === "audio" ? (
-          <div className="w-full max-w-md rounded-2xl bg-gradient-to-br from-blue-600 to-violet-700 p-8 text-white">
+          <div className="mx-4 w-full max-w-md rounded-2xl bg-gradient-to-br from-blue-600 to-violet-700 p-8 text-white">
             {rec.thumbnail ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={rec.thumbnail} alt="" className="mx-auto mb-5 h-40 w-40 rounded-2xl object-cover" />
@@ -369,7 +438,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           </div>
         ) : url && rec.kind === "image" ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={rec.title} className="max-h-full max-w-full rounded-2xl object-contain" />
+          <img src={url} alt={rec.title} className="h-full w-full object-contain" />
         ) : url ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video
@@ -377,7 +446,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
             src={url}
             autoPlay
             playsInline
-            className="max-h-full w-full max-w-4xl rounded-2xl bg-black"
+            className="h-full w-full bg-black object-contain"
             onEnded={() => playerNext()}
             onPlay={() => setPaused(false)}
             onPause={() => setPaused(true)}
@@ -390,36 +459,69 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           />
         ) : null}
 
-        {/* Tap-to-play affordance — a big Play glyph while paused. */}
+        {/* iOS-gallery / WhatsApp-status tap zones — over the media, UNDER the chrome
+            (z-10/20) so the X, •••, status bar and Save button stay tappable. Video
+            gets three thirds (prev · play-pause · next); an image gets two halves
+            (prev · next). touch-manipulation kills mobile double-tap-to-zoom so a
+            fast double-tap on a side reliably registers as a ±10s seek. */}
+        {url && !error && rec.kind !== "audio" ? (
+          <div className="absolute inset-0 z-[5] flex select-none [touch-action:manipulation]">
+            <button
+              type="button"
+              aria-label={rec.kind === "video" ? "Previous clip; double-tap to rewind 10 seconds" : "Previous"}
+              onClick={() => onSideTap("left")}
+              className="h-full flex-1 outline-none"
+            />
+            {rec.kind === "video" ? (
+              <button type="button" aria-label="Play or pause" onClick={togglePlay} className="h-full flex-1 outline-none" />
+            ) : null}
+            <button
+              type="button"
+              aria-label={rec.kind === "video" ? "Next clip; double-tap to forward 10 seconds" : "Next"}
+              onClick={() => onSideTap("right")}
+              className="h-full flex-1 outline-none"
+            />
+          </div>
+        ) : null}
+
+        {/* Big Play glyph while paused (video). Above the tap zones so it isn't dimmed. */}
         {paused && rec.kind === "video" && url ? (
-          <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <span className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center">
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
               <Play className="ml-0.5 h-7 w-7 fill-white" />
             </span>
           </span>
         ) : null}
+
+        {/* Double-tap seek feedback — a "−10s / +10s" pill on the tapped side. */}
+        {seekFlash !== null ? (
+          <motion.span
+            key={`${seekFlash}-${currentTime.toFixed(1)}`}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={springs.press}
+            className={cn(
+              "pointer-events-none absolute top-1/2 z-[6] flex -translate-y-1/2 items-center gap-1.5 rounded-full bg-black/55 px-4 py-2 text-sm font-bold text-white backdrop-blur",
+              seekFlash === -1 ? "left-6" : "right-6",
+            )}
+          >
+            {seekFlash === -1 ? <Rewind className="h-4 w-4 fill-white" /> : <FastForward className="h-4 w-4 fill-white" />}
+            10s
+          </motion.span>
+        ) : null}
       </div>
 
-      {/* Bottom controls: the seek scrubber (drag/swipe to fast-forward or
-          rewind), queue ‹ › when there's more than one, and Save to device —
-          directly in the preview. The strip is pointer-events-none so taps pass
-          through to the play/pause stage except on the controls themselves. */}
+      {/* Bottom controls: just the elapsed/duration readout and Save to device now
+          — navigation and seeking are the tap-zone gestures on the media itself, so
+          there is no scrubber competing with the content (Stories/Reels-style). The
+          strip is pointer-events-none so taps around the button still reach the tap
+          zones; the button itself is pointer-events-auto. */}
       {url && !error ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-3 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-          {rec.kind === "video" ? (
-            <div className="pointer-events-auto flex w-full max-w-3xl items-center gap-2">
-              {total > 1 ? (
-                <NavBtn label="Previous" onClick={playerPrev} disabled={index === 0}>
-                  <ChevronLeft className="h-5 w-5" />
-                </NavBtn>
-              ) : null}
-              <Scrubber currentTime={currentTime} duration={duration} onSeek={seekTo} />
-              {total > 1 ? (
-                <NavBtn label="Next" onClick={playerNext} disabled={index >= total - 1}>
-                  <ChevronRight className="h-5 w-5" />
-                </NavBtn>
-              ) : null}
-            </div>
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          {rec.kind === "video" && duration > 0 ? (
+            <span className="rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-medium tabular-nums text-white/80 backdrop-blur">
+              {fmtTime(currentTime)} / {fmtTime(duration)}
+            </span>
           ) : null}
           <button
             type="button"
@@ -520,74 +622,6 @@ function fmtTime(s: number): string {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${m}:${String(sec).padStart(2, "0")}`;
-}
-
-/**
- * Draggable seek bar. Pointer-capture makes a press-and-drag anywhere on the
- * track scrub the video — the "swipe backwards/forward" the owner asked for —
- * and `touch-none` stops the browser from scrolling the page during the drag.
- */
-function Scrubber({
-  currentTime,
-  duration,
-  onSeek,
-}: {
-  currentTime: number;
-  duration: number;
-  onSeek: (t: number) => void;
-}) {
-  const trackRef = useRef<HTMLDivElement | null>(null);
-  const seekAt = (clientX: number) => {
-    const el = trackRef.current;
-    if (!el || !duration) return;
-    const rect = el.getBoundingClientRect();
-    const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    onSeek(frac * duration);
-  };
-  const pct = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
-
-  return (
-    <div className="flex flex-1 items-center gap-2.5 rounded-full bg-black/40 px-3 py-2 backdrop-blur">
-      <span className="text-[11px] font-medium tabular-nums text-white/90">{fmtTime(currentTime)}</span>
-      <div
-        ref={trackRef}
-        role="slider"
-        aria-label="Seek"
-        aria-valuemin={0}
-        aria-valuemax={Math.round(duration)}
-        aria-valuenow={Math.round(currentTime)}
-        tabIndex={0}
-        onPointerDown={(e) => {
-          e.currentTarget.setPointerCapture(e.pointerId);
-          seekAt(e.clientX);
-        }}
-        onPointerMove={(e) => {
-          if (e.buttons > 0) seekAt(e.clientX);
-        }}
-        className="relative h-6 flex-1 cursor-pointer touch-none"
-      >
-        <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full bg-white/25">
-          <div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
-        </div>
-        <div className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow" style={{ left: `${pct}%` }} />
-      </div>
-      <span className="text-[11px] font-medium tabular-nums text-white/70">{fmtTime(duration)}</span>
-    </div>
-  );
-}
-
-function NavBtn({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      disabled={disabled}
-      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20 disabled:opacity-30"
-    >
-      {children}
-    </button>
-  );
 }
 
 function MenuItem({

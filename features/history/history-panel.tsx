@@ -8,6 +8,8 @@ import {
   Heart,
   History,
   Image as ImageIcon,
+  LayoutGrid,
+  List as ListIcon,
   Loader2,
   Music,
   Play,
@@ -15,26 +17,49 @@ import {
   Trash2,
   Video,
 } from "lucide-react";
-import { type ComponentType, type ReactNode, useMemo, useState } from "react";
+import { type ComponentType, type ReactNode, useEffect, useMemo, useState } from "react";
 
 import type { MediaKind } from "@/types";
 
 import { startDownload } from "@/features/downloads/manager";
-import { openPlayer } from "@/features/downloads/player-store";
+import { openPlayerQueue } from "@/features/downloads/player-store";
+import { estimateBytes } from "@/features/history/usage";
+import { haptic } from "@/lib/motion/haptics";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
-import { cn } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 import type { DownloadRecord } from "@/types";
 
 import { useHistory } from "./use-history";
 
-const INITIAL_VISIBLE = 6;
+const INITIAL_GRID = 18;
+const INITIAL_LIST = 8;
+
+type SortKey = "time" | "az" | "size" | "platform";
+type ViewMode = "grid" | "list";
 
 const KIND_ICON: Record<MediaKind, ComponentType<{ className?: string }>> = {
   video: Video,
   audio: Music,
   image: ImageIcon,
 };
+
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: "time", label: "Recent" },
+  { key: "az", label: "Alphabetical" },
+  { key: "size", label: "Largest" },
+  { key: "platform", label: "Top platform" },
+];
+
+const COLUMN_CHOICES = [2, 3, 4, 5] as const;
+
+// View prefs persist per-browser (owner: "users can choose how many grid cols they
+// want or if they prefer list form"). Only ever read on the client — the panel
+// itself renders nothing until the local history loads, so there is no SSR render
+// to mismatch against.
+const VIEW_KEY = "frenz:gallery-view";
+const COLS_KEY = "frenz:gallery-cols";
+const SORT_KEY = "frenz:gallery-sort";
 
 function timeAgo(ts: number): string {
   const s = (Date.now() - ts) / 1000;
@@ -48,50 +73,86 @@ function timeAgo(ts: number): string {
   return new Date(ts).toLocaleDateString();
 }
 
-/**
- * Explicit calendar date + clock time, shown on every device (owner ask). Uses
- * the visitor's locale/timezone; the year is dropped for this year so the common
- * case stays short ("Jul 21 · 4:54 PM") and only older items carry a year.
- */
 function formatDateTime(ts: number): { date: string; time: string } {
   const d = new Date(ts);
   const thisYear = d.getFullYear() === new Date().getFullYear();
   return {
-    date: d.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      ...(thisYear ? {} : { year: "numeric" }),
-    }),
+    date: d.toLocaleDateString(undefined, { month: "short", day: "numeric", ...(thisYear ? {} : { year: "numeric" }) }),
     time: d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
   };
+}
+
+/** Sort a copy of `items` by the chosen key. "Top platform" ranks by how many
+ *  downloads each platform has (most-downloaded first), then newest within it. */
+function sortItems(items: DownloadRecord[], sort: SortKey): DownloadRecord[] {
+  const arr = [...items];
+  if (sort === "az") return arr.sort((a, b) => a.title.localeCompare(b.title));
+  if (sort === "size") return arr.sort((a, b) => estimateBytes(b) - estimateBytes(a));
+  if (sort === "platform") {
+    const counts = new Map<string, number>();
+    for (const it of arr) counts.set(it.platform, (counts.get(it.platform) ?? 0) + 1);
+    return arr.sort((a, b) => {
+      const d = (counts.get(b.platform) ?? 0) - (counts.get(a.platform) ?? 0);
+      if (d) return d;
+      if (a.platform !== b.platform) return a.platform.localeCompare(b.platform);
+      return b.createdAt - a.createdAt;
+    });
+  }
+  return arr.sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export function HistoryPanel() {
   const { items, toggleFavorite, removeDownload, clearHistory } = useHistory();
   const [tab, setTab] = useState<"recent" | "favorites">("recent");
   const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+
+  const [view, setView] = useState<ViewMode>("grid");
+  const [cols, setCols] = useState<number>(3);
+  const [sort, setSort] = useState<SortKey>("time");
+  const [limit, setLimit] = useState(INITIAL_GRID);
+
+  // Load persisted view prefs after mount (client-only; see VIEW_KEY comment).
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(VIEW_KEY);
+      if (v === "grid" || v === "list") setView(v);
+      const c = Number(localStorage.getItem(COLS_KEY));
+      if (COLUMN_CHOICES.includes(c as (typeof COLUMN_CHOICES)[number])) setCols(c);
+      const s = localStorage.getItem(SORT_KEY);
+      if (s && SORTS.some((o) => o.key === s)) setSort(s as SortKey);
+    } catch {
+      /* storage blocked — defaults are fine */
+    }
+  }, []);
+
+  const persist = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const favCount = useMemo(() => items.filter((i) => i.favorite).length, [items]);
 
   const filtered = useMemo(() => {
     const base = tab === "favorites" ? items.filter((i) => i.favorite) : items;
     const q = query.trim().toLowerCase();
-    if (!q) return base;
-    return base.filter(
-      (i) =>
-        i.title.toLowerCase().includes(q) ||
-        i.platformName.toLowerCase().includes(q),
-    );
-  }, [items, tab, query]);
+    const matched = q
+      ? base.filter((i) => i.title.toLowerCase().includes(q) || i.platformName.toLowerCase().includes(q))
+      : base;
+    return sortItems(matched, sort);
+  }, [items, tab, query, sort]);
 
   if (items.length === 0) return null;
 
-  const searching = query.trim().length > 0;
-  const collapsed = !expanded && !searching;
-  const shown = collapsed ? filtered.slice(0, INITIAL_VISIBLE) : filtered;
-  const overflow = filtered.length - INITIAL_VISIBLE;
+  const initial = view === "grid" ? INITIAL_GRID : INITIAL_LIST;
+  const shown = filtered.slice(0, limit);
+  const openAt = (idx: number) => {
+    haptic("light");
+    openPlayerQueue(filtered, idx);
+  };
 
   return (
     <section id="history" className="border-t border-border/60 py-16 sm:py-20">
@@ -110,126 +171,192 @@ export function HistoryPanel() {
           {confirmClear ? (
             <div className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">Clear all?</span>
-              <button
-                type="button"
-                onClick={() => {
-                  clearHistory();
-                  setConfirmClear(false);
-                }}
-                className="rounded-lg bg-red-500/10 px-3 py-1.5 font-medium text-red-400 transition hover:bg-red-500/20"
-              >
+              <button type="button" onClick={() => { clearHistory(); setConfirmClear(false); }} className="rounded-lg bg-red-500/10 px-3 py-1.5 font-medium text-red-400 transition hover:bg-red-500/20">
                 Yes, clear
               </button>
-              <button
-                type="button"
-                onClick={() => setConfirmClear(false)}
-                className="rounded-lg px-3 py-1.5 font-medium text-muted-foreground transition hover:text-foreground"
-              >
+              <button type="button" onClick={() => setConfirmClear(false)} className="rounded-lg px-3 py-1.5 font-medium text-muted-foreground transition hover:text-foreground">
                 Cancel
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmClear(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:border-red-500/40 hover:text-red-400"
-            >
+            <button type="button" onClick={() => setConfirmClear(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:border-red-500/40 hover:text-red-400">
               <Trash2 className="h-3.5 w-3.5" /> Clear all
             </button>
           )}
         </div>
 
-        {/* Controls */}
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="inline-flex rounded-xl bg-secondary p-1">
-            <TabButton active={tab === "recent"} onClick={() => setTab("recent")}>
-              Recent
-              <Count>{items.length}</Count>
-            </TabButton>
-            <TabButton
-              active={tab === "favorites"}
-              onClick={() => setTab("favorites")}
-            >
-              Favorites
-              <Count>{favCount}</Count>
-            </TabButton>
+        {/* Controls: tabs · search · sort · view · (grid) columns */}
+        <div className="mb-5 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex rounded-xl bg-secondary p-1">
+              <TabButton active={tab === "recent"} onClick={() => setTab("recent")}>
+                Recent <Count>{items.length}</Count>
+              </TabButton>
+              <TabButton active={tab === "favorites"} onClick={() => setTab("favorites")}>
+                Favorites <Count>{favCount}</Count>
+              </TabButton>
+            </div>
+
+            <div className="relative sm:w-64">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search downloads…"
+                aria-label="Search downloads"
+                className="h-10 w-full rounded-xl bg-background px-3 pl-9 text-sm outline-none ring-1 ring-inset ring-border transition focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </div>
 
-          <div className="relative sm:w-64">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search downloads…"
-              aria-label="Search downloads"
-              className="h-10 w-full rounded-xl bg-background px-3 pl-9 text-sm outline-none ring-1 ring-inset ring-border transition focus:ring-2 focus:ring-primary"
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Sort */}
+            <label className="inline-flex items-center gap-2 rounded-xl bg-secondary/60 px-3 py-1.5 text-sm">
+              <span className="text-muted-foreground">Sort</span>
+              <select
+                value={sort}
+                onChange={(e) => { const s = e.target.value as SortKey; setSort(s); persist(SORT_KEY, s); setLimit(initial); }}
+                aria-label="Sort downloads"
+                className="bg-transparent font-semibold text-foreground outline-none"
+              >
+                {SORTS.map((o) => (
+                  <option key={o.key} value={o.key}>{o.label}</option>
+                ))}
+              </select>
+            </label>
+
+            {/* View toggle */}
+            <div className="inline-flex rounded-xl bg-secondary/60 p-1">
+              <ViewButton active={view === "grid"} label="Grid" onClick={() => { setView("grid"); persist(VIEW_KEY, "grid"); setLimit(INITIAL_GRID); }}>
+                <LayoutGrid className="h-4 w-4" />
+              </ViewButton>
+              <ViewButton active={view === "list"} label="List" onClick={() => { setView("list"); persist(VIEW_KEY, "list"); setLimit(INITIAL_LIST); }}>
+                <ListIcon className="h-4 w-4" />
+              </ViewButton>
+            </div>
+
+            {/* Columns — grid only */}
+            {view === "grid" ? (
+              <div className="inline-flex items-center gap-1 rounded-xl bg-secondary/60 p-1">
+                {COLUMN_CHOICES.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => { setCols(n); persist(COLS_KEY, String(n)); }}
+                    aria-label={`${n} columns`}
+                    aria-pressed={cols === n}
+                    className={cn(
+                      "h-8 w-8 rounded-lg text-sm font-bold tabular-nums transition",
+                      cols === n ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
 
         {filtered.length === 0 ? (
           <p className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-            {tab === "favorites"
-              ? "No favorites yet — tap the heart on any download to save it here."
-              : "No downloads match your search."}
+            {tab === "favorites" ? "No favorites yet — tap the heart on any download to save it here." : "No downloads match your search."}
           </p>
+        ) : view === "grid" ? (
+          <div
+            className="grid gap-1.5 sm:gap-2"
+            style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+          >
+            {shown.map((item, i) => (
+              <GalleryTile key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => toggleFavorite(item.id)} />
+            ))}
+          </div>
         ) : (
-          <>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {shown.map((item) => (
-                <HistoryCard
-                  key={item.id}
-                  item={item}
-                  onToggleFavorite={() => toggleFavorite(item.id)}
-                  onRemove={() => removeDownload(item.id)}
-                />
-              ))}
-            </div>
-
-            {collapsed && overflow > 0 ? (
-              <div className="mt-5 text-center">
-                <button
-                  type="button"
-                  onClick={() => setExpanded(true)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-semibold shadow-soft transition hover:bg-secondary"
-                >
-                  Show all {filtered.length} downloads
-                </button>
-              </div>
-            ) : null}
-
-            {expanded && !searching ? (
-              <div className="mt-5 text-center">
-                <button
-                  type="button"
-                  onClick={() => setExpanded(false)}
-                  className="text-sm font-medium text-muted-foreground transition hover:text-foreground"
-                >
-                  Show less
-                </button>
-              </div>
-            ) : null}
-          </>
+          <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
+            {shown.map((item, i) => (
+              <ListRow
+                key={item.id}
+                item={item}
+                onOpen={() => openAt(i)}
+                onToggleFavorite={() => toggleFavorite(item.id)}
+                onRemove={() => removeDownload(item.id)}
+              />
+            ))}
+          </div>
         )}
+
+        {filtered.length > limit ? (
+          <div className="mt-5 text-center">
+            <button type="button" onClick={() => setLimit((n) => n + initial)} className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-semibold shadow-soft transition hover:bg-secondary">
+              Show more ({filtered.length - limit})
+            </button>
+          </div>
+        ) : filtered.length > initial ? (
+          <div className="mt-5 text-center">
+            <button type="button" onClick={() => setLimit(initial)} className="text-sm font-medium text-muted-foreground transition hover:text-foreground">
+              Show less
+            </button>
+          </div>
+        ) : null}
       </div>
     </section>
   );
 }
 
-function HistoryCard({
-  item,
-  onToggleFavorite,
-  onRemove,
-}: {
-  item: DownloadRecord;
-  onToggleFavorite: () => void;
-  onRemove: () => void;
-}) {
+/** iOS-Photos-style square tile: cropped thumbnail, platform + kind badges, a
+ *  favorite heart, and a title scrim. Tapping opens the story-style player queue. */
+function GalleryTile({ item, onOpen, onToggleFavorite }: { item: DownloadRecord; onOpen: () => void; onToggleFavorite: () => void }) {
+  const platform = PLATFORMS[item.platform] ?? PLATFORMS.generic;
+  const Icon = BRAND_ICONS[item.platform];
+  const KindIcon = KIND_ICON[item.kind] ?? Video;
+  return (
+    <div className="group relative aspect-square overflow-hidden rounded-xl bg-black/40">
+      <button type="button" onClick={onOpen} aria-label={`Watch ${item.title}`} className="absolute inset-0 h-full w-full">
+        {item.thumbnail ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.thumbnail} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground"><KindIcon className="h-6 w-6" /></div>
+        )}
+        {/* Scrim + title */}
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent px-2 pb-1.5 pt-6">
+          <span className="line-clamp-1 text-left text-[11px] font-medium text-white/95">{item.title}</span>
+        </span>
+        {/* Play affordance */}
+        <span className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
+            <Play className="ml-0.5 h-5 w-5 fill-white" />
+          </span>
+        </span>
+      </button>
+
+      {/* Platform badge (top-left) */}
+      <span className={cn("pointer-events-none absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br text-white shadow", platform.accent)}>
+        {Icon ? <Icon className="h-3.5 w-3.5" /> : <KindIcon className="h-3.5 w-3.5" />}
+      </span>
+
+      {/* Favorite toggle (top-right) */}
+      <button
+        type="button"
+        onClick={onToggleFavorite}
+        aria-label={item.favorite ? "Unfavorite" : "Favorite"}
+        aria-pressed={item.favorite}
+        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur transition hover:bg-black/55 active:scale-90"
+      >
+        <Heart className={cn("h-3.5 w-3.5", item.favorite && "fill-rose-500 text-rose-500")} />
+      </button>
+    </div>
+  );
+}
+
+/** Compact list row with the fuller action set (favorite / copy / re-download / remove). */
+function ListRow({ item, onOpen, onToggleFavorite, onRemove }: { item: DownloadRecord; onOpen: () => void; onToggleFavorite: () => void; onRemove: () => void }) {
   const [copied, setCopied] = useState(false);
   const [redownloading, setRedownloading] = useState(false);
   const platform = PLATFORMS[item.platform] ?? PLATFORMS.generic;
   const Icon = BRAND_ICONS[item.platform];
   const KindIcon = KIND_ICON[item.kind] ?? Video;
+  const { date, time } = formatDateTime(item.createdAt);
 
   const copyLink = async () => {
     try {
@@ -240,11 +367,8 @@ function HistoryCard({
       /* clipboard blocked */
     }
   };
-
   const reDownload = () => {
     setRedownloading(true);
-    // Background stream with the floating progress card — never a raw-file
-    // navigation (the old path stranded iOS on a Quick Look preview).
     startDownload({
       url: item.url,
       formatId: item.formatId,
@@ -258,120 +382,68 @@ function HistoryCard({
     setTimeout(() => setRedownloading(false), 1200);
   };
 
-  const { date, time } = formatDateTime(item.createdAt);
-
   return (
-    <div className="group flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 shadow-soft transition hover:border-foreground/15 hover:shadow-card">
-      {/* Top: thumbnail + details. Aligned to the top so a two-line title never
-          shifts the badges around — the old single-row layout got cramped and
-          "scattered" once the title, badges, platform and time all fought for one
-          line on a phone. */}
-      <div className="flex items-start gap-3">
-        <button
-          type="button"
-          onClick={() => openPlayer(item)}
-          aria-label="Watch"
-          className="relative aspect-video w-24 shrink-0 overflow-hidden rounded-xl bg-black/40 sm:w-28"
-        >
-          {item.thumbnail ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={item.thumbnail} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-              <KindIcon className="h-5 w-5" />
-            </div>
-          )}
-          {/* Play affordance on hover/focus — the thumbnail itself opens the player. */}
-          <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100">
-            <Play className="h-6 w-6 fill-white text-white drop-shadow" />
-          </span>
-          <span
-            className={cn(
-              "absolute bottom-1 left-1 flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br text-white shadow",
-              platform.accent,
-            )}
-          >
-            {Icon ? <Icon className="h-3 w-3" /> : null}
-          </span>
-        </button>
+    <div className="flex items-center gap-3 border-b border-border/50 p-2.5 last:border-b-0 hover:bg-secondary/40">
+      <button type="button" onClick={onOpen} aria-label={`Watch ${item.title}`} className="relative aspect-video w-24 shrink-0 overflow-hidden rounded-lg bg-black/40 sm:w-28">
+        {item.thumbnail ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.thumbnail} alt="" loading="lazy" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground"><KindIcon className="h-5 w-5" /></div>
+        )}
+        <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition hover:bg-black/25 hover:opacity-100">
+          <Play className="h-6 w-6 fill-white text-white drop-shadow" />
+        </span>
+        <span className={cn("absolute bottom-1 left-1 flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br text-white shadow", platform.accent)}>
+          {Icon ? <Icon className="h-3 w-3" /> : <KindIcon className="h-3 w-3" />}
+        </span>
+      </button>
 
-        <div className="min-w-0 flex-1">
-          <p className="line-clamp-2 text-sm font-semibold leading-snug">{item.title}</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
-              <KindIcon className="h-2.5 w-2.5" />
-              {item.qualityLabel}
-            </span>
-            <span className="text-xs font-medium text-muted-foreground">{item.platformName}</span>
-          </div>
-          {/* Explicit date + time on every device (owner ask), with a subtle
-              relative hint. Tabular figures keep the times vertically aligned. */}
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3 shrink-0" />
-            <span className="font-medium text-foreground/80">{date}</span>
-            <span aria-hidden className="text-muted-foreground/50">·</span>
-            <span className="tabular-nums">{time}</span>
-            <span aria-hidden className="text-muted-foreground/40">·</span>
-            <span className="text-muted-foreground/70">{timeAgo(item.createdAt)}</span>
-          </p>
+      <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+        <p className="line-clamp-1 text-sm font-semibold leading-snug">{item.title}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+          <span className="font-medium text-muted-foreground">{item.platformName}</span>
+          <span aria-hidden className="text-muted-foreground/40">·</span>
+          <span className="inline-flex items-center gap-1"><KindIcon className="h-3 w-3" />{item.qualityLabel}</span>
+          <span aria-hidden className="text-muted-foreground/40">·</span>
+          <span>{formatBytes(estimateBytes(item))}</span>
         </div>
-      </div>
+        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+          <Clock className="h-3 w-3 shrink-0" />
+          <span className="font-medium text-foreground/80">{date}</span>
+          <span aria-hidden className="text-muted-foreground/50">·</span>
+          <span className="tabular-nums">{time}</span>
+          <span aria-hidden className="text-muted-foreground/40">·</span>
+          <span className="text-muted-foreground/70">{timeAgo(item.createdAt)}</span>
+        </p>
+      </button>
 
-      {/* Action bar — evenly spread across the card so the controls have room to
-          breathe on any width instead of crowding into the right edge. Watch is
-          the labelled primary; the rest are grouped secondary icons. */}
-      <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-2.5">
-        {/* Watch in the in-browser player — the review player is mounted by the
-            Downloader on this page, so signed-out visitors can watch from their
-            history too (not only re-download). */}
-        <button
-          type="button"
-          onClick={() => openPlayer(item)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-secondary/70 active:scale-[0.98]"
-        >
-          <Play className="h-3.5 w-3.5" /> Watch
-        </button>
-        <div className="flex items-center gap-0.5">
-          <IconButton label="Favorite" onClick={onToggleFavorite} active={item.favorite}>
-            <Heart className={cn("h-4 w-4", item.favorite && "fill-current")} />
-          </IconButton>
-          <IconButton label="Copy link" onClick={copyLink}>
-            {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
-          </IconButton>
-          <IconButton label="Re-download" onClick={reDownload} disabled={redownloading}>
-            {redownloading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-          </IconButton>
-          <IconButton label="Remove" onClick={onRemove}>
-            <Trash2 className="h-4 w-4" />
-          </IconButton>
-        </div>
+      <div className="flex shrink-0 items-center gap-0.5">
+        <IconButton label="Favorite" onClick={onToggleFavorite} active={item.favorite}>
+          <Heart className={cn("h-4 w-4", item.favorite && "fill-current")} />
+        </IconButton>
+        <IconButton label="Copy link" onClick={copyLink}>
+          {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+        </IconButton>
+        <IconButton label="Re-download" onClick={reDownload} disabled={redownloading}>
+          {redownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+        </IconButton>
+        <IconButton label="Remove" onClick={onRemove}>
+          <Trash2 className="h-4 w-4" />
+        </IconButton>
       </div>
     </div>
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition",
-        active
-          ? "bg-background shadow"
-          : "text-muted-foreground hover:text-foreground",
+        active ? "bg-background shadow" : "text-muted-foreground hover:text-foreground",
       )}
     >
       {children}
@@ -379,27 +451,29 @@ function TabButton({
   );
 }
 
-function Count({ children }: { children: ReactNode }) {
+function ViewButton({ active, label, onClick, children }: { active: boolean; label: string; onClick: () => void; children: ReactNode }) {
   return (
-    <span className="rounded-full bg-muted-foreground/15 px-1.5 text-[10px] font-bold text-muted-foreground">
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`${label} view`}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition",
+        active ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
       {children}
-    </span>
+      <span className="hidden sm:inline">{label}</span>
+    </button>
   );
 }
 
-function IconButton({
-  children,
-  label,
-  onClick,
-  active,
-  disabled,
-}: {
-  children: ReactNode;
-  label: string;
-  onClick: () => void;
-  active?: boolean;
-  disabled?: boolean;
-}) {
+function Count({ children }: { children: ReactNode }) {
+  return <span className="rounded-full bg-muted-foreground/15 px-1.5 text-[10px] font-bold text-muted-foreground">{children}</span>;
+}
+
+function IconButton({ children, label, onClick, active, disabled }: { children: ReactNode; label: string; onClick: () => void; active?: boolean; disabled?: boolean }) {
   return (
     <button
       type="button"

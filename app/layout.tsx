@@ -8,7 +8,6 @@ import { ThemeColorSync } from "@/components/theme-color-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { BootHead, BootSplash, ThemeBootScript } from "@/features/app-shell/boot-splash";
 import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
-import { RouteProgress } from "@/features/app-shell/route-progress";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
 import { CommandCenterMount } from "@/features/navigation/command-center-mount";
 import { RegisterServiceWorker } from "@/features/notifications/register-sw";
@@ -325,10 +324,6 @@ export default function RootLayout({
                 decoration. Kept as a plain filled div (not deleted outright)
                 so nothing behind app content is ever transparent. */}
             <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-background" />
-            {/* The slim stripe under the top bar that fills during every
-                navigation — mounted here (not in a template) so it survives
-                across route changes and is never remounted mid-transition. */}
-            <RouteProgress />
             {children}
             {/* <AssistantWidget /> temporarily removed — re-add later */}
             {/* Ads are intentionally NOT global anymore — they live only on the

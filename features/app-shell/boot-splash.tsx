@@ -94,17 +94,10 @@ html.frenz-boot-off #frenz-boot{display:none}
 // errs toward instant when in doubt. Tune COLD_GAP_MS if launches feel too quiet
 // or resumes too loud. The old per-day counter (`frenz-boot-shows`) is gone.
 //
-// REVISED 2026-08-02 (owner: "cold entering in signed pages still shows white
-// instead of the F loader"): the COLD_GAP resume-suppression now applies ONLY in a
-// standalone PWA (`isStandalone`). That gap exists solely because an iOS PWA's
-// process-killed back-swipe relaunches as 'navigate' — the ONE case where a
-// back-gesture is indistinguishable from a cold start. A plain BROWSER has no such
-// ambiguity: its back-swipe is a bfcache 'back_forward' (handled above → instant),
-// so a browser 'navigate' is ALWAYS a genuine cold open and shows the F. This is
-// what was failing: right after a password/email-code login (which sets no
-// justSignedIn cookie) `frenz-last-active` is fresh, so the gap suppressed the F
-// and the signed page painted white. In the browser the gap no longer applies, so
-// every cold open — including the post-login redirect — shows the branded loader.
+// 2026-08-02: a briefly-tried variant that showed the F on EVERY browser 'navigate'
+// (dropping the gap outside standalone) was REVERTED — it made the loader appear on
+// ordinary page entries, not just genuine cold starts. The 30-min gap applies
+// everywhere again: F on a real cold start, instant on a resume / quick re-entry.
 //
 // Why this also covers "every login" with no extra work: every sign-in path ends
 // in `window.location.assign(next)` — a full document navigation, which reports
@@ -173,7 +166,7 @@ html.frenz-boot-off #frenz-boot{display:none}
 // forever. Caught only by a real-browser test. Keep every new `var` name
 // distinct from the ones already in scope, and re-run the boot verification
 // after any edit.
-const JS = `(function(){var COLD_GAP_MS=1800000;var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var mark=function(){try{localStorage.setItem('frenz-last-active',String(Date.now()))}catch(e){}};document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')mark()});window.addEventListener('pagehide',mark);var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';var isStandalone=false;try{isStandalone=d.classList.contains('pwa-standalone')||window.navigator.standalone===true||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)}catch(e){}var show=justSignedIn;if(!show&&coldStart){if(isStandalone){var last=0;try{var lraw=localStorage.getItem('frenz-last-active');if(lraw)last=parseInt(lraw,10)||0}catch(e){}if(!last||Date.now()-last>COLD_GAP_MS)show=true}else{show=true}}if(!show){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var faded=false;var fade=function(){if(faded)return;faded=true;var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};var shellReady=function(){return !!document.querySelector('main')};if(shellReady()){fade()}else{try{var mo=new MutationObserver(function(){if(shellReady()){mo.disconnect();fade()}});mo.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}document.addEventListener('DOMContentLoaded',fade)}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
+const JS = `(function(){var COLD_GAP_MS=1800000;var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var mark=function(){try{localStorage.setItem('frenz-last-active',String(Date.now()))}catch(e){}};document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')mark()});window.addEventListener('pagehide',mark);var instant=false;try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';var show=justSignedIn;if(!show&&coldStart){var last=0;try{var lraw=localStorage.getItem('frenz-last-active');if(lraw)last=parseInt(lraw,10)||0}catch(e){}if(!last||Date.now()-last>COLD_GAP_MS)show=true}if(!show){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var faded=false;var fade=function(){if(faded)return;faded=true;var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};var shellReady=function(){return !!document.querySelector('main')};if(shellReady()){fade()}else{try{var mo=new MutationObserver(function(){if(shellReady()){mo.disconnect();fade()}});mo.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}document.addEventListener('DOMContentLoaded',fade)}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
 
 // Must run BEFORE the <style> below is evaluated, AND before next-themes'
 // own injected script (rendered later, wherever <ThemeProvider> sits) so the

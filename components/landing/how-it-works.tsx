@@ -30,17 +30,20 @@ const GRID_PLATFORMS: PlatformId[] = [
 export function HowItWorks() {
   return (
     <section id="how-it-works" className="container max-w-6xl scroll-mt-24 py-14 sm:py-20">
-      <div className="mb-10 text-center">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
+      <div className="mb-12 text-center">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
           <Sparkles className="h-3.5 w-3.5" /> How it works
         </span>
-        <h2 className="mt-4 text-3xl font-extrabold tracking-[-0.03em] text-slate-900 dark:text-white sm:text-4xl">
+        <h2 className="mt-5 text-balance text-3xl font-extrabold tracking-[-0.03em] text-slate-900 dark:text-white sm:text-[2.75rem] sm:leading-[1.1]">
           3{" "}
           <span className="bg-gradient-to-r from-blue-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:to-fuchsia-400">
             Simple
           </span>{" "}
           Steps. That&rsquo;s it.
         </h2>
+        <p className="mx-auto mt-5 max-w-lg text-pretty text-base leading-relaxed text-muted-foreground">
+          From link to saved file in seconds — no tutorials, no settings to learn.
+        </p>
       </div>
 
       <div className="grid items-center gap-10 lg:grid-cols-[1fr_auto_1fr]">

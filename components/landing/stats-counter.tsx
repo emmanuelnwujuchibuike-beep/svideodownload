@@ -46,17 +46,17 @@ const PROOF: Proof[] = [
 export function StatsCounter() {
   return (
     <section className="container max-w-6xl py-6">
-      <div className="grid grid-cols-2 gap-4 rounded-3xl border border-border/70 bg-card p-6 shadow-card sm:grid-cols-4 sm:p-8">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-7 rounded-[1.75rem] border border-border/50 bg-gradient-to-b from-card to-card/55 p-7 shadow-card ring-1 ring-inset ring-border/40 sm:grid-cols-4 sm:gap-4 sm:p-10">
         {PROOF.map(({ icon: Icon, value, label }) => (
-          <div key={label} className="flex flex-col items-center gap-2 text-center sm:flex-row sm:text-left">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/15 to-violet-500/15 text-violet-600 dark:text-violet-300">
+          <div key={label} className="flex flex-col items-center gap-2.5 text-center sm:flex-row sm:gap-3 sm:text-left">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/15 to-violet-500/15 text-violet-600 ring-1 ring-inset ring-violet-500/15 dark:text-violet-300">
               <Icon className="h-5 w-5" />
             </span>
             <span>
-              <span className="block bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-2xl font-extrabold tabular-nums text-transparent dark:from-blue-400 dark:to-violet-400 sm:text-3xl">
+              <span className="block bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-[1.75rem] font-extrabold leading-none tabular-nums text-transparent dark:from-blue-400 dark:to-violet-400 sm:text-[2.1rem]">
                 {value}
               </span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">{label}</span>
+              <span className="mt-1 block text-xs font-medium text-muted-foreground">{label}</span>
             </span>
           </div>
         ))}

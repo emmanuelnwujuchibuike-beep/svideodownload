@@ -1,4 +1,4 @@
-import { Cloud, Gauge, Layers, MonitorSmartphone, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { Gauge, Layers, MonitorSmartphone, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { SHOWCASE_PLATFORMS } from "@/lib/platforms";
@@ -38,28 +38,35 @@ export function FeaturesGrid() {
   return (
     <section id="features" className="container max-w-6xl scroll-mt-24 py-14 sm:py-20">
       <div className="mx-auto max-w-2xl text-center">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
           <Sparkles className="h-3.5 w-3.5" /> Powerful Features
         </span>
-        <h2 className="mt-4 text-3xl font-extrabold tracking-[-0.03em] text-slate-900 dark:text-white sm:text-4xl">
+        <h2 className="mt-5 text-balance text-3xl font-extrabold tracking-[-0.03em] text-slate-900 dark:text-white sm:text-[2.75rem] sm:leading-[1.1]">
           Everything you need.{" "}
           <span className="bg-gradient-to-r from-blue-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:to-fuchsia-400">
             All in one place.
           </span>
         </h2>
+        <p className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground">
+          A downloader built to feel effortless — no watermarks, no sign-up, no limits.
+          Fast servers, clean files and the quality you choose, on every device you own.
+        </p>
       </div>
 
-      <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map((f) => (
           <div
             key={f.title}
-            className="group rounded-3xl border border-border/70 bg-card p-6 shadow-soft transition-all duration-300 hover:-translate-y-1 hover:border-foreground/15 hover:shadow-card"
+            className="group relative overflow-hidden rounded-3xl border border-border/60 bg-card p-6 shadow-soft ring-1 ring-inset ring-transparent transition-all duration-300 hover:-translate-y-1.5 hover:border-transparent hover:shadow-elevated hover:ring-violet-500/20"
           >
-            <span className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${f.tint} text-white shadow-md transition-transform duration-300 group-hover:scale-110`}>
+            {/* Soft brand wash that fades in on hover — premium depth without a
+                heavy always-on effect (keeps the section cheap to paint). */}
+            <span aria-hidden className={`pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gradient-to-br ${f.tint} opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-15`} />
+            <span className={`relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${f.tint} text-white shadow-lg transition-transform duration-300 group-hover:scale-110`}>
               {f.title === "HD Quality" ? <span className="text-sm font-extrabold">HD</span> : <f.icon className="h-5 w-5" />}
             </span>
-            <h3 className="mt-4 text-lg font-bold tracking-tight text-slate-900 dark:text-white">{f.title}</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{f.desc}</p>
+            <h3 className="relative mt-5 text-lg font-bold tracking-tight text-slate-900 dark:text-white">{f.title}</h3>
+            <p className="relative mt-1.5 text-sm leading-relaxed text-muted-foreground">{f.desc}</p>
           </div>
         ))}
       </div>

@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, HelpCircle } from "lucide-react";
 
 import { Reveal } from "@/components/ui/reveal";
 import { jsonLd } from "@/lib/seo/json-ld";
@@ -57,12 +57,19 @@ export function Faq() {
       />
       <div className="container max-w-3xl">
         <Reveal className="mb-14 text-center">
-          <span className="inline-flex items-center rounded-full border border-border bg-secondary/50 px-3 py-1 text-xs font-medium text-muted-foreground">
-            FAQ
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
+            <HelpCircle className="h-3.5 w-3.5" /> FAQ
           </span>
-          <h2 className="mt-5 text-3xl font-semibold tracking-[-0.02em] sm:text-[2.75rem] sm:leading-[1.1]">
+          <h2 className="mt-5 text-balance text-3xl font-extrabold tracking-[-0.03em] sm:text-[2.75rem] sm:leading-[1.1]">
             Frequently asked questions
           </h2>
+          <p className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground">
+            Everything you might want to know before you start. Still stuck?{" "}
+            <a href="/support" className="font-semibold text-primary underline-offset-4 hover:underline">
+              Chat with our team
+            </a>
+            .
+          </p>
         </Reveal>
 
         <div className="space-y-3">

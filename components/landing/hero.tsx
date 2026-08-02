@@ -52,7 +52,7 @@ export function Hero() {
       <div className="container relative z-10 grid items-center gap-10 lg:grid-cols-2 lg:gap-8" id="hero">
         {/* Left — copy + CTAs */}
         <div className="text-center lg:text-left">
-          <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
+          <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
             <Sparkles className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
             All-in-One Downloader &amp; Social Hub
           </span>

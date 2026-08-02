@@ -1,9 +1,9 @@
 "use client";
 
-import { AlertCircle, Check, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MessageCircle, MoreVertical, Play, Rewind, FastForward, Share2, Trash2, X } from "lucide-react";
+import { AlertCircle, Check, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MessageCircle, MoreVertical, Play, Share2, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { closePlayer, playerClipEnded, playerNext, playerPrev, usePlayerQueue } from "@/features/downloads/player-store";
@@ -46,17 +46,14 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   const [savedToDevice, setSavedToDevice] = useState(false);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0); // 0-100 within the CURRENT item, for the status bar
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  // Transient "−10s / +10s" pill shown on a double-tap seek (the top segmented bar
-  // already signals prev/next, so no separate nav flash is needed). Auto-clears.
-  const [seekFlash, setSeekFlash] = useState<-1 | 1 | null>(null);
+  // The center play/pause glyph shows briefly then hides for a "clear full screen"
+  // (owner). `dragY` follows a downward swipe so the clip dismisses like a story.
+  const [controlsVisible, setControlsVisible] = useState(false);
+  const [dragY, setDragY] = useState(0);
   const blobRef = useRef<Blob | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  // Pending single-tap on a side zone, held ~260ms so a second tap on the same
-  // side upgrades it to a double-tap seek instead of firing prev/next.
-  const tapRef = useRef<{ side: "left" | "right"; timer: number } | null>(null);
-  const flashTimer = useRef<number | null>(null);
+  const controlsTimer = useRef<number | null>(null);
+  const gesture = useRef<{ x: number; y: number; t: number } | null>(null);
   // Prefetched the moment the ••• sheet opens (real signal of intent to maybe
   // publish) — by the time "Publish to everyone" is actually tapped, the
   // presign round-trip and the auth check are usually already resolved, so
@@ -262,46 +259,41 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     toast("Removed from downloads.", "info", { duration: 2000 });
   };
 
-  /* ── Playback controls — iOS-gallery / WhatsApp-status gestures (owner spec) ──
-   *  On a full-screen video:
-   *    • tap LEFT third   → previous clip   · double-tap LEFT  → −10s
-   *    • tap CENTER third → play / pause
-   *    • tap RIGHT third  → next clip        · double-tap RIGHT → +10s
-   *  On an image, left/right jump prev/next instantly (no seek). A clip also
-   *  auto-advances when it ends. Keyboard mirrors this (Space / ← / → / Esc).
+  /* ── Playback controls — WhatsApp-story gestures (owner spec) ─────────────────
+   *  On the full-screen media:
+   *    • tap LEFT third   → previous clip
+   *    • tap CENTER third → play / pause (video); the play glyph shows ~2s then
+   *                         hides so the view is a clear full screen
+   *    • tap RIGHT third  → next clip
+   *    • swipe DOWN        → exit
+   *  A clip also auto-advances when it ends. Keyboard mirrors this (Space / ← / → /
+   *  ↓ / Esc). No scrubber, no double-tap seek — deliberately minimal, like a story.
    */
-  const SEEK_STEP = 10;
-  const DOUBLE_TAP_MS = 260;
+  const SWIPE_CLOSE_PX = 90;
+
+  // Reveal the center glyph, then hide it after 2s so the view goes clear (owner).
+  const revealControls = () => {
+    if (controlsTimer.current) window.clearTimeout(controlsTimer.current);
+    setControlsVisible(true);
+    controlsTimer.current = window.setTimeout(() => {
+      setControlsVisible(false);
+      controlsTimer.current = null;
+    }, 2000);
+  };
+  const hideControls = () => {
+    if (controlsTimer.current) window.clearTimeout(controlsTimer.current);
+    controlsTimer.current = null;
+    setControlsVisible(false);
+  };
 
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) {
-      void v.play().catch(() => {});
-      setPaused(false);
-    } else {
-      v.pause();
-      setPaused(true);
-    }
-  };
-  const seekTo = (t: number) => {
-    const v = videoRef.current;
-    if (!v) return;
-    const clamped = Math.max(0, Math.min(v.duration || t, t));
-    v.currentTime = clamped;
-    setCurrentTime(clamped);
-  };
-  const seekBy = (delta: number) => seekTo((videoRef.current?.currentTime ?? currentTime) + delta);
-
-  const doSeek = (dir: -1 | 1) => {
-    seekBy(dir * SEEK_STEP);
     haptic("light");
-    if (flashTimer.current) window.clearTimeout(flashTimer.current);
-    setSeekFlash(dir);
-    flashTimer.current = window.setTimeout(() => {
-      setSeekFlash(null);
-      flashTimer.current = null;
-    }, 550);
+    // onPlay / onPause (on the <video>) drive `paused` and the glyph reveal/hide,
+    // so this just flips playback and both taps (pause AND resume) get the beat.
+    if (v.paused) void v.play().catch(() => {});
+    else v.pause();
   };
   const goPrev = () => {
     if (index === 0) return;
@@ -309,59 +301,75 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     playerPrev();
   };
   const goNext = () => {
-    if (index >= total - 1) return; // tap never dismisses; only a finished clip advances past the end
+    if (index >= total - 1) return; // a tap never dismisses; only a finished clip advances past the end
     haptic("light");
     playerNext();
   };
 
-  /** A tap on a side zone. Images jump instantly; video waits ~260ms so a second
-   *  tap on the same side upgrades to a ±10s seek instead of prev/next. */
-  const onSideTap = (side: "left" | "right") => {
-    if (rec.kind !== "video") {
-      side === "left" ? goPrev() : goNext();
+  /* One gesture surface over the media: a near-stationary press is a TAP (its x
+   * position picks previous / play-pause / next); a downward drag is a SWIPE that
+   * follows the finger and, past the threshold, exits — exactly like a story. */
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    gesture.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+    setDragY(0);
+  };
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const g = gesture.current;
+    if (!g) return;
+    const dy = e.clientY - g.y;
+    const dx = e.clientX - g.x;
+    if (dy > 0 && Math.abs(dy) > Math.abs(dx)) setDragY(dy); // follow a downward drag only
+  };
+  const endGesture = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const g = gesture.current;
+    gesture.current = null;
+    if (!g) return;
+    const dy = e.clientY - g.y;
+    const dx = e.clientX - g.x;
+    const dt = Date.now() - g.t;
+    if (dy > SWIPE_CLOSE_PX && dy > Math.abs(dx)) {
+      // Swipe down → exit.
+      haptic("light");
+      closePlayer();
       return;
     }
-    const pending = tapRef.current;
-    if (pending && pending.side === side) {
-      window.clearTimeout(pending.timer);
-      tapRef.current = null;
-      doSeek(side === "left" ? -1 : 1);
-      return;
+    setDragY(0); // snap back
+    if (Math.hypot(dx, dy) < 12 && dt < 500) {
+      // A near-stationary quick press is a tap; zone by horizontal position.
+      const frac = e.clientX / Math.max(1, window.innerWidth);
+      if (frac < 0.34) goPrev();
+      else if (frac > 0.66) goNext();
+      else if (rec.kind === "video") togglePlay();
     }
-    if (pending) window.clearTimeout(pending.timer);
-    const timer = window.setTimeout(() => {
-      tapRef.current = null;
-      side === "left" ? goPrev() : goNext();
-    }, DOUBLE_TAP_MS);
-    tapRef.current = { side, timer };
   };
 
-  // Clear any pending tap/flash timers on unmount so they never fire late.
-  useEffect(() => {
-    return () => {
-      if (tapRef.current) window.clearTimeout(tapRef.current.timer);
-      if (flashTimer.current) window.clearTimeout(flashTimer.current);
-    };
-  }, []);
+  // Clear the glyph timer on unmount so it never fires late.
+  useEffect(() => () => { if (controlsTimer.current) window.clearTimeout(controlsTimer.current); }, []);
 
-  // Keyboard: Escape closes; Space toggles; ← / → seek 10s; on non-video ← / →
-  // move between clips.
+  // Keyboard mirror: Esc / ↓ close; Space toggles; ← / → previous / next.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") return closePlayer();
+      if (e.key === "Escape" || e.key === "ArrowDown") return closePlayer();
       if (e.key === " " && rec.kind === "video") {
         e.preventDefault();
         togglePlay();
       } else if (e.key === "ArrowRight") {
-        rec.kind === "video" ? doSeek(1) : goNext();
+        goNext();
       } else if (e.key === "ArrowLeft") {
-        rec.kind === "video" ? doSeek(-1) : goPrev();
+        goPrev();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rec.kind, index, total]);
+
+  // Follows a downward swipe (translate + a slight fade) then snaps back on release.
+  const mediaDragStyle: CSSProperties = {
+    transform: dragY ? `translateY(${dragY}px)` : undefined,
+    transition: dragY ? "none" : "transform 0.22s ease, opacity 0.22s ease",
+    opacity: dragY ? Math.max(0.35, 1 - dragY / 600) : undefined,
+  };
 
   return (
     <div className="fixed inset-0 z-[92] flex flex-col bg-black/95" role="dialog" aria-modal="true" aria-label={rec.title}>
@@ -438,7 +446,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           </div>
         ) : url && rec.kind === "image" ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={rec.title} className="h-full w-full object-contain" />
+          <img src={url} alt={rec.title} className="h-full w-full object-contain" style={mediaDragStyle} />
         ) : url ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video
@@ -447,82 +455,60 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
             autoPlay
             playsInline
             className="h-full w-full bg-black object-contain"
+            style={mediaDragStyle}
             onEnded={() => playerClipEnded()}
-            onPlay={() => setPaused(false)}
-            onPause={() => setPaused(true)}
-            onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+            onPlay={() => { setPaused(false); hideControls(); }}
+            onPause={() => { setPaused(true); revealControls(); }}
             onTimeUpdate={(e) => {
               const v = e.currentTarget;
-              setCurrentTime(v.currentTime);
               if (v.duration) setProgress((v.currentTime / v.duration) * 100);
             }}
           />
         ) : null}
 
-        {/* iOS-gallery / WhatsApp-status tap zones — over the media, UNDER the chrome
-            (z-10/20) so the X, •••, status bar and Save button stay tappable. Video
-            gets three thirds (prev · play-pause · next); an image gets two halves
-            (prev · next). touch-manipulation kills mobile double-tap-to-zoom so a
-            fast double-tap on a side reliably registers as a ±10s seek. */}
+        {/* One WhatsApp-story gesture surface over the media, UNDER the chrome
+            (z-10/20) so the X, •••, status bar and Save button stay tappable. A
+            near-stationary tap's x position picks previous / play-pause / next; a
+            downward swipe follows the finger and, past the threshold, exits.
+            touch-action:none keeps the browser from stealing the vertical drag. */}
         {url && !error && rec.kind !== "audio" ? (
-          <div className="absolute inset-0 z-[5] flex select-none [touch-action:manipulation]">
-            <button
-              type="button"
-              aria-label={rec.kind === "video" ? "Previous clip; double-tap to rewind 10 seconds" : "Previous"}
-              onClick={() => onSideTap("left")}
-              className="h-full flex-1 outline-none"
-            />
-            {rec.kind === "video" ? (
-              <button type="button" aria-label="Play or pause" onClick={togglePlay} className="h-full flex-1 outline-none" />
-            ) : null}
-            <button
-              type="button"
-              aria-label={rec.kind === "video" ? "Next clip; double-tap to forward 10 seconds" : "Next"}
-              onClick={() => onSideTap("right")}
-              className="h-full flex-1 outline-none"
-            />
-          </div>
+          <div
+            className="absolute inset-0 z-[5] select-none [touch-action:none]"
+            role="group"
+            aria-label="Tap left or right for previous or next, tap center to pause, swipe down to close"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={endGesture}
+            onPointerCancel={() => { gesture.current = null; setDragY(0); }}
+          />
         ) : null}
 
-        {/* Big Play glyph while paused (video). Above the tap zones so it isn't dimmed. */}
-        {paused && rec.kind === "video" && url ? (
-          <span className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
-              <Play className="ml-0.5 h-7 w-7 fill-white" />
-            </span>
-          </span>
-        ) : null}
-
-        {/* Double-tap seek feedback — a "−10s / +10s" pill on the tapped side. */}
-        {seekFlash !== null ? (
-          <motion.span
-            key={`${seekFlash}-${currentTime.toFixed(1)}`}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={springs.press}
-            className={cn(
-              "pointer-events-none absolute top-1/2 z-[6] flex -translate-y-1/2 items-center gap-1.5 rounded-full bg-black/55 px-4 py-2 text-sm font-bold text-white backdrop-blur",
-              seekFlash === -1 ? "left-6" : "right-6",
-            )}
-          >
-            {seekFlash === -1 ? <Rewind className="h-4 w-4 fill-white" /> : <FastForward className="h-4 w-4 fill-white" />}
-            10s
-          </motion.span>
-        ) : null}
+        {/* Center play glyph — shown ~2s after a pause, then it fades out for a
+            clear full screen (owner). */}
+        <AnimatePresence>
+          {paused && controlsVisible && rec.kind === "video" && url ? (
+            <motion.span
+              key="playglyph"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={springs.press}
+              className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center"
+            >
+              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
+                <Play className="ml-0.5 h-7 w-7 fill-white" />
+              </span>
+            </motion.span>
+          ) : null}
+        </AnimatePresence>
       </div>
 
-      {/* Bottom controls: just the elapsed/duration readout and Save to device now
-          — navigation and seeking are the tap-zone gestures on the media itself, so
-          there is no scrubber competing with the content (Stories/Reels-style). The
-          strip is pointer-events-none so taps around the button still reach the tap
-          zones; the button itself is pointer-events-auto. */}
+      {/* Bottom controls: just Save to device — navigation and pausing are the
+          story gestures on the media itself, so nothing competes with the content
+          for a clean full screen. The strip is pointer-events-none so taps around
+          the button still reach the gesture surface; the button is pointer-events-auto. */}
       {url && !error ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-          {rec.kind === "video" && duration > 0 ? (
-            <span className="rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-medium tabular-nums text-white/80 backdrop-blur">
-              {fmtTime(currentTime)} / {fmtTime(duration)}
-            </span>
-          ) : null}
           <button
             type="button"
             onClick={saveToDeviceNow}
@@ -615,13 +601,6 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       />
     </div>
   );
-}
-
-function fmtTime(s: number): string {
-  if (!isFinite(s) || s < 0) return "0:00";
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
 function MenuItem({

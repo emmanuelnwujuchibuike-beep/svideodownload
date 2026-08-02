@@ -218,7 +218,7 @@ export default async function ProfilePage({
   // The profile header renders immediately; the (heavier) posts grid streams in
   // behind a skeleton so the page never blocks on the post query.
   const isViewer = !!me && !profile.isOwner;
-  const [plan, friendState, mutuals, friendTotal, postsTotal, privacy, collectionsN, followsYou, profileExtras] = await Promise.all([
+  const [plan, friendState, mutuals, friendTotal, postsTotal, privacy, collectionsN, followsYou, profileExtras, totals, repBonus] = await Promise.all([
     getUserPlan(profile.id),
     isViewer ? friendshipState(me!, profile.id) : Promise.resolve("none" as const),
     isViewer ? mutualFriendsCount(me!, profile.id) : Promise.resolve(0),
@@ -228,6 +228,10 @@ export default async function ProfilePage({
     viewableCollectionsCount(profile.id, me, profile.isFollowing),
     isViewer ? followsViewer(profile.id, me!) : Promise.resolve(false),
     getProfileExtras(profile.id),
+    // Hoisted from the owner branch so the PUBLIC reputation chip (migration 0102)
+    // can use the same real totals — reputation is shown publicly by default.
+    creatorTotals(profile.id),
+    getReputationBonus(profile.id),
   ]);
   // Digital Identity media (migration 0098) — the identity the profile displays.
   const profileMedia = await getProfileMedia(profile.id);
@@ -249,6 +253,23 @@ export default async function ProfilePage({
         ].join(", "),
       }
     : undefined;
+
+  // Reputation — computed from real signals (no fabrication; see reputation.ts),
+  // in the shared scope so both the owner's rail and the PUBLIC reputation chip use
+  // the same value. Shown publicly by default; the profile owner can hide the public
+  // chip via privacy (`show_reputation`), and always sees their own in the rail.
+  const accountAgeDays = Math.max(0, Math.floor((Date.now() - new Date(profile.createdAt).getTime()) / 86_400_000));
+  const reputation = computeReputation({
+    accountAgeDays,
+    posts: postsTotal,
+    followers: profile.followersCount,
+    friends: friendTotal,
+    engagementReceived: totals.likes + totals.comments + totals.shares + totals.saves,
+    views: totals.views,
+    collections: collectionsN,
+    verified: profile.isVerified,
+    bonus: repBonus,
+  });
 
   // Per-tab visibility: activity tabs appear only when the viewer is allowed to
   // see them (owner always; public → everyone; followers → the viewer follows).
@@ -279,31 +300,18 @@ export default async function ProfilePage({
   // Creator Tools · Achievements · Top Friends · Recent Activity). Everything is
   // the viewer's REAL data; tools without a backend announce "coming soon".
   if (profile.isOwner) {
-    const [totals, friends, notifs, repBonus, firstPost, timeCapsules, journalEntries] = await Promise.all([
-      creatorTotals(profile.id),
+    const [friends, notifs, firstPost, timeCapsules, journalEntries] = await Promise.all([
       topFriends(profile.id),
       listNotifications(profile.id, 12),
-      getReputationBonus(profile.id),
       firstPublishedPost(profile.id),
       getTimeCapsules(profile.id),
       getJournalEntries(profile.id),
     ]);
     const activity = notificationsToActivity(notifs.items);
     const joined = `Joined ${new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`;
-    // Reputation + Achievements — both DERIVED from the same real signals (no
-    // fabrication). See lib/social/reputation.ts and lib/social/achievements.ts.
-    const accountAgeDays = Math.max(0, Math.floor((Date.now() - new Date(profile.createdAt).getTime()) / 86_400_000));
-    const reputation = computeReputation({
-      accountAgeDays,
-      posts: postsTotal,
-      followers: profile.followersCount,
-      friends: friendTotal,
-      engagementReceived: totals.likes + totals.comments + totals.shares + totals.saves,
-      views: totals.views,
-      collections: collectionsN,
-      verified: profile.isVerified,
-      bonus: repBonus,
-    });
+    // `totals`, `accountAgeDays` and `reputation` are computed in the shared scope
+    // above (also feeding the public reputation chip). Achievements derive from the
+    // same real signals — see lib/social/achievements.ts.
     const achievements = computeAchievements({
       accountAgeDays,
       posts: postsTotal,
@@ -556,7 +564,7 @@ export default async function ProfilePage({
 
             {/* Identity Card™ — the premium glass surface */}
             <div className="relative z-10 px-3 sm:px-4">
-              <div className="relative glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7">
+              <div className="relative glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7" style={heroCardStyle}>
                 {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
                 {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
                 {/* Avatar + adaptive action bar */}
@@ -582,7 +590,7 @@ export default async function ProfilePage({
                         />
                       </IdentityMediaViewer>
                     </IdentityRing>
-                    <DiamondCrownBadge plan={plan} size="md" className="absolute bottom-1 right-1 z-10 ring-2 ring-background" />
+                    {privacy.show_plan_badge ? <DiamondCrownBadge plan={plan} size="md" className="absolute bottom-1 right-1 z-10 ring-2 ring-background" /> : null}
                   </div>
 
                   {/* Action bar — every button always visible, no scrolling on any
@@ -642,9 +650,21 @@ export default async function ProfilePage({
                   <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
                     {profile.displayName}
                     {profile.isVerified ? <BadgeCheck className="h-5 w-5 text-primary sm:h-6 sm:w-6" /> : null}
-                    <DiamondCrownBadge plan={plan} size="sm" showLabel />
+                    {privacy.show_plan_badge ? <DiamondCrownBadge plan={plan} size="sm" showLabel /> : null}
                   </h1>
                   <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
+                  {/* Public reputation rank (migration 0102) — shown by default; the
+                      profile owner can hide it from Privacy. A premium metallic chip
+                      in the rank's own gradient; the score is real (reputation.ts). */}
+                  {privacy.show_reputation ? (
+                    <span
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-white shadow-sm ring-1 ring-inset ring-white/20"
+                      style={{ backgroundImage: `linear-gradient(135deg, ${reputation.rank.from}, ${reputation.rank.to})` }}
+                      title={`Reputation score ${reputation.score.toLocaleString()}`}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" /> {reputation.rank.name}
+                    </span>
+                  ) : null}
                   {/* Status + Mood (Part 9) — the member's own expression, read
                       defensively so it stays empty until migration 0095 is applied. */}
                   {profileExtras.status || profileExtras.mood ? (

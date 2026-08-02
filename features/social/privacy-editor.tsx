@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Bookmark, CheckCheck, Clock, Eye, Loader2, MessageSquare, Repeat2, Search, Sparkles, UserPlus, Users } from "lucide-react";
+import { Activity, Award, Bookmark, CheckCheck, Clock, Crown, Eye, Loader2, MessageSquare, Repeat2, Search, Sparkles, UserPlus, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -69,6 +69,9 @@ export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
           <SegRow icon={MessageSquare} tint="purple" title="Messages" desc="Who can send you direct messages" value={state.messages_policy} choices={POLICY} onChange={(v) => set("messages_policy", v as PrivacySettings["messages_policy"])} />
           <ToggleRow icon={Search} tint="slate" title="Search engine indexing" desc="Let Google show your profile" on={state.allow_indexing} onToggle={() => set("allow_indexing", !state.allow_indexing)} />
           <ToggleRow icon={Sparkles} tint="purple" title="Recommendations" desc="Show me in suggestions & trending" on={state.show_in_recommendations} onToggle={() => set("show_in_recommendations", !state.show_in_recommendations)} />
+          {/* Public-by-default, hideable (owner). */}
+          <ToggleRow icon={Award} tint="amber" title="Show my reputation" desc="Display your rank on your public profile" on={state.show_reputation} onToggle={() => set("show_reputation", !state.show_reputation)} />
+          <ToggleRow icon={Crown} tint="violet" title="Show my Pro / Business badge" desc="Display your plan badge next to your name" on={state.show_plan_badge} onToggle={() => set("show_plan_badge", !state.show_plan_badge)} />
         </div>
       </div>
 

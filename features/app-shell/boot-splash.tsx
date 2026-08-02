@@ -295,14 +295,12 @@ export function BootHead() {
 }
 
 export function BootSplash() {
-  return (
-    <div id="frenz-boot" aria-hidden="true">
-      <span className="frenz-boot__mark">
-        {/* eslint-disable-next-line @next/next/no-img-element -- must render
-            before the JS bundle (next/image) is available */}
-        <img src="/brand/frenz-logo-splash.png" width={152} height={152} alt="" />
-        <span className="frenz-boot__shine" />
-      </span>
-    </div>
-  );
+  // The F loader is REMOVED from the website entirely (owner, 2026-08-02: "remove
+  // the F loader entirely from both the pwa and browser … it will be in native app
+  // in the future but not in the website"). Rendering nothing means no `#frenz-boot`
+  // node ever exists, so the boot dismiss script has nothing to show and the F never
+  // appears — on a cold entry, a reload, a mode switch, a sign-out, or a sign-in.
+  // Kept as a component (not deleted) so app/layout's import stays stable; a future
+  // native app shell can bring its own splash without touching the web build.
+  return null;
 }

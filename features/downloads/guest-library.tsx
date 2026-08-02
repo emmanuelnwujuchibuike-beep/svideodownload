@@ -28,7 +28,8 @@ export function GuestLibrary() {
   const { user } = useUser();
 
   return (
-    <div className="container max-w-3xl space-y-8">
+    <div className="space-y-8">
+      <div className="container max-w-3xl space-y-8">
       <header className="text-center">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           <FolderDown className="h-3.5 w-3.5" /> Your downloads
@@ -51,11 +52,14 @@ export function GuestLibrary() {
 
       {/* Admin-managed ad slot ABOVE the history; collapses when empty. */}
       <DownloadHistoryAd position="top" />
+      </div>
 
-      {/* The on-device history list (search / favourite / re-download / remove).
-          Returns nothing until there is at least one saved download. */}
+      {/* The on-device history gallery — rendered OUTSIDE the narrow container so
+          it spans full width with minimal side padding and the media reaches the
+          far edges (owner). Returns nothing until there is at least one download. */}
       <HistoryPanel />
 
+      <div className="container max-w-3xl space-y-8">
       {/* Admin-managed ad slot below the history — insert or remove any ad for
           this zone from the dashboard. Renders nothing until the zone is filled. */}
       <DownloadHistoryAd position="bottom" />
@@ -80,6 +84,7 @@ export function GuestLibrary() {
           </Link>
         </div>
       ) : null}
+      </div>
     </div>
   );
 }

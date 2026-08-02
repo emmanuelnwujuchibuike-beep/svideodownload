@@ -4,6 +4,7 @@ import { CalendarClock, HardDrive, Layers, Lock, Search, Sparkles } from "lucide
 import { useMemo, useState } from "react";
 import { IoDownloadOutline, IoPlay } from "react-icons/io5";
 
+import { SmartThumb } from "@/components/ui/smart-thumb";
 import { useHistory } from "@/features/history/use-history";
 import { cn } from "@/lib/utils";
 
@@ -176,14 +177,14 @@ export function DownloadsTab({ emptyText }: { emptyText: string }) {
               className="group overflow-hidden rounded-2xl border border-border/60 bg-card shadow-soft transition hover:shadow-elevated"
             >
               <div className="relative aspect-video overflow-hidden bg-neutral-900">
-                {r.thumbnail ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.thumbnail} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600/25 to-violet-600/25 text-white/40">
-                    <IoPlay className="h-8 w-8" />
-                  </div>
-                )}
+                {/* A broken/expired source-CDN cover falls back to a play glyph
+                    instead of the browser's "?" (owner, 2026-08-02). */}
+                <SmartThumb
+                  src={r.thumbnail}
+                  alt=""
+                  className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                  fallback={<IoPlay className="h-8 w-8" />}
+                />
                 <span className={cn("absolute bottom-1.5 right-1.5 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white backdrop-blur")}>
                   {r.qualityLabel || r.kind}
                 </span>

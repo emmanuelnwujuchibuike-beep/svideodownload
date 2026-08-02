@@ -21,6 +21,7 @@ import { type ComponentType, type ReactNode, useEffect, useMemo, useState } from
 
 import type { MediaKind } from "@/types";
 
+import { SmartThumb } from "@/components/ui/smart-thumb";
 import { startDownload } from "@/features/downloads/manager";
 import { openPlayerQueue } from "@/features/downloads/player-store";
 import { estimateBytes } from "@/features/history/usage";
@@ -155,8 +156,10 @@ export function HistoryPanel() {
   };
 
   return (
-    <section id="history" className="border-t border-border/60 py-16 sm:py-20">
-      <div className="container max-w-5xl">
+    <section id="history" className="border-t border-border/60 py-14 sm:py-20">
+      {/* Minimal side padding (owner) so the media grid stretches to the far edges,
+          iOS-Photos-style; the header/controls ride the same edge. */}
+      <div className="mx-auto max-w-6xl px-2 sm:px-4">
         {/* Header */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -312,12 +315,12 @@ function GalleryTile({ item, onOpen, onToggleFavorite }: { item: DownloadRecord;
   return (
     <div className="group relative aspect-square overflow-hidden rounded-xl bg-black/40">
       <button type="button" onClick={onOpen} aria-label={`Watch ${item.title}`} className="absolute inset-0 h-full w-full">
-        {item.thumbnail ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.thumbnail} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground"><KindIcon className="h-6 w-6" /></div>
-        )}
+        <SmartThumb
+          src={item.thumbnail}
+          alt=""
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
+          fallback={<KindIcon className="h-7 w-7" />}
+        />
         {/* Scrim + title */}
         <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent px-2 pb-1.5 pt-6">
           <span className="line-clamp-1 text-left text-[11px] font-medium text-white/95">{item.title}</span>
@@ -383,48 +386,44 @@ function ListRow({ item, onOpen, onToggleFavorite, onRemove }: { item: DownloadR
   };
 
   return (
-    <div className="flex items-center gap-3 border-b border-border/50 p-2.5 last:border-b-0 hover:bg-secondary/40">
-      <button type="button" onClick={onOpen} aria-label={`Watch ${item.title}`} className="relative aspect-video w-24 shrink-0 overflow-hidden rounded-lg bg-black/40 sm:w-28">
-        {item.thumbnail ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.thumbnail} alt="" loading="lazy" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground"><KindIcon className="h-5 w-5" /></div>
-        )}
-        <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition hover:bg-black/25 hover:opacity-100">
-          <Play className="h-6 w-6 fill-white text-white drop-shadow" />
+    <div className="flex items-center gap-3 border-b border-border/50 px-2.5 py-2.5 last:border-b-0 hover:bg-secondary/40 sm:px-3">
+      {/* Square, compact cover — a wide aspect-video thumb crowded the row on a
+          phone (owner). Fixed 56/64px keeps the text and actions roomy. */}
+      <button type="button" onClick={onOpen} aria-label={`Watch ${item.title}`} className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-black/40 sm:h-16 sm:w-16">
+        <SmartThumb src={item.thumbnail} alt="" className="h-full w-full object-cover" fallback={<KindIcon className="h-5 w-5" />} />
+        <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100">
+          <Play className="h-5 w-5 fill-white text-white drop-shadow" />
         </span>
-        <span className={cn("absolute bottom-1 left-1 flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br text-white shadow", platform.accent)}>
-          {Icon ? <Icon className="h-3 w-3" /> : <KindIcon className="h-3 w-3" />}
+        <span className={cn("absolute bottom-0.5 left-0.5 flex h-4 w-4 items-center justify-center rounded bg-gradient-to-br text-white shadow", platform.accent)}>
+          {Icon ? <Icon className="h-2.5 w-2.5" /> : <KindIcon className="h-2.5 w-2.5" />}
         </span>
       </button>
 
+      {/* Text — every line is single + truncated, so nothing wraps roughly. */}
       <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
-        <p className="line-clamp-1 text-sm font-semibold leading-snug">{item.title}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-          <span className="font-medium text-muted-foreground">{item.platformName}</span>
-          <span aria-hidden className="text-muted-foreground/40">·</span>
-          <span className="inline-flex items-center gap-1"><KindIcon className="h-3 w-3" />{item.qualityLabel}</span>
-          <span aria-hidden className="text-muted-foreground/40">·</span>
-          <span>{formatBytes(estimateBytes(item))}</span>
-        </div>
-        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+        <p className="truncate text-sm font-semibold leading-tight">{item.title}</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {item.platformName} · {item.qualityLabel} · {formatBytes(estimateBytes(item))}
+        </p>
+        <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-muted-foreground/70">
           <Clock className="h-3 w-3 shrink-0" />
-          <span className="font-medium text-foreground/80">{date}</span>
-          <span aria-hidden className="text-muted-foreground/50">·</span>
-          <span className="tabular-nums">{time}</span>
-          <span aria-hidden className="text-muted-foreground/40">·</span>
-          <span className="text-muted-foreground/70">{timeAgo(item.createdAt)}</span>
+          <span className="tabular-nums">{date} · {time}</span>
+          <span aria-hidden>·</span>
+          {timeAgo(item.createdAt)}
         </p>
       </button>
 
-      <div className="flex shrink-0 items-center gap-0.5">
+      {/* Compact action cluster — favourite always; the rest reveal from sm+ where
+          there is room, so a phone row never gets crowded. */}
+      <div className="flex shrink-0 items-center">
         <IconButton label="Favorite" onClick={onToggleFavorite} active={item.favorite}>
           <Heart className={cn("h-4 w-4", item.favorite && "fill-current")} />
         </IconButton>
-        <IconButton label="Copy link" onClick={copyLink}>
-          {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
-        </IconButton>
+        <span className="hidden sm:inline-flex">
+          <IconButton label="Copy link" onClick={copyLink}>
+            {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+          </IconButton>
+        </span>
         <IconButton label="Re-download" onClick={reDownload} disabled={redownloading}>
           {redownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
         </IconButton>

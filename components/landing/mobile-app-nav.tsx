@@ -59,26 +59,28 @@ import { cn } from "@/lib/utils";
  * once per state), so it never costs a frame on a low-end device.
  */
 type NavGlyph = ComponentType<{ className?: string; strokeWidth?: number | string }>;
-type NavItem = { href: string; label: string; icon: NavGlyph; activeIcon: NavGlyph };
+type NavItem = { href: string; label: string; icon: NavGlyph; activeIcon: NavGlyph; avatarUrl?: string | null };
 
-/** The destinations for the viewer's mode. `profileHref` is their real profile
- *  when signed in, else the sign-in doorway. */
-function navItems(fullBleed: boolean, profileHref: string): NavItem[] {
+/** The destinations for the viewer's mode. `homeHref` is the download page for a
+ *  signed-in Downloader user, else the landing; `profileHref` is their real profile
+ *  when signed in, else the sign-in doorway; `avatarUrl` shows on the Profile tab. */
+function navItems(fullBleed: boolean, homeHref: string, profileHref: string, avatarUrl: string | null): NavItem[] {
+  const profile: NavItem = { href: profileHref, label: "Profile", icon: FrenzPersonSolid, activeIcon: FrenzPersonSolid, avatarUrl };
   if (fullBleed) {
     return [
       { href: "/home", label: "Home", icon: FrenzHomeOutline, activeIcon: FrenzHomeSolid },
       { href: "/friends", label: "Friends", icon: FrenzFriendsOutline, activeIcon: FrenzFriendsSolid },
       { href: "/reels", label: "Reels", icon: FrenzReelsOutline, activeIcon: FrenzReelsSolid },
       { href: "/messages", label: "Chats", icon: FrenzInboxOutline, activeIcon: FrenzInboxSolid },
-      { href: profileHref, label: "Profile", icon: FrenzPersonSolid, activeIcon: FrenzPersonSolid },
+      profile,
     ];
   }
   return [
-    { href: "/", label: "Home", icon: FrenzHomeOutline, activeIcon: FrenzHomeSolid },
+    { href: homeHref, label: "Home", icon: FrenzHomeOutline, activeIcon: FrenzHomeSolid },
     { href: "/reels", label: "Reels", icon: FrenzReelsOutline, activeIcon: FrenzReelsSolid },
-    { href: "/library", label: "History", icon: History, activeIcon: History },
+    { href: "/history", label: "History", icon: History, activeIcon: History },
     { href: "/support", label: "Support", icon: Headset, activeIcon: Headset },
-    { href: profileHref, label: "Profile", icon: FrenzPersonSolid, activeIcon: FrenzPersonSolid },
+    profile,
   ];
 }
 
@@ -99,11 +101,15 @@ export function MobileAppNav() {
   const pathname = usePathname() || "/";
   const navRef = useRef<HTMLElement | null>(null);
   const mode = useAppMode();
-  const { handle } = useEntitlements();
-  const profileHref = handle ? `/u/${handle}` : "/profile";
+  const { handle, avatarUrl } = useEntitlements();
+  const signedIn = !!handle;
+  const profileHref = signedIn ? `/u/${handle}` : "/profile";
+  // Home: the signed-in download page for a Downloader user (owner), the landing
+  // for a signed-out visitor. Full Bleed uses /home directly.
+  const homeHref = signedIn ? "/downloads" : "/";
   // Signed-in + Full Bleed → app destinations; Downloader / signed-out → downloader
   // destinations. So Support (and every marketing page) keeps the viewer's mode.
-  const items = navItems(!!handle && mode === "full", profileHref);
+  const items = navItems(signedIn && mode === "full", homeHref, profileHref, avatarUrl);
 
   // Publish the nav's height (which already includes the home-indicator safe-area
   // pad) so the fixed bottom ad bar can dock directly above it. On desktop this nav
@@ -158,12 +164,14 @@ function NavTab({
   icon: Icon,
   activeIcon: ActiveIcon,
   active,
+  avatarUrl,
 }: {
   href: string;
   label: string;
   icon: NavGlyph;
   activeIcon: NavGlyph;
   active: boolean;
+  avatarUrl?: string | null;
 }) {
   const Glyph = active ? ActiveIcon : Icon;
   return (
@@ -179,7 +187,16 @@ function NavTab({
     >
       <NavLift active={active}>
         <PressIcon active={active}>
-          <Glyph strokeWidth={2.1} className={cn("h-6 w-6 transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
+          {avatarUrl ? (
+            // The Profile tab shows the member's real picture (owner) — same as the
+            // signed-in app nav — with an accent ring when active.
+            <span className={cn("flex h-7 w-7 items-center justify-center overflow-hidden rounded-full", active && "ring-2 ring-primary ring-offset-1 ring-offset-background")}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            </span>
+          ) : (
+            <Glyph strokeWidth={2.1} className={cn("h-6 w-6 transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
+          )}
         </PressIcon>
       </NavLift>
       <span

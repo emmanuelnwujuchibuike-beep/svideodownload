@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
+import { Headset, History } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -15,9 +16,10 @@ import {
   FrenzInboxOutline,
   FrenzInboxSolid,
   FrenzPersonSolid,
+  FrenzReelsOutline,
+  FrenzReelsSolid,
 } from "@/components/icons/frenz-icons";
 import { useAppMode } from "@/features/app-shell/use-app-mode";
-import { promptFullBleed } from "@/features/app-shell/switch-mode-prompt";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { CreateActionSheet } from "@/features/create/create-action-sheet";
 import { useQuery } from "@/features/data";
@@ -106,58 +108,45 @@ export function MobileNav() {
         // floating dock. Full width, square corners, flush with the bottom.
         className="relative flex items-end justify-around border-t border-border/60 bg-background px-2 pb-[max(env(safe-area-inset-bottom),0.65rem)] pt-2.5"
       >
-        <NavTab label="Home" href="/home" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/home"} onWarm={router.prefetch} />
-        <NavTab label="Friends" href="/friends" icon={FrenzFriendsOutline} activeIcon={FrenzFriendsSolid} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />
+        {mode === "downloader" ? (
+          <>
+            {/* Downloader mode — downloads-focused destinations so the nav never
+                pulls into Full Bleed (owner). Home is the signed-in download page;
+                History is the shared history-only page. Profile is shared below. */}
+            <NavTab label="Home" href="/downloads" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/downloads"} onWarm={router.prefetch} />
+            <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={router.prefetch} />
+            <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
+            <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />
+          </>
+        ) : (
+          <>
+            <NavTab label="Home" href="/home" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/home"} onWarm={router.prefetch} />
+            <NavTab label="Friends" href="/friends" icon={FrenzFriendsOutline} activeIcon={FrenzFriendsSolid} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />
 
-        {/* Create — the mockup's signature gradient circle, slightly raised
-            out of the pill. (Replaces the earlier dark-squircle treatment to
-            follow the owner's re-sent mockup exactly.)
-            2026-07-16: this used to call `openUpload("post")` and jump STRAIGHT
-            into the post composer, which made every other primary action
-            (download, reel, story, live) unreachable from the nav. Per the
-            owner's picked mockup (public/download button menus.jpg, "Option 1
-            — Keep the nav. Use the + button for Download and more."), it now
-            opens the action sheet instead. */}
-        <PressIcon className="-mt-5 self-center">
-          <button
-            type="button"
-            onClick={() => {
-              haptic("selection");
-              playSound("tap");
-              // Downloader mode can share downloads, but posting / uploading from the
-              // gallery is a Full Bleed feature (owner) — offer the switch instead.
-              if (mode === "downloader") {
-                promptFullBleed("Creating a post or uploading from your gallery");
-                return;
-              }
-              setCreateOpen(true);
-            }}
-            aria-label="Create"
-            aria-haspopup="dialog"
-            aria-expanded={createOpen}
-            className="group relative flex h-[52px] w-[52px] items-center justify-center"
-          >
-            <span aria-hidden className="bg-brand absolute inset-0 rounded-full opacity-45 blur-[10px] transition group-active:opacity-70" />
-            <span className="bg-brand relative flex h-[52px] w-[52px] items-center justify-center rounded-full text-white shadow-lg shadow-violet-500/30 ring-[3px] ring-card/80">
-              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </span>
-          </button>
-        </PressIcon>
+            {/* Create — the signature gradient circle. Opens the action sheet (the
+                owner's picked mockup). Full Bleed only; Downloader mode has no
+                Create/Chats — those are the Full Bleed features. */}
+            <PressIcon className="-mt-5 self-center">
+              <button
+                type="button"
+                onClick={() => { haptic("selection"); playSound("tap"); setCreateOpen(true); }}
+                aria-label="Create"
+                aria-haspopup="dialog"
+                aria-expanded={createOpen}
+                className="group relative flex h-[52px] w-[52px] items-center justify-center"
+              >
+                <span aria-hidden className="bg-brand absolute inset-0 rounded-full opacity-45 blur-[10px] transition group-active:opacity-70" />
+                <span className="bg-brand relative flex h-[52px] w-[52px] items-center justify-center rounded-full text-white shadow-lg shadow-violet-500/30 ring-[3px] ring-card/80">
+                  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </span>
+              </button>
+            </PressIcon>
 
-        <NavTab
-          label="Chats"
-          href="/messages"
-          icon={FrenzInboxOutline}
-          activeIcon={FrenzInboxSolid}
-          active={pathname.startsWith("/messages")}
-          badge={unread}
-          onWarm={router.prefetch}
-          // Chatting is a Full Bleed feature — in Downloader mode, offer the switch
-          // instead of opening the inbox (owner).
-          guard={mode === "downloader" ? () => promptFullBleed("Chatting with people") : undefined}
-        />
+            <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={unread} onWarm={router.prefetch} />
+          </>
+        )}
 
         {/* Profile (avatar-in-circle) — active state is now a colored ring
             accent on the same tile, not a different fill entirely, matching

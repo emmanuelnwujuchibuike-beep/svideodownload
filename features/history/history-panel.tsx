@@ -13,7 +13,7 @@ import { useHistory } from "./use-history";
  * around the shared iOS-Photos MediaGallery (grid/list, column count, sort). The
  * same MediaGallery powers the signed-in Downloads page, so both look identical.
  */
-export function HistoryPanel() {
+export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
   const { items, toggleFavorite, removeDownload, clearHistory } = useHistory();
   const [tab, setTab] = useState<"recent" | "favorites">("recent");
   const [query, setQuery] = useState("");
@@ -28,7 +28,20 @@ export function HistoryPanel() {
     return base.filter((i) => i.title.toLowerCase().includes(q) || i.platformName.toLowerCase().includes(q));
   }, [items, tab, query]);
 
-  if (items.length === 0) return null;
+  if (items.length === 0) {
+    // Embedded (e.g. on /library) → render nothing so it doesn't take space; the
+    // dedicated history page passes `standalone` so it shows an empty state instead.
+    if (!standalone) return null;
+    return (
+      <section className="py-16 text-center">
+        <div className="mx-auto max-w-md px-4">
+          <History className="mx-auto h-10 w-10 text-muted-foreground/40" />
+          <h2 className="mt-4 text-xl font-bold">No downloads yet</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Videos, reels, photos and audio you download will show up here.</p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section id="history" className="border-t border-border/60 py-14 sm:py-20">

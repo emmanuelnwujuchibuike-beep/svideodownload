@@ -30,8 +30,10 @@ export function useAppMode(): AppMode {
  * Switch the experience mode. Writes the cookie (which drives middleware routing
  * AND every server render's chrome) then HARD-navigates to the mode's home so the
  * whole tree re-renders under the new mode — Full Bleed → the app home; Downloader
- * → the personalized landing. A hard navigation (not a client push) is deliberate:
- * the mode changes server-side routing, so the document must be re-fetched.
+ * → the signed-in download page. A hard navigation (not a client push) is
+ * deliberate: the mode changes server-side routing, so the document must be
+ * re-fetched. (The browser shows no F loader on this navigation — it is gated to
+ * the installed PWA only; see boot-splash.tsx.)
  */
 export function setAppMode(mode: AppMode): void {
   try {
@@ -41,5 +43,5 @@ export function setAppMode(mode: AppMode): void {
   }
   optimistic = mode;
   for (const l of listeners) l();
-  window.location.assign(mode === "downloader" ? "/" : "/home");
+  window.location.assign(mode === "downloader" ? "/downloads" : "/home");
 }

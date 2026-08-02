@@ -1,16 +1,11 @@
 "use client";
 
 import {
-  ChevronDown,
-  Globe,
   Download,
-  Heart,
-  MoreVertical,
   Pause,
   Play,
   RotateCw,
   Search,
-  Trash2,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -18,10 +13,9 @@ import { useMemo, useState } from "react";
 import { DownloadBox } from "@/features/downloads/download-box";
 import { DownloadsRail } from "@/features/downloads/downloads-rail";
 import { HubWarmup } from "@/features/downloads/hub-warmup";
-import { openPlayerQueue } from "@/features/downloads/player-store";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
-import { estimateBytes } from "@/features/history/usage";
+import { MediaGallery } from "@/features/history/media-gallery";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { DownloadHistoryAd } from "@/features/monetization/download-history-ad";
 import { DownloadInterstitial } from "@/features/monetization/download-interstitial";
@@ -60,22 +54,19 @@ export function DownloadsPage() {
 
   const [tab, setTab] = useState<Tab>("All");
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<"newest" | "oldest" | "az">("newest");
-  const [limit, setLimit] = useState(8);
 
   const active = tasks.filter((t) => t.status !== "completed" && t.status !== "canceled");
 
+  // Filter by type-tab + search; the shared MediaGallery below owns the sort + view
+  // (grid/list + column count), the same way the landing history does.
   const filtered = useMemo(() => {
     let list = items.filter((r) => matchesTab(r, tab));
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((r) => r.title.toLowerCase().includes(q) || r.platformName.toLowerCase().includes(q));
     }
-    if (sort === "oldest") list = [...list].sort((a, b) => a.createdAt - b.createdAt);
-    else if (sort === "az") list = [...list].sort((a, b) => a.title.localeCompare(b.title));
-    else list = [...list].sort((a, b) => b.createdAt - a.createdAt);
     return list;
-  }, [items, tab, search, sort]);
+  }, [items, tab, search]);
 
   return (
     <div className="space-y-5 pt-1">
@@ -136,7 +127,7 @@ export function DownloadsPage() {
               <button
                 key={t}
                 type="button"
-                onClick={() => { setTab(t); setLimit(8); }}
+                onClick={() => setTab(t)}
                 aria-pressed={tab === t}
                 className={cn(
                   "shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition",
@@ -203,53 +194,31 @@ export function DownloadsPage() {
           {/* Admin-managed ad slot ABOVE the history list; collapses when empty. */}
           <DownloadHistoryAd position="top" maxWidth="max-w-3xl" />
 
-          {/* Downloaded */}
+          {/* Downloaded — the SAME iOS-Photos gallery the landing history uses
+              (grid by default, column-count picker, sort, grid/list toggle). The
+              type tabs above and this search still filter; the gallery owns the
+              sort + view. Publishing/quality/etc. stay reachable by tapping a tile
+              into the review player's ••• menu. */}
           <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-base font-bold">Downloaded ({filtered.length})</h2>
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search"
-                    aria-label="Search downloads"
-                    className="h-9 w-32 rounded-lg bg-secondary/60 pl-8 pr-2 text-sm text-foreground outline-none ring-1 ring-inset ring-transparent transition focus:w-44 focus:bg-background focus:ring-primary sm:w-40"
-                  />
-                </div>
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as typeof sort)}
-                  aria-label="Sort"
-                  className="h-9 rounded-lg bg-secondary/60 px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-transparent focus:ring-primary"
-                >
-                  <option value="newest">Newest</option>
-                  <option value="oldest">Oldest</option>
-                  <option value="az">A–Z</option>
-                </select>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search"
+                  aria-label="Search downloads"
+                  className="h-9 w-32 rounded-lg bg-secondary/60 pl-8 pr-2 text-sm text-foreground outline-none ring-1 ring-inset ring-transparent transition focus:w-44 focus:bg-background focus:ring-primary sm:w-40"
+                />
               </div>
             </div>
-
-            {filtered.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border/70 p-10 text-center">
-                <p className="text-sm font-semibold">No downloads yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">Paste a link above to download your first video.</p>
-              </div>
-            ) : (
-              <>
-                <ul className="divide-y divide-border/50">
-                  {filtered.slice(0, limit).map((r, i) => (
-                    <DownloadedRow key={r.id} rec={r} onOpen={() => openPlayerQueue(filtered, i)} onFavorite={() => toggleFavorite(r.id)} onRemove={() => removeDownload(r.id)} />
-                  ))}
-                </ul>
-                {filtered.length > limit ? (
-                  <button type="button" onClick={() => setLimit((n) => n + 8)} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold text-primary transition hover:bg-secondary">
-                    Show More <ChevronDown className="h-4 w-4" />
-                  </button>
-                ) : null}
-              </>
-            )}
+            <MediaGallery
+              items={filtered}
+              onToggleFavorite={toggleFavorite}
+              onRemove={removeDownload}
+              emptyText="No downloads yet — paste a link above to download your first video."
+            />
           </section>
 
           {/* Admin-managed ad slot below the history list — insert or remove any
@@ -285,60 +254,3 @@ function IconBtn({ label, onClick, children }: { label: string; onClick: () => v
   );
 }
 
-const QUALITY_TINT: Record<string, string> = {
-  "4K": "bg-fuchsia-500/15 text-fuchsia-500",
-  MP3: "bg-rose-500/15 text-rose-500",
-};
-
-function DownloadedRow({ rec, onOpen, onFavorite, onRemove }: { rec: DownloadRecord; onOpen: () => void; onFavorite: () => void; onRemove: () => void }) {
-  const [menu, setMenu] = useState(false);
-  const Brand = BRAND_ICONS[rec.platform];
-  const quality = rec.kind === "audio" ? "MP3" : rec.qualityLabel.replace(/p$/i, "").includes("4") && /4k|2160/i.test(rec.qualityLabel) ? "4K" : rec.qualityLabel;
-  const tint = QUALITY_TINT[quality] ?? "bg-secondary text-muted-foreground";
-
-  return (
-    <li className="flex items-center gap-3 py-2.5">
-      <button type="button" onClick={onOpen} aria-label="Watch" className="relative h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-neutral-800">
-        {rec.thumbnail ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={rec.thumbnail} alt="" className="h-full w-full object-cover" />
-        ) : null}
-        <span className="absolute inset-0 flex items-center justify-center bg-black/25 text-white"><Play className="h-4 w-4 fill-white" /></span>
-        {Brand ? <span className="absolute bottom-0.5 left-0.5 text-white/90"><Brand className="h-2.5 w-2.5" /></span> : null}
-      </button>
-      <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
-        <p className="truncate text-sm font-semibold">{rec.title}</p>
-        <p className="truncate text-xs text-muted-foreground">{rec.platformName}{rec.favorite ? " · ★ Favorite" : ""}</p>
-      </button>
-      <span className="hidden text-xs text-muted-foreground sm:block">{formatBytes(estimateBytes(rec))}</span>
-      <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold uppercase", tint)}>{quality}</span>
-      <button type="button" onClick={onOpen} aria-label="Watch in browser" className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white">
-        <Play className="h-4 w-4 fill-white" />
-      </button>
-      <div className="relative">
-        <button type="button" onClick={() => setMenu((v) => !v)} aria-label="More" className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-secondary">
-          <MoreVertical className="h-4 w-4" />
-        </button>
-        {menu ? (
-          <>
-            <button type="button" aria-label="Close" onClick={() => setMenu(false)} className="fixed inset-0 z-40 cursor-default" />
-            <div className="absolute right-0 z-50 mt-1 w-40 overflow-hidden rounded-xl border border-border/70 bg-card py-1 shadow-elevated">
-              <button type="button" onClick={() => { onOpen(); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary">
-                <Play className="h-4 w-4" /> Watch in browser
-              </button>
-              <button type="button" onClick={() => { onFavorite(); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary">
-                <Heart className={cn("h-4 w-4", rec.favorite && "fill-rose-500 text-rose-500")} /> {rec.favorite ? "Unfavorite" : "Favorite"}
-              </button>
-              <button type="button" onClick={() => { onOpen(); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary">
-                <Globe className="h-4 w-4" /> Publish to everyone
-              </button>
-              <button type="button" onClick={() => { onRemove(); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rose-500 hover:bg-secondary">
-                <Trash2 className="h-4 w-4" /> Remove
-              </button>
-            </div>
-          </>
-        ) : null}
-      </div>
-    </li>
-  );
-}

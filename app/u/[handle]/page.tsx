@@ -6,7 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
-import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
+import { IdentityBadges } from "@/components/badges/identity-badges";
 import { SiteHeader } from "@/components/layout/site-header";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { AppModeSwitcher } from "@/features/app-shell/app-mode-switcher";
@@ -344,7 +344,15 @@ export default async function ProfilePage({
     return (
       <>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
-        <ProfileMobileMenu />
+        <ProfileMobileMenu
+          user={{
+            handle: profile.handle,
+            displayName: profile.displayName,
+            avatarUrl: profile.avatarUrl,
+            plan,
+            verified: profile.isVerified,
+          }}
+        />
         <main className="pb-24 pt-[calc(var(--frenz-safe-top)+4rem)] lg:pt-4">
           {/* `frenz-profile-shell/cols/rail` (globals.css) put the rail beside
               the center only when the wrapper's OWN width — inside the app
@@ -444,13 +452,8 @@ export default async function ProfilePage({
                       <div className="min-w-0 flex-1 sm:pt-2">
                         <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
                           {profile.displayName}
-                          {profile.isVerified ? <BadgeCheck className="h-6 w-6 fill-blue-500 text-white" /> : null}
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${heroAccent ? "" : "bg-violet-500/12 text-violet-600 dark:text-violet-300"}`}
-                            style={heroAccent ? { backgroundColor: `${heroAccent}1f`, color: heroAccent } : undefined}
-                          >
-                            <Sparkles className="h-3.5 w-3.5" /> Creator
-                          </span>
+                          {/* Verified · plan (Pro/Business) · Creator, one cluster */}
+                          <IdentityBadges verified={profile.isVerified} plan={plan} creator accent={heroAccent} />
                         </h1>
                         <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
                         {/* Status + Mood (Part 9) — read defensively; empty until migration 0095 applies. */}
@@ -622,8 +625,9 @@ export default async function ProfilePage({
                   <div className="min-w-0 flex-1 sm:pt-2">
                   <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
                     {profile.displayName}
-                    {profile.isVerified ? <BadgeCheck className="h-5 w-5 text-primary sm:h-6 sm:w-6" /> : null}
-                    {privacy.show_plan_badge ? <DiamondCrownBadge plan={plan} size="md" /> : null}
+                    {/* Same cluster as the owner hero — the plan badge stays behind the
+                        owner's privacy switch, the tick never does. */}
+                    <IdentityBadges verified={profile.isVerified} plan={plan} showPlan={privacy.show_plan_badge} accent={heroAccent} />
                   </h1>
                   <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
                   {/* Public reputation rank (migration 0102) — shown by default; the
@@ -702,7 +706,7 @@ export default async function ProfilePage({
                         targetAvatarUrl={profile.avatarUrl}
                         mutualCount={mutuals}
                         initialState={friendState}
-                        className="shrink-0"
+                        className="min-w-0 flex-1 justify-center sm:flex-none"
                       />
                     ) : null}
                     <FollowButton
@@ -710,7 +714,7 @@ export default async function ProfilePage({
                       initialFollowing={profile.isFollowing}
                       canFollow={!!me}
                       followsYou={followsYou}
-                      className="shrink-0"
+                      className="min-w-0 flex-1 justify-center sm:flex-none"
                     />
                     {me ? (
                       <>
@@ -719,7 +723,7 @@ export default async function ProfilePage({
                             friends and stays a calm secondary otherwise. */}
                         <Link
                           href={`/messages/new/${profile.id}`}
-                          className={`btn-lux shrink-0 ${friendState === "friends" ? "btn-lux-primary" : "btn-lux-secondary"}`}
+                          className={`btn-lux min-w-0 flex-1 justify-center sm:flex-none ${friendState === "friends" ? "btn-lux-primary" : "btn-lux-secondary"}`}
                         >
                           <MessageCircle className="h-4 w-4" /> Message
                         </Link>

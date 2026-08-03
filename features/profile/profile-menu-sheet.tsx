@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { ProfileMenuBottomSheet } from "./profile-menu-bottom-sheet";
 import { ProfileMenuPanel, type MenuUser } from "./profile-menu-panel";
 
 /**
@@ -55,41 +56,36 @@ export function ProfileMenuSheet({
   const PANEL_WIDTH = 352; // w-88
   const left = Math.max(8, Math.min(anchor.right - PANEL_WIDTH, (typeof window === "undefined" ? 1024 : window.innerWidth) - PANEL_WIDTH - 8));
 
-  return createPortal(
+  return (
     <>
-      <button
-        type="button"
-        aria-label="Close menu"
-        onClick={onClose}
-        className={`fixed inset-0 z-[70] cursor-default bg-black/50 backdrop-blur-sm transition-opacity duration-200 ${shown ? "opacity-100" : "opacity-0"}`}
-      />
-
-      {/* Phones — the reference's bottom sheet */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Profile menu"
-        className={`fixed inset-x-0 bottom-0 z-[80] flex max-h-[92vh] flex-col overflow-hidden rounded-t-[1.75rem] border-t border-border/60 bg-card pb-[env(safe-area-inset-bottom)] shadow-2xl transition-transform duration-300 [transition-timing-function:var(--ease-out)] lg:hidden ${
-          shown ? "translate-y-0" : "translate-y-full"
-        }`}
-      >
-        <div aria-hidden className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-border" />
-        <ProfileMenuPanel user={user} onNavigate={onClose} onClose={onClose} />
+      {/* Phones — the reference's bottom sheet, shared with the profile page. */}
+      <div className="lg:hidden">
+        <ProfileMenuBottomSheet open user={user} onClose={onClose} />
       </div>
 
       {/* Desktop — the same panel, anchored under the avatar */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Profile menu"
-        style={{ top: anchor.top + 8, left, width: PANEL_WIDTH }}
-        className={`fixed z-[80] hidden max-h-[min(82vh,46rem)] origin-top-right flex-col overflow-hidden rounded-3xl border border-border/70 bg-card shadow-elevated transition duration-200 [transition-timing-function:var(--ease-out)] lg:flex ${
-          shown ? "scale-100 opacity-100" : "scale-95 opacity-0"
-        }`}
-      >
-        <ProfileMenuPanel user={user} onNavigate={onClose} onClose={onClose} />
-      </div>
-    </>,
-    document.body,
+      {createPortal(
+        <div className="hidden lg:block">
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={onClose}
+            className={`fixed inset-0 z-[70] cursor-default bg-black/50 backdrop-blur-sm transition-opacity duration-200 ${shown ? "opacity-100" : "opacity-0"}`}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Profile menu"
+            style={{ top: anchor.top + 8, left, width: PANEL_WIDTH }}
+            className={`fixed z-[80] flex max-h-[min(82vh,46rem)] origin-top-right flex-col overflow-hidden rounded-3xl border border-border/70 bg-card shadow-elevated transition duration-200 [transition-timing-function:var(--ease-out)] ${
+              shown ? "scale-100 opacity-100" : "scale-95 opacity-0"
+            }`}
+          >
+            <ProfileMenuPanel user={user} onNavigate={onClose} onClose={onClose} />
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }

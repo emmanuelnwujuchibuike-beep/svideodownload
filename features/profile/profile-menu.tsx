@@ -1,33 +1,22 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import { LayoutGrid } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
+import { ProfileMenuBottomSheet } from "./profile-menu-bottom-sheet";
 import { ProfileMenuPanel, type MenuUser } from "./profile-menu-panel";
 
 /**
  * Profile menu — the owner's premium control center (owner reference:
- * public/profilemenu.jpg). The CONTENT lives in `./profile-menu-panel` so this
- * panel and the top-right header avatar menu are literally the same component.
+ * public/profilemenu.jpg). The CONTENT lives in `./profile-menu-panel` and the
+ * mobile presentation in `./profile-menu-bottom-sheet`, so this, the profile
+ * page's mobile top bar and the header avatar all open the same menu.
  *
  * On desktop (lg+) it's an always-open panel docked on the right; on mobile it's a
  * bottom sheet opened from a top-right button.
  */
 export function ProfileMenu(user: MenuUser) {
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflowY;
-    document.body.style.overflowY = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflowY = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
 
   return (
     <>
@@ -48,37 +37,8 @@ export function ProfileMenu(user: MenuUser) {
         <LayoutGrid className="h-[18px] w-[18px]" />
       </button>
 
-      {/* Mobile bottom sheet (matches the reference). `open` gates pointer-events
-          synchronously so a stray tap never outlives the closing animation. */}
-      <div className={open ? undefined : "pointer-events-none"}>
-        <AnimatePresence>
-          {open ? (
-            <>
-              <motion.button
-                type="button"
-                aria-label="Close menu"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setOpen(false)}
-                className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm lg:hidden"
-              />
-              <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", stiffness: 380, damping: 40 }}
-                className="fixed inset-x-0 bottom-0 z-[80] flex max-h-[92vh] flex-col overflow-hidden rounded-t-[1.75rem] border-t border-border/60 bg-card pb-[env(safe-area-inset-bottom)] shadow-2xl lg:hidden"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Profile menu"
-              >
-                <div aria-hidden className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-border" />
-                <ProfileMenuPanel user={user} onNavigate={() => setOpen(false)} onClose={() => setOpen(false)} />
-              </motion.div>
-            </>
-          ) : null}
-        </AnimatePresence>
+      <div className="lg:hidden">
+        <ProfileMenuBottomSheet open={open} user={user} onClose={() => setOpen(false)} />
       </div>
     </>
   );

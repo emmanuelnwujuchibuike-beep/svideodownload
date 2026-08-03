@@ -44,7 +44,10 @@ export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
   }
 
   return (
-    <section id="history" className="border-t border-border/60 py-14 sm:py-20">
+    // Standalone (the /history page) has the header directly above it, so it needs
+    // almost no top padding — the big gap was the embedded py-14 stacking on the
+    // page's own top padding (owner). Embedded on /library it keeps the divider + gap.
+    <section id="history" className={cn(standalone ? "pb-16 pt-2" : "border-t border-border/60 py-14 sm:py-20")}>
       {/* Minimal side padding (owner) so the media grid stretches to the far edges. */}
       <div className="mx-auto max-w-6xl px-2 sm:px-4">
         {/* Header */}

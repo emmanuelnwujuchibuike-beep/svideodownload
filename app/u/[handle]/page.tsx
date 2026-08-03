@@ -807,7 +807,15 @@ export default async function ProfilePage({
           </div>
           </div>
           {/* Owner feature panel — docked open on desktop, a toggle drawer on mobile */}
-          {profile.isOwner ? <ProfileMenu /> : null}
+          {profile.isOwner ? (
+            <ProfileMenu
+              handle={profile.handle}
+              displayName={profile.displayName}
+              avatarUrl={profile.avatarUrl}
+              plan={plan}
+              verified={profile.isVerified}
+            />
+          ) : null}
         </div>
       </main>
     </>

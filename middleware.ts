@@ -57,6 +57,11 @@ export async function middleware(request: NextRequest) {
   // the download page in Downloader mode, the app home in Full Bleed. A cheap
   // cookie read at the edge — no DB, no per-render cost.
   const downloaderMode = request.cookies.get("frenz_mode")?.value === "downloader";
+  // Downloader mode has no feed homepage — so `/home` (a cold entry, a restored tab,
+  // or a bookmark) goes to the download page, never the Full-Bleed feed (owner).
+  if (downloaderMode && path === "/home") {
+    return NextResponse.redirect(new URL("/downloads", request.url));
+  }
   const isLandingRedirect =
     path === "/" &&
     !request.nextUrl.searchParams.has("url") &&

@@ -266,7 +266,7 @@ export async function adminGetMessages(threadId: string): Promise<SupportMessage
 
 /** User ids that should receive an admin support alert: anyone with the admin
  *  role, plus anyone whose email is in ADMIN_EMAILS. */
-async function resolveAdminUserIds(): Promise<string[]> {
+export async function resolveAdminUserIds(): Promise<string[]> {
   const db = createAdminClient();
   const ids = new Set<string>();
   const { data: byRole } = await db.from("profiles").select("id").eq("role", "admin");

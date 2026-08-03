@@ -89,6 +89,13 @@ export function AuthPanel({ next = "/home" }: { next?: string }) {
       } catch {
         /* cookies blocked — non-fatal */
       }
+      // Alert every admin (push + email) that this user signed in, with their
+      // details (owner). keepalive so it survives the navigation below.
+      try {
+        void fetch("/api/auth/notify-signin", { method: "POST", keepalive: true });
+      } catch {
+        /* best-effort */
+      }
     }
     window.location.assign(url);
   };

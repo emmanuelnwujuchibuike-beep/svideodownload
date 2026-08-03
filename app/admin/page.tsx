@@ -134,6 +134,7 @@ import { MessagingMonitor } from "@/features/admin/messaging-monitor";
 import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
 import { PaystackSettings } from "@/features/admin/paystack-settings";
+import { StatAdjuster } from "@/features/admin/stat-adjuster";
 import { PricingEditor } from "@/features/admin/pricing-editor";
 import { ModerationQueue } from "@/features/admin/moderation-queue";
 import { UserModeration } from "@/features/admin/user-moderation";
@@ -332,6 +333,9 @@ export default async function AdminPage() {
             operator opened the page for.
           */}
           <AdminPanel id="moderation">
+            {/* Admin stat overrides — adjust a user's followers or a post's
+                likes/views (owner). A deliberate manual control. */}
+            <StatAdjuster />
             <Suspense fallback={<PanelSkeleton />}>
               <ModerationSection />
             </Suspense>

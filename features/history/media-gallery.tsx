@@ -22,6 +22,7 @@ import { startDownload } from "@/features/downloads/manager";
 import { openPlayerQueue } from "@/features/downloads/player-store";
 import { estimateBytes } from "@/features/history/usage";
 import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes } from "@/lib/utils";
@@ -39,6 +40,14 @@ import type { DownloadRecord, MediaKind } from "@/types";
 
 export type SortKey = "time" | "az" | "size" | "platform";
 type ViewMode = "grid" | "list";
+
+/** Premium tactile feedback fired on every history control — a soft haptic + the
+ *  same nav "tap" tone the bottom nav uses (owner: "haptic sound in all the buttons
+ *  in the history page"). */
+function tap() {
+  haptic("light");
+  playSound("tap");
+}
 
 const KIND_ICON: Record<MediaKind, ComponentType<{ className?: string }>> = {
   video: Video,
@@ -154,11 +163,11 @@ export function MediaGallery({
     <div>
       {/* Controls: sort · view · (grid) columns */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <label className="inline-flex items-center gap-2 rounded-xl bg-secondary/60 px-3 py-1.5 text-sm">
+        <label className="inline-flex h-11 items-center gap-2 rounded-xl bg-secondary/60 px-3.5 text-sm shadow-sm ring-1 ring-inset ring-border/40">
           <span className="text-muted-foreground">Sort</span>
           <select
             value={sort}
-            onChange={(e) => { const s = e.target.value as SortKey; setSort(s); persist(SORT_KEY, s); setLimit(initial); }}
+            onChange={(e) => { tap(); const s = e.target.value as SortKey; setSort(s); persist(SORT_KEY, s); setLimit(initial); }}
             aria-label="Sort downloads"
             className="bg-transparent font-semibold text-foreground outline-none"
           >
@@ -168,7 +177,7 @@ export function MediaGallery({
           </select>
         </label>
 
-        <div className="inline-flex rounded-xl bg-secondary/60 p-1">
+        <div className="inline-flex rounded-xl bg-secondary/60 p-1 shadow-sm ring-1 ring-inset ring-border/40">
           <ViewButton active={view === "grid"} label="Grid" onClick={() => { setView("grid"); persist(VIEW_KEY, "grid"); setLimit(initialGrid); }}>
             <LayoutGrid className="h-4 w-4" />
           </ViewButton>
@@ -178,17 +187,17 @@ export function MediaGallery({
         </div>
 
         {view === "grid" ? (
-          <div className="inline-flex items-center gap-1 rounded-xl bg-secondary/60 p-1">
+          <div className="inline-flex items-center gap-1 rounded-xl bg-secondary/60 p-1 shadow-sm ring-1 ring-inset ring-border/40">
             {COLUMN_CHOICES.map((n) => (
               <button
                 key={n}
                 type="button"
-                onClick={() => { setCols(n); persist(COLS_KEY, String(n)); }}
+                onClick={() => { tap(); setCols(n); persist(COLS_KEY, String(n)); }}
                 aria-label={`${n} columns`}
                 aria-pressed={cols === n}
                 className={cn(
-                  "h-8 w-8 rounded-lg text-sm font-bold tabular-nums transition",
-                  cols === n ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground",
+                  "h-9 w-9 rounded-xl text-sm font-bold tabular-nums transition duration-150 active:scale-[0.9]",
+                  cols === n ? "bg-background text-foreground shadow-sm ring-1 ring-inset ring-border/60" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {n}
@@ -254,10 +263,10 @@ function GalleryTile({ item, onOpen, onToggleFavorite }: { item: DownloadRecord;
       </span>
       <button
         type="button"
-        onClick={onToggleFavorite}
+        onClick={() => { tap(); onToggleFavorite(); }}
         aria-label={item.favorite ? "Unfavorite" : "Favorite"}
         aria-pressed={item.favorite}
-        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur transition hover:bg-black/55 active:scale-90"
+        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur transition duration-150 hover:bg-black/55 active:scale-[0.82]"
       >
         <Heart className={cn("h-3.5 w-3.5", item.favorite && "fill-rose-500 text-rose-500")} />
       </button>
@@ -347,12 +356,12 @@ function ViewButton({ active, label, onClick, children }: { active: boolean; lab
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => { tap(); onClick(); }}
       aria-label={`${label} view`}
       aria-pressed={active}
       className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition",
-        active ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground",
+        "inline-flex h-9 items-center gap-1.5 rounded-xl px-3.5 text-sm font-semibold transition duration-150 active:scale-[0.94]",
+        active ? "bg-background text-foreground shadow-sm ring-1 ring-inset ring-border/60" : "text-muted-foreground hover:text-foreground",
       )}
     >
       {children}
@@ -367,10 +376,10 @@ function IconButton({ children, label, onClick, active, disabled }: { children: 
       type="button"
       aria-label={label}
       title={label}
-      onClick={onClick}
+      onClick={() => { tap(); onClick(); }}
       disabled={disabled}
       className={cn(
-        "rounded-lg p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-50",
+        "rounded-xl p-2 text-muted-foreground transition duration-150 hover:bg-secondary hover:text-foreground active:scale-[0.88] disabled:opacity-50",
         active && "text-primary hover:text-primary",
       )}
     >

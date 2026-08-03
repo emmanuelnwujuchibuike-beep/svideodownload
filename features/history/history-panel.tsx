@@ -3,10 +3,18 @@
 import { History, Search, Trash2 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
+import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 
 import { MediaGallery } from "./media-gallery";
 import { useHistory } from "./use-history";
+
+/** Premium tactile feedback on every history-page control (owner). */
+function tap() {
+  haptic("light");
+  playSound("tap");
+}
 
 /**
  * The landing "Your downloads" history — a header + Recent/Favorites tabs + search
@@ -62,15 +70,15 @@ export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
           {confirmClear ? (
             <div className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">Clear all?</span>
-              <button type="button" onClick={() => { clearHistory(); setConfirmClear(false); }} className="rounded-lg bg-red-500/10 px-3 py-1.5 font-medium text-red-400 transition hover:bg-red-500/20">
+              <button type="button" onClick={() => { tap(); clearHistory(); setConfirmClear(false); }} className="rounded-xl bg-red-500/10 px-3.5 py-2 font-semibold text-red-500 transition duration-150 hover:bg-red-500/20 active:scale-[0.95]">
                 Yes, clear
               </button>
-              <button type="button" onClick={() => setConfirmClear(false)} className="rounded-lg px-3 py-1.5 font-medium text-muted-foreground transition hover:text-foreground">
+              <button type="button" onClick={() => { tap(); setConfirmClear(false); }} className="rounded-xl px-3.5 py-2 font-semibold text-muted-foreground transition duration-150 hover:text-foreground active:scale-[0.95]">
                 Cancel
               </button>
             </div>
           ) : (
-            <button type="button" onClick={() => setConfirmClear(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:border-red-500/40 hover:text-red-400">
+            <button type="button" onClick={() => { tap(); setConfirmClear(true); }} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3.5 py-2 text-sm font-semibold text-muted-foreground shadow-sm transition duration-150 hover:border-red-500/40 hover:text-red-500 active:scale-[0.96]">
               <Trash2 className="h-3.5 w-3.5" /> Clear all
             </button>
           )}
@@ -78,7 +86,7 @@ export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
 
         {/* Tabs + search */}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex rounded-xl bg-secondary p-1">
+          <div className="inline-flex rounded-xl bg-secondary p-1 shadow-sm ring-1 ring-inset ring-border/40">
             <TabButton active={tab === "recent"} onClick={() => setTab("recent")}>
               Recent <Count>{items.length}</Count>
             </TabButton>
@@ -114,10 +122,11 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => { tap(); onClick(); }}
+      aria-pressed={active}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition",
-        active ? "bg-background shadow" : "text-muted-foreground hover:text-foreground",
+        "inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition duration-150 active:scale-[0.95]",
+        active ? "bg-background text-foreground shadow-sm ring-1 ring-inset ring-border/60" : "text-muted-foreground hover:text-foreground",
       )}
     >
       {children}

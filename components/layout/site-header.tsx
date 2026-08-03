@@ -11,7 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useUser } from "@/features/auth/use-user";
 import { UserMenu } from "@/features/auth/user-menu";
-import { DownloadsEntry } from "@/features/downloads/downloads-entry";
+import { LanguageSelector } from "@/components/i18n/language-selector";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { SearchTrigger, SearchTriggerIcon } from "@/features/navigation/search-trigger";
 import { DESTINATIONS } from "@/lib/navigation/registry";
@@ -276,9 +276,9 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
             </Link>
           )}
           <SearchTrigger className="w-48" />
-          {/* Auth-aware "your downloads" entry — /library for guests (no login
-              wall), /downloads for signed-in users — prefetched on mount. */}
-          <DownloadsEntry />
+          {/* Language selector for the top ~50 languages (owner — replaced the
+              downloads/history icon). History lives in the bottom nav now. */}
+          <LanguageSelector />
           <ThemeToggle />
           <UserMenu />
         </div>
@@ -288,9 +288,9 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
         {social ? null : (
           <div className="flex items-center gap-1 lg:hidden">
             <SearchTriggerIcon />
-            {/* Your-downloads entry, mirroring the desktop header — /library for
-                guests, /downloads for signed-in users, prefetched. */}
-            <DownloadsEntry variant="tile" />
+            {/* Language selector — the top ~50 languages (owner, replaced the
+                downloads/history icon; History is in the bottom nav). */}
+            <LanguageSelector />
             {/* Log in — owner, 2026-07-21: the login CTA was desktop-only and
                 buried in the hamburger on mobile, so a new visitor on a phone had
                 no visible way in. UserMenu already carries the robust signed-in/out

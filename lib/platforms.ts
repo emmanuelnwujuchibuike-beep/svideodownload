@@ -108,6 +108,16 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     accentForeground: "light",
     watermarkFree: false,
   },
+  telegram: {
+    id: "telegram",
+    name: "Telegram",
+    hosts: ["t.me", "telegram.me", "telegram.org", "telegram.dog"],
+    // Telegram brand blue. Both stops clear WCAG AA against white after the hero
+    // scrim (see platforms.test.ts).
+    accent: "from-[#2aabee] to-[#1c93e3]",
+    accentForeground: "light",
+    watermarkFree: false,
+  },
   generic: {
     id: "generic",
     name: "Web Video",

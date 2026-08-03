@@ -24,14 +24,15 @@ export const MODULES: PlatformModule[] = [
     name: "Frenz Download",
     shortName: "Download",
     /*
-     * "20+ platforms" was wrong — there are 11 supported platforms in
-     * lib/platforms.ts (12 entries minus the `generic` fallback). It is pinned by
-     * a test against SHOWCASE_PLATFORMS.length so it cannot drift again in either
-     * direction, and it matters more than a normal copy error because this
-     * tagline is republished verbatim into /llms.txt, which exists to be believed
-     * by systems that cannot check it against the product.
+     * "20+ platforms" was wrong — there are 12 supported platforms in
+     * lib/platforms.ts (13 entries minus the `generic` fallback; Telegram was the
+     * 12th, added 2026-08-03). It is pinned by a test against
+     * SHOWCASE_PLATFORMS.length so it cannot drift again in either direction, and
+     * it matters more than a normal copy error because this tagline is republished
+     * verbatim into /llms.txt, which exists to be believed by systems that cannot
+     * check it against the product.
      */
-    tagline: "Save video & audio from 11 social platforms.",
+    tagline: "Save video & audio from 12 social platforms.",
     basePath: "/downloads",
     icon: Download,
     accent: "from-blue-600 to-violet-600",

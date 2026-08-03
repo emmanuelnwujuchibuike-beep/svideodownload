@@ -16,6 +16,7 @@ export type PlatformId =
   | "threads"
   | "snapchat"
   | "linkedin"
+  | "telegram"
   | "generic";
 
 export interface Platform {
@@ -83,6 +84,7 @@ export type ExtractorName =
   | "pinterest"
   | "snapchat"
   | "threads"
+  | "telegram"
   | "ytdlp";
 
 export interface VideoMetadata {

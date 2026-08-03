@@ -6,6 +6,7 @@ import {
   SiPinterest,
   SiReddit,
   SiSnapchat,
+  SiTelegram,
   SiThreads,
   SiTiktok,
   SiVimeo,
@@ -28,6 +29,7 @@ export const BRAND_ICONS: Partial<Record<PlatformId, IconType>> = {
   threads: SiThreads,
   snapchat: SiSnapchat,
   linkedin: FaLinkedin,
+  telegram: SiTelegram,
 };
 
 /** The hero/flagship featured platforms, in display order. */

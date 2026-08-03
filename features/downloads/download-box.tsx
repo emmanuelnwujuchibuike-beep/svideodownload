@@ -212,7 +212,7 @@ export function DownloadBox() {
       {/* Supported platforms */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold text-white/70">Supported:</span>
-        {FLAGSHIP_IDS.map((id) => {
+        {[...FLAGSHIP_IDS, "youtube" as const, "telegram" as const].map((id) => {
           const platform = PLATFORMS[id];
           const Icon = BRAND_ICONS[id];
           return (

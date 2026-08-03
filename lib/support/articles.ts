@@ -360,7 +360,7 @@ export const SUPPORT_ARTICLES: SupportArticle[] = [
       {
         heading: "Watermarks",
         body: [
-          "Where a platform offers a clean source, we fetch that one — TikTok, Instagram, X and Threads all do, which is four of the eleven platforms supported.",
+          "Where a platform offers a clean source, we fetch that one — TikTok, Instagram, X and Threads all do, which is four of the twelve platforms supported.",
           "The other seven do not publish a watermark-free source, so their videos arrive exactly as that platform encodes them, overlay included. No tool can remove a watermark that is burned into the picture without damaging the picture, and we would rather say so than imply otherwise.",
         ],
       },

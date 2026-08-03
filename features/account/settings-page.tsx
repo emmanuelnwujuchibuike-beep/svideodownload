@@ -15,12 +15,16 @@ export function SettingsPage({
   description,
   children,
   bare,
+  backHref = "/account",
 }: {
   title: string;
   description?: string;
   children: ReactNode;
   /** Skip the single card wrapper so the page can compose its own cards/groups. */
   bare?: boolean;
+  /** Where the back arrow goes. Drill-down screens (a single Identity field)
+   *  return to their own list, not all the way out to the settings root. */
+  backHref?: string;
 }) {
   return (
     <AppContent>
@@ -29,9 +33,9 @@ export function SettingsPage({
       <div className="mx-auto max-w-2xl">
         <div className="mb-4 flex items-center gap-3">
           <Link
-            href="/account"
+            href={backHref}
             prefetch
-            aria-label="Back to settings"
+            aria-label="Back"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border text-muted-foreground transition hover:bg-secondary hover:text-foreground"
           >
             <ChevronLeft className="h-5 w-5" />

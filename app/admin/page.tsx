@@ -29,6 +29,7 @@ import { Suspense } from "react";
 import { AdManager } from "@/features/admin/ad-manager";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
 import { SupportInbox } from "@/features/admin/support-inbox";
+import { VerificationQueue } from "@/features/admin/verification-queue";
 import { FeatureFlagManager } from "@/features/admin/feature-flags-manager";
 import { ExperimentsManager } from "@/features/admin/experiments-manager";
 import { getFlags } from "@/lib/platform/flags";
@@ -148,6 +149,7 @@ import { listBroadcasts } from "@/lib/social/broadcasts";
 import { getTrendingSettings } from "@/lib/social/feed";
 import { fetchMessagingStats } from "@/lib/social/messaging-stats";
 import { listReportedTargets } from "@/lib/social/moderation";
+import { listVerificationQueue, verificationCounts } from "@/lib/social/verification";
 import { fetchPushDeliveryStats } from "@/lib/social/push-delivery-stats";
 import { listAds } from "@/lib/monetization/ads";
 import { LandingEditor } from "@/features/admin/landing-editor";
@@ -349,6 +351,12 @@ export default async function AdminPage() {
             <SupportInbox />
           </AdminPanel>
 
+          <AdminPanel id="verification">
+            <Suspense fallback={<PanelSkeleton />}>
+              <VerificationSection />
+            </Suspense>
+          </AdminPanel>
+
           <AdminPanel id="trending">
             <Suspense fallback={<PanelSkeleton />}>
               <ContentSection />
@@ -538,6 +546,11 @@ async function ModerationSection() {
 async function LandingSection() {
   const landing = await getLandingSettings();
   return <LandingEditor settings={landing} />;
+}
+
+async function VerificationSection() {
+  const [queue, counts] = await Promise.all([listVerificationQueue(), verificationCounts()]);
+  return <VerificationQueue queue={queue} counts={counts} />;
 }
 
 async function ContentSection() {

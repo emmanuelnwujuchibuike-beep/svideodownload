@@ -109,6 +109,14 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     icon: "Headset",
     blurb: "1:1 support conversations with members. Reply here — members are notified by push and email.",
   },
+  {
+    id: "verification",
+    label: "Verification",
+    category: "audience",
+    icon: "BadgeCheck",
+    blurb:
+      "Blue-tick applications: check the legal name against the document and the selfie against the face, then approve or decline. You can also issue a tick directly, with no application.",
+  },
 
   /* ── Content ── */
   {

@@ -23,6 +23,7 @@ import { DownloadInterstitial } from "@/features/monetization/download-interstit
 import { ExitIntent } from "@/features/monetization/exit-intent";
 import { TiredOfAds } from "@/features/monetization/tired-of-ads";
 import { UsageDashboard } from "@/features/downloads/usage-dashboard";
+import { WallpaperGallery } from "@/features/wallpapers/wallpaper-gallery";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord, PlatformId } from "@/types";
 import { cn, formatBytes } from "@/lib/utils";
@@ -229,6 +230,9 @@ export function DownloadsPage() {
               />
             </section>
           ) : null}
+
+          {/* Wallpapers — 12 free HD downloads, full-screen preview with tap-nav. */}
+          <WallpaperGallery />
 
           {/* Admin-managed ad slot below the history list — insert or remove any
               ad for this zone from the dashboard; collapses when empty. */}

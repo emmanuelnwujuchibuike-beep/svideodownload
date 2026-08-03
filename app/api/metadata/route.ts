@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { getMetadata } from "@/server/extractors";
+import { detectPlatform } from "@/lib/platforms";
 import { metadataLimiter, clientId } from "@/lib/rate-limit";
+import { parseTelegramUrl, telegramMtprotoConfigured } from "@/server/services/telegram-mtproto";
 import { metadataRequestSchema } from "@/lib/validation";
 import {
   hasWorker,
@@ -63,6 +65,21 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ ok: true, data });
   } catch (err) {
+    // Telegram Stories / private channels: say WHY instead of the generic
+    // "region-locked" — these need the authenticated MTProto connection, which
+    // yt-dlp can't provide (so the chain fell through to here).
+    if (detectPlatform(parsed.data.url).id === "telegram") {
+      const ref = parseTelegramUrl(parsed.data.url);
+      if (ref?.isStory || ref?.channelId) {
+        return fail(
+          telegramMtprotoConfigured()
+            ? "Couldn't fetch this Telegram media — it may have expired, or the connected account can't see it."
+            : "Telegram Stories and private channels need the authenticated Telegram connection set up on the server (TELEGRAM_API_ID / API_HASH / SESSION). Public channel posts — t.me/<channel>/<id> — work without it.",
+          "EXTRACTION_FAILED",
+          422,
+        );
+      }
+    }
     if (err instanceof YtDlpError) {
       if (err.code === "TIMEOUT") {
         return fail("The site took too long to respond.", "TIMEOUT", 504);

@@ -133,6 +133,7 @@ import { LimitsEditor } from "@/features/admin/limits-editor";
 import { MessagingMonitor } from "@/features/admin/messaging-monitor";
 import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
+import { AnalyticsDashboard } from "@/features/admin/analytics-dashboard";
 import { PaystackSettings } from "@/features/admin/paystack-settings";
 import { StatAdjuster } from "@/features/admin/stat-adjuster";
 import { PricingEditor } from "@/features/admin/pricing-editor";
@@ -485,6 +486,8 @@ export default async function AdminPage() {
           </AdminPanel>
 
           <AdminPanel id="traffic">
+            {/* Live analytics dashboard (Phase 2/3) — reads the event pipeline. */}
+            <AnalyticsDashboard />
             <Suspense fallback={<PanelSkeleton />}>
               <TrafficSection />
             </Suspense>

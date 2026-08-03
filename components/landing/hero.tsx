@@ -12,7 +12,7 @@ import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { PlatformId } from "@/types";
 
 /** Platform marks shown under the "Download anything" card (public/newlanding.jpg). */
-const SUPPORTED: PlatformId[] = ["tiktok", "twitter", "snapchat", "instagram", "facebook", "pinterest"];
+const SUPPORTED: PlatformId[] = ["tiktok", "twitter", "snapchat", "instagram", "facebook", "pinterest", "youtube", "telegram"];
 
 /**
  * The reference checklist beneath the CTAs (public/newlandingfull.jpg). Every one

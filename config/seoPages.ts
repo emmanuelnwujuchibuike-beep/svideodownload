@@ -1004,6 +1004,49 @@ export const CLUSTERS: SeoCluster[] = [
       },
     ],
   },
+  {
+    id: "telegram",
+    platformId: "telegram",
+    brand: "Telegram",
+    thing: "videos",
+    stem: "telegram",
+    intros: [
+      "Download Telegram videos in HD — paste a public channel post link and save in seconds.",
+      "Save videos, photos, GIFs and voice messages from public Telegram channels, no app and no login.",
+      "The simple way to download Telegram media on any device — videos, photos and audio.",
+    ],
+    facts: [
+      "Save videos, photos, GIFs, documents and voice messages from public Telegram channels and posts — keep the original quality with full sound.",
+      "Paste a t.me link to a public channel post and the media downloads straight to your device as a clean file, with no watermark added by us.",
+      "Everything runs in your browser on iPhone, Android, Windows and Mac; public channel content downloads without signing in.",
+    ],
+    baseBenefits: [
+      { title: "HD video", text: "Download Telegram videos at their original quality with sound." },
+      { title: "Photos & files", text: "Save photos, GIFs, documents and voice messages too." },
+      { title: "No login", text: "Public channel posts download without your Telegram account." },
+    ],
+    baseFaqs: [
+      { q: "Is the Telegram downloader free?", a: "Yes — free and unlimited with no account." },
+      { q: "What can I download from Telegram?", a: "Public channel videos, photos, GIFs, documents and voice messages — just paste the post's t.me link." },
+      { q: "Does it work on iPhone and Android?", a: "Yes — directly in your mobile browser, saved to your device." },
+      { q: "Can I download Telegram Stories?", a: "Public channel posts download instantly here; Stories and private content need an authenticated connection." },
+      { q: "Is it safe?", a: "Yes — encrypted downloads, no stored files and no login for public content." },
+    ],
+    modifiers: [
+      {
+        slug: "video-downloader",
+        title: "Telegram Video Downloader (HD MP4)",
+        keyword: "Telegram video downloader",
+        h1: "Telegram Video Downloader — HD MP4",
+        tagline: "Download Telegram videos in HD — free, no login.",
+        angle:
+          "Our Telegram video downloader saves videos from public Telegram channels and posts as HD MP4 files, or extracts the audio as MP3. Paste the t.me post link and download instantly — no app, no account and no watermark.",
+        benefit: { title: "Original quality", text: "Saves Telegram videos at full source quality with sound." },
+        faqs: [{ q: "How do I download a Telegram video?", a: "Open the public post in Telegram, copy its t.me link, paste it here and tap Download." }],
+        secondary: ["download telegram video", "telegram to mp4", "save telegram video", "telegram channel video download"],
+      },
+    ],
+  },
 ];
 
 /** Attach the shared generic modifiers to each cluster (after its specific ones). */
@@ -1023,6 +1066,7 @@ const GENERIC_BY_CLUSTER: Record<string, SeoModifier[]> = {
   vimeo: GENERIC,
   linkedin: GENERIC,
   threads: GENERIC,
+  telegram: GENERIC,
 };
 
 for (const cluster of CLUSTERS) {

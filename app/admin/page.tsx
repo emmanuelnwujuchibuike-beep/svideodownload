@@ -134,6 +134,7 @@ import { MessagingMonitor } from "@/features/admin/messaging-monitor";
 import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
 import { AnalyticsDashboard } from "@/features/admin/analytics-dashboard";
+import { AnnouncementSettings } from "@/features/admin/announcement-settings";
 import { PaystackSettings } from "@/features/admin/paystack-settings";
 import { StatAdjuster } from "@/features/admin/stat-adjuster";
 import { PricingEditor } from "@/features/admin/pricing-editor";
@@ -441,6 +442,8 @@ export default async function AdminPage() {
           </AdminPanel>
 
           <AdminPanel id="communication">
+            <AnnouncementSettings />
+            <div className="my-6 border-t border-border/60" />
             <CommunicationCatalog events={getDomainEvents()} integrations={getIntegrations()} />
           </AdminPanel>
 

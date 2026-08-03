@@ -50,6 +50,17 @@ const TopBannerAd = dynamic(
   () => import("./top-banner-ad").then((m) => m.TopBannerAd),
   { ssr: false },
 );
+// The top-of-page ad (content pages only) and the admin announcement bar. Both
+// are code-split here so they never ride the landing's first-load, and both gate
+// themselves by pathname.
+const TopPageBannerAd = dynamic(
+  () => import("./top-page-banner-ad").then((m) => m.TopPageBannerAd),
+  { ssr: false },
+);
+const AnnouncementBanner = dynamic(
+  () => import("@/features/announcements/announcement-banner").then((m) => m.AnnouncementBanner),
+  { ssr: false },
+);
 const IdleInterstitial = dynamic(
   () => import("./idle-interstitial").then((m) => m.IdleInterstitial),
   { ssr: false },
@@ -92,6 +103,8 @@ export function DeferredAdFurniture() {
 
   return (
     <>
+      <AnnouncementBanner />
+      <TopPageBannerAd />
       <TopBannerAd />
       <IdleInterstitial />
       <ExitIntent />

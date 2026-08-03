@@ -21,6 +21,7 @@ export const AD_ZONES = [
   "reward_video",
   "sidebar",
   "bottom_banner",
+  "top_banner",
   "download_history_top",
   "download_history_bottom",
   /* Legacy, kept so existing rows stay visible and editable in the admin rather
@@ -223,6 +224,14 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
     label: "Bottom banner (all pages)",
     description:
       "Pinned to the bottom of the viewport on every marketing page, directly above the app-style bottom nav, on a solid card so it reads as part of the chrome. Not dismissible. (Zone id kept as bottom_banner for back-compat.)",
+    persistent: true,
+    supportsSkip: false,
+    prefetch: true,
+  },
+  top_banner: {
+    label: "Top banner (content pages)",
+    description:
+      "Pinned to the top of the viewport, directly below the header, on content pages — history, academy, blog, help and the SEO downloader pages. Deliberately NOT shown on the home page, the download pages, or any social page. Not dismissible.",
     persistent: true,
     supportsSkip: false,
     prefetch: true,

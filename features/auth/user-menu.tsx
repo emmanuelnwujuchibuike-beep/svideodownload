@@ -1,41 +1,57 @@
 "use client";
 
-import { Bookmark, Fingerprint, LogOut, MessageCircle, User as UserIcon, UserCircle } from "lucide-react";
+import { Fingerprint, UserCircle } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
-import { createPortal } from "react-dom";
+import { type ComponentType, useState } from "react";
 
 import { MyDiamondCrownBadge } from "@/components/badges/my-diamond-crown-badge";
-import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
-import { signOutClient } from "@/lib/auth/sign-out";
+import type { MenuUser } from "@/features/profile/profile-menu-panel";
 
 import { useEntitlements } from "./use-entitlements";
 import { useUser } from "./use-user";
 
-/** Desktop header auth control: "Sign in" when logged out, avatar menu in. */
+type SheetComponent = ComponentType<{
+  user: MenuUser;
+  anchor: { top: number; right: number };
+  onClose: () => void;
+}>;
+
+/**
+ * Header auth control: a login CTA when logged out, the avatar in.
+ *
+ * Tapping the avatar opens the SAME premium profile menu the profile page uses
+ * (owner: "the profile menu at the right top header to be identical with the one
+ * i uploaded" — public/profilemenu.jpg). The sheet and everything it pulls in
+ * (language table, theme toggle, inbox cache) is `import()`-ed on tap, because
+ * this control is permanent chrome on every marketing page and a static import
+ * would put all of it on the landing's cold-entry first-load JS.
+ */
 export function UserMenu() {
   const { user, loading, enabled } = useUser();
-  const { handle, avatarUrl: realAvatarUrl } = useEntitlements();
+  const { handle, avatarUrl: realAvatarUrl, displayName, plan, verified } = useEntitlements();
   const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
-  const MENU_WIDTH = 224; // w-56
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
+  const [Sheet, setSheet] = useState<SheetComponent | null>(null);
 
-  // Portal-rendered + position computed on open (not a plain `absolute
-  // right-0 mt-2` sibling) — this button sits inside scrollable/flex-
-  // constrained headers on several pages (the mobile Messages header among
-  // them), and an unportaled dropdown there got squeezed/clipped by the
-  // ancestor's own overflow/width instead of floating free — the same class
-  // of bug already fixed this same way on every other menu in the app
-  // (ConversationRow's row menu, NotificationCard's menu, etc.).
-  const toggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+  // The sheet is portaled to <body> and positioned from the trigger's own rect —
+  // this button sits inside scrollable/flex-constrained headers on several pages
+  // (the mobile Messages header among them), where an unportaled dropdown got
+  // squeezed/clipped by the ancestor's overflow instead of floating free.
+  const toggle = async (e: React.MouseEvent<HTMLButtonElement>) => {
     if (open) {
       setOpen(false);
       return;
     }
     const rect = e.currentTarget.getBoundingClientRect();
-    const margin = 8;
-    const left = Math.min(Math.max(rect.right - MENU_WIDTH, margin), window.innerWidth - MENU_WIDTH - margin);
-    setMenuPos({ top: rect.bottom + 8, left });
+    setAnchor({ top: rect.bottom, right: rect.right });
+    if (!Sheet) {
+      try {
+        const mod = await import("@/features/profile/profile-menu-sheet");
+        setSheet(() => mod.ProfileMenuSheet);
+      } catch {
+        return; // chunk failed to load — leave the avatar inert rather than break the header
+      }
+    }
     setOpen(true);
   };
 
@@ -120,7 +136,6 @@ export function UserMenu() {
     );
   }
 
-  const email = user.email ?? "";
   // The REAL Frenz profile picture (profiles.avatar_url via useEntitlements),
   // not user_metadata.avatar_url — that field is only ever set by an OAuth
   // provider (Google sign-in) and is null for an email/OTP account even
@@ -152,84 +167,21 @@ export function UserMenu() {
         <MyDiamondCrownBadge size="xs" className="absolute -bottom-1 -right-1 ring-2 ring-background" />
       </button>
 
-      {open && menuPos
-        ? createPortal(
-            <>
-              {/* Full-screen invisible close target — the menu is portaled to
-                  document.body now, so it's no longer a DOM descendant of the
-                  trigger button; a document-level "click outside" listener
-                  would need to special-case the portal instead of just
-                  matching the app's existing pattern for this exact class of
-                  menu (ConversationRow/NotificationCard use the same trick). */}
-              <button type="button" aria-label="Close menu" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
-              <div
-                role="menu"
-                style={{ top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
-                className="fixed z-50 overflow-hidden rounded-2xl border border-border/70 bg-card p-1.5 shadow-elevated"
-              >
-          <div className="flex items-center justify-between gap-2 px-3 py-2">
-            <span className="truncate text-xs text-muted-foreground">{email}</span>
-            <MyDiamondCrownBadge size="sm" showLabel />
-          </div>
-          <Link
-            href={handle ? `/u/${handle}` : "/account#profile"}
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
-          >
-            <ModuleIconBadge icon={UserCircle} className="h-6 w-6 rounded-lg" /> {handle ? "My profile" : "Set up profile"}
-          </Link>
-          <Link
-            href="/messages"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
-          >
-            <ModuleIconBadge icon={MessageCircle} className="h-6 w-6 rounded-lg" /> Messages
-          </Link>
-          <Link
-            href="/saved"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
-          >
-            <ModuleIconBadge icon={Bookmark} className="h-6 w-6 rounded-lg" /> Saved
-          </Link>
-          <Link
-            href="/account"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary"
-          >
-            <ModuleIconBadge icon={UserIcon} className="h-6 w-6 rounded-lg" /> Account
-          </Link>
-          {/* Client-first sign-out (progressive enhancement): with JS on, this
-              clears the browser session + identity cache locally and hard-navigates
-              home, so the header can't keep painting a signed-in view — the exact
-              bug where an admin "signed out" but still saw their avatar + plan UI.
-              With JS off, the form still POSTs to the server route. */}
-          <form
-            action="/auth/signout"
-            method="post"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setOpen(false);
-              void signOutClient();
-            }}
-          >
-            <button
-              type="submit"
-              role="menuitem"
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-            >
-              <ModuleIconBadge icon={LogOut} className="h-6 w-6 rounded-lg" /> Sign out
-            </button>
-          </form>
-              </div>
-            </>,
-            document.body,
-          )
-        : null}
+      {open && anchor && Sheet ? (
+        <Sheet
+          user={{
+            handle: handle ?? "",
+            // Fall back through the honest options rather than inventing a name:
+            // profile display name → handle → the email's local part.
+            displayName: displayName || handle || (user.email ?? "").split("@")[0] || "You",
+            avatarUrl: avatar,
+            plan,
+            verified,
+          }}
+          anchor={anchor}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

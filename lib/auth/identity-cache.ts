@@ -35,6 +35,8 @@ const KEY = "frenz-identity";
 export interface CachedIdentity {
   handle: string | null;
   avatarUrl: string | null;
+  /** Cosmetic, same as the other two: the header profile menu's identity card. */
+  displayName?: string | null;
 }
 
 export function readIdentity(): CachedIdentity | null {
@@ -45,8 +47,9 @@ export function readIdentity(): CachedIdentity | null {
     const parsed = JSON.parse(raw) as Partial<CachedIdentity>;
     const handle = typeof parsed.handle === "string" ? parsed.handle : null;
     const avatarUrl = typeof parsed.avatarUrl === "string" ? parsed.avatarUrl : null;
+    const displayName = typeof parsed.displayName === "string" ? parsed.displayName : null;
     if (!handle && !avatarUrl) return null;
-    return { handle, avatarUrl };
+    return { handle, avatarUrl, displayName };
   } catch {
     return null;
   }

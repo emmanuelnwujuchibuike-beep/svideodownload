@@ -18,6 +18,10 @@ export interface Entitlements {
   handle: string | null;
   /** The real Frenz profile picture (profiles.avatar_url) — NOT the auth record's own user_metadata.avatar_url, which is only ever set by an OAuth provider and can be stale/absent even when a real profile picture is set. */
   avatarUrl: string | null;
+  /** profiles.display_name — for the header profile menu's identity card. */
+  displayName: string | null;
+  /** profiles.is_verified — the blue tick, cosmetic only; never an authorization signal. */
+  verified: boolean;
   ready: boolean;
 }
 
@@ -28,6 +32,8 @@ const FREE: Omit<Entitlements, "ready"> = {
   showAds: true,
   handle: null,
   avatarUrl: null,
+  displayName: null,
+  verified: false,
 };
 
 let cache: Omit<Entitlements, "ready"> | null = null;
@@ -104,9 +110,11 @@ export function useEntitlements(): Entitlements {
           showAds: d?.showAds ?? true,
           handle: (d?.handle as string | null) ?? null,
           avatarUrl: (d?.avatarUrl as string | null) ?? null,
+          displayName: (d?.displayName as string | null) ?? null,
+          verified: Boolean(d?.verified),
         };
         // Persist identity for the next cold start's first frame.
-        writeIdentity({ handle: cache.handle, avatarUrl: cache.avatarUrl });
+        writeIdentity({ handle: cache.handle, avatarUrl: cache.avatarUrl, displayName: cache.displayName });
       })
       .catch(() => {
         cache = FREE;

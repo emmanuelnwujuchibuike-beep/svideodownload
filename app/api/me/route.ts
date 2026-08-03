@@ -54,17 +54,26 @@ export async function GET(request: Request) {
   // Google) instead of this one, so an account that uploaded a real profile
   // picture through account settings still saw a plain letter avatar in the
   // topbar menu — the two are different columns entirely.
+  //
+  // `display_name` + `is_verified` come along for the ride (same row, no extra
+  // round trip) so the header's profile menu can render the same identity card
+  // as the profile page's — name and verified tick included — without a second
+  // fetch of its own.
   let handle: string | null = null;
   let avatarUrl: string | null = null;
+  let displayName: string | null = null;
+  let verified = false;
   if (userId) {
     try {
       const { data } = await createAdminClient()
         .from("profiles")
-        .select("handle, avatar_url")
+        .select("handle, avatar_url, display_name, is_verified")
         .eq("id", userId)
         .maybeSingle();
       handle = (data?.handle as string | null) ?? null;
       avatarUrl = (data?.avatar_url as string | null) ?? null;
+      displayName = (data?.display_name as string | null) ?? null;
+      verified = Boolean(data?.is_verified);
     } catch {
       /* ignore */
     }
@@ -99,6 +108,8 @@ export async function GET(request: Request) {
       plan,
       handle,
       avatarUrl,
+      displayName,
+      verified,
       isPremium: plan !== "free",
       showAds: limits.ads,
       limits: {

@@ -385,8 +385,12 @@ export default async function ProfilePage({
                   <div className="relative glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7" style={heroCardStyle}>
                     {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                      <div className="min-w-0">
+                    {/* Facebook/Instagram arrangement (owner): three columns across the
+                        FULL card width — avatar, then the identity growing into the middle,
+                        then the actions pinned right. The identity used to sit BELOW the
+                        avatar, which left the whole right half of the card empty. */}
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
+                      <div className="min-w-0 sm:shrink-0">
                         {/* Avatar straddling the cover edge — Identity Ring shows live presence + verification */}
                         <div className="relative -mt-14 w-fit sm:-mt-[4.5rem]">
                     {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
@@ -435,50 +439,52 @@ export default async function ProfilePage({
                         </div>
                       </div>
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-2 pt-1 sm:pt-0">
-                        <Link href="/account/identity" className="btn-lux btn-lux-secondary">
+                      {/* Identity — the middle column, grows into the space the
+                          actions don't need so the card is filled edge to edge. */}
+                      <div className="min-w-0 flex-1 sm:pt-2">
+                        <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
+                          {profile.displayName}
+                          {profile.isVerified ? <BadgeCheck className="h-6 w-6 fill-blue-500 text-white" /> : null}
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${heroAccent ? "" : "bg-violet-500/12 text-violet-600 dark:text-violet-300"}`}
+                            style={heroAccent ? { backgroundColor: `${heroAccent}1f`, color: heroAccent } : undefined}
+                          >
+                            <Sparkles className="h-3.5 w-3.5" /> Creator
+                          </span>
+                        </h1>
+                        <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
+                        {/* Status + Mood (Part 9) — read defensively; empty until migration 0095 applies. */}
+                        {profileExtras.status || profileExtras.mood ? (
+                          <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
+                            {profileExtras.mood ? <span className="font-semibold text-primary" style={heroAccent ? { color: heroAccent } : undefined}>{profileExtras.mood}</span> : null}
+                            {profileExtras.status ? <span className="text-muted-foreground">{profileExtras.status}</span> : null}
+                          </div>
+                        ) : null}
+
+                        {profile.bio ? <p className="mt-3 leading-relaxed">{profile.bio}</p> : null}
+
+                        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                          {profile.website ? (
+                            <a href={profile.website} target="_blank" rel="nofollow noopener" className="inline-flex items-center gap-1.5 text-primary hover:underline">
+                              <LinkIcon className="h-4 w-4" />
+                              {profile.website.replace(/^https?:\/\//, "")}
+                            </a>
+                          ) : null}
+                          <span className="inline-flex items-center gap-1.5">
+                            <CalendarDays className="h-4 w-4" />
+                            {joined}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Actions — pinned to the card's right edge on sm+, full-width
+                          buttons on a phone (nothing half-filling a row). */}
+                      <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0 sm:pt-2">
+                        <Link href="/account/identity" className="btn-lux btn-lux-secondary flex-1 justify-center sm:flex-none">
                           Edit Profile
                         </Link>
                         <ShareProfileButton handle={profile.handle} name={profile.displayName} />
                       </div>
-                    </div>
-
-                    {/* Name + trust badges */}
-                    <div className="mt-4">
-                      <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
-                        {profile.displayName}
-                        {profile.isVerified ? <BadgeCheck className="h-6 w-6 fill-blue-500 text-white" /> : null}
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${heroAccent ? "" : "bg-violet-500/12 text-violet-600 dark:text-violet-300"}`}
-                          style={heroAccent ? { backgroundColor: `${heroAccent}1f`, color: heroAccent } : undefined}
-                        >
-                          <Sparkles className="h-3.5 w-3.5" /> Creator
-                        </span>
-                      </h1>
-                      <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
-                      {/* Status + Mood (Part 9) — read defensively; empty until migration 0095 applies. */}
-                      {profileExtras.status || profileExtras.mood ? (
-                        <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
-                          {profileExtras.mood ? <span className="font-semibold text-primary" style={heroAccent ? { color: heroAccent } : undefined}>{profileExtras.mood}</span> : null}
-                          {profileExtras.status ? <span className="text-muted-foreground">{profileExtras.status}</span> : null}
-                        </div>
-                      ) : null}
-                    </div>
-
-                    {profile.bio ? <p className="mt-3 max-w-2xl leading-relaxed">{profile.bio}</p> : null}
-
-                    <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                      {profile.website ? (
-                        <a href={profile.website} target="_blank" rel="nofollow noopener" className="inline-flex items-center gap-1.5 text-primary hover:underline">
-                          <LinkIcon className="h-4 w-4" />
-                          {profile.website.replace(/^https?:\/\//, "")}
-                        </a>
-                      ) : null}
-                      <span className="inline-flex items-center gap-1.5">
-                        <CalendarDays className="h-4 w-4" />
-                        {joined}
-                      </span>
                     </div>
 
                     {/* 5 live stats — one divided glass panel; Followers/Following link through */}
@@ -579,9 +585,13 @@ export default async function ProfilePage({
               <div className="relative glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7" style={heroCardStyle}>
                 {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
                 {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
-                {/* Avatar + adaptive action bar */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="relative -mt-14 w-fit sm:-mt-[4.5rem]">
+                {/* Avatar · identity · adaptive action bar — three columns across the
+                    FULL card width (Facebook/Instagram arrangement, owner request). The
+                    identity used to sit BELOW the avatar with the actions stranded on the
+                    far right, which left the middle of the card empty on every screen
+                    wider than a phone. */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
+                  <div className="relative -mt-14 w-fit sm:-mt-[4.5rem] sm:shrink-0">
                     {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute -inset-2.5 rounded-full opacity-50 blur-xl" style={{ background: heroAccent }} /> : null}
                     <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
@@ -606,10 +616,84 @@ export default async function ProfilePage({
                         no duplicate diamond on the avatar corner. */}
                   </div>
 
-                  {/* Action bar — every button always visible, no scrolling on any
-                      device: it wraps to a second row on narrow screens rather than
-                      scrolling sideways (which also clipped the ••• menu). */}
-                  <div className="flex flex-wrap items-center gap-2 sm:mb-1 sm:justify-end">
+                  {/* Identity — the middle column. `flex-1` is what actually fills the
+                      card: the name, handle, rank and relationship chips now occupy the
+                      space between the avatar and the action bar. */}
+                  <div className="min-w-0 flex-1 sm:pt-2">
+                  <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
+                    {profile.displayName}
+                    {profile.isVerified ? <BadgeCheck className="h-5 w-5 text-primary sm:h-6 sm:w-6" /> : null}
+                    {privacy.show_plan_badge ? <DiamondCrownBadge plan={plan} size="md" /> : null}
+                  </h1>
+                  <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
+                  {/* Public reputation rank (migration 0102) — shown by default; the
+                      profile owner can hide it from Privacy. A premium metallic chip
+                      in the rank's own gradient; the score is real (reputation.ts). */}
+                  {privacy.show_reputation ? (
+                    <span
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-white shadow-sm ring-1 ring-inset ring-white/20"
+                      style={{ backgroundImage: `linear-gradient(135deg, ${reputation.rank.from}, ${reputation.rank.to})` }}
+                      title={`Reputation score ${reputation.score.toLocaleString()}`}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" /> {reputation.rank.name}
+                    </span>
+                  ) : null}
+                  {/* Status + Mood (Part 9) — the member's own expression, read
+                      defensively so it stays empty until migration 0095 is applied. */}
+                  {profileExtras.status || profileExtras.mood ? (
+                    <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
+                      {profileExtras.mood ? <span className="font-semibold text-primary" style={heroAccent ? { color: heroAccent } : undefined}>{profileExtras.mood}</span> : null}
+                      {profileExtras.status ? <span className="text-muted-foreground">{profileExtras.status}</span> : null}
+                    </div>
+                  ) : null}
+
+                {/* Identity Presence™ — independent relationship signals, real data only.
+                    Rendered only for signed-in visitors when a genuine relationship exists. */}
+                {isViewer &&
+                (friendState === "friends" ||
+                  friendState === "incoming" ||
+                  friendState === "outgoing" ||
+                  followsYou ||
+                  profile.isFollowing ||
+                  mutuals > 0) ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {friendState === "friends" ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/12 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Friends
+                      </span>
+                    ) : friendState === "incoming" ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/12 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Sent you a request
+                      </span>
+                    ) : friendState === "outgoing" ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" /> Request sent
+                      </span>
+                    ) : null}
+                    {followsYou ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/12 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500" /> Follows you
+                      </span>
+                    ) : null}
+                    {profile.isFollowing ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                        <BadgeCheck className="h-3.5 w-3.5" /> Following
+                      </span>
+                    ) : null}
+                    {mutuals > 0 ? (
+                      <span className="inline-flex items-center rounded-full bg-gradient-to-r from-blue-500/15 to-violet-500/15 px-2.5 py-1 text-xs font-semibold text-violet-600 dark:text-violet-300">
+                        {mutuals} mutual friend{mutuals === 1 ? "" : "s"}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+                  </div>
+
+                  {/* Action bar — pinned to the card's right edge on sm+, and a
+                      full-width block of equal buttons on a phone. Every button stays
+                      visible: it wraps to a second row rather than scrolling sideways
+                      (which used to clip the ••• menu). */}
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:justify-end sm:pt-2">
                     {me && friendState !== "self" ? (
                       <AddFriendButton
                         targetId={profile.id}
@@ -657,77 +741,6 @@ export default async function ProfilePage({
                     )}
                   </div>
                 </div>
-
-                {/* Identity */}
-                <div className="mt-4">
-                  <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
-                    {profile.displayName}
-                    {profile.isVerified ? <BadgeCheck className="h-5 w-5 text-primary sm:h-6 sm:w-6" /> : null}
-                    {privacy.show_plan_badge ? <DiamondCrownBadge plan={plan} size="md" /> : null}
-                  </h1>
-                  <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
-                  {/* Public reputation rank (migration 0102) — shown by default; the
-                      profile owner can hide it from Privacy. A premium metallic chip
-                      in the rank's own gradient; the score is real (reputation.ts). */}
-                  {privacy.show_reputation ? (
-                    <span
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-white shadow-sm ring-1 ring-inset ring-white/20"
-                      style={{ backgroundImage: `linear-gradient(135deg, ${reputation.rank.from}, ${reputation.rank.to})` }}
-                      title={`Reputation score ${reputation.score.toLocaleString()}`}
-                    >
-                      <Sparkles className="h-3.5 w-3.5" /> {reputation.rank.name}
-                    </span>
-                  ) : null}
-                  {/* Status + Mood (Part 9) — the member's own expression, read
-                      defensively so it stays empty until migration 0095 is applied. */}
-                  {profileExtras.status || profileExtras.mood ? (
-                    <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
-                      {profileExtras.mood ? <span className="font-semibold text-primary" style={heroAccent ? { color: heroAccent } : undefined}>{profileExtras.mood}</span> : null}
-                      {profileExtras.status ? <span className="text-muted-foreground">{profileExtras.status}</span> : null}
-                    </div>
-                  ) : null}
-                </div>
-
-                {/* Identity Presence™ — independent relationship signals, real data only.
-                    Rendered only for signed-in visitors when a genuine relationship exists. */}
-                {isViewer &&
-                (friendState === "friends" ||
-                  friendState === "incoming" ||
-                  friendState === "outgoing" ||
-                  followsYou ||
-                  profile.isFollowing ||
-                  mutuals > 0) ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {friendState === "friends" ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/12 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Friends
-                      </span>
-                    ) : friendState === "incoming" ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/12 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Sent you a request
-                      </span>
-                    ) : friendState === "outgoing" ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" /> Request sent
-                      </span>
-                    ) : null}
-                    {followsYou ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/12 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-300">
-                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500" /> Follows you
-                      </span>
-                    ) : null}
-                    {profile.isFollowing ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                        <BadgeCheck className="h-3.5 w-3.5" /> Following
-                      </span>
-                    ) : null}
-                    {mutuals > 0 ? (
-                      <span className="inline-flex items-center rounded-full bg-gradient-to-r from-blue-500/15 to-violet-500/15 px-2.5 py-1 text-xs font-semibold text-violet-600 dark:text-violet-300">
-                        {mutuals} mutual friend{mutuals === 1 ? "" : "s"}
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
 
                 {profile.restricted ? (
                   <div className="mt-6 rounded-2xl border border-border/60 bg-card/50 p-8 text-center ring-hairline">

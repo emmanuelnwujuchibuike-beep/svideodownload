@@ -5,7 +5,7 @@ import { getCachedMetadata, getMetadata } from "@/server/extractors";
 import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
 import { getOrProduce, type DownloadResult } from "./download-cache";
-import { downloadTelegramMedia } from "./telegram-mtproto";
+import { downloadTelegramMedia, downloadTelegramStream } from "./telegram-mtproto";
 import { prepareDownload, YtDlpError } from "./ytdlp-service";
 
 const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
@@ -294,15 +294,20 @@ export async function resolveDownload(
   const format = findFormat(meta, formatId, kind);
 
   // Authenticated Telegram (private / Story) media has no public URL to proxy and
-  // yt-dlp can't reach it — download it through the worker's MTProto client. The
-  // result is cached like every other download, so a re-request is served off disk.
+  // yt-dlp can't reach it — download it through the worker's MTProto client.
+  // STREAM it so the browser gets bytes + progress immediately (no long "preparing"
+  // wait); fall back to the buffered, cached path if the stream can't be set up.
   if (format?.telegramRef) {
     const ref = format.telegramRef;
-    const key = createHash("sha256").update(`tg|${JSON.stringify(ref)}|${format.ext}`).digest("hex").slice(0, 40);
-    const result = await getOrProduce(key, format.ext, contentTypeFor(format.ext), (finalPath) =>
-      downloadTelegramMedia(ref, finalPath),
-    );
-    return { ...result, title };
+    try {
+      return { ...(await downloadTelegramStream(ref)), title };
+    } catch {
+      const key = createHash("sha256").update(`tg|${JSON.stringify(ref)}|${format.ext}`).digest("hex").slice(0, 40);
+      const result = await getOrProduce(key, format.ext, contentTypeFor(format.ext), (finalPath) =>
+        downloadTelegramMedia(ref, finalPath),
+      );
+      return { ...result, title };
+    }
   }
 
   const hasDirect = !!format?.directUrl && format.kind === kind;

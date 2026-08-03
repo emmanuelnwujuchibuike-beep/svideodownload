@@ -203,6 +203,29 @@ function mediaToFormat(media: any, Api: any, ref: TelegramRef): MediaFormat {
   };
 }
 
+/** Pick the largest real (non-stripped) thumbnail from a media object, or null. */
+function pickThumb(media: any): any | null {
+  const thumbs: any[] = media?.document?.thumbs || media?.photo?.sizes || [];
+  const usable = thumbs.filter((t) => t?.className !== "PhotoStrippedSize" && t?.className !== "PhotoPathSize");
+  if (usable.length === 0) return thumbs[0] ?? null;
+  usable.sort((a, b) => (b?.w ?? b?.size ?? 0) - (a?.w ?? a?.size ?? 0));
+  return usable[0] ?? null;
+}
+
+/** Download a small cover thumbnail and return it as a data URI (CSP-safe, persists
+ *  in history like a normal thumbnail URL). Best-effort — null on any failure. */
+async function fetchThumbDataUri(client: any, media: any): Promise<string | null> {
+  try {
+    const thumb = pickThumb(media);
+    if (!thumb) return null;
+    const buf: any = await client.downloadMedia(media, { thumb });
+    if (!buf || (buf.length ?? 0) === 0 || buf.length > 200_000) return null;
+    return `data:image/jpeg;base64,${Buffer.from(buf).toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
 /** Resolve metadata for a private/story/authenticated Telegram URL via MTProto. */
 export async function resolveTelegramViaMtproto(url: string): Promise<VideoMetadata> {
   const ref = parseTelegramUrl(url);
@@ -214,6 +237,7 @@ export async function resolveTelegramViaMtproto(url: string): Promise<VideoMetad
   const platform = detectPlatform(url);
   const name = entityName(entity, ref);
   const durationSec = media?.document?.attributes?.find((a: any) => a?.className === "DocumentAttributeVideo")?.duration ?? null;
+  const thumbnail = await fetchThumbDataUri(client, media);
 
   return {
     id: `${ref.username || ref.channelId || "tg"}-${ref.storyId ?? ref.messageId ?? "0"}`,
@@ -222,7 +246,7 @@ export async function resolveTelegramViaMtproto(url: string): Promise<VideoMetad
     sourceUrl: url,
     title: (caption?.trim() || (ref.isStory ? `${name} · Story` : name)).slice(0, 200),
     description: caption?.trim() || null,
-    thumbnail: null,
+    thumbnail,
     durationSeconds: durationSec != null ? Number(durationSec) : null,
     creator: name,
     uploadDate: null,
@@ -234,9 +258,63 @@ export async function resolveTelegramViaMtproto(url: string): Promise<VideoMetad
   };
 }
 
+const CONTENT_TYPE: Record<string, string> = {
+  mp4: "video/mp4",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  ogg: "audio/ogg",
+};
+
+/**
+ * STREAM the media as it downloads, instead of buffering the whole file to disk
+ * first. This is the fix for "it takes long to prepare the download": the browser
+ * starts receiving bytes (and showing real progress) immediately, rather than
+ * waiting ~20s for the server to pull the entire file before a single byte streams.
+ * Chunks flow through a backpressured ReadableStream. The caller falls back to the
+ * buffered path if setting this up fails.
+ */
+export async function downloadTelegramStream(
+  ref: TelegramRef,
+): Promise<{ stream: ReadableStream<Uint8Array>; ext: string; contentType: string; filesize: number }> {
+  const { client, Api } = await getClient();
+  const { media } = await fetchMedia(client, Api, ref);
+  const format = mediaToFormat(media, Api, ref);
+  const filesize = format.filesize ?? 0;
+
+  // 512 KB parts (a multiple of 4096, within Telegram's per-request limit).
+  const iter: any = client.iterDownload({ file: media, requestSize: 512 * 1024 });
+
+  const stream = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { value, done } = await iter.next();
+        if (done || !value) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(new Uint8Array(value as Buffer));
+      } catch (e) {
+        controller.error(e);
+      }
+    },
+    async cancel() {
+      try {
+        await iter.close?.();
+      } catch {
+        /* best-effort */
+      }
+    },
+  });
+
+  return { stream, ext: format.ext, contentType: CONTENT_TYPE[format.ext] ?? "application/octet-stream", filesize };
+}
+
 /**
  * Download the media the ref points at, straight to `finalPath` via the
- * authenticated client. Used by the download service for `telegramRef` formats.
+ * authenticated client. The buffered fallback for `downloadTelegramStream`.
  */
 export async function downloadTelegramMedia(
   ref: TelegramRef,

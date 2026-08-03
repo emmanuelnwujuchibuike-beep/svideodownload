@@ -114,9 +114,12 @@ export function DownloadsPage({ wallpapers }: { wallpapers: Wallpaper[] }) {
 
       <DownloadStats items={items} />
 
-      <RecentDownloads items={items} onOpenAll={showHistory ? () => setTab("All") : undefined} />
+      {/* "View all" and "Favorites" both open the dedicated history page — a
+          prefetched <Link>, so the route is already warm and the transition is
+          instant rather than a spinner (owner). */}
+      <RecentDownloads items={items} />
 
-      <DownloadQuickActions onFavorites={() => setTab("All")} />
+      <DownloadQuickActions />
 
       {/* Plan-aware storage detail: the usage breakdown, analytics, and the
           upgrade-or-clear gate. The headline meter now lives in the card above,

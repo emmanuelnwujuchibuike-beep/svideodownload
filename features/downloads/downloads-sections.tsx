@@ -229,7 +229,7 @@ export function DownloadStats({ items }: { items: DownloadRecord[] }) {
 
 /* ───────────────────────────── Recent downloads ──────────────────────────── */
 
-export function RecentDownloads({ items, onOpenAll }: { items: DownloadRecord[]; onOpenAll?: () => void }) {
+export function RecentDownloads({ items }: { items: DownloadRecord[] }) {
   const recent = items.slice(0, 4);
   if (recent.length === 0) return null;
 
@@ -237,15 +237,12 @@ export function RecentDownloads({ items, onOpenAll }: { items: DownloadRecord[];
     <section>
       <div className="mb-3 flex items-end justify-between gap-3">
         <h2 className="text-lg font-bold tracking-tight">Recent downloads</h2>
-        {onOpenAll ? (
-          <button type="button" onClick={onOpenAll} className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
-            View all <ArrowRight className="h-3.5 w-3.5" />
-          </button>
-        ) : (
-          <Link href="/history" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
-            View all <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        )}
+        {/* Opens the dedicated history page. `prefetch` warms the route while
+            this section is on screen, so the tap is an instant transition rather
+            than a load (owner). */}
+        <Link href="/history" prefetch className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+          View all <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
 
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 [scrollbar-width:none] sm:grid sm:grid-cols-4 sm:overflow-visible [&::-webkit-scrollbar]:hidden">
@@ -302,10 +299,10 @@ function relativeTime(at: number): string {
  * links; the product-ecosystem entries that have no route yet are marked "Soon"
  * rather than shipped as buttons that 404 (the profile-doorway rule).
  */
-export function DownloadQuickActions({ onFavorites }: { onFavorites?: () => void }) {
-  const cards: { icon: typeof Sparkles; tint: string; title: string; sub: string; href?: string; onClick?: () => void; soon?: boolean; badge?: string }[] = [
+export function DownloadQuickActions() {
+  const cards: { icon: typeof Sparkles; tint: string; title: string; sub: string; href?: string; soon?: boolean }[] = [
     { icon: ImageIcon, tint: "text-fuchsia-500 bg-fuchsia-500/12", title: "Wallpapers", sub: "Browse full screen", href: "/wallpapers" },
-    { icon: Heart, tint: "text-rose-500 bg-rose-500/12", title: "Favorites", sub: "View saved items", onClick: onFavorites },
+    { icon: Heart, tint: "text-rose-500 bg-rose-500/12", title: "Favorites", sub: "View saved items", href: "/history?filter=favorites" },
     { icon: Bookmark, tint: "text-blue-500 bg-blue-500/12", title: "Saved posts", sub: "Your bookmarks", href: "/saved" },
     { icon: Sparkles, tint: "text-violet-500 bg-violet-500/12", title: "AI Studio", sub: "Edit your media", soon: true },
   ];
@@ -335,13 +332,6 @@ export function DownloadQuickActions({ onFavorites }: { onFavorites?: () => void
             <Link key={c.title} href={c.href} prefetch className={cls}>
               {inner}
             </Link>
-          );
-        }
-        if (c.onClick) {
-          return (
-            <button key={c.title} type="button" onClick={c.onClick} className={cn(cls, "w-full")}>
-              {inner}
-            </button>
           );
         }
         return (

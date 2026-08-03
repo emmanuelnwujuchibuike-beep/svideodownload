@@ -11,7 +11,7 @@ import {
   SquareDashedMousePointer,
   Trash2,
 } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { startDownload } from "@/features/downloads/manager";
 import { totalUsedBytes } from "@/features/history/usage";
@@ -50,6 +50,16 @@ export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+
+  /*
+    Open straight into Favorites from the download page's quick action. Read
+    from `window.location` in an effect rather than through `searchParams` —
+    taking searchParams in the page would make /history dynamic, and this page
+    is deliberately static so it opens instantly (see the note on its route).
+  */
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("filter") === "favorites") setTab("favorites");
+  }, []);
 
   const favCount = useMemo(() => items.filter((i) => i.favorite).length, [items]);
   const usedBytes = useMemo(() => totalUsedBytes(items), [items]);

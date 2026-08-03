@@ -1,4 +1,4 @@
-import { BadgeCheck, CalendarDays, Camera, Link as LinkIcon, Lock, MessageCircle, MoreHorizontal, Sparkles } from "lucide-react";
+import { BadgeCheck, CalendarDays, Camera, Link as LinkIcon, Lock, MessageCircle } from "lucide-react";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Image from "next/image";
@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { IdentityBadges } from "@/components/badges/identity-badges";
-import { SiteHeader } from "@/components/layout/site-header";
+import { RankCrown } from "@/components/badges/rank-crown";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { AppModeSwitcher } from "@/features/app-shell/app-mode-switcher";
 import { CreatorRail } from "@/features/profile/creator-rail";
@@ -18,11 +18,10 @@ import { ProfileTabs } from "@/features/profile/profile-tabs";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
 import { friendIdSet } from "@/lib/social/friend-ids";
-import { ProfileMobileMenu } from "@/features/profile/profile-mobile-menu";
+import { ProfileCoverControls } from "@/features/profile/profile-cover-controls";
 import { Toaster } from "@/features/ui/toast";
 import { LivingGlow } from "@/features/profile/living-glow";
 import { ProfileMenu } from "@/features/profile/profile-menu";
-import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
 import { ShareProfileButton } from "@/features/profile/share-profile-button";
 import { FollowButton } from "@/features/social/follow-button";
 import { ProfileActions } from "@/features/social/profile-actions";
@@ -84,6 +83,38 @@ export async function generateMetadata({
       images: profile.avatarUrl ? [{ url: profile.avatarUrl }] : undefined,
     },
   };
+}
+
+/**
+ * One cell of the hero's stat row.
+ *
+ * Owner (2026-08-03): the row "felt tightly packed and the texts are touching
+ * the line". Three things caused that — `px-2` on a five-column grid left the
+ * longest label ("FOLLOWERS") flush against its divider, the 0.08em letter-
+ * spacing widened it further, and nothing allowed the label to shrink. So the
+ * cell now has room that scales with the viewport, the label tightens its
+ * tracking on the narrowest screens where the divider is closest, and long
+ * labels never sit against a rule.
+ */
+function StatCell({ label, value, href }: { label: string; value: number; href?: string }) {
+  const inner = (
+    <>
+      <span className="block text-lg font-bold leading-tight tracking-tight tabular-nums sm:text-2xl">
+        {formatCompactNumber(value)}
+      </span>
+      <span className="mt-1 block truncate text-[9px] font-semibold uppercase leading-tight tracking-[0.02em] text-muted-foreground sm:text-[11px] sm:tracking-[0.08em]">
+        {label}
+      </span>
+    </>
+  );
+  const cls = "min-w-0 px-1 py-3.5 text-center sm:px-3 sm:py-5";
+  return href ? (
+    <Link href={href} className={cn(cls, "transition hover:bg-secondary/40")}>
+      {inner}
+    </Link>
+  ) : (
+    <div className={cls}>{inner}</div>
+  );
 }
 
 async function publishedPostsCount(profileId: string, isOwner: boolean): Promise<number> {
@@ -344,16 +375,9 @@ export default async function ProfilePage({
     return (
       <>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
-        <ProfileMobileMenu
-          user={{
-            handle: profile.handle,
-            displayName: profile.displayName,
-            avatarUrl: profile.avatarUrl,
-            plan,
-            verified: profile.isVerified,
-          }}
-        />
-        <main className="pb-24 pt-[calc(var(--frenz-safe-top)+4rem)] lg:pt-4">
+        {/* No fixed top bar on mobile any more (owner) — the cover runs edge to
+            edge under the status bar and its controls float over it. */}
+        <main className="pb-24 pt-0 lg:pt-4">
           {/* `frenz-profile-shell/cols/rail` (globals.css) put the rail beside
               the center only when the wrapper's OWN width — inside the app
               sidebar — passes 62rem, so it never clips on a laptop. */}
@@ -365,15 +389,12 @@ export default async function ProfilePage({
                   now lives on a `.glass-strong` prestige card straddled by the
                   avatar, with an honest Photo/Video/Avatar mode control. */}
               <div className="relative">
-                {/* Cover — Living Profile light or the creator's own banner.
-                    It used to be pulled UP under the fixed mobile top bar for an
-                    edge-to-edge look. That put its own controls underneath the
-                    header, where the header simply won on z-order: "Edit Cover"
-                    and the ••• menu were unreachable (owner, 2026-08-03). The
-                    cover now STARTS below the header — the visible artwork is
-                    the same height as before, it just isn't tucked under
-                    anything. */}
-                <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:h-60 sm:rounded-3xl">
+                {/* Cover — Living Profile light or the creator's own banner, the
+                    same full-bleed treatment as the visitor hero (owner). With
+                    the fixed top bar gone there is nothing left to cover its
+                    controls, so the artwork can run under the status bar; its
+                    height absorbs the safe area so the card below stays put. */}
+                <div className="relative h-[calc(11rem+var(--frenz-safe-top))] w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:h-60 sm:rounded-3xl">
                   {profile.bannerUrl ? (
                     <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 1024px) 100vw, 900px" className="object-cover" />
                   ) : null}
@@ -383,16 +404,26 @@ export default async function ProfilePage({
                   <LivingGlow joinedAt={profile.createdAt} />
                   {/* Top gloss + bottom scrim so the overlapping card reads cleanly over any cover */}
                   <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/25" />
-                  {/* No safe-area padding here any more — the cover no longer
-                      reaches into it, so adding it just pushed the buttons down. */}
-                  <div className="absolute right-3 top-3 flex items-center gap-2">
-                    <Link href="/account/identity" className="inline-flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/55">
-                      <Camera className="h-4 w-4" /> Edit Cover
-                    </Link>
-                    <Link href="/account" aria-label="More options" className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/40 text-white backdrop-blur-md transition hover:bg-black/55">
-                      <MoreHorizontal className="h-5 w-5" />
-                    </Link>
-                  </div>
+                  {/* Search · Edit Cover · Menu, floating over the artwork and
+                      inset past the notch (they must not enter the safe area
+                      even though the picture does). Replaces the whole top bar. */}
+                  <ProfileCoverControls
+                    user={{
+                      handle: profile.handle,
+                      displayName: profile.displayName,
+                      avatarUrl: profile.avatarUrl,
+                      plan,
+                      verified: profile.isVerified,
+                    }}
+                  />
+                  {/* Desktop keeps the plain Edit Cover affordance — the floating
+                      controls above are the mobile chrome replacement. */}
+                  <Link
+                    href="/account/identity"
+                    className="absolute right-3 top-3 hidden items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/55 lg:inline-flex"
+                  >
+                    <Camera className="h-4 w-4" /> Edit Cover
+                  </Link>
                 </div>
 
                 {/* Identity Card™ — the premium glass surface */}
@@ -497,31 +528,24 @@ export default async function ProfilePage({
                       </div>
                     </div>
 
-                    {/* 5 live stats — one divided glass panel; Followers/Following link through */}
+                    {/* 5 live stats — one divided glass panel; Followers/Following
+                        link through. Same `StatCell` as the visitor hero, so the
+                        two rows breathe identically. */}
                     <div className="mt-5 grid grid-cols-5 divide-x divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card/50 ring-hairline">
-                      {stats.map((s) => {
-                        const href =
-                          s.label === "Followers"
-                            ? `/u/${profile.handle}/followers`
-                            : s.label === "Following"
-                              ? `/u/${profile.handle}/following`
-                              : null;
-                        const inner = (
-                          <>
-                            <span className="block text-base font-extrabold tracking-tight sm:text-2xl">{formatCompactNumber(s.value)}</span>
-                            <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground sm:text-[11px]">{s.label}</span>
-                          </>
-                        );
-                        return href ? (
-                          <Link key={s.label} href={href} className="px-1 py-4 text-center transition hover:bg-secondary/40">
-                            {inner}
-                          </Link>
-                        ) : (
-                          <div key={s.label} className="px-1 py-4 text-center">
-                            {inner}
-                          </div>
-                        );
-                      })}
+                      {stats.map((s) => (
+                        <StatCell
+                          key={s.label}
+                          label={s.label}
+                          value={s.value}
+                          href={
+                            s.label === "Followers"
+                              ? `/u/${profile.handle}/followers`
+                              : s.label === "Following"
+                                ? `/u/${profile.handle}/following`
+                                : undefined
+                          }
+                        />
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -567,11 +591,12 @@ export default async function ProfilePage({
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
-      {/* Mobile top bar — desktop uses the app shell's sidebar + top bar */}
-      <SiteHeader social desktopHidden />
-      {/* Add friends — single top-level icon (mobile only; desktop uses the top bar) */}
-      <SuggestionsLauncher className="fixed left-3 top-[calc(0.75rem+var(--frenz-safe-top))] z-[60] bg-background/70 backdrop-blur-xl lg:hidden" />
-      <main className="pb-24 pt-14 sm:pt-16 lg:pt-4">
+      {/* No mobile top bar and no add-friends launcher (owner). `SiteHeader social`
+          collapsed to `h-0` on mobile, so all it contributed was the hairline
+          rule sitting across the top of the cover; the +person button floated
+          over the artwork beside the avatar. Both are gone, and the cover is
+          genuinely edge to edge. Desktop chrome comes from the app shell. */}
+      <main className="pb-24 pt-0 lg:pt-4">
         <div className="mx-auto flex w-full max-w-6xl gap-6">
           <div className="mx-auto min-w-0 max-w-4xl flex-1 sm:px-4">
           {/* Hero — cover + glass Identity Card + Identity Presence™ (Profile Header · Part 2).
@@ -582,7 +607,7 @@ export default async function ProfilePage({
                 bleeds to the very TOP (under the status bar) instead of stopping at the
                 header line (owner): pulled up by the main's top padding and grown by
                 the same, so the card below stays put. sm+ keeps the rounded card. */}
-            <div className="relative -mt-14 h-[calc(11rem+3.5rem)] w-full overflow-hidden bg-gradient-to-br from-blue-600/30 via-violet-500/15 to-purple-500/20 sm:mt-0 sm:h-60 sm:rounded-3xl md:h-64">
+            <div className="relative h-[calc(11rem+var(--frenz-safe-top))] w-full overflow-hidden bg-gradient-to-br from-blue-600/30 via-violet-500/15 to-purple-500/20 sm:h-60 sm:rounded-3xl md:h-64">
               {profile.bannerUrl ? (
                 <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 896px) 100vw, 896px" className="object-cover" />
               ) : null}
@@ -646,7 +671,7 @@ export default async function ProfilePage({
                       style={{ backgroundImage: `linear-gradient(135deg, ${reputation.rank.from}, ${reputation.rank.to})` }}
                       title={`Reputation score ${reputation.score.toLocaleString()}`}
                     >
-                      <Sparkles className="h-3.5 w-3.5" /> {reputation.rank.name}
+                      <RankCrown className="h-4 w-4" /> {reputation.rank.name}
                     </span>
                   ) : null}
                   {/* Status + Mood (Part 9) — the member's own expression, read
@@ -793,34 +818,13 @@ export default async function ProfilePage({
                         privacy.show_views ? "grid-cols-5" : "grid-cols-4",
                       )}
                     >
-                      <Link
-                        href={`/u/${profile.handle}/following`}
-                        className="px-2 py-4 text-center transition hover:bg-secondary/40 sm:py-5"
-                      >
-                        <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(profile.followingCount)}</span>
-                        <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Following</span>
-                      </Link>
-                      <Link
-                        href={`/u/${profile.handle}/followers`}
-                        className="px-2 py-4 text-center transition hover:bg-secondary/40 sm:py-5"
-                      >
-                        <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(profile.followersCount)}</span>
-                        <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Followers</span>
-                      </Link>
-                      <div className="px-2 py-4 text-center sm:py-5">
-                        <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(friendTotal)}</span>
-                        <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Friends</span>
-                      </div>
-                      <div className="px-2 py-4 text-center sm:py-5">
-                        <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(postsTotal)}</span>
-                        <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Posts</span>
-                      </div>
-                      {privacy.show_views ? (
-                        <div className="px-2 py-4 text-center sm:py-5">
-                          <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(totals.views)}</span>
-                          <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Views</span>
-                        </div>
-                      ) : null}
+                      <StatCell label="Following" value={profile.followingCount} href={`/u/${profile.handle}/following`} />
+                      <StatCell label="Followers" value={profile.followersCount} href={`/u/${profile.handle}/followers`} />
+                      {/* Owner: Friends replaced by Likes here — a visitor cares
+                          what the creator's work has earned, not their friend list. */}
+                      <StatCell label="Likes" value={totals.likes} />
+                      <StatCell label="Posts" value={postsTotal} />
+                      {privacy.show_views ? <StatCell label="Views" value={totals.views} /> : null}
                     </div>
                   </>
                 )}

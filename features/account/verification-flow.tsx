@@ -23,13 +23,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SETTINGS_TINTS, SettingsGroup } from "@/features/account/settings-ui";
 import { createClient } from "@/lib/supabase/client";
-import type {
-  Eligibility,
-  IdDocumentType,
-  VerificationCategory,
-  VerificationState,
-} from "@/lib/social/verification";
-import { ID_DOCUMENT_TYPES, VERIFICATION_CATEGORIES } from "@/lib/social/verification-shared";
+// Types come from `verification-shared`, NOT `verification` — the latter is
+// `server-only`, and although a type-only import is erased at build time,
+// leaving the specifier here invites someone to add a value import to it later
+// and pull the service-role module into a client bundle.
+import {
+  ID_DOCUMENT_TYPES,
+  VERIFICATION_CATEGORIES,
+  type Eligibility,
+  type IdDocumentType,
+  type VerificationCategory,
+  type VerificationState,
+} from "@/lib/social/verification-shared";
 import { cn } from "@/lib/utils";
 
 /**

@@ -41,7 +41,14 @@ export function WallpaperExplore({ items, canEngage }: { items: Wallpaper[]; can
       <WallpaperReels
         items={items}
         canEngage={canEngage}
-        onClose={() => router.back()}
+        // `back()` is right when they arrived from the landing's CTA, but a
+        // visitor who opened /wallpapers directly (a shared link, a search
+        // result) has nothing behind it — that would strand them on a page with
+        // a close button that does nothing. Fall back to the home page.
+        onClose={() => {
+          if (window.history.length > 1) router.back();
+          else router.push("/");
+        }}
         onDownloaded={onDownloaded}
       />
       {adOpen ? <WallpaperInterstitial onClose={() => setAdOpen(false)} /> : null}

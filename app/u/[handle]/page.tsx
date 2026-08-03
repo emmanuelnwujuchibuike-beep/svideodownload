@@ -21,7 +21,6 @@ import { friendIdSet } from "@/lib/social/friend-ids";
 import { ProfileCoverControls } from "@/features/profile/profile-cover-controls";
 import { Toaster } from "@/features/ui/toast";
 import { LivingGlow } from "@/features/profile/living-glow";
-import { ProfileMenu } from "@/features/profile/profile-menu";
 import { ShareProfileButton } from "@/features/profile/share-profile-button";
 import { FollowButton } from "@/features/social/follow-button";
 import { ProfileActions } from "@/features/social/profile-actions";
@@ -848,16 +847,11 @@ export default async function ProfilePage({
             ) : null}
           </div>
           </div>
-          {/* Owner feature panel — docked open on desktop, a toggle drawer on mobile */}
-          {profile.isOwner ? (
-            <ProfileMenu
-              handle={profile.handle}
-              displayName={profile.displayName}
-              avatarUrl={profile.avatarUrl}
-              plan={plan}
-              verified={profile.isVerified}
-            />
-          ) : null}
+          {/* No owner panel here: this branch only runs when the viewer is NOT
+              the owner (see the `if (profile.isOwner)` return above), so the
+              `isOwner ?` that used to sit here could never be true. The owner's
+              own profile gets the creator rail on desktop and the shared menu
+              from the cover controls on mobile. */}
         </div>
       </main>
     </>

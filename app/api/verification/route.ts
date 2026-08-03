@@ -42,7 +42,7 @@ function bad(error: string, status = 400) {
 }
 
 /** Eligibility inputs, read from the same tables the profile itself uses. */
-async function eligibilityFor(userId: string, email: string | undefined, emailConfirmed: boolean) {
+async function eligibilityFor(userId: string, emailConfirmed: boolean) {
   const admin = createAdminClient();
   const [{ data: profile }, { data: sub }, posts] = await Promise.all([
     admin
@@ -69,7 +69,7 @@ async function eligibilityFor(userId: string, email: string | undefined, emailCo
     avatarUrl: (profile?.avatar_url as string | null) ?? null,
     followers: (profile?.followers_count as number | null) ?? 0,
     posts: posts.count ?? 0,
-    emailConfirmed: emailConfirmed || !!email,
+    emailConfirmed,
     suspended: Boolean(profile?.is_suspended),
     paidPlan: Boolean(paidPlan),
   });
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     return bad("You already have an application under review.");
   }
 
-  const eligibility = await eligibilityFor(user.id, user.email, !!user.email_confirmed_at);
+  const eligibility = await eligibilityFor(user.id, !!user.email_confirmed_at);
   if (!eligibility.eligible) {
     const missing = eligibility.criteria.filter((c) => !c.met).map((c) => c.label);
     return bad(`Not eligible yet: ${missing.join(", ")}.`, 403);

@@ -48,7 +48,7 @@ export default async function VerificationSettingsPage() {
     avatarUrl: (profile?.avatar_url as string | null) ?? null,
     followers: (profile?.followers_count as number | null) ?? 0,
     posts: posts.count ?? 0,
-    emailConfirmed: !!user.email_confirmed_at || !!user.email,
+    emailConfirmed: !!user.email_confirmed_at,
     suspended: Boolean(profile?.is_suspended),
     paidPlan: Boolean(paidPlan),
   });

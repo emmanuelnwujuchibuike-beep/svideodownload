@@ -43,6 +43,19 @@ export interface Platform {
 
 export type MediaKind = "video" | "audio" | "image";
 
+/**
+ * Reference to authenticated Telegram (MTProto) media, when there's no public CDN
+ * URL to proxy. The download service re-resolves it through the worker's Telegram
+ * client at download time (see server/services/telegram-mtproto.ts).
+ */
+export interface TelegramMediaRef {
+  username?: string;
+  channelId?: string;
+  messageId?: number;
+  storyId?: number;
+  isStory?: boolean;
+}
+
 export interface MediaFormat {
   /** Download selector: a height tier ("1080"), "audio", or an extractor key. */
   formatId: string;
@@ -73,6 +86,12 @@ export interface MediaFormat {
    * validated file rather than a copy of whatever the source actually serves.
    */
   transcodeMaxHeight?: number | null;
+  /**
+   * Set on authenticated Telegram (private/Story) media that has no public URL.
+   * The download service downloads it through the worker's MTProto client rather
+   * than proxying/yt-dlp.
+   */
+  telegramRef?: TelegramMediaRef | null;
 }
 
 export type ExtractorName =

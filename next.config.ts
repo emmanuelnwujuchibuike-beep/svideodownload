@@ -145,6 +145,11 @@ const nextConfig: NextConfig = {
   env: { NEXT_PUBLIC_APP_BUILD: appBuild },
   // Emit a self-contained server bundle for the Docker runtime image.
   output: "standalone",
+  // GramJS (Telegram MTProto client) is only ever loaded at runtime on the WORKER
+  // (via a dynamic import in server/services/telegram-mtproto.ts) for private/Story
+  // downloads. It uses native optional deps + dynamic requires that webpack can't
+  // bundle, so keep it external — required from node_modules at runtime instead.
+  serverExternalPackages: ["telegram"],
   // Keep barrel-heavy libraries from pulling their entire surface into a route
   // bundle: importing one icon should ship one icon. Central to the platform's
   // "more modules must not bloat existing routes" guarantee (docs/ARCHITECTURE.md).

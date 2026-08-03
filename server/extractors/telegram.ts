@@ -1,6 +1,12 @@
 import { detectPlatform } from "@/lib/platforms";
 import type { MediaFormat, PlatformId, VideoMetadata } from "@/types";
 
+import {
+  parseTelegramUrl,
+  resolveTelegramViaMtproto,
+  telegramMtprotoConfigured,
+} from "@/server/services/telegram-mtproto";
+
 import { extractorFetch } from "./http";
 import { DESKTOP_UA, metaContent, unescapeJsonUrl } from "./parse";
 import { ExtractionError, type Extractor } from "./types";
@@ -119,8 +125,36 @@ export const telegramExtractor: Extractor = {
   },
   async extract(url: string): Promise<VideoMetadata> {
     const platform = detectPlatform(url);
+
+    // Authenticated path FIRST when configured — it serves Stories, private
+    // channels AND public posts. Falls through to the public embed on failure so a
+    // public post still works even if the signed-in account can't see it.
+    if (telegramMtprotoConfigured()) {
+      try {
+        return await resolveTelegramViaMtproto(url);
+      } catch (err) {
+        const ref = parseTelegramUrl(url);
+        // A Story / private link can't be served by the public embed — surface why.
+        if (ref?.isStory || ref?.channelId) {
+          throw new ExtractionError(err instanceof Error ? err.message : "Could not fetch this Telegram media");
+        }
+        // A public post — fall through to the embed below.
+      }
+    }
+
     const parsed = embedUrl(url);
     if (!parsed) {
+      const ref = parseTelegramUrl(url);
+      if (ref?.isStory) {
+        throw new ExtractionError(
+          "Telegram Stories need the authenticated connection, which isn't configured on this server.",
+        );
+      }
+      if (ref?.channelId) {
+        throw new ExtractionError(
+          "Private Telegram channels need the authenticated connection, which isn't configured on this server.",
+        );
+      }
       throw new ExtractionError("Not a downloadable Telegram post — link to a specific public post (t.me/<channel>/<id>).");
     }
 

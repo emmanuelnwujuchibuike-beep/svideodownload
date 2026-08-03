@@ -19,7 +19,7 @@ import type { MediaKind, PlatformId } from "@/types";
  * saves are unreliable, callers should fall back to a native link.
  */
 
-export type TaskStatus = "queued" | "downloading" | "paused" | "completed" | "failed" | "canceled";
+export type TaskStatus = "queued" | "preparing" | "downloading" | "paused" | "completed" | "failed" | "canceled";
 
 export interface DownloadTask {
   id: string;
@@ -47,6 +47,70 @@ export interface DownloadTask {
 let tasks: DownloadTask[] = [];
 const controllers = new Map<string, AbortController>();
 const listeners = new Set<() => void>();
+
+// ── Run concurrency gate ────────────────────────────────────────────────────
+// A batch (e.g. every photo of a TikTok slideshow) used to fire ALL its
+// downloads at once. That hammered the extractor with N simultaneous requests
+// for the same post — the platform rate-limits, so most came back as failures
+// ("batch always shows failed"). We now run at most MAX_CONCURRENT at a time and
+// hold the rest as "queued"; the first request also warms the metadata cache so
+// the siblings resolve instantly instead of each re-extracting.
+const MAX_CONCURRENT = 2;
+let activeRuns = 0;
+const runQueue: string[] = [];
+
+function pump() {
+  while (activeRuns < MAX_CONCURRENT && runQueue.length > 0) {
+    const id = runQueue.shift();
+    if (id === undefined) break;
+    const task = tasks.find((t) => t.id === id);
+    if (!task || task.status === "canceled" || task.status === "completed") continue;
+    activeRuns += 1;
+    void run(id).finally(() => {
+      activeRuns -= 1;
+      pump();
+    });
+  }
+}
+
+function enqueueRun(id: string) {
+  if (!runQueue.includes(id)) runQueue.push(id);
+  pump();
+}
+
+function dequeueRun(id: string) {
+  const i = runQueue.indexOf(id);
+  if (i !== -1) runQueue.splice(i, 1);
+}
+
+// ── Serialized device-saves ─────────────────────────────────────────────────
+// Browsers block multiple programmatic downloads fired in a tight loop — only
+// the FIRST `<a download>` click lands, the rest are silently dropped ("only one
+// file downloads"). Saving one at a time with a small gap lets every file in a
+// batch actually reach the device.
+const SAVE_GAP_MS = 700;
+const saveQueue: (() => void)[] = [];
+let savePumping = false;
+
+function enqueueSave(fn: () => void) {
+  saveQueue.push(fn);
+  if (savePumping) return;
+  savePumping = true;
+  const next = () => {
+    const job = saveQueue.shift();
+    if (!job) {
+      savePumping = false;
+      return;
+    }
+    try {
+      job();
+    } catch {
+      /* a single save failing must not stall the queue */
+    }
+    setTimeout(next, SAVE_GAP_MS);
+  };
+  next();
+}
 
 // A monotonic count of completed downloads this session, with its own listener
 // set — the interstitial fires on "3 consecutive downloads" and only needs the
@@ -125,7 +189,11 @@ async function run(id: string) {
   if (!task) return;
   const controller = new AbortController();
   controllers.set(id, controller);
-  patch(id, { status: "downloading", error: null, receivedBytes: 0, speed: 0 });
+  // "preparing", not "downloading": the /api/download request BLOCKS while the
+  // server extracts + transcodes the file, before a single byte streams back.
+  // Showing "Preparing…" here (instead of a stuck 0% "Downloading") is the fix
+  // for "it takes time showing downloading but isn't actually downloading yet".
+  patch(id, { status: "preparing", error: null, receivedBytes: 0, speed: 0 });
   const startedAt = performance.now();
   trackDownload("started", { downloadId: task.id, platform: task.platform, mediaKind: task.kind, quality: task.qualityLabel });
 
@@ -148,11 +216,17 @@ async function run(id: string) {
     let received = 0;
     let lastT = performance.now();
     let lastBytes = 0;
+    let flowing = false;
 
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       if (value) {
+        // First byte in → the server finished preparing and is now streaming.
+        if (!flowing) {
+          flowing = true;
+          patch(id, { status: "downloading" });
+        }
         chunks.push(value);
         received += value.length;
         const now = performance.now();
@@ -176,7 +250,9 @@ async function run(id: string) {
     //    of navigating anywhere — the user never leaves the app.
     const ios = isIosDevice();
     retainBlob(id, blob, filename);
-    if (!ios) saveBlob(blob, filename);
+    // Serialized (see enqueueSave): a batch's files save one-by-one with a gap
+    // so the browser doesn't drop all but the first.
+    if (!ios) enqueueSave(() => saveBlob(blob, filename));
 
     patch(id, { status: "completed", receivedBytes: received, totalBytes: total || received, speed: 0, awaitingSave: ios });
     completedCount += 1;
@@ -261,22 +337,24 @@ export function startDownload(input: {
   // refresh/retry never double-counts). `started`/`completed`/`failed` follow in run().
   trackDownload("requested", { downloadId: id, platform: input.platform, mediaKind: input.kind, quality: input.qualityLabel });
   // No "started" toast — the floating progress card IS the notification.
-  void run(id);
+  enqueueRun(id);
   return id;
 }
 
 export function pauseDownload(id: string) {
+  dequeueRun(id);
   controllers.get(id)?.abort();
   controllers.delete(id);
   patch(id, { status: "paused", speed: 0 });
 }
 export function resumeDownload(id: string) {
-  void run(id);
+  enqueueRun(id);
 }
 export function retryDownload(id: string) {
-  void run(id);
+  enqueueRun(id);
 }
 export function cancelDownload(id: string) {
+  dequeueRun(id);
   controllers.get(id)?.abort();
   controllers.delete(id);
   finishedBlobs.delete(id);
@@ -284,12 +362,14 @@ export function cancelDownload(id: string) {
   emit();
 }
 export function pauseAll() {
-  for (const t of tasks) if (t.status === "downloading") pauseDownload(t.id);
+  for (const t of tasks) if (t.status === "downloading" || t.status === "preparing" || t.status === "queued") pauseDownload(t.id);
 }
 export function clearFinished() {
   for (const t of tasks) {
     if (t.status === "completed" || t.status === "failed" || t.status === "canceled") finishedBlobs.delete(t.id);
   }
-  tasks = tasks.filter((t) => t.status === "downloading" || t.status === "paused" || t.status === "queued");
+  tasks = tasks.filter(
+    (t) => t.status === "downloading" || t.status === "preparing" || t.status === "paused" || t.status === "queued",
+  );
   emit();
 }

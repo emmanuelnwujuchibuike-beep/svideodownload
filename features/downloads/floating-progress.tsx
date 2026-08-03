@@ -87,8 +87,9 @@ export function FloatingDownloadProgress() {
   }, []);
 
   // Auto-dismiss completed cards that need no further action.
-  const activeCount = tasks.filter((t) => t.status === "downloading" || t.status === "queued").length;
-  const active = tasks.find((t) => t.status === "downloading" || t.status === "queued");
+  const isActive = (s: DownloadTask["status"]) => s === "downloading" || s === "queued" || s === "preparing";
+  const activeCount = tasks.filter((t) => isActive(t.status)).length;
+  const active = tasks.find((t) => isActive(t.status));
   const finished = tasks.find((t) => t.status === "completed" || t.status === "failed");
   const task = active ?? finished;
   // Hold the card while the review player is open — closing the player must
@@ -149,11 +150,15 @@ export function FloatingDownloadProgress() {
                     ? "Download failed"
                     : activeCount > 1
                       ? `Downloading ${activeCount} items…`
-                      : "Downloading…"}
+                      : task.status === "preparing"
+                        ? "Preparing your file…"
+                        : task.status === "queued"
+                          ? "Queued…"
+                          : "Downloading…"}
               </p>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{task.title || "Your file"}</p>
 
-              {task.status === "downloading" || task.status === "queued" ? (
+              {isActive(task.status) ? (
                 <>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
                     {pct === null ? (
@@ -224,8 +229,8 @@ export function FloatingDownloadProgress() {
 
             <button
               type="button"
-              aria-label={task.status === "downloading" ? "Cancel download" : "Dismiss"}
-              onClick={() => (task.status === "downloading" || task.status === "queued" ? cancelDownload(task.id) : dismissTask(task.id))}
+              aria-label={isActive(task.status) ? "Cancel download" : "Dismiss"}
+              onClick={() => (isActive(task.status) ? cancelDownload(task.id) : dismissTask(task.id))}
               className="shrink-0 rounded-lg p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
             >
               <X className="h-4 w-4" />

@@ -2,6 +2,7 @@
 
 import {
   Check,
+  ChevronDown,
   Clock,
   Copy,
   Download,
@@ -108,6 +109,12 @@ export function sortItems(items: DownloadRecord[], sort: SortKey): DownloadRecor
   return arr.sort((a, b) => b.createdAt - a.createdAt);
 }
 
+export interface GallerySelection {
+  active: boolean;
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+}
+
 export function MediaGallery({
   items,
   onToggleFavorite,
@@ -115,6 +122,8 @@ export function MediaGallery({
   initialGrid = 18,
   initialList = 8,
   emptyText = "No downloads yet.",
+  groupByDay = false,
+  selection,
 }: {
   items: DownloadRecord[];
   onToggleFavorite: (id: string) => void;
@@ -122,6 +131,13 @@ export function MediaGallery({
   initialGrid?: number;
   initialList?: number;
   emptyText?: string;
+  /** Break the grid into Today / Yesterday / This week / Earlier sections, each
+   *  with a count and collapsible (the history reference,
+   *  public/new downloadhistory.jpg). Only meaningful with the Recent sort — any
+   *  other order would put the same day in several places, so it's ignored. */
+  groupByDay?: boolean;
+  /** Multi-select mode: tiles toggle instead of opening the player. */
+  selection?: GallerySelection;
 }) {
   const [view, setView] = useState<ViewMode>("grid");
   const [cols, setCols] = useState<number>(3);
@@ -154,6 +170,35 @@ export function MediaGallery({
   const sorted = useMemo(() => sortItems(items, sort), [items, sort]);
   const initial = view === "grid" ? initialGrid : initialList;
   const shown = sorted.slice(0, limit);
+
+  /*
+    Day groups. Only for the Recent sort — under "Largest" or "Alphabetical" the
+    same day would appear in several places, so a "Today" heading would be a lie.
+    Grouping shows EVERYTHING rather than paging, because the headings are the
+    way you navigate a long history; a "Show more" under them would fight that.
+  */
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const grouped = useMemo(() => {
+    if (!groupByDay || sort !== "time") return null;
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    const today = midnight.getTime();
+    const yesterday = today - 86_400_000;
+    const week = today - 6 * 86_400_000;
+
+    const buckets: { key: string; label: string; items: DownloadRecord[] }[] = [
+      { key: "today", label: "Today", items: [] },
+      { key: "yesterday", label: "Yesterday", items: [] },
+      { key: "week", label: "This week", items: [] },
+      { key: "earlier", label: "Earlier", items: [] },
+    ];
+    for (const item of sorted) {
+      const t = item.createdAt;
+      const bucket = t >= today ? 0 : t >= yesterday ? 1 : t >= week ? 2 : 3;
+      buckets[bucket]!.items.push(item);
+    }
+    return buckets.filter((b) => b.items.length > 0);
+  }, [groupByDay, sort, sorted]);
   const openAt = (idx: number) => {
     haptic("light");
     openPlayerQueue(sorted, idx);
@@ -209,10 +254,42 @@ export function MediaGallery({
 
       {sorted.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">{emptyText}</p>
+      ) : view === "grid" && grouped ? (
+        <div className="space-y-5">
+          {grouped.map((g) => (
+            <section key={g.key}>
+              <button
+                type="button"
+                onClick={() => { tap(); setCollapsed((c) => ({ ...c, [g.key]: !c[g.key] })); }}
+                aria-expanded={!collapsed[g.key]}
+                className="mb-2 flex w-full items-center justify-between gap-3 text-left"
+              >
+                <span className="text-lg font-bold tracking-tight">{g.label}</span>
+                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  {g.items.length} item{g.items.length === 1 ? "" : "s"}
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", collapsed[g.key] && "-rotate-90")} />
+                </span>
+              </button>
+              {collapsed[g.key] ? null : (
+                <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+                  {g.items.map((item) => (
+                    <GalleryTile
+                      key={item.id}
+                      item={item}
+                      onOpen={() => openAt(sorted.indexOf(item))}
+                      onToggleFavorite={() => onToggleFavorite(item.id)}
+                      selection={selection}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          ))}
+        </div>
       ) : view === "grid" ? (
         <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
           {shown.map((item, i) => (
-            <GalleryTile key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} />
+            <GalleryTile key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} selection={selection} />
           ))}
         </div>
       ) : (
@@ -223,7 +300,9 @@ export function MediaGallery({
         </div>
       )}
 
-      {sorted.length > limit ? (
+      {/* Grouped view renders everything under its headings, so paging would
+          only get in the way of them. */}
+      {grouped && view === "grid" ? null : sorted.length > limit ? (
         <div className="mt-5 text-center">
           <button type="button" onClick={() => setLimit((n) => n + initial)} className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-semibold shadow-soft transition hover:bg-secondary">
             Show more ({sorted.length - limit})
@@ -241,13 +320,33 @@ export function MediaGallery({
 }
 
 /** iOS-Photos-style square tile. */
-function GalleryTile({ item, onOpen, onToggleFavorite }: { item: DownloadRecord; onOpen: () => void; onToggleFavorite: () => void }) {
+function GalleryTile({
+  item,
+  onOpen,
+  onToggleFavorite,
+  selection,
+}: {
+  item: DownloadRecord;
+  onOpen: () => void;
+  onToggleFavorite: () => void;
+  selection?: GallerySelection;
+}) {
   const platform = PLATFORMS[item.platform] ?? PLATFORMS.generic;
   const Icon = BRAND_ICONS[item.platform];
   const KindIcon = KIND_ICON[item.kind] ?? Video;
+  const selecting = !!selection?.active;
+  const picked = !!selection?.selected.has(item.id);
   return (
-    <div className="group relative aspect-square overflow-hidden rounded-xl bg-black/40">
-      <button type="button" onClick={onOpen} aria-label={`Watch ${item.title}`} className="absolute inset-0 h-full w-full">
+    <div className={cn("group relative aspect-square overflow-hidden rounded-xl bg-black/40", picked && "ring-2 ring-primary")}>
+      <button
+        type="button"
+        // In select mode the whole tile toggles instead of opening the player —
+        // otherwise picking items would launch a video on every tap.
+        onClick={selecting ? () => { tap(); selection!.onToggle(item.id); } : onOpen}
+        aria-label={selecting ? `${picked ? "Deselect" : "Select"} ${item.title}` : `Watch ${item.title}`}
+        aria-pressed={selecting ? picked : undefined}
+        className="absolute inset-0 h-full w-full"
+      >
         <SmartThumb src={item.thumbnail} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]" fallback={<KindIcon className="h-7 w-7" />} />
         <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent px-2 pb-1.5 pt-6">
           <span className="line-clamp-1 text-left text-[11px] font-medium text-white/95">{item.title}</span>
@@ -261,15 +360,29 @@ function GalleryTile({ item, onOpen, onToggleFavorite }: { item: DownloadRecord;
       <span className={cn("pointer-events-none absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br text-white shadow", platform.accent)}>
         {Icon ? <Icon className="h-3.5 w-3.5" /> : <KindIcon className="h-3.5 w-3.5" />}
       </span>
-      <button
-        type="button"
-        onClick={() => { tap(); onToggleFavorite(); }}
-        aria-label={item.favorite ? "Unfavorite" : "Favorite"}
-        aria-pressed={item.favorite}
-        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur transition duration-150 hover:bg-black/55 active:scale-[0.82]"
-      >
-        <Heart className={cn("h-3.5 w-3.5", item.favorite && "fill-rose-500 text-rose-500")} />
-      </button>
+      {/* In select mode the corner shows the tick instead of the heart —
+          favouriting mid-selection would be an easy mis-tap. */}
+      {selecting ? (
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-white/80 transition",
+            picked ? "bg-primary text-primary-foreground" : "bg-black/30",
+          )}
+        >
+          {picked ? <Check className="h-3.5 w-3.5" /> : null}
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => { tap(); onToggleFavorite(); }}
+          aria-label={item.favorite ? "Unfavorite" : "Favorite"}
+          aria-pressed={item.favorite}
+          className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur transition duration-150 hover:bg-black/55 active:scale-[0.82]"
+        >
+          <Heart className={cn("h-3.5 w-3.5", item.favorite && "fill-rose-500 text-rose-500")} />
+        </button>
+      )}
     </div>
   );
 }

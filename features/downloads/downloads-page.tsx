@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Download,
   Pause,
   Play,
   RotateCw,
@@ -13,6 +12,14 @@ import { useMemo, useState } from "react";
 import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { DownloadBox } from "@/features/downloads/download-box";
 import { DownloadsRail } from "@/features/downloads/downloads-rail";
+import {
+  CloudStorageCard,
+  DownloadQuickActions,
+  DownloadStats,
+  DownloadTrustStrip,
+  DownloadsHero,
+  RecentDownloads,
+} from "@/features/downloads/downloads-sections";
 import { HubWarmup } from "@/features/downloads/hub-warmup";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
@@ -84,38 +91,36 @@ export function DownloadsPage({ wallpapers }: { wallpapers: Wallpaper[] }) {
       {/* Warms the Gateway chunk and prefetches its destinations on idle, so
           nothing lags the first time it is needed. Renders nothing. */}
       <HubWarmup />
-      {/* Hero. `id="download"` is the target the rail's "Download from Link"
-          quick action points at — the anchor previously existed only on the
-          landing hero, so that control did nothing on this page. */}
-      <section
-        id="download"
-        className="relative scroll-mt-20 overflow-hidden rounded-2xl bg-gradient-to-br from-blue-700 via-violet-700 to-purple-800 p-5 text-white shadow-elevated sm:p-7"
-      >
-        <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full bg-fuchsia-400/30 blur-3xl motion-safe:animate-drift" />
-        <div className="relative">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-extrabold tracking-[-0.02em] sm:text-3xl">Downloads</h1>
-              <p className="mt-1 text-sm text-white/80">All your downloaded content in one place.</p>
-            </div>
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-white shadow-lg ring-1 ring-white/25 motion-safe:animate-float">
-              <Download className="h-7 w-7" />
-            </span>
-          </div>
-          <div className="mt-5">
-            <DownloadBox />
-          </div>
-        </div>
+
+      {/* ── The owner's reference layout (public/new downloadpage.jpg), in order:
+             hero → paste card → cloud storage → stat tiles → recent → quick
+             actions → trust strip. Every figure below is computed from the
+             viewer's real download history. ── */}
+
+      <DownloadsHero />
+
+      {/* Paste card. `id="download"` is the target the rail's "Download from
+          Link" quick action points at — the anchor previously existed only on
+          the landing hero, so that control did nothing on this page. */}
+      <section id="download" className="scroll-mt-20 rounded-3xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
+        <DownloadBox surface="card" />
       </section>
 
-      {/* Under the purple hero — adjusts to whatever ad size the zone serves
+      {/* Under the paste card — adjusts to whatever ad size the zone serves
           (AdSurface hugs the unit). The site's highest-attention placement. */}
       <AdSurface zone="under_download" maxWidth="max-w-3xl" />
 
-      {/* Plan-aware storage: the usage meter (5 GB free · 50 GB Pro · unlimited
-          Business), analytics, and the upgrade-or-clear gate — the same feature
-          the public library carries, in the dashboard. This is the page's single
-          stats surface; the old five-card row was redundant with it and is gone. */}
+      <CloudStorageCard items={items} />
+
+      <DownloadStats items={items} />
+
+      <RecentDownloads items={items} onOpenAll={showHistory ? () => setTab("All") : undefined} />
+
+      <DownloadQuickActions onFavorites={() => setTab("All")} />
+
+      {/* Plan-aware storage detail: the usage breakdown, analytics, and the
+          upgrade-or-clear gate. The headline meter now lives in the card above,
+          so this is the detail behind it. */}
       <UsageDashboard />
 
       {/*
@@ -244,6 +249,10 @@ export function DownloadsPage({ wallpapers }: { wallpapers: Wallpaper[] }) {
           {/* "Tired of ads → Upgrade to Pro" — shown only to visitors who see
               ads (free / signed-out); Pro and Business never see it. */}
           <TiredOfAds />
+
+          {/* The reference's closing strip. Guarantees, not invented totals —
+              see the note in downloads-sections. */}
+          <DownloadTrustStrip />
         </div>
 
         {/* Storage, Quick Actions, Categories and Learn. A sticky sidebar at

@@ -1,11 +1,23 @@
 "use client";
 
-import { History, Search, Trash2 } from "lucide-react";
+import {
+  Cloud,
+  Download,
+  Heart,
+  History,
+  Search,
+  Share2,
+  SlidersHorizontal,
+  SquareDashedMousePointer,
+  Trash2,
+} from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
+import { startDownload } from "@/features/downloads/manager";
+import { totalUsedBytes } from "@/features/history/usage";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
-import { cn } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 
 import { MediaGallery } from "./media-gallery";
 import { useHistory } from "./use-history";
@@ -21,20 +33,95 @@ function tap() {
  * around the shared iOS-Photos MediaGallery (grid/list, column count, sort). The
  * same MediaGallery powers the signed-in Downloads page, so both look identical.
  */
+type KindFilter = "all" | "video" | "image" | "audio";
+
+const KIND_FILTERS: { key: KindFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "video", label: "Videos" },
+  { key: "image", label: "Images" },
+  { key: "audio", label: "Audio" },
+];
+
 export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
   const { items, toggleFavorite, removeDownload, clearHistory } = useHistory();
   const [tab, setTab] = useState<"recent" | "favorites">("recent");
+  const [kind, setKind] = useState<KindFilter>("all");
   const [query, setQuery] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   const favCount = useMemo(() => items.filter((i) => i.favorite).length, [items]);
+  const usedBytes = useMemo(() => totalUsedBytes(items), [items]);
+  const counts = useMemo<Record<KindFilter, number>>(
+    () => ({
+      all: items.length,
+      video: items.filter((i) => i.kind === "video").length,
+      image: items.filter((i) => i.kind === "image").length,
+      audio: items.filter((i) => i.kind === "audio").length,
+    }),
+    [items],
+  );
 
   const filtered = useMemo(() => {
-    const base = tab === "favorites" ? items.filter((i) => i.favorite) : items;
+    let base = tab === "favorites" ? items.filter((i) => i.favorite) : items;
+    if (tab !== "favorites" && kind !== "all") base = base.filter((i) => i.kind === kind);
     const q = query.trim().toLowerCase();
     if (!q) return base;
     return base.filter((i) => i.title.toLowerCase().includes(q) || i.platformName.toLowerCase().includes(q));
-  }, [items, tab, query]);
+  }, [items, tab, kind, query]);
+
+  const toggleSelected = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const pick = () => items.filter((i) => selected.has(i.id));
+
+  /** Share the selected items' source links. Falls back to the clipboard where
+   *  the Web Share API isn't available (every desktop browser). */
+  const shareSelected = async () => {
+    const urls = pick().map((i) => i.url);
+    if (urls.length === 0) return;
+    const text = urls.join("\n");
+    try {
+      if (navigator.share) await navigator.share({ title: "My downloads", text });
+      else await navigator.clipboard.writeText(text);
+    } catch {
+      /* the user dismissed the sheet — nothing to report */
+    }
+  };
+
+  /** Re-run each selected download through the manager, which already
+   *  serialises saves so the browser doesn't drop all but the first. */
+  const redownloadSelected = () => {
+    for (const item of pick()) {
+      startDownload({
+        url: item.url,
+        formatId: item.formatId,
+        kind: item.kind,
+        title: item.title,
+        thumbnail: item.thumbnail,
+        platform: item.platform,
+        platformName: item.platformName,
+        qualityLabel: item.qualityLabel,
+      });
+    }
+    setSelected(new Set());
+    setSelecting(false);
+  };
+
+  const deleteSelected = () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    if (!confirm(`Remove ${ids.length} item${ids.length === 1 ? "" : "s"} from your history?`)) return;
+    for (const id of ids) removeDownload(id);
+    setSelected(new Set());
+    setSelecting(false);
+  };
 
   if (items.length === 0) {
     // Embedded (e.g. on /library) → render nothing so it doesn't take space; the
@@ -64,8 +151,24 @@ export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
             <h2 className="flex items-center gap-2 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
               <History className="h-6 w-6 text-primary" /> Your downloads
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">{items.length} saved · stored privately on your private cloud</p>
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+              {items.length} saved · Stored privately on your cloud
+              <Cloud className="h-3.5 w-3.5" />
+            </p>
           </div>
+
+          {/* Select — the reference's top-right control. */}
+          <button
+            type="button"
+            onClick={() => { tap(); setSelecting((s) => !s); setSelected(new Set()); }}
+            aria-pressed={selecting}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-sm font-semibold shadow-sm transition duration-150 active:scale-[0.96]",
+              selecting ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <SquareDashedMousePointer className="h-4 w-4" /> {selecting ? "Done" : "Select"}
+          </button>
 
           {confirmClear ? (
             <div className="flex items-center gap-2 text-sm">
@@ -84,49 +187,87 @@ export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
           )}
         </div>
 
-        {/* Tabs + search */}
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex rounded-xl bg-secondary p-1 shadow-sm ring-1 ring-inset ring-border/40">
-            <TabButton active={tab === "recent"} onClick={() => setTab("recent")}>
-              Recent <Count>{items.length}</Count>
-            </TabButton>
-            <TabButton active={tab === "favorites"} onClick={() => setTab("favorites")}>
-              Favorites <Count>{favCount}</Count>
-            </TabButton>
+        {/* Type filter chips with live counts, and Favorites as its own chip —
+            the reference's row (public/new downloadhistory.jpg). Counts are real
+            and recomputed from the history, so a chip never advertises items
+            that aren't there. */}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {KIND_FILTERS.map((f) => (
+              <Chip key={f.key} active={tab !== "favorites" && kind === f.key} onClick={() => { setTab("recent"); setKind(f.key); }}>
+                {f.label} <Count>{counts[f.key]}</Count>
+              </Chip>
+            ))}
           </div>
+          <Chip active={tab === "favorites"} onClick={() => setTab(tab === "favorites" ? "recent" : "favorites")}>
+            <Heart className={cn("h-3.5 w-3.5", tab === "favorites" && "fill-current")} /> Favorites <Count>{favCount}</Count>
+          </Chip>
+        </div>
 
-          <div className="relative sm:w-64">
+        {/* Search + storage used */}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="relative min-w-0 flex-1 sm:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search downloads…"
               aria-label="Search downloads"
-              className="h-10 w-full rounded-xl bg-background px-3 pl-9 text-sm outline-none ring-1 ring-inset ring-border transition focus:ring-2 focus:ring-primary"
+              className="h-11 w-full rounded-xl bg-background px-3 pl-9 text-sm outline-none ring-1 ring-inset ring-border transition focus:ring-2 focus:ring-primary"
             />
           </div>
+          <span className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-secondary/60 px-3.5 text-sm font-semibold shadow-sm ring-1 ring-inset ring-border/40">
+            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+            <span className="text-primary">{formatBytes(usedBytes)} used</span>
+          </span>
         </div>
 
         <MediaGallery
           items={filtered}
           onToggleFavorite={toggleFavorite}
           onRemove={removeDownload}
+          groupByDay
+          selection={{ active: selecting, selected, onToggle: toggleSelected }}
           emptyText={tab === "favorites" ? "No favorites yet — tap the heart on any download to save it here." : "No downloads match your search."}
         />
       </div>
+
+      {/* Selection action bar — the reference's footer. It only exists while
+          Select is on, and each action states how many items it will touch, so
+          "Delete" can never be a surprise. */}
+      {selecting ? (
+        <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] z-30 mx-auto mt-4 max-w-6xl px-2 sm:px-4">
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/70 bg-card/95 p-3 shadow-elevated backdrop-blur-xl">
+            <span className="mr-auto text-sm text-muted-foreground">
+              {selected.size === 0 ? "Select items to take action" : `${selected.size} selected`}
+            </span>
+            <button type="button" disabled={selected.size === 0} onClick={() => void shareSelected()} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm font-semibold transition hover:bg-secondary disabled:opacity-40">
+              <Share2 className="h-4 w-4" /> Share
+            </button>
+            <button type="button" disabled={selected.size === 0} onClick={() => redownloadSelected()} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm font-semibold transition hover:bg-secondary disabled:opacity-40">
+              <Download className="h-4 w-4" /> Download again
+            </button>
+            <button type="button" disabled={selected.size === 0} onClick={() => deleteSelected()} className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/40 px-3 py-2 text-sm font-semibold text-rose-500 transition hover:bg-rose-500/10 disabled:opacity-40">
+              <Trash2 className="h-4 w-4" /> Delete
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
       onClick={() => { tap(); onClick(); }}
       aria-pressed={active}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition duration-150 active:scale-[0.95]",
-        active ? "bg-background text-foreground shadow-sm ring-1 ring-inset ring-border/60" : "text-muted-foreground hover:text-foreground",
+        "inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold transition duration-150 active:scale-[0.95]",
+        active
+          ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm"
+          : "bg-secondary/70 text-muted-foreground ring-1 ring-inset ring-border/40 hover:text-foreground",
       )}
     >
       {children}

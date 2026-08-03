@@ -22,6 +22,7 @@ import { buildDownloadContext, pickFormat } from "@/lib/download-hub/context";
 import type { DownloadContext } from "@/lib/download-hub/types";
 import { BRAND_ICONS, FLAGSHIP_IDS } from "@/lib/platform-icons";
 import { detectPlatform, PLATFORMS } from "@/lib/platforms";
+import { cn } from "@/lib/utils";
 import { sourceUrlSchema } from "@/lib/validation";
 import type { MediaKind } from "@/types";
 
@@ -35,7 +36,14 @@ const DiscoveryGateway = dynamic(
 
 /** Large paste box + preview that enqueues into the in-app download manager
  * (real progress / pause / resume), with supported-platform badges. */
-export function DownloadBox() {
+/**
+ * `surface` picks the palette this box sits on. "hero" is the original
+ * white-on-purple treatment; "card" is the light card the download page's
+ * reference design puts it on (public/new downloadpage.jpg), where white text
+ * and white/10 fills would be invisible.
+ */
+export function DownloadBox({ surface = "hero" }: { surface?: "hero" | "card" } = {}) {
+  const onCard = surface === "card";
   const [url, setUrl] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const { status, metadata, error, fetchMetadata, reset } = useDownloader();
@@ -169,7 +177,7 @@ export function DownloadBox() {
 
   return (
     <div className="w-full">
-      <form onSubmit={onSubmit} className="rounded-2xl bg-white/10 p-1.5 ring-1 ring-inset ring-white/15 backdrop-blur">
+      <form onSubmit={onSubmit} className={cn("rounded-2xl p-1.5 ring-1 ring-inset", onCard ? "bg-secondary/40 ring-border/60" : "bg-white/10 ring-white/15 backdrop-blur")}>
         <div className="flex flex-col gap-2 sm:flex-row">
           <div className="relative flex-1">
             <input
@@ -203,15 +211,15 @@ export function DownloadBox() {
       </form>
 
       {validationError || error ? (
-        <p role="alert" className="mt-2 text-sm font-medium text-rose-300">{validationError ?? error}</p>
+        <p role="alert" className={cn("mt-2 text-sm font-medium", onCard ? "text-rose-500" : "text-rose-300")}>{validationError ?? error}</p>
       ) : null}
       {justQueued ? (
-        <p className="mt-2 text-sm font-medium text-emerald-300">Added to your downloads ↓</p>
+        <p className={cn("mt-2 text-sm font-medium", onCard ? "text-emerald-600 dark:text-emerald-400" : "text-emerald-300")}>Added to your downloads ↓</p>
       ) : null}
 
       {/* Supported platforms */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold text-white/70">Supported:</span>
+        <span className={cn("text-xs font-semibold", onCard ? "text-muted-foreground" : "text-white/70")}>Supported:</span>
         {[...FLAGSHIP_IDS, "youtube" as const, "telegram" as const].map((id) => {
           const platform = PLATFORMS[id];
           const Icon = BRAND_ICONS[id];
@@ -222,7 +230,7 @@ export function DownloadBox() {
           );
         })}
         {url && detectPlatform(url).id !== "generic" ? (
-          <span className="text-xs font-medium text-white/80">· Detected {detectPlatform(url).name}</span>
+          <span className={cn("text-xs font-medium", onCard ? "text-foreground" : "text-white/80")}>· Detected {detectPlatform(url).name}</span>
         ) : null}
       </div>
 

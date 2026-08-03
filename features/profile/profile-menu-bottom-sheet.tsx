@@ -23,10 +23,14 @@ export function ProfileMenuBottomSheet({
   open,
   user,
   onClose,
+  lockScroll = true,
 }: {
   open: boolean;
   user: MenuUser;
   onClose: () => void;
+  /** Set false when an ancestor already holds the body scroll lock, so the two
+   *  don't stack and restore each other's value on the way out. */
+  lockScroll?: boolean;
 }) {
   // Keep the sheet mounted for the closing animation, then drop it.
   const [mounted, setMounted] = useState(open);
@@ -44,23 +48,35 @@ export function ProfileMenuBottomSheet({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !lockScroll) return;
     const prev = document.body.style.overflowY;
     document.body.style.overflowY = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflowY = prev;
-      window.removeEventListener("keydown", onKey);
     };
+  }, [open, lockScroll]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   if (!mounted || typeof document === "undefined") return null;
 
   return createPortal(
-    // `open` gates pointer-events synchronously so a stray tap never outlives the
-    // closing animation.
-    <div className={open ? undefined : "pointer-events-none"}>
+    /*
+      `lg:hidden` lives HERE, on the portaled node itself — not on a wrapper at
+      the call site. This subtree is mounted into <body>, so a
+      `<div className="lg:hidden">` around the component in the caller is not an
+      ancestor of anything rendered here and cannot hide it. That exact mistake
+      put the bottom sheet AND the desktop panel on screen together on a laptop.
+
+      `open` gates pointer-events synchronously so a stray tap never outlives
+      the closing animation.
+    */
+    <div className={open ? "lg:hidden" : "pointer-events-none lg:hidden"}>
       <button
         type="button"
         aria-label="Close menu"

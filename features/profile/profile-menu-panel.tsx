@@ -12,20 +12,18 @@ import {
   Home,
   LogOut,
   MessageCircle,
-  Newspaper,
   Settings,
   ShoppingBag,
   Sparkles,
-  TrendingUp,
-  Users,
   UsersRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type ComponentType } from "react";
+import { type ComponentType, useEffect } from "react";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
+import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { LanguageSettingRow } from "@/components/i18n/language-setting-row";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useQuery } from "@/features/data";
@@ -75,13 +73,12 @@ type NavItem = {
   badge?: "inbox";
 };
 
+// Owner (2026-08-03): Trending, News and Communities removed — every row here
+// now goes somewhere real, so the menu has no dead ends at all.
 const NAV: NavItem[] = [
   { label: "Home", href: "/home", icon: Home },
   { label: "Explore", href: "/explore", icon: Compass },
-  { label: "Trending", icon: TrendingUp, soon: true },
   { label: "Reels", href: "/reels", icon: Film },
-  { label: "News", icon: Newspaper, soon: true },
-  { label: "Communities", icon: Users, soon: true },
   { label: "Friends", href: "/friends", icon: UsersRound },
   { label: "Chats", href: "/messages", icon: MessageCircle, badge: "inbox" },
   { label: "Downloads", href: "/downloads", icon: Download },
@@ -131,6 +128,27 @@ export function ProfileMenuPanel({
   const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox, { revalidateOnFocus: false });
   const unread = inbox?.unread ?? 0;
 
+  /*
+    Warm every destination the moment the menu opens (owner: "make all the pages
+    in the profile menu … prefetch instantly as soon as the menu opens to avoid
+    loading unnecessarily"). The panel only mounts when the sheet opens, so this
+    effect IS "on open".
+
+    `<Link prefetch>` alone would not do it: App Router only prefetches a link
+    once it scrolls into the viewport, and most of this list sits below the fold
+    of a bottom sheet. Prefetching explicitly means the row the member taps is
+    already in the router cache and opens without a loading state.
+
+    Deliberately fire-and-forget and deliberately NOT on the landing: this
+    component is only ever mounted behind a tap by a signed-in member, so the
+    requests cost a visitor nothing.
+  */
+  useEffect(() => {
+    for (const item of NAV) if (item.href) router.prefetch(item.href);
+    if (user.handle) router.prefetch(`/u/${user.handle}`);
+    if (user.plan === "free") router.prefetch("/account/plan");
+  }, [router, user.handle, user.plan]);
+
   const signOut = async () => {
     onClose?.();
     await signOutClient();
@@ -149,12 +167,9 @@ export function ProfileMenuPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Brand header */}
+      {/* Brand header — the official mark alone, no lettering (owner). */}
       <div className="flex items-center justify-between px-5 pt-4">
-        <span className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-600 text-sm font-black text-white shadow-sm">F</span>
-          <span className="text-lg font-bold tracking-tight">Frenz</span>
-        </span>
+        <FrenzLogo size={34} priority />
         {onClose ? (
           <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:bg-secondary hover:text-foreground">
             <X className="h-5 w-5" />

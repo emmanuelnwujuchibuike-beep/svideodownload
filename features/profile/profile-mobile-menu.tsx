@@ -62,9 +62,7 @@ export function ProfileMobileMenu({ user }: { user: MenuUser }) {
         </div>
       </header>
 
-      <div className="lg:hidden">
-        <ProfileMenuBottomSheet open={open} user={user} onClose={() => setOpen(false)} />
-      </div>
+      <ProfileMenuBottomSheet open={open} user={user} onClose={() => setOpen(false)} />
     </>
   );
 }

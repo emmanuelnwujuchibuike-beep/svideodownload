@@ -37,9 +37,9 @@ export function ProfileMenu(user: MenuUser) {
         <LayoutGrid className="h-[18px] w-[18px]" />
       </button>
 
-      <div className="lg:hidden">
-        <ProfileMenuBottomSheet open={open} user={user} onClose={() => setOpen(false)} />
-      </div>
+      {/* The sheet is `lg:hidden` on its own portaled node — a wrapper here
+          would not reach it. */}
+      <ProfileMenuBottomSheet open={open} user={user} onClose={() => setOpen(false)} />
     </>
   );
 }

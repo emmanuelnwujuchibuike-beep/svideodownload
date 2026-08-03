@@ -151,6 +151,15 @@ export const DATA_DOMAINS: DataDomain[] = [
     storage: ["relational"],
   },
   {
+    id: "verification",
+    name: "Account Verification",
+    owner: "lib/social/verification",
+    description:
+      "Blue-tick applications: the identity check, its decision and an append-only audit trail. Document images live in the PRIVATE verification-docs bucket and are only ever reached through short-lived signed URLs.",
+    tables: ["verification_requests", "verification_events"],
+    storage: ["relational", "object"],
+  },
+  {
     id: "notifications",
     name: "Notifications",
     owner: "lib/social (notifications), lib/push",

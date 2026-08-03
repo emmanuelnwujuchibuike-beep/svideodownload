@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   BarChart3,
   Bell,
   Bookmark,
@@ -20,10 +21,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
+import { IdentityBadges } from "@/components/badges/identity-badges";
+import { SETTINGS_TINTS } from "@/features/account/settings-ui";
 import { AppContent } from "@/features/app-shell/app-content";
 import { isAdmin } from "@/lib/admin";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { getOwnProfile } from "@/lib/social/profile";
+import { getVerificationState, verificationSummary } from "@/lib/social/verification";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -37,7 +41,7 @@ export const metadata: Metadata = {
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-type Row = { href: string; Icon: LucideIcon; title: string; sub: string };
+type Row = { href: string; Icon: LucideIcon; title: string; sub: string; tint: string };
 
 /**
  * Settings — a premium, professional LIST menu (Snapchat/TikTok-style): every
@@ -54,51 +58,58 @@ export default async function AccountPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: sub }, ownProfile] = await Promise.all([
-    supabase.from("profiles").select("role, avatar_url").eq("id", user.id).single(),
+  const [{ data: profile }, { data: sub }, ownProfile, verification] = await Promise.all([
+    supabase.from("profiles").select("role, avatar_url, is_verified").eq("id", user.id).single(),
     supabase.from("subscriptions").select("plan, status").eq("user_id", user.id).maybeSingle(),
     getOwnProfile(user.id),
+    getVerificationState(user.id),
   ]);
+  const verificationSub = verificationSummary(verification);
 
   const planActive = sub?.status === "active" || sub?.status === "trialing";
   const plan = (planActive ? sub?.plan : "free") ?? "free";
   const planLabel = plan === "business" ? "Business" : plan === "pro" ? "Pro" : "Free";
   const isPremium = plan !== "free";
+  const verified = Boolean(profile?.is_verified);
   const email = user.email ?? "—";
   const avatar = (user.user_metadata?.avatar_url as string | undefined) || profile?.avatar_url || null;
   const admin = isAdmin(profile?.role, user.email);
   const initial = email.charAt(0).toUpperCase();
 
+  // Coloured icon tiles per row, matching the owner's reference
+  // (public/profile settings.jpg) — a tint carries the category, which a wall of
+  // identical grey tiles could not.
   const groups: { heading: string; items: Row[] }[] = [
     {
       heading: "Profile",
       items: [
-        { href: "/account/identity", Icon: UserCog, title: "Identity", sub: "Name, photo, video, avatar, status" },
-        { href: "/account/appearance", Icon: Palette, title: "Appearance", sub: "Theme, language, home & feed" },
-        { href: "/account/notifications", Icon: Bell, title: "Notifications", sub: "Alerts & activity" },
+        { href: "/account/identity", Icon: UserCog, title: "Identity", sub: "Name, photo, video, avatar, status", tint: "violet" },
+        { href: "/account/verification", Icon: BadgeCheck, title: "Verification", sub: verificationSub, tint: "blue" },
+        { href: "/account/appearance", Icon: Palette, title: "Appearance", sub: "Theme, language, home & feed", tint: "purple" },
+        { href: "/account/notifications", Icon: Bell, title: "Notifications", sub: "Alerts & activity", tint: "rose" },
       ],
     },
     {
       heading: "Privacy & security",
       items: [
-        { href: "/account/privacy", Icon: Lock, title: "Privacy", sub: "Who can see & contact you" },
-        { href: "/account/security", Icon: ShieldCheck, title: "Security", sub: "2FA, passkeys, devices" },
-        { href: "/account/password", Icon: KeyRound, title: "Password", sub: "Change your password" },
+        { href: "/account/privacy", Icon: Lock, title: "Privacy", sub: "Who can see & contact you", tint: "emerald" },
+        { href: "/account/security", Icon: ShieldCheck, title: "Security", sub: "2FA, passkeys, devices", tint: "cyan" },
+        { href: "/account/password", Icon: KeyRound, title: "Password", sub: "Change your password", tint: "amber" },
       ],
     },
     {
       heading: "Content & insights",
       items: [
-        { href: "/downloads", Icon: Download, title: "Downloads", sub: "Your saved library" },
-        { href: "/saved", Icon: Bookmark, title: "Saved", sub: "Posts you bookmarked" },
-        { href: "/account/analytics", Icon: BarChart3, title: "Analytics", sub: "Your performance" },
+        { href: "/downloads", Icon: Download, title: "Downloads", sub: "Your saved library", tint: "blue" },
+        { href: "/saved", Icon: Bookmark, title: "Saved", sub: "Posts you bookmarked", tint: "violet" },
+        { href: "/account/analytics", Icon: BarChart3, title: "Analytics", sub: "Your performance", tint: "emerald" },
       ],
     },
     {
       heading: "Plan & developer",
       items: [
-        { href: "/account/plan", Icon: Crown, title: "Plan", sub: `${planLabel} plan · billing` },
-        { href: "/account/developer", Icon: Code2, title: "Developer", sub: "API keys & usage" },
+        { href: "/account/plan", Icon: Crown, title: "Plan", sub: `${planLabel} plan · billing`, tint: "amber" },
+        { href: "/account/developer", Icon: Code2, title: "Developer", sub: "API keys & usage", tint: "slate" },
       ],
     },
   ];
@@ -144,7 +155,11 @@ export default async function AccountPage() {
               )}
             </div>
             <div className="mt-3">
-              <h2 className="truncate text-xl font-bold tracking-[-0.02em]">{ownProfile?.displayName || email}</h2>
+              <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xl font-bold tracking-[-0.02em]">
+                <span className="truncate">{ownProfile?.displayName || email}</span>
+                {/* The same cluster the profile hero uses — one badge language app-wide. */}
+                <IdentityBadges verified={verified} plan={plan as BillingPlan} size="sm" />
+              </h2>
               <p className="text-sm text-muted-foreground">{ownProfile?.handle ? `@${ownProfile.handle}` : email}</p>
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
                 {admin ? (
@@ -152,15 +167,11 @@ export default async function AccountPage() {
                     <ShieldCheck className="h-3 w-3" /> Admin
                   </span>
                 ) : null}
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
-                    isPremium ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-secondary text-muted-foreground",
-                  )}
-                >
-                  {isPremium ? <Crown className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
-                  {planLabel}
-                </span>
+                {!isPremium ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                    <Sparkles className="h-3 w-3" /> {planLabel}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -175,8 +186,8 @@ export default async function AccountPage() {
                 <div className="divide-y divide-border/60">
                   {g.items.map((it) => (
                     <Link key={it.href} href={it.href} prefetch className="flex items-center gap-3 px-4 py-3.5 transition hover:bg-secondary/40">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground ring-1 ring-inset ring-border/60">
-                        <it.Icon className="h-[18px] w-[18px]" />
+                      <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset", SETTINGS_TINTS[it.tint] ?? SETTINGS_TINTS.slate)}>
+                        <it.Icon className="h-[19px] w-[19px]" />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-semibold">{it.title}</span>

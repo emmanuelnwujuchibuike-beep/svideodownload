@@ -58,10 +58,9 @@ export function ProfileMenuSheet({
 
   return (
     <>
-      {/* Phones — the reference's bottom sheet, shared with the profile page. */}
-      <div className="lg:hidden">
-        <ProfileMenuBottomSheet open user={user} onClose={onClose} />
-      </div>
+      {/* Phones — the reference's bottom sheet, shared with the profile page.
+          It hides itself at lg+; this component already holds the scroll lock. */}
+      <ProfileMenuBottomSheet open user={user} onClose={onClose} lockScroll={false} />
 
       {/* Desktop — the same panel, anchored under the avatar */}
       {createPortal(

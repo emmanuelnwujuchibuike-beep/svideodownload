@@ -5,6 +5,8 @@ import {
   adminGetMessages,
   adminListThreads,
   cleanBody,
+  clearThreadForUser,
+  deleteThreadById,
   getMyThread,
   markMyThreadRead,
   markThreadReadByAdmin,
@@ -55,6 +57,17 @@ export async function sendMyMessage(
   return { ok: true, message };
 }
 
+/** Member clears their own finished conversation. */
+export async function clearMyThread(): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+  await clearThreadForUser(user.id);
+  return { ok: true };
+}
+
 /** Admin: every support thread, newest first. */
 export async function adminLoadThreads(): Promise<AdminSupportThread[]> {
   const admin = await getAdminUser();
@@ -68,6 +81,14 @@ export async function adminLoadMessages(threadId: string): Promise<SupportMessag
   if (!admin) return [];
   await markThreadReadByAdmin(threadId);
   return adminGetMessages(threadId);
+}
+
+/** Admin: delete a finished support thread and its messages. */
+export async function adminClearThread(threadId: string): Promise<{ ok: boolean }> {
+  const admin = await getAdminUser();
+  if (!admin) return { ok: false };
+  await deleteThreadById(threadId);
+  return { ok: true };
 }
 
 /** Admin: reply to a thread. */

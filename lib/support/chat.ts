@@ -209,6 +209,26 @@ export async function postAdminReply(adminId: string, threadId: string, body: st
   return msg ? (mapMessages([msg])[0] ?? null) : null;
 }
 
+/** Member clears (deletes) their OWN finished conversation + its messages, so the
+ *  1:1 support center starts fresh next time. */
+export async function clearThreadForUser(userId: string): Promise<void> {
+  if (!hasSupabase) return;
+  const db = createAdminClient();
+  const { data: thread } = await db.from("support_threads").select("id").eq("user_id", userId).maybeSingle();
+  if (!thread) return;
+  const threadId = thread.id as string;
+  await db.from("support_messages").delete().eq("thread_id", threadId);
+  await db.from("support_threads").delete().eq("id", threadId);
+}
+
+/** Admin deletes a finished support thread and all of its messages. */
+export async function deleteThreadById(threadId: string): Promise<void> {
+  if (!hasSupabase) return;
+  const db = createAdminClient();
+  await db.from("support_messages").delete().eq("thread_id", threadId);
+  await db.from("support_threads").delete().eq("id", threadId);
+}
+
 /** Admin opened a thread — clear its unread count. */
 export async function markThreadReadByAdmin(threadId: string): Promise<void> {
   if (!hasSupabase) return;

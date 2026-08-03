@@ -1,9 +1,10 @@
 "use client";
 
-import { Headset, Send } from "lucide-react";
+import { Headset, Send, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  adminClearThread,
   adminLoadMessages,
   adminLoadThreads,
   adminSendReply,
@@ -107,6 +108,17 @@ export function SupportInbox() {
     void refreshThreads();
   }, [reply, activeId, sending, refreshThreads]);
 
+  const clearThread = useCallback(async () => {
+    if (!activeId) return;
+    if (!window.confirm("Delete this conversation? This permanently removes it and all its messages for both sides.")) return;
+    const id = activeId;
+    setThreads((ts) => ts.filter((t) => t.id !== id));
+    setActiveId(null);
+    setMessages([]);
+    await adminClearThread(id);
+    void refreshThreads();
+  }, [activeId, refreshThreads]);
+
   const active = threads.find((t) => t.id === activeId) ?? null;
 
   return (
@@ -184,6 +196,14 @@ export function SupportInbox() {
                 <p className="truncate text-sm font-bold">{threadName(active)}</p>
                 <p className="truncate text-xs text-muted-foreground">{active.email ?? active.handle ?? ""}</p>
               </div>
+              <button
+                type="button"
+                onClick={() => void clearThread()}
+                aria-label="Delete conversation"
+                className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-secondary hover:text-rose-500 active:scale-95"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Clear
+              </button>
             </div>
 
             <div className="flex-1 space-y-2.5 overflow-y-auto px-4 py-4">

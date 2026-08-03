@@ -1,10 +1,10 @@
 "use client";
 
-import { Headset, Send } from "lucide-react";
+import { Headset, Send, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { loadMyThread, sendMyMessage } from "@/lib/support/actions";
+import { clearMyThread, loadMyThread, sendMyMessage } from "@/lib/support/actions";
 import type { SupportMessage } from "@/lib/support/chat";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +30,7 @@ export function SupportChat() {
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -89,6 +90,16 @@ export function SupportChat() {
     setMessages((m) => m.map((x) => (x.id === optimistic.id ? res.message : x)));
   }, [text, sending]);
 
+  const clearChat = useCallback(async () => {
+    if (clearing || messages.length === 0) return;
+    if (!window.confirm("Clear this conversation? This permanently removes the messages for you and our team.")) return;
+    setClearing(true);
+    setMessages([]);
+    await clearMyThread();
+    setClearing(false);
+    void refresh();
+  }, [clearing, messages.length, refresh]);
+
   if (status === "loading") {
     return (
       <div className="flex h-[60vh] min-h-[26rem] items-center justify-center rounded-3xl border border-border/60 bg-card">
@@ -132,6 +143,16 @@ export function SupportChat() {
           <p className="text-sm font-bold leading-tight">FrenzSave Support</p>
           <p className="text-xs text-muted-foreground">Typically replies within a minute</p>
         </div>
+        {messages.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => void clearChat()}
+            disabled={clearing}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-secondary hover:text-rose-500 active:scale-95 disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Clear
+          </button>
+        ) : null}
       </div>
 
       {/* Messages */}

@@ -151,6 +151,15 @@ export const DATA_DOMAINS: DataDomain[] = [
     storage: ["relational"],
   },
   {
+    id: "wallpapers",
+    name: "Wallpapers",
+    owner: "lib/wallpapers",
+    description:
+      "The admin-curated wallpaper library and its real engagement — likes, private saves and comments. Counters are trigger-maintained on the row so a grid of cards costs one query, not one per card. Images live in the public wallpapers bucket.",
+    tables: ["wallpapers", "wallpaper_likes", "wallpaper_saves", "wallpaper_comments"],
+    storage: ["relational", "object"],
+  },
+  {
     id: "verification",
     name: "Account Verification",
     owner: "lib/social/verification",

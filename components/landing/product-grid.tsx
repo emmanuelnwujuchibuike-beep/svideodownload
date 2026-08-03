@@ -1,4 +1,4 @@
-import { ArrowRight, LayoutGrid } from "lucide-react";
+import { ArrowRight, Image as ImageIcon, LayoutGrid } from "lucide-react";
 import Link from "next/link";
 
 import { getClaimableProfiles } from "@/lib/content/genome/queries";
@@ -84,6 +84,25 @@ export function ProductGrid() {
           className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-6 py-3 text-sm font-semibold shadow-soft transition hover:border-foreground/20 hover:shadow-card active:scale-[0.99]"
         >
           See All Features <LayoutGrid className="h-4 w-4" />
+        </Link>
+      </div>
+
+      {/* Explore wallpapers (owner) — a premium gradient CTA below the feature
+          grid, opening the standalone full-screen gallery. `prefetch` warms the
+          route so the transition is instant rather than a spinner, and the page
+          is public: a signed-out visitor gets the whole library and can download
+          from it. */}
+      <div className="mt-3 flex justify-center">
+        <Link
+          href="/wallpapers"
+          prefetch
+          className="group relative inline-flex items-center gap-2.5 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-500/30 transition-all duration-300 hover:shadow-violet-500/50 active:scale-[0.98]"
+        >
+          <span aria-hidden className="pointer-events-none absolute -inset-1 -z-10 rounded-3xl bg-gradient-to-r from-blue-500 to-fuchsia-500 opacity-40 blur-md" />
+          <span aria-hidden className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full" />
+          <ImageIcon className="relative h-4 w-4" />
+          <span className="relative">Explore wallpapers</span>
+          <ArrowRight className="relative h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
         </Link>
       </div>
     </section>

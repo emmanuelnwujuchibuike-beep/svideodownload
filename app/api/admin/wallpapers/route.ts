@@ -1,0 +1,151 @@
+import { NextResponse } from "next/server";
+
+import { getAdminUser } from "@/lib/admin/guard";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+// Wallpapers are full-resolution images; the default body limit is too small.
+export const maxDuration = 60;
+
+/**
+ * Admin wallpaper management.
+ *
+ * POST (multipart) — upload one or more images into the public `wallpapers`
+ *   bucket and publish a row for each. Multi-file on purpose: an operator
+ *   curating a set is uploading ten at a time, not one.
+ * PATCH  — retitle, recategorise, reorder, or hide/publish a wallpaper.
+ * DELETE — remove a wallpaper and its object.
+ *
+ * Everything is behind `getAdminUser`. Uploads go through the service role, so
+ * they land outside the `members/<uid>/` folder that member shares are confined
+ * to, and the storage RLS policies never come into it.
+ */
+
+const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
+const MAX_BYTES = 20 * 1024 * 1024;
+
+function bad(error: string, status = 400) {
+  return NextResponse.json({ ok: false, error }, { status });
+}
+
+export async function POST(request: Request) {
+  const admin = await getAdminUser();
+  if (!admin) return bad("Not authorised.", 403);
+
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return bad("Expected a file upload.");
+  }
+
+  const files = form.getAll("files").filter((f): f is File => f instanceof File);
+  if (files.length === 0) return bad("No images selected.");
+
+  const category = (form.get("category") as string | null)?.trim() || "Abstract";
+  const db = createAdminClient();
+  const created: string[] = [];
+  const failed: string[] = [];
+
+  for (const file of files) {
+    if (!ALLOWED.has(file.type)) {
+      failed.push(`${file.name}: unsupported type`);
+      continue;
+    }
+    if (file.size > MAX_BYTES) {
+      failed.push(`${file.name}: over 20 MB`);
+      continue;
+    }
+
+    const ext = file.type.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+    const key = `curated/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+    try {
+      const { error: upErr } = await db.storage.from("wallpapers").upload(key, file, {
+        contentType: file.type,
+        cacheControl: "31536000",
+        upsert: false,
+      });
+      if (upErr) {
+        failed.push(`${file.name}: ${upErr.message}`);
+        continue;
+      }
+      const { data: pub } = db.storage.from("wallpapers").getPublicUrl(key);
+
+      // The filename makes a far better default title than "Untitled" — an
+      // operator can rename it inline afterwards.
+      const title = file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim() || "Wallpaper";
+
+      const { error: rowErr } = await db.from("wallpapers").insert({
+        title,
+        category,
+        image_url: pub.publicUrl,
+        bytes: file.size,
+        status: "published",
+        source: "admin",
+        uploaded_by: admin.id,
+      });
+      if (rowErr) {
+        // Don't leave an orphaned object behind if the row didn't land.
+        await db.storage.from("wallpapers").remove([key]);
+        failed.push(`${file.name}: ${rowErr.message}`);
+        continue;
+      }
+      created.push(title);
+    } catch (e) {
+      failed.push(`${file.name}: ${e instanceof Error ? e.message : "failed"}`);
+    }
+  }
+
+  return NextResponse.json({ ok: true, created: created.length, failed });
+}
+
+export async function PATCH(request: Request) {
+  const admin = await getAdminUser();
+  if (!admin) return bad("Not authorised.", 403);
+
+  let body: { id?: string; title?: string; category?: string; status?: string; sortOrder?: number };
+  try {
+    body = await request.json();
+  } catch {
+    return bad("Malformed request.");
+  }
+  if (!body.id) return bad("Missing wallpaper.");
+
+  const patch: Record<string, unknown> = {};
+  if (typeof body.title === "string") patch.title = body.title.trim().slice(0, 120) || "Wallpaper";
+  if (typeof body.category === "string") patch.category = body.category.trim().slice(0, 40) || "Abstract";
+  if (body.status === "published" || body.status === "hidden") patch.status = body.status;
+  if (typeof body.sortOrder === "number") patch.sort_order = Math.trunc(body.sortOrder);
+  if (Object.keys(patch).length === 0) return bad("Nothing to change.");
+
+  const { error } = await createAdminClient().from("wallpapers").update(patch).eq("id", body.id);
+  return error ? bad(error.message, 500) : NextResponse.json({ ok: true });
+}
+
+export async function DELETE(request: Request) {
+  const admin = await getAdminUser();
+  if (!admin) return bad("Not authorised.", 403);
+
+  const id = new URL(request.url).searchParams.get("id");
+  if (!id) return bad("Missing wallpaper.");
+
+  const db = createAdminClient();
+  try {
+    const { data } = await db.from("wallpapers").select("image_url").eq("id", id).maybeSingle();
+    const { error } = await db.from("wallpapers").delete().eq("id", id);
+    if (error) return bad(error.message, 500);
+
+    // Best-effort object cleanup: derive the key back out of the public URL.
+    const url = data?.image_url as string | undefined;
+    const marker = "/wallpapers/";
+    if (url?.includes(marker)) {
+      const key = decodeURIComponent(url.slice(url.lastIndexOf(marker) + marker.length));
+      await db.storage.from("wallpapers").remove([key]);
+    }
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return bad(e instanceof Error ? e.message : "Failed.", 500);
+  }
+}

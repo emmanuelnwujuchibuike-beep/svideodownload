@@ -25,6 +25,7 @@ import { TiredOfAds } from "@/features/monetization/tired-of-ads";
 import { UsageDashboard } from "@/features/downloads/usage-dashboard";
 import { WallpaperGallery } from "@/features/wallpapers/wallpaper-gallery";
 import { BRAND_ICONS } from "@/lib/platform-icons";
+import type { Wallpaper } from "@/lib/wallpapers";
 import type { DownloadRecord, PlatformId } from "@/types";
 import { cn, formatBytes } from "@/lib/utils";
 
@@ -50,7 +51,7 @@ function matchesTab(rec: DownloadRecord, tab: Tab): boolean {
   }
 }
 
-export function DownloadsPage() {
+export function DownloadsPage({ wallpapers }: { wallpapers: Wallpaper[] }) {
   const { items, toggleFavorite, removeDownload } = useHistory();
   const { tasks, pauseDownload, resumeDownload, retryDownload, cancelDownload, pauseAll } = useDownloadManager();
 
@@ -231,8 +232,10 @@ export function DownloadsPage() {
             </section>
           ) : null}
 
-          {/* Wallpapers — 12 free HD downloads, full-screen preview with tap-nav. */}
-          <WallpaperGallery />
+          {/* Wallpapers — the real library; every tile opens the reels viewer. */}
+          {/* /downloads is behind a sign-in redirect, so the viewer is always a
+              member here — engagement is enabled. */}
+          <WallpaperGallery items={wallpapers} canEngage />
 
           {/* Admin-managed ad slot below the history list — insert or remove any
               ad for this zone from the dashboard; collapses when empty. */}

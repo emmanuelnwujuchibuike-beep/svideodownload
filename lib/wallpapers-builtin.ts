@@ -1,0 +1,23 @@
+import { BUILT_IN_WALLPAPERS, type Wallpaper } from "./wallpapers";
+
+/**
+ * The built-in placeholder set, shaped like real wallpapers.
+ *
+ * Split into its own module so `wallpapers-server.ts` can `import()` it only on
+ * the path where the real library is empty — once an operator has published
+ * anything, this never loads.
+ */
+export function builtInWallpapers(): Wallpaper[] {
+  return BUILT_IN_WALLPAPERS.map((w) => ({
+    id: w.id,
+    name: w.name,
+    category: w.category,
+    url: `/api/wallpaper?id=${w.id}&size=full`,
+    thumbUrl: `/api/wallpaper?id=${w.id}&size=thumb`,
+    downloadUrl: `/api/wallpaper?id=${w.id}&size=full&dl=1`,
+    likes: 0,
+    saves: 0,
+    comments: 0,
+    builtIn: true,
+  }));
+}

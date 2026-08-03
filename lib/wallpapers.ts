@@ -1,24 +1,44 @@
 /**
- * Curated wallpaper set for the download page's "Wallpapers" section.
+ * The wallpaper library.
  *
- * 12 downloadable images. The bytes are served through our OWN /api/wallpaper
- * route (same-origin), so display needs no CSP exception and the download needs no
- * CORS — and the CDN caches each one after the first fetch. The source URLs below
- * are the only place to swap in your own artwork: replace `sourceFor` with your CDN
- * / R2 URLs and the grid, viewer and download all follow automatically.
+ * Wallpapers are uploaded and curated by an admin (migration 0105 + the admin
+ * dashboard's Wallpapers panel) and stored in the public `wallpapers` bucket.
  *
- * NOTE: labels are decorative (name + category + resolution) — deliberately NO
- * view/like/download counts, which would be fabricated engagement (owner's
- * standing "no fake stats" rule).
+ * ── Why the curated fallback still exists ─────────────────────────────────────
+ * Until an operator has uploaded anything — and on any deploy where 0105 hasn't
+ * been applied yet — `listWallpapers()` returns the 12 built-in entries below so
+ * the download page's Wallpapers section is never an empty hole. The moment one
+ * real wallpaper is published, the built-ins stop being served. Built-in bytes
+ * are proxied through /api/wallpaper; uploaded ones are served straight from the
+ * bucket CDN.
+ *
+ * Labels are name + category + resolution only — deliberately NO fabricated
+ * view/like/download counts. The counts on an uploaded wallpaper are real,
+ * maintained by the triggers in 0105.
  */
 
 export interface Wallpaper {
   id: string;
   name: string;
   category: string;
+  /** Full-size image. */
+  url: string;
+  /** Grid thumbnail; falls back to `url`. */
+  thumbUrl: string;
+  /** Direct-download URL (adds a filename). */
+  downloadUrl: string;
+  likes: number;
+  saves: number;
+  comments: number;
+  /** True for the built-in placeholders — they have no database row, so they
+   *  can't be liked, saved or commented on. */
+  builtIn: boolean;
+  viewerLiked?: boolean;
+  viewerSaved?: boolean;
 }
 
-export const WALLPAPERS: Wallpaper[] = [
+/** The built-in set, used only while the real library is empty. */
+export const BUILT_IN_WALLPAPERS: { id: string; name: string; category: string }[] = [
   { id: "1", name: "Aurora", category: "Gradient" },
   { id: "2", name: "Nightfall", category: "Abstract" },
   { id: "3", name: "Ember", category: "Texture" },
@@ -33,17 +53,26 @@ export const WALLPAPERS: Wallpaper[] = [
   { id: "12", name: "Frost", category: "Minimal" },
 ];
 
-const BY_ID = new Map(WALLPAPERS.map((w) => [w.id, w]));
-
-export function getWallpaper(id: string): Wallpaper | undefined {
-  return BY_ID.get(id);
-}
+const BUILT_IN_BY_ID = new Map(BUILT_IN_WALLPAPERS.map((w) => [w.id, w]));
 
 export type WallpaperSize = "thumb" | "full";
 
-/** The upstream image URL for a wallpaper. Swap this for your own CDN/R2 URLs. */
+/** Upstream image URL for a BUILT-IN wallpaper (proxied by /api/wallpaper). */
 export function sourceFor(id: string, size: WallpaperSize): string {
   const dims = size === "thumb" ? "600/900" : "1080/1920";
   // Deterministic per-id photo; `frenz-wp-<id>` keeps thumb + full the same image.
   return `https://picsum.photos/seed/frenz-wp-${id}/${dims}`;
+}
+
+export function getBuiltInWallpaper(id: string): { id: string; name: string; category: string } | undefined {
+  return BUILT_IN_BY_ID.get(id);
+}
+
+export interface WallpaperComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  authorHandle: string | null;
+  authorName: string | null;
+  authorAvatar: string | null;
 }

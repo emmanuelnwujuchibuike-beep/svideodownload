@@ -127,6 +127,14 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "What the feed promotes, and the broadcast composer.",
   },
   {
+    id: "wallpapers",
+    label: "Wallpapers",
+    category: "content",
+    icon: "Image",
+    blurb:
+      "Upload and curate the wallpaper library shown on the download page and the full-screen gallery at /wallpapers. Hide a wallpaper to shelve it without losing its likes and comments.",
+  },
+  {
     id: "landing",
     label: "Landing page",
     category: "content",

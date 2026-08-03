@@ -30,6 +30,7 @@ import { AdManager } from "@/features/admin/ad-manager";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
 import { SupportInbox } from "@/features/admin/support-inbox";
 import { VerificationQueue } from "@/features/admin/verification-queue";
+import { WallpaperManager } from "@/features/admin/wallpaper-manager";
 import { FeatureFlagManager } from "@/features/admin/feature-flags-manager";
 import { ExperimentsManager } from "@/features/admin/experiments-manager";
 import { getFlags } from "@/lib/platform/flags";
@@ -150,6 +151,7 @@ import { getTrendingSettings } from "@/lib/social/feed";
 import { fetchMessagingStats } from "@/lib/social/messaging-stats";
 import { listReportedTargets } from "@/lib/social/moderation";
 import { listVerificationQueue, verificationCounts } from "@/lib/social/verification";
+import { listAllWallpapers } from "@/lib/wallpapers-server";
 import { fetchPushDeliveryStats } from "@/lib/social/push-delivery-stats";
 import { listAds } from "@/lib/monetization/ads";
 import { LandingEditor } from "@/features/admin/landing-editor";
@@ -357,6 +359,12 @@ export default async function AdminPage() {
             </Suspense>
           </AdminPanel>
 
+          <AdminPanel id="wallpapers">
+            <Suspense fallback={<PanelSkeleton />}>
+              <WallpapersSection />
+            </Suspense>
+          </AdminPanel>
+
           <AdminPanel id="trending">
             <Suspense fallback={<PanelSkeleton />}>
               <ContentSection />
@@ -546,6 +554,11 @@ async function ModerationSection() {
 async function LandingSection() {
   const landing = await getLandingSettings();
   return <LandingEditor settings={landing} />;
+}
+
+async function WallpapersSection() {
+  const wallpapers = await listAllWallpapers();
+  return <WallpaperManager wallpapers={wallpapers} />;
 }
 
 async function VerificationSection() {

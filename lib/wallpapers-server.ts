@@ -23,10 +23,27 @@ interface Row {
   saves_count: number | null;
   comments_count: number | null;
   created_at: string;
+  /** Migration 0108 — absent until it is applied. */
+  views_count?: number | null;
+  views_boost?: number | null;
+  likes_boost?: number | null;
+  saves_boost?: number | null;
 }
 
-const COLUMNS =
+const BASE_COLUMNS =
   "id, title, category, image_url, thumb_url, status, likes_count, saves_count, comments_count, created_at";
+/** Migration 0108: real views + the signed operator adjustments. */
+const METRIC_COLUMNS = "views_count, views_boost, likes_boost, saves_boost";
+
+/**
+ * What a visitor sees for a metric: the REAL count plus the operator's signed
+ * adjustment (0108), floored at zero. The two are kept apart in the database on
+ * purpose — see the migration — so the platform never loses track of which part
+ * was actually earned. The admin panel renders both.
+ */
+function shown(real: number | null | undefined, boost: number | null | undefined): number {
+  return Math.max(0, (real ?? 0) + (boost ?? 0));
+}
 
 function toWallpaper(row: Row): Wallpaper {
   return {
@@ -38,11 +55,36 @@ function toWallpaper(row: Row): Wallpaper {
     // Routed through our own endpoint so the response carries a filename and
     // the browser saves rather than navigates.
     downloadUrl: `/api/wallpaper?id=${row.id}&dl=1`,
-    likes: row.likes_count ?? 0,
-    saves: row.saves_count ?? 0,
+    likes: shown(row.likes_count, row.likes_boost),
+    saves: shown(row.saves_count, row.saves_boost),
     comments: row.comments_count ?? 0,
+    views: shown(row.views_count, row.views_boost),
     builtIn: false,
   };
+}
+
+/**
+ * Selects the metric columns when they exist and silently falls back when they
+ * don't. Without this, a deploy where 0108 hasn't been applied would fail the
+ * whole select and drop the library back to the built-in placeholders — the
+ * operator's real wallpapers would appear to vanish.
+ */
+async function selectWallpapers(
+  build: (columns: string) => PromiseLike<{ data: unknown; error: unknown }>,
+): Promise<Row[]> {
+  try {
+    const { data, error } = await build(`${BASE_COLUMNS}, ${METRIC_COLUMNS}`);
+    if (!error) return (data ?? []) as Row[];
+  } catch {
+    /* 0108 not applied — fall back */
+  }
+  try {
+    const { data, error } = await build(BASE_COLUMNS);
+    if (error) return [];
+    return (data ?? []) as Row[];
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -51,19 +93,15 @@ function toWallpaper(row: Row): Wallpaper {
  * carries whether THAT viewer has liked or saved it.
  */
 export async function listWallpapers(viewerId?: string | null, limit = 120): Promise<Wallpaper[]> {
-  let rows: Row[] = [];
-  try {
-    const { data } = await createAdminClient()
+  const rows = await selectWallpapers((columns) =>
+    createAdminClient()
       .from("wallpapers")
-      .select(COLUMNS)
+      .select(columns)
       .eq("status", "published")
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false })
-      .limit(limit);
-    rows = (data ?? []) as Row[];
-  } catch {
-    rows = [];
-  }
+      .limit(limit),
+  );
 
   if (rows.length === 0) {
     const { builtInWallpapers } = await import("./wallpapers-builtin");
@@ -149,22 +187,28 @@ export async function listWallpaperComments(wallpaperId: string, limit = 50): Pr
 
 /** Admin view — every wallpaper, including hidden ones. */
 export async function listAllWallpapers(limit = 300) {
-  try {
-    const { data } = await createAdminClient()
+  const rows = await selectWallpapers((columns) =>
+    createAdminClient()
       .from("wallpapers")
-      .select(`${COLUMNS}, sort_order, bytes, width, height`)
+      .select(`${columns}, sort_order, bytes, width, height`)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false })
-      .limit(limit);
-    return (data ?? []).map((row) => ({
-      ...toWallpaper(row as Row),
-      status: (row as Row).status,
-      sortOrder: (row as { sort_order?: number }).sort_order ?? 0,
-      createdAt: (row as Row).created_at,
-    }));
-  } catch {
-    return [];
-  }
+      .limit(limit),
+  );
+  return rows.map((row) => ({
+    ...toWallpaper(row),
+    status: row.status,
+    sortOrder: (row as { sort_order?: number }).sort_order ?? 0,
+    createdAt: row.created_at,
+    // The admin panel needs the REAL counts and the adjustments apart, so an
+    // operator can always see what was earned versus what they added.
+    realLikes: row.likes_count ?? 0,
+    realSaves: row.saves_count ?? 0,
+    realViews: row.views_count ?? 0,
+    likesBoost: row.likes_boost ?? 0,
+    savesBoost: row.saves_boost ?? 0,
+    viewsBoost: row.views_boost ?? 0,
+  }));
 }
 
 /** Bump the real download counter. Never gates the download itself. */

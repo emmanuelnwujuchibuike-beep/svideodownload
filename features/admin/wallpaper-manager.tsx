@@ -16,7 +16,18 @@ export interface AdminWallpaper {
   likes: number;
   saves: number;
   comments: number;
+  views: number;
+  /** Real, trigger-maintained counts (migration 0108). */
+  realLikes: number;
+  realSaves: number;
+  realViews: number;
+  /** Signed operator adjustments, kept apart from the real counts. */
+  likesBoost: number;
+  savesBoost: number;
+  viewsBoost: number;
 }
+
+type BoostKey = "viewsBoost" | "likesBoost" | "savesBoost";
 
 const CATEGORIES = ["Abstract", "Gradient", "Nature", "Dark", "Minimal", "Space", "Texture", "Anime", "Cars", "City"];
 
@@ -34,6 +45,9 @@ export function WallpaperManager({ wallpapers }: { wallpapers: AdminWallpaper[] 
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [category, setCategory] = useState(CATEGORIES[0]!);
+  // The name for the next upload. Owner: a wallpaper should carry a name a
+  // person wrote, not the camera's filename.
+  const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -44,6 +58,7 @@ export function WallpaperManager({ wallpapers }: { wallpapers: AdminWallpaper[] 
     try {
       const form = new FormData();
       form.append("category", category);
+      form.append("name", name);
       for (const f of Array.from(files)) form.append("files", f);
       const res = await fetch("/api/admin/wallpapers", { method: "POST", body: form });
       const json = (await res.json()) as { ok?: boolean; created?: number; failed?: string[]; error?: string };
@@ -57,6 +72,7 @@ export function WallpaperManager({ wallpapers }: { wallpapers: AdminWallpaper[] 
           `${json.created ?? 0} uploaded.` +
           (json.failed?.length ? ` ${json.failed.length} skipped: ${json.failed.join("; ")}` : ""),
       });
+      setName("");
       router.refresh();
     } catch {
       setMsg({ ok: false, text: "Network error." });
@@ -135,8 +151,21 @@ export function WallpaperManager({ wallpapers }: { wallpapers: AdminWallpaper[] 
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             {busy ? "Uploading…" : "Upload images"}
           </button>
-          <span className="text-xs text-muted-foreground">JPEG, PNG, WebP or AVIF · up to 20 MB each · multiple at once</span>
         </div>
+        {/* The name for this upload. Without it, a camera filename like
+            IMG_8662 used to become the caption visitors read; now an unnamed
+            upload falls back to a clean "Abstract 01" instead. */}
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={120}
+          placeholder="Name these wallpapers (optional) — e.g. Neon Canyon"
+          className="mt-2 h-10 w-full rounded-xl bg-background px-3 text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+        />
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          JPEG, PNG, WebP or AVIF · up to 20 MB each · multiple at once. Uploading several with a name numbers them
+          (&ldquo;Neon Canyon 1&rdquo;, &ldquo;Neon Canyon 2&rdquo;). You can rename any of them below.
+        </p>
         {msg ? (
           <p className={cn("mt-2 text-xs font-medium", msg.ok ? "text-emerald-500" : "text-rose-500")}>{msg.text}</p>
         ) : null}
@@ -180,6 +209,15 @@ export function WallpaperManager({ wallpapers }: { wallpapers: AdminWallpaper[] 
                     </option>
                   ))}
                 </select>
+
+                {/* Engagement adjustments. Each row shows what visitors SEE and,
+                    underneath, what was actually earned — so an operator can
+                    always tell the two apart and set an adjustment back to zero. */}
+                <div className="space-y-1 rounded-lg bg-secondary/40 p-1.5">
+                  <BoostRow label="Views" field="viewsBoost" shown={w.views} real={w.realViews} boost={w.viewsBoost} id={w.id} onPatch={patch} busy={rowBusy === w.id} />
+                  <BoostRow label="Likes" field="likesBoost" shown={w.likes} real={w.realLikes} boost={w.likesBoost} id={w.id} onPatch={patch} busy={rowBusy === w.id} />
+                  <BoostRow label="Saves" field="savesBoost" shown={w.saves} real={w.realSaves} boost={w.savesBoost} id={w.id} onPatch={patch} busy={rowBusy === w.id} />
+                </div>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
@@ -212,5 +250,84 @@ export function WallpaperManager({ wallpapers }: { wallpapers: AdminWallpaper[] 
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * One adjustable metric.
+ *
+ * The number on the left is what a VISITOR sees; the line under it is what was
+ * actually earned plus the operator's adjustment, shown separately and always.
+ * That separation is the whole point: an adjusted count stays distinguishable
+ * from a real one, and "Reset" puts it back with a single tap.
+ *
+ * Steppers rather than a free-text box: the common operation is a nudge, and a
+ * typed field invites a slipped digit that would be visible to every visitor.
+ * The value is committed on each tap, so nothing is left unsaved.
+ */
+function BoostRow({
+  label,
+  field,
+  shown,
+  real,
+  boost,
+  id,
+  onPatch,
+  busy,
+}: {
+  label: string;
+  field: BoostKey;
+  shown: number;
+  real: number;
+  boost: number;
+  id: string;
+  onPatch: (id: string, body: Record<string, unknown>) => Promise<void>;
+  busy: boolean;
+}) {
+  const step = (delta: number) => void onPatch(id, { [field]: boost + delta });
+
+  return (
+    <div className="flex items-center gap-1">
+      <span className="w-10 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-[11px] font-bold tabular-nums">
+        {shown.toLocaleString()}
+        {boost !== 0 ? (
+          <span className="ml-1 font-medium text-amber-500">
+            ({real.toLocaleString()} real {boost > 0 ? "+" : "−"} {Math.abs(boost).toLocaleString()})
+          </span>
+        ) : null}
+      </span>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => step(-10)}
+        aria-label={`Reduce ${label} by 10`}
+        className="flex h-6 w-6 items-center justify-center rounded-md border border-border text-[11px] font-bold transition hover:bg-background disabled:opacity-40"
+      >
+        −
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => step(10)}
+        aria-label={`Increase ${label} by 10`}
+        className="flex h-6 w-6 items-center justify-center rounded-md border border-border text-[11px] font-bold transition hover:bg-background disabled:opacity-40"
+      >
+        +
+      </button>
+      {boost !== 0 ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void onPatch(id, { [field]: 0 })}
+          aria-label={`Reset ${label} adjustment`}
+          className="rounded-md border border-border px-1.5 text-[10px] font-semibold text-muted-foreground transition hover:bg-background disabled:opacity-40"
+        >
+          Reset
+        </button>
+      ) : null}
+    </div>
   );
 }

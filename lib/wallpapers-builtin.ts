@@ -18,6 +18,9 @@ export function builtInWallpapers(): Wallpaper[] {
     likes: 0,
     saves: 0,
     comments: 0,
+    // A placeholder has no database row, so it has nothing real to count and
+    // is never given an invented number.
+    views: 0,
     builtIn: true,
   }));
 }

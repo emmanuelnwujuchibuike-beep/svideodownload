@@ -301,7 +301,10 @@ function relativeTime(at: number): string {
  */
 export function DownloadQuickActions() {
   const cards: { icon: typeof Sparkles; tint: string; title: string; sub: string; href?: string; soon?: boolean }[] = [
-    { icon: ImageIcon, tint: "text-fuchsia-500 bg-fuchsia-500/12", title: "Wallpapers", sub: "Browse full screen", href: "/wallpapers" },
+    // "Browse full screen" means exactly that, so it skips the grid and opens
+    // the reels viewer directly (`?reels=1`) — the behaviour this card has
+    // always had, kept on the one wallpaper route.
+    { icon: ImageIcon, tint: "text-fuchsia-500 bg-fuchsia-500/12", title: "Wallpapers", sub: "Browse full screen", href: "/wallpapers?reels=1" },
     { icon: Heart, tint: "text-rose-500 bg-rose-500/12", title: "Favorites", sub: "View saved items", href: "/history?filter=favorites" },
     { icon: Bookmark, tint: "text-blue-500 bg-blue-500/12", title: "Saved posts", sub: "Your bookmarks", href: "/saved" },
     { icon: Sparkles, tint: "text-violet-500 bg-violet-500/12", title: "AI Studio", sub: "Edit your media", soon: true },

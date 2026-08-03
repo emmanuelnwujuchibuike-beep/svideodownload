@@ -1,4 +1,14 @@
+import { matchPage, PAGES } from "@/lib/analytics/pages";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+/** The bucket for a path no catalogue entry claims. */
+const OTHER_PAGE_ID = "__other";
+
+/** The full catalogue at zero — the shape every range starts from, so a page
+ *  with no traffic still reports rather than vanishing. */
+function emptyPageStats(): PageStat[] {
+  return PAGES.map((p) => ({ id: p.id, label: p.label, group: p.group, views: 0, visitors: 0 }));
+}
 
 /**
  * Admin analytics reads over the Phase-1 tables plus the monetization + security
@@ -40,9 +50,22 @@ export interface AdAnalytics {
   byZone: AdZoneStat[];
 }
 
+/** One catalogued surface and its traffic. Zero-view pages are INCLUDED — see
+ *  `lib/analytics/pages.ts` for why a zero is information worth rendering. */
+export interface PageStat {
+  id: string;
+  label: string;
+  group: string;
+  views: number;
+  /** Distinct visitors on this page over the sample. */
+  visitors: number;
+}
+
 export interface Engagement {
   topPages: Breakdown[];
   topReferrers: Breakdown[];
+  /** EVERY catalogued page, grouped, including the ones with no traffic. */
+  pages: PageStat[];
   newVisitors: number;
   returningVisitors: number;
 }
@@ -261,7 +284,7 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
     byCountry: [],
     timeseries: { granularity, buckets: emptyBuckets },
     ads: { impressions: 0, clicks: 0, ctr: 0, cpmUsd: DEFAULT_CPM_USD, revenueUsd: 0, byZone: [] },
-    engagement: { topPages: [], topReferrers: [], newVisitors: 0, returningVisitors: 0 },
+    engagement: { topPages: [], topReferrers: [], pages: emptyPageStats(), newVisitors: 0, returningVisitors: 0 },
     monitoring: { errorRatePct: 0, failedDownloads: 0, recentErrors: [], recentSecurity: [] },
     approxBreakdowns: false,
     generatedAt: new Date().toISOString(),
@@ -332,6 +355,36 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
     }
     const topPages = [...pageTally.entries()].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count).slice(0, 8);
     const topReferrers = [...refTally.entries()].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count).slice(0, 8);
+
+    // Per-PAGE stats over the catalogue: every surface reports, including the
+    // ones nobody visited, and dynamic routes collapse into a single row.
+    const pageViewTally = new Map<string, number>();
+    const pageVisitors = new Map<string, Set<string>>();
+    for (const r of rows) {
+      if (r.event_type !== "page_view") continue;
+      const id = matchPage(r.path) ?? OTHER_PAGE_ID;
+      pageViewTally.set(id, (pageViewTally.get(id) ?? 0) + 1);
+      let seen = pageVisitors.get(id);
+      if (!seen) pageVisitors.set(id, (seen = new Set()));
+      seen.add(r.visitor_id);
+    }
+    const pages: PageStat[] = emptyPageStats().map((p) => ({
+      ...p,
+      views: pageViewTally.get(p.id) ?? 0,
+      visitors: pageVisitors.get(p.id)?.size ?? 0,
+    }));
+    // Uncatalogued paths are surfaced, never dropped — an "Other" row with a
+    // count is how a forgotten page gets noticed and catalogued.
+    const otherViews = pageViewTally.get(OTHER_PAGE_ID) ?? 0;
+    if (otherViews > 0) {
+      pages.push({
+        id: OTHER_PAGE_ID,
+        label: "Other (uncatalogued)",
+        group: "Other",
+        views: otherViews,
+        visitors: pageVisitors.get(OTHER_PAGE_ID)?.size ?? 0,
+      });
+    }
 
     // New vs returning: over a bounded sample of this range's visitors, how many
     // also have an event STRICTLY BEFORE the range started. Scaled to the full
@@ -418,7 +471,7 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
       byCountry: tally((r) => r.country),
       timeseries: { granularity, buckets },
       ads,
-      engagement: { topPages, topReferrers, newVisitors, returningVisitors },
+      engagement: { topPages, topReferrers, pages, newVisitors, returningVisitors },
       monitoring,
       approxBreakdowns: rows.length >= SAMPLE_CAP,
       generatedAt: new Date().toISOString(),

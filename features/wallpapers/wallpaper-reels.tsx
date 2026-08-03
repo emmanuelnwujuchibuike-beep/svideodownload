@@ -37,6 +37,26 @@ import { cn } from "@/lib/utils";
  * look broken), they prompt a sign-in.
  */
 
+/**
+ * Wallpapers already counted this session. Module-level, so scrolling back up
+ * past one — or reopening the viewer — doesn't count it again. A built-in
+ * placeholder has no database row, so it is never counted at all.
+ */
+const viewed = new Set<string>();
+
+function countView(wallpaper: Wallpaper | undefined) {
+  if (!wallpaper || wallpaper.builtIn || viewed.has(wallpaper.id)) return;
+  viewed.add(wallpaper.id);
+  // Fire-and-forget: a view is a side effect of looking at a picture, and must
+  // never block the scroll or surface an error.
+  void fetch("/api/wallpapers/view", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: wallpaper.id }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 export function WallpaperReels({
   items,
   startIndex = 0,
@@ -76,7 +96,10 @@ export function WallpaperReels({
         for (const e of entries) {
           if (e.isIntersecting && e.intersectionRatio > 0.6) {
             const i = Number((e.target as HTMLElement).dataset.i);
-            if (!Number.isNaN(i)) setIndex(i);
+            if (!Number.isNaN(i)) {
+              setIndex(i);
+              countView(items[i]);
+            }
           }
         }
       },
@@ -242,7 +265,17 @@ export function WallpaperReels({
         style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}
       >
         <p className="text-lg font-bold tracking-tight drop-shadow">{current.name}</p>
-        <p className="mt-0.5 text-sm text-white/70">{current.category}</p>
+        <p className="mt-0.5 flex items-center gap-1.5 text-sm text-white/70">
+          {current.category}
+          {/* Views appear only once there are some — a fresh wallpaper shows no
+              number rather than a "0 views" that reads like nobody cares. */}
+          {current.views > 0 ? (
+            <>
+              <span aria-hidden>·</span>
+              <span>{current.views.toLocaleString()} views</span>
+            </>
+          ) : null}
+        </p>
         <button
           type="button"
           onClick={() => download(current)}

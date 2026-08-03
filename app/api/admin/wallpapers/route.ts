@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/admin/guard";
+import { wallpaperTitle } from "@/lib/wallpaper-title";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -44,9 +45,14 @@ export async function POST(request: Request) {
   if (files.length === 0) return bad("No images selected.");
 
   const category = (form.get("category") as string | null)?.trim() || "Abstract";
+  // An operator-supplied name for this batch. With one file it IS the name;
+  // with several it becomes "Name 1", "Name 2", … so a batch upload still ends
+  // up with real names instead of camera filenames.
+  const batchName = (form.get("name") as string | null)?.trim().slice(0, 120) || "";
   const db = createAdminClient();
   const created: string[] = [];
   const failed: string[] = [];
+  let index = 0;
 
   for (const file of files) {
     if (!ALLOWED.has(file.type)) {
@@ -73,9 +79,14 @@ export async function POST(request: Request) {
       }
       const { data: pub } = db.storage.from("wallpapers").getPublicUrl(key);
 
-      // The filename makes a far better default title than "Untitled" — an
-      // operator can rename it inline afterwards.
-      const title = file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim() || "Wallpaper";
+      index += 1;
+      const title = wallpaperTitle({
+        batchName,
+        batchSize: files.length,
+        index,
+        filename: file.name,
+        category,
+      });
 
       const { error: rowErr } = await db.from("wallpapers").insert({
         title,
@@ -105,7 +116,16 @@ export async function PATCH(request: Request) {
   const admin = await getAdminUser();
   if (!admin) return bad("Not authorised.", 403);
 
-  let body: { id?: string; title?: string; category?: string; status?: string; sortOrder?: number };
+  let body: {
+    id?: string;
+    title?: string;
+    category?: string;
+    status?: string;
+    sortOrder?: number;
+    viewsBoost?: number;
+    likesBoost?: number;
+    savesBoost?: number;
+  };
   try {
     body = await request.json();
   } catch {
@@ -118,10 +138,41 @@ export async function PATCH(request: Request) {
   if (typeof body.category === "string") patch.category = body.category.trim().slice(0, 40) || "Abstract";
   if (body.status === "published" || body.status === "hidden") patch.status = body.status;
   if (typeof body.sortOrder === "number") patch.sort_order = Math.trunc(body.sortOrder);
-  if (Object.keys(patch).length === 0) return bad("Nothing to change.");
 
-  const { error } = await createAdminClient().from("wallpapers").update(patch).eq("id", body.id);
-  return error ? bad(error.message, 500) : NextResponse.json({ ok: true });
+  // Engagement adjustments (0108). These are SIGNED and land in their own
+  // columns — the trigger-maintained real counters are never written here, so
+  // an adjustment can always be undone by setting it back to 0, and the real
+  // number stays recoverable. Bounded so a typo can't set a nine-digit count.
+  const BOOST_LIMIT = 10_000_000;
+  const boost = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isFinite(v)
+      ? Math.max(-BOOST_LIMIT, Math.min(BOOST_LIMIT, Math.trunc(v)))
+      : undefined;
+  const adjustments: Record<string, unknown> = {};
+  const views = boost(body.viewsBoost);
+  const likes = boost(body.likesBoost);
+  const saves = boost(body.savesBoost);
+  if (views !== undefined) adjustments.views_boost = views;
+  if (likes !== undefined) adjustments.likes_boost = likes;
+  if (saves !== undefined) adjustments.saves_boost = saves;
+
+  if (Object.keys(patch).length === 0 && Object.keys(adjustments).length === 0) return bad("Nothing to change.");
+
+  const db = createAdminClient();
+  if (Object.keys(patch).length > 0) {
+    const { error } = await db.from("wallpapers").update(patch).eq("id", body.id);
+    if (error) return bad(error.message, 500);
+  }
+  if (Object.keys(adjustments).length > 0) {
+    const { error } = await db.from("wallpapers").update(adjustments).eq("id", body.id);
+    // Separated so a missing 0108 can't fail a rename, and reported honestly
+    // rather than swallowed — an operator who nudged a count must not be told
+    // it saved when the column isn't there.
+    if (error) {
+      return bad("Engagement adjustments need the latest database update (0108).", 503);
+    }
+  }
+  return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(request: Request) {

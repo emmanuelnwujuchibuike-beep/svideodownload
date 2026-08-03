@@ -23,7 +23,7 @@ import { type ComponentType, useCallback, useEffect, useRef, useState } from "re
 
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
-import type { AdZoneStat, AnalyticsSummary, Breakdown, MonitorRow, Range, TimeBucket } from "@/lib/analytics/queries";
+import type { AdZoneStat, AnalyticsSummary, Breakdown, MonitorRow, PageStat, Range, TimeBucket } from "@/lib/analytics/queries";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 import { GeoMap } from "./geo-map";
@@ -186,6 +186,12 @@ export function AnalyticsDashboard() {
         </div>
       </div>
 
+      {/* Every page — including the ones nobody visited */}
+      <div>
+        <SectionLabel icon={Eye}>Pages</SectionLabel>
+        <PagesTable rows={data?.engagement.pages ?? []} />
+      </div>
+
       {/* Monitoring */}
       <Monitoring data={data} />
 
@@ -269,6 +275,73 @@ function BreakdownCard({ icon: Icon, title, rows }: { icon: ComponentType<{ clas
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * Every catalogued surface and its traffic, grouped.
+ *
+ * Unlike "Top pages" (a top-8 tally that hides everything below it), this
+ * reports the WHOLE app: a page with no views shows a zero rather than being
+ * absent, which is the only way the dashboard can answer "is anyone using this?"
+ * — the question the owner asked of Wallpapers.
+ *
+ * Bars are scaled to the busiest page so the shape is readable at a glance;
+ * counts are the real numbers, never rounded up.
+ */
+function PagesTable({ rows }: { rows: PageStat[] }) {
+  const groups = rows.reduce<Record<string, PageStat[]>>((acc, r) => {
+    (acc[r.group] ??= []).push(r);
+    return acc;
+  }, {});
+  const max = Math.max(1, ...rows.map((r) => r.views));
+  const total = rows.reduce((sum, r) => sum + r.views, 0);
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-2xl border border-border/60 bg-card p-6 text-center text-xs text-muted-foreground shadow-sm">
+        No page views yet — this fills in as traffic flows.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+      <div className="flex items-center justify-between border-b border-border/60 px-3.5 py-2.5">
+        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          {rows.length} pages tracked
+        </span>
+        <span className="text-xs tabular-nums text-muted-foreground">{formatCompactNumber(total)} views</span>
+      </div>
+      <div className="max-h-[28rem] overflow-y-auto">
+        {Object.entries(groups).map(([group, items]) => (
+          <div key={group}>
+            <p className="sticky top-0 z-10 bg-secondary/70 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground backdrop-blur">
+              {group}
+            </p>
+            <ul className="divide-y divide-border/50">
+              {items.map((r) => (
+                <li key={r.id} className="px-3.5 py-2">
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className={cn("truncate font-medium", r.views === 0 && "text-muted-foreground")}>{r.label}</span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {formatCompactNumber(r.views)}
+                      <span className="ml-1.5 opacity-70">· {formatCompactNumber(r.visitors)} visitors</span>
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500"
+                      style={{ width: `${(r.views / max) * 100}%` }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

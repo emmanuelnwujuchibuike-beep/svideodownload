@@ -13,14 +13,27 @@ export const metadata: Metadata = {
 };
 
 /**
- * /wallpapers — the public Explore surface, reached from the landing's
- * "Explore wallpapers" button.
+ * /wallpapers — the public Wallpapers surface, reached from the landing hero's
+ * Wallpapers button.
+ *
+ * The page IS the download page's Wallpapers section, given its own room: a
+ * premium header and the full library as a grid, with the reels viewer one tap
+ * away (owner, 2026-08-03).
+ *
+ * `?reels=1` skips the grid and opens the viewer immediately — that is what the
+ * "Browse full screen" entry points mean, and it keeps the original
+ * straight-to-reels behaviour on one route instead of a second near-identical
+ * wallpaper page.
  *
  * Open to signed-out visitors on purpose (owner): they can scroll the whole
- * library in reels form and download from it. Engagement is a signed-in,
- * download-page affordance, so `canEngage` follows the session.
+ * library and download from it. Engagement is a signed-in affordance, so
+ * `canEngage` follows the session.
  */
-export default async function WallpapersPage() {
+export default async function WallpapersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reels?: string }>;
+}) {
   let viewerId: string | null = null;
   try {
     const supabase = await createClient();
@@ -32,7 +45,7 @@ export default async function WallpapersPage() {
     /* signed out — the library is still public */
   }
 
-  const items = await listWallpapers(viewerId);
+  const [items, { reels }] = await Promise.all([listWallpapers(viewerId), searchParams]);
 
-  return <WallpaperExplore items={items} canEngage={!!viewerId} />;
+  return <WallpaperExplore items={items} canEngage={!!viewerId} openReels={reels === "1"} />;
 }

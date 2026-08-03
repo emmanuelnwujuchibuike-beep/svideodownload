@@ -97,6 +97,31 @@ export function Hero() {
             >
               <Play className="h-4 w-4" /> Explore Features
             </Link>
+            {/*
+              Wallpapers (owner, 2026-08-03) — opens the standalone library.
+
+              Deliberately a plain server-rendered Link, NOT a client island. The
+              first version of this was a client component that warmed the route
+              on idle; it added a client boundary to the landing and pushed the
+              page straight through the 2-second cold-entry budget (budget.test
+              caught it at 303 kB). A Link with `prefetch` costs ZERO client
+              JavaScript and still satisfies the ask: Next prefetches it after
+              hydration, so the route is warm by the time anyone reaches for it
+              without competing with the landing's own first paint. `loading.tsx`
+              on /wallpapers is what makes the reveal instant either way.
+            */}
+            <Link
+              href="/wallpapers"
+              prefetch
+              className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl border border-violet-300/60 bg-white px-7 py-3.5 text-sm font-semibold text-slate-900 shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-card active:scale-[0.99] dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur dark:hover:border-white/30 sm:w-auto"
+            >
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-violet-500/15 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full"
+              />
+              <Sparkles className="relative h-4 w-4 text-violet-500 dark:text-violet-400" />
+              <span className="relative">Wallpapers</span>
+            </Link>
           </div>
 
           {/* Reference checklist — three checkable product facts (no scale claims,

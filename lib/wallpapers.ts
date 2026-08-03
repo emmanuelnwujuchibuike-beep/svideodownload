@@ -30,6 +30,8 @@ export interface Wallpaper {
   likes: number;
   saves: number;
   comments: number;
+  /** Real views plus the operator's adjustment (migration 0108), floored at 0. */
+  views: number;
   /** True for the built-in placeholders — they have no database row, so they
    *  can't be liked, saved or commented on. */
   builtIn: boolean;

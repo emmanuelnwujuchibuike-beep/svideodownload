@@ -60,7 +60,9 @@ export function TopPageBannerAd() {
   return (
     <div
       ref={barRef}
-      style={{ top: "var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem))" }}
+      // Sits BELOW the global announcement bar (if one is showing) — offset by its
+      // published height so the two never overlap.
+      style={{ top: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + var(--frenz-announce-h, 0px))" }}
       className={cn(
         // z-40: below the header (z-50), above content — matches the bottom bar.
         "fixed inset-x-0 z-40 border-b border-border/60 bg-card",

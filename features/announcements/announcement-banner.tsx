@@ -10,15 +10,14 @@ import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 
 /**
- * Premium site announcement bar — pinned just below the header on the home +
- * download pages (owner). Content is set by admins (see /admin → Announcement) and
+ * Premium site announcement bar — pinned just below the header, shown GLOBALLY to
+ * every visitor (incl. anonymous) on every page (owner: "it must be global on all
+ * users' browsers"). Content is set by admins (see /admin → Announcement) and
  * fetched here after paint, so it never touches the landing's cold-entry budget and
  * never un-statics a page. Fixed at `--frenz-header-bottom`; publishes its height as
- * `--frenz-topbanner-h` so the layout reserves space and content clears it.
- *
- * Mounted in both the marketing and app layouts; `usePathname` gates it to the two
- * surfaces so it shows on `/` and `/downloads` only. Dismissal is keyed by the
- * announcement's content hash, so editing the copy re-shows it.
+ * `--frenz-announce-h` so the layout reserves space (the top-of-page ad, if any,
+ * stacks BELOW it). Dismissal is keyed by the announcement's content hash, so
+ * editing the copy re-shows it. An optional `showOn` allowlist can scope it.
  */
 
 const DISMISS_KEY = "frenz-ann-dismissed";
@@ -53,7 +52,7 @@ const VARIANTS: Record<
   },
 };
 
-export function AnnouncementBanner({ showOn = ["/", "/downloads"] }: { showOn?: string[] }) {
+export function AnnouncementBanner({ showOn }: { showOn?: string[] }) {
   const pathname = usePathname();
   const [ann, setAnn] = useState<PublicAnnouncement | null>(null);
   const [dismissed, setDismissed] = useState(true); // hidden until we know
@@ -62,7 +61,9 @@ export function AnnouncementBanner({ showOn = ["/", "/downloads"] }: { showOn?: 
   const msgTextRef = useRef<HTMLSpanElement | null>(null);
   const [overflowing, setOverflowing] = useState(false);
 
-  const onPath = showOn.includes(pathname);
+  // GLOBAL by default (owner: it must reach every visitor, incl. anonymous, on every
+  // page). A `showOn` allowlist is optional; when omitted the bar shows everywhere.
+  const onPath = showOn ? showOn.includes(pathname) : true;
 
   useEffect(() => {
     if (!onPath) return;
@@ -96,17 +97,17 @@ export function AnnouncementBanner({ showOn = ["/", "/downloads"] }: { showOn?: 
   useEffect(() => {
     const root = document.documentElement;
     if (!visible || !barRef.current) {
-      root.style.setProperty("--frenz-topbanner-h", "0px");
+      root.style.setProperty("--frenz-announce-h", "0px");
       return;
     }
     const bar = barRef.current;
-    const set = () => root.style.setProperty("--frenz-topbanner-h", `${bar.offsetHeight}px`);
+    const set = () => root.style.setProperty("--frenz-announce-h", `${bar.offsetHeight}px`);
     set();
     const ro = new ResizeObserver(set);
     ro.observe(bar);
     return () => {
       ro.disconnect();
-      root.style.setProperty("--frenz-topbanner-h", "0px");
+      root.style.setProperty("--frenz-announce-h", "0px");
     };
   }, [visible]);
 

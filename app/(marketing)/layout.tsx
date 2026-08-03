@@ -54,11 +54,14 @@ export default async function MarketingLayout({ children }: { children: React.Re
   const reelUrls = await firstReelUrls();
   return (
     <>
-      {/* Reserve room for the fixed TOP bar (announcement on home, or the top ad on
-          content pages — the two never show together). It publishes its height as
-          --frenz-topbanner-h (0 when absent, so an unbannered page keeps its exact
-          layout); this padding pushes the page's own content down to clear it. */}
-      <div style={{ paddingTop: "var(--frenz-topbanner-h, 0px)" }} className="transition-[padding] duration-200">
+      {/* Reserve room for the fixed TOP bars: the GLOBAL announcement bar
+          (--frenz-announce-h) plus the content-page top ad stacked below it
+          (--frenz-topbanner-h). Each is 0 when absent, so an unbannered page keeps
+          its exact layout; this padding pushes the page's content clear of both. */}
+      <div
+        style={{ paddingTop: "calc(var(--frenz-announce-h, 0px) + var(--frenz-topbanner-h, 0px))" }}
+        className="transition-[padding] duration-200"
+      >
         {children}
       </div>
       {/* Reserve room for the fixed BOTTOM ad bar (it now sits above the bottom nav

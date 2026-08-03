@@ -41,11 +41,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <AppSidebar handle={null} />
       <div className="flex min-w-0 flex-1 flex-col">
         <AppTopbar />
-        {/* Premium announcement bar (admin-set) — the download page is one of its
-            two surfaces. Fixed below the header; the reservation padding below keeps
-            the sticky ad + content clear of it. */}
-        <DeferredAnnouncement showOn={["/downloads"]} />
-        <div style={{ paddingTop: "var(--frenz-topbanner-h, 0px)" }} className="transition-[padding] duration-200">
+        {/* Premium announcement bar (admin-set) — GLOBAL: shown on every signed-in
+            page too, not just downloads. Fixed below the header; the reservation
+            padding below keeps the sticky ad + content clear of it. */}
+        <DeferredAnnouncement />
+        <div
+          style={{ paddingTop: "calc(var(--frenz-announce-h, 0px) + var(--frenz-topbanner-h, 0px))" }}
+          className="transition-[padding] duration-200"
+        >
           {/* Sticky top ad — Downloads page only, mounted here (outside the page
               transition template) so its sticky pin is reliable. */}
           <DownloadTopAd />

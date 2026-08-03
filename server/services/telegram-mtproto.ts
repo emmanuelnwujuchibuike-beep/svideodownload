@@ -287,8 +287,24 @@ export async function downloadTelegramStream(
   // 512 KB parts (a multiple of 4096, within Telegram's per-request limit).
   const iter: any = client.iterDownload({ file: media, requestSize: 512 * 1024 });
 
+  // CRITICAL: pull the FIRST chunk here, during setup. If iterDownload can't handle
+  // this media (throws or yields nothing), it fails NOW — the caller catches it and
+  // falls back to the buffered path. Without this the failure happens mid-response,
+  // after 200 headers are already sent, which the client sees as a 502 with no
+  // fallback (the bug this replaced).
+  const firstResult = await iter.next();
+  if (firstResult.done || !firstResult.value || (firstResult.value.length ?? 0) === 0) {
+    throw new Error("Telegram stream produced no data");
+  }
+  let pending: Uint8Array | null = new Uint8Array(firstResult.value as Buffer);
+
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
+      if (pending) {
+        controller.enqueue(pending);
+        pending = null;
+        return;
+      }
       try {
         const { value, done } = await iter.next();
         if (done || !value) {

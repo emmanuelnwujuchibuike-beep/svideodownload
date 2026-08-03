@@ -1,8 +1,29 @@
 "use client";
 
-import { Bookmark, Clapperboard, Download, FolderHeart, Grid3x3, LayoutGrid, Repeat2, Rows3 } from "lucide-react";
+import {
+  Award,
+  BadgeCheck,
+  Bookmark,
+  BookOpen,
+  Briefcase,
+  Clapperboard,
+  Clock,
+  Download,
+  FileText,
+  FolderHeart,
+  GraduationCap,
+  Grid3x3,
+  IdCard,
+  LayoutGrid,
+  Package,
+  Repeat2,
+  Rows3,
+  Sparkles,
+  Trophy,
+  Wrench,
+} from "lucide-react";
 import dynamic from "next/dynamic";
-import { type ComponentType, useMemo, useState } from "react";
+import { type ComponentType, type ReactNode, useMemo, useState } from "react";
 
 import { WowOutline } from "@/components/brand/wow-icon";
 
@@ -10,70 +31,96 @@ import { ProfileMediaGrid } from "@/features/social/profile-media-grid";
 import type { PostCard } from "@/lib/social/posts";
 import { cn } from "@/lib/utils";
 
-// These tabs render only when selected (initial tab is Posts), so defer their
-// chunks off the initial profile load.
+// These tabs render only when selected, so defer their chunks off first load.
 const CollectionsTab = dynamic(() => import("@/features/profile/collections-tab").then((m) => m.CollectionsTab), { ssr: false });
 const DownloadsTab = dynamic(() => import("@/features/profile/downloads-tab").then((m) => m.DownloadsTab), { ssr: false });
 
+/** The post-backed sections this component renders from its own datasets. */
 export type ProfileTab = "posts" | "reels" | "downloads" | "reposted" | "liked" | "saved" | "collections";
+
+const POST_TABS = new Set<string>(["posts", "reels", "downloads", "reposted", "liked", "saved", "collections"]);
+
 type MediaView = "grid" | "list";
 const VIEW_COOKIE = "svd_profile_view";
 
 type IconType = ComponentType<{ className?: string }>;
 
-const TAB_LABEL: Record<ProfileTab, string> = {
-  posts: "Posts",
-  reels: "Reels",
-  downloads: "Downloads",
-  reposted: "Reposts",
-  liked: "Wows",
-  saved: "Saved",
-  collections: "Collections",
+/** Module icon names (`lib/profile/modules.ts`) → real components. */
+const ICONS: Record<string, IconType> = {
+  Grid3x3,
+  Clapperboard,
+  Download,
+  FolderHeart,
+  Repeat2,
+  Heart: WowOutline,
+  Bookmark,
+  IdCard,
+  Trophy,
+  LayoutGrid,
+  Briefcase,
+  GraduationCap,
+  BadgeCheck,
+  Award,
+  BookOpen,
+  Sparkles,
+  FileText,
+  Package,
+  Wrench,
+  Clock,
 };
 
-const TAB_ICON: Record<ProfileTab, IconType> = {
-  posts: Grid3x3,
-  reels: Clapperboard,
-  downloads: Download,
-  reposted: Repeat2,
-  liked: WowOutline,
-  saved: Bookmark,
-  collections: FolderHeart,
-};
+/** One entry in the dock — resolved by the Universal Profile Engine. */
+export interface ProfileSection {
+  key: string;
+  label: string;
+  /** Icon NAME from the module registry (this file owns the mapping). */
+  icon: string;
+}
 
 /**
- * Instant, client-side profile tabs. All datasets are handed in from the server
- * once, so switching between Posts / Reels / Downloads / Reposts / Liked / Saved
- * is immediate on every device — no navigation, no skeleton, never a reload.
- * The tab bar is a clean icon+underline rail (no sideways slide); the grid/list
- * view toggle lives on the far right, always separated from the tabs.
- * `initialView` is seeded from a cookie so the chosen layout paints instantly.
+ * Smart Navigation Dock™ — now driven by the Universal Profile Engine
+ * (Feature 18 · Part 14).
+ *
+ * The dock used to render a hard-coded tab list. It now renders whatever
+ * sections the engine resolved for THIS profile and THIS viewer, in the
+ * member's own order — so a Business profile leads with About and Products
+ * while a personal one still leads with Posts, from the same component.
+ *
+ * Post-backed sections keep rendering from the datasets handed in once by the
+ * server. Every other section arrives already rendered in `panels`, as a server
+ * component passed through as a prop: switching stays instant, nothing is
+ * fetched on tap, and none of those panels cost anything in the client bundle.
  */
 export function ProfileTabs({
   handle,
   ownerId,
   isOwner,
-  tabs,
+  sections,
   initialTab,
   initialView = "grid",
   posts,
   liked,
   saved,
   reposted = [],
+  panels,
 }: {
   handle: string;
   ownerId: string;
   isOwner: boolean;
-  tabs: ProfileTab[];
-  initialTab: ProfileTab;
+  sections: ProfileSection[];
+  initialTab: string;
   initialView?: MediaView;
   posts: PostCard[];
   liked: PostCard[];
   saved: PostCard[];
   reposted?: PostCard[];
+  /** Server-rendered content for every non-post section. */
+  panels?: Record<string, ReactNode>;
 }) {
-  const [active, setActive] = useState<ProfileTab>(tabs.includes(initialTab) ? initialTab : "posts");
-  // Grid vs X-style list — seeded from a cookie (instant, no flash), remembered on-device.
+  const keys = useMemo(() => sections.map((s) => s.key), [sections]);
+  const [active, setActive] = useState<string>(() => (keys.includes(initialTab) ? initialTab : (keys[0] ?? "posts")));
+
+  // Grid vs list — seeded from a cookie (instant, no flash), remembered on-device.
   const [view, setView] = useState<MediaView>(initialView);
   const chooseView = (v: MediaView) => {
     setView(v);
@@ -87,16 +134,16 @@ export function ProfileTabs({
   const reels = useMemo(() => posts.filter((p) => p.mediaKind === "video"), [posts]);
   const publishedDownloads = useMemo(() => posts.filter((p) => p.platform && p.platform !== "frenz"), [posts]);
 
-  const select = (id: ProfileTab) => {
+  const select = (id: string) => {
     setActive(id);
-    // Reflect the tab in the URL for shareability — WITHOUT a navigation/reload.
+    // Reflect the section in the URL for shareability — WITHOUT a navigation.
     if (typeof window !== "undefined") {
-      const url = id === "posts" ? `/u/${handle}` : `/u/${handle}?tab=${id}`;
+      const url = id === (keys[0] ?? "posts") ? `/u/${handle}` : `/u/${handle}?tab=${id}`;
       window.history.replaceState(window.history.state, "", url);
     }
   };
 
-  const empty: Record<ProfileTab, string> = {
+  const empty: Record<string, string> = {
     posts: isOwner ? "You haven't posted anything yet — tap + to create." : "No public posts yet.",
     reels: "No reels yet.",
     downloads: isOwner
@@ -108,28 +155,53 @@ export function ProfileTabs({
     collections: isOwner ? "Save posts into collections to organize them." : "No collections yet.",
   };
 
-  const showViewToggle = active !== "downloads" && active !== "collections";
+  // The view toggle belongs to the media grid, so it only appears for the
+  // sections that ARE a media grid.
+  const showViewToggle = POST_TABS.has(active) && active !== "downloads" && active !== "collections";
+
+  const renderActive = () => {
+    if (!POST_TABS.has(active)) return panels?.[active] ?? null;
+    if (active === "downloads" && isOwner) return <DownloadsTab emptyText={empty.downloads!} />;
+    if (active === "collections") return <CollectionsTab ownerId={ownerId} isOwner={isOwner} emptyText={empty.collections!} />;
+    return (
+      <ProfileMediaGrid
+        posts={
+          active === "reels"
+            ? reels
+            : active === "downloads"
+              ? publishedDownloads
+              : active === "liked"
+                ? liked
+                : active === "saved"
+                  ? saved
+                  : active === "reposted"
+                    ? reposted
+                    : posts
+        }
+        layout={active === "reels" ? "reel" : "card"}
+        view={view}
+        emptyText={empty[active] ?? "Nothing here yet."}
+      />
+    );
+  };
 
   return (
     <div className="mt-8">
       <div className="mb-6 flex items-center gap-2">
-        {/* Smart Navigation Dock™ (Profile · Part 3) — a premium glass segmented
-            control that replaces the old text-tab rail. Each section is one tap
-            away; the active section lifts into a brand pill while inactive sections
-            stay calm icons (labelled on wider screens, icon-only on mobile so every
-            tab fits). Scrolls horizontally beside the creator rail. Behaviour is
-            unchanged: instant client-side switching, URL kept in sync, no reload. */}
+        {/* A premium glass segmented control: the active section lifts into a
+            brand pill while the rest stay calm icons (labelled on wider screens,
+            icon-only on mobile so every section fits). */}
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-2xl border border-border/60 bg-card/60 p-1 shadow-sm backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {tabs.map((id) => {
-            const Icon = TAB_ICON[id];
-            const isActive = active === id;
+          {sections.map((s) => {
+            const Icon = ICONS[s.icon] ?? Grid3x3;
+            const isActive = active === s.key;
             return (
               <button
-                key={id}
+                key={s.key}
                 type="button"
-                onClick={() => select(id)}
+                onClick={() => select(s.key)}
                 aria-pressed={isActive}
-                title={TAB_LABEL[id]}
+                title={s.label}
                 className={cn(
                   "group relative flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition",
                   isActive
@@ -138,7 +210,7 @@ export function ProfileTabs({
                 )}
               >
                 <Icon className="h-[18px] w-[18px] shrink-0 transition-transform group-active:scale-90" />
-                <span className={isActive ? "inline" : "hidden sm:inline"}>{TAB_LABEL[id]}</span>
+                <span className={isActive ? "inline" : "hidden sm:inline"}>{s.label}</span>
               </button>
             );
           })}
@@ -171,31 +243,8 @@ export function ProfileTabs({
         ) : null}
       </div>
 
-      {/* Keep it a single mounted content region that swaps instantly */}
-      {active === "downloads" && isOwner ? (
-        <DownloadsTab emptyText={empty.downloads} />
-      ) : active === "collections" ? (
-        <CollectionsTab ownerId={ownerId} isOwner={isOwner} emptyText={empty.collections} />
-      ) : (
-        <ProfileMediaGrid
-          posts={
-            active === "reels"
-              ? reels
-              : active === "downloads"
-                ? publishedDownloads
-                : active === "liked"
-                  ? liked
-                  : active === "saved"
-                    ? saved
-                    : active === "reposted"
-                      ? reposted
-                      : posts
-          }
-          layout={active === "reels" ? "reel" : "card"}
-          view={view}
-          emptyText={empty[active]}
-        />
-      )}
+      {/* A single mounted content region that swaps instantly */}
+      {renderActive()}
     </div>
   );
 }

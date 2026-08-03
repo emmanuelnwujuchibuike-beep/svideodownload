@@ -1,4 +1,4 @@
-import { BadgeCheck, CalendarDays, Camera, Link as LinkIcon, Lock, MessageCircle } from "lucide-react";
+import { BadgeCheck, CalendarDays, Camera, Link as LinkIcon, Lock, Mail, MessageCircle, Phone } from "lucide-react";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Image from "next/image";
@@ -14,7 +14,7 @@ import { CreatorRail } from "@/features/profile/creator-rail";
 import type { TopContent } from "@/features/profile/identity-analytics";
 import { notificationsToActivity } from "@/features/profile/activity-map";
 import { listNotifications } from "@/lib/social/notifications";
-import { ProfileTabs } from "@/features/profile/profile-tabs";
+import { ProfileSections } from "@/features/profile/profile-sections";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
 import { friendIdSet } from "@/lib/social/friend-ids";
@@ -35,6 +35,21 @@ import { IdentityMedia } from "@/features/profile/identity-media";
 import { IdentityMediaViewer } from "@/features/profile/identity-media-viewer";
 import { computeReputation } from "@/lib/social/reputation";
 import { computeAchievements, earnedCount } from "@/lib/social/achievements";
+import { resolveViewerRole, type ViewerRole } from "@/lib/profile/audience";
+import type { StoredModule } from "@/lib/profile/engine";
+import type { ModuleKey } from "@/lib/profile/modules";
+import { isCommercialType, profileType, type ProfileTypeKey } from "@/lib/profile/profile-types";
+import type { EarnedAchievement } from "@/lib/social/achievements";
+import {
+  getProfileDetails,
+  getProfileIdentity,
+  getProfileModules,
+  listCredentials,
+  listOfferings,
+  type Credential,
+  type Offering,
+  type ProfileDetails,
+} from "@/lib/social/profile-platform";
 import { buildLifeJourney } from "@/lib/social/life-journey";
 import { getTimeCapsules } from "@/lib/social/time-capsules";
 import { getJournalEntries } from "@/lib/social/journal";
@@ -42,12 +57,6 @@ import { createClient } from "@/lib/supabase/server";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
-
-type ProfileTab = "posts" | "reels" | "downloads" | "reposted" | "liked" | "saved" | "collections";
-// Posts / Reels / Downloads are always public; the activity tabs (Reposts, Liked,
-// Saved, Collections) each honour their own per-tab visibility (Repost spec §7)
-// and are hidden entirely from viewers who aren't allowed to see them.
-const BASE_TABS: ProfileTab[] = ["posts", "reels", "downloads"];
 
 async function viewerId(): Promise<string | null> {
   try {
@@ -302,16 +311,55 @@ export default async function ProfilePage({
     bonus: repBonus,
   });
 
-  // Per-tab visibility: activity tabs appear only when the viewer is allowed to
-  // see them (owner always; public → everyone; followers → the viewer follows).
-  // Collections gate on whether any collection is actually visible to the viewer
-  // (each collection carries its own visibility).
-  const tabs: ProfileTab[] = [...BASE_TABS];
-  if (tabVisible(privacy.reposts_visibility, profile.isOwner, profile.isFollowing)) tabs.push("reposted");
-  if (tabVisible(privacy.likes_visibility, profile.isOwner, profile.isFollowing)) tabs.push("liked");
-  if (tabVisible(privacy.saves_visibility, profile.isOwner, profile.isFollowing)) tabs.push("saved");
-  if (profile.isOwner || collectionsN > 0) tabs.push("collections");
-  const activeTab: ProfileTab = tabs.includes(tab as ProfileTab) ? (tab as ProfileTab) : "posts";
+  // ── Universal Profile Engine™ (Feature 18 · Part 14, migration 0107) ──────
+  // What this profile IS, which sections it offers, and the content those
+  // sections read. Every one of these readers degrades to empty/defaults, so
+  // before 0107 is applied the engine simply resolves every profile as a
+  // personal profile with its default sections — today's behaviour exactly.
+  const [identity, storedModules, details, credentials, offerings] = await Promise.all([
+    getProfileIdentity(profile.id),
+    getProfileModules(profile.id),
+    getProfileDetails(profile.id),
+    listCredentials(profile.id),
+    listOfferings(profile.id),
+  ]);
+  const typeSpec = profileType(identity.type);
+
+  // Visitor Adaptive Experience™ — the viewer's role is DERIVED from real
+  // relationships, never claimed. `isAdmin` is deliberately not resolved here:
+  // moderators get no elevated access to a member's sections (see audience.ts),
+  // so establishing it would cost a query and change nothing.
+  const viewerRole = resolveViewerRole({
+    viewerId: me,
+    isOwner: profile.isOwner,
+    isAdmin: false,
+    isFriend: friendState === "friends",
+    isFollowing: profile.isFollowing,
+  });
+
+  // Reposts / Wows / Saved keep answering to their OWN per-tab privacy setting
+  // (Repost spec §7). The engine may narrow them further, never widen them.
+  const allowedGoverned: ModuleKey[] = [];
+  if (tabVisible(privacy.reposts_visibility, profile.isOwner, profile.isFollowing)) allowedGoverned.push("reposted");
+  if (tabVisible(privacy.likes_visibility, profile.isOwner, profile.isFollowing)) allowedGoverned.push("liked");
+  if (tabVisible(privacy.saves_visibility, profile.isOwner, profile.isFollowing)) allowedGoverned.push("saved");
+
+  const joined = `Joined ${new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`;
+
+  // Achievements are derived from the same real signals as reputation. Hoisted
+  // out of the owner branch because they are now a SECTION any viewer may be
+  // shown (when the member enables it), not just a card in the owner's rail.
+  const achievements = computeAchievements({
+    accountAgeDays,
+    posts: postsTotal,
+    followers: profile.followersCount,
+    friends: friendTotal,
+    likes: totals.likes,
+    views: totals.views,
+    collections: collectionsN,
+    verified: profile.isVerified,
+    reputationScore: reputation.score,
+  });
 
   const ld = {
     "@context": "https://schema.org",
@@ -339,21 +387,9 @@ export default async function ProfilePage({
       getJournalEntries(profile.id),
     ]);
     const activity = notificationsToActivity(notifs.items);
-    const joined = `Joined ${new Date(profile.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`;
-    // `totals`, `accountAgeDays` and `reputation` are computed in the shared scope
-    // above (also feeding the public reputation chip). Achievements derive from the
-    // same real signals — see lib/social/achievements.ts.
-    const achievements = computeAchievements({
-      accountAgeDays,
-      posts: postsTotal,
-      followers: profile.followersCount,
-      friends: friendTotal,
-      likes: totals.likes,
-      views: totals.views,
-      collections: collectionsN,
-      verified: profile.isVerified,
-      reputationScore: reputation.score,
-    });
+    // `totals`, `accountAgeDays`, `reputation`, `achievements` and `joined` are
+    // all computed in the shared scope above — they feed the public reputation
+    // chip and the Achievements section as well as this rail.
     // Life Journey™ — real dated milestones (joined, first post) + current-state
     // highlights (posts, friends, rank, achievements). No invented events.
     const journey = buildLifeJourney({
@@ -493,6 +529,19 @@ export default async function ProfilePage({
                           <IdentityBadges verified={profile.isVerified} plan={plan} creator accent={heroAccent} />
                         </h1>
                         <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
+                        {/* What this profile IS (Part 14). A personal profile is
+                            the default and says nothing — only a declared purpose
+                            earns a chip. */}
+                        {identity.type !== "personal" || details.headline ? (
+                          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                            {identity.type !== "personal" ? (
+                              <span className="rounded-full bg-secondary/70 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-muted-foreground ring-1 ring-inset ring-border/50">
+                                {typeSpec.label}
+                              </span>
+                            ) : null}
+                            {details.headline ? <span className="text-muted-foreground">{details.headline}</span> : null}
+                          </p>
+                        ) : null}
                         {/* Status + Mood (Part 9) — read defensively; empty until migration 0095 applies. */}
                         {profileExtras.status || profileExtras.mood ? (
                           <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-secondary/60 px-3 py-1 text-sm">
@@ -555,10 +604,30 @@ export default async function ProfilePage({
                   <AppModeSwitcher />
                 </div>
 
-                {/* Real posts — Videos / Reels / Liked / Saved / Collections (grid + list) */}
+                {/* The sections this profile shows — resolved by the Universal
+                    Profile Engine from the member's type, their module choices
+                    and (for a visitor) their relationship. */}
                 <div className="mt-6 px-4 sm:px-6">
                   <Suspense fallback={<PostGridSkeleton count={6} />}>
-                    <ProfileTabsLoader profileId={profile.id} handle={profile.handle} viewerId={me} isOwner tabs={tabs} initialTab={activeTab} />
+                    <ProfileSectionsLoader
+                      profileId={profile.id}
+                      handle={profile.handle}
+                      viewerId={me}
+                      role={viewerRole}
+                      type={identity.type}
+                      storedModules={storedModules}
+                      landingModule={identity.landingModule}
+                      initialTab={tab ?? null}
+                      allowedGoverned={allowedGoverned}
+                      details={details}
+                      credentials={credentials}
+                      offerings={offerings}
+                      achievements={achievements}
+                      bio={profile.bio}
+                      website={profile.website}
+                      joined={joined}
+                      collectionsCount={collectionsN}
+                    />
                   </Suspense>
                 </div>
               </div>
@@ -661,6 +730,18 @@ export default async function ProfilePage({
                     <IdentityBadges verified={profile.isVerified} plan={plan} showPlan={privacy.show_plan_badge} accent={heroAccent} />
                   </h1>
                   <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
+                  {/* What this profile IS (Part 14) — the visitor's first answer
+                      to "what am I looking at". */}
+                  {identity.type !== "personal" || details.headline ? (
+                    <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                      {identity.type !== "personal" ? (
+                        <span className="rounded-full bg-secondary/70 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-muted-foreground ring-1 ring-inset ring-border/50">
+                          {typeSpec.label}
+                        </span>
+                      ) : null}
+                      {details.headline ? <span className="text-muted-foreground">{details.headline}</span> : null}
+                    </p>
+                  ) : null}
                   {/* Public reputation rank (migration 0102) — shown by default; the
                       profile owner can hide it from Privacy. A premium metallic chip
                       in the rank's own gradient; the score is real (reputation.ts). */}
@@ -729,6 +810,50 @@ export default async function ProfilePage({
                       visible: it wraps to a second row rather than scrolling sideways
                       (which used to clip the ••• menu). */}
                   <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:justify-end sm:pt-2">
+                    {/* Business actions (Part 14) — adaptive, and REAL: each one
+                        appears only when the business has actually supplied the
+                        destination, so no visitor is offered a booking flow that
+                        goes nowhere. Book leads, because it's the action a
+                        business most wants taken. */}
+                    {isCommercialType(identity.type) && !profile.restricted ? (
+                      <>
+                        {details.bookingUrl ? (
+                          <a
+                            href={details.bookingUrl}
+                            target="_blank"
+                            rel="nofollow noopener"
+                            className="btn-lux btn-lux-primary min-w-0 flex-1 justify-center sm:flex-none"
+                          >
+                            <CalendarDays className="h-4 w-4" /> Book
+                          </a>
+                        ) : null}
+                        {details.quoteUrl ? (
+                          <a
+                            href={details.quoteUrl}
+                            target="_blank"
+                            rel="nofollow noopener"
+                            className="btn-lux btn-lux-secondary min-w-0 flex-1 justify-center sm:flex-none"
+                          >
+                            Get a quote
+                          </a>
+                        ) : null}
+                        {details.contactPhone ? (
+                          <a
+                            href={`tel:${details.contactPhone.replace(/\s/g, "")}`}
+                            className="btn-lux btn-lux-secondary min-w-0 flex-1 justify-center sm:flex-none"
+                          >
+                            <Phone className="h-4 w-4" /> Call
+                          </a>
+                        ) : details.contactEmail ? (
+                          <a
+                            href={`mailto:${details.contactEmail}`}
+                            className="btn-lux btn-lux-secondary min-w-0 flex-1 justify-center sm:flex-none"
+                          >
+                            <Mail className="h-4 w-4" /> Email
+                          </a>
+                        ) : null}
+                      </>
+                    ) : null}
                     {me && friendState !== "self" ? (
                       <AddFriendButton
                         targetId={profile.id}
@@ -830,17 +955,29 @@ export default async function ProfilePage({
               </div>
             </div>
 
-            {/* Content tabs — fetched once, switched instantly client-side. Hidden for private accounts. */}
+            {/* Content sections — fetched once, switched instantly client-side.
+                Hidden entirely for private accounts. */}
             {!profile.restricted ? (
               <div className="mt-6 px-4 sm:px-6">
                 <Suspense fallback={<PostGridSkeleton count={6} />}>
-                  <ProfileTabsLoader
+                  <ProfileSectionsLoader
                     profileId={profile.id}
                     handle={profile.handle}
                     viewerId={me}
-                    isOwner={profile.isOwner}
-                    tabs={tabs}
-                    initialTab={activeTab}
+                    role={viewerRole}
+                    type={identity.type}
+                    storedModules={storedModules}
+                    landingModule={identity.landingModule}
+                    initialTab={tab ?? null}
+                    allowedGoverned={allowedGoverned}
+                    details={details}
+                    credentials={credentials}
+                    offerings={offerings}
+                    achievements={achievements}
+                    bio={profile.bio}
+                    website={profile.website}
+                    joined={joined}
+                    collectionsCount={collectionsN}
                   />
                 </Suspense>
               </div>
@@ -858,47 +995,86 @@ export default async function ProfilePage({
   );
 }
 
-/** Fetches every tab's dataset ONCE (behind Suspense), then hands them to the
- *  instant client-side tabs. Posts/Reels/Downloads all derive from one query. */
-async function ProfileTabsLoader({
+/**
+ * Fetches every post-backed section's dataset ONCE (behind Suspense), then hands
+ * everything to the Universal Profile Engine to resolve. Posts / Reels /
+ * Downloads all derive from one query.
+ */
+async function ProfileSectionsLoader({
   profileId,
   handle,
   viewerId,
-  isOwner,
-  tabs,
+  role,
+  type,
+  storedModules,
+  landingModule,
   initialTab,
+  allowedGoverned,
+  details,
+  credentials,
+  offerings,
+  achievements,
+  bio,
+  website,
+  joined,
+  collectionsCount,
 }: {
   profileId: string;
   handle: string;
   viewerId: string | null;
-  isOwner: boolean;
-  tabs: ProfileTab[];
-  initialTab: ProfileTab;
+  role: ViewerRole;
+  type: ProfileTypeKey;
+  storedModules: StoredModule[];
+  landingModule: string | null;
+  initialTab: string | null;
+  allowedGoverned: ModuleKey[];
+  details: ProfileDetails;
+  credentials: Credential[];
+  offerings: Offering[];
+  achievements: EarnedAchievement[];
+  bio: string | null;
+  website: string | null;
+  joined: string;
+  collectionsCount: number;
 }) {
-  // Only fetch a tab's dataset when it's actually visible to this viewer — a
-  // hidden (private) tab never even loads its data, so nothing can leak.
+  const isOwner = role === "owner";
+  // Only fetch a section's dataset when this viewer is allowed to see it — a
+  // hidden section never even loads its data, so nothing can leak.
   const [posts, liked, saved, reposted, jar] = await Promise.all([
+    // The viewer id is what lets a FOLLOWER see followers-only posts, so it
+    // must stay the real viewer — not a stand-in derived from the role.
     listUserPosts(profileId, viewerId),
-    tabs.includes("liked") ? listLikedPosts(profileId) : Promise.resolve([]),
-    tabs.includes("saved") ? listSavedPosts(profileId) : Promise.resolve([]),
-    tabs.includes("reposted") ? listUserReposts(profileId) : Promise.resolve([]),
+    isOwner || allowedGoverned.includes("liked") ? listLikedPosts(profileId) : Promise.resolve([]),
+    isOwner || allowedGoverned.includes("saved") ? listSavedPosts(profileId) : Promise.resolve([]),
+    isOwner || allowedGoverned.includes("reposted") ? listUserReposts(profileId) : Promise.resolve([]),
     cookies(),
   ]);
   // Seed the grid/list choice from the cookie so the layout paints instantly.
   const initialView = jar.get("svd_profile_view")?.value === "list" ? "list" : "grid";
 
   return (
-    <ProfileTabs
+    <ProfileSections
       handle={handle}
-      ownerId={profileId}
-      isOwner={isOwner}
-      tabs={tabs}
+      profileId={profileId}
+      role={role}
+      type={type}
+      storedModules={storedModules}
+      landingModule={landingModule}
       initialTab={initialTab}
       initialView={initialView}
       posts={posts}
       liked={liked}
       saved={saved}
       reposted={reposted}
+      details={details}
+      credentials={credentials}
+      offerings={offerings}
+      achievements={achievements}
+      bio={bio}
+      website={website}
+      joined={joined}
+      collectionsCount={collectionsCount}
+      allowedGoverned={allowedGoverned}
     />
   );
 }

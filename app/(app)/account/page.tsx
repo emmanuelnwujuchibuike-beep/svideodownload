@@ -3,16 +3,20 @@ import {
   BarChart3,
   Bell,
   Bookmark,
+  Briefcase,
   ChevronRight,
   Code2,
   Crown,
   Download,
   KeyRound,
+  Layers,
+  LayoutGrid,
   Lock,
   LogOut,
   Palette,
   ShieldCheck,
   Sparkles,
+  Store,
   UserCog,
   type LucideIcon,
 } from "lucide-react";
@@ -26,7 +30,10 @@ import { SETTINGS_TINTS } from "@/features/account/settings-ui";
 import { AppContent } from "@/features/app-shell/app-content";
 import { isAdmin } from "@/lib/admin";
 import type { BillingPlan } from "@/lib/monetization/types";
+import { effectiveModules } from "@/lib/profile/engine";
+import { profileType } from "@/lib/profile/profile-types";
 import { getOwnProfile } from "@/lib/social/profile";
+import { getProfileIdentity, getProfileModules } from "@/lib/social/profile-platform";
 import { getVerificationState, verificationSummary } from "@/lib/social/verification";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -58,13 +65,22 @@ export default async function AccountPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: sub }, ownProfile, verification] = await Promise.all([
+  const [{ data: profile }, { data: sub }, ownProfile, verification, identity, storedModules] = await Promise.all([
     supabase.from("profiles").select("role, avatar_url, is_verified").eq("id", user.id).single(),
     supabase.from("subscriptions").select("plan, status").eq("user_id", user.id).maybeSingle(),
     getOwnProfile(user.id),
     getVerificationState(user.id),
+    getProfileIdentity(user.id),
+    getProfileModules(user.id),
   ]);
   const verificationSub = verificationSummary(verification);
+
+  // Universal Profile Engine™ — the sub-lines read the member's REAL layout, so
+  // the settings list reports what their profile actually is.
+  const typeSpec = profileType(identity.type);
+  const typeLabelSuffix = identity.type === "personal" ? "your own space" : "switch any time";
+  const onCount = effectiveModules(identity.type, storedModules).filter((m) => m.enabled).length;
+  const sectionsSub = `${onCount} section${onCount === 1 ? "" : "s"} on your profile`;
 
   const planActive = sub?.status === "active" || sub?.status === "trialing";
   const plan = (planActive ? sub?.plan : "free") ?? "free";
@@ -87,6 +103,18 @@ export default async function AccountPage() {
         { href: "/account/verification", Icon: BadgeCheck, title: "Verification", sub: verificationSub, tint: "blue" },
         { href: "/account/appearance", Icon: Palette, title: "Appearance", sub: "Theme, language, home & feed", tint: "purple" },
         { href: "/account/notifications", Icon: Bell, title: "Notifications", sub: "Alerts & activity", tint: "rose" },
+      ],
+    },
+    {
+      // Universal Profile Engine™ (Feature 18 · Part 14) — one identity that
+      // adapts. The type row carries its CURRENT value so the member can read
+      // what their profile is without opening anything.
+      heading: "Profile platform",
+      items: [
+        { href: "/account/profile-type", Icon: Layers, title: "Profile type", sub: `${typeSpec.label} · ${typeLabelSuffix}`, tint: "violet" },
+        { href: "/account/modules", Icon: LayoutGrid, title: "Sections", sub: sectionsSub, tint: "blue" },
+        { href: "/account/business", Icon: Store, title: "Business", sub: "Overview, contact, hours & catalogue", tint: "emerald" },
+        { href: "/account/professional", Icon: Briefcase, title: "Professional", sub: "Portfolio, experience & credentials", tint: "amber" },
       ],
     },
     {

@@ -88,6 +88,15 @@ export const DATA_DOMAINS: DataDomain[] = [
     storage: ["relational"],
   },
   {
+    id: "profile-platform",
+    name: "Universal Profile Platform",
+    owner: "lib/profile, lib/social (profile-platform)",
+    description:
+      "The Universal Profile Engine™: which modules a profile shows and to whom, plus the content those modules read — singular details (headline, mission, hours, contact), the professional showcase (experience, education, certifications, awards, publications, projects) and the business catalogue (products, services). The profile TYPE itself is a column on `profiles`, which the Identity domain owns — one identity, never a second row.",
+    tables: ["profile_modules", "profile_details", "profile_credentials", "profile_offerings"],
+    storage: ["relational"],
+  },
+  {
     id: "messaging",
     name: "Messaging",
     owner: "lib/social (messages)",

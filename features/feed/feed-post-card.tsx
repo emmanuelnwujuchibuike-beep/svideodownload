@@ -1,6 +1,8 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import {
+  AnimatePresence,
+  motion } from "framer-motion";
 import {
   BadgeCheck,
   Ban,
@@ -24,6 +26,7 @@ import {
   Sparkles,
   UserPlus,
 } from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { memo, useRef, useState } from "react";
 
@@ -398,7 +401,7 @@ function FeedPostCardImpl({
         <div className="min-w-0 flex-1">
           <Link href={`/u/${item.publisher.handle}`} className="flex items-center gap-1 text-[15px] font-semibold leading-tight hover:underline">
             <span className="truncate">{item.publisher.displayName}</span>
-            {item.publisher.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
+            {item.publisher.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
           </Link>
           <p className="text-xs text-muted-foreground">@{item.publisher.handle} · {timeAgo(item.createdAt)}</p>
         </div>

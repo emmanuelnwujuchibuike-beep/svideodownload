@@ -1,7 +1,16 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { BadgeCheck, Check, Loader2, Repeat2, UserPlus, X } from "lucide-react";
+import {
+  AnimatePresence,
+  motion } from "framer-motion";
+import { BadgeCheck,
+  Check,
+  Loader2,
+  Repeat2,
+  UserPlus,
+  X,
+} from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -138,7 +147,7 @@ function ReposterRowItem({ r, onNavigate }: { r: Reposter; onNavigate: () => voi
         <Link href={`/u/${r.handle}`} onClick={onNavigate} className="min-w-0 flex-1">
           <span className="flex items-center gap-1 text-sm font-semibold leading-tight">
             <span className="truncate">{r.displayName}</span>
-            {r.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
+            {r.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
           </span>
           <span className="block truncate text-xs text-muted-foreground">
             @{r.handle} · {timeAgo(r.repostedAt)}

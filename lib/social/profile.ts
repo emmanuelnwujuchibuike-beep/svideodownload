@@ -342,6 +342,8 @@ export interface PrivacySettings {
    *  the Pro/Business (Diamond/Crown) badge shown next to the name. */
   show_reputation: boolean;
   show_plan_badge: boolean;
+  /** Migration 0106 — the profile's total view count, public by default. */
+  show_views: boolean;
 }
 
 export const DEFAULT_PRIVACY: PrivacySettings = {
@@ -361,6 +363,7 @@ export const DEFAULT_PRIVACY: PrivacySettings = {
   group_invite_policy: "everyone",
   show_reputation: true,
   show_plan_badge: true,
+  show_views: true,
 };
 
 /* ----------------------------- follow lists ----------------------------- */
@@ -546,7 +549,7 @@ export async function listMutedCreators(viewerId: string): Promise<ListUser[]> {
 /** A user's privacy settings (defaults if none saved yet). */
 const PRIVACY_BASE_COLS =
   "activity_visibility, followers_visibility, reposts_visibility, likes_visibility, saves_visibility, comments_policy, messages_policy, allow_indexing, show_in_recommendations, read_receipts_enabled, typing_indicators_enabled, last_seen_visibility, group_invite_policy";
-const PRIVACY_NEW_COLS = "show_reputation, show_plan_badge"; // migration 0102
+const PRIVACY_NEW_COLS = "show_reputation, show_plan_badge, show_views"; // migrations 0102 + 0106
 
 export async function getPrivacySettings(userId: string): Promise<PrivacySettings> {
   if (!hasSupabase) return DEFAULT_PRIVACY;

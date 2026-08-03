@@ -1,6 +1,8 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import {
+  AnimatePresence,
+  motion } from "framer-motion";
 import {
   BadgeCheck,
   Award,
@@ -20,6 +22,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -880,7 +883,7 @@ function CommentItemImpl({
         <div className={cn("rounded-3xl rounded-tl-lg border px-3.5 py-2.5 shadow-soft backdrop-blur-sm transition", node.isBest ? "border-emerald-500/40 bg-emerald-500/[0.06] ring-1 ring-emerald-500/20" : "border-border/50 bg-card/60 hover:border-border")}>
           <div className="flex flex-wrap items-center gap-1.5 text-sm">
             {a ? <Link href={`/u/${a.handle}`} className="max-w-[55vw] truncate font-semibold hover:underline">{a.displayName}</Link> : <span className="font-semibold text-muted-foreground">Unknown</span>}
-            {a?.isVerified ? <BadgeCheck className="h-3.5 w-3.5 text-primary" /> : null}
+            {a?.isVerified ? <VerifiedTick className="h-3.5 w-3.5" /> : null}
             {a ? <DiamondCrownBadge plan={a.plan} size="xs" /> : null}
             {mood ? <span className={cn("inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0 text-[10px] font-bold", mood.tint)}>{mood.emoji} {mood.label}</span> : null}
             <span className="text-xs text-muted-foreground">· {timeAgo(node.createdAt)}</span>

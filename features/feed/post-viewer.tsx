@@ -1,9 +1,10 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import {
+  AnimatePresence,
+  motion } from "framer-motion";
 import {
   ArrowLeft,
-  BadgeCheck,
   Bookmark,
   Check,
   Download,
@@ -15,6 +16,7 @@ import {
   Share2,
   UserPlus,
 } from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -298,7 +300,7 @@ function ViewerInner({
           <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="min-w-0 flex-1">
             <span className="flex items-center gap-1 font-semibold leading-tight">
               <span className="truncate">{item.publisher.displayName}</span>
-              {item.publisher.isVerified ? <BadgeCheck className="h-4 w-4 shrink-0 text-primary" /> : null}
+              {item.publisher.isVerified ? <VerifiedTick className="h-4 w-4 shrink-0" /> : null}
             </span>
             <span className="block truncate text-sm text-muted-foreground">@{item.publisher.handle}</span>
           </Link>

@@ -1,6 +1,11 @@
 "use client";
 
-import { BadgeCheck, Heart, MessageCircle, Play } from "lucide-react";
+import {
+  Heart,
+  MessageCircle,
+  Play,
+} from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -128,7 +133,7 @@ export function MessagePostEmbed({ postId, mine }: { postId: string; mine: boole
         <span className={"truncate text-xs font-semibold " + (mine ? "text-white" : "text-foreground")}>
           {preview.publisher.displayName}
         </span>
-        {preview.publisher.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-sky-400" /> : null}
+        {preview.publisher.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
         <span className={"shrink-0 truncate text-xs " + (mine ? "text-white/60" : "text-muted-foreground")}>
           @{preview.publisher.handle} · {timeAgo(preview.createdAt)}
         </span>

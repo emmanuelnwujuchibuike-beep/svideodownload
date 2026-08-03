@@ -1,7 +1,27 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Archive as ArchiveIcon, BadgeCheck, BarChart3, BellOff, Check, CheckCheck, FileText, Image as ImageIcon, Loader2, MapPin, Mic, MoreHorizontal, Pin, Search, SlidersHorizontal, Trash2, User, Video as VideoIcon, X } from "lucide-react";
+import {
+  motion } from "framer-motion";
+import { Archive as ArchiveIcon,
+  BarChart3,
+  BellOff,
+  Check,
+  CheckCheck,
+  FileText,
+  Image as ImageIcon,
+  Loader2,
+  MapPin,
+  Mic,
+  MoreHorizontal,
+  Pin,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  User,
+  Video as VideoIcon,
+  X,
+} from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -536,7 +556,7 @@ export function ConversationList({
               <div className="min-w-0 flex-1">
                 <span className="flex items-center gap-1 text-sm font-semibold">
                   <span className="truncate">{req.user.displayName}</span>
-                  {req.user.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
+                  {req.user.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
                   <span className="ml-auto shrink-0 text-xs font-normal text-muted-foreground">{timeAgo(req.createdAt)}</span>
                 </span>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">{req.note || "Wants to be your friend"}</p>
@@ -879,7 +899,7 @@ function ConversationRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className={cn("truncate text-[15px]", c.unread ? "font-bold" : "font-semibold")}>{name}</span>
-            {!isGroup && c.other!.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
+            {!isGroup && c.other!.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
             {c.muted ? <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" /> : null}
           </div>
           {isTyping ? (

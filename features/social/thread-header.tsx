@@ -1,6 +1,12 @@
 "use client";
 
-import { ArrowLeft, BadgeCheck, MoreVertical, Phone, Video } from "lucide-react";
+import {
+  ArrowLeft,
+  MoreVertical,
+  Phone,
+  Video,
+} from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -203,7 +209,7 @@ export function ThreadHeader({
           <span className="min-w-0">
             <span className={cn("flex items-center gap-1 text-[15px] font-bold", forceDarkText && "text-neutral-900")}>
               <span className="truncate">{other.displayName}</span>
-              {other.isVerified ? <BadgeCheck className="h-3.5 w-3.5 text-primary" /> : null}
+              {other.isVerified ? <VerifiedTick className="h-3.5 w-3.5" /> : null}
             </span>
             <PresenceBadge userId={other.id} handle={other.handle} forceLight={forceDarkText} />
           </span>

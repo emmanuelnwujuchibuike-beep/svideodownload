@@ -1,6 +1,10 @@
 "use client";
 
-import { BadgeCheck, Check, Loader2 } from "lucide-react";
+import {
+  Check,
+  Loader2,
+} from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -62,7 +66,7 @@ function SuggestRow({ item }: { item: SuggestItem }) {
       <Link href={`/u/${item.handle}`} className="min-w-0 flex-1">
         <span className="flex items-center gap-1 text-sm font-semibold leading-tight">
           <span className="truncate">{item.displayName}</span>
-          {item.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
+          {item.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
         </span>
         <span className="block truncate text-[11px] text-muted-foreground">
           {formatCompactNumber(item.followersCount)} followers

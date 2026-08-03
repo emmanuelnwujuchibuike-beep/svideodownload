@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BadgeCheck,
   Bookmark,
   ChevronRight,
   Cloud,
@@ -18,6 +17,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ComponentType, useEffect } from "react";
@@ -197,7 +197,7 @@ export function ProfileMenuPanel({
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
             <span className="truncate text-base font-bold text-foreground">{user.displayName}</span>
-            {user.verified ? <BadgeCheck className="h-4 w-4 shrink-0 text-primary" /> : null}
+            {user.verified ? <VerifiedTick className="h-4 w-4 shrink-0" /> : null}
           </span>
           <span className="mt-0.5 flex items-center gap-2">
             <span className="truncate text-sm text-muted-foreground">{user.handle ? `@${user.handle}` : "Set up your profile"}</span>

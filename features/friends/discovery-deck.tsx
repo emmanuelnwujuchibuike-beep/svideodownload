@@ -1,6 +1,11 @@
 "use client";
 
-import { BadgeCheck, Volume2, VolumeX, X } from "lucide-react";
+import {
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -232,7 +237,7 @@ function DiscoverySlide({ item, isActive }: { item: DiscoveryItem; isActive: boo
           )}
           <span className="flex items-center gap-1 text-sm font-semibold text-white drop-shadow">
             {item.displayName}
-            {item.isVerified ? <BadgeCheck className="h-3.5 w-3.5" /> : null}
+            {item.isVerified ? <VerifiedTick className="h-3.5 w-3.5" /> : null}
           </span>
         </Link>
         {item.title ? (

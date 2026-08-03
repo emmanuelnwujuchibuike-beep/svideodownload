@@ -72,6 +72,7 @@ export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
           {/* Public-by-default, hideable (owner). */}
           <ToggleRow icon={Award} tint="amber" title="Show my reputation" desc="Display your rank on your public profile" on={state.show_reputation} onToggle={() => set("show_reputation", !state.show_reputation)} />
           <ToggleRow icon={Crown} tint="violet" title="Show my Pro / Business badge" desc="Display your plan badge next to your name" on={state.show_plan_badge} onToggle={() => set("show_plan_badge", !state.show_plan_badge)} />
+          <ToggleRow icon={Eye} tint="cyan" title="Show my view count" desc="Display total views on your public profile" on={state.show_views} onToggle={() => set("show_views", !state.show_views)} />
         </div>
       </div>
 

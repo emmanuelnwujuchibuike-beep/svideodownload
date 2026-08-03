@@ -1,7 +1,14 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { BadgeCheck, Loader2, Repeat2, X } from "lucide-react";
+import {
+  AnimatePresence,
+  motion } from "framer-motion";
+import { BadgeCheck,
+  Loader2,
+  Repeat2,
+  X,
+} from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -197,7 +204,7 @@ export function RepostComposer({
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-1 text-sm font-semibold leading-tight">
                     <span className="truncate">{post.publisher.displayName}</span>
-                    {post.publisher.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
+                    {post.publisher.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">@{post.publisher.handle}</p>
                   {post.title ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{post.title}</p> : null}

@@ -25,9 +25,10 @@ const schema = z.object({
   typing_indicators_enabled: z.boolean().optional(),
   last_seen_visibility: relPolicy.optional(),
   group_invite_policy: relPolicy.optional(),
-  // Migration 0102 — public-by-default, hideable.
+  // Migrations 0102 + 0106 — public-by-default, hideable.
   show_reputation: z.boolean().optional(),
   show_plan_badge: z.boolean().optional(),
+  show_views: z.boolean().optional(),
 });
 
 /** PATCH /api/privacy — upsert the signed-in user's privacy settings. */
@@ -52,12 +53,13 @@ export async function PATCH(request: Request) {
   const row = { user_id: user.id, ...parsed.data, updated_at: new Date().toISOString() };
   const { error } = await supabase.from("privacy_settings").upsert(row, { onConflict: "user_id" });
   if (error) {
-    // The migration-0102 columns may not be applied yet — retry WITHOUT them so
-    // every other privacy setting still saves (the two toggles then persist once
-    // the migration lands).
-    const { show_reputation: _sr, show_plan_badge: _spb, ...base } = row;
+    // The migration-0102/0106 columns may not be applied yet — retry WITHOUT them
+    // so every other privacy setting still saves (these toggles then persist once
+    // the migrations land).
+    const { show_reputation: _sr, show_plan_badge: _spb, show_views: _sv, ...base } = row;
     void _sr;
     void _spb;
+    void _sv;
     const retry = await supabase.from("privacy_settings").upsert(base, { onConflict: "user_id" });
     if (retry.error) return NextResponse.json({ error: "Couldn't save settings." }, { status: 500 });
   }

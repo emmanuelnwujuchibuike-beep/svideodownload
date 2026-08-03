@@ -1,6 +1,12 @@
 "use client";
 
-import { AnimatePresence, animate, motion, useMotionValue, useTransform, type MotionValue } from "framer-motion";
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useMotionValue,
+  useTransform,
+  type MotionValue } from "framer-motion";
 import {
   BadgeCheck,
   Ban,
@@ -33,6 +39,7 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1377,7 +1384,7 @@ function ReelCard({
       <div className={cn("absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 pt-16 transition-opacity duration-200", captionPad, ui ? "opacity-100" : "pointer-events-none opacity-0")}>
         <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="inline-flex items-center gap-1.5 text-white">
           <span className="font-bold">@{item.publisher.handle}</span>
-          {item.publisher.isVerified ? <BadgeCheck className="h-4 w-4" /> : null}
+          {item.publisher.isVerified ? <VerifiedTick className="h-4 w-4" /> : null}
         </Link>
         {title ? (
           <p className={cn("mt-1.5 max-w-md text-sm text-white/90", !infoOpen && "line-clamp-2")}>
@@ -1502,7 +1509,7 @@ function ReelCard({
                 <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="min-w-0 flex-1">
                   <span className="flex items-center gap-1 font-semibold leading-tight">
                     <span className="truncate">{item.publisher.displayName}</span>
-                    {item.publisher.isVerified ? <BadgeCheck className="h-4 w-4 shrink-0 text-primary" /> : null}
+                    {item.publisher.isVerified ? <VerifiedTick className="h-4 w-4 shrink-0" /> : null}
                   </span>
                   <span className="block truncate text-sm text-muted-foreground">@{item.publisher.handle}</span>
                 </Link>

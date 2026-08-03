@@ -1,6 +1,10 @@
 "use client";
 
-import { BadgeCheck, Flame, Play } from "lucide-react";
+import {
+  Flame,
+  Play,
+} from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -98,7 +102,7 @@ export function TrendingReels({ initialItems }: { initialItems?: FeedItem[] }) {
                 <span className="absolute inset-x-2 bottom-2 text-white">
                   <span className="flex items-center gap-1 text-xs font-semibold">
                     <span className="truncate">@{item.publisher.handle}</span>
-                    {item.publisher.isVerified ? <BadgeCheck className="h-3 w-3 shrink-0" /> : null}
+                    {item.publisher.isVerified ? <VerifiedTick className="h-3 w-3 shrink-0" /> : null}
                   </span>
                   <span className="mt-0.5 line-clamp-1 text-[10px] text-white/80">{item.title}</span>
                   <span className="mt-1 inline-flex items-center gap-1 text-[10px] text-white/70"><Play className="h-2.5 w-2.5 fill-white" /> {formatCompactNumber(item.viewsCount)}</span>

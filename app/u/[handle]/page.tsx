@@ -41,7 +41,7 @@ import { buildLifeJourney } from "@/lib/social/life-journey";
 import { getTimeCapsules } from "@/lib/social/time-capsules";
 import { getJournalEntries } from "@/lib/social/journal";
 import { createClient } from "@/lib/supabase/server";
-import { formatCompactNumber } from "@/lib/utils";
+import { cn, formatCompactNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -365,10 +365,15 @@ export default async function ProfilePage({
                   now lives on a `.glass-strong` prestige card straddled by the
                   avatar, with an honest Photo/Video/Avatar mode control. */}
               <div className="relative">
-                {/* Cover — Living Profile light or the creator's own banner. Mobile:
-                    bleeds to the very top under the status bar (pulled up by the main's
-                    safe-area+header padding, grown to match so the card stays put). */}
-                <div className="relative -mt-[calc(var(--frenz-safe-top)+4rem)] h-[calc(11rem+var(--frenz-safe-top)+4rem)] w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:mt-0 sm:h-60 sm:rounded-3xl">
+                {/* Cover — Living Profile light or the creator's own banner.
+                    It used to be pulled UP under the fixed mobile top bar for an
+                    edge-to-edge look. That put its own controls underneath the
+                    header, where the header simply won on z-order: "Edit Cover"
+                    and the ••• menu were unreachable (owner, 2026-08-03). The
+                    cover now STARTS below the header — the visible artwork is
+                    the same height as before, it just isn't tucked under
+                    anything. */}
+                <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:h-60 sm:rounded-3xl">
                   {profile.bannerUrl ? (
                     <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 1024px) 100vw, 900px" className="object-cover" />
                   ) : null}
@@ -378,7 +383,9 @@ export default async function ProfilePage({
                   <LivingGlow joinedAt={profile.createdAt} />
                   {/* Top gloss + bottom scrim so the overlapping card reads cleanly over any cover */}
                   <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/25" />
-                  <div className="absolute right-3 top-3 flex items-center gap-2 pt-[var(--frenz-safe-top)] sm:pt-0">
+                  {/* No safe-area padding here any more — the cover no longer
+                      reaches into it, so adding it just pushed the buttons down. */}
+                  <div className="absolute right-3 top-3 flex items-center gap-2">
                     <Link href="/account/identity" className="inline-flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/55">
                       <Camera className="h-4 w-4" /> Edit Cover
                     </Link>
@@ -776,8 +783,16 @@ export default async function ProfilePage({
                       </span>
                     </div>
 
-                    {/* Live stats — divided glass panel; Following/Followers link through */}
-                    <div className="mt-5 grid grid-cols-4 divide-x divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card/50 ring-hairline">
+                    {/* Live stats — divided glass panel; Following/Followers link through.
+                        Views are public BY DEFAULT (owner) and drop out of the grid
+                        entirely when the member turns them off in Privacy, so the row
+                        re-balances to four rather than leaving a hole. */}
+                    <div
+                      className={cn(
+                        "mt-5 grid divide-x divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card/50 ring-hairline",
+                        privacy.show_views ? "grid-cols-5" : "grid-cols-4",
+                      )}
+                    >
                       <Link
                         href={`/u/${profile.handle}/following`}
                         className="px-2 py-4 text-center transition hover:bg-secondary/40 sm:py-5"
@@ -800,6 +815,12 @@ export default async function ProfilePage({
                         <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(postsTotal)}</span>
                         <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Posts</span>
                       </div>
+                      {privacy.show_views ? (
+                        <div className="px-2 py-4 text-center sm:py-5">
+                          <span className="block text-xl font-bold tracking-tight sm:text-2xl">{formatCompactNumber(totals.views)}</span>
+                          <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-[11px]">Views</span>
+                        </div>
+                      ) : null}
                     </div>
                   </>
                 )}

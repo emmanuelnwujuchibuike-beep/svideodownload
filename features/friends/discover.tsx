@@ -1,6 +1,12 @@
 "use client";
 
-import { BadgeCheck, Search, UserCheck, UserPlus, X } from "lucide-react";
+import {
+  Search,
+  UserCheck,
+  UserPlus,
+  X,
+} from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -109,7 +115,7 @@ function PersonRow({ person }: { person: Person }) {
       <Link href={`/u/${person.handle}`} className="min-w-0 flex-1">
         <span className="flex items-center gap-1 text-sm font-semibold">
           <span className="truncate">{person.displayName}</span>
-          {person.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
+          {person.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
         </span>
         <span className="block truncate text-xs text-muted-foreground">@{person.handle} · {formatCompactNumber(person.followersCount)} followers</span>
       </Link>

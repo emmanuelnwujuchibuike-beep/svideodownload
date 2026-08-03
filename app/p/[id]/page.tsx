@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 
-import { BadgeCheck, CalendarDays, Download, Eye } from "lucide-react";
+import {
+  CalendarDays,
+  Download,
+  Eye,
+} from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -294,7 +299,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           <Link href={`/u/${post.publisher.handle}`} className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
               <span className="truncate font-semibold">{post.publisher.displayName}</span>
-              {post.publisher.isVerified ? <BadgeCheck className="h-4 w-4 shrink-0 text-primary" /> : null}
+              {post.publisher.isVerified ? <VerifiedTick className="h-4 w-4 shrink-0" /> : null}
               <DiamondCrownBadge plan={plan} size="xs" />
             </span>
             <span className="block truncate text-sm text-muted-foreground">@{post.publisher.handle}</span>

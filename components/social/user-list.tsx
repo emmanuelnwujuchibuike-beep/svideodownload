@@ -1,4 +1,4 @@
-import { BadgeCheck } from "lucide-react";
+import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
@@ -44,7 +44,7 @@ export function UserList({
           <Link href={`/u/${u.handle}`} className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
               <span className="truncate text-sm font-semibold">{u.displayName}</span>
-              {u.isVerified ? <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
+              {u.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
               <DiamondCrownBadge plan={u.plan} size="xs" />
             </span>
             <span className="block truncate text-xs text-muted-foreground">@{u.handle}</span>

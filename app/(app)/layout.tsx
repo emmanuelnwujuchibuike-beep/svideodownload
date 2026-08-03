@@ -5,7 +5,7 @@ import { EdgeSwipeBack } from "@/features/app-shell/edge-swipe-back";
 import { OfflineBanner } from "@/features/app-shell/offline-banner";
 import { StatusBarScrim } from "@/features/app-shell/status-bar-scrim";
 import { ScrollPerfMonitor } from "@/features/perf/scroll-perf-monitor";
-import { AnnouncementBanner } from "@/features/announcements/announcement-banner";
+import { DeferredAnnouncement } from "@/features/announcements/deferred-announcement";
 import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { DeviceCheck } from "@/features/app-shell/device-check";
@@ -44,7 +44,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         {/* Premium announcement bar (admin-set) — the download page is one of its
             two surfaces. Fixed below the header; the reservation padding below keeps
             the sticky ad + content clear of it. */}
-        <AnnouncementBanner showOn={["/downloads"]} />
+        <DeferredAnnouncement showOn={["/downloads"]} />
         <div style={{ paddingTop: "var(--frenz-topbanner-h, 0px)" }} className="transition-[padding] duration-200">
           {/* Sticky top ad — Downloads page only, mounted here (outside the page
               transition template) so its sticky pin is reliable. */}

@@ -58,6 +58,9 @@ export function AnnouncementBanner({ showOn = ["/", "/downloads"] }: { showOn?: 
   const [ann, setAnn] = useState<PublicAnnouncement | null>(null);
   const [dismissed, setDismissed] = useState(true); // hidden until we know
   const barRef = useRef<HTMLDivElement | null>(null);
+  const msgWrapRef = useRef<HTMLDivElement | null>(null);
+  const msgTextRef = useRef<HTMLSpanElement | null>(null);
+  const [overflowing, setOverflowing] = useState(false);
 
   const onPath = showOn.includes(pathname);
 
@@ -107,10 +110,26 @@ export function AnnouncementBanner({ showOn = ["/", "/downloads"] }: { showOn?: 
     };
   }, [visible]);
 
+  // Marquee only when the message is too long to fit — measure the single copy
+  // against its container. Short messages stay static (no needless scrolling).
+  useEffect(() => {
+    if (!visible) return;
+    const wrap = msgWrapRef.current;
+    const text = msgTextRef.current;
+    if (!wrap || !text) return;
+    const check = () => setOverflowing(text.scrollWidth > wrap.clientWidth + 4);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [visible, ann?.message]);
+
   if (!visible || !ann) return null;
 
   const v = VARIANTS[ann.variant];
   const Icon = v.icon;
+  // Slow, readable scroll speed scaled to the message length.
+  const marqueeSeconds = Math.max(12, Math.round(ann.message.length * 0.22));
 
   const dismiss = () => {
     haptic("light");
@@ -136,7 +155,15 @@ export function AnnouncementBanner({ showOn = ["/", "/downloads"] }: { showOn?: 
             <Icon className="h-3.5 w-3.5" /> {v.label}
           </span>
           <Icon className="h-4 w-4 shrink-0 sm:hidden" />
-          <p className="min-w-0 flex-1 truncate text-sm font-medium">{ann.message}</p>
+          <div ref={msgWrapRef} className="min-w-0 flex-1 overflow-hidden">
+            <div
+              className={cn("flex w-max whitespace-nowrap", overflowing && "gap-16")}
+              style={overflowing ? { animation: `announcement-marquee ${marqueeSeconds}s linear infinite` } : undefined}
+            >
+              <span ref={msgTextRef} className="text-sm font-medium">{ann.message}</span>
+              {overflowing ? <span aria-hidden className="text-sm font-medium">{ann.message}</span> : null}
+            </div>
+          </div>
           {ann.ctaLabel && ann.ctaHref ? (
             <a
               href={ann.ctaHref}

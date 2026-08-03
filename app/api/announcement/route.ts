@@ -7,13 +7,12 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/announcement — the public site announcement (enabled-only, no secrets).
- * The top banner fetches this after paint. Cached briefly at the edge so it's cheap
- * under traffic but still reflects an admin change within a minute.
+ * The top banner fetches this after paint. NOT edge-cached, so an admin change
+ * appears on the next page load instead of waiting out a CDN TTL (owner: "I updated
+ * it but didn't see it immediately"). Kept cheap by a short in-memory cache in
+ * getPublicAnnouncement rather than a CDN cache.
  */
 export async function GET() {
   const announcement = await getPublicAnnouncement();
-  return NextResponse.json(
-    { announcement },
-    { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } },
-  );
+  return NextResponse.json({ announcement }, { headers: { "Cache-Control": "no-store" } });
 }

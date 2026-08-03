@@ -49,8 +49,17 @@ const GLOBAL_CEILING = 340 * 1024;
  * the review player and the ad furniture themselves are all code-split off
  * first-load (ReviewPlayerMount, DeferredAdFurniture, the dynamic interstitial).
  * This is the smallest step over the measured 301.3 kB. Holding the line here.
+ *
+ * 302 → 303 kB (2026-08-03): the owner-requested Telegram platform added a 12th
+ * brand (lib/platforms) and TWO more brand-icon SVGs to the hero + paste-box
+ * "Supported platforms" strips (SiTelegram + SiYoutube, both explicitly asked for),
+ * plus the announcement / top-of-page ad banner wiring in the marketing layout.
+ * Each legitimately lives on the landing; everything that COULD be deferred already
+ * is — the language-picker table, the analytics collector, and both banners are all
+ * dynamic-imported off first-load. This is the measured 302.8 kB, the smallest step
+ * over. Holding the line here.
  */
-const ENTRY_CEILING = 302 * 1024;
+const ENTRY_CEILING = 303 * 1024;
 
 const ENTRY_ROUTES = [
   "/(marketing)/page",

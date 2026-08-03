@@ -613,6 +613,12 @@
     from { opacity: 0; transform: translate3d(0, -100%, 0); }
     to { opacity: 1; transform: translate3d(0, 0, 0); }
   }
+  /* Announcement marquee — a long message scrolls horizontally so nothing is cut
+     off. Two copies in the track make the -50% loop seamless. */
+  @keyframes announcement-marquee {
+    from { transform: translate3d(0, 0, 0); }
+    to { transform: translate3d(-50%, 0, 0); }
+  }
   .animate-fade-up {
     animation: fade-up var(--dur-slow) var(--ease-out) both;
     will-change: transform, opacity;

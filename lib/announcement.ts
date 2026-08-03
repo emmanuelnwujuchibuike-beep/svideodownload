@@ -77,11 +77,19 @@ export async function getAnnouncementConfig(): Promise<Announcement> {
   }
 }
 
+// Tiny in-memory cache so the un-edge-cached public endpoint stays cheap under
+// traffic while still reflecting an admin change within a few seconds. Cleared on
+// save so the admin sees their change on the very next load.
+let pubCache: { at: number; value: PublicAnnouncement | null } | null = null;
+const PUB_TTL_MS = 8000;
+
 /** The public announcement, or null when disabled / blank. Includes the content id. */
 export async function getPublicAnnouncement(): Promise<PublicAnnouncement | null> {
+  if (pubCache && Date.now() - pubCache.at < PUB_TTL_MS) return pubCache.value;
   const a = await getAnnouncementConfig();
-  if (!a.enabled || !a.message.trim()) return null;
-  return { ...a, id: contentId(a) };
+  const value = !a.enabled || !a.message.trim() ? null : { ...a, id: contentId(a) };
+  pubCache = { at: Date.now(), value };
+  return value;
 }
 
 /** Admin: persist the announcement. */
@@ -89,5 +97,6 @@ export async function setAnnouncementConfig(patch: Partial<Announcement>): Promi
   const db = createAdminClient();
   const merged = normalize(patch);
   await db.from("settings").upsert({ key: "announcement", value: merged }, { onConflict: "key" });
+  pubCache = null; // reflect the change immediately
   return merged;
 }

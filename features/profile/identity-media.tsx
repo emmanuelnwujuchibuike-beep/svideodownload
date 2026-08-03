@@ -1,6 +1,8 @@
 import type { IdentityMode } from "@/lib/social/profile";
 import { cn } from "@/lib/utils";
 
+import { IdentityVideo } from "./identity-video";
+
 /**
  * Digital Identity media (Avatar Studio / Profile Video). Renders the identity a
  * profile chooses to show — photo, a silent looping profile video, or a chosen
@@ -27,24 +29,8 @@ export function IdentityMedia({
   className?: string;
 }) {
   if (mode === "video" && video) {
-    return (
-      <span className={cn("relative block overflow-hidden rounded-full", className)}>
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-        <video
-          src={video}
-          poster={photo ?? undefined}
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="h-full w-full object-cover motion-reduce:hidden"
-        />
-        {photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={photo} alt="" className="absolute inset-0 hidden h-full w-full object-cover motion-reduce:block" />
-        ) : null}
-      </span>
-    );
+    // Cached, instant-on-repeat, poster-first (client island) — see IdentityVideo.
+    return <IdentityVideo src={video} poster={photo} className={className} />;
   }
 
   const src = mode === "avatar" && avatar ? avatar : photo;

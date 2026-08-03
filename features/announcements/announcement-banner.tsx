@@ -25,31 +25,31 @@ const DISMISS_KEY = "frenz-ann-dismissed";
 
 const VARIANTS: Record<
   PublicAnnouncement["variant"],
-  { icon: ComponentType<{ className?: string }>; label: string; bar: string; chip: string }
+  { icon: ComponentType<{ className?: string }>; label: string; bar: string; glow: string }
 > = {
   feature: {
     icon: Sparkles,
     label: "New",
     bar: "from-violet-600 via-indigo-600 to-blue-600",
-    chip: "bg-white/20 text-white",
+    glow: "shadow-indigo-600/40",
   },
   update: {
     icon: Rocket,
     label: "Update",
-    bar: "from-emerald-600 via-teal-600 to-cyan-600",
-    chip: "bg-white/20 text-white",
+    bar: "from-emerald-500 via-teal-600 to-cyan-600",
+    glow: "shadow-teal-600/40",
   },
   announcement: {
     icon: Megaphone,
     label: "News",
     bar: "from-blue-600 via-sky-600 to-indigo-600",
-    chip: "bg-white/20 text-white",
+    glow: "shadow-blue-600/40",
   },
   promo: {
     icon: Gift,
     label: "Offer",
     bar: "from-amber-500 via-orange-500 to-rose-500",
-    chip: "bg-white/25 text-white",
+    glow: "shadow-orange-500/40",
   },
 };
 
@@ -146,47 +146,62 @@ export function AnnouncementBanner({ showOn = ["/", "/downloads"] }: { showOn?: 
     <div
       ref={barRef}
       style={{ top: "var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem))" }}
-      className="fixed inset-x-0 z-40 animate-[slideDownIn_320ms_cubic-bezier(0.22,1,0.36,1)]"
+      className="fixed inset-x-0 z-40 px-3 pt-2 animate-[slideDownIn_420ms_cubic-bezier(0.16,1,0.3,1)]"
       role="status"
     >
-      <div className={cn("bg-gradient-to-r text-white shadow-lg", v.bar)}>
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-2.5 px-3 py-2 sm:gap-3 sm:px-4">
-          <span className={cn("hidden shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide sm:inline-flex", v.chip)}>
-            <Icon className="h-3.5 w-3.5" /> {v.label}
-          </span>
-          <Icon className="h-4 w-4 shrink-0 sm:hidden" />
-          <div ref={msgWrapRef} className="min-w-0 flex-1 overflow-hidden">
+      {/* Floating, rounded, glassy card — a native-iOS notification feel. */}
+      <div
+        className={cn(
+          "relative mx-auto flex max-w-2xl items-center gap-3 overflow-hidden rounded-[1.25rem] bg-gradient-to-r px-3 py-2.5 text-white shadow-xl ring-1 ring-white/15 sm:px-4",
+          v.bar,
+          v.glow,
+        )}
+      >
+        {/* top sheen for depth */}
+        <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent" />
+        {/* soft corner highlight */}
+        <span aria-hidden className="pointer-events-none absolute -left-8 -top-10 h-24 w-24 rounded-full bg-white/20 blur-2xl" />
+
+        {/* icon in a frosted disc */}
+        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/25 backdrop-blur-md">
+          <Icon className="h-[18px] w-[18px]" />
+        </span>
+
+        <div className="relative min-w-0 flex-1">
+          <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-[0.14em] text-white/75">{v.label}</span>
+          <div ref={msgWrapRef} className="overflow-hidden">
             <div
               className={cn("flex w-max whitespace-nowrap", overflowing && "gap-16")}
               style={overflowing ? { animation: `announcement-marquee ${marqueeSeconds}s linear infinite` } : undefined}
             >
-              <span ref={msgTextRef} className="text-sm font-medium">{ann.message}</span>
-              {overflowing ? <span aria-hidden className="text-sm font-medium">{ann.message}</span> : null}
+              <span ref={msgTextRef} className="text-[13px] font-semibold leading-snug tracking-tight sm:text-sm">{ann.message}</span>
+              {overflowing ? <span aria-hidden className="text-[13px] font-semibold leading-snug tracking-tight sm:text-sm">{ann.message}</span> : null}
             </div>
           </div>
-          {ann.ctaLabel && ann.ctaHref ? (
-            <a
-              href={ann.ctaHref}
-              onClick={() => {
-                haptic("light");
-                playSound("tap");
-              }}
-              className="shrink-0 rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-neutral-900 shadow-sm transition hover:bg-white active:scale-[0.97]"
-            >
-              {ann.ctaLabel}
-            </a>
-          ) : null}
-          {ann.dismissible ? (
-            <button
-              type="button"
-              onClick={dismiss}
-              aria-label="Dismiss announcement"
-              className="shrink-0 rounded-lg p-1 text-white/80 transition hover:bg-white/15 hover:text-white active:scale-90"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          ) : null}
         </div>
+
+        {ann.ctaLabel && ann.ctaHref ? (
+          <a
+            href={ann.ctaHref}
+            onClick={() => {
+              haptic("light");
+              playSound("tap");
+            }}
+            className="relative shrink-0 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-neutral-900 shadow-md shadow-black/10 transition hover:bg-white/90 active:scale-[0.96]"
+          >
+            {ann.ctaLabel}
+          </a>
+        ) : null}
+        {ann.dismissible ? (
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label="Dismiss announcement"
+            className="relative shrink-0 rounded-full p-1.5 text-white/70 transition hover:bg-white/15 hover:text-white active:scale-90"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
       </div>
     </div>
   );

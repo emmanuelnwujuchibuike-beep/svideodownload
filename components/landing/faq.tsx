@@ -15,7 +15,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Which platforms are supported?",
-    a: "TikTok, Instagram, YouTube, X (Twitter), Facebook, Pinterest, Snapchat, Vimeo, Reddit, LinkedIn and Threads.",
+    a: "TikTok, Instagram, YouTube, Telegram, X (Twitter), Facebook, Pinterest, Snapchat, Vimeo, Reddit, LinkedIn and Threads — plus public Telegram channels and, when configured, private/Story content.",
   },
   {
     q: "Can I download just the audio (MP3)?",

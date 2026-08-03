@@ -476,7 +476,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
                   Download from
                 </p>
                 <div className="mt-2 grid grid-cols-4 gap-2">
-                  {DOWNLOADERS.slice(0, 8).map((d) => {
+                  {DOWNLOADERS.slice(0, 12).map((d) => {
                     const platform = PLATFORMS[d.platformId];
                     const Icon = BRAND_ICONS[d.platformId];
                     return (

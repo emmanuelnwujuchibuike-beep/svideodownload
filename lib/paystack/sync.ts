@@ -43,7 +43,7 @@ export async function syncPaystackEvent(
   }
   if (!userId) return;
 
-  const plan = planForPlanCode(data.plan?.plan_code);
+  const plan = await planForPlanCode(data.plan?.plan_code);
   let status: "active" | "canceled" | "past_due" = "active";
   let cancelAtEnd = false;
   let effectivePlan = plan;

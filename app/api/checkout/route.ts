@@ -12,7 +12,7 @@ const schema = z.object({ plan: z.enum(["pro", "business"]) });
 
 /** Starts a Paystack subscription checkout for the signed-in user. */
 export async function POST(request: Request) {
-  if (!paystackEnabled()) {
+  if (!(await paystackEnabled())) {
     return NextResponse.json({ error: "Billing isn't available yet." }, { status: 503 });
   }
 
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Choose a valid plan." }, { status: 400 });
   }
 
-  const planCode = planCodeForPlan(parsed.data.plan);
+  const planCode = await planCodeForPlan(parsed.data.plan);
   if (!planCode) {
     return NextResponse.json({ error: "That plan isn't available yet." }, { status: 503 });
   }

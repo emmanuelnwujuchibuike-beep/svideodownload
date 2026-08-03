@@ -133,6 +133,7 @@ import { LimitsEditor } from "@/features/admin/limits-editor";
 import { MessagingMonitor } from "@/features/admin/messaging-monitor";
 import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
+import { PaystackSettings } from "@/features/admin/paystack-settings";
 import { PricingEditor } from "@/features/admin/pricing-editor";
 import { ModerationQueue } from "@/features/admin/moderation-queue";
 import { UserModeration } from "@/features/admin/user-moderation";
@@ -283,6 +284,8 @@ export default async function AdminPage() {
           </AdminPanel>
 
           <AdminPanel id="pricing">
+            {/* Payment provider setup — your Paystack test/live keys, set here. */}
+            <PaystackSettings />
             <PricingEditor pricing={pricing} />
             <LimitsEditor
               limits={{

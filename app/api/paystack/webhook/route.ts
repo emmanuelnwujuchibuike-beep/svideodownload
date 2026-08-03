@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   const payload = await request.text(); // raw body — required for signature
   const sig = request.headers.get("x-paystack-signature");
 
-  if (!verifyPaystackSignature(payload, sig)) {
+  if (!(await verifyPaystackSignature(payload, sig))) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 

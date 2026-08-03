@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 /** Returns a Paystack manage link so a member can update card / cancel. */
 export async function POST() {
-  if (!paystackEnabled()) {
+  if (!(await paystackEnabled())) {
     return NextResponse.json({ error: "Billing isn't available yet." }, { status: 503 });
   }
 

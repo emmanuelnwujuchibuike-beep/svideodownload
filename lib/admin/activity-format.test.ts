@@ -27,8 +27,11 @@ describe("activity — eventDetail", () => {
 
 describe("activity — NOTABLE set", () => {
   it("includes what an operator wants to see and excludes the noise", () => {
-    expect(NOTABLE.has("download")).toBe(true);
     expect(NOTABLE.has("ad_click")).toBe(true);
+    expect(NOTABLE.has("subscribe")).toBe(true);
+    // Downloads render from the canonical `downloads` table, never the event
+    // type too — otherwise the same download shows twice (e:<id> and d:<id>).
+    expect(NOTABLE.has("download")).toBe(false);
     // These would flood the feed and are deliberately excluded.
     expect(NOTABLE.has("api_call")).toBe(false);
     expect(NOTABLE.has("experiment_exposure")).toBe(false);

@@ -6,9 +6,14 @@ import { getEvents } from "@/lib/platform/events-registry";
  */
 
 /** Event types worth showing in the operator feed. `api_call`/`experiment_exposure`
- *  would flood it — widen this set deliberately. */
+ *  would flood it — widen this set deliberately.
+ *
+ *  `download` is intentionally ABSENT: downloads are rendered from the canonical
+ *  `downloads` table (see activity.ts). Including the event type too would render
+ *  the same download twice — once as `e:<id>` and once as `d:<id>` — which the
+ *  id-based dedup can't catch because the ids differ. That was the duplicate
+ *  activity the operator reported. */
 export const NOTABLE = new Set([
-  "download",
   "ad_click",
   "ad_impression",
   "affiliate_click",

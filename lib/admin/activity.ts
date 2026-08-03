@@ -70,8 +70,11 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
       .order("created_at", { ascending: false })
       .limit(limit);
     if (since) {
-      eventsQ = eventsQ.gt("created_at", since);
-      dlQ = dlQ.gt("created_at", since);
+      // `gte`, not `gt`: a row sharing the cursor's exact timestamp must not be
+      // dropped. The client dedups by id, so re-returning the cursor row itself is
+      // harmless — but silently skipping a distinct same-millisecond row is not.
+      eventsQ = eventsQ.gte("created_at", since);
+      dlQ = dlQ.gte("created_at", since);
     }
     const [{ data: events }, { data: downloads }] = await Promise.all([eventsQ, dlQ]);
 

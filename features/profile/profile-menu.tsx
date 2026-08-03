@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { type ComponentType, useEffect, useState } from "react";
 
+import { LanguageSettingRow } from "@/components/i18n/language-setting-row";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 type Item = { label: string; sub: string; href: string; icon: ComponentType<{ className?: string }>; soon?: boolean };
@@ -70,6 +71,9 @@ function PanelBody({ onNavigate, onClose }: { onNavigate?: () => void; onClose?:
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5" />
           </Link>
         ))}
+
+        {/* Language picker — same row style as the nav items. */}
+        <LanguageSettingRow />
 
         <div className="mt-2 flex items-center justify-between rounded-2xl bg-secondary/40 px-4 py-3">
           <span className="text-sm font-medium text-muted-foreground">Appearance</span>

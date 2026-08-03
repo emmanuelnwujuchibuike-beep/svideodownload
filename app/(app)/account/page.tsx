@@ -74,7 +74,7 @@ export default async function AccountPage() {
       heading: "Profile",
       items: [
         { href: "/account/identity", Icon: UserCog, title: "Identity", sub: "Name, photo, video, avatar, status" },
-        { href: "/account/appearance", Icon: Palette, title: "Appearance", sub: "Theme, home & feed layout" },
+        { href: "/account/appearance", Icon: Palette, title: "Appearance", sub: "Theme, language, home & feed" },
         { href: "/account/notifications", Icon: Bell, title: "Notifications", sub: "Alerts & activity" },
       ],
     },

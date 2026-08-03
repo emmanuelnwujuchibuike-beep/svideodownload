@@ -40,9 +40,16 @@ export function DiamondCrownBadge({
   const label = business ? "Business" : "Pro";
   const title = business ? "Diamond Crown · Business" : "Crown · Pro";
 
+  // Refined, jewel-like gradients with a metallic depth (Telegram/Snapchat-grade).
   const gradient = business
-    ? "bg-gradient-to-br from-amber-200 via-amber-400 to-amber-500 text-slate-900 ring-amber-200/50 shadow-amber-400/30"
-    : "bg-gradient-to-br from-blue-500 to-cyan-400 text-white ring-white/30 shadow-blue-500/30";
+    ? "bg-gradient-to-br from-amber-200 via-yellow-400 to-amber-600 text-amber-950 ring-amber-100/70 shadow-amber-500/40"
+    : "bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-500 text-white ring-sky-100/60 shadow-blue-500/40";
+
+  // A subtle top-highlight sheen gives the badge a polished, three-dimensional
+  // "gem" finish instead of a flat pill — the premium cue the owner asked for.
+  const sheen = (
+    <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/55 via-white/10 to-transparent" />
+  );
 
   if (showLabel) {
     return (
@@ -50,14 +57,15 @@ export function DiamondCrownBadge({
         title={title}
         aria-label={title}
         className={cn(
-          "inline-flex items-center rounded-full font-semibold uppercase tracking-wide shadow-sm ring-1",
+          "relative inline-flex items-center overflow-hidden rounded-full font-bold tracking-wide shadow-sm ring-1",
           dims.pad,
           dims.text,
           gradient,
           className,
         )}
       >
-        <Icon className={dims.icon} aria-hidden /> {label}
+        {sheen}
+        <Icon className={cn("relative", dims.icon)} aria-hidden /> <span className="relative">{label}</span>
       </span>
     );
   }
@@ -67,13 +75,14 @@ export function DiamondCrownBadge({
       title={title}
       aria-label={title}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full shadow-sm ring-1",
+        "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full shadow-sm ring-1",
         dims.box,
         gradient,
         className,
       )}
     >
-      <Icon className={dims.icon} aria-hidden />
+      {sheen}
+      <Icon className={cn("relative", dims.icon)} aria-hidden />
     </span>
   );
 }

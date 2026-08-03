@@ -357,8 +357,10 @@ export default async function ProfilePage({
                   now lives on a `.glass-strong` prestige card straddled by the
                   avatar, with an honest Photo/Video/Avatar mode control. */}
               <div className="relative">
-                {/* Cover — Living Profile light or the creator's own banner */}
-                <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:h-60 sm:rounded-3xl">
+                {/* Cover — Living Profile light or the creator's own banner. Mobile:
+                    bleeds to the very top under the status bar (pulled up by the main's
+                    safe-area+header padding, grown to match so the card stays put). */}
+                <div className="relative -mt-[calc(var(--frenz-safe-top)+4rem)] h-[calc(11rem+var(--frenz-safe-top)+4rem)] w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:mt-0 sm:h-60 sm:rounded-3xl">
                   {profile.bannerUrl ? (
                     <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 1024px) 100vw, 900px" className="object-cover" />
                   ) : null}
@@ -560,8 +562,11 @@ export default async function ProfilePage({
               The same premium surface as the owner hero, now for visitors, with real
               relationship signals (friends / follows-you / following / mutuals) — never faked. */}
           <div className="relative">
-            {/* Cover — Living Profile light or the member's own banner */}
-            <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-blue-600/30 via-violet-500/15 to-purple-500/20 sm:h-60 sm:rounded-3xl md:h-64">
+            {/* Cover — Living Profile light or the member's own banner. On mobile it
+                bleeds to the very TOP (under the status bar) instead of stopping at the
+                header line (owner): pulled up by the main's top padding and grown by
+                the same, so the card below stays put. sm+ keeps the rounded card. */}
+            <div className="relative -mt-14 h-[calc(11rem+3.5rem)] w-full overflow-hidden bg-gradient-to-br from-blue-600/30 via-violet-500/15 to-purple-500/20 sm:mt-0 sm:h-60 sm:rounded-3xl md:h-64">
               {profile.bannerUrl ? (
                 <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 896px) 100vw, 896px" className="object-cover" />
               ) : null}
@@ -597,7 +602,8 @@ export default async function ProfilePage({
                         />
                       </IdentityMediaViewer>
                     </IdentityRing>
-                    {privacy.show_plan_badge ? <DiamondCrownBadge plan={plan} size="md" className="absolute bottom-1 right-1 z-10 ring-2 ring-background" /> : null}
+                    {/* Plan badge lives ONCE, next to the name (Telegram/Snapchat-style) —
+                        no duplicate diamond on the avatar corner. */}
                   </div>
 
                   {/* Action bar — every button always visible, no scrolling on any
@@ -657,7 +663,7 @@ export default async function ProfilePage({
                   <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
                     {profile.displayName}
                     {profile.isVerified ? <BadgeCheck className="h-5 w-5 text-primary sm:h-6 sm:w-6" /> : null}
-                    {privacy.show_plan_badge ? <DiamondCrownBadge plan={plan} size="sm" showLabel /> : null}
+                    {privacy.show_plan_badge ? <DiamondCrownBadge plan={plan} size="md" /> : null}
                   </h1>
                   <p className="mt-0.5 text-muted-foreground">@{profile.handle}</p>
                   {/* Public reputation rank (migration 0102) — shown by default; the

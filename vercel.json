@@ -3,6 +3,7 @@
   "framework": "nextjs",
   "buildCommand": "next build",
   "installCommand": "npm install",
+  "ignoreCommand": "bash scripts/vercel-should-build.sh",
   "regions": ["cdg1"],
   "functions": {
     "app/api/download/route.ts": {

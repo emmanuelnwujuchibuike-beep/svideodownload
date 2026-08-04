@@ -1,6 +1,7 @@
 import { ArrowRight, BookOpen, Headset, Mail, MessageSquare } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SiTiktok } from "react-icons/si";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -17,6 +18,11 @@ export const metadata: Metadata = {
 };
 
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@frenzsave.com";
+
+/** The official TikTok account. One constant so the handle and the URL can
+ *  never disagree — the label is derived from it, not typed twice. */
+const TIKTOK_HANDLE = "frenzsave";
+const TIKTOK_URL = `https://www.tiktok.com/@${TIKTOK_HANDLE}`;
 
 /**
  * Support — one page for every way to reach us: a live 1:1 chat with the team,
@@ -137,6 +143,26 @@ export default function SupportPage() {
                     </details>
                   ))}
                 </div>
+              </div>
+
+              {/* Follow — the official TikTok account (owner). `rel` carries
+                  `noopener` because it opens in a new tab, and `nofollow`
+                  because an outbound social link shouldn't pass ranking signal. */}
+              <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-soft">
+                <h2 className="text-lg font-bold tracking-tight">Follow Frenz</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Tips, new features and downloader tricks on TikTok.
+                </p>
+                <a
+                  href={TIKTOK_URL}
+                  target="_blank"
+                  rel="nofollow noopener"
+                  className="group mt-3.5 inline-flex items-center gap-2.5 rounded-2xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 active:scale-[0.98]"
+                >
+                  <SiTiktok className="h-4 w-4" />
+                  @{TIKTOK_HANDLE}
+                  <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                </a>
               </div>
             </div>
           </div>

@@ -143,8 +143,22 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   env: { NEXT_PUBLIC_APP_BUILD: appBuild },
-  // Emit a self-contained server bundle for the Docker runtime image.
-  output: "standalone",
+  /*
+    A self-contained server bundle for the Docker runtime image (the download
+    WORKER — see Dockerfile + fly.toml, which copy `.next/standalone`).
+
+    Skipped on Vercel, and that is the point. Vercel's Next builder produces its
+    own serverless bundles and NEVER reads `.next/standalone`, so building it
+    there was pure waste: the step traces the dependency graph and copies the
+    server bundle plus a pruned node_modules on every single deploy. Build CPU is
+    the largest line on this project's Vercel bill by a wide margin, so removing
+    work that nothing consumes is the cheapest possible saving — it changes no
+    runtime behaviour at all.
+
+    `VERCEL` is set by Vercel in every build environment. Docker, Fly and local
+    builds don't set it and still get the standalone output unchanged.
+  */
+  output: process.env.VERCEL ? undefined : "standalone",
   // GramJS (Telegram MTProto client) is only ever loaded at runtime on the WORKER
   // (via a dynamic import in server/services/telegram-mtproto.ts) for private/Story
   // downloads. It uses native optional deps + dynamic requires that webpack can't

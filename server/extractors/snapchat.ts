@@ -23,7 +23,7 @@ const MOBILE_UA =
 
 const TIMEOUT_MS = Number(process.env.SNAPCHAT_EXTRACTOR_TIMEOUT_MS || 9000);
 
-interface Snap {
+export interface Snap {
   snapId?: string;
   snapMediaType?: number;
   snapTitle?: string;
@@ -39,6 +39,76 @@ interface VideoMeta {
   durationMs?: number;
   viewCount?: number | string;
   creator?: unknown;
+}
+
+/**
+ * Every snap anywhere in the `__NEXT_DATA__` blob, in document order.
+ *
+ * ── Why a deep walk instead of reading known keys ─────────────────────────────
+ * Snapchat puts snaps in a different container depending on what the page IS:
+ * `story.snapList` for a live 24-hour story, `curatedHighlights[].snapList` for
+ * highlights, and other shapes again for a SAVED story folder on a profile (the
+ * "My Obsession" case the owner hit). Reading a fixed list of keys meant a
+ * folder shape we hadn't seen produced NOTHING — the extractor fell through to a
+ * regex that matches a single URL, which is exactly why a folder of many videos
+ * downloaded one.
+ *
+ * Walking for the SHAPE of a snap (an object carrying `snapUrls.mediaUrl`)
+ * instead of its location means a container being renamed or added no longer
+ * breaks extraction. That is the right trade for a scraper: the page's structure
+ * is outside our control and changes without warning, but what a snap looks like
+ * is stable.
+ *
+ * De-duplicated on snapId (falling back to the media URL), because the same snap
+ * legitimately appears more than once in the blob — a preview list plus the
+ * folder itself, say. Depth- and count-capped so a hostile or pathological page
+ * cannot spin the server.
+ */
+export function collectSnaps(root: unknown): Snap[] {
+  const out: Snap[] = [];
+  const seen = new Set<string>();
+  const MAX_SNAPS = 200;
+  const MAX_DEPTH = 12;
+
+  const walk = (node: unknown, depth: number) => {
+    if (out.length >= MAX_SNAPS || depth > MAX_DEPTH || !node || typeof node !== "object") return;
+
+    if (Array.isArray(node)) {
+      for (const child of node) walk(child, depth + 1);
+      return;
+    }
+
+    const obj = node as Record<string, unknown>;
+    const urls = obj.snapUrls as { mediaUrl?: unknown } | undefined;
+    const mediaUrl = urls && typeof urls === "object" ? urls.mediaUrl : undefined;
+    if (typeof mediaUrl === "string" && mediaUrl) {
+      const key = typeof obj.snapId === "string" && obj.snapId ? obj.snapId : mediaUrl;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(obj as Snap);
+      }
+      // Don't return — a snap can nest further snaps in some page shapes.
+    }
+
+    for (const child of Object.values(obj)) walk(child, depth + 1);
+  };
+
+  walk(root, 0);
+  return out;
+}
+
+/**
+ * Does this URL address a COLLECTION (a profile, or a saved story folder)
+ * rather than one specific snap?
+ *
+ * It matters because `matchSnap` narrows to a single snap when it can, and
+ * narrowing is wrong for a folder: the owner asked for the folder, so they want
+ * everything in it. A `/t/` short link is treated as a collection too — it
+ * carries no snap id of its own, so any "match" against one would be a
+ * coincidence between a short code and part of a snap id.
+ */
+export function isCollectionUrl(url: string): boolean {
+  return /\/(?:@|p\/|t\/|add\/)/i.test(url) || /\/story\//i.test(url);
 }
 
 /** Find the snap the URL targets by matching its snapId anywhere in the link. */
@@ -227,13 +297,25 @@ export const snapchatExtractor: Extractor = {
         // identify it from the URL, return every snap so the user picks the
         // right one (instead of guessing and serving a random snap).
         if (!mediaUrl) {
-          const snapList =
-            pp.story?.snapList ?? pp.curatedHighlights?.[0]?.snapList ?? [];
-          const snaps = (Array.isArray(snapList) ? snapList : []).filter(
-            (s) => s.snapUrls?.mediaUrl,
-          );
+          // Known containers first (a live story, then EVERY highlight folder —
+          // not just the first, which silently ignored folders 2..n).
+          const known: Snap[] = [
+            ...(Array.isArray(pp.story?.snapList) ? pp.story!.snapList! : []),
+            ...(Array.isArray(pp.curatedHighlights)
+              ? pp.curatedHighlights.flatMap((h) => (Array.isArray(h?.snapList) ? h.snapList : []))
+              : []),
+          ].filter((s) => s?.snapUrls?.mediaUrl);
+
+          // Fall back to a deep walk when the known shapes yield nothing usable.
+          // A SAVED story folder on a profile lives somewhere we don't have a
+          // name for, and finding one snap is indistinguishable from finding the
+          // folder's first snap — so re-scan whenever we have 0 or 1.
+          const snaps = known.length > 1 ? known : collectSnaps(data);
+
           if (snaps.length) {
-            const matched = matchSnap(snaps, url);
+            // Only narrow to a single snap when the link actually addresses one.
+            // A folder link means "give me the folder".
+            const matched = isCollectionUrl(url) ? null : matchSnap(snaps, url);
             const chosen = matched ? [matched] : snaps;
             formats = chosen.map((s, i) => snapFormat(s, i, chosen.length));
             title = matched?.snapTitle ?? snaps[0]?.snapTitle;
@@ -247,10 +329,46 @@ export const snapchatExtractor: Extractor = {
     // Generic fallback: any Snapchat CDN media URL in the page (covers layout
     // changes). Spotlight uses extension-less /d/ or /y/ paths; stories use .mp4.
     if (!mediaUrl && !formats?.length) {
-      const m =
-        html.match(/"contentUrl":"(https:\\?\/\\?\/[a-z0-9.-]*sc-cdn\.net\\?\/[^"]+?)"/i) ??
-        html.match(/https:\/\/[a-z0-9.-]*sc-cdn\.net\/[^"'\\ ]+?\.(?:mp4|mov)[^"'\\ ]*/i);
-      if (m) mediaUrl = m[1] ?? m[0];
+      /*
+        Collect EVERY media URL on the page, not the first one.
+
+        This is the path a saved story folder used to take, and `String.match`
+        without /g returns a single match — so a folder of many videos produced
+        exactly one download. Now it gathers all of them (de-duplicated, order
+        preserved) and only falls back to a single format when there genuinely is
+        just one.
+      */
+      const found: string[] = [];
+      const seen = new Set<string>();
+      const push = (raw: string | undefined) => {
+        if (!raw) return;
+        const clean = unescapeJsonUrl(raw);
+        if (!seen.has(clean)) {
+          seen.add(clean);
+          found.push(clean);
+        }
+      };
+      for (const m of html.matchAll(
+        /"contentUrl":"(https:\\?\/\\?\/[a-z0-9.-]*sc-cdn\.net\\?\/[^"]+?)"/gi,
+      )) {
+        push(m[1]);
+      }
+      for (const m of html.matchAll(
+        /https:\/\/[a-z0-9.-]*sc-cdn\.net\/[^"'\\ ]+?\.(?:mp4|mov)[^"'\\ ]*/gi,
+      )) {
+        push(m[0]);
+      }
+
+      if (found.length > 1) {
+        formats = found.map((u, i) => ({
+          ...videoFormat(stripSnapWatermark(cleanUrl(u))),
+          formatId: `snap-${i}`,
+          label: `Story ${i + 1}`,
+          isSeparateItem: true,
+        }));
+      } else if (found.length === 1) {
+        mediaUrl = found[0];
+      }
     }
 
     if (!mediaUrl && !formats?.length) {

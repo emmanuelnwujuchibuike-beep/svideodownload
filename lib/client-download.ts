@@ -48,6 +48,60 @@ export const isIosDevice = isIos;
  * a user gesture, so call this from a button tap (the download-complete card),
  * never from an async completion. Falls back to the anchor save.
  */
+/**
+ * Hand SEVERAL finished files to the device in one gesture.
+ *
+ * iOS is the case that matters: `navigator.share` takes an array, so a whole
+ * batch (every snap of a Snapchat story, every photo of a slideshow) goes into
+ * ONE share sheet and lands in Photos in a single action — instead of one tap,
+ * one sheet and one dismissal per file.
+ *
+ * Elsewhere it falls back to individual anchor saves with a gap between them,
+ * because browsers silently drop all but the first `<a download>` fired in a
+ * tight loop.
+ *
+ * Returns true when the files were handed over, false when the visitor
+ * cancelled — the caller uses that to decide whether to clear its pending state,
+ * so a cancelled sheet leaves the buttons intact rather than losing the files.
+ */
+export async function saveFilesToDevice(
+  items: { blob: Blob; filename: string }[],
+): Promise<boolean> {
+  if (items.length === 0) return false;
+  if (items.length === 1) {
+    await saveToDevice(items[0]!.blob, items[0]!.filename);
+    return true;
+  }
+
+  const files = items.map(
+    (i) =>
+      new File([i.blob], safeDownloadFilename(i.filename), {
+        type: i.blob.type || mimeForExtension(i.filename),
+      }),
+  );
+
+  if (typeof navigator.share === "function") {
+    try {
+      // `canShare` is the only reliable way to know the platform will accept a
+      // multi-file payload; some accept one file but not many.
+      if (!navigator.canShare || navigator.canShare({ files })) {
+        await navigator.share({ files });
+        return true;
+      }
+    } catch (e) {
+      // Cancelled — the files are untouched and still waiting.
+      if (e instanceof Error && e.name === "AbortError") return false;
+      // Anything else falls through to the per-file path below.
+    }
+  }
+
+  // Serialised anchor saves — a tight loop would drop all but the first.
+  for (const [index, file] of files.entries()) {
+    setTimeout(() => saveBlob(file, file.name), index * 700);
+  }
+  return true;
+}
+
 export async function saveToDevice(blob: Blob, filename: string): Promise<void> {
   const safe = safeDownloadFilename(filename);
   if (isIosDevice() && typeof navigator.share === "function") {

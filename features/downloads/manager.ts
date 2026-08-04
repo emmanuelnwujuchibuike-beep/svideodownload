@@ -2,9 +2,9 @@
 
 import { trackDownload } from "@/lib/analytics/client";
 import { addDownload } from "@/features/history/store";
-import { mediaKey, saveMedia } from "@/features/downloads/local-media";
+import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { toast } from "@/features/ui/toast";
-import { isIosDevice, saveBlob, saveToDevice } from "@/lib/client-download";
+import { isIosDevice, saveBlob, saveFilesToDevice, saveToDevice } from "@/lib/client-download";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import type { MediaKind, PlatformId } from "@/types";
 
@@ -127,7 +127,13 @@ export function onDownloadCompleted(cb: () => void): () => void {
   return () => completionListeners.delete(cb);
 }
 // Finished files kept briefly so the completion card's "Save to device" button
-// (iOS — the share sheet requires a user gesture) can hand them over. Capped.
+// (iOS — the share sheet requires a user gesture) can hand them over.
+//
+// Deliberately a SMALL cap: holding a batch of videos in memory on a phone is
+// how Safari decides to kill the tab. It used to mean a batch lost its earliest
+// files ("File expired"), but `finishedFile()` now falls back to the on-device
+// library every completed download is written to — so the cap bounds memory
+// without ever losing a file.
 const finishedBlobs = new Map<string, { blob: Blob; filename: string }>();
 function retainBlob(id: string, blob: Blob, filename: string) {
   finishedBlobs.set(id, { blob, filename });
@@ -289,15 +295,86 @@ async function run(id: string) {
   }
 }
 
+/**
+ * The finished file for a task, from memory or — if the in-memory copy was
+ * evicted — from the on-device library it was persisted to when it completed.
+ *
+ * The fallback is what makes a BATCH work. `finishedBlobs` is deliberately small
+ * (holding a dozen videos in memory on a phone invites Safari killing the tab),
+ * so in a batch of eight the earliest files were always evicted and reported
+ * "File expired — download it again" even though they were sitting in IndexedDB
+ * the whole time. Every completed download is written to the library in `run()`,
+ * so re-reading is exact, not a guess.
+ */
+async function finishedFile(id: string): Promise<{ blob: Blob; filename: string } | null> {
+  const kept = finishedBlobs.get(id);
+  if (kept) return kept;
+
+  const task = tasks.find((t) => t.id === id);
+  if (!task) return null;
+  const blob = await getMedia(mediaKey(task.url, task.formatId, task.kind));
+  if (!blob) return null;
+  return { blob, filename: `${task.title || "download"}.${extFor(blob.type || "")}` };
+}
+
 /** Hand a finished task's file to the device (call from a TAP — iOS share sheet). */
 export async function saveTaskToDevice(id: string): Promise<void> {
+  // The in-memory copy is checked SYNCHRONOUSLY and shared with nothing awaited
+  // in between. iOS only allows `navigator.share` while the tap's transient
+  // activation is alive, and an IndexedDB read is a real task boundary — routing
+  // the common case through the async fallback would risk breaking a save that
+  // works today. The fallback below only runs when memory has already lost it,
+  // where the alternative was failing outright.
   const kept = finishedBlobs.get(id);
-  if (!kept) {
+  if (kept) {
+    await saveToDevice(kept.blob, kept.filename);
+    patch(id, { awaitingSave: false });
+    return;
+  }
+
+  const file = await finishedFile(id);
+  if (!file) {
     toast("File expired — download it again.", "error");
     return;
   }
-  await saveToDevice(kept.blob, kept.filename);
+  await saveToDevice(file.blob, file.filename);
   patch(id, { awaitingSave: false });
+}
+
+/** Every completed download still waiting to be handed to the device. */
+export function tasksAwaitingSave(): DownloadTask[] {
+  return tasks.filter((t) => t.status === "completed" && t.awaitingSave);
+}
+
+/**
+ * Hand EVERY waiting file to the device in one gesture.
+ *
+ * The reason this exists: on iOS the share sheet needs a real user tap, so a
+ * batch used to mean one tap per file — select all eight snaps of a story, then
+ * tap Save eight times, dismissing eight sheets. The owner's "it only downloads
+ * one, I have to mark them one after the other".
+ *
+ * `navigator.share` accepts an ARRAY of files, so the whole batch goes into a
+ * single sheet and lands in Photos in one action. Must be called straight from
+ * the tap: iOS revokes the gesture if an await runs first, so the files are
+ * gathered BEFORE sharing and the share is the last thing that happens.
+ */
+export async function saveAllToDevice(): Promise<void> {
+  const waiting = tasksAwaitingSave();
+  if (waiting.length === 0) return;
+
+  const files = (await Promise.all(waiting.map((t) => finishedFile(t.id).then((f) => (f ? { id: t.id, ...f } : null)))))
+    .filter((f): f is { id: string; blob: Blob; filename: string } => f !== null);
+
+  if (files.length === 0) {
+    toast("Those files expired — download them again.", "error");
+    return;
+  }
+
+  const saved = await saveFilesToDevice(files);
+  // Only clear the flag for what actually went to the device: a partial save
+  // must leave the rest still offering their button, not silently drop them.
+  if (saved) for (const f of files) patch(f.id, { awaitingSave: false });
 }
 
 /** Remove a completed/failed task from the list (the card's dismiss). */

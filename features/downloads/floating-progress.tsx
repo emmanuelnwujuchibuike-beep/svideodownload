@@ -12,6 +12,7 @@ import {
   getServerSnapshot,
   getSnapshot,
   retryDownload,
+  saveAllToDevice,
   saveTaskToDevice,
   subscribe,
   type DownloadTask,
@@ -81,6 +82,9 @@ export function FloatingDownloadProgress() {
   // return the visitor to the card and its Save to device / Download history
   // buttons, not to an empty screen because it timed out mid-review.
   const reviewing = usePlayerQueue() !== null;
+  // How many finished files are still waiting to be handed to the device — the
+  // whole batch, not just the one this card happens to be showing.
+  const awaitingCount = tasks.filter((t) => t.status === "completed" && t.awaitingSave).length;
   useEffect(() => {
     if (!task || task.status !== "completed" || task.awaitingSave || reviewing) return;
     const t = setTimeout(() => dismissTask(task.id), 6000);
@@ -129,7 +133,9 @@ export function FloatingDownloadProgress() {
               <p className="truncate text-sm font-semibold leading-snug">
                 {task.status === "completed"
                   ? task.awaitingSave
-                    ? "Ready — save it to your device"
+                    ? awaitingCount > 1
+                      ? `${awaitingCount} files ready to save`
+                      : "Ready — save it to your device"
                     : "Download complete"
                   : task.status === "failed"
                     ? "Download failed"
@@ -168,13 +174,34 @@ export function FloatingDownloadProgress() {
 
               {/* Actions */}
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                {/* One tap for the WHOLE batch. iOS's share sheet takes an
+                    array of files, so eight story snaps land in Photos in a
+                    single action instead of eight taps and eight sheets. Only
+                    shown when more than one file is actually waiting. */}
+                {task.status === "completed" && task.awaitingSave && awaitingCount > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => void saveAllToDevice()}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 active:scale-95"
+                  >
+                    <Share className="h-3.5 w-3.5" /> Save all {awaitingCount}
+                  </button>
+                ) : null}
                 {task.status === "completed" && task.awaitingSave ? (
                   <button
                     type="button"
                     onClick={() => void saveTaskToDevice(task.id)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 active:scale-95"
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition active:scale-95",
+                      // Saving the whole batch is the action people want when
+                      // several are waiting, so this steps down to secondary
+                      // rather than competing with it as a second blue button.
+                      awaitingCount > 1
+                        ? "border border-border/70 hover:bg-secondary"
+                        : "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25 hover:opacity-95",
+                    )}
                   >
-                    <Share className="h-3.5 w-3.5" /> Save to device
+                    <Share className="h-3.5 w-3.5" /> {awaitingCount > 1 ? "Save this one" : "Save to device"}
                   </button>
                 ) : null}
                 {task.status === "completed" ? (

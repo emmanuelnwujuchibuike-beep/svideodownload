@@ -69,8 +69,24 @@ const GLOBAL_CEILING = 340 * 1024;
  * cannot be deferred: it is on the synchronous path of every completed download.
  * Nothing else moved — the wallpaper/interstitial work this shipped alongside is
  * entirely off the landing. This is the smallest step over the measured 303.x kB.
+ *
+ * 304 → 305 kB (2026-08-04, later): batch "Save all". On iOS every finished file
+ * needs its own tap, so selecting eight snaps of a Snapchat story meant eight
+ * taps and eight share sheets — the owner's "it only downloads one, I have to
+ * mark them one after the other". `navigator.share` accepts an ARRAY, so the
+ * whole batch now goes into one sheet (`saveFilesToDevice`), plus an IndexedDB
+ * fallback so a batch no longer loses its earliest files to the in-memory cap.
+ *
+ * It CANNOT be code-split: iOS only permits `navigator.share` while the tap's
+ * transient activation is alive, and awaiting a dynamic import first is exactly
+ * what destroys it — the feature would break on the platform it exists for. So
+ * it stays on the synchronous path, at ~0.6 kB.
+ *
+ * Second bump today, both correctness fixes on the download path (the other was
+ * the lost file extension). Worth naming: the landing has no headroom left, and
+ * the next FEATURE that wants a byte here should take one out first.
  */
-const ENTRY_CEILING = 304 * 1024;
+const ENTRY_CEILING = 305 * 1024;
 
 const ENTRY_ROUTES = [
   "/(marketing)/page",

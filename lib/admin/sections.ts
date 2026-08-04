@@ -110,6 +110,14 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "1:1 support conversations with members. Reply here — members are notified by push and email.",
   },
   {
+    id: "ratings",
+    label: "App ratings",
+    category: "audience",
+    icon: "Star",
+    blurb:
+      "What members and guests said when the app asked them to rate it, newest first. Guests can rate, so this is the only feedback surface that reaches the signed-out majority.",
+  },
+  {
     id: "verification",
     label: "Verification",
     category: "audience",

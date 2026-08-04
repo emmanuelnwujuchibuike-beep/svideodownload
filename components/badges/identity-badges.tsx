@@ -60,7 +60,11 @@ export function IdentityBadges({
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1.5 align-middle", className)}>
       {verified ? <VerifiedTick size={size} /> : null}
-      {plated ? <DiamondCrownBadge plan={plan} size={size === "md" ? "md" : "sm"} showLabel /> : null}
+      {/* A tick-sized jewel, not a labelled pill (owner, 2026-08-04). The plan
+          is still announced — `title` and `aria-label` on the badge carry
+          "Crown · Pro" / "Diamond Crown · Business" — so dropping the visible
+          word costs nothing to a screen reader. */}
+      {plated ? <DiamondCrownBadge plan={plan} size={size === "md" ? "md" : "sm"} /> : null}
       {creator ? (
         <span
           title="Creator"

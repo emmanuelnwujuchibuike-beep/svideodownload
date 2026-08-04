@@ -13,6 +13,7 @@ import {
   Star,
   UserMinus,
   UserPlus,
+  Users,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -164,14 +165,24 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
     <div className="mx-auto w-full max-w-2xl">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-[-0.02em]">Friends</h1>
-        <Link
-          href="/friends/trust"
-          aria-label="Trust Center"
-          title="Trust Center"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-        >
-          <ShieldCheck className="h-5 w-5" />
-        </Link>
+        <div className="flex items-center gap-0.5">
+          <Link
+            href="/friends/circles"
+            aria-label="Circles"
+            title="Circles"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+          >
+            <Users className="h-5 w-5" />
+          </Link>
+          <Link
+            href="/friends/trust"
+            aria-label="Trust Center"
+            title="Trust Center"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+          >
+            <ShieldCheck className="h-5 w-5" />
+          </Link>
+        </div>
       </div>
 
       {initial.viewer && favorites.length > 0 ? (

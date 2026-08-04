@@ -1,8 +1,4 @@
-import {
-  DEFAULT_MODULE_AUDIENCE,
-  type AudienceKey,
-  type ModuleKey,
-} from "@/lib/profile/modules";
+import { DEFAULT_MODULE_AUDIENCE, type ModuleKey } from "@/lib/profile/modules";
 import type { StoredModule } from "@/lib/profile/engine";
 import { DEFAULT_PROFILE_TYPE, type ProfileTypeKey, profileType } from "@/lib/profile/profile-types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -69,7 +65,9 @@ export async function getProfileModules(profileId: string): Promise<StoredModule
         moduleKey: r.module_key,
         enabled: r.enabled,
         position: r.position,
-        audience: (r.audience ?? DEFAULT_MODULE_AUDIENCE) as AudienceKey,
+        // Left as a plain string: it may be a built-in key or a Part 17
+        // `circle:<uuid>`. `canSeeModule` narrows it and fails closed.
+        audience: r.audience ?? DEFAULT_MODULE_AUDIENCE,
       }),
     );
   } catch {

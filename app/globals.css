@@ -922,3 +922,288 @@
 .frenz-profile-scale .text-sm { font-size: 0.875em; line-height: 1.45; }
 .frenz-profile-scale .text-base { font-size: 1em; line-height: 1.5; }
 .frenz-profile-scale .text-lg { font-size: 1.125em; line-height: 1.45; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PROFILE LUX SURFACE (owner brief, 2026-08-04)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   A refined palette for the profile: soft electric blue as the primary accent,
+   a little premium violet for highlights, near-white surfaces, and elegant
+   shadows instead of colourful backgrounds.
+
+   ── Why this is SCOPED and not a global token change ──────────────────────
+   The brief is about the profile. Rewriting `:root` would repaint the landing
+   page, the downloader and the admin panel along with it — a far larger blast
+   radius than was asked for, on surfaces whose contrast has already been
+   tuned. `.frenz-lux` re-declares the same token names inside one subtree, so
+   every existing component picks the new palette up without a single class
+   change, and nothing outside the profile moves.
+
+   ── Dark mode ─────────────────────────────────────────────────────────────
+   "95% clean white surfaces" is a light-mode instruction. Forcing white cards
+   into dark mode produces exactly the glare people turn dark mode on to avoid,
+   so `.dark .frenz-lux` keeps the app's dark surfaces and carries over only
+   the accents — lifted, because #2563FF on a near-black background sits under
+   the 4.5:1 contrast floor.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.frenz-lux {
+  /* The brief's palette, as HSL triplets so they slot into the token system. */
+  --lux-primary: 223 100% 57%; /* #2563FF */
+  --lux-secondary: 246 100% 68%; /* #6D5CFF */
+  --lux-glow: 37 99 255; /* rgb() channels for the accent glow */
+  --lux-purple-glow: 109 92 255; /* rgb() channels for the violet glow */
+
+  --primary: var(--lux-primary);
+  --accent: var(--lux-secondary);
+  --ring: var(--lux-secondary);
+  --brand-blue: var(--lux-primary);
+  --brand-purple: var(--lux-secondary);
+  --background: 240 25% 98%; /* #FAFAFC */
+  --card: 0 0% 100%; /* #FFFFFF */
+  --border: 228 28% 93%; /* #E8EAF2 */
+  --input: 228 28% 93%;
+  --foreground: 221 39% 11%; /* #111827 */
+  --card-foreground: 221 39% 11%;
+  --secondary: 240 25% 97%;
+  --muted-foreground: 220 9% 46%; /* #6B7280 */
+}
+
+.dark .frenz-lux {
+  --lux-glow: 96 145 255;
+  --lux-purple-glow: 148 136 255;
+  --primary: 223 100% 68%;
+  --accent: 246 100% 76%;
+  --ring: 246 100% 76%;
+  --brand-blue: 223 100% 68%;
+  --brand-purple: 246 100% 76%;
+  /* Surfaces stay the app's dark ones. */
+  --background: 229 55% 5%;
+  --card: 226 36% 10%;
+  --border: 225 28% 16%;
+  --input: 225 28% 18%;
+  --foreground: 220 25% 97%;
+  --card-foreground: 220 25% 97%;
+  --secondary: 224 30% 14%;
+  --muted-foreground: 220 15% 68%;
+}
+
+@layer utilities {
+  /* ── Depth, not colour ────────────────────────────────────────────────
+     A stacked shadow reads as elevation; a tinted background reads as a
+     highlighter. Both lift a card; only one of them stays quiet. */
+  .lux-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 1.5rem;
+    box-shadow:
+      0 1px 2px rgb(17 24 39 / 0.04),
+      0 8px 24px -12px rgb(17 24 39 / 0.1);
+  }
+  .dark .lux-card {
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.4),
+      0 8px 24px -12px rgb(0 0 0 / 0.5);
+  }
+
+  /* The header card: white lifting to the faintest blue. Not a gradient you
+     should be able to name — if it reads as blue, it is too strong. */
+  .lux-header {
+    background: linear-gradient(180deg, hsl(var(--card)) 0%, #f8faff 100%);
+  }
+  .dark .lux-header {
+    background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(226 40% 12%) 100%);
+  }
+
+  /* Radial light behind the avatar. Soft rgba, never a solid block. */
+  .lux-halo::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 320px;
+    height: 320px;
+    transform: translate(-50%, -38%);
+    background: radial-gradient(circle, rgb(var(--lux-glow) / 0.12) 0%, rgb(var(--lux-glow) / 0) 68%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Avatar ring ─────────────────────────────────────────────────────
+     Two layers: a slowly drifting blue→violet conic gradient, and a soft
+     outer glow that breathes on a long cycle. The glow is a box-shadow on a
+     sibling, never on the image, so the avatar itself never blurs. */
+  .lux-ring-glow {
+    box-shadow:
+      0 0 0 1px rgb(var(--lux-glow) / 0.12),
+      0 0 28px rgb(var(--lux-glow) / 0.18),
+      0 0 56px rgb(var(--lux-purple-glow) / 0.12);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .lux-ring-spin {
+      animation: lux-ring-spin 14s linear infinite;
+    }
+    .lux-ring-breathe {
+      animation: lux-ring-breathe 7s ease-in-out infinite;
+    }
+  }
+
+  /* ── Icons ───────────────────────────────────────────────────────────
+     White disc, hairline gradient rim, one small shadow. The glyph carries
+     the colour; the container never does. */
+  .lux-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background: hsl(var(--card));
+    box-shadow:
+      0 0 0 1px hsl(var(--border)),
+      0 1px 3px rgb(17 24 39 / 0.06);
+  }
+  .dark .lux-icon {
+    box-shadow:
+      0 0 0 1px hsl(var(--border)),
+      0 1px 3px rgb(0 0 0 / 0.4);
+  }
+  .lux-icon-rim {
+    position: relative;
+  }
+  .lux-icon-rim::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(140deg, rgb(var(--lux-glow) / 0.5), rgb(var(--lux-purple-glow) / 0.35));
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* ── Section accents ─────────────────────────────────────────────────
+     A section gets ONE accent: a left rule or a top rule. Never a tinted
+     card. The hue arrives as --lux-accent so a section declares its own
+     colour without needing a class per section. */
+  .lux-accent-left {
+    border-left: 3px solid var(--lux-accent, hsl(var(--primary)));
+  }
+  .lux-accent-top {
+    border-top: 2px solid var(--lux-accent, hsl(var(--primary)));
+  }
+
+  /* ── Progress ────────────────────────────────────────────────────────── */
+  .lux-progress {
+    background: hsl(var(--secondary));
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+  .lux-progress-bar {
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, hsl(var(--lux-primary)), hsl(var(--lux-secondary)));
+    transition: width 900ms var(--ease-out);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lux-progress-bar {
+      transition: none;
+    }
+  }
+
+  /* ── Floating action button ──────────────────────────────────────────── */
+  .lux-fab {
+    background: linear-gradient(140deg, hsl(var(--lux-primary)), hsl(var(--lux-secondary)));
+    color: #fff;
+    border: 1px solid rgb(255 255 255 / 0.22);
+    box-shadow:
+      0 6px 16px -4px rgb(var(--lux-glow) / 0.45),
+      0 12px 32px -12px rgb(var(--lux-purple-glow) / 0.4);
+    transition:
+      transform var(--dur-fast) var(--ease-spring),
+      box-shadow var(--dur) var(--ease-out);
+  }
+  .lux-fab:active {
+    transform: scale(0.96);
+  }
+  @media (hover: hover) {
+    .lux-fab:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        0 10px 24px -6px rgb(var(--lux-glow) / 0.5),
+        0 18px 40px -14px rgb(var(--lux-purple-glow) / 0.45);
+    }
+  }
+
+  /* ── Interaction ─────────────────────────────────────────────────────── */
+  .lux-press {
+    transition: transform var(--dur-fast) var(--ease-spring);
+  }
+  .lux-press:active {
+    transform: scale(0.98);
+  }
+  @media (hover: hover) {
+    .lux-lift {
+      transition:
+        transform var(--dur) var(--ease-out),
+        box-shadow var(--dur) var(--ease-out);
+    }
+    .lux-lift:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        0 2px 4px rgb(17 24 39 / 0.05),
+        0 16px 32px -16px rgb(17 24 39 / 0.16);
+    }
+  }
+
+  /* ── Entrance ────────────────────────────────────────────────────────
+     One short fade and rise, once, on mount. NOT a page transition — those
+     belong in loading.tsx and must never be driven from a layout (the baked
+     slide-animation incident). This is a plain CSS animation on a leaf. */
+  @media (prefers-reduced-motion: no-preference) {
+    .lux-enter {
+      animation: lux-rise 460ms var(--ease-out) both;
+    }
+    .lux-pulse {
+      animation: lux-pulse-soft 3.6s ease-in-out infinite;
+    }
+  }
+}
+
+@keyframes lux-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes lux-ring-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes lux-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lux-pulse-soft {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.88;
+  }
+}

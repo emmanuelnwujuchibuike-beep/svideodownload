@@ -240,3 +240,82 @@ describe("canEnableModule", () => {
     }
   });
 });
+
+describe("circle audiences (Part 17)", () => {
+  const CIRCLE = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+  const OTHER = "9f8b0c11-2d33-4e55-a677-0011223344ff";
+  const audience = `circle:${CIRCLE}`;
+
+  it("shows a circle-gated module only to a member of that exact circle", () => {
+    expect(canSeeModule("friend", audience, { viewerCircles: new Set([CIRCLE]) })).toBe(true);
+    expect(canSeeModule("friend", audience, { viewerCircles: new Set([OTHER]) })).toBe(false);
+    expect(canSeeModule("friend", audience, { viewerCircles: new Set() })).toBe(false);
+  });
+
+  // Fail-closed: no context at all must never mean "let them in".
+  it("hides it when membership is unknown", () => {
+    expect(canSeeModule("friend", audience)).toBe(false);
+    expect(canSeeModule("anon", audience)).toBe(false);
+    expect(canSeeModule("member", audience)).toBe(false);
+  });
+
+  it("hides it from moderators — a circle is not published content", () => {
+    expect(canSeeModule("admin", audience, { viewerCircles: new Set() })).toBe(false);
+  });
+
+  it("always shows it to the owner", () => {
+    expect(canSeeModule("owner", audience)).toBe(true);
+  });
+
+  it("hides a malformed circle audience rather than opening it", () => {
+    for (const bad of ["circle:", "circle:not-a-uuid", "circle:' or 1=1--", "circle:undefined"]) {
+      expect(canSeeModule("friend", bad, { viewerCircles: new Set([CIRCLE]) }), bad).toBe(false);
+    }
+  });
+
+  it("leaves the built-in audiences untouched", () => {
+    expect(canSeeModule("follower", "public")).toBe(true);
+    expect(canSeeModule("anon", "member")).toBe(false);
+    expect(canSeeModule("friend", "friend")).toBe(true);
+    expect(canSeeModule("admin", "private")).toBe(false);
+  });
+
+  it("the engine hides a circle-gated module from a non-member", () => {
+    const stored: StoredModule[] = [
+      { moduleKey: "about", enabled: true, position: 0, audience },
+      { moduleKey: "posts", enabled: true, position: 1, audience: "public" },
+    ];
+    const outsider = resolveProfileLayout({
+      type: "personal",
+      stored,
+      landing: null,
+      role: "friend",
+      content: ALL_CONTENT,
+    });
+    expect(outsider.modules.map((m) => m.key)).not.toContain("about");
+
+    const insider = resolveProfileLayout({
+      type: "personal",
+      stored,
+      landing: null,
+      role: "friend",
+      content: ALL_CONTENT,
+      viewerCircles: new Set([CIRCLE]),
+    });
+    expect(insider.modules.map((m) => m.key)).toContain("about");
+  });
+
+  it("never lands a viewer on a circle-gated module they cannot see", () => {
+    const layout = resolveProfileLayout({
+      type: "personal",
+      stored: [
+        { moduleKey: "about", enabled: true, position: 0, audience },
+        { moduleKey: "posts", enabled: true, position: 1, audience: "public" },
+      ],
+      landing: "about",
+      role: "friend",
+      content: ALL_CONTENT,
+    });
+    expect(layout.landing).toBe("posts");
+  });
+});

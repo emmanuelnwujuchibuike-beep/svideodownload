@@ -4,6 +4,8 @@ import { z } from "zod";
 import { canEnableModule } from "@/lib/profile/engine";
 import { AUDIENCE_KEYS, LIVE_MODULE_KEYS } from "@/lib/profile/modules";
 import { profileType } from "@/lib/profile/profile-types";
+import { circleAudienceId } from "@/lib/social/graph/circles";
+import { ownedCircleIds } from "@/lib/social/graph/store";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -23,7 +25,11 @@ const schema = z.object({
       z.object({
         key: z.enum(LIVE_MODULE_KEYS),
         enabled: z.boolean(),
-        audience: z.enum(AUDIENCE_KEYS),
+        // A built-in key, or a Part 17 `circle:<uuid>` whose ownership is
+        // checked below — a member may only gate a section to a circle they
+        // actually own, or they could point it at a stranger's circle and hand
+        // that stranger's friends the keys to their private section.
+        audience: z.union([z.enum(AUDIENCE_KEYS), z.string().max(64)]),
       }),
     )
     .max(40),
@@ -63,6 +69,17 @@ export async function PUT(request: Request) {
   }
   const type = profileType((row as { profile_type: string | null } | null)?.profile_type).key;
 
+  // Circles this member owns. Anything else in a `circle:` audience is
+  // rewritten to `private` rather than rejected: the section stays hidden
+  // (the safe direction) instead of the whole save failing on one stale chip.
+  const ownCircles = await ownedCircleIds(user.id);
+  const audienceFor = (raw: string): string => {
+    if ((AUDIENCE_KEYS as readonly string[]).includes(raw)) return raw;
+    const circleId = circleAudienceId(raw);
+    if (circleId && ownCircles.has(circleId)) return raw;
+    return "private";
+  };
+
   const seen = new Set<string>();
   const rows = parsed.data.modules
     .filter((m) => {
@@ -77,7 +94,7 @@ export async function PUT(request: Request) {
       // Position comes from the ORDER of the array, never from the client's
       // own numbering — so positions are always dense and never collide.
       position: index,
-      audience: m.audience,
+      audience: audienceFor(m.audience),
       updated_at: new Date().toISOString(),
     }));
 

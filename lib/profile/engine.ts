@@ -34,19 +34,27 @@ import {
 } from "@/lib/profile/modules";
 import { profileType, type ProfileTypeKey } from "@/lib/profile/profile-types";
 
+/**
+ * A stored audience: one of the five built-in keys, or `circle:<uuid>` for a
+ * Social Circle (Part 17). Typed as a string because circles are an open set —
+ * the narrowing happens in `canSeeModule`, which fails closed on anything it
+ * does not recognise.
+ */
+export type StoredAudience = AudienceKey | string;
+
 /** One member's stored preference for one module. */
 export interface StoredModule {
   moduleKey: string;
   enabled: boolean;
   position: number;
-  audience: AudienceKey;
+  audience: StoredAudience;
 }
 
 export interface ResolvedModule {
   key: ModuleKey;
   spec: ModuleSpec;
   position: number;
-  audience: AudienceKey;
+  audience: StoredAudience;
   /** True when the module has real content; false = owner-only empty state. */
   hasContent: boolean;
 }
@@ -68,6 +76,12 @@ export interface ResolveInput {
    * treated as EMPTY — a module must prove it has content, never assume it.
    */
   content: Partial<Record<ModuleKey, boolean>>;
+  /**
+   * Which of the OWNER's Social Circles this viewer belongs to (Part 17).
+   * Absent means "none", so a circle-gated module is hidden — the direction a
+   * failed membership read must always take.
+   */
+  viewerCircles?: ReadonlySet<string>;
   /**
    * Modules whose visibility is decided by an older, per-tab privacy setting
    * (Reposts / Wows / Saved). Those settings predate modules and remain the
@@ -124,8 +138,8 @@ export function resolveProfileLayout(input: ResolveInput): ResolvedLayout {
     .filter((m) => m.enabled)
     .map(({ enabled: _enabled, ...m }) => ({ ...m, hasContent: input.content[m.key] === true }))
     .filter((m) => {
-      // Gate 3 — audience.
-      if (!canSeeModule(input.role, m.audience)) return false;
+      // Gate 3 — audience (including Social Circles).
+      if (!canSeeModule(input.role, m.audience, { viewerCircles: input.viewerCircles })) return false;
       // The three legacy tabs answer to their own privacy setting first.
       if (m.spec.governedElsewhere && !isOwner && !governed.has(m.key)) return false;
       // Gate 4 — substance. The owner keeps every enabled module so they can

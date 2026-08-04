@@ -29,7 +29,7 @@
  * Pure: no React, no Supabase, no I/O.
  */
 
-import type { AudienceKey } from "@/lib/profile/modules";
+import { circleAudienceId } from "@/lib/social/graph/circles";
 
 /** Derived, in ascending order of access. */
 export type ViewerRole =
@@ -61,6 +61,16 @@ export function resolveViewerRole(ctx: ViewerContext): ViewerRole {
   return "anon";
 }
 
+/** What the viewer brings beyond their role — currently their circle membership. */
+export interface AudienceContext {
+  /**
+   * Ids of the PROFILE OWNER's circles this viewer belongs to. Ids only: the
+   * viewer must never learn a circle's name from a visibility check (see
+   * `lib/social/graph/store.ts`).
+   */
+  viewerCircles?: ReadonlySet<string>;
+}
+
 /**
  * Can `role` see a module gated at `audience`?
  *
@@ -70,9 +80,23 @@ export function resolveViewerRole(ctx: ViewerContext): ViewerRole {
  * themselves. Anything stricter than public is invisible to them too, except
  * where their moderation tools (a separate surface, with its own audit trail)
  * grant it explicitly.
+ *
+ * `audience` is typed as a plain string because a Social Circle audience
+ * (Part 17) is stored as `circle:<uuid>` — an open set that no union type can
+ * enumerate. Everything unrecognised still falls through to `default: false`,
+ * so a malformed audience hides the module rather than exposing it.
  */
-export function canSeeModule(role: ViewerRole, audience: AudienceKey): boolean {
+export function canSeeModule(role: ViewerRole, audience: string, ctx?: AudienceContext): boolean {
   if (role === "owner") return true;
+
+  // Circle-gated: membership of that exact circle, and nothing else. Admins are
+  // excluded for the same reason they are excluded from `private` — a circle is
+  // a member's own decision about who is close to them, not published content.
+  const circleId = circleAudienceId(audience);
+  if (circleId) return ctx?.viewerCircles?.has(circleId) === true;
+  // A `circle:` audience that failed to parse is malformed, not permissive.
+  if (audience.startsWith("circle:")) return false;
+
   switch (audience) {
     case "public":
       return true;

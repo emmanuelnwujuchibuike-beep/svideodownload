@@ -73,27 +73,36 @@ export async function POST(request: Request) {
     updated_at: new Date().toISOString(),
   };
 
+  /*
+    ── Store, then always email ──────────────────────────────────────────
+    Owner (2026-08-04): "I didn't receive any email on rating."
+
+    The original order was the bug. It stored the row FIRST and returned 503
+    on failure, so with migration 0111 unapplied the request never reached the
+    email at all — every rating anyone left was thrown away silently, which is
+    the worst possible outcome for the one feature whose entire purpose is
+    carrying feedback to a person.
+
+    So the write and the notification are now independent. The email goes out
+    whatever the database does, and says so when the row could not be kept.
+  */
+  let stored = false;
   try {
     const db = createAdminClient();
     // Matches the partial unique indexes in 0111: a member is unique by
     // user_id, a guest by visitor_id.
     const conflict = userId ? "user_id" : "visitor_id";
     const { error } = await db.from("app_ratings").upsert(row, { onConflict: conflict });
-    if (error) {
-      return NextResponse.json(
-        { error: "Ratings aren't available yet. Ask an admin to apply the latest database update." },
-        { status: 503 },
-      );
-    }
+    stored = !error;
   } catch {
-    return NextResponse.json({ error: "Couldn't save that." }, { status: 500 });
+    stored = false;
   }
 
   /*
-    Email the admin — but never let it delay or fail the response. The person
-    rating has done their part the moment the row lands; whether our mail
-    provider is reachable is not their problem, and blocking on it would make a
-    slow SMTP hop look like a broken button.
+    Never let the mail hop delay or fail the response. The person rating has
+    done their part the moment they tapped send; whether our mail provider is
+    reachable is not their problem, and blocking on it would make a slow SMTP
+    round trip look like a broken button.
   */
   const stars = "★".repeat(rating) + "☆".repeat(5 - rating);
   void sendAdminEmail(
@@ -102,8 +111,11 @@ export async function POST(request: Request) {
      <p style="margin:0 0 8px"><strong>From:</strong> ${escapeHtml(email ?? (userId ? "signed-in member" : "guest"))}</p>
      <p style="margin:0 0 8px"><strong>Downloads completed:</strong> ${downloads ?? "unknown"}</p>
      <p style="margin:0 0 8px"><strong>Where:</strong> ${escapeHtml(surface ?? "unknown")}</p>
-     ${comment ? `<blockquote style="margin:16px 0;padding:12px 16px;background:#f4f4f5;border-radius:8px">${escapeHtml(comment)}</blockquote>` : "<p style='color:#71717a'>No comment left.</p>"}`,
+     ${comment ? `<blockquote style="margin:16px 0;padding:12px 16px;background:#f4f4f5;border-radius:8px">${escapeHtml(comment)}</blockquote>` : "<p style='color:#71717a'>No comment left.</p>"}
+     ${stored ? "" : `<p style="margin:16px 0 0;padding:12px 16px;background:#fef2f2;border-radius:8px;color:#991b1b"><strong>Not saved to the dashboard.</strong> Migration <code>0111_app_ratings.sql</code> looks unapplied — this email is the only copy of this rating.</p>`}`,
   ).catch(() => {});
 
-  return NextResponse.json({ ok: true });
+  // `ok` either way: the rating reached its destination. Telling the rater it
+  // failed would invite them to send it again, which helps nobody.
+  return NextResponse.json({ ok: true, stored });
 }

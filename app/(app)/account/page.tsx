@@ -18,6 +18,7 @@ import {
   Sparkles,
   Store,
   UserCog,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import type { Metadata } from "next";
@@ -139,6 +140,13 @@ export default async function AccountPage() {
       heading: "Privacy & security",
       items: [
         { href: "/account/privacy", Icon: Lock, title: "Privacy", sub: "Who can see & contact you", tint: "emerald" },
+        {
+          href: "/account/relationships",
+          Icon: Users,
+          title: "Relationships",
+          sub: "Friend list visibility, circles & trusted contacts",
+          tint: "violet",
+        },
         { href: "/account/security", Icon: ShieldCheck, title: "Security", sub: "2FA, passkeys, devices", tint: "cyan" },
         { href: "/account/password", Icon: KeyRound, title: "Password", sub: "Change your password", tint: "amber" },
       ],

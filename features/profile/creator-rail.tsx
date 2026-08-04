@@ -70,9 +70,46 @@ export interface CreatorRailProps {
   journalEntries?: JournalEntry[];
 }
 
-function Card({ title, viewAll, children }: { title: string; viewAll?: { feature: string; href?: string }; children: React.ReactNode }) {
+/**
+ * A section's single accent (lux brief, 2026-08-04).
+ *
+ * "Never color the whole card. Only use: icon / top border / left accent /
+ * progress bar / badge." So this is a left spine and nothing else — and only
+ * the sections the brief names get one. Profile Health and Reputation stay
+ * neutral on purpose: accenting everything is how a palette turns into a
+ * rainbow, and then no accent means anything.
+ */
+export const RAIL_ACCENTS = {
+  about: "#2563FF",
+  journey: "#6D5CFF",
+  analytics: "#4F46E5",
+  journal: "#A78BFA",
+  capsule: "#6D5CFF",
+  tools: "#2563FF",
+  achievements: "#F59E0B",
+} as const;
+
+function Accented({ color, children }: { color: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-3xl border border-border/70 bg-card p-5 shadow-sm">
+    <div className="lux-accent-left overflow-hidden rounded-3xl" style={{ "--lux-accent": color } as React.CSSProperties}>
+      {children}
+    </div>
+  );
+}
+
+function Card({
+  title,
+  viewAll,
+  accent,
+  children,
+}: {
+  title: string;
+  viewAll?: { feature: string; href?: string };
+  accent?: string;
+  children: React.ReactNode;
+}) {
+  const card = (
+    <section className="lux-lift rounded-3xl border border-border/70 bg-card p-5 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-base font-bold">{title}</h2>
         {viewAll ? (
@@ -86,6 +123,7 @@ function Card({ title, viewAll, children }: { title: string; viewAll?: { feature
       {children}
     </section>
   );
+  return accent ? <Accented color={accent}>{card}</Accented> : card;
 }
 
 const TOOLS: { title: string; sub: string; icon: LucideIcon; tile: string; href?: string; feature: string }[] = [
@@ -130,7 +168,7 @@ export function CreatorRail({
   return (
     <aside className={cn("w-full space-y-4", className)}>
       {/* About Me */}
-      <Card title="About Me">
+      <Card title="About Me" accent={RAIL_ACCENTS.about}>
         {bio ? <p className="text-sm leading-relaxed">{bio}</p> : null}
         <ul className={cn("space-y-2.5 text-sm text-muted-foreground", bio && "mt-3")}>
           <li className="flex items-center gap-2.5"><UserRound className="h-4 w-4 shrink-0" /> Content Creator</li>
@@ -166,19 +204,19 @@ export function CreatorRail({
       {reputation ? <ReputationCard reputation={reputation} /> : null}
 
       {/* Life Journey™ — real dated milestones + current-state highlights */}
-      {journey ? <LifeJourneyCard entries={journey} /> : null}
+      {journey ? <Accented color={RAIL_ACCENTS.journey}><LifeJourneyCard entries={journey} /></Accented> : null}
 
       {/* Time Capsule™ — real, persisted, sealed until a future date */}
-      {timeCapsules ? <TimeCapsuleCard initialCapsules={timeCapsules} /> : null}
+      {timeCapsules ? <Accented color={RAIL_ACCENTS.capsule}><TimeCapsuleCard initialCapsules={timeCapsules} /></Accented> : null}
 
       {/* Private Journal — real, persisted, never shown to a visitor */}
-      {journalEntries ? <PrivateJournalCard initialEntries={journalEntries} /> : null}
+      {journalEntries ? <Accented color={RAIL_ACCENTS.journal}><PrivateJournalCard initialEntries={journalEntries} /></Accented> : null}
 
       {/* Identity Analytics™ — REAL engagement (animated) + best content */}
-      {analytics ? <IdentityAnalytics data={analytics} topContent={topContent} /> : null}
+      {analytics ? <Accented color={RAIL_ACCENTS.analytics}><IdentityAnalytics data={analytics} topContent={topContent} /></Accented> : null}
 
       {/* Creator Tools */}
-      <Card title="Creator Tools">
+      <Card title="Creator Tools" accent={RAIL_ACCENTS.tools}>
         <ul className="space-y-1">
           {TOOLS.map((t) => {
             const inner = (
@@ -207,7 +245,11 @@ export function CreatorRail({
       </Card>
 
       {/* Achievements — premium digital-trophy showcase, earned/locked from REAL signals */}
-      {achievements ? <AchievementsShowcase achievements={achievements} /> : null}
+      {achievements ? (
+        <Accented color={RAIL_ACCENTS.achievements}>
+          <AchievementsShowcase achievements={achievements} />
+        </Accented>
+      ) : null}
 
       {/* Top Friends */}
       <Card title="Top Friends" viewAll={{ feature: "Friends", href: "/friends" }}>

@@ -59,6 +59,7 @@ export function ProfileSections({
   ownerViewing = false,
   previewRole = null,
   allowedGoverned,
+  viewerCircles,
 }: {
   handle: string;
   profileId: string;
@@ -85,6 +86,8 @@ export function ProfileSections({
   ownerViewing?: boolean;
   /** The role being previewed, if any (Part 16). */
   previewRole?: ViewerRole | null;
+  /** Owner circles this viewer belongs to (Part 17). Absent = none. */
+  viewerCircles?: ReadonlySet<string>;
 }) {
   const isOwner = role === "owner";
   const byKind = credentialsByKind(credentials);
@@ -134,6 +137,7 @@ export function ProfileSections({
     role,
     content,
     allowedGoverned,
+    viewerCircles,
   });
 
   // The preview bar is owner-only chrome and renders even when the previewed

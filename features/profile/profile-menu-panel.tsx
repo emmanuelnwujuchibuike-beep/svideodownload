@@ -201,7 +201,7 @@ export function ProfileMenuPanel({
           </span>
           <span className="mt-0.5 flex items-center gap-2">
             <span className="truncate text-sm text-muted-foreground">{user.handle ? `@${user.handle}` : "Set up your profile"}</span>
-            {user.plan !== "free" ? <DiamondCrownBadge plan={user.plan} size="xs" showLabel /> : null}
+            {user.plan !== "free" ? <DiamondCrownBadge plan={user.plan} size="xs" /> : null}
           </span>
         </span>
         <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />

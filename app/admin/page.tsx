@@ -29,6 +29,7 @@ import { Suspense } from "react";
 import { AdManager } from "@/features/admin/ad-manager";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
 import { SupportInbox } from "@/features/admin/support-inbox";
+import { RatingsSection } from "@/features/admin/ratings-section";
 import { VerificationQueue } from "@/features/admin/verification-queue";
 import { WallpaperManager } from "@/features/admin/wallpaper-manager";
 import { FeatureFlagManager } from "@/features/admin/feature-flags-manager";
@@ -351,6 +352,12 @@ export default async function AdminPage() {
               getAdminUser-guarded actions, so it needs no server-side query here. */}
           <AdminPanel id="support">
             <SupportInbox />
+          </AdminPanel>
+
+          <AdminPanel id="ratings">
+            <Suspense fallback={<PanelSkeleton />}>
+              <RatingsSection />
+            </Suspense>
           </AdminPanel>
 
           <AdminPanel id="verification">

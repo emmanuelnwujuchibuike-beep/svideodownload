@@ -39,8 +39,9 @@ import { useState } from "react";
 
 import { SETTINGS_TINTS } from "@/features/account/settings-ui";
 import type { EffectiveModule } from "@/lib/profile/engine";
-import { AUDIENCES, modulesForType, type AudienceKey, type ModuleKey } from "@/lib/profile/modules";
+import { AUDIENCES, modulesForType, type ModuleKey } from "@/lib/profile/modules";
 import type { ProfileTypeKey } from "@/lib/profile/profile-types";
+import { circleAudience, circleColorClasses } from "@/lib/social/graph/circles";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -79,8 +80,16 @@ interface Row {
   icon: string;
   tint: string;
   enabled: boolean;
-  audience: AudienceKey;
+  /** A built-in key or a Part 17 `circle:<uuid>`. */
+  audience: string;
   governedElsewhere: boolean;
+}
+
+/** One of the member's Social Circles, for the audience chips. */
+export interface EditorCircle {
+  id: string;
+  name: string;
+  color: string;
 }
 
 /**
@@ -100,10 +109,13 @@ export function ProfileModulesEditor({
   type,
   modules,
   landing,
+  circles = [],
 }: {
   type: ProfileTypeKey;
   modules: EffectiveModule[];
   landing: ModuleKey | null;
+  /** The member's Social Circles (Part 17) — each becomes an audience chip. */
+  circles?: EditorCircle[];
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(() =>
@@ -139,7 +151,7 @@ export function ProfileModulesEditor({
     if (landingKey === key) setLandingKey(null);
   };
 
-  const setAudience = (key: ModuleKey, audience: AudienceKey) => {
+  const setAudience = (key: ModuleKey, audience: string) => {
     touch();
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, audience } : r)));
   };
@@ -266,23 +278,54 @@ export function ProfileModulesEditor({
                         Who sees this is set in Privacy
                       </span>
                     ) : (
-                      AUDIENCES.map((a) => (
-                        <button
-                          key={a.key}
-                          type="button"
-                          onClick={() => setAudience(r.key, a.key)}
-                          aria-pressed={r.audience === a.key}
-                          title={a.blurb}
-                          className={cn(
-                            "rounded-full px-2.5 py-1 text-[11px] font-semibold transition",
-                            r.audience === a.key
-                              ? "bg-brand-tile text-white shadow-sm"
-                              : "bg-secondary/60 text-muted-foreground hover:text-foreground",
-                          )}
-                        >
-                          {a.label}
-                        </button>
-                      ))
+                      <>
+                        {AUDIENCES.map((a) => (
+                          <button
+                            key={a.key}
+                            type="button"
+                            onClick={() => setAudience(r.key, a.key)}
+                            aria-pressed={r.audience === a.key}
+                            title={a.blurb}
+                            className={cn(
+                              "rounded-full px-2.5 py-1 text-[11px] font-semibold transition",
+                              r.audience === a.key
+                                ? "bg-brand-tile text-white shadow-sm"
+                                : "bg-secondary/60 text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            {a.label}
+                          </button>
+                        ))}
+                        {/* Social Circles — a real audience, enforced by the
+                            engine against real membership rows. */}
+                        {circles.map((c) => {
+                          const value = circleAudience(c.id);
+                          const active = r.audience === value;
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => setAudience(r.key, value)}
+                              aria-pressed={active}
+                              title={`Only people in your ${c.name} circle`}
+                              className={cn(
+                                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition",
+                                active
+                                  ? "bg-brand-tile text-white shadow-sm"
+                                  : "bg-secondary/60 text-muted-foreground hover:text-foreground",
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "h-1.5 w-1.5 rounded-full",
+                                  active ? "bg-white/90" : circleColorClasses(c.color).dot,
+                                )}
+                              />
+                              {c.name}
+                            </button>
+                          );
+                        })}
+                      </>
                     )}
                   </div>
                 ) : null}

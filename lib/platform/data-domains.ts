@@ -116,6 +116,15 @@ export const DATA_DOMAINS: DataDomain[] = [
     storage: ["relational"],
   },
   {
+    id: "social-graph",
+    name: "Social Graph",
+    owner: "lib/social/graph",
+    description:
+      "The Social Graph™ OVERLAY (migration 0112). It deliberately owns no edges: follows, friendships, requests, favourites, blocks, mutes and restrictions all belong to the Social domain and stay the single source of truth. What lives here is what did not exist before — a member's PRIVATE annotation on an edge (a relationship label), their private groupings of edges (circles and their membership), and a record of who matters (trusted contacts, which grant no access). Every table is readable only by the person who created the row, never by the person it is about.",
+    tables: ["relationship_labels", "social_circles", "circle_members", "trusted_contacts"],
+    storage: ["relational"],
+  },
+  {
     id: "messaging",
     name: "Messaging",
     owner: "lib/social (messages)",

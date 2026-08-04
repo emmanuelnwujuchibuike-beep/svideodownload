@@ -1,4 +1,19 @@
-import { BadgeCheck, CalendarDays, Camera, Link as LinkIcon, Lock, Mail, MessageCircle, Phone } from "lucide-react";
+import {
+  BadgeCheck,
+  CalendarDays,
+  Camera,
+  Eye,
+  Grid3x3,
+  Heart,
+  Link as LinkIcon,
+  Lock,
+  Mail,
+  MessageCircle,
+  Phone,
+  UserPlus,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Image from "next/image";
@@ -18,7 +33,9 @@ import { ProfileSections } from "@/features/profile/profile-sections";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
 import { friendIdSet } from "@/lib/social/friend-ids";
+import { viewerCircleIds } from "@/lib/social/graph/store";
 import { ProfileCoverControls } from "@/features/profile/profile-cover-controls";
+import { ProfileFab } from "@/features/profile/profile-fab";
 import { Toaster } from "@/features/ui/toast";
 import { LivingGlow } from "@/features/profile/living-glow";
 import { ShareProfileButton } from "@/features/profile/share-profile-button";
@@ -119,6 +136,23 @@ export async function generateMetadata({
 }
 
 /**
+ * The stat row's icons (lux brief, 2026-08-04).
+ *
+ * Colour lands on the GLYPH only — the number stays black, which is what keeps
+ * the row readable as data rather than as decoration. Each stat gets its own
+ * hue so the row is scannable at a glance without any of them shouting; Likes
+ * is the one gradient, because it is the only stat with two owners (the person
+ * and the people who gave it).
+ */
+const STAT_ICONS: Record<string, { Icon: LucideIcon; className: string }> = {
+  Posts: { Icon: Grid3x3, className: "text-[#2563FF]" },
+  Followers: { Icon: Users, className: "text-[#6D5CFF]" },
+  Following: { Icon: UserPlus, className: "text-indigo-500" },
+  Likes: { Icon: Heart, className: "text-pink-500" },
+  Views: { Icon: Eye, className: "text-sky-500" },
+};
+
+/**
  * One cell of the hero's stat row.
  *
  * Owner (2026-08-03): the row "felt tightly packed and the texts are touching
@@ -130,8 +164,14 @@ export async function generateMetadata({
  * labels never sit against a rule.
  */
 function StatCell({ label, value, href }: { label: string; value: number; href?: string }) {
+  const stat = STAT_ICONS[label];
   const inner = (
     <>
+      {stat ? (
+        <span aria-hidden className="lux-icon mx-auto mb-1.5 h-7 w-7 sm:h-8 sm:w-8">
+          <stat.Icon className={cn("h-[15px] w-[15px] sm:h-4 sm:w-4", stat.className)} />
+        </span>
+      ) : null}
       <span className="block text-lg font-bold leading-tight tracking-tight tabular-nums sm:text-2xl">
         {formatCompactNumber(value)}
       </span>
@@ -142,7 +182,7 @@ function StatCell({ label, value, href }: { label: string; value: number; href?:
   );
   const cls = "min-w-0 px-1 py-3.5 text-center sm:px-3 sm:py-5";
   return href ? (
-    <Link href={href} className={cn(cls, "transition hover:bg-secondary/40")}>
+    <Link href={href} className={cn(cls, "lux-press transition hover:bg-secondary/40")}>
       {inner}
     </Link>
   ) : (
@@ -461,7 +501,7 @@ export default async function ProfilePage({
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
         {/* No fixed top bar on mobile any more (owner) — the cover runs edge to
             edge under the status bar and its controls float over it. */}
-        <main className="frenz-profile-scale pb-24 pt-0 lg:pt-4" style={theme.vars as React.CSSProperties}>
+        <main className="frenz-lux frenz-profile-scale pb-24 pt-0 lg:pt-4" style={theme.vars as React.CSSProperties}>
           {/* `frenz-profile-shell/cols/rail` (globals.css) put the rail beside
               the center only when the wrapper's OWN width — inside the app
               sidebar — passes 62rem, so it never clips on a laptop. */}
@@ -512,7 +552,7 @@ export default async function ProfilePage({
 
                 {/* Identity Card™ — the premium glass surface */}
                 <div className="relative z-10 px-3 sm:px-4">
-                  <div className="relative glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7" style={heroCardStyle}>
+                  <div className="relative lux-card lux-header lux-halo lux-enter -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7" style={heroCardStyle}>
                     {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
                     {/* Facebook/Instagram arrangement (owner): three columns across the
@@ -702,6 +742,8 @@ export default async function ProfilePage({
               />
             </div>
           </div>
+          {/* Owner-only Create button. Real destination, above the bottom nav. */}
+          <ProfileFab />
         </main>
         <Toaster />
       </>
@@ -716,7 +758,7 @@ export default async function ProfilePage({
           rule sitting across the top of the cover; the +person button floated
           over the artwork beside the avatar. Both are gone, and the cover is
           genuinely edge to edge. Desktop chrome comes from the app shell. */}
-      <main className="frenz-profile-scale pb-24 pt-0 lg:pt-4" style={theme.vars as React.CSSProperties}>
+      <main className="frenz-lux frenz-profile-scale pb-24 pt-0 lg:pt-4" style={theme.vars as React.CSSProperties}>
         <div className="mx-auto flex w-full max-w-6xl gap-6">
           <div className="mx-auto min-w-0 max-w-4xl flex-1 sm:px-4">
           {/* Hero — cover + glass Identity Card + Identity Presence™ (Profile Header · Part 2).
@@ -737,7 +779,7 @@ export default async function ProfilePage({
 
             {/* Identity Card™ — the premium glass surface */}
             <div className="relative z-10 px-3 sm:px-4">
-              <div className="relative glass-strong -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7" style={heroCardStyle}>
+              <div className="relative lux-card lux-header lux-halo lux-enter -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7" style={heroCardStyle}>
                 {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
                 {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
                 {/* Avatar · identity · adaptive action bar — three columns across the
@@ -1098,7 +1140,7 @@ async function ProfileSectionsLoader({
   const isOwner = role === "owner";
   // Only fetch a section's dataset when this viewer is allowed to see it — a
   // hidden section never even loads its data, so nothing can leak.
-  const [posts, liked, saved, reposted, jar] = await Promise.all([
+  const [posts, liked, saved, reposted, jar, viewerCircles] = await Promise.all([
     // The viewer id is what lets a FOLLOWER see followers-only posts, so it
     // must stay the real viewer — not a stand-in derived from the role.
     listUserPosts(profileId, viewerId),
@@ -1106,6 +1148,10 @@ async function ProfileSectionsLoader({
     isOwner || allowedGoverned.includes("saved") ? listSavedPosts(profileId) : Promise.resolve([]),
     isOwner || allowedGoverned.includes("reposted") ? listUserReposts(profileId) : Promise.resolve([]),
     cookies(),
+    // Part 17 — which of THIS owner's circles the viewer is in, so a module
+    // gated to "Family" resolves against real membership. Ids only; the viewer
+    // never learns a circle's name from a visibility check.
+    viewerCircleIds(profileId, viewerId),
   ]);
   // Seed the grid/list choice from the cookie so the layout paints instantly.
   const initialView = jar.get("svd_profile_view")?.value === "list" ? "list" : "grid";
@@ -1135,6 +1181,7 @@ async function ProfileSectionsLoader({
       ownerViewing={ownerViewing}
       previewRole={previewRole}
       allowedGoverned={allowedGoverned}
+      viewerCircles={viewerCircles}
     />
   );
 }

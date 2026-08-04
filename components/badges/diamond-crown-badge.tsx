@@ -1,23 +1,48 @@
-import { Crown, Gem } from "lucide-react";
+import { BadgeCheck } from "lucide-react";
 
 import type { BillingPlan } from "@/lib/monetization/types";
 import { cn } from "@/lib/utils";
 
 /**
- * Diamond Crown status badge — the platform-wide premium marker. Drop it next to
- * any username, profile, post, comment, reel or business page.
+ * Plan status badge — the platform-wide premium marker. Drop it next to any
+ * username, profile, post, comment, reel or business page.
  *
- * Tiering:
- *   business → Diamond Crown (platinum-gold)
- *   pro      → Crown (blue/cyan)
- *   free     → renders nothing
+ * ── Shape and colour (owner, 2026-08-04) ──────────────────────────────────
+ * "Reduce the size of the pro and business badge, make the badge like a tick
+ * like Snapchat rather than a long flat badge... also the rectangle badge that
+ * says pro and business... make it to be like a tick but a different colour
+ * and not the blue verified tick."
  *
- * Pure + presentational so it's safe in server OR client trees. For the current
- * viewer's badge, pair with `useEntitlements()` (see `MyDiamondCrownBadge`).
+ * So it is now the same scalloped seal as the verification tick, at the same
+ * rhythm beside a name, in a colour that is unmistakably NOT the verified
+ * blue:
+ *
+ *   business → gold. The top tier, and the one colour nothing else on a
+ *              profile uses.
+ *   pro      → royal violet (#6D5CFF, the brand's secondary). Distinct from
+ *              the verified blue at a glance, and it belongs to the palette
+ *              rather than being a colour picked to be different.
+ *   free     → renders nothing.
+ *
+ * Emerald was avoided deliberately: it is the online-presence colour on the
+ * avatar ring, and two green marks a centimetre apart meaning different things
+ * is exactly the confusion this badge is supposed to remove.
+ *
+ * Colour is never the ONLY carrier — `title` and `aria-label` both name the
+ * tier, so dropping the visible word costs a screen reader nothing.
+ *
+ * Pure + presentational so it is safe in server OR client trees. For the
+ * current viewer's badge, pair with `useEntitlements()` (see
+ * `MyDiamondCrownBadge`).
  */
 export function DiamondCrownBadge({
   plan,
   size = "sm",
+  /**
+   * Adds the tier's name as PLAIN TEXT beside the seal. Kept for the Plan and
+   * Analytics screens, where the badge sits in prose and the word is the
+   * information. It is no longer a pill — the rectangle is gone everywhere.
+   */
   showLabel = false,
   className,
 }: {
@@ -31,58 +56,55 @@ export function DiamondCrownBadge({
 
   const dims =
     size === "md"
-      ? { box: "h-6 w-6", icon: "h-3.5 w-3.5", text: "text-xs", pad: "px-2.5 py-1 gap-1.5" }
+      ? { seal: "h-[22px] w-[22px]", text: "text-xs" }
       : size === "sm"
-        ? { box: "h-5 w-5", icon: "h-3 w-3", text: "text-[11px]", pad: "px-2 py-0.5 gap-1" }
-        : { box: "h-4 w-4", icon: "h-2.5 w-2.5", text: "text-[10px]", pad: "px-1.5 py-0.5 gap-1" };
+        ? { seal: "h-[18px] w-[18px]", text: "text-[11px]" }
+        : { seal: "h-[15px] w-[15px]", text: "text-[10px]" };
 
-  const Icon = business ? Gem : Crown;
-  const label = business ? "Business" : "Pro";
-  const title = business ? "Diamond Crown · Business" : "Crown · Pro";
+  /*
+    Black and gold (owner, 2026-08-04). Business is the gold seal; Pro is the
+    black one.
 
-  // Refined, jewel-like gradients with a metallic depth (Telegram/Snapchat-grade).
-  const gradient = business
-    ? "bg-gradient-to-br from-amber-200 via-yellow-400 to-amber-600 text-amber-950 ring-amber-100/70 shadow-amber-500/40"
-    : "bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-500 text-white ring-sky-100/60 shadow-blue-500/40";
+    The black seal INVERTS in dark mode — a #111827 badge on a #0B1020 card is
+    a badge nobody can see, so it becomes a white seal with a dark tick. Gold
+    needs no inversion: it clears contrast on both surfaces.
+  */
+  const tone = business
+    ? {
+        fill: "fill-amber-500",
+        glyph: "text-white",
+        label: "Business",
+        title: "Business account",
+        text: "text-amber-600 dark:text-amber-400",
+      }
+    : {
+        fill: "fill-[#111827] dark:fill-white",
+        glyph: "text-white dark:text-[#111827]",
+        label: "Pro",
+        title: "Pro member",
+        text: "text-[#111827] dark:text-white",
+      };
 
-  // A subtle top-highlight sheen gives the badge a polished, three-dimensional
-  // "gem" finish instead of a flat pill — the premium cue the owner asked for.
-  const sheen = (
-    <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/55 via-white/10 to-transparent" />
+  const seal = (
+    <BadgeCheck aria-hidden className={cn("shrink-0 drop-shadow-sm", tone.fill, tone.glyph, dims.seal)} />
   );
 
   if (showLabel) {
     return (
       <span
-        title={title}
-        aria-label={title}
-        className={cn(
-          "relative inline-flex items-center overflow-hidden rounded-full font-bold tracking-wide shadow-sm ring-1",
-          dims.pad,
-          dims.text,
-          gradient,
-          className,
-        )}
+        title={tone.title}
+        aria-label={tone.title}
+        className={cn("inline-flex items-center gap-1.5 font-bold tracking-wide", dims.text, tone.text, className)}
       >
-        {sheen}
-        <Icon className={cn("relative", dims.icon)} aria-hidden /> <span className="relative">{label}</span>
+        {seal}
+        {tone.label}
       </span>
     );
   }
 
   return (
-    <span
-      title={title}
-      aria-label={title}
-      className={cn(
-        "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full shadow-sm ring-1",
-        dims.box,
-        gradient,
-        className,
-      )}
-    >
-      {sheen}
-      <Icon className={cn("relative", dims.icon)} aria-hidden />
+    <span title={tone.title} aria-label={tone.title} className={cn("inline-flex shrink-0", className)}>
+      {seal}
     </span>
   );
 }

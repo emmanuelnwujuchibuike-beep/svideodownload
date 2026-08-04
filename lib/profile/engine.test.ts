@@ -220,11 +220,23 @@ describe("resolveProfileLayout", () => {
 });
 
 describe("canEnableModule", () => {
-  it("rejects planned modules, unknown keys and modules another type owns", () => {
-    expect(canEnableModule("business", "reviews")).toBe(false); // planned
+  it("rejects unknown keys and modules another type doesn't offer", () => {
     expect(canEnableModule("business", "nope")).toBe(false); // unknown
     expect(canEnableModule("personal", "catalog")).toBe(false); // wrong type
     expect(canEnableModule("business", "catalog")).toBe(true);
     expect(canEnableModule("personal", "posts")).toBe(true);
+    // Reviews gained a backend in migration 0110, so a business profile can
+    // now enable it. (It was the `planned` example here until then.)
+    expect(canEnableModule("business", "reviews")).toBe(true);
+  });
+
+  it("rejects any module still marked planned, whatever it is", () => {
+    // Written against the REGISTRY rather than a hardcoded key, so this keeps
+    // holding as modules gain backends — the rule is what matters, not which
+    // module happens to be unbuilt today.
+    for (const m of PROFILE_MODULES.filter((x) => x.status === "planned")) {
+      const type = m.types === "all" ? "personal" : m.types[0]!;
+      expect(canEnableModule(type, m.key), `${m.key} is planned but enableable`).toBe(false);
+    }
   });
 });

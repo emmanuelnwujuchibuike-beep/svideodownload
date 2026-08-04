@@ -1,4 +1,14 @@
-import { ArrowDown, CheckCircle2, Image as ImageIcon, Play, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  Compass,
+  Download,
+  Image as ImageIcon,
+  Lock,
+  Shield,
+  ShieldCheck,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -15,12 +25,25 @@ import type { PlatformId } from "@/types";
 const SUPPORTED: PlatformId[] = ["tiktok", "twitter", "snapchat", "instagram", "facebook", "pinterest", "youtube", "telegram"];
 
 /**
- * The reference checklist beneath the CTAs (public/newlandingfull.jpg). Every one
- * is a checkable product fact, not a scale claim — no account needed to download,
- * the downloader is free, and it is fast + secure — so they pass the Reality
- * Ledger for the same reason the stats band does: they describe what the thing IS.
+ * The trust row beneath the CTAs (public/upgraded landing page.jpg) — four
+ * columns, each an icon disc, a claim and a two-line explanation.
+ *
+ * Every one is a checkable product FACT, not a scale claim: it is free, it needs
+ * no account, it is fast, and the files go to the device rather than an account.
+ * None of them asserts a user count or a rating — the Reality Ledger fails the
+ * build on those, and there is no system behind either to make them true.
  */
-const CHECKS = ["No sign up required", "100% Free to use", "Fast & Secure"];
+const TRUST = [
+  { label: "100% Free", detail: "Always free, forever", Icon: Shield, tone: "blue" },
+  {
+    label: "No Sign Up Required",
+    detail: "Sign up only to track downloads across devices",
+    Icon: Lock,
+    tone: "violet",
+  },
+  { label: "Fast & Secure", detail: "Blazing fast downloads", Icon: Zap, tone: "blue" },
+  { label: "Safe & Private", detail: "Your data stays yours", Icon: ShieldCheck, tone: "violet" },
+] as const;
 
 /**
  * The avatar stack's illustrated faces — cartoon avatars only, never a real
@@ -77,61 +100,107 @@ export function Hero() {
           </p>
 
           {/* CTAs */}
-          <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:items-start lg:justify-start">
-            {/*
-              Primary CTA goes straight to the paste-link tool, not to signup
-              (owner, 2026-07-18). The downloader needs no account, so sending a
-              visitor to /login first put a wall in front of the one thing the page
-              is asking them to do. `#download` is the anchor on the tool below,
-              which carries `scroll-mt-24` so the fixed header does not cover it.
-            */}
+          {/*
+            CTA stack — the owner's reference (public/upgraded landing page.jpg).
+
+            Three full-width rows, each an icon tile + title + one-line
+            explanation + a trailing arrow, rather than three inline pills. The
+            reference's own hierarchy: one loud primary, two calm secondaries.
+
+            Every row is a plain server-rendered <Link>. The landing sits at its
+            cold-entry ceiling with no headroom, so this section adds markup and
+            CSS but not a single byte of client JavaScript — the arrows and the
+            sheen are CSS, and nothing here hydrates.
+          */}
+          <div className="mt-8 flex flex-col gap-3">
+            {/* Primary — goes straight to the paste-link tool (owner, 2026-07-18):
+                the downloader needs no account, so a signup wall in front of the
+                one thing the page asks for was the wrong door. */}
             <Link
               href="#download"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 via-violet-600 to-fuchsia-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/30 transition duration-200 hover:-translate-y-0.5 hover:opacity-95 hover:shadow-xl hover:shadow-violet-600/40 active:scale-[0.99] sm:w-auto"
-            >
-              Start Downloading <ArrowDown className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/features"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-7 py-3.5 text-sm font-semibold text-slate-900 shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-card active:scale-[0.99] dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur dark:hover:border-white/30 sm:w-auto"
-            >
-              <Play className="h-4 w-4" /> Explore Features
-            </Link>
-            {/*
-              Wallpapers (owner, 2026-08-03) — opens the standalone library.
-
-              Deliberately a plain server-rendered Link, NOT a client island. The
-              first version of this was a client component that warmed the route
-              on idle; it added a client boundary to the landing and pushed the
-              page straight through the 2-second cold-entry budget (budget.test
-              caught it at 303 kB). A Link with `prefetch` costs ZERO client
-              JavaScript and still satisfies the ask: Next prefetches it after
-              hydration, so the route is warm by the time anyone reaches for it
-              without competing with the landing's own first paint. `loading.tsx`
-              on /wallpapers is what makes the reveal instant either way.
-            */}
-            <Link
-              href="/wallpapers"
-              prefetch
-              className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-purple-600/30 transition duration-200 hover:-translate-y-0.5 hover:opacity-95 hover:shadow-xl hover:shadow-purple-600/40 active:scale-[0.99] sm:w-auto"
+              className="group relative flex w-full items-center gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-4 py-4 text-left text-white shadow-lg shadow-violet-600/30 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-violet-600/40 active:scale-[0.995]"
             >
               <span
                 aria-hidden
                 className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full"
               />
-              <ImageIcon className="relative h-4 w-4" />
-              <span className="relative">View 4K Wallpapers</span>
+              <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 ring-1 ring-inset ring-white/25">
+                <Download className="h-5 w-5" />
+              </span>
+              <span className="relative min-w-0 flex-1">
+                <span className="block text-base font-bold leading-tight">Start Free Download</span>
+                <span className="mt-0.5 block text-xs text-white/85">100% Free</span>
+              </span>
+              <ArrowRight className="relative h-5 w-5 shrink-0 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+
+            <Link
+              href="/features"
+              className="group flex w-full items-center gap-4 rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-left text-slate-900 shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-card active:scale-[0.995] dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur dark:hover:border-white/30"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200/70 dark:bg-white/10 dark:text-white dark:ring-white/15">
+                <Compass className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-base font-bold leading-tight">Explore Features</span>
+                <span className="mt-0.5 block text-xs text-slate-500 dark:text-white/60">See what Frenz can do</span>
+              </span>
+              <ArrowRight className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 dark:text-white/50" />
+            </Link>
+
+            {/*
+              Wallpapers — opens the standalone library.
+
+              Deliberately a plain server-rendered Link, NOT a client island. The
+              first version was a client component warming the route on idle; it
+              added a client boundary to the landing and pushed the page straight
+              through the cold-entry budget (budget.test caught it at 303 kB). A
+              Link with `prefetch` costs ZERO client JavaScript and still opens
+              instantly — `loading.tsx` on /wallpapers does the rest.
+            */}
+            <Link
+              href="/wallpapers"
+              prefetch
+              className="group flex w-full items-center gap-4 rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-left shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:shadow-card active:scale-[0.995] dark:border-white/15 dark:bg-white/5 dark:backdrop-blur dark:hover:border-violet-400/40"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600 ring-1 ring-inset ring-violet-200/70 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-400/20">
+                <ImageIcon className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-base font-bold leading-tight text-violet-600 dark:text-violet-300">
+                  View 4K Wallpapers
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-500 dark:text-white/60">
+                  Stunning quality, updated daily
+                </span>
+              </span>
+              <ArrowRight className="h-5 w-5 shrink-0 text-violet-400 transition-transform group-hover:translate-x-0.5" />
             </Link>
           </div>
 
-          {/* Reference checklist — three checkable product facts (no scale claims,
-              so the Reality Ledger passes): no account needed, the downloader is
-              free, and it is fast + secure. */}
-          <ul className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-3 lg:justify-start">
-            {CHECKS.map((label) => (
-              <li key={label} className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-white/80">
-                <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                {label}
+          {/*
+            Trust row — the reference's four columns, each an icon disc, a claim
+            and a two-line explanation, divided by hairlines.
+
+            Every one is a checkable product FACT, not a scale claim: free,
+            no account, fast, and "your data stays yours". Nothing here asserts a
+            user count or a rating, which the Reality Ledger would fail the build
+            on and which there is no system behind to make true.
+          */}
+          <ul className="mt-8 grid grid-cols-4 gap-x-1 divide-x divide-slate-200/80 dark:divide-white/10">
+            {TRUST.map(({ label, detail, Icon, tone }) => (
+              <li key={label} className="flex flex-col items-center px-1 text-center">
+                <span
+                  className={
+                    tone === "blue"
+                      ? "flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"
+                      : "flex h-9 w-9 items-center justify-center rounded-full bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300"
+                  }
+                >
+                  <Icon className="h-[18px] w-[18px]" />
+                </span>
+                <span className="mt-2 text-[13px] font-bold leading-tight text-slate-900 dark:text-white">{label}</span>
+                <span className="mt-0.5 text-[11px] leading-snug text-slate-500 dark:text-white/60">{detail}</span>
               </li>
             ))}
           </ul>

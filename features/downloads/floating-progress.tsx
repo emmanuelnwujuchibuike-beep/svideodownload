@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Download, History, Loader2, Play, RotateCcw, Share, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
@@ -9,6 +10,7 @@ import { useUser } from "@/features/auth/use-user";
 import {
   cancelDownload,
   dismissTask,
+  getCompletedCount,
   getServerSnapshot,
   getSnapshot,
   retryDownload,
@@ -39,6 +41,25 @@ function eta(t: DownloadTask): string | null {
   if (s < 60) return `${s}s left`;
   return `${Math.ceil(s / 60)}m left`;
 }
+
+/**
+ * The rating prompt (owner: ask after two successful downloads).
+ *
+ * Mounted from HERE rather than from each page, for two reasons: this component
+ * is already on every surface a download can finish on, and it already
+ * subscribes to completions — so the prompt costs one dynamic import instead of
+ * a new client boundary on each page.
+ *
+ * `ssr: false` and gated on the count, so the chunk is fetched only once someone
+ * has actually completed their second download. The landing sits at its
+ * cold-entry ceiling with no headroom, and a rating card is the last thing that
+ * should be in a first-time visitor's critical path.
+ */
+const RatingPrompt = dynamic(() => import("@/features/feedback/rating-prompt").then((m) => m.RatingPrompt), {
+  ssr: false,
+});
+
+const RATING_AFTER = 2;
 
 // Only one card layer app-wide even if two surfaces mount it (app shell +
 // landing downloader) — the first mount wins.
@@ -85,13 +106,25 @@ export function FloatingDownloadProgress() {
   // How many finished files are still waiting to be handed to the device — the
   // whole batch, not just the one this card happens to be showing.
   const awaitingCount = tasks.filter((t) => t.status === "completed" && t.awaitingSave).length;
+  // Completed downloads THIS session — the rating prompt's trigger.
+  //
+  // The MONOTONIC counter, not a filter over `tasks`: a completed card is
+  // dismissed after a few seconds, so counting the live list would climb to two
+  // and then fall back to zero, and the prompt would never appear for anyone who
+  // let their cards auto-dismiss — which is everyone. This component re-renders
+  // on every task change, so reading it during render is enough to observe it.
+  const completed = getCompletedCount();
   useEffect(() => {
     if (!task || task.status !== "completed" || task.awaitingSave || reviewing) return;
     const t = setTimeout(() => dismissTask(task.id), 6000);
     return () => clearTimeout(t);
   }, [task, reviewing]);
 
-  if (!claimed.current || !task) return null;
+  // The prompt owns its own timing, dismissal and "already asked" memory; this
+  // only decides when the chunk is worth fetching at all.
+  const askForRating = claimed.current && completed >= RATING_AFTER;
+
+  if (!claimed.current || !task) return askForRating ? <RatingPrompt /> : null;
 
   const pct = task.totalBytes > 0 ? Math.min(100, Math.round((task.receivedBytes / task.totalBytes) * 100)) : null;
   const remaining = eta(task);

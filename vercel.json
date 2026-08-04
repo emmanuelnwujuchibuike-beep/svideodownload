@@ -16,5 +16,8 @@
       "maxDuration": 120
     }
   },
-  "crons": [{ "path": "/api/cron/trending", "schedule": "0 3 * * *" }]
+  "crons": [
+    { "path": "/api/cron/trending", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/profile-snapshots", "schedule": "30 3 * * *" }
+  ]
 }

@@ -176,6 +176,25 @@ const nextConfig: NextConfig = {
     // the JPEG/PNG weight, and cache the optimized variants for ~31 days.
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 2_678_400,
+    /*
+      Image optimization is billed per unique (source image × width), and the
+      defaults generate up to SIXTEEN widths per image — 8 device sizes plus 8
+      image sizes. Most of them are never the best match for any `sizes`
+      attribute this app actually uses, so they are paid-for variants nobody
+      downloads.
+
+      These lists keep a rung at every real breakpoint (phone → 2× desktop) and
+      at every avatar/thumbnail size the UI asks for. Nothing breaks when a width
+      is removed: Next picks the next LARGER rung, so an image is never upscaled
+      or blurry — at worst a few kB heavier on an unusual viewport, which the
+      AVIF/WebP saving above more than covers.
+
+      Trimming these is safe to revisit; RAISING minimumCacheTTL or narrowing
+      `remotePatterns` are the other two levers, and both carry more risk (see
+      the note on remotePatterns above).
+    */
+    deviceSizes: [640, 828, 1080, 1920, 2560],
+    imageSizes: [32, 64, 128, 256],
   },
   async headers() {
     return [

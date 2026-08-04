@@ -76,6 +76,11 @@ function snapFormat(snap: Snap, i: number, count: number): MediaFormat {
     acodec: isVideo ? "aac" : null,
     directUrl: stripSnapWatermark(cleanUrl(snap.snapUrls!.mediaUrl!)),
     httpHeaders: headers,
+    // A story with several snaps is several PIECES OF MEDIA, not several
+    // qualities of one. Without this the UI treats them as a quality picker and
+    // downloads only whichever is selected — the owner's "it only downloads the
+    // first one". Flagged, they become a multi-select batch instead.
+    isSeparateItem: count > 1,
   };
 }
 

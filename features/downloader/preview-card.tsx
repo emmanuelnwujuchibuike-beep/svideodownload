@@ -74,7 +74,23 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   // the background (each item streams through the download manager).
   const [selected, setSelected] = useState<Set<string>>(new Set());
   useEffect(() => setSelected(new Set()), [metadata.id]);
-  const isBatchable = imageFormats.length > 1;
+
+  /*
+    What can be batch-downloaded on the CURRENT tab.
+
+    Two cases, both "these are distinct pieces of media, not alternatives":
+      · a multi-photo post — more than one image format (the original case), and
+      · anything an extractor explicitly flagged `isSeparateItem`, which is how
+        a Snapchat story with several snaps arrives.
+
+    Before this, batching was hardcoded to images, so a multi-snap story rendered
+    as a QUALITY picker: choosing "Story 1" downloaded one snap and the rest were
+    unreachable. Keying off the active tab means the same grid serves both, and
+    multi-photo behaviour is unchanged (an image tab with >1 image still batches).
+  */
+  const separateItems = useMemo(() => formats.filter((f) => f.isSeparateItem), [formats]);
+  const batchItems = separateItems.length > 1 ? separateItems : tab === "image" ? imageFormats : [];
+  const isBatchable = batchItems.length > 1;
   const toggleSelect = (formatId: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -82,8 +98,8 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       else next.add(formatId);
       return next;
     });
-  const allSelected = isBatchable && selected.size === imageFormats.length;
-  const batchBytes = imageFormats.reduce((n, f) => (selected.has(f.formatId) ? n + (f.filesize ?? 0) : n), 0);
+  const allSelected = isBatchable && selected.size === batchItems.length;
+  const batchBytes = batchItems.reduce((n, f) => (selected.has(f.formatId) ? n + (f.filesize ?? 0) : n), 0);
   const [showUpgradeGate, setShowUpgradeGate] = useState(false);
 
   const batchDownload = () => {
@@ -91,17 +107,20 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       setShowUpgradeGate(true);
       return;
     }
-    const items = imageFormats.filter((f) => selected.has(f.formatId));
+    const items = batchItems.filter((f) => selected.has(f.formatId));
     items.forEach((f, i) => {
+      // Each item carries its OWN kind — a story can mix video snaps and photo
+      // snaps, and sending them all as "image" would have saved the videos with
+      // the wrong extension.
       enqueueDownload({
         url: metadata.sourceUrl,
         formatId: f.formatId,
-        kind: "image",
-        title: `${metadata.title || "photo"} · ${i + 1} of ${items.length}`,
+        kind: f.kind,
+        title: `${metadata.title || "download"} · ${i + 1} of ${items.length}`,
         thumbnail: f.directUrl ?? metadata.thumbnail,
         platform: metadata.platform,
         platformName: metadata.platformName,
-        qualityLabel: "Image",
+        qualityLabel: f.label,
       });
     });
     // No "started" toast — the floating card shows "Downloading N items…".
@@ -327,14 +346,14 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         */}
         <ResultAd className="mt-4" />
 
-        {isImageTab && isBatchable ? (
+        {isBatchable ? (
           <div className="mt-4">
             {/* Select items header — count + Select All (Pro & Above batch) */}
             <div className="mb-2.5 flex items-center justify-between">
               <p className="text-sm font-semibold">
                 Select items{" "}
                 <span className="font-normal text-muted-foreground">
-                  ({selected.size}/{imageFormats.length})
+                  ({selected.size}/{batchItems.length})
                 </span>
                 <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                   <Crown className="h-3 w-3" /> Pro
@@ -342,7 +361,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
               </p>
               <button
                 type="button"
-                onClick={() => setSelected(allSelected ? new Set() : new Set(imageFormats.map((f) => f.formatId)))}
+                onClick={() => setSelected(allSelected ? new Set() : new Set(batchItems.map((f) => f.formatId)))}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-violet-500 transition hover:text-violet-400"
               >
                 {allSelected ? "Deselect All" : "Select All"}
@@ -359,7 +378,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
 
             {/* Numbered selection grid — tap toggles; also previews the photo */}
             <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto pr-1">
-              {imageFormats.map((f, i) => {
+              {batchItems.map((f, i) => {
                 const on = selected.has(f.formatId);
                 return (
                   <button
@@ -370,20 +389,35 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
                       toggleSelect(f.formatId);
                     }}
                     aria-pressed={on}
-                    aria-label={`Photo ${i + 1}${on ? " selected" : ""}`}
+                    aria-label={`${f.label || `Item ${i + 1}`}${on ? " selected" : ""}`}
                     className={cn(
                       "group/tile relative aspect-square overflow-hidden rounded-2xl ring-2 transition-all active:scale-[0.97]",
                       on ? "ring-violet-500 shadow-lg shadow-violet-500/20" : "ring-border/60 hover:ring-foreground/25",
                     )}
                   >
-                    {f.directUrl ? (
+                    {/* Only an IMAGE item's own URL is a usable thumbnail. A
+                        video snap's directUrl is an mp4, so it falls back to the
+                        post thumbnail and then to an icon — never an <img>
+                        pointed at a video, which renders as a broken tile. */}
+                    {f.kind === "image" && f.directUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={f.directUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                    ) : metadata.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={metadata.thumbnail} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                     ) : (
                       <span className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
-                        <ImageIcon className="h-5 w-5" />
+                        {f.kind === "video" ? <Video className="h-5 w-5" /> : <ImageIcon className="h-5 w-5" />}
                       </span>
                     )}
+                    {/* A play badge so a video item is distinguishable from a photo. */}
+                    {f.kind === "video" ? (
+                      <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
+                          <Play className="h-4 w-4" />
+                        </span>
+                      </span>
+                    ) : null}
                     {/* number badge */}
                     <span className="absolute left-1.5 top-1.5 flex h-5 min-w-5 items-center justify-center rounded-md bg-black/60 px-1 text-[10px] font-bold text-white backdrop-blur">
                       {i + 1}

@@ -1,3 +1,4 @@
+import { mimeForExtension, safeDownloadFilename } from "@/lib/download-filename";
 import { isIos } from "@/lib/pwa/platform";
 import type { MediaKind } from "@/types";
 
@@ -24,7 +25,11 @@ export function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "download";
+  // `safeDownloadFilename` truncates the BASE name and keeps the extension.
+  // Slicing the whole string (what this used to do) cut ".jpg" down to ".jp"
+  // on any long title, and a file with no valid extension can't be saved as an
+  // image — see lib/download-filename.ts.
+  a.download = safeDownloadFilename(filename);
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();
@@ -44,10 +49,15 @@ export const isIosDevice = isIos;
  * never from an async completion. Falls back to the anchor save.
  */
 export async function saveToDevice(blob: Blob, filename: string): Promise<void> {
-  const safe = filename.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "download";
+  const safe = safeDownloadFilename(filename);
   if (isIosDevice() && typeof navigator.share === "function") {
     try {
-      const file = new File([blob], safe, { type: blob.type || "application/octet-stream" });
+      // The MIME type is what iOS uses to decide whether the share sheet offers
+      // "Save Image"/"Save Video" at all — `application/octet-stream` gets the
+      // generic "File" treatment. `type` is derived from the extension when the
+      // blob itself doesn't carry one, so a correctly-named file is never
+      // offered as an untyped document.
+      const file = new File([blob], safe, { type: blob.type || mimeForExtension(safe) });
       if (!navigator.canShare || navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file] });
         return;

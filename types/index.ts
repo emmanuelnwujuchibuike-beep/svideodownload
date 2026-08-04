@@ -80,6 +80,20 @@ export interface MediaFormat {
   /** Headers required to fetch `directUrl` (e.g. Referer / User-Agent). */
   httpHeaders?: Record<string, string> | null;
   /**
+   * True when this format is a DISTINCT piece of media rather than another
+   * quality of the same one — a Snapchat story with several snaps, say.
+   *
+   * The distinction is load-bearing, not cosmetic. Formats are normally
+   * alternatives, so the UI shows a picker and downloads exactly one. A story's
+   * snaps are not alternatives: picking "Story 1" and stopping means the other
+   * snaps are never downloaded at all, which is precisely the bug this flag
+   * fixes. Formats marked this way are offered as a multi-select batch instead.
+   *
+   * Multi-photo posts are the same idea and predate this flag; they are still
+   * detected by "more than one image format", so nothing about them changes.
+   */
+  isSeparateItem?: boolean;
+  /**
    * Set ONLY on a synthesized lower-quality tier (see quality-ladder.ts): at
    * download time, `directUrl` is downscaled/re-encoded to this max height via
    * ffmpeg instead of proxied verbatim — so it's always a real, smaller,

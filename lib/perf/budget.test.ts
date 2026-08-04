@@ -58,8 +58,19 @@ const GLOBAL_CEILING = 340 * 1024;
  * is — the language-picker table, the analytics collector, and both banners are all
  * dynamic-imported off first-load. This is the measured 302.8 kB, the smallest step
  * over. Holding the line here.
+ *
+ * 303 → 304 kB (2026-08-04): a CORRECTNESS fix, not a feature. `saveToDevice` and
+ * `saveBlob` built a filename with `…slice(0, 120)`, which cuts from the end — so
+ * any long title lost its extension ("….jpg" → "….jp") and iOS offered the file as
+ * an untyped "File" that could not be saved to Photos. The owner hit it on an X
+ * image; short titles were unaffected, which is why it looked random. The fix is
+ * `lib/download-filename.ts` (reserve the extension, then truncate the base), which
+ * the landing's Downloader pulls in through `client-download`. It is ~0.5 kB and
+ * cannot be deferred: it is on the synchronous path of every completed download.
+ * Nothing else moved — the wallpaper/interstitial work this shipped alongside is
+ * entirely off the landing. This is the smallest step over the measured 303.x kB.
  */
-const ENTRY_CEILING = 303 * 1024;
+const ENTRY_CEILING = 304 * 1024;
 
 const ENTRY_ROUTES = [
   "/(marketing)/page",

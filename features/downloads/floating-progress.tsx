@@ -16,28 +16,13 @@ import {
   subscribe,
   type DownloadTask,
 } from "@/features/downloads/manager";
-import { openPlayer, usePlayerQueue } from "@/features/downloads/player-store";
+import { usePlayerQueue } from "@/features/downloads/player-store";
 import type { DownloadRecord } from "@/types";
 import { cn } from "@/lib/utils";
 
-/** A finished task, in the shape the in-browser player plays (resolves the saved
- *  file from the on-device library by url+format+kind). */
-function taskToRecord(t: DownloadTask): DownloadRecord {
-  return {
-    id: t.id,
-    url: t.url,
-    platform: t.platform,
-    platformName: t.platformName,
-    title: t.title,
-    thumbnail: t.thumbnail,
-    formatId: t.formatId,
-    kind: t.kind,
-    qualityLabel: t.qualityLabel,
-    size: t.receivedBytes || t.totalBytes || null,
-    createdAt: t.createdAt,
-    favorite: false,
-  };
-}
+/* `taskToRecord` lived here to build a one-off record for an isolated player.
+   Reviewing now links into the history page instead (see the Review button), so
+   the record comes from history itself and the shim is gone. */
 
 function fmtBytes(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)} GB`;
@@ -203,17 +188,31 @@ export function FloatingDownloadProgress() {
                   </Link>
                 ) : null}
                 {task.status === "completed" ? (
-                  <button
-                    type="button"
-                    // Do NOT dismiss the card — the full-screen player opens over
-                    // it, so closing the player leaves the card (and its Save to
-                    // device / Download history buttons) still there.
-                    onClick={() => openPlayer(taskToRecord(task))}
+                  /*
+                    Reviewing opens the clip INSIDE the history page (owner,
+                    2026-08-04) rather than in an isolated player over whatever
+                    page the download happened on.
+
+                    Why that's better: history is where the clip actually lives,
+                    and opening it there means the player has the whole library
+                    as its queue — so it auto-advances to the next download and
+                    the visitor lands somewhere useful when they close it. The
+                    old behaviour opened a single-item player over the landing
+                    page and left them exactly where they started.
+
+                    `?review=<id>` is read by the history page, which opens the
+                    player seeded at that item; an id that isn't there yet just
+                    shows history, so this can never dead-end.
+                  */
+                  <Link
+                    href={`/history?review=${encodeURIComponent(task.id)}`}
+                    prefetch
+                    onClick={() => dismissTask(task.id)}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 px-3 py-2 text-xs font-semibold transition hover:bg-secondary"
                   >
                     <Play className="h-3.5 w-3.5" />{" "}
                     {task.kind === "audio" ? "Review audio" : task.kind === "image" ? "View image" : "Review video"}
-                  </button>
+                  </Link>
                 ) : null}
                 {task.status === "failed" ? (
                   <button

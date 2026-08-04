@@ -15,7 +15,14 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const settings = await getMonetizationSettings();
   return NextResponse.json(
-    { interstitialSkipSeconds: normalizeSkipSeconds(settings.interstitialSkipSeconds) },
+    {
+      interstitialSkipSeconds: normalizeSkipSeconds(settings.interstitialSkipSeconds),
+      // The per-moment switches (wallpaper downloads, history video watches).
+      // Public and non-user-specific, like the skip delay — the client needs
+      // them before an ad fills to know whether to arm the trigger at all.
+      interstitialWallpaper: settings.interstitialWallpaper === true,
+      interstitialHistoryVideo: settings.interstitialHistoryVideo === true,
+    },
     { headers: { "Cache-Control": "public, max-age=60" } },
   );
 }

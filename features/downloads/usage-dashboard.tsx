@@ -21,6 +21,7 @@ import { useHistory } from "@/features/history/use-history";
 import { computeUsage, limitForPlan } from "@/features/history/usage";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { MediaKind } from "@/types";
+import { upgradeCta } from "@/lib/monetization/upgrade-cta";
 import { cn, formatBytes } from "@/lib/utils";
 
 const KIND_ICON: Record<MediaKind, ComponentType<{ className?: string }>> = {
@@ -58,12 +59,9 @@ export function UsageDashboard({ onClearHistory }: { onClearHistory?: () => void
   const uncapped = isBusiness || !Number.isFinite(limitBytes);
   const usage = useMemo(() => computeUsage(items, limitBytes), [items, limitBytes]);
   const settled = ready && !loading;
-  // Free users are asked to upgrade to Pro; Pro users to Business; guests sign in.
-  const upgrade = !signedIn
-    ? { label: "Sign in to upgrade to Pro", href: "/login?next=/pricing" }
-    : plan === "pro"
-      ? { label: "Upgrade to Business", href: "/pricing" }
-      : { label: "Upgrade to Pro", href: "/pricing" };
+  // One shared, plan-aware CTA (lib/monetization/upgrade-cta): free → Pro,
+  // Pro → Business, guests sign in, Business → null (nothing left to sell).
+  const upgrade = upgradeCta(plan, signedIn);
 
   const clear = () => {
     clearHistory();
@@ -144,17 +142,21 @@ export function UsageDashboard({ onClearHistory }: { onClearHistory?: () => void
               : `You're at ${usage.percentUsed}% of your ${formatBytes(limitBytes)} limit`}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {usage.overLimit
-              ? `${upgrade.label} for more storage, or clear history to keep downloading.`
-              : `${upgrade.label} for more storage before you run out of space.`}
+            {upgrade
+              ? usage.overLimit
+                ? `${upgrade.label} for more storage, or clear history to keep downloading.`
+                : `${upgrade.label} for more storage before you run out of space.`
+              : "Clear history to free up space."}
           </p>
           <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
-            <Link
-              href={upgrade.href}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 active:scale-[0.98]"
-            >
-              <Crown className="h-4 w-4" /> {upgrade.label}
-            </Link>
+            {upgrade ? (
+              <Link
+                href={upgrade.href}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:opacity-95 active:scale-[0.98]"
+              >
+                <Crown className="h-4 w-4" /> {upgrade.label}
+              </Link>
+            ) : null}
             {confirmClear ? (
               <span className="inline-flex items-center gap-2 text-sm">
                 <button

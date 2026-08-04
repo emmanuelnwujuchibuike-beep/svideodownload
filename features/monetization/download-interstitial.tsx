@@ -5,9 +5,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { getCompletedCount, onDownloadCompleted } from "@/features/downloads/manager";
 import { getWatchCount, isPlayerOpen, onVideoWatched } from "@/features/downloads/player-store";
+import { upgradeCta, upgradeHeadline } from "@/lib/monetization/upgrade-cta";
 
 import { FullscreenInterstitial } from "./fullscreen-interstitial";
-import { useInterstitialSkipSeconds } from "./use-interstitial-skip";
+import { useInterstitialConfig } from "./use-interstitial-skip";
 import { useShowAds } from "./use-show-ads";
 
 /**
@@ -40,6 +41,12 @@ const IDLE_MS = 5_000;
 const COOLDOWN_MS = 60_000;
 const MIN_GAP_MS = 3_000;
 const EVERY = 3;
+/**
+ * History watches use their OWN interval (owner, 2026-08-04): the ad shows when
+ * the SECOND video finishes, not the third. Kept separate from `EVERY` so
+ * changing the download cadence never silently moves the watch cadence.
+ */
+const WATCH_EVERY = 2;
 /** Shared with the marketing IdleInterstitial so they never both fire. */
 const LAST_SHOWN_KEY = "frenz:interstitial-last-shown";
 const ACTIVITY = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"] as const;
@@ -53,7 +60,7 @@ export function DownloadInterstitial({
 }) {
   const { showAds, ready } = useShowAds();
   const { plan } = useEntitlements();
-  const skipSeconds = useInterstitialSkipSeconds();
+  const { skipSeconds, historyVideo: historyVideoOn } = useInterstitialConfig();
   const [open, setOpen] = useState(false);
   const [hasAd, setHasAd] = useState<boolean | null>(null);
   const [remaining, setRemaining] = useState(0);
@@ -117,13 +124,16 @@ export function DownloadInterstitial({
     return () => offs.forEach((off) => off());
   }, [ready, showAds, triggers, show]);
 
-  // Watch trigger — free/guest AND Pro (not Business).
+  // Watch trigger — free/guest AND Pro (not Business), and only when the admin
+  // has switched it on. `onVideoWatched` fires on a NATURAL end only, so this
+  // can never interrupt a clip mid-watch: the ad lands as the 2nd video
+  // finishes, which is exactly the moment the owner asked for.
   useEffect(() => {
-    if (!ready || !watchAllowed || !triggers.includes("watch")) return;
+    if (!ready || !watchAllowed || !historyVideoOn || !triggers.includes("watch")) return;
     return onVideoWatched(() => {
-      if (getWatchCount() % EVERY === 0) show();
+      if (getWatchCount() % WATCH_EVERY === 0) show();
     });
-  }, [ready, watchAllowed, triggers, show]);
+  }, [ready, watchAllowed, historyVideoOn, triggers, show]);
 
   const shown = open && hasAd === true;
   // The admin-set skip delay: while it counts down the ad can't be dismissed;
@@ -163,12 +173,10 @@ export function DownloadInterstitial({
 
   if (!canPreload) return null;
 
-  // The upsell line follows the plan: free/guest are asked to go Pro, a Pro user
-  // is only ever asked to go Business (never "upgrade to Pro").
-  const upsell =
-    plan === "pro"
-      ? { text: "Want an ad-free library?", cta: "Go Business", href: "/pricing" }
-      : { text: "Tired of ads?", cta: "Upgrade to Pro", href: "/pricing" };
+  // The upsell follows the plan through the SHARED helper, so this can never
+  // drift back into offering a Pro customer another Pro subscription.
+  const offer = upgradeCta(plan);
+  const upsell = offer ? { text: upgradeHeadline(plan), cta: offer.label, href: offer.href } : undefined;
 
   return (
     <FullscreenInterstitial

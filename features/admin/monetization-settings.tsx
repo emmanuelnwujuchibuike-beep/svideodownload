@@ -48,6 +48,16 @@ const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
     label: "Full-screen units",
     hint: "Idle interstitial, the after-download panel, and any video unit. Off by default.",
   },
+  {
+    key: "interstitialWallpaper",
+    label: "Wallpaper interstitial",
+    hint: "A skippable full-screen ad after every 2nd wallpaper download, on /wallpapers and the download page. Off by default.",
+  },
+  {
+    key: "interstitialHistoryVideo",
+    label: "History video interstitial",
+    hint: "A skippable full-screen ad when the 2nd video watched from download history finishes. Never interrupts a clip mid-watch. Off by default.",
+  },
 ];
 
 export function MonetizationSettings({ settings }: { settings: MonetizationSettings }) {

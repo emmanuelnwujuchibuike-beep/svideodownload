@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import type { RevenueStrategy } from "@/lib/monetization/types";
+import { upgradeCta, upgradeHeadline } from "@/lib/monetization/upgrade-cta";
 
 
 
@@ -90,14 +91,18 @@ export function ResultOffer() {
     );
   }
 
-  // premium_prompt
+  // premium_prompt. The decision engine only returns this for a NON-premium
+  // visitor, so `upgradeCta` resolves to the Pro offer — routed through the
+  // shared helper anyway so there is exactly one place this wording lives.
+  const offer = upgradeCta("free");
+  if (!offer) return null;
   return (
     <UpsellCard
       icon={<Zap className="h-6 w-6" />}
-      title="Tired of ads?"
+      title={upgradeHeadline("free")}
       body="Go Pro for an ad-free experience, faster downloads and batch saving."
-      href="/pricing"
-      cta="Upgrade to Pro"
+      href={offer.href}
+      cta={offer.label}
     />
   );
 }

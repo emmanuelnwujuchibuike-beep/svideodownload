@@ -139,6 +139,21 @@ export interface MonetizationSettings {
    */
   interstitialSkipSeconds: number;
   /**
+   * Full-screen interstitial after every 2nd wallpaper download, on the
+   * standalone /wallpapers page and the download page's Wallpapers section.
+   *
+   * Its own switch rather than riding on `interstitial`: a wallpaper download
+   * is a different moment from a video download, and an operator running one
+   * should not be forced to run the other. Like `interstitial`, it defaults OFF
+   * — the most intrusive placements are opt-in, never inherited.
+   */
+  interstitialWallpaper: boolean;
+  /**
+   * Full-screen interstitial when the 2nd video watched from download history
+   * FINISHES. Fires on the natural end of a clip only, never mid-watch.
+   */
+  interstitialHistoryVideo: boolean;
+  /**
    * Allow pop-under / OnClick units (the `pop` format).
    *
    * Defaults OFF, unlike the original switch which defaulted ON. These take
@@ -184,6 +199,8 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   recommendedTools: true,
   interstitial: false,
   interstitialSkipSeconds: 5,
+  interstitialWallpaper: false,
+  interstitialHistoryVideo: false,
   popunder: false,
 };
 

@@ -1,4 +1,4 @@
-import { ArrowDown, CheckCircle2, Play, Sparkles } from "lucide-react";
+import { ArrowDown, CheckCircle2, Image as ImageIcon, Play, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -113,14 +113,14 @@ export function Hero() {
             <Link
               href="/wallpapers"
               prefetch
-              className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl border border-violet-300/60 bg-white px-7 py-3.5 text-sm font-semibold text-slate-900 shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-card active:scale-[0.99] dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur dark:hover:border-white/30 sm:w-auto"
+              className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-purple-600/30 transition duration-200 hover:-translate-y-0.5 hover:opacity-95 hover:shadow-xl hover:shadow-purple-600/40 active:scale-[0.99] sm:w-auto"
             >
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-violet-500/15 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full"
+                className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full"
               />
-              <Sparkles className="relative h-4 w-4 text-violet-500 dark:text-violet-400" />
-              <span className="relative">Wallpapers</span>
+              <ImageIcon className="relative h-4 w-4" />
+              <span className="relative">View 4K Wallpapers</span>
             </Link>
           </div>
 

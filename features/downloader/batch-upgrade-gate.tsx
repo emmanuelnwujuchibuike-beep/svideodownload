@@ -4,6 +4,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Crown, Download, X } from "lucide-react";
 import Link from "next/link";
 
+import { useEntitlements } from "@/features/auth/use-entitlements";
+import { upgradeCta } from "@/lib/monetization/upgrade-cta";
+
 /**
  * Premium pop-up shown when a Free (incl. signed-out) visitor tries to run a
  * batch download — replaces a plain toast with a real choice: pay for the
@@ -22,6 +25,12 @@ export function BatchUpgradeGate({
   onUseSingleDownload: () => void;
   onClose: () => void;
 }) {
+  // Reads the visitor's REAL plan rather than assuming free. This dialog is
+  // opened by a batch attempt, and assuming its audience was the bug: a Pro
+  // customer who hit it was told to "Upgrade to Pro".
+  const { plan } = useEntitlements();
+  const cta = upgradeCta(plan);
+
   if (!open) return null;
 
   return (
@@ -57,17 +66,21 @@ export function BatchUpgradeGate({
               Downloading all {itemCount} at once is a Pro feature
             </h3>
             <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Upgrade to Pro &amp; Above for unlimited batch downloads, high quality and no ads — or keep going free
-              and download items one at a time, no sign-up required.
+              {cta ? `${cta.label} for unlimited batch downloads, high quality and no ads — or keep` : "Keep"} going
+              free and download items one at a time, no sign-up required.
             </p>
 
             <div className="mt-5 flex flex-col gap-2">
-              <Link
-                href="/pricing"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-3.5 text-base font-semibold text-white shadow-lg shadow-violet-500/30 transition hover:opacity-95 active:scale-[0.99]"
-              >
-                <Crown className="h-5 w-5" /> Upgrade to Pro
-              </Link>
+              {/* Plan-aware, and null for Business — who already has batch and
+                  must never be shown an upgrade button. */}
+              {cta ? (
+                <Link
+                  href={cta.href}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-3.5 text-base font-semibold text-white shadow-lg shadow-violet-500/30 transition hover:opacity-95 active:scale-[0.99]"
+                >
+                  <Crown className="h-5 w-5" /> {cta.label}
+                </Link>
+              ) : null}
               <button
                 type="button"
                 onClick={onUseSingleDownload}

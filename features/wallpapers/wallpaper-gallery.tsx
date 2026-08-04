@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from "react";
 
 import { AdSlot } from "@/features/monetization/ad-slot";
 import { useShowAds } from "@/features/monetization/use-show-ads";
+import { useInterstitialConfig } from "@/features/monetization/use-interstitial-skip";
 import { WallpaperReels } from "@/features/wallpapers/wallpaper-reels";
+import { useWallpaperInterstitial } from "@/features/wallpapers/use-wallpaper-interstitial";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
@@ -29,7 +31,11 @@ const PREVIEW_COUNT = 6;
 
 export function WallpaperGallery({ items, canEngage }: { items: Wallpaper[]; canEngage: boolean }) {
   const [viewer, setViewer] = useState<number | null>(null);
-  const [adOpen, setAdOpen] = useState(false);
+  // Every 2nd wallpaper download, not every one (owner, 2026-08-04). This used
+  // to fire an interstitial on EVERY download here while the standalone
+  // /wallpapers page fired from the 2nd onwards — the shared hook is what keeps
+  // the two surfaces telling the same story.
+  const { adOpen, onDownloaded, close: closeAd } = useWallpaperInterstitial();
 
   if (items.length === 0) return null;
   const preview = items.slice(0, PREVIEW_COUNT);
@@ -75,11 +81,11 @@ export function WallpaperGallery({ items, canEngage }: { items: Wallpaper[]; can
           startIndex={viewer}
           canEngage={canEngage}
           onClose={() => setViewer(null)}
-          onDownloaded={() => setAdOpen(true)}
+          onDownloaded={onDownloaded}
         />
       ) : null}
 
-      {adOpen ? <WallpaperInterstitial onClose={() => setAdOpen(false)} /> : null}
+      {adOpen ? <WallpaperInterstitial onClose={closeAd} /> : null}
     </section>
   );
 }
@@ -186,13 +192,21 @@ function ShareYourOwn() {
  */
 export function WallpaperInterstitial({ onClose }: { onClose: () => void }) {
   const { showAds, ready } = useShowAds();
-  const [left, setLeft] = useState(5);
+  // The admin's skip delay (0 / 5 / 10), not a hardcoded 5 — the same setting
+  // the download-flow interstitial obeys, so both behave identically.
+  const { skipSeconds } = useInterstitialConfig();
+  const [left, setLeft] = useState(skipSeconds);
   const [hasAd, setHasAd] = useState<boolean | null>(null);
 
+  // Re-seed if the config resolves after mount, then count down. Depending on
+  // `skipSeconds` rather than running once is what stops the countdown being
+  // stuck at the default when the fetch lands a moment later.
   useEffect(() => {
+    setLeft(skipSeconds);
+    if (skipSeconds <= 0) return;
     const t = setInterval(() => setLeft((l) => (l > 0 ? l - 1 : 0)), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [skipSeconds]);
 
   // A premium member, or no ad to fill the slot → don't interrupt at all.
   useEffect(() => {

@@ -3,10 +3,11 @@
 import { ArrowRight, ChevronLeft, Download, Heart } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { WallpaperInterstitial } from "@/features/wallpapers/wallpaper-gallery";
 import { WallpaperReels } from "@/features/wallpapers/wallpaper-reels";
+import { useWallpaperInterstitial } from "@/features/wallpapers/use-wallpaper-interstitial";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import type { Wallpaper } from "@/lib/wallpapers";
@@ -52,15 +53,9 @@ export function WallpaperExplore({
 }) {
   const router = useRouter();
   const [viewer, setViewer] = useState<number | null>(openReels ? 0 : null);
-  const [adOpen, setAdOpen] = useState(false);
-  // A ref, not state: incrementing a counter must not re-render the viewer and
-  // interrupt a scroll in progress.
-  const downloads = useRef(0);
-
-  const onDownloaded = useCallback(() => {
-    downloads.current += 1;
-    if (downloads.current >= 2) setAdOpen(true);
-  }, []);
+  // Every 2nd wallpaper download shows a skippable interstitial — the same rule
+  // as the download page's Wallpapers section, owned by one shared hook.
+  const { adOpen, onDownloaded, close: closeAd } = useWallpaperInterstitial();
 
   const open = useCallback((index: number) => {
     haptic("light");
@@ -160,7 +155,7 @@ export function WallpaperExplore({
         />
       ) : null}
 
-      {adOpen ? <WallpaperInterstitial onClose={() => setAdOpen(false)} /> : null}
+      {adOpen ? <WallpaperInterstitial onClose={closeAd} /> : null}
     </>
   );
 }

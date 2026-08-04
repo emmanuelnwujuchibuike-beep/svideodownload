@@ -52,6 +52,11 @@ const schema = z.object({
     .number()
     .refine((v) => [0, 5, 10].includes(v), { message: "Skip delay must be 0, 5 or 10 seconds" })
     .default(5),
+  // Per-moment interstitial switches. Default false so an existing saved
+  // settings row (written before these existed) can never come back with an
+  // intrusive placement silently switched on.
+  interstitialWallpaper: z.boolean().default(false),
+  interstitialHistoryVideo: z.boolean().default(false),
   popunder: z.boolean().default(false),
   /*
     Validated as "empty, or a well-formed publisher id" rather than just a

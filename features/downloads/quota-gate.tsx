@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 
 import type { BillingPlan } from "@/lib/monetization/types";
+import { upgradeCta } from "@/lib/monetization/upgrade-cta";
 import { formatBytes } from "@/lib/utils";
 
 /**
@@ -21,11 +22,9 @@ import { formatBytes } from "@/lib/utils";
  * Presentation only: the caller owns the "is this over the limit" decision (so
  * the same rule guards the paste box and the usage page) and passes it in.
  */
-function upgradeCta(plan: BillingPlan, signedIn: boolean): { label: string; href: string } {
-  if (!signedIn) return { label: "Sign in to upgrade to Pro", href: "/login?next=/pricing" };
-  if (plan === "pro") return { label: "Upgrade to Business — unlimited", href: "/pricing" };
-  return { label: "Upgrade to Pro", href: "/pricing" };
-}
+/* The plan-aware CTA is shared (lib/monetization/upgrade-cta) so this dialog,
+   the usage meter, the interstitial upsell and the batch gate can never drift
+   into offering a Pro customer another Pro subscription. */
 
 export function QuotaGate({
   open,
@@ -105,8 +104,9 @@ export function QuotaGate({
             </h2>
             <p className="mt-1.5 text-sm text-muted-foreground">
               You&apos;ve saved {formatBytes(usedBytes)} across{" "}
-              {count === 1 ? "1 download" : `${count} downloads`}. {cta.label} for more storage
-              synced across your devices — or clear your history to keep downloading.
+              {count === 1 ? "1 download" : `${count} downloads`}.{" "}
+              {cta ? `${cta.label} for more storage synced across your devices — or clear` : "Clear"} your history to
+              keep downloading.
             </p>
 
             {/* Full meter, so the reason is visible, not just stated. */}
@@ -120,14 +120,18 @@ export function QuotaGate({
             </div>
 
             <div className="mt-6 flex flex-col gap-2.5">
-              <Link
-                href={cta.href}
-                onClick={onClose}
-                className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:opacity-95 active:scale-[0.98]"
-              >
-                <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-                <Crown className="h-4 w-4" /> {cta.label}
-              </Link>
+              {/* Null for Business — they are on the top plan, so there is
+                  nothing to sell and clearing history is the only real action. */}
+              {cta ? (
+                <Link
+                  href={cta.href}
+                  onClick={onClose}
+                  className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:opacity-95 active:scale-[0.98]"
+                >
+                  <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+                  <Crown className="h-4 w-4" /> {cta.label}
+                </Link>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {

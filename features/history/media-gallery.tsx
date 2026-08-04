@@ -16,7 +16,7 @@ import {
   Trash2,
   Video,
 } from "lucide-react";
-import { type ComponentType, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ComponentType, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { SmartThumb } from "@/components/ui/smart-thumb";
 import { startDownload } from "@/features/downloads/manager";
@@ -203,6 +203,32 @@ export function MediaGallery({
     haptic("light");
     openPlayerQueue(sorted, idx);
   };
+
+  /*
+    Deep-link review (owner, 2026-08-04): the download-complete card links here
+    with `?review=<id>` instead of opening its own isolated player, so the clip
+    is reviewed in history with the whole library as its queue.
+
+    Runs ONCE per id: the ref guard stops the player reopening every time
+    `sorted` changes (a sort switch, a new download landing) — which would yank
+    a visitor who had already closed it straight back in. The query param is
+    then stripped with `replaceState`, so a refresh or a Back doesn't replay it.
+    A missing id simply does nothing; history is already the right place to be.
+  */
+  const reviewed = useRef<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined" || sorted.length === 0) return;
+    const id = new URLSearchParams(window.location.search).get("review");
+    if (!id || reviewed.current === id) return;
+    reviewed.current = id;
+    const idx = sorted.findIndex((item) => item.id === id);
+    if (idx >= 0) openPlayerQueue(sorted, idx);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("review");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    // `sorted` is intentionally the only dependency — see the note above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sorted]);
 
   return (
     <div>

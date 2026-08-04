@@ -230,10 +230,23 @@ export function WallpaperReels({
         {index + 1} / {items.length}
       </span>
 
-      {/* Action rail */}
+      {/*
+        Action rail — hard right, bottom-aligned (owner, 2026-08-04: "at the
+        very right and at the bottom just like tiktok and snapchat").
+
+        It used to float 7rem up, which left a band of dead space under it and
+        put the buttons in the middle of the picture rather than out of the way
+        of it. TikTok and Snapchat both anchor the rail to the bottom-right
+        corner so the image is unobstructed and the thumb reaches the controls
+        without moving — on a large phone the old position sat above the
+        natural thumb arc.
+
+        The caption's `pr-28` is what keeps the two from colliding; the rail is
+        the fixed-width column and the caption flows around it.
+      */}
       <div
-        className="absolute right-3 z-10 flex flex-col items-center gap-4"
-        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 7rem)" }}
+        className="absolute right-1.5 z-10 flex flex-col items-center gap-4"
+        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}
       >
         <RailButton
           label={`${state[current.id]?.likes ?? current.likes}`}
@@ -261,7 +274,7 @@ export function WallpaperReels({
 
       {/* Caption */}
       <div
-        className="absolute inset-x-0 z-10 px-4 pr-20 text-white"
+        className="absolute inset-x-0 z-10 px-4 pr-28 text-white"
         style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}
       >
         <p className="text-lg font-bold tracking-tight drop-shadow">{current.name}</p>

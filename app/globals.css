@@ -992,27 +992,46 @@
   /* ── Depth, not colour ────────────────────────────────────────────────
      A stacked shadow reads as elevation; a tinted background reads as a
      highlighter. Both lift a card; only one of them stays quiet. */
+  /*
+    Every lux surface reads the Layout Studio variables FIRST and falls back to
+    the lux treatment.
+
+    Owner (2026-08-04): "make the layout settings in settings page reflect on
+    the profile and public." They did not, and the reason was narrow: the theme
+    resolved to `--frenz-profile-*` custom properties that exactly ONE class
+    consumed (`.frenz-themed-card`, used in one file — the About/Catalog
+    panels). Everything else on the profile — the hero, the whole right rail,
+    achievements — was hard-coded `bg-card`, so a member could pick a surface,
+    a radius and a corner style and see almost nothing change.
+
+    Routing the fallback through `var(--frenz-profile-*, <lux value>)` fixes it
+    without a second theming system: a member who has never opened Layout
+    Studio gets the lux defaults, and one who has gets their choice, on every
+    card at once.
+  */
   .lux-card {
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-    border-radius: 1.5rem;
-    box-shadow:
+    background: var(--frenz-profile-card-bg, hsl(var(--card)));
+    border: var(--frenz-profile-card-border, 1px solid hsl(var(--border)));
+    border-radius: var(--frenz-profile-radius, 1.5rem);
+    backdrop-filter: var(--frenz-profile-card-blur, none);
+    box-shadow: var(
+      --frenz-profile-card-shadow,
       0 1px 2px rgb(17 24 39 / 0.04),
-      0 8px 24px -12px rgb(17 24 39 / 0.1);
+      0 8px 24px -12px rgb(17 24 39 / 0.1)
+    );
   }
   .dark .lux-card {
-    box-shadow:
-      0 1px 2px rgb(0 0 0 / 0.4),
-      0 8px 24px -12px rgb(0 0 0 / 0.5);
+    box-shadow: var(--frenz-profile-card-shadow, 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.5));
   }
 
   /* The header card: white lifting to the faintest blue. Not a gradient you
-     should be able to name — if it reads as blue, it is too strong. */
+     should be able to name — if it reads as blue, it is too strong. A chosen
+     surface wins over it. */
   .lux-header {
-    background: linear-gradient(180deg, hsl(var(--card)) 0%, #f8faff 100%);
+    background: var(--frenz-profile-card-bg, linear-gradient(180deg, hsl(var(--card)) 0%, #f8faff 100%));
   }
   .dark .lux-header {
-    background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(226 40% 12%) 100%);
+    background: var(--frenz-profile-card-bg, linear-gradient(180deg, hsl(var(--card)) 0%, hsl(226 40% 12%) 100%));
   }
 
   /* Radial light behind the avatar. Soft rgba, never a solid block. */

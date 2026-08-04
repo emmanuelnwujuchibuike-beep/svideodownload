@@ -43,7 +43,7 @@ const METRICS: { key: keyof IdentityAnalyticsData; label: string; Icon: typeof E
 
 export function IdentityAnalytics({ data, topContent }: { data: IdentityAnalyticsData; topContent: TopContent | null }) {
   return (
-    <section className="rounded-3xl border border-border/70 bg-card p-5 shadow-sm">
+    <section className="lux-card p-5">
       <div className="mb-3.5 flex items-center gap-2.5">
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-tile text-white shadow-sm">
           <Sparkles className="h-4 w-4" />

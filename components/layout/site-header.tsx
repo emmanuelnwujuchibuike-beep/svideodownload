@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Crown, Fingerprint, LogOut, UserCircle, X } from "lucide-react";
+import { ArrowRight, Crown, LogOut, UserCircle, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -543,7 +543,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
               {enabled && !user ? (
                 /*
                   Mirrors UserMenu's desktop CTA exactly — same gradient, glow,
-                  sheen and Fingerprint mark — differing only in being full-width.
+                  sheen and copy — differing only in being full-width.
                   One control, one treatment, on every viewport.
                 */
                 <Link
@@ -559,8 +559,12 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
                     aria-hidden
                     className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full"
                   />
-                  <Fingerprint className="h-5 w-5" />
-                  {t("nav.launchApp")}
+                  {/* Owner (2026-08-04): "change the launch app button in the
+                      menu in the landing page to login button" — and the
+                      fingerprint goes with it. "Launch app" described a
+                      destination that does not exist (there is no app to
+                      launch); this is a sign-in, so it says so. */}
+                  {t("nav.login")}
                   <ArrowRight className="h-5 w-5" />
                 </Link>
               ) : null}

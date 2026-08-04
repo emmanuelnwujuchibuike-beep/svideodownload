@@ -109,7 +109,7 @@ function Card({
   children: React.ReactNode;
 }) {
   const card = (
-    <section className="lux-lift rounded-3xl border border-border/70 bg-card p-5 shadow-sm">
+    <section className="lux-lift lux-card p-5">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-base font-bold">{title}</h2>
         {viewAll ? (

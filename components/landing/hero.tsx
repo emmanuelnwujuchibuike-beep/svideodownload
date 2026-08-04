@@ -74,7 +74,22 @@ export function Hero() {
 
       <div className="container relative z-10 grid items-center gap-10 lg:grid-cols-2 lg:gap-8" id="hero">
         {/* Left — copy + CTAs */}
-        <div className="text-center lg:text-left">
+        {/*
+          Left-aligned at every width (owner, 2026-08-04: "the landing page hero
+          section currently is center while in the image, the hero section is
+          not").
+
+          The reference (public/upgraded landing page.jpg) is a PHONE
+          screenshot, and every element in it — eyebrow, headline, paragraph,
+          CTA rows — starts at the same left margin. This column was
+          `text-center lg:text-left`, so the one viewport the reference
+          actually shows was the one viewport that did not match it.
+
+          Left is also the better reading setup: a three-line headline and a
+          four-line paragraph centred on a narrow screen give the eye a new
+          starting point on every line, which is measurably slower to read.
+        */}
+        <div className="text-left">
           <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
             <Sparkles className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
             All-in-One Downloader &amp; Social Hub
@@ -92,7 +107,7 @@ export function Hero() {
             Explore.
           </h1>
 
-          <p className="mx-auto mt-6 max-w-lg text-pretty text-base leading-relaxed text-slate-600 dark:text-white/70 sm:text-lg lg:mx-0">
+          <p className="mt-6 max-w-lg text-pretty text-base leading-relaxed text-slate-600 dark:text-white/70 sm:text-lg">
             Frenz lets you download videos, photos, stories and reels — no watermark,
             full HD, completely free — from the platforms you already use. Then share,
             connect and explore, all in{" "}
@@ -209,7 +224,7 @@ export function Hero() {
               "50,000+ Happy Users" count or an invented star rating (there is no
               review system to source one). Illustrative cartoon avatars, never real
               faces, and an honest number-free line. See the Reality Ledger. */}
-          <div className="mt-8 flex items-center justify-center gap-3 lg:justify-start">
+          <div className="mt-8 flex items-center justify-start gap-3">
             <div className="flex -space-x-2.5">
               {FACES.map((f) => (
                 <span

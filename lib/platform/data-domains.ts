@@ -125,6 +125,21 @@ export const DATA_DOMAINS: DataDomain[] = [
     storage: ["relational"],
   },
   {
+    id: "discovery",
+    name: "Profile Discovery",
+    owner: "lib/discovery, lib/social/profile-search",
+    description:
+      "Who can be FOUND, and by what (migration 0113). Per-member discoverability with a per-FIELD opt-in — city and country are off by default, because being findable by name is what a profile is for while being findable by location is a separate consent. Private bookmarks of other people (never disclosed to them), plus discovery analytics kept as DAILY AGGREGATES: a row per search would be the highest-write table here and would record who looked for whom, so counters answer the owner's question while storing nothing about any searcher. `profile_search_terms` has no column that could hold a searcher id.",
+    tables: [
+      "profile_discovery",
+      "profile_bookmarks",
+      "profile_bookmark_lists",
+      "profile_discovery_stats",
+      "profile_search_terms",
+    ],
+    storage: ["relational"],
+  },
+  {
     id: "messaging",
     name: "Messaging",
     owner: "lib/social (messages)",

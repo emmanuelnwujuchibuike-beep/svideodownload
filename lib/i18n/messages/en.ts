@@ -36,7 +36,7 @@ export const en = {
   "nav.pricing": "Pricing",
   "nav.academy": "Academy",
   "nav.support": "Support",
-  "nav.launchApp": "Launch App",
+  "nav.login": "Log in",
   "nav.openMenu": "Open menu",
   "nav.closeMenu": "Close menu",
 

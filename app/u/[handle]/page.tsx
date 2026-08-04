@@ -38,6 +38,7 @@ import { ProfileCoverControls } from "@/features/profile/profile-cover-controls"
 import { ProfileFab } from "@/features/profile/profile-fab";
 import { Toaster } from "@/features/ui/toast";
 import { LivingGlow } from "@/features/profile/living-glow";
+import { ProfileCardLink } from "@/features/profile/profile-card-link";
 import { ShareProfileButton } from "@/features/profile/share-profile-button";
 import { FollowButton } from "@/features/social/follow-button";
 import { ProfileActions } from "@/features/social/profile-actions";
@@ -662,6 +663,7 @@ export default async function ProfilePage({
                           Edit Profile
                         </Link>
                         <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                        <ProfileCardLink handle={profile.handle} />
                       </div>
                     </div>
 
@@ -979,6 +981,7 @@ export default async function ProfilePage({
                         </Link>
                         <span className="shrink-0">
                           <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                        <ProfileCardLink handle={profile.handle} />
                         </span>
                         <span className="shrink-0">
                           <ProfileActions
@@ -991,6 +994,7 @@ export default async function ProfilePage({
                     ) : (
                       <span className="shrink-0">
                         <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                        <ProfileCardLink handle={profile.handle} />
                       </span>
                     )}
                   </div>

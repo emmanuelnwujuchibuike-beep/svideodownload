@@ -29,7 +29,7 @@ export function AchievementsShowcase({ achievements }: { achievements: EarnedAch
   const earned = earnedCount(achievements);
 
   return (
-    <section className="rounded-3xl border border-border/70 bg-card p-5 shadow-sm">
+    <section className="lux-card p-5">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-base font-bold">Achievements</h2>
         <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-bold text-muted-foreground">

@@ -84,7 +84,7 @@ export function HealthCard({ health }: { health: ProfileHealth }) {
   const colors = BAND_COLOR[health.band];
 
   return (
-    <section className="rounded-3xl border border-border/70 bg-card p-5 shadow-sm">
+    <section className="lux-card p-5">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-base font-bold">
           <ShieldCheck className="h-[18px] w-[18px] text-muted-foreground" /> Profile health

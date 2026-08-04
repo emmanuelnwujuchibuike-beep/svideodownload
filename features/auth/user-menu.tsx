@@ -1,6 +1,6 @@
 "use client";
 
-import { Fingerprint, UserCircle } from "lucide-react";
+import { UserCircle } from "lucide-react";
 import Link from "next/link";
 import { type ComponentType, useState } from "react";
 
@@ -121,17 +121,24 @@ export function UserMenu() {
         href="/login?next=/account"
         aria-label="Log in"
         title="Log in"
-        className="group relative inline-flex items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-3 py-2 text-white shadow-lg shadow-violet-500/30 transition-all duration-300 hover:shadow-violet-500/50 active:scale-[0.97]"
+        className="group relative inline-flex items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-500/30 transition-all duration-300 hover:shadow-violet-500/50 active:scale-[0.97]"
       >
         {/* breathing glow behind the pill */}
         <span aria-hidden className="pointer-events-none absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 opacity-40 blur-md motion-safe:animate-pulse" />
         {/* sheen sweep on hover */}
         <span aria-hidden className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full" />
-        {/* Icon-only (owner, 2026-07-22): "Log in" text + trailing arrow removed to
-            leave just the fingerprint, which reads as "sign in" on its own. The
-            aria-label + title keep it accessible to screen readers and legible on
-            hover. Same passwordless flow — also where a new account is created. */}
-        <Fingerprint className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
+        {/*
+          Owner (2026-08-04): "remove the fingerprint button from the top of the
+          landing page header."
+
+          The word replaces the mark rather than the button disappearing: this
+          is the ONLY way into an account from the desktop header (the menu that
+          also offers login is `lg:hidden`), so deleting it outright would leave
+          a signed-out visitor on a laptop with no visible way to sign in. A
+          fingerprint also over-promised — it suggests biometric sign-in, while
+          the flow is a one-time email code.
+        */}
+        <span className="relative">Log in</span>
       </Link>
     );
   }

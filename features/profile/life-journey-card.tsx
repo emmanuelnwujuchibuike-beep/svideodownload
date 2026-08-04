@@ -25,7 +25,7 @@ const ICONS: Record<JourneyEntry["iconKey"], LucideIcon> = {
  */
 export function LifeJourneyCard({ entries }: { entries: JourneyEntry[] }) {
   return (
-    <section className="rounded-3xl border border-border/70 bg-card p-5 shadow-sm sm:p-6">
+    <section className="lux-card p-5 sm:p-6">
       <div className="mb-5 flex items-center gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-tile text-white shadow-sm">
           <Sparkles className="h-[18px] w-[18px]" />

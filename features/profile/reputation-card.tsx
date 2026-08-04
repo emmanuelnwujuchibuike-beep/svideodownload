@@ -22,7 +22,7 @@ export function ReputationCard({ reputation }: { reputation: Reputation }) {
   const gradId = `rep-${rank.key}`;
 
   return (
-    <section className="rounded-3xl border border-border/70 bg-card p-5 shadow-sm">
+    <section className="lux-card p-5">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-base font-bold">Reputation</h2>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-bold text-muted-foreground">

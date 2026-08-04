@@ -1,5 +1,3 @@
-import { BadgeCheck } from "lucide-react";
-
 import type { BillingPlan } from "@/lib/monetization/types";
 import { cn } from "@/lib/utils";
 
@@ -7,29 +5,28 @@ import { cn } from "@/lib/utils";
  * Plan status badge — the platform-wide premium marker. Drop it next to any
  * username, profile, post, comment, reel or business page.
  *
- * ── Shape and colour (owner, 2026-08-04) ──────────────────────────────────
- * "Reduce the size of the pro and business badge, make the badge like a tick
- * like Snapchat rather than a long flat badge... also the rectangle badge that
- * says pro and business... make it to be like a tick but a different colour
- * and not the blue verified tick."
+ * ── Shape, glyph AND colour (owner, 2026-08-04) ───────────────────────────
+ * The brief arrived in three passes: make it small like a tick rather than a
+ * long flat pill; make it a different colour from the blue verified tick;
+ * then — "let the pro and business tick be different and unique from the
+ * verified tick not just by color."
  *
- * So it is now the same scalloped seal as the verification tick, at the same
- * rhythm beside a name, in a colour that is unmistakably NOT the verified
- * blue:
+ * That last one is the right instinct, and not only aesthetically. A marker
+ * distinguished by colour alone is invisible to roughly one man in twelve, and
+ * a gold check beside a blue check at 18px is a coin toss for everyone else.
+ * So these differ on three independent channels:
  *
- *   business → gold. The top tier, and the one colour nothing else on a
- *              profile uses.
- *   pro      → royal violet (#6D5CFF, the brand's secondary). Distinct from
- *              the verified blue at a glance, and it belongs to the palette
- *              rather than being a colour picked to be different.
- *   free     → renders nothing.
+ *   verified → scalloped seal + CHECK  + blue   (lucide BadgeCheck, untouched)
+ *   pro      → HEXAGON        + CROWN  + black
+ *   business → DIAMOND        + FACET  + gold
  *
- * Emerald was avoided deliberately: it is the online-presence colour on the
- * avatar ring, and two green marks a centimetre apart meaning different things
- * is exactly the confusion this badge is supposed to remove.
+ * Silhouette does the work at a glance — a hexagon and a diamond read as
+ * different objects from a scalloped circle even at 15px, in greyscale, and
+ * out of the corner of your eye. Colour and glyph then confirm it.
  *
- * Colour is never the ONLY carrier — `title` and `aria-label` both name the
- * tier, so dropping the visible word costs a screen reader nothing.
+ * Drawn inline rather than pulled from an icon set because no icon set has a
+ * crowned hexagon; two hand-written paths are smaller than the alternative and
+ * cost no dependency.
  *
  * Pure + presentational so it is safe in server OR client trees. For the
  * current viewer's badge, pair with `useEntitlements()` (see
@@ -61,32 +58,14 @@ export function DiamondCrownBadge({
         ? { seal: "h-[18px] w-[18px]", text: "text-[11px]" }
         : { seal: "h-[15px] w-[15px]", text: "text-[10px]" };
 
-  /*
-    Black and gold (owner, 2026-08-04). Business is the gold seal; Pro is the
-    black one.
-
-    The black seal INVERTS in dark mode — a #111827 badge on a #0B1020 card is
-    a badge nobody can see, so it becomes a white seal with a dark tick. Gold
-    needs no inversion: it clears contrast on both surfaces.
-  */
   const tone = business
-    ? {
-        fill: "fill-amber-500",
-        glyph: "text-white",
-        label: "Business",
-        title: "Business account",
-        text: "text-amber-600 dark:text-amber-400",
-      }
-    : {
-        fill: "fill-[#111827] dark:fill-white",
-        glyph: "text-white dark:text-[#111827]",
-        label: "Pro",
-        title: "Pro member",
-        text: "text-[#111827] dark:text-white",
-      };
+    ? { label: "Business", title: "Business account", text: "text-amber-600 dark:text-amber-400" }
+    : { label: "Pro", title: "Pro member", text: "text-[#111827] dark:text-white" };
 
-  const seal = (
-    <BadgeCheck aria-hidden className={cn("shrink-0 drop-shadow-sm", tone.fill, tone.glyph, dims.seal)} />
+  const seal = business ? (
+    <BusinessDiamond className={dims.seal} />
+  ) : (
+    <ProHexagon className={dims.seal} />
   );
 
   if (showLabel) {
@@ -106,5 +85,46 @@ export function DiamondCrownBadge({
     <span title={tone.title} aria-label={tone.title} className={cn("inline-flex shrink-0", className)}>
       {seal}
     </span>
+  );
+}
+
+/**
+ * Pro — a black hexagonal seal with a crown.
+ *
+ * The fill inverts in dark mode: #111827 on a #0B1020 card is a badge nobody
+ * can see. Gold needs no inversion, which is why only this one carries the
+ * `dark:` pair.
+ */
+function ProHexagon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={cn("shrink-0 drop-shadow-sm", className)}>
+      <path d="M12 1.6 21 6.8v10.4L12 22.4 3 17.2V6.8z" className="fill-[#111827] dark:fill-white" />
+      {/* Crown: three peaks over a base bar. Simplified hard for legibility at 15px. */}
+      <path
+        d="M7.2 14.6 6 8.4l3.1 2.3L12 7l2.9 3.7 3.1-2.3-1.2 6.2z"
+        className="fill-white dark:fill-[#111827]"
+      />
+      <rect x="7.2" y="15.4" width="9.6" height="1.7" rx="0.85" className="fill-white dark:fill-[#111827]" />
+    </svg>
+  );
+}
+
+/** Business — a gold diamond seal with an inner facet. */
+function BusinessDiamond({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={cn("shrink-0 drop-shadow-sm", className)}>
+      <defs>
+        <linearGradient id="frenz-biz-seal" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#FCD34D" />
+          <stop offset="55%" stopColor="#F59E0B" />
+          <stop offset="100%" stopColor="#D97706" />
+        </linearGradient>
+      </defs>
+      <path d="M12 1.4 22.6 12 12 22.6 1.4 12z" fill="url(#frenz-biz-seal)" />
+      {/* The facet — an inner outline plus a girdle line, which is what makes a
+          diamond read as cut stone rather than as a rotated square. */}
+      <path d="M12 5.6 18.4 12 12 18.4 5.6 12z" fill="none" stroke="#fff" strokeOpacity="0.9" strokeWidth="1.5" />
+      <path d="M5.6 12h12.8" stroke="#fff" strokeOpacity="0.55" strokeWidth="1.1" />
+    </svg>
   );
 }

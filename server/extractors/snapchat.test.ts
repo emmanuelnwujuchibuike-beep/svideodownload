@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { collectSnaps, isCollectionUrl, stripSnapWatermark } from "./snapchat";
+import { collectSnaps, dedupeSnaps, isCollectionUrl, stripSnapWatermark } from "./snapchat";
 
 /**
  * Snapchat Spotlight watermark removal.
@@ -155,5 +155,87 @@ describe("isCollectionUrl", () => {
 
   it("treats a single Spotlight clip as one item", () => {
     expect(isCollectionUrl("https://www.snapchat.com/spotlight/W7_EDlXWTBiXAEEniNoMPw")).toBe(false);
+  });
+});
+
+/**
+ * The duplication regression (owner, 2026-08-04).
+ *
+ * A normal story link started returning every snap many times over — one snap
+ * showed as 12 items, six showed as 72. Snapchat re-saves story snaps into
+ * highlight folders, so merging `story.snapList` with EVERY entry of
+ * `curatedHighlights` multiplies the story by the number of folders.
+ *
+ * These pin both halves of the rule, because fixing one by breaking the other
+ * is exactly how this happened the first time.
+ */
+describe("dedupeSnaps", () => {
+  const snap = (id: string, url = `https://cf-st.sc-cdn.net/d/${id}.mp4`) => ({
+    snapId: id,
+    snapUrls: { mediaUrl: url },
+  });
+
+  it("keeps distinct snaps in order", () => {
+    const out = dedupeSnaps([snap("a"), snap("b"), snap("c")]);
+    expect(out.map((s) => s.snapId)).toEqual(["a", "b", "c"]);
+  });
+
+  it("drops a repeat of the same snapId", () => {
+    expect(dedupeSnaps([snap("a"), snap("a"), snap("b")]).map((s) => s.snapId)).toEqual(["a", "b"]);
+  });
+
+  // The signed-URL case: the same snap arrives twice with different query
+  // strings, so keying on the whole URL de-duplicates nothing.
+  it("drops a repeat whose signed URL differs but whose path does not", () => {
+    const a = { snapUrls: { mediaUrl: "https://cf-st.sc-cdn.net/d/x.mp4?sig=111&exp=1" } };
+    const b = { snapUrls: { mediaUrl: "https://cf-st.sc-cdn.net/d/x.mp4?sig=222&exp=2" } };
+    expect(dedupeSnaps([a, b])).toHaveLength(1);
+  });
+
+  it("keeps two genuinely different snaps that share a host", () => {
+    const a = { snapUrls: { mediaUrl: "https://cf-st.sc-cdn.net/d/x.mp4?sig=1" } };
+    const b = { snapUrls: { mediaUrl: "https://cf-st.sc-cdn.net/d/y.mp4?sig=1" } };
+    expect(dedupeSnaps([a, b])).toHaveLength(2);
+  });
+
+  it("skips entries with no identity at all", () => {
+    expect(dedupeSnaps([{ snapUrls: {} }, { snapUrls: { mediaUrl: "" } }])).toHaveLength(0);
+  });
+
+  it("handles an empty list", () => {
+    expect(dedupeSnaps([])).toEqual([]);
+  });
+});
+
+describe("collectSnaps de-duplication (the 12x regression)", () => {
+  const withSig = (id: string, sig: number) => ({
+    snapId: id,
+    snapUrls: { mediaUrl: `https://cf-st.sc-cdn.net/d/${id}.mp4?sig=${sig}` },
+  });
+
+  it("counts a snap once however many containers hold it", () => {
+    // One story of 6 snaps, re-saved into 11 highlight folders — the exact
+    // shape that produced 72.
+    const story = Array.from({ length: 6 }, (_, i) => withSig(`snap${i}`, 0));
+    const highlights = Array.from({ length: 11 }, (_, folder) => ({
+      snapList: story.map((s) => withSig(s.snapId, folder + 1)),
+    }));
+    const blob = { props: { pageProps: { story: { snapList: story }, curatedHighlights: highlights } } };
+
+    expect(collectSnaps(blob)).toHaveLength(6);
+  });
+
+  it("still finds every snap of a genuine multi-folder page", () => {
+    const blob = {
+      props: {
+        pageProps: {
+          curatedHighlights: [
+            { snapList: [withSig("a", 1), withSig("b", 1)] },
+            { snapList: [withSig("c", 1)] },
+          ],
+        },
+      },
+    };
+    expect(collectSnaps(blob).map((s) => s.snapId)).toEqual(["a", "b", "c"]);
   });
 });

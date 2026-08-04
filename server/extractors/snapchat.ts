@@ -64,6 +64,34 @@ interface VideoMeta {
  * folder itself, say. Depth- and count-capped so a hostile or pathological page
  * cannot spin the server.
  */
+/**
+ * The identity of a snap, for de-duplication.
+ *
+ * `snapId` when there is one. Otherwise the media URL with its QUERY STRING
+ * STRIPPED — Snapchat's CDN links carry a signature and an expiry, so the same
+ * snap appearing twice in the blob can arrive with two different full URLs.
+ * Keying on the raw URL therefore de-duplicates nothing, which is how the same
+ * video reached the picker several times over.
+ */
+function snapKey(s: Snap): string {
+  if (typeof s.snapId === "string" && s.snapId) return s.snapId;
+  const url = s.snapUrls?.mediaUrl ?? "";
+  return url.split("?")[0] ?? url;
+}
+
+/** Drop repeats while preserving order. */
+export function dedupeSnaps(snaps: readonly Snap[]): Snap[] {
+  const seen = new Set<string>();
+  const out: Snap[] = [];
+  for (const s of snaps) {
+    const key = snapKey(s);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
 export function collectSnaps(root: unknown): Snap[] {
   const out: Snap[] = [];
   const seen = new Set<string>();
@@ -82,7 +110,7 @@ export function collectSnaps(root: unknown): Snap[] {
     const urls = obj.snapUrls as { mediaUrl?: unknown } | undefined;
     const mediaUrl = urls && typeof urls === "object" ? urls.mediaUrl : undefined;
     if (typeof mediaUrl === "string" && mediaUrl) {
-      const key = typeof obj.snapId === "string" && obj.snapId ? obj.snapId : mediaUrl;
+      const key = snapKey(obj as Snap);
       if (!seen.has(key)) {
         seen.add(key);
         out.push(obj as Snap);
@@ -297,20 +325,40 @@ export const snapchatExtractor: Extractor = {
         // identify it from the URL, return every snap so the user picks the
         // right one (instead of guessing and serving a random snap).
         if (!mediaUrl) {
-          // Known containers first (a live story, then EVERY highlight folder —
-          // not just the first, which silently ignored folders 2..n).
-          const known: Snap[] = [
-            ...(Array.isArray(pp.story?.snapList) ? pp.story!.snapList! : []),
-            ...(Array.isArray(pp.curatedHighlights)
+          /*
+            ── The live story and the highlight folders are NOT one list ──────
+            Owner (2026-08-04): a normal story started returning every snap
+            many times over — one snap showed as 12, six showed as 72.
+
+            The cause was merging `story.snapList` with EVERY entry of
+            `curatedHighlights`. Snapchat re-saves story snaps into highlight
+            folders, so a profile with a live story and eleven highlights
+            reports that story's snaps twelve times. The previous fix (read all
+            the folders instead of only the first) was right for a SAVED FOLDER
+            link and wrong for a plain story link, because it applied to both.
+
+            The two cases are now separated by what the page actually contains:
+            a live story wins when there is one, and the folders are only
+            consulted when there is not — which is precisely the saved-folder
+            page. Both lists are de-duplicated regardless, because the same snap
+            can appear twice inside one container with two signed URLs.
+          */
+          const storySnaps = (Array.isArray(pp.story?.snapList) ? pp.story!.snapList! : []).filter(
+            (s) => s?.snapUrls?.mediaUrl,
+          );
+          const highlightSnaps = (
+            Array.isArray(pp.curatedHighlights)
               ? pp.curatedHighlights.flatMap((h) => (Array.isArray(h?.snapList) ? h.snapList : []))
-              : []),
-          ].filter((s) => s?.snapUrls?.mediaUrl);
+              : []
+          ).filter((s) => s?.snapUrls?.mediaUrl);
+
+          const known = dedupeSnaps(storySnaps.length > 0 ? storySnaps : highlightSnaps);
 
           // Fall back to a deep walk when the known shapes yield nothing usable.
           // A SAVED story folder on a profile lives somewhere we don't have a
           // name for, and finding one snap is indistinguishable from finding the
           // folder's first snap — so re-scan whenever we have 0 or 1.
-          const snaps = known.length > 1 ? known : collectSnaps(data);
+          const snaps = known.length > 1 ? known : dedupeSnaps(collectSnaps(data));
 
           if (snaps.length) {
             // Only narrow to a single snap when the link actually addresses one.
@@ -343,8 +391,12 @@ export const snapchatExtractor: Extractor = {
       const push = (raw: string | undefined) => {
         if (!raw) return;
         const clean = unescapeJsonUrl(raw);
-        if (!seen.has(clean)) {
-          seen.add(clean);
+        // Keyed on the PATH, not the whole URL: the CDN signs these links, so
+        // the same snap can appear twice with different query strings and would
+        // otherwise be downloaded twice.
+        const key = clean.split("?")[0] ?? clean;
+        if (!seen.has(key)) {
+          seen.add(key);
           found.push(clean);
         }
       };

@@ -33,8 +33,10 @@ import type { BillingPlan } from "@/lib/monetization/types";
 import { effectiveModules } from "@/lib/profile/engine";
 import { BAND_LABEL } from "@/lib/profile/health";
 import { profileType } from "@/lib/profile/profile-types";
+import { profileTheme } from "@/lib/profile/theme";
 import { getProfileHealth } from "@/lib/social/profile-health";
 import { getOwnProfile } from "@/lib/social/profile";
+import { getProfileAppearance } from "@/lib/social/profile-appearance";
 import { getProfileIdentity, getProfileModules } from "@/lib/social/profile-platform";
 import { getVerificationState, verificationSummary } from "@/lib/social/verification";
 import { createClient } from "@/lib/supabase/server";
@@ -84,6 +86,10 @@ export default async function AccountPage() {
   const onCount = effectiveModules(identity.type, storedModules).filter((m) => m.enabled).length;
   const sectionsSub = `${onCount} section${onCount === 1 ? "" : "s"} on your profile`;
 
+  // Layout Studio (Part 16) — the row names the theme actually in use.
+  const appearance = await getProfileAppearance(user.id);
+  const themeSub = `${profileTheme(appearance.theme).label} theme · cards, corners & text`;
+
   // Profile Intelligence (Part 15) — the settings row carries the real score, so
   // a member can see where they stand without opening anything.
   const health = await getProfileHealth(user);
@@ -124,6 +130,7 @@ export default async function AccountPage() {
         { href: "/account/health", Icon: ShieldCheck, title: "Profile health", sub: healthSub, tint: "emerald" },
         { href: "/account/profile-type", Icon: Layers, title: "Profile type", sub: `${typeSpec.label} · ${typeLabelSuffix}`, tint: "violet" },
         { href: "/account/modules", Icon: LayoutGrid, title: "Sections", sub: sectionsSub, tint: "blue" },
+        { href: "/account/layout-studio", Icon: Palette, title: "Layout Studio", sub: themeSub, tint: "purple" },
         { href: "/account/business", Icon: Store, title: "Business", sub: "Overview, contact, hours & catalogue", tint: "emerald" },
         { href: "/account/professional", Icon: Briefcase, title: "Professional", sub: "Portfolio, experience & credentials", tint: "amber" },
       ],

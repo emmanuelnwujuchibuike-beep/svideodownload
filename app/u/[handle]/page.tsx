@@ -35,9 +35,11 @@ import { IdentityMedia } from "@/features/profile/identity-media";
 import { IdentityMediaViewer } from "@/features/profile/identity-media-viewer";
 import { computeReputation } from "@/lib/social/reputation";
 import type { ProfileHealth } from "@/lib/profile/health";
+import { resolveProfileTheme } from "@/lib/profile/theme";
+import { getProfileAppearance } from "@/lib/social/profile-appearance";
 import { getProfileHealth } from "@/lib/social/profile-health";
 import { computeAchievements, earnedCount } from "@/lib/social/achievements";
-import { resolveViewerRole, type ViewerRole } from "@/lib/profile/audience";
+import { isPreviewableRole, resolveViewerRole, type ViewerRole } from "@/lib/profile/audience";
 import type { StoredModule } from "@/lib/profile/engine";
 import type { ModuleKey } from "@/lib/profile/modules";
 import { isCommercialType, profileType, type ProfileTypeKey } from "@/lib/profile/profile-types";
@@ -271,9 +273,9 @@ export default async function ProfilePage({
   searchParams,
 }: {
   params: Promise<{ handle: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; preview?: string }>;
 }) {
-  const [{ handle }, { tab }] = await Promise.all([params, searchParams]);
+  const [{ handle }, { tab, preview }] = await Promise.all([params, searchParams]);
   const me = await viewerId();
   const profile = await getPublicProfile(handle, me);
   if (!profile) notFound();
@@ -352,13 +354,32 @@ export default async function ProfilePage({
   // relationships, never claimed. `isAdmin` is deliberately not resolved here:
   // moderators get no elevated access to a member's sections (see audience.ts),
   // so establishing it would cost a query and change nothing.
-  const viewerRole = resolveViewerRole({
+  const realRole = resolveViewerRole({
     viewerId: me,
     isOwner: profile.isOwner,
     isAdmin: false,
     isFriend: friendState === "friends",
     isFollowing: profile.isFollowing,
   });
+
+  /*
+    Profile Preview (Part 16). `?preview=<role>` renders your OWN profile as
+    someone else sees it, by feeding the role into the real resolver rather than
+    simulating anything — so the preview cannot drift from what a visitor gets.
+
+    It only applies to the owner, and only for `PREVIEWABLE_ROLES` (which
+    excludes owner and admin), so it can only ever REDUCE what is rendered.
+    There is no value of `?preview=` that reveals more than the viewer is
+    already entitled to, which is what keeps it out of the access-control story.
+  */
+  const previewRole =
+    profile.isOwner && preview && isPreviewableRole(preview) ? (preview as ViewerRole) : null;
+  const viewerRole = previewRole ?? realRole;
+
+  // The member's Layout Studio theme (Part 16, migration 0109) — read
+  // fail-closed, so before 0109 applies every profile renders the default.
+  const appearance = await getProfileAppearance(profile.id);
+  const theme = resolveProfileTheme({ ...appearance, accent: accentHex(profileExtras.accent) });
 
   // Reposts / Wows / Saved keep answering to their OWN per-tab privacy setting
   // (Repost spec §7). The engine may narrow them further, never widen them.
@@ -440,7 +461,7 @@ export default async function ProfilePage({
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
         {/* No fixed top bar on mobile any more (owner) — the cover runs edge to
             edge under the status bar and its controls float over it. */}
-        <main className="pb-24 pt-0 lg:pt-4">
+        <main className="frenz-profile-scale pb-24 pt-0 lg:pt-4" style={theme.vars as React.CSSProperties}>
           {/* `frenz-profile-shell/cols/rail` (globals.css) put the rail beside
               the center only when the wrapper's OWN width — inside the app
               sidebar — passes 62rem, so it never clips on a laptop. */}
@@ -655,6 +676,8 @@ export default async function ProfilePage({
                       website={profile.website}
                       joined={joined}
                       collectionsCount={collectionsN}
+                      ownerViewing={profile.isOwner}
+                      previewRole={previewRole}
                     />
                   </Suspense>
                 </div>
@@ -693,7 +716,7 @@ export default async function ProfilePage({
           rule sitting across the top of the cover; the +person button floated
           over the artwork beside the avatar. Both are gone, and the cover is
           genuinely edge to edge. Desktop chrome comes from the app shell. */}
-      <main className="pb-24 pt-0 lg:pt-4">
+      <main className="frenz-profile-scale pb-24 pt-0 lg:pt-4" style={theme.vars as React.CSSProperties}>
         <div className="mx-auto flex w-full max-w-6xl gap-6">
           <div className="mx-auto min-w-0 max-w-4xl flex-1 sm:px-4">
           {/* Hero — cover + glass Identity Card + Identity Presence™ (Profile Header · Part 2).
@@ -1007,6 +1030,8 @@ export default async function ProfilePage({
                     website={profile.website}
                     joined={joined}
                     collectionsCount={collectionsN}
+                      ownerViewing={profile.isOwner}
+                      previewRole={previewRole}
                   />
                 </Suspense>
               </div>
@@ -1047,6 +1072,8 @@ async function ProfileSectionsLoader({
   website,
   joined,
   collectionsCount,
+  ownerViewing,
+  previewRole,
 }: {
   profileId: string;
   handle: string;
@@ -1065,6 +1092,8 @@ async function ProfileSectionsLoader({
   website: string | null;
   joined: string;
   collectionsCount: number;
+  ownerViewing: boolean;
+  previewRole: ViewerRole | null;
 }) {
   const isOwner = role === "owner";
   // Only fetch a section's dataset when this viewer is allowed to see it — a
@@ -1103,6 +1132,8 @@ async function ProfileSectionsLoader({
       website={website}
       joined={joined}
       collectionsCount={collectionsCount}
+      ownerViewing={ownerViewing}
+      previewRole={previewRole}
       allowedGoverned={allowedGoverned}
     />
   );

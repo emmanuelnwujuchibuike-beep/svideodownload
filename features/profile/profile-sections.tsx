@@ -9,6 +9,7 @@ import {
   ShowcasePanel,
   SkillsPanel,
 } from "@/features/profile/module-panels";
+import { ProfilePreviewBar } from "@/features/profile/preview-bar";
 import { ProfileTabs, type ProfileSection } from "@/features/profile/profile-tabs";
 import type { ViewerRole } from "@/lib/profile/audience";
 import { resolveProfileLayout, type StoredModule } from "@/lib/profile/engine";
@@ -55,6 +56,8 @@ export function ProfileSections({
   website,
   joined,
   collectionsCount,
+  ownerViewing = false,
+  previewRole = null,
   allowedGoverned,
 }: {
   handle: string;
@@ -78,6 +81,10 @@ export function ProfileSections({
   joined: string;
   collectionsCount: number;
   allowedGoverned: ModuleKey[];
+  /** True when the REAL viewer owns this profile — shows the preview bar. */
+  ownerViewing?: boolean;
+  /** The role being previewed, if any (Part 16). */
+  previewRole?: ViewerRole | null;
 }) {
   const isOwner = role === "owner";
   const byKind = credentialsByKind(credentials);
@@ -129,7 +136,23 @@ export function ProfileSections({
     allowedGoverned,
   });
 
-  if (layout.modules.length === 0) return null;
+  // The preview bar is owner-only chrome and renders even when the previewed
+  // role can see NOTHING — that empty result is the single most useful thing
+  // the preview can tell you, so returning null here would hide the answer.
+  const previewBar = ownerViewing ? (
+    <ProfilePreviewBar handle={handle} active={previewRole} visibleCount={layout.modules.length} />
+  ) : null;
+
+  if (layout.modules.length === 0) {
+    return previewBar ? (
+      <>
+        {previewBar}
+        <p className="rounded-2xl border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
+          Nothing on your profile is visible to {previewRole ? "this audience" : "anyone"} yet.
+        </p>
+      </>
+    ) : null;
+  }
 
   const sections: ProfileSection[] = layout.modules.map((m) => ({
     key: m.key,
@@ -175,18 +198,21 @@ export function ProfileSections({
   const active = initialTab && visible.has(initialTab as ModuleKey) ? initialTab : (layout.landing ?? sections[0]!.key);
 
   return (
-    <ProfileTabs
-      handle={handle}
-      ownerId={profileId}
-      isOwner={isOwner}
-      sections={sections}
-      initialTab={active}
-      initialView={initialView}
-      posts={posts}
-      liked={liked}
-      saved={saved}
-      reposted={reposted}
-      panels={panels}
-    />
+    <>
+      {previewBar}
+      <ProfileTabs
+        handle={handle}
+        ownerId={profileId}
+        isOwner={isOwner}
+        sections={sections}
+        initialTab={active}
+        initialView={initialView}
+        posts={posts}
+        liked={liked}
+        saved={saved}
+        reposted={reposted}
+        panels={panels}
+      />
+    </>
   );
 }

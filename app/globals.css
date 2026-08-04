@@ -883,3 +883,42 @@
   .frenz-profile-cols { flex-direction: row; }
   .frenz-profile-rail { width: 340px; flex: 0 0 340px; }
 }
+
+/* ── Profile Layout Studio™ (Feature 18 · Part 16) ─────────────────────────
+   The theme resolves to CSS custom properties on the profile's <main>
+   (lib/profile/theme.ts). These are the only rules that consume them, so a
+   theme change is a style recalculation — no re-render, no re-fetch — and it
+   cannot leak into the app chrome outside that subtree.
+
+   Every property falls back to today's appearance, so a profile with no stored
+   theme (or one loaded before migration 0109 is applied) renders exactly as it
+   did before. */
+.frenz-themed-card {
+  background: var(--frenz-profile-card-bg, hsl(var(--card)));
+  border: var(--frenz-profile-card-border, 1px solid hsl(var(--border) / 0.7));
+  box-shadow: var(--frenz-profile-card-shadow, 0 1px 2px hsl(229 55% 3% / 0.06));
+  border-radius: var(--frenz-profile-radius, 1.5rem);
+  /* Resolves to `none` on every surface except Glass — see SURFACE_VARS. */
+  backdrop-filter: var(--frenz-profile-card-blur, none);
+}
+
+/* Text scale.
+
+   Tailwind's size utilities are in `rem`, which is relative to the ROOT — so
+   setting font-size on a wrapper alone would do nothing to them. Re-declaring
+   the handful of sizes the profile actually uses in `em` makes them relative to
+   the scope instead, which is what lets one variable scale the whole section
+   proportionally.
+
+   `em` and not a transform: scaling a container with `transform` blurs text on
+   non-integer ratios and breaks hit targets. This reflows properly.
+
+   It stays multiplicative with the reader's own OS text size, because the base
+   is still 1rem — someone using Dynamic Type keeps it. */
+.frenz-profile-scale {
+  font-size: calc(1rem * var(--frenz-profile-font-scale, 1));
+}
+.frenz-profile-scale .text-xs { font-size: 0.75em; line-height: 1.4; }
+.frenz-profile-scale .text-sm { font-size: 0.875em; line-height: 1.45; }
+.frenz-profile-scale .text-base { font-size: 1em; line-height: 1.5; }
+.frenz-profile-scale .text-lg { font-size: 1.125em; line-height: 1.45; }

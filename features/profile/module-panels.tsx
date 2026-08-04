@@ -42,7 +42,7 @@ import {
  * window a reference back to this page.
  */
 
-const CARD = "rounded-3xl border border-border/70 bg-card p-5 shadow-sm";
+const CARD = "frenz-themed-card p-5";
 const EMPTY = "rounded-2xl border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground";
 
 const KIND_META: Record<CredentialKind, { label: string; icon: LucideIcon }> = {

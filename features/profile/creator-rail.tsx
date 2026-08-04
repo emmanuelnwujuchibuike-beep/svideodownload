@@ -20,12 +20,14 @@ import { CreatorActivity } from "@/features/profile/creator-activity";
 import { IdentityAnalytics, type IdentityAnalyticsData, type TopContent } from "@/features/profile/identity-analytics";
 import { LifeJourneyCard } from "@/features/profile/life-journey-card";
 import { PrivateJournalCard } from "@/features/profile/private-journal-card";
+import { HealthCard } from "@/features/profile/health-card";
 import { ReputationCard } from "@/features/profile/reputation-card";
 import { TimeCapsuleCard } from "@/features/profile/time-capsule-card";
 import type { ActivityRow } from "@/features/profile/activity-map";
 import type { EarnedAchievement } from "@/lib/social/achievements";
 import type { JournalEntry } from "@/lib/social/journal";
 import type { JourneyEntry } from "@/lib/social/life-journey";
+import type { ProfileHealth } from "@/lib/profile/health";
 import type { Reputation } from "@/lib/social/reputation";
 import type { TimeCapsule } from "@/lib/social/time-capsules";
 import { cn } from "@/lib/utils";
@@ -58,6 +60,8 @@ export interface CreatorRailProps {
   topContent?: TopContent | null;
   /** The owner's derived Reputation (rank, trust index, progress). */
   reputation?: Reputation;
+  /** Profile Health Score (Part 15) — owner-only, never shown to a visitor. */
+  health?: ProfileHealth;
   /** The owner's Life Journey™ — real dated milestones + current-state highlights. */
   journey?: JourneyEntry[];
   /** The owner's real, persisted Time Capsules (locked ones carry no message). */
@@ -117,6 +121,7 @@ export function CreatorRail({
   analytics,
   topContent = null,
   reputation,
+  health,
   journey,
   timeCapsules,
   journalEntries,
@@ -151,6 +156,11 @@ export function CreatorRail({
           <ThemeToggle />
         </div>
       </Card>
+
+      {/* Profile Health™ (Part 15) — the owner's own score and the one thing
+          worth doing next. Above Reputation on purpose: reputation describes
+          where you stand, health tells you what to DO. */}
+      {health ? <HealthCard health={health} /> : null}
 
       {/* Reputation™ — derived rank, trust index + progress toward next rank */}
       {reputation ? <ReputationCard reputation={reputation} /> : null}

@@ -34,6 +34,8 @@ import { accentHex, getPrivacySettings, getProfileExtras, getProfileMedia, getPu
 import { IdentityMedia } from "@/features/profile/identity-media";
 import { IdentityMediaViewer } from "@/features/profile/identity-media-viewer";
 import { computeReputation } from "@/lib/social/reputation";
+import type { ProfileHealth } from "@/lib/profile/health";
+import { getProfileHealth } from "@/lib/social/profile-health";
 import { computeAchievements, earnedCount } from "@/lib/social/achievements";
 import { resolveViewerRole, type ViewerRole } from "@/lib/profile/audience";
 import type { StoredModule } from "@/lib/profile/engine";
@@ -57,6 +59,27 @@ import { createClient } from "@/lib/supabase/server";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * The signed-in member's own Profile Health (Part 15).
+ *
+ * Deliberately re-reads the session user rather than taking an id: the health
+ * score depends on auth-only facts (email confirmation, verified MFA factors)
+ * that live on the session and cannot be derived from a profile row. Returns
+ * undefined on any failure — the rail simply drops the card.
+ */
+async function ownerHealth(): Promise<ProfileHealth | undefined> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return undefined;
+    return await getProfileHealth(user);
+  } catch {
+    return undefined;
+  }
+}
 
 async function viewerId(): Promise<string | null> {
   try {
@@ -379,12 +402,17 @@ export default async function ProfilePage({
   // Creator Tools · Achievements · Top Friends · Recent Activity). Everything is
   // the viewer's REAL data; tools without a backend announce "coming soon".
   if (profile.isOwner) {
-    const [friends, notifs, firstPost, timeCapsules, journalEntries] = await Promise.all([
+    const [friends, notifs, firstPost, timeCapsules, journalEntries, health] = await Promise.all([
       topFriends(profile.id),
       listNotifications(profile.id, 12),
       firstPublishedPost(profile.id),
       getTimeCapsules(profile.id),
       getJournalEntries(profile.id),
+      // Profile Health (Part 15) — owner-only, and computed from the SESSION
+      // user so the auth-only signals (email confirmation, MFA factors) are
+      // real. Never computed for a visitor: a health score is nobody else's
+      // business, and it would leak whether an account has 2FA turned on.
+      ownerHealth(),
     ]);
     const activity = notificationsToActivity(notifs.items);
     // `totals`, `accountAgeDays`, `reputation`, `achievements` and `joined` are
@@ -645,6 +673,7 @@ export default async function ProfilePage({
                 topContent={totals.topPost}
                 reputation={reputation}
                 journey={journey}
+                health={health}
                 timeCapsules={timeCapsules}
                 journalEntries={journalEntries}
               />

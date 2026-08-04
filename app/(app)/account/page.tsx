@@ -31,7 +31,9 @@ import { AppContent } from "@/features/app-shell/app-content";
 import { isAdmin } from "@/lib/admin";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { effectiveModules } from "@/lib/profile/engine";
+import { BAND_LABEL } from "@/lib/profile/health";
 import { profileType } from "@/lib/profile/profile-types";
+import { getProfileHealth } from "@/lib/social/profile-health";
 import { getOwnProfile } from "@/lib/social/profile";
 import { getProfileIdentity, getProfileModules } from "@/lib/social/profile-platform";
 import { getVerificationState, verificationSummary } from "@/lib/social/verification";
@@ -82,6 +84,14 @@ export default async function AccountPage() {
   const onCount = effectiveModules(identity.type, storedModules).filter((m) => m.enabled).length;
   const sectionsSub = `${onCount} section${onCount === 1 ? "" : "s"} on your profile`;
 
+  // Profile Intelligence (Part 15) — the settings row carries the real score, so
+  // a member can see where they stand without opening anything.
+  const health = await getProfileHealth(user);
+  const healthSub =
+    health.recommendations.length === 0
+      ? `${health.score}/100 · ${BAND_LABEL[health.band]}`
+      : `${health.score}/100 · ${health.recommendations.length} suggestion${health.recommendations.length === 1 ? "" : "s"}`;
+
   const planActive = sub?.status === "active" || sub?.status === "trialing";
   const plan = (planActive ? sub?.plan : "free") ?? "free";
   const planLabel = plan === "business" ? "Business" : plan === "pro" ? "Pro" : "Free";
@@ -111,6 +121,7 @@ export default async function AccountPage() {
       // what their profile is without opening anything.
       heading: "Profile platform",
       items: [
+        { href: "/account/health", Icon: ShieldCheck, title: "Profile health", sub: healthSub, tint: "emerald" },
         { href: "/account/profile-type", Icon: Layers, title: "Profile type", sub: `${typeSpec.label} · ${typeLabelSuffix}`, tint: "violet" },
         { href: "/account/modules", Icon: LayoutGrid, title: "Sections", sub: sectionsSub, tint: "blue" },
         { href: "/account/business", Icon: Store, title: "Business", sub: "Overview, contact, hours & catalogue", tint: "emerald" },

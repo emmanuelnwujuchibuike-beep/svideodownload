@@ -66,8 +66,11 @@ export function GhostModePanel({ initial }: { initial: GhostState }) {
       }
       if (writes.presence) {
         try {
+          // PATCH, not POST. The route exports PATCH only, so a POST was a
+          // 405 that this code dutifully reported as a failure and reverted —
+          // which is why the online-status switch would not stay on.
           const res = await fetch("/api/presence-status", {
-            method: "POST",
+            method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ status: writes.presence }),
           });

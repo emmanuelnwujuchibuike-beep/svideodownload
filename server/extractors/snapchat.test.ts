@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { collectSnaps, dedupeSnaps, isCollectionUrl, stripSnapWatermark } from "./snapchat";
+import {
+  chooseSnapGroup,
+  collectSnapGroups,
+  collectSnaps,
+  dedupeSnaps,
+  isCollectionUrl,
+  stripSnapWatermark,
+} from "./snapchat";
 
 /**
  * Snapchat Spotlight watermark removal.
@@ -298,5 +305,117 @@ describe("the story a link points at wins over the profile's archive", () => {
 
   it("carries a per-snap poster through", () => {
     expect(dedupeSnaps([snap("x")])[0]!.snapUrls!.mediaPreviewUrl).toContain("/p/x.jpg");
+  });
+});
+
+
+/**
+ * ── The bug that came back three times ────────────────────────────────────
+ * A 24-hour story link kept returning the account's SAVED profile stories.
+ * Every earlier fix read a fixed key and, when the page did not use it, fell
+ * through to a walk that FLATTENED every snap on the page.
+ *
+ * Flattening was the bug. These tests pin the property that makes it
+ * impossible to recur: the page's lists are kept SEPARATE, and exactly one is
+ * ever chosen — so a result can never contain snaps from two containers,
+ * whatever key names Snapchat uses next.
+ */
+describe("snap groups", () => {
+  const snap = (id: string) => ({
+    snapId: id,
+    snapUrls: { mediaUrl: `https://cf-st.sc-cdn.net/d/${id}.mp4`, mediaPreviewUrl: `https://cf-st.sc-cdn.net/p/${id}.jpg` },
+  });
+
+  const page = {
+    props: {
+      pageProps: {
+        story: { storyId: "live-1", snapList: [snap("live_a"), snap("live_b")] },
+        curatedHighlights: [
+          { highlightId: "obsession", title: "My Obsession", snapList: [snap("saved_a"), snap("saved_b"), snap("saved_c")] },
+          { highlightId: "trips", title: "Trips", snapList: [snap("trip_a")] },
+        ],
+      },
+    },
+  };
+
+  it("keeps each list separate instead of flattening them", () => {
+    const groups = collectSnapGroups(page);
+    expect(groups).toHaveLength(3);
+    expect(groups.map((g) => g.snaps.length).sort()).toEqual([1, 2, 3]);
+  });
+
+  it("labels the live story and the saved folders", () => {
+    const groups = collectSnapGroups(page);
+    expect(groups.filter((g) => g.isLiveStory)).toHaveLength(1);
+    expect(groups.filter((g) => g.isHighlight)).toHaveLength(2);
+  });
+
+  it("records the container ids so a folder link can be matched", () => {
+    const folder = collectSnapGroups(page).find((g) => g.ids.includes("obsession"));
+    expect(folder).toBeDefined();
+    expect(folder!.snaps).toHaveLength(3);
+  });
+
+  // Link 1 — a plain 24h story share.
+  it("a share link with no folder in it picks the LIVE story, not the archive", () => {
+    const choice = chooseSnapGroup(collectSnapGroups(page), ["https://snapchat.com/t/ErbU9eX5"]);
+    expect(choice!.reason).toBe("live-story");
+    expect(choice!.group.snaps.map((s) => s.snapId)).toEqual(["live_a", "live_b"]);
+    // The decisive assertion: nothing saved leaks in.
+    expect(choice!.group.snaps.some((s) => s.snapId!.startsWith("saved"))).toBe(false);
+  });
+
+  // Link 2 — a saved profile-story folder.
+  it("a link naming a folder picks that folder", () => {
+    const choice = chooseSnapGroup(collectSnapGroups(page), ["https://www.snapchat.com/@emily/obsession"]);
+    expect(choice!.reason).toBe("container-id");
+    expect(choice!.group.snaps).toHaveLength(3);
+    expect(choice!.snap).toBeNull();
+  });
+
+  it("a link naming one snap narrows to that snap", () => {
+    const choice = chooseSnapGroup(collectSnapGroups(page), ["https://www.snapchat.com/p/xyz/saved_b"]);
+    expect(choice!.reason).toBe("snap-id");
+    expect(choice!.snap!.snapId).toBe("saved_b");
+  });
+
+  it("returns the only list when a page has just one", () => {
+    const single = { props: { pageProps: { story: { snapList: [snap("only")] } } } };
+    const choice = chooseSnapGroup(collectSnapGroups(single), ["https://snapchat.com/t/abc"]);
+    expect(choice!.reason).toBe("only-group");
+    expect(choice!.group.snaps).toHaveLength(1);
+  });
+
+  it("finds a list under a key we have never seen", () => {
+    const unknownShape = { props: { pageProps: { somethingNew: { items: [snap("x"), snap("y")] } } } };
+    const groups = collectSnapGroups(unknownShape);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.snaps).toHaveLength(2);
+  });
+
+  it("falls back to the first list rather than merging", () => {
+    const twoUnknown = {
+      props: { pageProps: { a: { items: [snap("a1")] }, b: { items: [snap("b1")] } } },
+    };
+    const choice = chooseSnapGroup(collectSnapGroups(twoUnknown), ["https://snapchat.com/t/zzz"]);
+    expect(choice!.reason).toBe("first");
+    expect(choice!.group.snaps).toHaveLength(1);
+  });
+
+  it("de-duplicates within a list", () => {
+    const dupes = { props: { pageProps: { story: { snapList: [snap("a"), snap("a"), snap("b")] } } } };
+    expect(collectSnapGroups(dupes)[0]!.snaps).toHaveLength(2);
+  });
+
+  it("returns nothing for a page with no snaps", () => {
+    expect(collectSnapGroups({ props: { pageProps: {} } })).toEqual([]);
+    expect(chooseSnapGroup([], ["https://snapchat.com/t/abc"])).toBeNull();
+  });
+
+  it("survives junk and cycles", () => {
+    expect(() => collectSnapGroups(null)).not.toThrow();
+    const cyclic: Record<string, unknown> = { props: {} };
+    cyclic.self = cyclic;
+    expect(() => collectSnapGroups(cyclic)).not.toThrow();
   });
 });

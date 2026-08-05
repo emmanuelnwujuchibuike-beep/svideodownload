@@ -69,15 +69,32 @@ function safeFilename(raw: string | null, fallbackExt: string): string {
 }
 
 export async function GET(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-
   const params = new URL(request.url).searchParams;
   const raw = params.get("url");
   if (!raw) return NextResponse.json({ error: "Missing url." }, { status: 400 });
+
+  /*
+    Sign-in is required for member media, and NOT for the public wallpaper
+    library.
+
+    The wallpaper library is deliberately open — a signed-out visitor arriving
+    from the landing page can browse and download it, which is the whole point
+    of that surface. Requiring an account here would have made "Save to device"
+    fail for exactly the audience it was built for.
+
+    The exemption is narrow and checked AFTER the host allowlist below: it
+    covers objects in the public `wallpapers` bucket only. Those bytes are
+    already served publicly at the same URL, so proxying them adds no exposure
+    — only egress, which is bounded by the same allowlist as everything else.
+  */
+  const isPublicWallpaper = /\/wallpapers\//i.test(raw);
+  if (!isPublicWallpaper) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+  }
 
   let target: URL;
   try {

@@ -126,6 +126,141 @@ export function collectSnaps(root: unknown): Snap[] {
 }
 
 /**
+ * ── Snaps, grouped by the CONTAINER they live in ──────────────────────────
+ *
+ * Three attempts at this bug all failed the same way: they read a fixed key
+ * (`story.snapList`), and when the page did not use that key they fell through
+ * to a walk that MERGED every snap on the page — so a 24-hour story link
+ * returned the account's saved folders too.
+ *
+ * The structural mistake was flattening. A Snapchat page holds several
+ * independent lists — the live story, and one per saved folder — and a link
+ * addresses exactly ONE of them. Any code path that can concatenate two lists
+ * is a bug waiting for a page shape we have not seen.
+ *
+ * So the walk now returns GROUPS and never flattens them. It records where
+ * each list was found and what identifies it, and a separate chooser picks one
+ * group. It cannot return snaps from two containers, whatever the page looks
+ * like — which is the property that was missing, and the reason this kept
+ * coming back.
+ */
+export interface SnapGroup {
+  /** Dot path the list was found at — e.g. `props.pageProps.story.snapList`. */
+  path: string;
+  /** Ids/slugs on the enclosing object, for matching against the URL. */
+  ids: string[];
+  snaps: Snap[];
+  /** The live 24-hour story: a `story` container that is not a saved folder. */
+  isLiveStory: boolean;
+  /** A saved/curated folder on the profile. */
+  isHighlight: boolean;
+}
+
+const ID_KEYS = ["storyId", "highlightId", "id", "storyTitle", "title", "slug", "name"];
+
+/** Every list of snaps on the page, kept SEPARATE. */
+export function collectSnapGroups(root: unknown): SnapGroup[] {
+  const groups: SnapGroup[] = [];
+  const MAX_GROUPS = 60;
+  const MAX_DEPTH = 12;
+
+  const isSnap = (v: unknown): v is Snap =>
+    !!v && typeof v === "object" && typeof (v as Snap).snapUrls?.mediaUrl === "string";
+
+  const walk = (node: unknown, path: string, parent: Record<string, unknown> | null, depth: number) => {
+    if (groups.length >= MAX_GROUPS || depth > MAX_DEPTH || !node || typeof node !== "object") return;
+
+    if (Array.isArray(node)) {
+      const snaps = dedupeSnaps(node.filter(isSnap));
+      if (snaps.length > 0) {
+        const lower = path.toLowerCase();
+        groups.push({
+          path,
+          ids: parent
+            ? ID_KEYS.map((k) => parent[k]).filter((v): v is string => typeof v === "string" && v.length > 0)
+            : [],
+          snaps,
+          isHighlight: lower.includes("highlight") || lower.includes("curated") || lower.includes("saved"),
+          isLiveStory:
+            lower.includes("story") && !lower.includes("highlight") && !lower.includes("curated") && !lower.includes("saved"),
+        });
+        // Do not descend INTO a list of snaps — its members are the leaves.
+        return;
+      }
+      node.forEach((child, i) => walk(child, `${path}[${i}]`, parent, depth + 1));
+      return;
+    }
+
+    const obj = node as Record<string, unknown>;
+    for (const [key, value] of Object.entries(obj)) {
+      walk(value, path ? `${path}.${key}` : key, obj, depth + 1);
+    }
+  };
+
+  walk(root, "", null, 0);
+  return groups;
+}
+
+/** Long tokens in a URL, used to match a snap or a container id. */
+function urlTokens(url: string): string[] {
+  let dec = url;
+  try {
+    dec = decodeURIComponent(url);
+  } catch {
+    /* keep raw */
+  }
+  return [...new Set([...(url.match(/[A-Za-z0-9_-]{6,}/g) ?? []), ...(dec.match(/[A-Za-z0-9_-]{6,}/g) ?? [])])];
+}
+
+export interface GroupChoice {
+  group: SnapGroup;
+  /** Set when the URL named one specific snap inside the group. */
+  snap: Snap | null;
+  /** Why this group was chosen — surfaced in tests, not to users. */
+  reason: "snap-id" | "container-id" | "only-group" | "live-story" | "first";
+}
+
+/**
+ * Pick the ONE list the link addresses.
+ *
+ * Ordered by how directly each rule ties the link to a list. A URL naming a
+ * snap is unambiguous; a URL naming a folder is nearly so; after that the live
+ * story wins, because a bare share link to an account is showing its current
+ * story, not its archive.
+ */
+export function chooseSnapGroup(groups: readonly SnapGroup[], urls: readonly string[]): GroupChoice | null {
+  if (groups.length === 0) return null;
+
+  const tokens = new Set(urls.flatMap(urlTokens));
+  const hits = (value: string) =>
+    tokens.has(value) || [...tokens].some((t) => t.length >= 8 && (value.includes(t) || t.includes(value)));
+
+  // 1. The URL names a specific snap.
+  for (const group of groups) {
+    const snap = group.snaps.find((s) => s.snapId && hits(s.snapId));
+    if (snap) return { group, snap, reason: "snap-id" };
+  }
+
+  // 2. The URL names the container (a saved folder's id or title).
+  for (const group of groups) {
+    if (group.ids.some((id) => hits(id))) return { group, snap: null, reason: "container-id" };
+  }
+
+  // 3. Only one list on the page — no ambiguity to resolve.
+  if (groups.length === 1) return { group: groups[0]!, snap: null, reason: "only-group" };
+
+  // 4. The live 24-hour story. A share link that names no folder is showing
+  //    what the account is posting NOW, which is the whole point of a story.
+  const live = groups.find((g) => g.isLiveStory);
+  if (live) return { group: live, snap: null, reason: "live-story" };
+
+  // 5. Document order. Next.js serialises the page's primary content first,
+  //    so the first list is the one the page is actually about.
+  return { group: groups[0]!, snap: null, reason: "first" };
+}
+
+
+/**
  * Does this URL address a COLLECTION (a profile, or a saved story folder)
  * rather than one specific snap?
  *
@@ -143,24 +278,6 @@ export function isCollectionUrl(url: string): boolean {
   return /\/(?:@|p\/|add\/)/i.test(url) || /\/story\//i.test(url);
 }
 
-/** Find the snap the URL targets by matching its snapId anywhere in the link. */
-function matchSnap(snaps: Snap[], url: string): Snap | null {
-  let dec = url;
-  try {
-    dec = decodeURIComponent(url);
-  } catch {
-    /* keep raw */
-  }
-  // 1) the snap's id appears verbatim in the URL (most reliable)
-  const exact = snaps.find((s) => s.snapId && (url.includes(s.snapId) || dec.includes(s.snapId)));
-  if (exact) return exact;
-  // 2) a long token in the URL overlaps a snapId (handles wrapped/short ids)
-  for (const t of dec.match(/[A-Za-z0-9_-]{16,}/g) ?? []) {
-    const m = snaps.find((s) => s.snapId && (s.snapId.includes(t) || t.includes(s.snapId)));
-    if (m) return m;
-  }
-  return null;
-}
 
 function snapFormat(snap: Snap, i: number, count: number): MediaFormat {
   const isVideo = snap.snapMediaType !== 0; // 1 = video, 0 = image
@@ -338,85 +455,35 @@ export const snapchatExtractor: Extractor = {
         // right one (instead of guessing and serving a random snap).
         if (!mediaUrl) {
           /*
-            ── The live story and the highlight folders are NOT one list ──────
-            Owner (2026-08-04): a normal story started returning every snap
-            many times over — one snap showed as 12, six showed as 72.
+            ── One link addresses ONE list ─────────────────────────────────
+            Owner, three times over: a normal 24-hour story link kept
+            returning the account's SAVED profile stories.
 
-            The cause was merging `story.snapList` with EVERY entry of
-            `curatedHighlights`. Snapchat re-saves story snaps into highlight
-            folders, so a profile with a live story and eleven highlights
-            reports that story's snaps twelve times. The previous fix (read all
-            the folders instead of only the first) was right for a SAVED FOLDER
-            link and wrong for a plain story link, because it applied to both.
+            Every previous attempt read a fixed key and, when the page did not
+            use it, fell through to a walk that FLATTENED every snap on the
+            page. Flattening is the bug. A Snapchat page holds several
+            independent lists — the live story, plus one per saved folder —
+            and a link points at exactly one of them, so any path that can
+            concatenate two lists will eventually return someone's archive.
 
-            The two cases are now separated by what the page actually contains:
-            a live story wins when there is one, and the folders are only
-            consulted when there is not — which is precisely the saved-folder
-            page. Both lists are de-duplicated regardless, because the same snap
-            can appear twice inside one container with two signed URLs.
+            `collectSnapGroups` keeps them separate and `chooseSnapGroup`
+            picks one. It is now structurally impossible to return snaps from
+            two containers, whatever key names Snapchat uses next — which is
+            the property that was missing every time this came back.
           */
-          const storySnaps = (Array.isArray(pp.story?.snapList) ? pp.story!.snapList! : []).filter(
-            (s) => s?.snapUrls?.mediaUrl,
-          );
-          const highlightSnaps = (
-            Array.isArray(pp.curatedHighlights)
-              ? pp.curatedHighlights.flatMap((h) => (Array.isArray(h?.snapList) ? h.snapList : []))
-              : []
-          ).filter((s) => s?.snapUrls?.mediaUrl);
+          const groups = collectSnapGroups(data);
+          const choice = chooseSnapGroup(groups, [resolvedUrl, url]);
 
-          /*
-            WHERE the snaps came from is the strongest signal we have about
-            what the link addressed, and it is more reliable than the URL —
-            especially for a /t/ short code, which is opaque until followed.
-          */
-          const fromHighlights = storySnaps.length === 0 && highlightSnaps.length > 0;
-          const known = dedupeSnaps(storySnaps.length > 0 ? storySnaps : highlightSnaps);
-
-          /*
-            The deep walk is a LAST RESORT — only when the named containers
-            yielded nothing at all.
-
-            Owner (2026-08-04): "it downloads videos from the profile posted
-            stories instead of the exact story that the link was copied from."
-            The threshold was `> 1`, so a story containing a SINGLE snap fell
-            through to `collectSnaps`, which walks the entire page blob and
-            therefore swept in every highlight folder on that profile. The link
-            addressed one story; the download produced someone's archive.
-
-            The old threshold made sense when the two containers were merged
-            and a lone snap really was ambiguous. Now that a live story wins
-            cleanly, one snap is simply a one-snap story, and re-scanning can
-            only ever ADD media the link did not ask for.
-          */
-          const snaps = known.length > 0 ? known : dedupeSnaps(collectSnaps(data));
-
-          if (snaps.length) {
+          if (choice) {
             /*
-              ── One link, one thing (owner, 2026-08-04) ────────────────────
-              "I want it to download that exact temporal story video and not
-              the profile story, unless it is the profile story link that was
-              copied and pasted."
-
-              A share link to a single ephemeral snap was returning the
-              account's saved stories alongside it. Two changes fix that:
-
-               · The RESOLVED url classifies the link, not the /t/ short code.
-                 A short link that lands on a profile or a folder reads as a
-                 collection; one that lands on a snap does not.
-               · A non-collection link is narrowed to ONE snap — the one it
-                 names, or the first if we cannot tell. Previously an
-                 unmatched single-snap link fell back to "return everything",
-                 which is exactly how a profile's archive arrived.
-
-              A folder still returns the folder: `fromHighlights` means the
-              page had no live story and served saved ones, which only
-              happens on a profile or folder page.
+              Narrow to a single snap ONLY when the URL named one. Otherwise
+              the whole chosen list is what was asked for: a 24-hour story is
+              several snaps and the owner wants all of them, and a saved
+              folder likewise.
             */
-            const collection = isCollectionUrl(resolvedUrl) || fromHighlights;
-            const matched = collection ? null : (matchSnap(snaps, resolvedUrl) ?? snaps[0] ?? null);
-            const chosen = matched ? [matched] : snaps;
-            formats = chosen.map((s, i) => snapFormat(s, i, chosen.length));
-            title = matched?.snapTitle ?? snaps[0]?.snapTitle;
+            const chosen = choice.snap ? [choice.snap] : choice.group.snaps;
+            formats = chosen.map((sn, i) => snapFormat(sn, i, chosen.length));
+            title = choice.snap?.snapTitle ?? choice.group.snaps[0]?.snapTitle;
           }
         }
       } catch {

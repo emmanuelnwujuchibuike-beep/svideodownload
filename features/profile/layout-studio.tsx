@@ -324,7 +324,12 @@ export function LayoutStudio({
         <button
           type="button"
           onClick={() => void resetToDefault()}
-          disabled={busy || (theme === null && surface === null && radius === null && fontScale === null)}
+          // Only ever disabled while saving. It was also disabled when the
+          // stored appearance was already empty — but that is exactly the
+          // state a member lands in when their theme failed to save, so the
+          // one control that could rescue them was greyed out. A control that
+          // silently does nothing is indistinguishable from a broken one.
+          disabled={busy}
           className="btn-lux btn-lux-secondary"
         >
           <RotateCcw className="h-4 w-4" />

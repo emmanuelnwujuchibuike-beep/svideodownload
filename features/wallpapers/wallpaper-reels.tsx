@@ -44,6 +44,26 @@ import { cn } from "@/lib/utils";
  */
 const viewed = new Set<string>();
 
+/**
+ * A URL the browser can actually fetch from this page.
+ *
+ * The wallpaper bytes live on storage hosts that reflect CORS for the two
+ * production origins only, so a direct `fetch` from any other origin throws
+ * and "Save to device" did nothing at all (owner, twice).
+ *
+ * This is the identical failure `/api/media/download` was built to solve for
+ * member media — wallpapers simply never routed through it. Same-origin means
+ * no preflight, no allowlist to keep in step with every deploy domain, and a
+ * real `Content-Disposition` on the way back.
+ *
+ * A relative path (the built-in wallpapers ship with the app) is already
+ * same-origin and is left alone; proxying it would spend egress for nothing.
+ */
+function fetchableUrl(raw: string, name: string): string {
+  if (!/^https?:\/\//i.test(raw)) return raw;
+  return `/api/media/download?url=${encodeURIComponent(raw)}&name=${encodeURIComponent(name)}`;
+}
+
 function countView(wallpaper: Wallpaper | undefined) {
   if (!wallpaper || wallpaper.builtIn || viewed.has(wallpaper.id)) return;
   viewed.add(wallpaper.id);
@@ -160,10 +180,27 @@ export function WallpaperReels({
     [canEngage],
   );
 
+/**
+ * A URL the browser can actually fetch from this page.
+ *
+ * The wallpaper bytes live on storage hosts that reflect CORS for the two
+ * production origins only, so a direct `fetch` from a preview deploy — or any
+ * origin not on that allowlist — throws, and "Save to device" did nothing at
+ * all (owner, twice).
+ *
+ * This is the identical failure that `/api/media/download` was built to solve
+ * for member media; wallpapers simply never routed through it. Same-origin
+ * means no preflight, no allowlist to keep in step with every deploy domain,
+ * and a real Content-Disposition on the way back.
+ *
+ * A relative path (the built-in wallpapers ship with the app) is already
+ * same-origin and is left alone — proxying it would spend egress for nothing.
+ */
   const download = useCallback(
     (wallpaper: Wallpaper) => {
       haptic("selection");
       playSound("tap");
+      const filename = `${wallpaper.name || "wallpaper"}.jpg`;
       startDownload({
         url: wallpaper.downloadUrl,
         formatId: "wallpaper",
@@ -173,7 +210,7 @@ export function WallpaperReels({
         platform: "generic",
         platformName: "Wallpaper",
         qualityLabel: "Full resolution",
-        directUrl: wallpaper.downloadUrl,
+        directUrl: fetchableUrl(wallpaper.downloadUrl, filename),
       });
       onDownloaded?.(wallpaper);
     },

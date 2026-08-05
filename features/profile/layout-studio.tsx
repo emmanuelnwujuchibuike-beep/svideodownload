@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   Loader2,
   Minus,
+  RotateCcw,
   Sparkles,
   Store,
   Users,
@@ -109,6 +110,46 @@ export function LayoutStudio({
         return;
       }
       setMsg({ ok: true, text: "Saved." });
+      router.refresh();
+    } catch {
+      setMsg({ ok: false, text: "Network error." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Back to the plain white default (owner, 2026-08-04).
+   *
+   * Writes NULLs rather than the default theme's key. A stored "default" and
+   * no stored preference are different states: the second means "I have never
+   * chosen", so the profile follows whatever the platform default becomes
+   * later. Saving the current default freezes today's look forever, which is
+   * not what "reset" means to anyone.
+   *
+   * It is also the one control that always works — a member who picked
+   * something unreadable needs a way out that does not depend on them being
+   * able to read the screen.
+   */
+  const resetToDefault = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/profile/appearance", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme: null, surface: null, radius: null, font_scale: null }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setMsg({ ok: false, text: json.error ?? "Couldn't reset your theme." });
+        return;
+      }
+      setTheme(null);
+      setSurface(null);
+      setRadius(null);
+      setFontScale(null);
+      setMsg({ ok: true, text: "Back to the default look." });
       router.refresh();
     } catch {
       setMsg({ ok: false, text: "Network error." });
@@ -276,6 +317,18 @@ export function LayoutStudio({
         <button type="button" onClick={() => void save()} disabled={busy || !dirty} className="btn-lux btn-lux-primary">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           {dirty ? "Save theme" : "Saved"}
+        </button>
+        {/* Deliberately NOT gated on `dirty`: the member who most needs this
+            is the one whose SAVED theme is the problem, and they have nothing
+            unsaved to discard. */}
+        <button
+          type="button"
+          onClick={() => void resetToDefault()}
+          disabled={busy || (theme === null && surface === null && radius === null && fontScale === null)}
+          className="btn-lux btn-lux-secondary"
+        >
+          <RotateCcw className="h-4 w-4" />
+          Reset to default
         </button>
         {dirty ? (
           <button

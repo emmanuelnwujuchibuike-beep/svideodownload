@@ -35,7 +35,6 @@ import { IdentityRing } from "@/features/profile/identity-ring";
 import { friendIdSet } from "@/lib/social/friend-ids";
 import { viewerCircleIds } from "@/lib/social/graph/store";
 import { ProfileCoverControls } from "@/features/profile/profile-cover-controls";
-import { ProfileFab } from "@/features/profile/profile-fab";
 import { Toaster } from "@/features/ui/toast";
 import { LivingGlow } from "@/features/profile/living-glow";
 import { ProfileCardLink } from "@/features/profile/profile-card-link";
@@ -758,8 +757,6 @@ export default async function ProfilePage({
               />
             </div>
           </div>
-          {/* Owner-only Create button. Real destination, above the bottom nav. */}
-          <ProfileFab />
         </main>
         <Toaster />
       </>

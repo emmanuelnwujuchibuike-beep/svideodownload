@@ -136,7 +136,11 @@ export function collectSnaps(root: unknown): Snap[] {
  * coincidence between a short code and part of a snap id.
  */
 export function isCollectionUrl(url: string): boolean {
-  return /\/(?:@|p\/|t\/|add\/)/i.test(url) || /\/story\//i.test(url);
+  // `t/` is deliberately absent. A short code is opaque, so the link is
+  // FOLLOWED first and this is asked about where it LANDED. Treating /t/ as a
+  // collection on sight is what made a single shared snap return an entire
+  // profile's saved stories.
+  return /\/(?:@|p\/|add\/)/i.test(url) || /\/story\//i.test(url);
 }
 
 /** Find the snap the URL targets by matching its snapId anywhere in the link. */
@@ -282,6 +286,9 @@ export const snapchatExtractor: Extractor = {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let html: string;
+    // Where the short link actually LANDED. A /t/ code is opaque; the page it
+    // resolves to is what says whether this is one snap or a whole folder.
+    let resolvedUrl = url;
     try {
       const res = await extractorFetch(
         url,
@@ -293,6 +300,7 @@ export const snapchatExtractor: Extractor = {
         "snapchat",
       );
       if (!res.ok) throw new ExtractionError(`Snapchat responded ${res.status}`);
+      resolvedUrl = res.url || url;
       html = await res.text();
     } finally {
       clearTimeout(timer);
@@ -356,6 +364,12 @@ export const snapchatExtractor: Extractor = {
               : []
           ).filter((s) => s?.snapUrls?.mediaUrl);
 
+          /*
+            WHERE the snaps came from is the strongest signal we have about
+            what the link addressed, and it is more reliable than the URL —
+            especially for a /t/ short code, which is opaque until followed.
+          */
+          const fromHighlights = storySnaps.length === 0 && highlightSnaps.length > 0;
           const known = dedupeSnaps(storySnaps.length > 0 ? storySnaps : highlightSnaps);
 
           /*
@@ -377,9 +391,29 @@ export const snapchatExtractor: Extractor = {
           const snaps = known.length > 0 ? known : dedupeSnaps(collectSnaps(data));
 
           if (snaps.length) {
-            // Only narrow to a single snap when the link actually addresses one.
-            // A folder link means "give me the folder".
-            const matched = isCollectionUrl(url) ? null : matchSnap(snaps, url);
+            /*
+              ── One link, one thing (owner, 2026-08-04) ────────────────────
+              "I want it to download that exact temporal story video and not
+              the profile story, unless it is the profile story link that was
+              copied and pasted."
+
+              A share link to a single ephemeral snap was returning the
+              account's saved stories alongside it. Two changes fix that:
+
+               · The RESOLVED url classifies the link, not the /t/ short code.
+                 A short link that lands on a profile or a folder reads as a
+                 collection; one that lands on a snap does not.
+               · A non-collection link is narrowed to ONE snap — the one it
+                 names, or the first if we cannot tell. Previously an
+                 unmatched single-snap link fell back to "return everything",
+                 which is exactly how a profile's archive arrived.
+
+              A folder still returns the folder: `fromHighlights` means the
+              page had no live story and served saved ones, which only
+              happens on a profile or folder page.
+            */
+            const collection = isCollectionUrl(resolvedUrl) || fromHighlights;
+            const matched = collection ? null : (matchSnap(snaps, resolvedUrl) ?? snaps[0] ?? null);
             const chosen = matched ? [matched] : snaps;
             formats = chosen.map((s, i) => snapFormat(s, i, chosen.length));
             title = matched?.snapTitle ?? snaps[0]?.snapTitle;

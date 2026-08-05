@@ -140,17 +140,22 @@ describe("collectSnaps", () => {
 });
 
 describe("isCollectionUrl", () => {
-  it("treats a profile, folder or share link as a collection", () => {
-    // Narrowing any of these to a single snap is what produced "one video".
-    for (const url of [
-      "https://snapchat.com/t/dY2J6e2d",
-      "https://www.snapchat.com/@someuser",
-      "https://www.snapchat.com/p/abc123/456",
-      "https://www.snapchat.com/add/someuser",
-      "https://www.snapchat.com/story/xyz",
-    ]) {
-      expect(isCollectionUrl(url), url).toBe(true);
-    }
+  it("treats a profile or folder link as a collection", () => {
+    expect(isCollectionUrl("https://www.snapchat.com/@emily")).toBe(true);
+    expect(isCollectionUrl("https://www.snapchat.com/p/abc123")).toBe(true);
+    expect(isCollectionUrl("https://www.snapchat.com/add/emily")).toBe(true);
+    expect(isCollectionUrl("https://www.snapchat.com/story/xyz")).toBe(true);
+  });
+
+  // A short code says nothing until it has been followed — classifying it as
+  // a collection on sight is what made one shared snap return a whole archive.
+  it("does NOT treat an unresolved /t/ short link as a collection", () => {
+    expect(isCollectionUrl("https://snapchat.com/t/qTTonTHj")).toBe(false);
+  });
+
+  it("classifies a /t/ link by where it RESOLVED to", () => {
+    expect(isCollectionUrl("https://www.snapchat.com/@emily")).toBe(true);
+    expect(isCollectionUrl("https://www.snapchat.com/spotlight/W7_ABC")).toBe(false);
   });
 
   it("treats a single Spotlight clip as one item", () => {

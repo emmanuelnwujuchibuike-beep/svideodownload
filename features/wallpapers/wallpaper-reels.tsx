@@ -245,7 +245,7 @@ export function WallpaperReels({
         the fixed-width column and the caption flows around it.
       */}
       <div
-        className="absolute right-1.5 z-10 flex flex-col items-center gap-4"
+        className="absolute right-1.5 z-20 flex flex-col items-center gap-4"
         style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}
       >
         <RailButton
@@ -274,7 +274,7 @@ export function WallpaperReels({
 
       {/* Caption */}
       <div
-        className="absolute inset-x-0 z-10 px-4 pr-28 text-white"
+        className="pointer-events-none absolute inset-x-0 z-10 px-4 pr-28 text-white"
         style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}
       >
         <p className="text-lg font-bold tracking-tight drop-shadow">{current.name}</p>
@@ -292,7 +292,7 @@ export function WallpaperReels({
         <button
           type="button"
           onClick={() => download(current)}
-          className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-2.5 text-sm font-bold text-neutral-900 shadow-lg transition active:scale-95"
+          className="pointer-events-auto mt-3 inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-2.5 text-sm font-bold text-neutral-900 shadow-lg transition active:scale-95"
         >
           <Download className="h-4 w-4" /> Download
         </button>

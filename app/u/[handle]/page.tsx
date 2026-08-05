@@ -341,8 +341,27 @@ export default async function ProfilePage({
   ]);
   // Digital Identity media (migration 0098) — the identity the profile displays.
   const profileMedia = await getProfileMedia(profile.id);
-  // The member's chosen accent (migration 0096), mapped to a hex, or null.
-  const heroAccent = accentHex(profileExtras.accent);
+  /*
+    ── The Layout Studio theme now reaches the profile ─────────────────────
+    Owner (2026-08-04): "the profile layout settings doesn't change how the
+    profile card looks."
+
+    They were right, and the cause was narrow. `resolveProfileTheme` emits
+    three kinds of variable — surface/radius (wired to every card), an ACCENT,
+    and a background WASH — but the accent and the wash were consumed in
+    exactly one place: the Layout Studio's own preview pane. So the preview
+    changed and the profile did not, which is worse than the feature not
+    existing: the settings screen was demonstrating something untrue.
+
+    The hero accent now comes from the RESOLVED theme rather than from the
+    member's separate accent column. `resolveProfileTheme` already prefers a
+    member's own accent (migration 0096) and falls back to the theme's, with
+    the WCAG correction from Part 16 applied — so picking a theme finally
+    changes the card, and picking an accent still wins over it.
+  */
+  const appearance = await getProfileAppearance(profile.id);
+  const theme = resolveProfileTheme({ ...appearance, accent: accentHex(profileExtras.accent) });
+  const heroAccent = theme.accent;
   // The accent wraps the whole Identity Card as a premium glowing STRIPE + shadow
   // (owner: "make the accent colour go round the hero card like a stripe premium
   // luxury glow and shadow"). The first two shadows mirror .glass-strong's own base
@@ -416,11 +435,6 @@ export default async function ProfilePage({
   const previewRole =
     profile.isOwner && preview && isPreviewableRole(preview) ? (preview as ViewerRole) : null;
   const viewerRole = previewRole ?? realRole;
-
-  // The member's Layout Studio theme (Part 16, migration 0109) — read
-  // fail-closed, so before 0109 applies every profile renders the default.
-  const appearance = await getProfileAppearance(profile.id);
-  const theme = resolveProfileTheme({ ...appearance, accent: accentHex(profileExtras.accent) });
 
   // Reposts / Wows / Saved keep answering to their OWN per-tab privacy setting
   // (Repost spec §7). The engine may narrow them further, never widen them.
@@ -519,7 +533,7 @@ export default async function ProfilePage({
                     the fixed top bar gone there is nothing left to cover its
                     controls, so the artwork can run under the status bar; its
                     height absorbs the safe area so the card below stays put. */}
-                <div className="relative h-[calc(11rem+var(--frenz-safe-top))] w-full overflow-hidden bg-gradient-to-br from-fuchsia-600/40 via-violet-600/30 to-indigo-700/40 sm:h-60 sm:rounded-3xl">
+                <div className="frenz-profile-wash relative h-[calc(11rem+var(--frenz-safe-top))] w-full overflow-hidden sm:h-60 sm:rounded-3xl">
                   {profile.bannerUrl ? (
                     <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 1024px) 100vw, 900px" className="object-cover" />
                   ) : null}
@@ -771,7 +785,7 @@ export default async function ProfilePage({
                 bleeds to the very TOP (under the status bar) instead of stopping at the
                 header line (owner): pulled up by the main's top padding and grown by
                 the same, so the card below stays put. sm+ keeps the rounded card. */}
-            <div className="relative h-[calc(11rem+var(--frenz-safe-top))] w-full overflow-hidden bg-gradient-to-br from-blue-600/30 via-violet-500/15 to-purple-500/20 sm:h-60 sm:rounded-3xl md:h-64">
+            <div className="frenz-profile-wash relative h-[calc(11rem+var(--frenz-safe-top))] w-full overflow-hidden sm:h-60 sm:rounded-3xl md:h-64">
               {profile.bannerUrl ? (
                 <Image src={profile.bannerUrl} alt="" fill priority sizes="(max-width: 896px) 100vw, 896px" className="object-cover" />
               ) : null}

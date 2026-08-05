@@ -102,12 +102,12 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const batchBytes = batchItems.reduce((n, f) => (selected.has(f.formatId) ? n + (f.filesize ?? 0) : n), 0);
   const [showUpgradeGate, setShowUpgradeGate] = useState(false);
 
-  const batchDownload = () => {
+  const batchDownload = (explicit?: typeof batchItems) => {
     if (showAds) {
       setShowUpgradeGate(true);
       return;
     }
-    const items = batchItems.filter((f) => selected.has(f.formatId));
+    const items = explicit ?? batchItems.filter((f) => selected.has(f.formatId));
     items.forEach((f, i) => {
       // Each item carries its OWN kind — a story can mix video snaps and photo
       // snaps, and sending them all as "image" would have saved the videos with
@@ -125,6 +125,39 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     });
     // No "started" toast — the floating card shows "Downloading N items…".
     setSelected(new Set());
+  };
+
+  /*
+    ── One is free, many is Pro (owner, 2026-08-04) ────────────────────────
+    Removing the `isImageTab` gate earlier made ANY selection take the batch
+    path, so ticking a single video asked a free member to upgrade to download
+    one file — which they could already do by just pressing the button.
+
+    The line is now where the value actually is: picking one item is an
+    ordinary download and stays free; picking several is the feature worth
+    paying for. A single tick therefore downloads THAT item rather than
+    whatever the active row happens to be, which is also what tapping a tile
+    plainly means.
+  */
+  const runDownload = () => {
+    // Nothing ticked on a multi-item link means "give me the lot" — that is
+    // what a story link asks for, and it is the action the button advertises.
+    if (isBatchable && selected.size === 0) {
+      batchDownload(batchItems);
+      return;
+    }
+    if (isBatchable && selected.size > 1) {
+      batchDownload();
+      return;
+    }
+    if (isBatchable && selected.size === 1) {
+      const only = batchItems.find((f) => selected.has(f.formatId));
+      if (only) {
+        startDownload(only.formatId, only.kind);
+        return;
+      }
+    }
+    startDownload(activeId, tab);
   };
 
   const activeFormat = formats.find((f) => f.formatId === activeId);
@@ -465,14 +498,12 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         <button
           type="button"
           disabled={phase !== "idle"}
-          onClick={() =>
-            isBatchable && selected.size > 0 ? batchDownload() : startDownload(activeId, tab)
-          }
+          onClick={() => runDownload()}
           className={cn(
             "group relative mt-5 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-4 text-base font-semibold shadow-lg transition-all active:scale-[0.99] disabled:active:scale-100",
             phase === "done"
               ? "bg-emerald-600 text-white shadow-emerald-600/25"
-              : isBatchable && selected.size > 0
+              : isBatchable && selected.size !== 1
                 ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-violet-500/30 hover:shadow-violet-500/50 hover:shadow-xl disabled:opacity-70"
                 : needsReward(activeId, tab)
                   ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-amber-500/30 hover:shadow-amber-500/50 hover:shadow-xl disabled:opacity-70"
@@ -489,10 +520,15 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
             <>
               <CheckCircle2 className="h-5 w-5" /> Download started — check your files
             </>
-          ) : isBatchable && selected.size > 0 ? (
+          ) : isBatchable && selected.size === 0 ? (
             <>
               <Download className="h-5 w-5 transition-transform group-hover:translate-y-0.5" />
-              Download {selected.size} Item{selected.size > 1 ? "s" : ""}
+              Download all {batchItems.length} {batchItems.every((f) => f.kind === "video") ? "videos" : "items"}
+            </>
+          ) : isBatchable && selected.size > 1 ? (
+            <>
+              <Download className="h-5 w-5 transition-transform group-hover:translate-y-0.5" />
+              Download {selected.size} Items
             </>
           ) : (
             <>
@@ -507,7 +543,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         <p className="mt-3 text-center text-xs text-muted-foreground">
           {phase === "done"
             ? "Saving to your device — check your browser downloads or Files app."
-            : isBatchable && selected.size > 0 && batchBytes > 0
+            : isBatchable && selected.size > 1 && batchBytes > 0
               ? `Total size: ~${formatBytes(batchBytes)}`
               : "Fast, private & free — no app, no sign-up."}
         </p>

@@ -1226,3 +1226,20 @@
     opacity: 0.88;
   }
 }
+
+/* ── Layout Studio: the theme WASH, on the real profile ────────────────────
+   The resolved theme emits `--frenz-profile-wash-from/to`, and until now the
+   only thing that consumed them was the Layout Studio's own preview pane — so
+   a member picked a theme, watched the preview change, and saw nothing change
+   on their profile (owner, 2026-08-04).
+
+   This paints the profile cover when there is no banner. It falls back to the
+   previous fixed gradient, so a profile with no stored appearance — and every
+   profile before migration 0109 is applied — looks exactly as it did. */
+.frenz-profile-wash {
+  background-image: linear-gradient(
+    135deg,
+    var(--frenz-profile-wash-from, hsl(280 85% 55% / 0.4)),
+    var(--frenz-profile-wash-to, hsl(255 85% 60% / 0.25))
+  );
+}

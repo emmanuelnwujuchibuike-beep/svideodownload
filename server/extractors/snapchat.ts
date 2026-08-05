@@ -358,11 +358,23 @@ export const snapchatExtractor: Extractor = {
 
           const known = dedupeSnaps(storySnaps.length > 0 ? storySnaps : highlightSnaps);
 
-          // Fall back to a deep walk when the known shapes yield nothing usable.
-          // A SAVED story folder on a profile lives somewhere we don't have a
-          // name for, and finding one snap is indistinguishable from finding the
-          // folder's first snap — so re-scan whenever we have 0 or 1.
-          const snaps = known.length > 1 ? known : dedupeSnaps(collectSnaps(data));
+          /*
+            The deep walk is a LAST RESORT — only when the named containers
+            yielded nothing at all.
+
+            Owner (2026-08-04): "it downloads videos from the profile posted
+            stories instead of the exact story that the link was copied from."
+            The threshold was `> 1`, so a story containing a SINGLE snap fell
+            through to `collectSnaps`, which walks the entire page blob and
+            therefore swept in every highlight folder on that profile. The link
+            addressed one story; the download produced someone's archive.
+
+            The old threshold made sense when the two containers were merged
+            and a lone snap really was ambiguous. Now that a live story wins
+            cleanly, one snap is simply a one-snap story, and re-scanning can
+            only ever ADD media the link did not ask for.
+          */
+          const snaps = known.length > 0 ? known : dedupeSnaps(collectSnaps(data));
 
           if (snaps.length) {
             // Only narrow to a single snap when the link actually addresses one.
@@ -421,6 +433,11 @@ export const snapchatExtractor: Extractor = {
           formatId: `snap-${i}`,
           label: `Story ${i + 1}`,
           isSeparateItem: true,
+          // This path scrapes raw media URLs out of the HTML and has no poster
+          // for any of them. Left null deliberately: the grid then falls back
+          // to the post thumbnail, which is honest, rather than us inventing a
+          // per-item cover that belongs to a different snap.
+          thumbnail: null,
         }));
       } else if (found.length === 1) {
         mediaUrl = found[0];
@@ -445,7 +462,23 @@ export const snapchatExtractor: Extractor = {
       sourceUrl: url,
       title: (title || metaContent(html, "og:title") || "Snapchat story").slice(0, 200),
       description: vm?.description ?? metaContent(html, "og:description"),
-      thumbnail: vm?.thumbnailUrl ? cleanUrl(vm.thumbnailUrl) : metaContent(html, "og:image"),
+      /*
+        The cover must be one of the snaps we actually returned.
+
+        Owner (2026-08-04): "snapchat only shows a cover of a video that wasn't
+        fetched and downloaded." The share page's og:image is Snapchat's own
+        preview card — a snap chosen by them, frequently not one in the list we
+        extracted — so the header advertised media the download would never
+        produce.
+
+        The first fetched item's own poster is the honest cover: it is
+        guaranteed to be something the member is about to get. Spotlight keeps
+        its `videoMetadata.thumbnailUrl` (a single video, where that IS the
+        item), and og:image survives only as the last resort.
+      */
+      thumbnail:
+        finalFormats.find((f) => f.thumbnail)?.thumbnail ??
+        (vm?.thumbnailUrl ? cleanUrl(vm.thumbnailUrl) : metaContent(html, "og:image")),
       durationSeconds: vm?.durationMs ? Math.round(vm.durationMs / 1000) : null,
       creator: creatorName(vm?.creator),
       uploadDate: null,

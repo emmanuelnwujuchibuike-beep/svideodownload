@@ -239,3 +239,59 @@ describe("collectSnaps de-duplication (the 12x regression)", () => {
     expect(collectSnaps(blob).map((s) => s.snapId)).toEqual(["a", "b", "c"]);
   });
 });
+
+/**
+ * The link must decide what you get.
+ *
+ * Owner (2026-08-04): a story link was returning the profile's saved stories
+ * instead of the story it pointed at. The container the page names is the
+ * authority; the deep walk is a last resort and can only ever ADD media the
+ * link did not ask for.
+ */
+describe("the story a link points at wins over the profile's archive", () => {
+  const snap = (id: string) => ({
+    snapId: id,
+    snapUrls: { mediaUrl: `https://cf-st.sc-cdn.net/d/${id}.mp4`, mediaPreviewUrl: `https://cf-st.sc-cdn.net/p/${id}.jpg` },
+  });
+
+  it("a ONE-snap story does not pull in the profile's highlights", () => {
+    // The exact shape that broke: a single-snap story on a profile that also
+    // has archived folders.
+    const blob = {
+      props: {
+        pageProps: {
+          story: { snapList: [snap("target")] },
+          curatedHighlights: [
+            { snapList: [snap("old1"), snap("old2")] },
+            { snapList: [snap("old3")] },
+          ],
+        },
+      },
+    };
+    const story = blob.props.pageProps.story.snapList.filter((s) => s.snapUrls?.mediaUrl);
+    const highlights = blob.props.pageProps.curatedHighlights.flatMap((h) => h.snapList);
+    const known = dedupeSnaps(story.length > 0 ? story : highlights);
+
+    expect(known.map((s) => s.snapId)).toEqual(["target"]);
+    // The deep walk would have returned all four — which is the bug.
+    expect(collectSnaps(blob).length).toBeGreaterThan(known.length);
+  });
+
+  it("still falls back to the folders when there is no live story", () => {
+    const blob = {
+      props: {
+        pageProps: {
+          curatedHighlights: [{ snapList: [snap("a"), snap("b")] }],
+        },
+      },
+    };
+    const story: ReturnType<typeof snap>[] = [];
+    const highlights = blob.props.pageProps.curatedHighlights.flatMap((h) => h.snapList);
+    const known = dedupeSnaps(story.length > 0 ? story : highlights);
+    expect(known.map((s) => s.snapId)).toEqual(["a", "b"]);
+  });
+
+  it("carries a per-snap poster through", () => {
+    expect(dedupeSnaps([snap("x")])[0]!.snapUrls!.mediaPreviewUrl).toContain("/p/x.jpg");
+  });
+});

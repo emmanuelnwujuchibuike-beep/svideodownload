@@ -8,6 +8,7 @@ import {
   Code2,
   Crown,
   Download,
+  Ghost,
   KeyRound,
   Layers,
   LayoutGrid,
@@ -40,6 +41,11 @@ import { getProfileHealth } from "@/lib/social/profile-health";
 import { getOwnProfile } from "@/lib/social/profile";
 import { getProfileAppearance } from "@/lib/social/profile-appearance";
 import { getProfileIdentity, getProfileModules } from "@/lib/social/profile-platform";
+import { GHOST_SIGNALS, ghostedCount, isFullyGhosted, readGhostState } from "@/lib/privacy/ghost";
+import { BAND_LABEL as SECURITY_BAND_LABEL, securityScore } from "@/lib/security/score";
+import { getSecurityInputs } from "@/lib/security/score-inputs";
+import { getOwnPresenceStatus } from "@/lib/social/presence-status";
+import { getPrivacySettings } from "@/lib/social/profile";
 import { getVerificationState, verificationSummary } from "@/lib/social/verification";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -80,6 +86,7 @@ export default async function AccountPage() {
     getProfileModules(user.id),
   ]);
   const verificationSub = verificationSummary(verification);
+  const privacySettings = await getPrivacySettings(user.id);
 
   // Universal Profile Engine™ — the sub-lines read the member's REAL layout, so
   // the settings list reports what their profile actually is.
@@ -99,6 +106,33 @@ export default async function AccountPage() {
     health.recommendations.length === 0
       ? `${health.score}/100 · ${BAND_LABEL[health.band]}`
       : `${health.score}/100 · ${health.recommendations.length} suggestion${health.recommendations.length === 1 ? "" : "s"}`;
+
+  /*
+    Both rows carry a REAL value rather than a static description — the same
+    discipline the Profile health and Layout Studio rows already follow. A
+    settings list that tells you where you stand saves opening the screen just
+    to find out nothing needs doing.
+  */
+  const ghostState = readGhostState({
+    presenceStatus: await getOwnPresenceStatus(user.id),
+    lastSeenVisibility: privacySettings.last_seen_visibility as string | null,
+    typingEnabled: privacySettings.typing_indicators_enabled as boolean | null,
+    readReceiptsEnabled: privacySettings.read_receipts_enabled as boolean | null,
+    activityVisibility: privacySettings.activity_visibility as string | null,
+    showViews: privacySettings.show_views as boolean | null,
+  });
+  const hiddenSignals = ghostedCount(ghostState);
+  const ghostSub = isFullyGhosted(ghostState)
+    ? "On · every activity signal hidden"
+    : hiddenSignals === 0
+      ? "Hide your online status, typing and more"
+      : `${hiddenSignals} of ${GHOST_SIGNALS.length} signals hidden`;
+
+  const score = securityScore(await getSecurityInputs(user));
+  const securitySub =
+    score.gaps.length === 0
+      ? `${score.score}/100 · ${SECURITY_BAND_LABEL[score.band]}`
+      : `${score.score}/100 · ${score.gaps.length} to fix`;
 
   const planActive = sub?.status === "active" || sub?.status === "trialing";
   const plan = (planActive ? sub?.plan : "free") ?? "free";
@@ -155,7 +189,14 @@ export default async function AccountPage() {
           sub: "Who can find you, and by what",
           tint: "blue",
         },
-        { href: "/account/security", Icon: ShieldCheck, title: "Security", sub: "2FA, passkeys, devices", tint: "cyan" },
+        {
+          href: "/account/ghost",
+          Icon: Ghost,
+          title: "Ghost Mode",
+          sub: ghostSub,
+          tint: "purple",
+        },
+        { href: "/account/security", Icon: ShieldCheck, title: "Security", sub: securitySub, tint: "cyan" },
         { href: "/account/password", Icon: KeyRound, title: "Password", sub: "Change your password", tint: "amber" },
       ],
     },

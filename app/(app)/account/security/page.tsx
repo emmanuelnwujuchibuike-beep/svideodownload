@@ -9,6 +9,9 @@ import { PasskeysEditor } from "@/features/account/passkeys-editor";
 import { PinSettingsEditor } from "@/features/account/pin-settings-editor";
 import { RecoveryCodesPanel } from "@/features/account/recovery-codes-panel";
 import { SecurityActivity } from "@/features/account/security-activity";
+import { SecurityScoreCard } from "@/features/account/security-score-card";
+import { getSecurityInputs } from "@/lib/security/score-inputs";
+import { securityScore } from "@/lib/security/score";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +34,10 @@ export default async function AccountSecurityPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/account/security");
 
+  // Every input already lived in these tables (0054–0058) and on the session
+  // itself; nothing added them up until now.
+  const score = securityScore(await getSecurityInputs(user));
+
   return (
     <SettingsPage title="Security" description="Two-factor authentication, passkeys, devices, and recent activity." bare>
       {recovered === "1" ? (
@@ -40,6 +47,7 @@ export default async function AccountSecurityPage({
       ) : null}
 
       <div className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card">
+        <SecurityScoreCard result={score} />
         <MfaEditor />
         <RecoveryCodesPanel />
         <PasskeysEditor />

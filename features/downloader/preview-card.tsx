@@ -117,7 +117,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         formatId: f.formatId,
         kind: f.kind,
         title: `${metadata.title || "download"} · ${i + 1} of ${items.length}`,
-        thumbnail: f.directUrl ?? metadata.thumbnail,
+        thumbnail: f.thumbnail ?? (f.kind === "image" ? f.directUrl : null) ?? metadata.thumbnail,
         platform: metadata.platform,
         platformName: metadata.platformName,
         qualityLabel: f.label,
@@ -395,11 +395,22 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
                       on ? "ring-violet-500 shadow-lg shadow-violet-500/20" : "ring-border/60 hover:ring-foreground/25",
                     )}
                   >
-                    {/* Only an IMAGE item's own URL is a usable thumbnail. A
-                        video snap's directUrl is an mp4, so it falls back to the
-                        post thumbnail and then to an icon — never an <img>
-                        pointed at a video, which renders as a broken tile. */}
-                    {f.kind === "image" && f.directUrl ? (
+                    {/*
+                      Each item's OWN poster first (owner, 2026-08-04: "each
+                      media should show their respective cover and not a general
+                      cover"). An extractor that supplies one — Snapchat sends a
+                      `mediaPreviewUrl` per snap — makes the grid usable; without
+                      it every tile in a 6-snap story was the same picture and
+                      choosing between them was guesswork.
+
+                      Then an IMAGE item's own URL, which IS its picture. A video
+                      item's directUrl is an mp4, so it never becomes an <img> —
+                      that renders as a broken tile.
+                    */}
+                    {f.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={f.thumbnail} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                    ) : f.kind === "image" && f.directUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={f.directUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                     ) : metadata.thumbnail ? (
@@ -455,13 +466,13 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
           type="button"
           disabled={phase !== "idle"}
           onClick={() =>
-            isImageTab && isBatchable && selected.size > 0 ? batchDownload() : startDownload(activeId, tab)
+            isBatchable && selected.size > 0 ? batchDownload() : startDownload(activeId, tab)
           }
           className={cn(
             "group relative mt-5 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-4 text-base font-semibold shadow-lg transition-all active:scale-[0.99] disabled:active:scale-100",
             phase === "done"
               ? "bg-emerald-600 text-white shadow-emerald-600/25"
-              : isImageTab && isBatchable && selected.size > 0
+              : isBatchable && selected.size > 0
                 ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-violet-500/30 hover:shadow-violet-500/50 hover:shadow-xl disabled:opacity-70"
                 : needsReward(activeId, tab)
                   ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-amber-500/30 hover:shadow-amber-500/50 hover:shadow-xl disabled:opacity-70"
@@ -478,7 +489,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
             <>
               <CheckCircle2 className="h-5 w-5" /> Download started — check your files
             </>
-          ) : isImageTab && isBatchable && selected.size > 0 ? (
+          ) : isBatchable && selected.size > 0 ? (
             <>
               <Download className="h-5 w-5 transition-transform group-hover:translate-y-0.5" />
               Download {selected.size} Item{selected.size > 1 ? "s" : ""}
@@ -496,7 +507,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         <p className="mt-3 text-center text-xs text-muted-foreground">
           {phase === "done"
             ? "Saving to your device — check your browser downloads or Files app."
-            : isImageTab && isBatchable && selected.size > 0 && batchBytes > 0
+            : isBatchable && selected.size > 0 && batchBytes > 0
               ? `Total size: ~${formatBytes(batchBytes)}`
               : "Fast, private & free — no app, no sign-up."}
         </p>
@@ -519,7 +530,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         </div>
 
         {/* Pro & Above — batch is a premium capability */}
-        {isImageTab && isBatchable && showAds ? (
+        {isBatchable && showAds ? (
           <div className="mt-3 flex items-center gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-3.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/25">
               <Crown className="h-[18px] w-[18px]" />

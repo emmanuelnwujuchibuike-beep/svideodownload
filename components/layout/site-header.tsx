@@ -107,6 +107,42 @@ const DOWNLOADERS = getPrimaryPages();
  * app shell (left sidebar + top bar) owns desktop nav, while this bar still
  * provides the mobile top bar.
  */
+/**
+ * The menu toggle's three-bar mark, folding into an X when the sheet is open.
+ *
+ * Extracted because the button now appears in TWO places (the mobile cluster
+ * and, for signed-out visitors, the desktop cluster). Two copies of an
+ * animation this fiddly is two copies to keep in step.
+ *
+ * Driven by `shown`, not `open`: `open` stays true for the 300ms the sheet
+ * takes to slide out, so an X keyed to it sat as an X for the whole animation
+ * and the tap read as unresponsive.
+ */
+function MenuMark({ shown }: { shown: boolean }) {
+  return (
+    <span className="relative flex h-5 w-5 flex-col items-end justify-center gap-[3.5px]">
+      <span
+        className={cn(
+          "h-[2px] rounded-full bg-current transition-all duration-300",
+          shown ? "w-5 translate-y-[5.5px] rotate-45" : "w-5",
+        )}
+      />
+      <span
+        className={cn(
+          "h-[2px] rounded-full bg-current transition-all duration-300",
+          shown ? "w-0 opacity-0" : "w-2.5 opacity-100",
+        )}
+      />
+      <span
+        className={cn(
+          "h-[2px] rounded-full bg-current transition-all duration-300",
+          shown ? "w-5 -translate-y-[5.5px] -rotate-45" : "w-3.5",
+        )}
+      />
+    </span>
+  );
+}
+
 export function SiteHeader({ social = false, desktopHidden = false }: { social?: boolean; desktopHidden?: boolean }) {
   /*
     Locale is fixed to the default until a second locale is genuinely translated.
@@ -281,6 +317,29 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
           <LanguageSelector />
           <ThemeToggle />
           <UserMenu />
+          {/*
+            The menu button now renders on DESKTOP too, for signed-out visitors
+            only (owner, 2026-08-04: the header login button is gone entirely
+            and "users will only use the login button in the menu").
+
+            Without this the instruction would have removed the only desktop
+            route to signing in — the drawer that carries "Log in" was
+            `lg:hidden`. A signed-in viewer still gets nothing extra here: they
+            have the avatar, and the marketing drawer is not their navigation.
+          */}
+          {!user ? (
+            <button
+              type="button"
+              aria-label={open ? t("nav.closeMenu") : t("nav.openMenu")}
+              aria-expanded={open}
+              onClick={() => (shown ? closeMenu() : openMenu())}
+              className="inline-flex h-10 w-10 items-center justify-center"
+            >
+              <IconTile>
+                <MenuMark shown={shown} />
+              </IconTile>
+            </button>
+          ) : null}
         </div>
 
         {/* Mobile right — search then menu, hidden on social surfaces (the bottom
@@ -337,26 +396,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
                   immediate. ARIA below deliberately stays on `open`, because the
                   sheet really is still present and focusable until it unmounts.
                 */}
-                <span className="relative flex h-5 w-5 flex-col items-end justify-center gap-[3.5px]">
-                  <span
-                    className={cn(
-                      "h-[2px] rounded-full bg-current transition-all duration-300",
-                      shown ? "w-5 translate-y-[5.5px] rotate-45" : "w-5",
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      "h-[2px] rounded-full bg-current transition-all duration-300",
-                      shown ? "w-0 opacity-0" : "w-2.5 opacity-100",
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      "h-[2px] rounded-full bg-current transition-all duration-300",
-                      shown ? "w-5 -translate-y-[5.5px] -rotate-45" : "w-3.5",
-                    )}
-                  />
-                </span>
+                <MenuMark shown={shown} />
               </IconTile>
             </button>
           </div>
@@ -385,7 +425,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
             aria-label="Close menu"
             onClick={closeMenu}
             className={cn(
-              "fixed inset-0 z-[65] bg-background/60 backdrop-blur-sm transition-opacity duration-300 lg:hidden",
+              "fixed inset-0 z-[65] bg-background/60 backdrop-blur-sm transition-opacity duration-300",
               shown ? "opacity-100" : "opacity-0",
             )}
           />
@@ -394,7 +434,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
             aria-modal="true"
             aria-label="Menu"
             className={cn(
-              "fixed bottom-0 right-0 top-0 z-[70] flex w-[88%] min-w-[18rem] max-w-sm flex-col border-l border-border/60 bg-background shadow-2xl lg:hidden",
+              "fixed bottom-0 right-0 top-0 z-[70] flex w-[88%] min-w-[18rem] max-w-sm flex-col border-l border-border/60 bg-background shadow-2xl",
               "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
               shown ? "translate-x-0" : "translate-x-full",
             )}

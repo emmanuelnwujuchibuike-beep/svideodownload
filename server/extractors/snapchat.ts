@@ -174,6 +174,10 @@ function snapFormat(snap: Snap, i: number, count: number): MediaFormat {
     acodec: isVideo ? "aac" : null,
     directUrl: stripSnapWatermark(cleanUrl(snap.snapUrls!.mediaUrl!)),
     httpHeaders: headers,
+    // Each snap carries its own poster. Snapchat has always sent it; nothing
+    // read it, so every tile in a multi-snap story showed the post's single
+    // cover image and the batch picker was unusable.
+    thumbnail: snap.snapUrls?.mediaPreviewUrl ? cleanUrl(snap.snapUrls.mediaPreviewUrl) : null,
     // A story with several snaps is several PIECES OF MEDIA, not several
     // qualities of one. Without this the UI treats them as a quality picker and
     // downloads only whichever is selected — the owner's "it only downloads the

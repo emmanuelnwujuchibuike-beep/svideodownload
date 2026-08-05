@@ -20,9 +20,20 @@ export function ProfileCardLink({ handle }: { handle: string }) {
       prefetch={false}
       aria-label="Digital card and QR code"
       title="Digital card and QR code"
-      className="btn-lux btn-lux-icon lux-press"
+      /*
+        `btn-lux-icon` REPLACES `btn-lux`; it is not composed with it. Using
+        both let the base class's own background win, so the button rendered as
+        a plain white circle with nothing readable in it (owner, 2026-08-04).
+
+        The glyph is explicitly the brand blue rather than inheriting
+        `muted-foreground`: inside the lux scope this sits on a white card
+        behind a white gradient, and grey-on-white at 18px was the reason it
+        read as empty. The lux brief's own rule for a secondary control —
+        "white with light border, blue icon only" — is exactly right here.
+      */
+      className="btn-lux-icon lux-press !text-[#2563FF] dark:!text-[#7CA0FF]"
     >
-      <QrCode className="h-[18px] w-[18px]" />
+      <QrCode className="h-[19px] w-[19px]" strokeWidth={2.2} />
     </Link>
   );
 }

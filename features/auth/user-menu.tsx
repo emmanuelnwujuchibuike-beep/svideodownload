@@ -107,41 +107,22 @@ export function UserMenu() {
       // eslint-disable-next-line @next/next/no-img-element
       return <img src={realAvatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />;
     }
-    // Owner (2026-07-16): "change the login button in the landing page to login
-    // or create account to access all features". The old "Log in for API" was
-    // both narrower than the truth (an account unlocks the whole social app,
-    // not just the REST API) and hid the fact that signing up happens through
-    // this same passwordless flow — there is no separate register page.
-    return (
-      // Premium, alive login CTA. Simple copy + icon (owner). The motion is all
-      // GPU (transform/opacity): a brand-gradient fill, a sheen that sweeps across
-      // on hover, a soft glow that breathes, and a press-scale. The icon nudges on
-      // hover. Everything inherits the global reduced-motion guard.
-      <Link
-        href="/login?next=/account"
-        aria-label="Log in"
-        title="Log in"
-        className="group relative inline-flex items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-500/30 transition-all duration-300 hover:shadow-violet-500/50 active:scale-[0.97]"
-      >
-        {/* breathing glow behind the pill */}
-        <span aria-hidden className="pointer-events-none absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 opacity-40 blur-md motion-safe:animate-pulse" />
-        {/* sheen sweep on hover */}
-        <span aria-hidden className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full" />
-        {/*
-          Owner (2026-08-04): "remove the fingerprint button from the top of the
-          landing page header."
+    /*
+      Owner (2026-08-04): "what I meant by remove the fingerprint button from
+      the top is to remove it ENTIRELY — users will only use the login button
+      in the menu."
 
-          The word replaces the mark rather than the button disappearing: this
-          is the ONLY way into an account from the desktop header (the menu that
-          also offers login is `lg:hidden`), so deleting it outright would leave
-          a signed-out visitor on a laptop with no visible way to sign in. A
-          fingerprint also over-promised — it suggests biometric sign-in, while
-          the flow is a one-time email code.
-        */}
-        <span className="relative">Log in</span>
-      </Link>
-    );
+      So a signed-out visitor gets no header CTA at all. The single way in is
+      the menu, which is why the menu button now renders on desktop as well
+      (see site-header.tsx) — without that, removing this would have left a
+      signed-out visitor on a laptop with no route to sign in anywhere.
+
+      The signed-IN branch below is untouched: the avatar is not a CTA, it is
+      how you reach your own account.
+    */
+    return null;
   }
+
 
   // The REAL Frenz profile picture (profiles.avatar_url via useEntitlements),
   // not user_metadata.avatar_url — that field is only ever set by an OAuth

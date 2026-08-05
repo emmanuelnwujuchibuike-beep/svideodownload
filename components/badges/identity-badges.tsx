@@ -1,4 +1,4 @@
-import { BadgeCheck, Sparkles } from "lucide-react";
+import { BadgeCheck } from "lucide-react";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import type { BillingPlan } from "@/lib/monetization/types";
@@ -40,9 +40,10 @@ export function IdentityBadges({
   plan,
   /** The profile owner can hide their plan badge from visitors (privacy). */
   showPlan = true,
-  creator = false,
-  /** The member's own accent colour, used to tint the Creator chip when set. */
-  accent,
+  /** @deprecated The Creator chip was removed (owner, 2026-08-04). Ignored. */
+  creator: _creator = false,
+  /** @deprecated The Creator chip was removed; kept so call sites still compile. */
+  accent: _accent,
   size = "md",
   className,
 }: {
@@ -55,7 +56,7 @@ export function IdentityBadges({
   className?: string;
 }) {
   const plated = showPlan && plan !== "free";
-  if (!verified && !plated && !creator) return null;
+  if (!verified && !plated) return null;
 
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1.5 align-middle", className)}>
@@ -65,19 +66,6 @@ export function IdentityBadges({
           "Crown · Pro" / "Diamond Crown · Business" — so dropping the visible
           word costs nothing to a screen reader. */}
       {plated ? <DiamondCrownBadge plan={plan} size={size === "md" ? "md" : "sm"} /> : null}
-      {creator ? (
-        <span
-          title="Creator"
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full font-semibold",
-            size === "md" ? "px-2.5 py-1 text-xs" : "px-2 py-0.5 text-[11px]",
-            accent ? "" : "bg-violet-500/12 text-violet-600 dark:text-violet-300",
-          )}
-          style={accent ? { backgroundColor: `${accent}1f`, color: accent } : undefined}
-        >
-          <Sparkles className={size === "md" ? "h-3.5 w-3.5" : "h-3 w-3"} /> Creator
-        </span>
-      ) : null}
     </span>
   );
 }

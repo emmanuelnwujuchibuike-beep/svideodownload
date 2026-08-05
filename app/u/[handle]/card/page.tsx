@@ -79,7 +79,16 @@ export default async function ProfileCardPage({ params }: { params: Promise<{ ha
   const openToday = details.hours?.some((h) => !h.closed);
 
   return (
-    <main className="frenz-lux min-h-dvh px-4 py-6">
+    /*
+      This page sits OUTSIDE the (app) group, so nothing above it reserves the
+      status bar — the back link was landing under the notch (owner,
+      2026-08-04). Every other surface gets this from the app shell's top bar;
+      a standalone route has to ask for it itself.
+    */
+    <main
+      className="frenz-lux min-h-dvh px-4 pb-6"
+      style={{ paddingTop: "calc(var(--frenz-safe-top, 0px) + 1.5rem)" }}
+    >
       <div className="mx-auto w-full max-w-md">
         <Link
           href={`/u/${profile.handle}`}

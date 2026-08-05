@@ -94,6 +94,16 @@ export interface MediaFormat {
    */
   isSeparateItem?: boolean;
   /**
+   * A poster for THIS item specifically.
+   *
+   * Only meaningful alongside `isSeparateItem`: a batch of distinct media
+   * needs a distinct picture per tile. Without it the grid falls back to the
+   * post-level thumbnail, so every snap in a story rendered as the same image
+   * and the picker was impossible to use — the owner's "each media should show
+   * their respective cover and not a general cover".
+   */
+  thumbnail?: string | null;
+  /**
    * Set ONLY on a synthesized lower-quality tier (see quality-ladder.ts): at
    * download time, `directUrl` is downscaled/re-encoded to this max height via
    * ffmpeg instead of proxied verbatim — so it's always a real, smaller,

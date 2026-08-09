@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/admin/guard";
+import { setCtaWallpaper } from "@/lib/wallpapers-cta";
 import { imageSizeOf } from "@/lib/media/image-size";
 import { wallpaperTitle } from "@/lib/wallpaper-title";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -137,6 +138,8 @@ export async function PATCH(request: Request) {
     viewsBoost?: number;
     likesBoost?: number;
     savesBoost?: number;
+    /** Make this wallpaper the background of the Wallpaper Gallery button. */
+    ctaBackground?: boolean;
   };
   try {
     body = await request.json();
@@ -144,6 +147,21 @@ export async function PATCH(request: Request) {
     return bad("Malformed request.");
   }
   if (!body.id) return bad("Missing wallpaper.");
+
+  /*
+    The Wallpaper Gallery button's background (owner, 2026-08-09).
+
+    Handled first and returned early: it writes to `settings`, not to the
+    wallpaper row, so it must not fall through to the "nothing to change" guard
+    below. Setting it to false clears the selection entirely rather than
+    clearing only when THIS wallpaper is the current one — an operator toggling
+    it off means "no background", and reading the current value first would be a
+    race for no benefit.
+  */
+  if (typeof body.ctaBackground === "boolean") {
+    await setCtaWallpaper(body.ctaBackground ? body.id : null);
+    return NextResponse.json({ ok: true });
+  }
 
   const patch: Record<string, unknown> = {};
   if (typeof body.title === "string") patch.title = body.title.trim().slice(0, 120) || "Wallpaper";

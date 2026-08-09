@@ -54,7 +54,14 @@ function matchesTab(rec: DownloadRecord, tab: Tab): boolean {
   }
 }
 
-export function DownloadsPage({ wallpapers }: { wallpapers: Wallpaper[] }) {
+export function DownloadsPage({
+  wallpapers,
+  /** Admin-chosen background for the Wallpaper Gallery tile — see lib/wallpapers-cta. */
+  ctaWallpaperUrl = null,
+}: {
+  wallpapers: Wallpaper[];
+  ctaWallpaperUrl?: string | null;
+}) {
   const { items, toggleFavorite, removeDownload } = useHistory();
   const { tasks, pauseDownload, resumeDownload, retryDownload, cancelDownload, pauseAll } = useDownloadManager();
 
@@ -119,7 +126,7 @@ export function DownloadsPage({ wallpapers }: { wallpapers: Wallpaper[] }) {
         still the one place on this page everybody already looks, which is the
         whole reason it was moved up from the bottom of the dashboard.
       */}
-      <WallpaperCta />
+      <WallpaperCta backgroundUrl={ctaWallpaperUrl} />
 
       {/* Under the paste card — adjusts to whatever ad size the zone serves
           (AdSurface hugs the unit). The site's highest-attention placement. */}

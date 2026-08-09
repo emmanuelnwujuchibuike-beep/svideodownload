@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AppContent } from "@/features/app-shell/app-content";
 import { DownloadsPage } from "@/features/downloads/downloads-page";
 import { getHomeProfile } from "@/lib/social/home";
+import { getCtaWallpaper } from "@/lib/wallpapers-cta";
 import { listWallpapers } from "@/lib/wallpapers-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -21,7 +22,13 @@ export default async function Downloads() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/downloads");
 
-  const [profile, wallpapers] = await Promise.all([getHomeProfile(user.id), listWallpapers(user.id)]);
+  const [profile, wallpapers, ctaWallpaper] = await Promise.all([
+    getHomeProfile(user.id),
+    listWallpapers(user.id),
+    // The admin-chosen tile background. Resolved HERE because DownloadsPage is
+    // a client component and cannot read the database itself.
+    getCtaWallpaper(),
+  ]);
   if (!profile?.handle) redirect("/welcome");
 
   return (
@@ -33,7 +40,7 @@ export default async function Downloads() {
       sidebar at `xl`, which is one tree rather than two behind media queries.
     */
     <AppContent>
-      <DownloadsPage wallpapers={wallpapers} />
+      <DownloadsPage wallpapers={wallpapers} ctaWallpaperUrl={ctaWallpaper.url} />
     </AppContent>
   );
 }

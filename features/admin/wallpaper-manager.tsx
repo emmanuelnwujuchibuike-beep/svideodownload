@@ -41,7 +41,19 @@ const CATEGORIES = ["Abstract", "Gradient", "Nature", "Dark", "Minimal", "Space"
  * almost always what an operator actually wants. Delete is there, marked, and
  * removes the stored object too.
  */
-export function WallpaperManager({ wallpapers }: { wallpapers: AdminWallpaper[] }) {
+export function WallpaperManager({
+  wallpapers,
+  /**
+   * The wallpaper currently used as the Wallpaper Gallery button's background,
+   * or null for the plain gradient. Read server-side from `settings` — one row,
+   * so the selection is exclusive by construction rather than by a constraint
+   * the app has to enforce on every write.
+   */
+  ctaId = null,
+}: {
+  wallpapers: AdminWallpaper[];
+  ctaId?: string | null;
+}) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [category, setCategory] = useState(CATEGORIES[0]!);
@@ -234,6 +246,39 @@ export function WallpaperManager({ wallpapers }: { wallpapers: AdminWallpaper[] 
                     )}
                     {w.status === "published" ? "Hide" : "Show"}
                   </button>
+                  {/*
+                    ── Button background (owner, 2026-08-09) ──────────────────
+                    "a wallpaper set by the admin in admin dashboard" — this is
+                    the picture behind the Wallpaper Gallery tile on the landing
+                    page and the downloads dashboard.
+
+                    Exclusive by construction: the choice is ONE row in
+                    `settings`, so selecting a different wallpaper replaces the
+                    previous one and there is no way for two to claim it at
+                    once. Tapping the current one again clears it back to the
+                    plain gradient.
+
+                    Only offered on a PUBLISHED wallpaper — a hidden one is not
+                    served, so using it would put a broken image behind the
+                    button on the front page.
+                  */}
+                  {w.status === "published" ? (
+                    <button
+                      type="button"
+                      disabled={rowBusy === w.id}
+                      onClick={() => void patch(w.id, { ctaBackground: ctaId !== w.id })}
+                      aria-pressed={ctaId === w.id}
+                      title={ctaId === w.id ? "Remove as button background" : "Use as the Wallpaper Gallery button background"}
+                      className={cn(
+                        "flex h-7 w-7 items-center justify-center rounded-lg border transition disabled:opacity-50",
+                        ctaId === w.id
+                          ? "border-violet-500 bg-violet-500/15 text-violet-500"
+                          : "border-border text-muted-foreground hover:bg-secondary",
+                      )}
+                    >
+                      <ImageIcon className="h-3 w-3" />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     disabled={rowBusy === w.id}

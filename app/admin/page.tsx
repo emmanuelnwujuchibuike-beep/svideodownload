@@ -32,6 +32,7 @@ import { SupportInbox } from "@/features/admin/support-inbox";
 import { RatingsSection } from "@/features/admin/ratings-section";
 import { VerificationQueue } from "@/features/admin/verification-queue";
 import { WallpaperManager } from "@/features/admin/wallpaper-manager";
+import { getCtaWallpaper } from "@/lib/wallpapers-cta";
 import { FeatureFlagManager } from "@/features/admin/feature-flags-manager";
 import { ExperimentsManager } from "@/features/admin/experiments-manager";
 import { getFlags } from "@/lib/platform/flags";
@@ -564,8 +565,8 @@ async function LandingSection() {
 }
 
 async function WallpapersSection() {
-  const wallpapers = await listAllWallpapers();
-  return <WallpaperManager wallpapers={wallpapers} />;
+  const [wallpapers, cta] = await Promise.all([listAllWallpapers(), getCtaWallpaper()]);
+  return <WallpaperManager wallpapers={wallpapers} ctaId={cta.id} />;
 }
 
 async function VerificationSection() {

@@ -296,11 +296,21 @@ function abs(u: string): string {
  * chosen for being quick was setting the floor for how slow everything else
  * could be.
  *
- * Five seconds is many times its normal response and still leaves room for the
- * fallbacks inside a tolerable total. A JSON API that has not answered in five
- * seconds is not going to rescue this request.
+ * ── Why 12s and not the 5s this shipped with ─────────────────────────────────
+ * 5s was wrong, and measuring it live is the only reason that is known. TikWM
+ * was answering in slightly over five seconds, so the cap made it lose every
+ * race — and what it lost to is far worse than waiting: the native parse
+ * returns bitrate tiers whose codec we cannot trust, every one of which has to
+ * be re-encoded. Measured on the owner's link, capping at 5s took the download
+ * from 4 seconds to 76.
+ *
+ * A ceiling was still the right idea; the number was simply set against how
+ * long TikWM SHOULD take instead of against what happens when it is skipped.
+ * The fallback here is expensive, so the deadline is generous: 12s bounds the
+ * pathological case (it used to be unbounded) while still letting the route
+ * that produces a directly-streamable H.264 file win whenever it can answer.
  */
-const TIKWM_TIMEOUT_MS = Number(process.env.TIKWM_TIMEOUT_MS || 5000);
+const TIKWM_TIMEOUT_MS = Number(process.env.TIKWM_TIMEOUT_MS || 12000);
 
 async function tikwmExtract(
   url: string,

@@ -105,8 +105,11 @@ function ToolLink({ tool, compact = false }: { tool: RecommendedTool; compact?: 
             </span>
           ) : null}
         </span>
+        {/* `line-clamp-1` WITHOUT `block`: the two cancel each other. The clamp
+            needs `display: -webkit-box` and `block` overrides it at equal
+            specificity, so the text was never actually clamped. */}
         {!compact && tool.description ? (
-          <span className="mt-0.5 line-clamp-1 block text-xs text-muted-foreground">
+          <span className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
             {tool.description}
           </span>
         ) : null}

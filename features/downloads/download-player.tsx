@@ -74,6 +74,16 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   const [publishing, setPublishing] = useState(false);
   const [postId, setPostId] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  /*
+    The full caption, on demand (owner, 2026-08-09: the grid should show "one
+    line with three dots … for see more that opens the media and caption").
+
+    Clamping the grid tile is only half of it — the "…more" cue has to lead
+    somewhere, and this player was truncating the caption too, so the rest was
+    unreachable from anywhere in the app. Collapsed by default: this is chrome
+    over the media, and a TikTok caption can be several hundred characters.
+  */
+  const [captionOpen, setCaptionOpen] = useState(false);
   const [sendToChatOpen, setSendToChatOpen] = useState(false);
   const [favorited, setFavorited] = useState(rec.favorite);
   const [savedToDevice, setSavedToDevice] = useState(false);
@@ -441,11 +451,40 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         <MoreVertical className="h-5 w-5" />
       </button>
 
-      {/* Title / position */}
-      <p className="pointer-events-none absolute inset-x-16 top-[calc(2rem+var(--frenz-safe-top))] z-10 truncate text-center text-sm font-medium text-white/90">
-        {rec.title}
-        {total > 1 ? <span className="text-white/60"> · {index + 1}/{total}</span> : null}
-      </p>
+      {/*
+        Title / position — TAP TO READ THE WHOLE CAPTION.
+
+        It was `pointer-events-none` + `truncate`, so a long caption was cut off
+        here exactly as it is on the grid tile, and the "…more" cue on that tile
+        led to another truncation. Now the line is a real control: collapsed it
+        reads as before, expanded it shows the caption in full and scrolls if it
+        is long.
+
+        It stays inset between the close and menu buttons so it can never
+        overlap either, and the expanded panel gets its own scrim — white text
+        over arbitrary video frames is otherwise unreadable.
+      */}
+      <div className="absolute inset-x-16 top-[calc(2rem+var(--frenz-safe-top))] z-10">
+        <button
+          type="button"
+          onClick={() => setCaptionOpen((v) => !v)}
+          aria-expanded={captionOpen}
+          aria-label={captionOpen ? "Hide caption" : "Show full caption"}
+          className={cn(
+            "block w-full rounded-xl text-center text-sm font-medium text-white/90 transition",
+            captionOpen && "max-h-[40vh] overflow-y-auto overscroll-contain bg-black/70 p-3 text-left backdrop-blur-md",
+          )}
+        >
+          <span className={cn(captionOpen ? "whitespace-pre-wrap break-words" : "block truncate")}>
+            {rec.title}
+            {total > 1 ? <span className="text-white/60"> · {index + 1}/{total}</span> : null}
+          </span>
+          {/* Only offered when there is genuinely more to see. */}
+          {!captionOpen && rec.title.length > 40 ? (
+            <span className="mt-0.5 block text-[11px] font-semibold text-white/60">…more</span>
+          ) : null}
+        </button>
+      </div>
 
       {/* The stage — full-bleed media. object-contain never crops the width or
           over-stretches beyond the source: it letterboxes on black and extends into

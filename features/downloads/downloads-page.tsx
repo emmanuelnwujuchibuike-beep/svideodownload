@@ -1,16 +1,6 @@
 "use client";
 
-import {
-  ArrowRight,
-  Image as ImageIcon,
-  Microscope,
-  Pause,
-  Play,
-  RotateCw,
-  Search,
-  X,
-} from "lucide-react";
-import Link from "next/link";
+import { Pause, Play, RotateCw, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useAppMode } from "@/features/app-shell/use-app-mode";
@@ -110,21 +100,26 @@ export function DownloadsPage({ wallpapers }: { wallpapers: Wallpaper[] }) {
           the landing hero, so that control did nothing on this page. */}
       <section id="download" className="scroll-mt-20 rounded-3xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
         <DownloadBox surface="card" />
-
-        {/*
-          The Wallpaper Gallery, right under the paste box (owner, 2026-08-09):
-          "so users who are signed in can go to the wallpaper page easily
-          without scrolling to the bottom".
-
-          The wallpapers section already exists on this page — at the very
-          bottom, past the stats, the recents, the quick actions and the usage
-          dashboard. Anyone who came here to browse wallpapers had to scroll the
-          entire download dashboard to find out they could. This is the same
-          destination and the same treatment as the landing's row, in the one
-          place on this page everybody already looks.
-        */}
-        <WallpaperCta className="mt-3" />
       </section>
+
+      {/*
+        The Wallpaper Gallery — its OWN block, outside the paste card (owner,
+        2026-08-09: "separate the wallpaper button from the supported platform
+        in the download page").
+
+        It used to sit inside that card, `mt-3` under `DownloadBox` — and the
+        last thing `DownloadBox` renders is the "Supported:" platform-badge
+        strip. Inside one bordered card with a small gap, the two read as one
+        block, so a link to an entirely different feature looked like a footnote
+        on the list of supported sites.
+
+        Out here it is a sibling of the paste card with the section's own
+        spacing around it, which is what it actually is: a second destination,
+        not part of the downloader. It stays directly BELOW the paste box —
+        still the one place on this page everybody already looks, which is the
+        whole reason it was moved up from the bottom of the dashboard.
+      */}
+      <WallpaperCta />
 
       {/* Under the paste card — adjusts to whatever ad size the zone serves
           (AdSurface hugs the unit). The site's highest-attention placement. */}

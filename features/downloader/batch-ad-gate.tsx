@@ -133,7 +133,29 @@ export function BatchAdGate({
   return (
     <FullscreenInterstitial
       zone={isGate ? "batch_download_gate" : "batch_download_complete"}
-      shown={hasAd !== false}
+      /*
+        ── `=== true`, NEVER `!== false` (owner, 2026-08-09) ─────────────────
+        "the black flashing and showing when a multiple download is selected."
+
+        `hasAd` is THREE-STATE: `null` = the slot has not answered yet, `false`
+        = no creative, `true` = a creative is there. This used to test "not
+        false", and NULL IS NOT FALSE — so the interstitial was revealed on the
+        very first frame of every batch, before the slot had reported anything.
+
+        `FullscreenInterstitial` is an OPAQUE `fixed inset-0 bg-black`. So each
+        batch put a full-screen black panel over the page with nothing on it,
+        held it for at least the 1200 ms grace period, and then either filled it
+        or tore it down — which is exactly the flash being reported. It is
+        specific to multiple downloads because this component only runs for a
+        batch.
+
+        `=== true` waits for a positive answer, which is what the sibling
+        `DownloadInterstitial` has always done (`open && hasAd === true`). The
+        slot still loads while hidden — the shell keeps it mounted and merely
+        `hidden` — so nothing about fill or reporting changes, and the
+        no-creative path below still lets the batch run.
+      */
+      shown={hasAd === true}
       canSkip={remaining <= 0}
       remaining={remaining}
       onResolved={setHasAd}

@@ -1,31 +1,19 @@
-import {
-  ArrowRight,
-  Compass,
-  Image as ImageIcon,
-  Lock,
-  Microscope,
-  Shield,
-  ShieldCheck,
-  Sparkles,
-  Zap,
-} from "lucide-react";
+import { ArrowRight, Compass, Lock, Shield, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
 import { HeroEffects } from "@/components/landing/hero-effects";
 import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
+import { SupportedPlatforms } from "@/components/landing/supported-platforms";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { Downloader } from "@/features/downloader/downloader";
 import { HeroCtaForm } from "@/features/downloader/hero-cta-form";
 import { HeroLinkDownloader } from "@/features/downloader/hero-link-downloader";
 import { SharedLinkDownloader } from "@/features/downloader/shared-link-downloader";
-import { BRAND_ICONS } from "@/lib/platform-icons";
-import type { PlatformId } from "@/types";
-
-/** Platform marks shown under the "Download anything" card (public/newlanding.jpg). */
-const SUPPORTED: PlatformId[] = ["tiktok", "twitter", "snapchat", "instagram", "facebook", "pinterest", "youtube", "telegram"];
+/* The platform list and its badge markup now live in
+   `components/landing/supported-platforms.tsx` — one definition, two surfaces. */
 
 /**
  * The trust row beneath the CTAs (public/upgraded landing page.jpg) — four
@@ -176,6 +164,23 @@ export function Hero() {
             */}
             <HeroCtaForm />
 
+            {/*
+              Supported platforms, directly under the hero download button
+              (owner, 2026-08-09).
+
+              This row already existed further down, inside the "Download
+              anything" card — but that card is most of a screen away, and the
+              hero button is where a first-time visitor decides whether this
+              tool handles the link already on their clipboard. Eight
+              recognisable marks answer that in the moment they are asking.
+
+              It is deliberately NOT removed from the lower card: that placement
+              comes from the owner's own reference (`public/newlanding.jpg`), so
+              both are intended. Shared component, one definition — see
+              `supported-platforms.tsx` for why that matters.
+            */}
+            <SupportedPlatforms className="-mt-0.5 px-1" />
+
             <Link
               href="/features"
               className="group flex w-full items-center gap-4 rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-left text-slate-900 shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-card active:scale-[0.995] dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur dark:hover:border-white/30"
@@ -310,18 +315,9 @@ export function Hero() {
               <SharedLinkDownloader />
             </Suspense>
           </div>
-          {/* Supported platforms, per the reference card. */}
-          <div className="relative mt-4 flex flex-wrap items-center justify-center gap-2">
-            <span className="text-xs font-semibold text-white/80">Supported Platforms:</span>
-            {SUPPORTED.map((id) => {
-              const Icon = BRAND_ICONS[id];
-              return Icon ? (
-                <span key={id} className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm">
-                  <Icon className="h-3.5 w-3.5" />
-                </span>
-              ) : null;
-            })}
-          </div>
+          {/* Supported platforms, per the reference card. Same component as the
+              hero's row, on the gradient surface. */}
+          <SupportedPlatforms surface="onGradient" className="relative mt-4" />
           {/* Trademark / non-affiliation disclaimer — INSIDE the download box
               (owner), in a light tone that reads on the purple gradient. The tool
               inside hides its own copy on the landing so this isn't doubled. */}

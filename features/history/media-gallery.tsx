@@ -66,6 +66,17 @@ const SORTS: { key: SortKey; label: string }[] = [
 
 const COLUMN_CHOICES = [2, 3, 4, 5] as const;
 
+/**
+ * Roughly how much of a caption survives one clamped line on a grid tile.
+ *
+ * Only decides whether to render the "…more" cue — the CLAMP itself is CSS and
+ * always exact. A character count cannot know the real wrap point (font, tile
+ * width, column count all move it), so this is deliberately conservative: a
+ * caption near the boundary may show "…more" with almost nothing hidden, which
+ * is a far better failure than hiding the cue on a caption that IS cut off.
+ */
+const CAPTION_PREVIEW_CHARS = 40;
+
 const VIEW_KEY = "frenz:gallery-view";
 const COLS_KEY = "frenz:gallery-cols";
 const SORT_KEY = "frenz:gallery-sort";
@@ -443,7 +454,38 @@ function GalleryTile({
             <KindIcon className="h-3.5 w-3.5 drop-shadow" />
             {item.kind === "video" && item.durationSeconds ? formatClock(item.durationSeconds) : null}
           </span>
-          <span className="line-clamp-1 block text-left text-[11px] font-medium text-white/95">{item.title}</span>
+          {/*
+            ── ONE line, ellipsised (owner, 2026-08-09) ────────────────────────
+            "media caption in history page shouldn't show everything, it should
+            only show one line with three dots."
+
+            🔴 The class was `line-clamp-1 block`, and those CANCEL EACH OTHER.
+            `line-clamp-1` works by setting `display: -webkit-box`; `block` sets
+            `display: block`. Both are single-class selectors, so specificity
+            ties and the LATER rule in the stylesheet wins — and Tailwind emits
+            `.block` after `.line-clamp-1` (verified by running the Tailwind CLI
+            over both). The clamp was silently dead, so a TikTok caption — which
+            is what `title` is for a downloaded slideshow — rendered in full and
+            covered the entire thumbnail.
+
+            `line-clamp-1` alone is already block-level. Never pair the two.
+          */}
+          <span className="line-clamp-1 text-left text-[11px] font-medium text-white/95">{item.title}</span>
+          {/*
+            "…more" — the affordance for the rest (owner: "three dots at the
+            caption for see more that opens the media and caption").
+
+            Not a separate control: the whole tile is already a button that
+            opens the player, and the player shows the caption in full. A second
+            tap target inside a 50%-width tile would be a mis-tap generator, so
+            this is a LABEL that says where the rest is, on the thing you were
+            going to tap anyway. Shown only when the text is actually cut off.
+          */}
+          {item.title.length > CAPTION_PREVIEW_CHARS ? (
+            <span aria-hidden className="mt-0.5 block text-left text-[10px] font-semibold text-white/70">
+              …more
+            </span>
+          ) : null}
         </span>
         <span className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">

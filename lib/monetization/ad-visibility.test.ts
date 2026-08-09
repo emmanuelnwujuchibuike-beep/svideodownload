@@ -92,6 +92,46 @@ describe("AdSlot reports visibility, not mere existence", () => {
   });
 });
 
+describe("no consumer reveals an interstitial on the UNANSWERED state", () => {
+  /*
+    `hasAd` is THREE-state: null (not answered), false (no creative), true.
+
+    `batch-ad-gate` used `shown={hasAd !== false}` — and `null !== false` is
+    TRUE, so an OPAQUE full-screen black panel went up on the first frame of
+    every batch, before the slot had reported anything. That is the "black
+    flashing when a multiple download is selected" the owner reported, and it is
+    batch-specific because this component only runs for a batch.
+
+    Every other consumer already required a positive answer. This keeps them
+    all honest: `!== false` is the bug, `=== true` is the contract.
+  */
+  const CONSUMERS = [
+    "features/downloader/batch-ad-gate.tsx",
+    "features/monetization/download-interstitial.tsx",
+    "features/monetization/ad-surface.tsx",
+    "features/monetization/download-complete-ad.tsx",
+  ];
+
+  it.each(CONSUMERS)("%s never treats null as 'has an ad'", (file) => {
+    const src = readFileSync(join(process.cwd(), file), "utf8");
+    expect(src, "`hasAd !== false` reveals the overlay before the slot answers").not.toMatch(
+      /hasAd\s*!==\s*false/,
+    );
+  });
+
+  it("the batch gate waits for a confirmed creative", () => {
+    const src = readFileSync(join(process.cwd(), "features/downloader/batch-ad-gate.tsx"), "utf8");
+    expect(src).toMatch(/shown=\{hasAd === true\}/);
+  });
+
+  it("the batch still runs when there is no creative", () => {
+    // The overlay must never hold a download hostage to an unfilled placement.
+    const src = readFileSync(join(process.cwd(), "features/downloader/batch-ad-gate.tsx"), "utf8");
+    expect(src).toMatch(/if \(hasAd === false\)/);
+    expect(src).toMatch(/runNow\(\)/);
+  });
+});
+
 describe("the interstitial only unveils itself for a real creative", () => {
   it("is opaque, so an empty one is a black screen", () => {
     // Documents WHY the above matters: this is not a translucent scrim.

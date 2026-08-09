@@ -712,8 +712,34 @@ function FormatRow({
 }) {
   const label =
     kind === "image" ? `Photo ${index + 1}` : format.label || (kind === "audio" ? "Audio" : "Video");
-  // Size shown only when known — never a misleading "—" or an inflated guess.
-  const size = kind === "image" ? null : formatBytes(format.filesize);
+  /*
+    ── The size has to be the size you actually get (owner, 2026-08-09) ───────
+    "Make the file size in the quality review accurate according to the file
+    size exactly, and not showing a small file size in review while the main
+    size is higher."
+
+    A number is printed ONLY for a format we hand over byte-for-byte. Two kinds
+    of format are not that, and both used to show a figure that described a file
+    nobody would ever receive:
+
+    • a stream we must RE-ENCODE (TikTok's H.265 "best quality") — measured on
+      the owner's link, it advertised 16.4 MB and delivered 43.4 MB, because the
+      figure came from the H.265 source and we ship H.264;
+    • a synthesized lower tier, which is produced by downscaling at download
+      time and therefore has no size until it exists.
+
+    Neither can be known in advance without encoding the file first, so each
+    says what it IS instead of guessing a number. That is more useful than a
+    wrong figure and considerably more useful than a blank.
+  */
+  const willConvert = kind === "video" && format.filesize == null;
+  const size =
+    kind === "image" ? null : format.filesize != null ? formatBytes(format.filesize) : null;
+  const sizeNote = !willConvert
+    ? null
+    : format.transcodeMaxHeight
+      ? "smaller file"
+      : "size varies";
   return (
     <button
       type="button"
@@ -735,7 +761,11 @@ function FormatRow({
       </span>
       <span className="flex items-center gap-1.5 text-[11px] uppercase text-muted-foreground">
         <span>{format.ext}</span>
-        {size && size !== "—" ? <span className="normal-case">· {size}</span> : null}
+        {size && size !== "—" ? (
+          <span className="normal-case">· {size}</span>
+        ) : sizeNote ? (
+          <span className="normal-case italic opacity-80">· {sizeNote}</span>
+        ) : null}
       </span>
     </button>
   );

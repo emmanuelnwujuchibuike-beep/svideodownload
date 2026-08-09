@@ -565,23 +565,22 @@ export function FloatingDownloadProgress({
               ) : null}
             </div>
 
-            <div className="flex shrink-0 flex-col items-center gap-1">
-              {/* Minimise — offered on ANY running download, not just a slow one:
-                  by the time someone wants the card out of the way they should not
-                  have to wait for us to agree that it is taking too long. */}
-              {running ? (
-                <button
-                  type="button"
-                  aria-label="Minimise — keep downloading in the background"
-                  onClick={() => {
-                    haptic("light");
-                    setMinimised(true);
-                  }}
-                  className="rounded-lg p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-                >
-                  <Minus className="h-4 w-4" />
-                </button>
-              ) : null}
+            <div className="flex shrink-0 flex-col items-center gap-1.5">
+              {/*
+                Minimise, as a LABELLED control (owner, 2026-08-09: "make the
+                minimise button more visible").
+
+                It was a bare 16px dash in muted grey, next to an identical-
+                looking dismiss — two anonymous glyphs, one of which cancels
+                your download. Nobody was going to find "you can carry on
+                browsing" in that. It now says the word, carries the brand tint
+                so it reads as an offer rather than chrome, and sits visually
+                above the close button instead of beside it as an equal.
+
+                Offered on ANY running download, not just a slow one: by the time
+                someone wants the card out of the way they should not have to
+                wait for us to agree that it is taking too long.
+              */}
               <button
                 type="button"
                 aria-label={running ? "Cancel download" : "Dismiss"}
@@ -590,6 +589,20 @@ export function FloatingDownloadProgress({
               >
                 <X className="h-4 w-4" />
               </button>
+              {running ? (
+                <button
+                  type="button"
+                  aria-label="Minimise — keep downloading in the background"
+                  onClick={() => {
+                    haptic("light");
+                    setMinimised(true);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-full bg-[#2563FF]/10 px-2 py-1 text-[10px] font-bold text-[#2563FF] ring-1 ring-inset ring-[#2563FF]/25 transition hover:bg-[#2563FF]/20 active:scale-95 dark:text-blue-300"
+                >
+                  <Minus className="h-3 w-3" strokeWidth={3} />
+                  Hide
+                </button>
+              ) : null}
             </div>
           </div>
       </div>

@@ -318,39 +318,62 @@ async function tikwmExtract(
         }),
       );
     } else {
-      // Keep BOTH streams. TikWM's `hdplay` is very often bytevc1/H.265 (needs
-      // a server transcode to play everywhere), while `play` is plain
-      // H.264+AAC — the guaranteed-playable variant the download service falls
-      // back to if the HD transcode ever fails. vcodec here is a hint only;
-      // the download service still probes the real stream before trusting it.
-      if (d.hdplay)
+      /*
+        Keep BOTH streams — but the H.264 one goes FIRST (owner, 2026-08-09:
+        "this TikTok link takes too much time while preparing").
+
+        TikWM's `hdplay` is very often bytevc1/H.265. That plays nowhere
+        reliably outside Safari, so the server has to re-encode it to H.264 —
+        and a re-encode is not a copy, it is minutes of CPU. Measured on the
+        owner's link: `hdplay` took 55 SECONDS to first byte, while `play`
+        (already H.264, streamed as-is) took 4.
+
+        `play` was second in this list, so it was never the default; everyone
+        got the 55-second path without choosing it. Ordering H.264 first makes
+        the fast, universally-playable stream what you get unless you ask for
+        the other one — and the other one now says what it costs.
+      */
+      if (d.play && d.play !== d.hdplay)
         formats.push({
-          formatId: "tt-0",
+          formatId: d.hdplay ? "tt-sd" : "tt-0",
           kind: "video",
           label: "HD · No watermark",
           ext: "mp4",
           resolution: null,
           fps: null,
-          filesize: typeof d.hd_size === "number" && d.hd_size > 0 ? d.hd_size : null,
-          tbr: null,
-          vcodec: null,
-          acodec: "aac",
-          directUrl: abs(d.hdplay),
-          httpHeaders: headers,
-        });
-      if (d.play && d.play !== d.hdplay)
-        formats.push({
-          formatId: d.hdplay ? "tt-sd" : "tt-0",
-          kind: "video",
-          label: d.hdplay ? "Standard · No watermark" : "HD · No watermark",
-          ext: "mp4",
-          resolution: null,
-          fps: null,
+          // Delivered byte-for-byte, so this number is exact.
           filesize: typeof d.size === "number" && d.size > 0 ? d.size : null,
           tbr: null,
           vcodec: "h264",
           acodec: "aac",
           directUrl: abs(d.play),
+          httpHeaders: headers,
+        });
+      if (d.hdplay)
+        formats.push({
+          formatId: "tt-0",
+          kind: "video",
+          label: "Best quality · converts on download",
+          ext: "mp4",
+          resolution: null,
+          fps: null,
+          /*
+            🔴 Deliberately NULL, not `hd_size` (owner: "make the file size in
+            the quality review accurate… not showing a small file size while
+            the main size is higher").
+
+            `hd_size` describes the H.265 SOURCE. What we deliver is that source
+            re-encoded to H.264, which is a different file and a much bigger
+            one — measured on the owner's link, 16.4 MB advertised against 43.4
+            MB delivered, 2.6× out. There is no honest number to put here
+            without encoding the file first, so the review shows none rather
+            than one that is wrong.
+          */
+          filesize: null,
+          tbr: null,
+          vcodec: null,
+          acodec: "aac",
+          directUrl: abs(d.hdplay),
           httpHeaders: headers,
         });
     }

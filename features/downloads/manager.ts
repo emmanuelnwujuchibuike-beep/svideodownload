@@ -1,6 +1,7 @@
 "use client";
 
 import { trackDownload } from "@/lib/analytics/client";
+import { isRetryable, MAX_ATTEMPTS, RETRY_DELAY_MS } from "@/features/downloads/retry-policy";
 import { addDownload } from "@/features/history/store";
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { toast } from "@/features/ui/toast";
@@ -65,19 +66,12 @@ const MAX_CONCURRENT = 2;
  * Automatic retry (owner, 2026-08-09: "make failed downloads automatically
  * retry... let there be zero fail rate").
  *
- * The owner's own error log is almost entirely `HTTP 502` — a transient
- * upstream failure, the exact class that succeeds on a second attempt. Making
- * a person tap Retry for something that would have worked on its own is
- * pushing our flakiness onto them.
- *
- * What is NOT retried matters just as much: a 404 or a 403 is a settled
- * answer, and hammering it three times only makes the failure slower to
- * report. Only transient causes are retried.
+ * The policy itself lives in ./retry-policy — a plain module with no browser
+ * APIs, so it can actually be unit-tested. It was inline here, inside a
+ * "use client" file, which is exactly how it shipped with a regex full of
+ * literal control bytes and a rule that retried HTTP 429 until the daily
+ * download cap ran away. See that file and its test.
  */
-const MAX_ATTEMPTS = 3;
-/** Backoff between attempts. Short — the member is watching a progress card. */
-const RETRY_DELAY_MS = [800, 2500];
-
 /**
  * How long a prepare may run before the card explains itself.
  *
@@ -86,13 +80,6 @@ const RETRY_DELAY_MS = [800, 2500];
  */
 const SLOW_PREPARE_MS = 6_000;
 
-/** Is this failure worth another go? */
-function isRetryable(reason: string): boolean {
-  // A definitive "not there" or "not allowed" will say the same thing again.
-  if (/(?:404|403|401|410)/.test(reason)) return false;
-  if (/private|removed|expired|not found|unavailable in your/i.test(reason)) return false;
-  return true;
-}
 let activeRuns = 0;
 const runQueue: string[] = [];
 
@@ -231,8 +218,19 @@ export function getServerSnapshot(): DownloadTask[] {
   return EMPTY;
 }
 
-function buildUrl(t: Pick<DownloadTask, "url" | "formatId" | "kind" | "title">): string {
+function buildUrl(t: Pick<DownloadTask, "url" | "formatId" | "kind" | "title" | "id">): string {
   const sp = new URLSearchParams({ url: t.url, formatId: t.formatId, kind: t.kind, title: t.title });
+  /*
+    `t` — this download's identity, stable across automatic retries.
+
+    The server spends one unit of the daily cap per REQUEST, and auto-retry can
+    make three of them for one download. Sending the task id lets the server
+    charge the download once and let its retries through on the same receipt.
+    Without it a free visitor's 30/day silently became 10, and the resulting
+    429s were themselves retried — which is how every download on the site ended
+    up failing (owner, 2026-08-09).
+  */
+  sp.set("t", t.id);
   return `/api/download?${sp.toString()}`;
 }
 

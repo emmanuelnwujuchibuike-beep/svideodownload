@@ -1274,6 +1274,13 @@
 .frenz-cta-go {
   opacity: 0;
   transform: translateY(6px);
+  /* Invisible controls must not be tappable. The face is absolutely positioned
+     OVER these; while it is showing, it owns every tap, and a finger landing on
+     a 0-opacity Paste or Download button underneath it is a control nobody can
+     see being pressed. This pairs with `preventDefault` on the Paste button's
+     pointerdown (see hero-paste-button.tsx): that stops the collapse from ever
+     starting, and this makes the outcome safe if it somehow does. */
+  pointer-events: none;
   transition:
     opacity 200ms var(--ease-out),
     transform 260ms var(--ease-out);
@@ -1297,6 +1304,7 @@
 .frenz-cta:focus-within .frenz-cta-go {
   opacity: 1;
   transform: none;
+  pointer-events: auto;
 }
 
 /* Once something has been typed the field STAYS, even after the input loses
@@ -1306,6 +1314,7 @@
 .frenz-cta-input:not(:placeholder-shown) {
   opacity: 1;
   transform: none;
+  pointer-events: auto;
 }
 .frenz-cta:has(.frenz-cta-input:not(:placeholder-shown)) .frenz-cta-face {
   opacity: 0;
@@ -1316,6 +1325,7 @@
 .frenz-cta:has(.frenz-cta-input:not(:placeholder-shown)) .frenz-cta-go {
   opacity: 1;
   transform: none;
+  pointer-events: auto;
 }
 
 /* The sheen is decoration; it must never sweep while someone is typing. */

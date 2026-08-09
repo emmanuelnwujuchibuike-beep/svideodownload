@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
+import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
 import { startDownload } from "@/features/downloads/manager";
 import { categoryIcon } from "@/features/wallpapers/wallpaper-categories";
 import { WallpaperInterstitial } from "@/features/wallpapers/wallpaper-gallery";
@@ -508,6 +509,25 @@ export function WallpaperExplore({
           onDownloaded={onDownloaded}
         />
       ) : null}
+
+      {/*
+        🔴 The download popup (owner, 2026-08-09): "let users be notified like a
+        pop up when they click on download wallpaper button, and they see it
+        started and completed."
+
+        The card that does exactly this already existed — it just was not on
+        this page. `FloatingDownloadProgress` is mounted from inside
+        `Downloader`, and /wallpapers renders no Downloader, so a wallpaper
+        download ran completely silently: no "started", no progress, no
+        "complete", and on iOS no "Save to device" tap, which is the step that
+        actually puts the file in Photos. Tapping Download appeared to do
+        nothing at all.
+
+        `z-[115]` because the reels viewer is a full-screen `z-[100]` overlay —
+        at the default 85 the card would render behind the wallpaper and be just
+        as invisible as having no card.
+      */}
+      <FloatingDownloadProgress layerClass="z-[115]" />
 
       {adOpen ? <WallpaperInterstitial onClose={closeAd} /> : null}
     </>

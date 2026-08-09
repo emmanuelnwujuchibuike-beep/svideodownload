@@ -33,9 +33,11 @@ function fail(error: string, code: ApiError["code"], status: number) {
 async function enforceDailyCap(
   request: Request,
   clientIp: string,
+  /** The client's stable id for this download — see `checkDownloadQuota`. */
+  downloadId?: string | null,
 ): Promise<Response | null> {
   if (isInternalWorkerCall(request)) return null;
-  const quota = await checkDownloadQuota(request, clientIp);
+  const quota = await checkDownloadQuota(request, clientIp, downloadId);
   if (quota.allowed) return null;
   return NextResponse.json<ApiError>(
     {
@@ -157,7 +159,17 @@ export async function GET(request: Request) {
   }
 
   const clientIp = clientId(request.headers);
-  const capped = await enforceDailyCap(request, clientIp);
+  /*
+    `t` is the download manager's task id: stable across automatic retries of
+    the SAME download, different for every new one, so a download costs one unit
+    of the daily cap however many attempts it takes to deliver.
+
+    Untrusted input, used only as part of a Redis key — length-capped and
+    stripped to id characters. A caller cannot forge anyone else's receipt: the
+    key it becomes is already scoped to their own user id or IP.
+  */
+  const downloadId = (sp.get("t") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || null;
+  const capped = await enforceDailyCap(request, clientIp, downloadId);
   if (capped) return capped;
 
   return processDownload(parsed.data, clientIp);

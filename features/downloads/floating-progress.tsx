@@ -126,7 +126,20 @@ let layerClaimed = false;
  * that reliably lands a video in Photos/Files from a web app — needs a real
  * tap, so it waits for one here instead of navigating to a Quick Look page).
  */
-export function FloatingDownloadProgress() {
+export function FloatingDownloadProgress({
+  /**
+   * Which layer to sit on. Defaults to the app-wide 85, which is above the page
+   * and below every sheet and menu.
+   *
+   * The wallpaper surfaces override it: the reels viewer is a full-screen
+   * `z-[100]` overlay, so at 85 the progress card was rendering BEHIND the
+   * wallpaper — a member tapping Download in the viewer got a card they could
+   * not see and no sign anything had happened (owner, 2026-08-09). Raising it
+   * globally would put a download card over every dialog in the app instead, so
+   * the surface that needs it asks for it.
+   */
+  layerClass = "z-[85]",
+}: { layerClass?: string } = {}) {
   const claimed = useRef(false);
   const tasks = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   /*
@@ -246,7 +259,10 @@ export function FloatingDownloadProgress() {
           setMinimised(false);
         }}
         aria-label={`Download in progress${pct !== null ? `, ${pct} percent` : ""} — tap to expand`}
-        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-3 z-[85] flex items-center gap-2 rounded-full border border-border/60 bg-card/95 py-2 pl-2 pr-3.5 shadow-elevated backdrop-blur-xl transition active:scale-95 lg:bottom-6 lg:right-6"
+        className={cn(
+          "fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-3 flex items-center gap-2 rounded-full border border-border/60 bg-card/95 py-2 pl-2 pr-3.5 shadow-elevated backdrop-blur-xl transition active:scale-95 lg:bottom-6 lg:right-6",
+          layerClass,
+        )}
       >
         <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#2563FF] to-[#6D5CFF] text-white">
           <Download className="h-4 w-4" />
@@ -279,7 +295,10 @@ export function FloatingDownloadProgress() {
     */
     <div
       key={task.id + task.status}
-      className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[85] mx-auto max-w-md animate-in fade-in slide-in-from-bottom-8 duration-300 [animation-timing-function:var(--ease-out)] motion-reduce:animate-none lg:inset-x-auto lg:bottom-6 lg:right-6 lg:w-96"
+      className={cn(
+        "fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] mx-auto max-w-md animate-in fade-in slide-in-from-bottom-8 duration-300 [animation-timing-function:var(--ease-out)] motion-reduce:animate-none lg:inset-x-auto lg:bottom-6 lg:right-6 lg:w-96",
+        layerClass,
+      )}
       role="status"
       aria-live="polite"
     >

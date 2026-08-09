@@ -128,7 +128,38 @@ export interface DailyResult {
   remaining: number;
 }
 
-export async function consumeDaily(key: string, limit: number): Promise<DailyResult> {
+/**
+ * Has this exact unit of work already been counted against a daily cap?
+ *
+ * The companion to `consumeDaily`'s `receiptKey`. A retry asks this first and,
+ * on a hit, spends nothing — see the note in `checkDownloadQuota` for why that
+ * matters: without it, an automatic retry silently multiplies what a person's
+ * daily allowance costs them.
+ *
+ * Fail-open, like everything else here. If Redis is unreachable the answer is
+ * "no receipt", the caller falls through to `consumeDaily`, and that fails open
+ * too — a broken counter must never be what stops a download.
+ */
+export async function alreadyCounted(receiptKey: string): Promise<boolean> {
+  if (!dailyRedis) return false;
+  try {
+    return (await dailyRedis.exists(`svd:receipt:${receiptKey}`)) === 1;
+  } catch {
+    return false;
+  }
+}
+
+export async function consumeDaily(
+  key: string,
+  limit: number,
+  /**
+   * When given, a receipt is written on a SUCCESSFUL charge so the same unit of
+   * work can be recognised later and not charged twice. Deliberately not
+   * written when the charge is refused — otherwise a retry could ride a receipt
+   * it never paid for and slip past the cap.
+   */
+  receiptKey?: string,
+): Promise<DailyResult> {
   if (!dailyRedis || limit <= 0) {
     return { allowed: true, used: 0, limit, remaining: limit };
   }
@@ -140,7 +171,13 @@ export async function consumeDaily(key: string, limit: number): Promise<DailyRes
       // Expire ~26h after first hit so the bucket self-cleans the next UTC day.
       await dailyRedis.expire(rk, 60 * 60 * 26);
     }
-    return { allowed: used <= limit, used, limit, remaining: Math.max(0, limit - used) };
+    const allowed = used <= limit;
+    if (allowed && receiptKey) {
+      // Six hours: comfortably longer than any download plus its retries, far
+      // shorter than the daily bucket, so receipts never outlive their purpose.
+      await dailyRedis.set(`svd:receipt:${receiptKey}`, 1, { ex: 60 * 60 * 6 });
+    }
+    return { allowed, used, limit, remaining: Math.max(0, limit - used) };
   } catch {
     // Never block a download because the counter backend hiccupped.
     return { allowed: true, used: 0, limit, remaining: limit };

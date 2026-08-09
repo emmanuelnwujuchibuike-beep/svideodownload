@@ -44,8 +44,23 @@ export interface PlanLimits {
  * overrides live in the `settings` table under key `plan_limits`. Use
  * `getPlanLimits()` to read the effective (override-aware) values.
  */
+/*
+  free.dailyDownloads: 30 → 150 (2026-08-09).
+
+  30 was set before batch downloading existed, and a batch is what this product
+  now produces constantly: ONE Snapchat story is up to a dozen separate files,
+  each spending its own unit. Three stories exhausted an anonymous visitor's
+  entire day — on a site whose headline promise is "100% free, no sign up" —
+  and the refusal arrives as a bare "Download failed" with an hour-long
+  Retry-After, which reads as the site being broken rather than as a limit.
+
+  This is a MONETIZATION lever, not a technical constant, and it is the one
+  number here that is a judgement call rather than a fix: the admin dashboard
+  overrides it (`settings.plan_limits`), so it can be tuned in seconds without
+  a deploy if 150 turns out to be too generous.
+*/
 export const DEFAULT_PLAN_LIMITS: Record<BillingPlan, PlanLimits> = {
-  free: { ads: true, dailyDownloads: 30, batch: false, apiAccess: true, apiDailyLimit: 50 },
+  free: { ads: true, dailyDownloads: 150, batch: false, apiAccess: true, apiDailyLimit: 50 },
   pro: { ads: false, dailyDownloads: 1000, batch: true, apiAccess: true, apiDailyLimit: 500 },
   business: { ads: false, dailyDownloads: 10000, batch: true, apiAccess: true, apiDailyLimit: 50000 },
 };

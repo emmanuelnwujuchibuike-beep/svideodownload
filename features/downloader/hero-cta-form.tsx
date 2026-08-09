@@ -81,6 +81,26 @@ export function HeroCtaForm() {
         spellCheck={false}
         placeholder="Paste your link here"
         aria-label="Paste a link to download"
+        /*
+          Bring the field to the middle of what is left of the screen once the
+          keyboard is up (owner: "the top header doesn't stay fixed when I open
+          the placeholder… I want it fixed and the keyboard should push downward
+          making space for the placeholder").
+
+          The layout half is already handled app-wide by
+          `interactiveWidget: "resizes-content"` in the root viewport, which
+          shrinks the LAYOUT viewport so the fixed header stays pinned instead of
+          drifting. Older iOS ignores that flag and pans the whole page instead,
+          which is what puts the field under the keyboard — this covers it.
+
+          The delay is not a guess at animation length: it waits for the resize
+          to have happened, because scrolling before the viewport changes
+          measures the pre-keyboard height and lands in the wrong place.
+        */
+        onFocus={(e) => {
+          const el = e.currentTarget;
+          setTimeout(() => el.scrollIntoView({ block: "center", behavior: "smooth" }), 320);
+        }}
         className="frenz-cta-input h-14 min-w-0 flex-1 rounded-xl border-0 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 dark:bg-white/95 sm:px-4 sm:text-base"
       />
       {/* Paste sits NEXT to Download (owner) — the two things you do here, side

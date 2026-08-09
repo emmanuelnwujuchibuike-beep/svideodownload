@@ -1,12 +1,16 @@
 "use client";
 
 import {
+  ArrowRight,
+  Image as ImageIcon,
+  Microscope,
   Pause,
   Play,
   RotateCw,
   Search,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { useAppMode } from "@/features/app-shell/use-app-mode";
@@ -104,6 +108,45 @@ export function DownloadsPage({ wallpapers }: { wallpapers: Wallpaper[] }) {
           the landing hero, so that control did nothing on this page. */}
       <section id="download" className="scroll-mt-20 rounded-3xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
         <DownloadBox surface="card" />
+
+        {/*
+          The Wallpaper Gallery, right under the paste box (owner, 2026-08-09):
+          "so users who are signed in can go to the wallpaper page easily
+          without scrolling to the bottom".
+
+          The wallpapers section already exists on this page — at the very
+          bottom, past the stats, the recents, the quick actions and the usage
+          dashboard. Anyone who came here to browse wallpapers had to scroll the
+          entire download dashboard to find out they could. This is the same
+          destination and the same treatment as the landing's row, in the one
+          place on this page everybody already looks.
+        */}
+        <Link
+          href="/wallpapers"
+          prefetch
+          className="frenz-wp group mt-3 flex w-full items-center gap-4 rounded-2xl border border-border bg-background/60 px-4 py-3.5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:shadow-card active:scale-[0.995]"
+        >
+          <span className="frenz-wp-icon relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-violet-100 to-fuchsia-100 text-violet-600 ring-1 ring-inset ring-violet-200/70 dark:from-violet-500/20 dark:to-fuchsia-500/15 dark:text-violet-300 dark:ring-violet-400/20">
+            <ImageIcon className="relative h-5 w-5" />
+            <span
+              aria-hidden
+              className="frenz-wp-sheen pointer-events-none absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/25"
+            />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className="text-base font-bold leading-tight text-violet-600 dark:text-violet-300">
+                Wallpaper Gallery
+              </span>
+              <span className="frenz-wp-cue inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-violet-600 ring-1 ring-inset ring-violet-200/70 dark:bg-violet-500/15 dark:text-violet-200 dark:ring-violet-400/25">
+                <Microscope className="h-3 w-3" />
+                View
+              </span>
+            </span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">Stunning quality, updated daily</span>
+          </span>
+          <ArrowRight className="h-5 w-5 shrink-0 text-violet-400 transition-transform group-hover:translate-x-0.5" />
+        </Link>
       </section>
 
       {/* Under the paste card — adjusts to whatever ad size the zone serves

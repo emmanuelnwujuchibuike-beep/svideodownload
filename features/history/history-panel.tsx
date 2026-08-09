@@ -1,16 +1,17 @@
 "use client";
 
 import {
+  ChevronLeft,
   Cloud,
   Download,
   Heart,
   History,
   Search,
   Share2,
-  SlidersHorizontal,
-  SquareDashedMousePointer,
   Trash2,
+  X,
 } from "lucide-react";
+import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { startDownload } from "@/features/downloads/manager";
@@ -155,83 +156,123 @@ export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
     <section id="history" className={cn(standalone ? "pb-16 pt-2" : "border-t border-border/60 py-14 sm:py-20")}>
       {/* Minimal side padding (owner) so the media grid stretches to the far edges. */}
       <div className="mx-auto max-w-6xl px-2 sm:px-4">
-        {/* Header */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
-              <History className="h-6 w-6 text-primary" /> Your downloads
-            </h2>
-            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-              {items.length} saved · Stored privately on your cloud
-              <Cloud className="h-3.5 w-3.5" />
-            </p>
-          </div>
+        {/*
+          ── Built to public/mainhistorypage.jpg, top to bottom ──────────────
+            1. a quiet bar: "‹ History" on the left, "Select" on the right
+            2. "Your Downloads" as its own headline
+            3. one meta line — count · size · where it lives
+            4. a full-width search field
+            5. All / Videos / Images / Audio, the active one filled
+            6. day sections with counts (in MediaGallery)
+            7. the grid (in MediaGallery), two columns by default
 
-          {/* Select — the reference's top-right control. */}
-          <button
-            type="button"
-            onClick={() => { tap(); setSelecting((s) => !s); setSelected(new Set()); }}
-            aria-pressed={selecting}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-sm font-semibold shadow-sm transition duration-150 active:scale-[0.96]",
-              selecting ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground",
-            )}
+          Nothing from the previous version was dropped to get there. "Clear
+          all" moved into the bar rather than disappearing, the live counts
+          stayed on the filter pills, and Favorites keeps its own chip — the
+          reference simply doesn't show a library with favourites in it.
+        */}
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <Link
+            href="/"
+            className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[15px] font-semibold text-primary transition active:scale-95"
           >
-            <SquareDashedMousePointer className="h-4 w-4" /> {selecting ? "Done" : "Select"}
-          </button>
+            <ChevronLeft className="h-5 w-5" /> History
+          </Link>
 
-          {confirmClear ? (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Clear all?</span>
-              <button type="button" onClick={() => { tap(); clearHistory(); setConfirmClear(false); }} className="rounded-xl bg-red-500/10 px-3.5 py-2 font-semibold text-red-500 transition duration-150 hover:bg-red-500/20 active:scale-[0.95]">
-                Yes, clear
+          <div className="flex items-center gap-1">
+            {confirmClear ? (
+              <span className="flex items-center gap-1 text-sm">
+                <button
+                  type="button"
+                  onClick={() => { tap(); clearHistory(); setConfirmClear(false); }}
+                  className="rounded-lg px-2.5 py-1.5 font-bold text-rose-500 transition active:scale-95"
+                >
+                  Clear all?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { tap(); setConfirmClear(false); }}
+                  className="rounded-lg px-2.5 py-1.5 font-semibold text-muted-foreground transition active:scale-95"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { tap(); setConfirmClear(true); }}
+                aria-label="Clear all downloads"
+                className="rounded-lg p-2 text-muted-foreground transition hover:text-rose-500 active:scale-95"
+              >
+                <Trash2 className="h-[18px] w-[18px]" />
               </button>
-              <button type="button" onClick={() => { tap(); setConfirmClear(false); }} className="rounded-xl px-3.5 py-2 font-semibold text-muted-foreground transition duration-150 hover:text-foreground active:scale-[0.95]">
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button type="button" onClick={() => { tap(); setConfirmClear(true); }} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3.5 py-2 text-sm font-semibold text-muted-foreground shadow-sm transition duration-150 hover:border-red-500/40 hover:text-red-500 active:scale-[0.96]">
-              <Trash2 className="h-3.5 w-3.5" /> Clear all
+            )}
+            <button
+              type="button"
+              onClick={() => { tap(); setSelecting((v) => !v); setSelected(new Set()); }}
+              aria-pressed={selecting}
+              className={cn(
+                "rounded-lg px-2 py-1.5 text-[15px] font-semibold transition active:scale-95",
+                selecting ? "text-foreground" : "text-primary",
+              )}
+            >
+              {selecting ? "Done" : "Select"}
             </button>
-          )}
+          </div>
         </div>
 
-        {/* Type filter chips with live counts, and Favorites as its own chip —
-            the reference's row (public/new downloadhistory.jpg). Counts are real
-            and recomputed from the history, so a chip never advertises items
-            that aren't there. */}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {KIND_FILTERS.map((f) => (
-              <Chip key={f.key} active={tab !== "favorites" && kind === f.key} onClick={() => { setTab("recent"); setKind(f.key); }}>
-                {f.label} <Count>{counts[f.key]}</Count>
-              </Chip>
-            ))}
-          </div>
+        <h2 className="text-[2rem] font-extrabold leading-none tracking-[-0.03em] sm:text-4xl">Your Downloads</h2>
+        {/* One line, three real facts. The size is measured from the records
+            themselves, not estimated from a count. */}
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted-foreground">
+          <span>{items.length} item{items.length === 1 ? "" : "s"}</span>
+          <span aria-hidden>·</span>
+          <span>{formatBytes(usedBytes)}</span>
+          <span aria-hidden>·</span>
+          <span className="inline-flex items-center gap-1.5">
+            Private Cloud <Cloud className="h-4 w-4 text-primary" />
+          </span>
+        </p>
+
+        {/* Full width, as in the reference — search is the fastest way through a
+            long history and it was previously sharing its row with a chip. */}
+        <div className="relative mt-5">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search downloads…"
+            aria-label="Search downloads"
+            className="h-14 w-full rounded-2xl bg-secondary/60 pl-12 pr-11 text-[15px] outline-none ring-1 ring-inset ring-transparent transition focus:bg-background focus:ring-2 focus:ring-primary"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => { tap(); setQuery(""); }}
+              aria-label="Clear search"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-muted-foreground transition hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
+
+        {/* The reference's four pills, evenly weighted, with the live counts the
+            previous version earned — a chip never advertises items that aren't
+            there. Favorites follows them because it is a different KIND of
+            filter, not a fifth media type. */}
+        <div className="-mx-2 mt-4 flex gap-2 overflow-x-auto px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {KIND_FILTERS.map((f) => (
+            <Chip key={f.key} active={tab !== "favorites" && kind === f.key} onClick={() => { setTab("recent"); setKind(f.key); }}>
+              {f.label} <Count>{counts[f.key]}</Count>
+            </Chip>
+          ))}
           <Chip active={tab === "favorites"} onClick={() => setTab(tab === "favorites" ? "recent" : "favorites")}>
             <Heart className={cn("h-3.5 w-3.5", tab === "favorites" && "fill-current")} /> Favorites <Count>{favCount}</Count>
           </Chip>
         </div>
 
-        {/* Search + storage used */}
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="relative min-w-0 flex-1 sm:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search downloads…"
-              aria-label="Search downloads"
-              className="h-11 w-full rounded-xl bg-background px-3 pl-9 text-sm outline-none ring-1 ring-inset ring-border transition focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <span className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-secondary/60 px-3.5 text-sm font-semibold shadow-sm ring-1 ring-inset ring-border/40">
-            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-            <span className="text-primary">{formatBytes(usedBytes)} used</span>
-          </span>
-        </div>
-
+        <div className="mt-5">
         <MediaGallery
           items={filtered}
           onToggleFavorite={toggleFavorite}
@@ -240,6 +281,7 @@ export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
           selection={{ active: selecting, selected, onToggle: toggleSelected }}
           emptyText={tab === "favorites" ? "No favorites yet — tap the heart on any download to save it here." : "No downloads match your search."}
         />
+        </div>
       </div>
 
       {/* Selection action bar — the reference's footer. It only exists while

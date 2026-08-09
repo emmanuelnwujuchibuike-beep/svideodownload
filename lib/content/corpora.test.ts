@@ -89,15 +89,31 @@ describe("findings mean something", () => {
 });
 
 describe("locale progress is measured", () => {
-  it("reports English complete and the rest at zero", () => {
+  it("measures coverage from the catalogue rather than declaring it", () => {
+    /*
+      Updated 2026-08-09: the five non-English UI catalogues were written on the
+      owner's instruction, so this can no longer assert "the rest at zero" —
+      that would now fail for the right reason and hide the property actually
+      worth protecting.
+
+      What matters here is that coverage is DERIVED. A hand-maintained table is
+      wrong the first time anyone adds a string, and wrong in the dangerous
+      direction: it reports a locale complete while new keys silently fall back
+      to English. So: complete locales report 0 missing, incomplete ones report a
+      real count, and the two always agree.
+    */
     const progress = localeProgress();
     const en = progress.find((l) => l.code === "en");
     expect(en?.coverage).toBe(1);
     expect(en?.missing).toBe(0);
 
-    for (const locale of progress.filter((l) => l.code !== "en")) {
-      expect(locale.coverage, `${locale.code} claims coverage`).toBe(0);
-      expect(locale.missing).toBeGreaterThan(0);
+    expect(progress.length).toBeGreaterThan(1);
+    for (const locale of progress) {
+      expect(locale.coverage).toBeGreaterThanOrEqual(0);
+      expect(locale.coverage).toBeLessThanOrEqual(1);
+      // The two halves of the same measurement must never disagree.
+      if (locale.coverage === 1) expect(locale.missing, `${locale.code}`).toBe(0);
+      else expect(locale.missing, `${locale.code}`).toBeGreaterThan(0);
     }
   });
 });

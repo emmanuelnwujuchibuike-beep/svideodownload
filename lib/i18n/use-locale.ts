@@ -28,7 +28,13 @@ export const LANGUAGE_COOKIE = "frenz_lang";
  * a partially-translated one renders exactly what exists. That is a better
  * behaviour than refusing the locale outright, and it is free.
  */
-const CODES: readonly LocaleCode[] = ["en", "fr", "ar", "sw", "pt", "ha"];
+const CODES: readonly LocaleCode[] = [
+  "en", "zh", "hi", "es", "fr", "ar", "bn", "pt", "ru", "ur",
+  "id", "de", "ja", "sw", "mr", "te", "tr", "ta", "vi", "ko",
+  "it", "th", "gu", "fa", "pl", "uk", "ms", "kn", "pa", "ro",
+  "nl", "yo", "ig", "ha", "am", "zu", "fil", "el", "cs", "sv",
+  "hu", "he", "da", "fi", "no", "sk", "sr", "hr", "bg", "ne",
+];
 
 export function useLocale(): LocaleCode {
   const [locale, setLocale] = useState<LocaleCode>("en");

@@ -27,9 +27,53 @@
  * of it is translated — see `localeAvailability`.
  */
 
+import { LANGUAGES } from "./languages";
 import { catalogueCoverage } from "./messages";
 
-export type LocaleCode = "en" | "fr" | "ar" | "sw" | "pt" | "ha";
+/**
+ * Every locale the app ships strings for (owner, 2026-08-09: "configure all
+ * languages in the language selector").
+ *
+ * ── Why this is a code list and not 50 hand-written objects ──────────────────
+ * `./languages` already holds the code, the English name and the endonym for
+ * each of these — it is the table the picker renders. Repeating all of that
+ * here would be a second copy of 50 rows, and the two would disagree within a
+ * month. This declares only what `languages.ts` does NOT know: which codes are
+ * locales we translate, their text direction, and their `Intl` tag.
+ *
+ * Order matters only for the switcher; the picker sorts by availability anyway.
+ */
+export const LOCALE_CODES = [
+  "en", "zh", "hi", "es", "fr", "ar", "bn", "pt", "ru", "ur",
+  "id", "de", "ja", "sw", "mr", "te", "tr", "ta", "vi", "ko",
+  "it", "th", "gu", "fa", "pl", "uk", "ms", "kn", "pa", "ro",
+  "nl", "yo", "ig", "ha", "am", "zu", "fil", "el", "cs", "sv",
+  "hu", "he", "da", "fi", "no", "sk", "sr", "hr", "bg", "ne",
+] as const;
+
+export type LocaleCode = (typeof LOCALE_CODES)[number];
+
+/**
+ * Right-to-left scripts. Getting this wrong is not cosmetic: the browser's bidi
+ * algorithm reorders the line, so an RTL language rendered LTR puts punctuation
+ * on the wrong end and scrambles any line mixing it with Latin text or digits.
+ */
+const RTL: ReadonlySet<string> = new Set(["ar", "he", "fa", "ur"]);
+
+/**
+ * BCP 47 tags that differ from the bare language code.
+ *
+ * Only the ones where `Intl` needs the difference — `no` resolves badly in some
+ * runtimes and `nb` (Bokmål) is the written standard; `zh` needs a script
+ * subtag to pick Simplified; `fil` is the standardised form of Tagalog.
+ * Everything else formats correctly from its plain code.
+ */
+const BCP47: Readonly<Record<string, string>> = {
+  no: "nb",
+  zh: "zh-Hans",
+  fil: "fil-PH",
+  pt: "pt-PT",
+};
 
 export type TextDirection = "ltr" | "rtl";
 
@@ -51,14 +95,26 @@ export interface Locale {
   bcp47: string;
 }
 
-export const LOCALES: Locale[] = [
-  { code: "en", name: "English", endonym: "English", direction: "ltr", bcp47: "en" },
-  { code: "fr", name: "French", endonym: "Français", direction: "ltr", bcp47: "fr" },
-  { code: "ar", name: "Arabic", endonym: "العربية", direction: "rtl", bcp47: "ar" },
-  { code: "sw", name: "Swahili", endonym: "Kiswahili", direction: "ltr", bcp47: "sw" },
-  { code: "pt", name: "Portuguese", endonym: "Português", direction: "ltr", bcp47: "pt" },
-  { code: "ha", name: "Hausa", endonym: "Hausa", direction: "ltr", bcp47: "ha" },
-];
+/**
+ * Built by joining `LOCALE_CODES` with the names in `./languages`.
+ *
+ * A code with no row there would be a locale the picker cannot even label, so
+ * it is dropped rather than rendered as a bare code — and `i18n.test.ts`
+ * asserts every declared code resolves, so the drop can never happen silently.
+ */
+export const LOCALES: Locale[] = LOCALE_CODES.flatMap((code) => {
+  const meta = LANGUAGES.find((l) => l.code === code);
+  if (!meta) return [];
+  return [
+    {
+      code,
+      name: meta.name,
+      endonym: meta.native,
+      direction: (RTL.has(code) ? "rtl" : "ltr") as TextDirection,
+      bcp47: BCP47[code] ?? code,
+    },
+  ];
+});
 
 /**
  * The locale everything falls back to, and the only one currently written.

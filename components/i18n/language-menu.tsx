@@ -4,7 +4,7 @@ import { Check, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { languageNote, languageStatus } from "@/lib/i18n/language-status";
+import { languageNote, languageStatus, isRtlCode as isRtl } from "@/lib/i18n/language-status";
 import { LANGUAGE_COOKIE, LANGUAGES } from "@/lib/i18n/languages";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -62,6 +62,16 @@ export function LanguageMenu({
       document.cookie = `${LANGUAGE_COOKIE}=${code}; path=/; max-age=31536000; samesite=lax${secure}`;
       localStorage.setItem(LANGUAGE_COOKIE, code);
       document.documentElement.setAttribute("lang", code);
+      /*
+        Direction, not just language.
+
+        Switching to Arabic without this leaves right-to-left text inside a
+        left-to-right document — punctuation on the wrong side, and any line
+        mixing Arabic with "Frenz" or a number in an unreadable order. The
+        `<head>` boot script applies this on a fresh load; this is the same
+        change for a switch that happens without one.
+      */
+      document.documentElement.setAttribute("dir", isRtl(code) ? "rtl" : "ltr");
       /*
         Tell every mounted consumer at once (owner: "language doesn't update
         instantly when switched").

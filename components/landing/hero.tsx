@@ -15,6 +15,7 @@ import { Suspense } from "react";
 import { HeroEffects } from "@/components/landing/hero-effects";
 import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
+import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { Downloader } from "@/features/downloader/downloader";
 import { HeroCtaForm } from "@/features/downloader/hero-cta-form";
@@ -212,37 +213,7 @@ export function Hero() {
               component — which is the only way to add this to a page that has
               no room left in its cold-entry budget.
             */}
-            <Link
-              href="/wallpapers"
-              prefetch
-              className="frenz-wp group flex w-full items-center gap-4 rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-left shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:shadow-card active:scale-[0.995] dark:border-white/15 dark:bg-white/5 dark:backdrop-blur dark:hover:border-violet-400/40"
-            >
-              <span className="frenz-wp-icon relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-violet-100 to-fuchsia-100 text-violet-600 ring-1 ring-inset ring-violet-200/70 dark:from-violet-500/20 dark:to-fuchsia-500/15 dark:text-violet-300 dark:ring-violet-400/20">
-                <ImageIcon className="relative h-5 w-5" />
-                <span
-                  aria-hidden
-                  className="frenz-wp-sheen pointer-events-none absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/25"
-                />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2">
-                  <span className="text-base font-bold leading-tight text-violet-600 dark:text-violet-300">
-                    Wallpaper Gallery
-                  </span>
-                  {/* The cue itself — a real label for what the tile does, not
-                      decoration, so `prefers-reduced-motion` keeps it and drops
-                      only the movement. */}
-                  <span className="frenz-wp-cue inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-violet-600 ring-1 ring-inset ring-violet-200/70 dark:bg-violet-500/15 dark:text-violet-200 dark:ring-violet-400/25">
-                    <Microscope className="h-3 w-3" />
-                    View
-                  </span>
-                </span>
-                <span className="mt-0.5 block text-xs text-slate-500 dark:text-white/60">
-                  Stunning quality, updated daily
-                </span>
-              </span>
-              <ArrowRight className="h-5 w-5 shrink-0 text-violet-400 transition-transform group-hover:translate-x-0.5" />
-            </Link>
+            <WallpaperCta />
 
             {/*
               The hero CTA's own result — under the Wallpaper Gallery button,

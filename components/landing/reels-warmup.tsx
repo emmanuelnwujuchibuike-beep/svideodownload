@@ -13,9 +13,30 @@ import { useEffect, useState } from "react";
  * egress cap on this project has been hit before:
  *   - only AFTER the load event (critical resources done) and on idle;
  *   - only on Save-Data:off, effectiveType 4g and measured downlink ≥ 2.5 Mbps;
- *   - only TWO clips, the first buffered (`auto`), the second headers-only
- *     (`metadata`) — a swipe away.
+ *   - only TWO clips, and only their HEADERS.
  * A 1px, transparent, out-of-flow <video> actually loads; `display:none` would not.
+ *
+ * ── Why `metadata` and never `auto` (owner Lighthouse run, 2026-08-09) ───────
+ *
+ * The first clip used the `auto` preload value, which does not mean "preload
+ * eagerly" — it means **download the entire file**. Measured against production on that
+ * date, the two clips this component warms were 11.4 MB and 1.7 MB. So this one
+ * component was pulling ~13.1 MB of the landing page's 14.5 MB total payload,
+ * which is essentially all of Lighthouse's "Avoid enormous network payloads",
+ * and it competed for bandwidth and decoder time with everything else — landing
+ * TTI measured 9.4 s.
+ *
+ * All of that was spent on a page where most visitors never tap Reels at all.
+ *
+ * `metadata` still buys the thing the warm-up exists for. It resolves DNS,
+ * completes the TLS handshake to the media host, and fetches the container
+ * header — so tapping Reels starts a byte-range request on an already-open
+ * connection to an already-parsed file, instead of starting from cold. The
+ * remaining cost is a few hundred KB rather than eleven megabytes.
+ *
+ * If a fully-buffered first frame is ever wanted again, the answer is a short
+ * `Range` request for the opening segment, NOT `auto` — `auto` has no ceiling
+ * and scales with whatever the largest reel happens to be that day.
  */
 
 const MIN_DOWNLINK_MBPS = 2.5;
@@ -63,11 +84,12 @@ export function ReelsWarmup({ urls }: { urls: string[] }) {
 
   return (
     <>
-      {urls.slice(0, 2).map((u, i) => (
+      {urls.slice(0, 2).map((u) => (
         <video
           key={u}
           src={u}
-          preload={i === 0 ? "auto" : "metadata"}
+          /* NEVER "auto" — see the header note. `auto` downloads the whole file. */
+          preload="metadata"
           muted
           playsInline
           aria-hidden

@@ -19,8 +19,8 @@ import type { Destination } from "@/lib/navigation/types";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { signOutClient } from "@/lib/auth/sign-out";
-import { translator, type MessageKey } from "@/lib/i18n/messages";
-import { useLocale } from "@/lib/i18n/use-locale";
+import { useTranslator } from "@/lib/i18n/use-translator";
+import type { MessageKey } from "@/lib/i18n/messages/en";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
 import { cn } from "@/lib/utils";
 
@@ -147,7 +147,7 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
   // The member's chosen language, clamped to catalogues that exist. Re-reads
   // on the switcher's event, so changing language updates the chrome with no
   // reload — see lib/i18n/use-locale.
-  const t = translator(useLocale());
+  const t = useTranslator();
   const [open, setOpen] = useState(false);
   /**
    * Slide state, kept separate from mount state.

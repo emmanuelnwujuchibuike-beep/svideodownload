@@ -37,6 +37,12 @@ export interface Wallpaper {
   /** Measured pixel dimensions, or null when they were never recorded. */
   width: number | null;
   height: number | null;
+  /**
+   * Upload time (ISO), or null for the built-in placeholders — they ship with
+   * the code and have no upload event, so "Newest" cannot rank them and must
+   * not pretend to. Sorting puts them last rather than inventing a date.
+   */
+  createdAt?: string | null;
   /** True for the built-in placeholders — they have no database row, so they
    *  can't be liked, saved or commented on. */
   builtIn: boolean;

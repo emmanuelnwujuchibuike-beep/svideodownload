@@ -76,6 +76,14 @@ function toWallpaper(row: Row): Wallpaper {
     // the whole point: an unmeasured wallpaper never gets a flattering 4K chip.
     width: row.width ?? null,
     height: row.height ?? null,
+    /*
+      When this was uploaded — the default sort (owner, 2026-08-09: "make the
+      wallpaper page to show wallpaper based on time uploaded").
+
+      `created_at` was already being SELECTED and then thrown away here, so the
+      gallery had no way to sort by it even though the data was in hand.
+    */
+    createdAt: row.created_at ?? null,
     builtIn: false,
   };
 }

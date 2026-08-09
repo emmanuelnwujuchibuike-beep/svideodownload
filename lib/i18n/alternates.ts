@@ -1,6 +1,33 @@
 import { DEFAULT_LOCALE, availableLocales, getLocale } from "./locales";
 
 /**
+ * Whether URLs like `/fr/help` actually resolve.
+ *
+ * ── This is the gate, and translation is NOT the gate (2026-08-09) ───────────
+ *
+ * They used to be the same question, and on 2026-08-09 they stopped being. The
+ * five non-English catalogues were filled on the owner's instruction, which
+ * immediately made `availableLocales()` return all six — and this file emitted
+ * hreflang alternates at `/fr/help`, `/ar/help` and so on.
+ *
+ * **No such route exists.** There is no `[locale]` segment anywhere in `app/`;
+ * the locale routing tree has never been built (it is a known open item). So
+ * every one of those alternates pointed at a 404, on the three pages that call
+ * this.
+ *
+ * That is precisely the failure the original note in this file described —
+ * "wrong hreflang is worse than absent hreflang… it costs ranking on the pages
+ * that currently earn all the traffic" — and the guard it relied on turned out
+ * to be measuring the wrong thing. Having strings for a language does not give
+ * that language a URL.
+ *
+ * Flip this to `true` in the SAME commit that ships the routing tree, and every
+ * page calling `localeAlternates` gains correct alternates with no further work.
+ * A test asserts the two stay consistent.
+ */
+export const LOCALE_ROUTING_BUILT = false;
+
+/**
  * hreflang alternates for a page.
  *
  * ── Why this returns almost nothing today, and why that is correct ────────────
@@ -8,15 +35,12 @@ import { DEFAULT_LOCALE, availableLocales, getLocale } from "./locales";
  * The obvious implementation emits an alternate for every DECLARED locale. That
  * would tell search engines a French version of this page exists at `/fr/...`,
  * which would then be crawled, found to be English (or a 404), and counted
- * against the site. Wrong hreflang is worse than absent hreflang: absent means
- * "no translations", wrong means "translations that do not work", and the second
- * costs ranking on the pages that currently earn all the traffic.
+ * against the site.
  *
- * So alternates come from `availableLocales()` — the same 90%-coverage gate the
- * switcher and content negotiation use. With one locale live this emits only the
- * `x-default`, which is exactly the honest signal. The moment a locale is
- * genuinely translated, every page that calls this gains a correct alternate
- * with no further work.
+ * Alternates therefore require BOTH a translated catalogue (`availableLocales()`)
+ * and a route that resolves (`LOCALE_ROUTING_BUILT`). Today the second is false,
+ * so this emits only `x-default` — the honest signal, and the same output it has
+ * always produced.
  *
  * ── The default locale is not prefixed ────────────────────────────────────────
  *
@@ -32,6 +56,8 @@ export function localeAlternates(path: string): {
   const languages: Record<string, string> = {};
 
   for (const locale of availableLocales()) {
+    // A prefixed URL is only claimable once the routing tree serves one.
+    if (locale.code !== DEFAULT_LOCALE && !LOCALE_ROUTING_BUILT) continue;
     const tag = getLocale(locale.code)?.bcp47 ?? locale.code;
     languages[tag] = locale.code === DEFAULT_LOCALE ? clean : `/${locale.code}${clean}`;
   }

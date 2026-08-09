@@ -16,6 +16,12 @@ import { useCallback, useMemo, useState } from "react";
 
 import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
 import { categoryIcon } from "@/features/wallpapers/wallpaper-categories";
+import {
+  DEFAULT_WALLPAPER_SORT,
+  sortWallpapers,
+  WALLPAPER_SORTS,
+  type WallpaperSort,
+} from "@/lib/wallpapers-sort";
 import { WallpaperReels } from "@/features/wallpapers/wallpaper-reels";
 import { WallpaperLimitSheet, WallpaperRewardAd } from "@/features/wallpapers/wallpaper-reward-ad";
 import { useWallpaperDownload } from "@/features/wallpapers/use-wallpaper-download";
@@ -93,7 +99,17 @@ export function WallpaperExplore({
 
   const [category, setCategory] = useState<string>("all");
   const [type, setType] = useState<WallpaperType | "all">("all");
-  const [sort, setSort] = useState<"popular" | "newest" | "saved">("popular");
+  /*
+    Newest by default (owner, 2026-08-09: "make the wallpaper page to show
+    wallpaper based on time uploaded, and users can change the sorting").
+
+    It was "popular", which on a library with little engagement is an ordering
+    nobody can perceive — everything ties at zero, so the grid looked frozen and
+    a wallpaper uploaded this morning could sit anywhere. Upload time is the one
+    axis that always moves, so a visitor returning tomorrow sees something new
+    at the top, which is the whole reason to open the page again.
+  */
+  const [sort, setSort] = useState<WallpaperSort>(DEFAULT_WALLPAPER_SORT);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [tuneOpen, setTuneOpen] = useState(false);
@@ -128,19 +144,30 @@ export function WallpaperExplore({
       return true;
     });
 
-    /* `items` arrives in the operator's curated order (sort_order, then newest),
-       so "newest" is the identity sort — re-sorting it would throw away the
-       curation for no gain. */
-    if (sort === "popular" && hasEngagement) return [...list].sort((a, b) => popularity(b) - popularity(a));
-    if (sort === "saved") return [...list].sort((a, b) => b.saves + b.likes - (a.saves + a.likes));
-    return list;
-  }, [items, category, type, query, sort, hasEngagement]);
+    /*
+      Every ordering now goes through the one comparator (lib/wallpapers-sort),
+      including "newest".
+
+      That used to be the identity sort, on the reasoning that `items` already
+      arrives ordered `sort_order, created_at desc` — true, but it meant "Newest"
+      was really "the operator's curation", so a wallpaper pinned with a low
+      `sort_order` outranked one uploaded minutes ago. Sorting explicitly makes
+      the label honest, and curation still leads on every other ordering through
+      the name tiebreak.
+    */
+    return sortWallpapers(list, sort);
+  }, [items, category, type, query, sort]);
 
   const filtering = category !== "all" || type !== "all" || query.trim().length > 0;
   /* The Popular section caps itself; a filtered or searched list never does —
      hiding results behind "View all" when someone has just narrowed the library
      to nine things would be actively unhelpful. */
-  const capped = sort === "popular" && hasEngagement && !filtering && !expanded;
+  /* The preview cap belongs to the RANKED orderings — a "top" list implies a
+     cut-off. A chronological or alphabetical list does not, so those show
+     everything. Never capped while filtering: narrowing to nine things and then
+     hiding some behind "View all" is actively unhelpful. */
+  const ranked = sort === "liked" || sort === "viewed" || sort === "downloaded" || sort === "saved";
+  const capped = ranked && hasEngagement && !filtering && !expanded;
   const shown = capped ? filtered.slice(0, POPULAR_PREVIEW) : filtered;
 
   const open = useCallback((wallpaper: Wallpaper) => {
@@ -167,15 +194,16 @@ export function WallpaperExplore({
   const deck = items.slice(0, 3);
   const deckBadge = resolutionBadge(deck[0]?.width, deck[0]?.height);
 
+  /* The heading names the ORDERING, so the grid always says what it is showing
+     — "Most liked" over a like-ranked list, not a generic "All wallpapers". */
+  const sortLabel = WALLPAPER_SORTS.find((s) => s.key === sort)?.label ?? "All wallpapers";
   const heading = query.trim()
     ? `Results for “${query.trim()}”`
     : category !== "all"
       ? category
-      : capped
-        ? "Popular"
-        : hasEngagement && sort === "popular"
-          ? "Popular"
-          : "All wallpapers";
+      : sort === DEFAULT_WALLPAPER_SORT
+        ? "All wallpapers"
+        : sortLabel;
 
   return (
     <>
@@ -375,27 +403,37 @@ export function WallpaperExplore({
                     Sort by
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {/* "Most popular" is offered only when there is engagement to
-                        rank on — the same rule the section heading follows. */}
-                    {(
-                      [
-                        ...(hasEngagement ? ([["popular", "Most popular"]] as const) : []),
-                        ["newest", "Newest"],
-                        ...(hasEngagement ? ([["saved", "Most loved"]] as const) : []),
-                      ] as [typeof sort, string][]
-                    ).map(([id, label]) => (
+                    {/*
+                      The full set (owner, 2026-08-09: "most liked, most viewed,
+                      alphabetically and any other sort").
+
+                      The ENGAGEMENT orderings are hidden while the library has
+                      no engagement at all. Offering "Most liked" over a set
+                      where every wallpaper has zero likes is a control that
+                      visibly does nothing when tapped — the ordering is real,
+                      but every row ties, so the grid does not move and the
+                      picker looks broken. Chronological and alphabetical always
+                      work, so they are always offered.
+                    */}
+                    {WALLPAPER_SORTS.filter(
+                      (s) =>
+                        hasEngagement ||
+                        !["liked", "viewed", "downloaded", "saved"].includes(s.key),
+                    ).map((s) => (
                       <button
-                        key={id}
+                        key={s.key}
                         type="button"
-                        onClick={() => setSort(id)}
+                        onClick={() => setSort(s.key)}
+                        aria-pressed={sort === s.key}
+                        title={s.hint}
                         className={cn(
                           "rounded-full px-3.5 py-2 text-xs font-bold transition active:scale-95",
-                          sort === id
+                          sort === s.key
                             ? "bg-foreground text-background"
                             : "bg-secondary text-muted-foreground hover:text-foreground",
                         )}
                       >
-                        {label}
+                        {s.label}
                       </button>
                     ))}
                     {filtering ? (

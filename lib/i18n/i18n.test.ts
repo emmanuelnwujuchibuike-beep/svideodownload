@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { localeAlternates, switchableLocales } from "./alternates";
-import { CATALOGUES, MESSAGE_KEYS, catalogueCoverage, translate } from "./messages";
+import { LOCALE_ROUTING_BUILT, localeAlternates, switchableLocales } from "./alternates";
+import { CATALOGUES, MESSAGE_KEYS, catalogueCoverage, isReviewed, translate } from "./messages";
 
 import {
   formatBytes,
@@ -15,6 +15,7 @@ import {
 } from "./format";
 import {
   DEFAULT_LOCALE,
+  LOCALE_CODES,
   LOCALES,
   availableLocales,
   coverage,
@@ -81,9 +82,31 @@ describe("locale availability — fail closed", () => {
   });
 
   it("offers only what is actually written today", () => {
-    // Honest snapshot: English only. This will change when translations land, and
-    // changing it should be a deliberate act with strings behind it.
-    expect(availableLocales().map((l) => l.code)).toEqual(["en"]);
+    /*
+      Updated 2026-08-09: all six catalogues were written on the owner's
+      instruction, so all six are now offerable. This assertion did its job —
+      it was designed to fail the moment translations landed, forcing the change
+      to be deliberate rather than incidental.
+
+      Note what it does NOT say: nothing here claims the translations have been
+      reviewed by a native speaker. That is `TRANSLATION_REVIEW`, and it is
+      false for all five — see the test below.
+    */
+    expect(availableLocales()).toHaveLength(LOCALE_CODES.length);
+  });
+
+  it("does not confuse 'translated' with 'reviewed'", () => {
+    /*
+      Coverage measures completeness; it cannot measure correctness. After
+      2026-08-09 those diverge: every locale is 100% complete and none but the
+      source language has been read by a native speaker. If this ever asserts
+      the wrong thing, the risk is a product that reads as careless in five
+      languages while every gauge shows green.
+    */
+    expect(isReviewed("en")).toBe(true);
+    for (const code of LOCALE_CODES.filter((c) => c !== "en")) {
+      expect(isReviewed(code), `${code} marked reviewed — was it actually read by a speaker?`).toBe(false);
+    }
   });
 });
 
@@ -93,20 +116,36 @@ describe("content negotiation", () => {
     expect(negotiate("")).toBe(DEFAULT_LOCALE);
   });
 
+  it("negotiates to a locale that is genuinely written", () => {
+    // Was "→ en" while French was empty. French exists now, so a French speaker
+    // gets French — which is the whole point of having written it.
+    expect(negotiate("fr-FR,fr;q=0.9")).toBe("fr");
+  });
+
   it("never negotiates to an unavailable locale", () => {
-    // A French speaker gets English because French is not written yet — not a
-    // French URL that serves English content.
-    expect(negotiate("fr-FR,fr;q=0.9")).toBe("en");
+    /*
+      Icelandic is not a declared locale, so it must not be reachable however
+      strongly the browser asks for it.
+
+      This assertion used Japanese until 2026-08-09, when Japanese became a real
+      locale — which is why it is worth stating what the test is FOR: it guards
+      the fail-closed path, not any particular language. If `is` is ever added,
+      swap it for another undeclared code rather than deleting the test.
+    */
+    expect(LOCALE_CODES as readonly string[]).not.toContain("is");
+    expect(negotiate("is-IS,is;q=0.9")).toBe("en");
   });
 
   it("matches a regional tag to its language", () => {
     expect(negotiate("en-GB,en;q=0.9")).toBe("en");
+    expect(negotiate("pt-BR,pt;q=0.9")).toBe("pt");
   });
 
   it("respects quality ordering", () => {
     // The browser is expressing a preference order; ignoring it is how sites end
     // up serving people their third choice.
-    expect(negotiate("fr;q=0.9,en;q=0.8")).toBe("en");
+    expect(negotiate("fr;q=0.9,en;q=0.8")).toBe("fr");
+    expect(negotiate("fr;q=0.4,en;q=0.8")).toBe("en");
   });
 
   it("survives a malformed header", () => {
@@ -172,8 +211,19 @@ describe("UI message catalogue", () => {
     expect(coverage("en")).toBe(1);
     expect(catalogueCoverage("en")).toBe(coverage("en"));
 
-    for (const locale of LOCALES.filter((l) => l.code !== "en")) {
-      expect(coverage(locale.code), `${locale.code} claims coverage it does not have`).toBe(0);
+    /*
+      All six are complete as of 2026-08-09. The property worth asserting is no
+      longer "the others are zero" but that coverage is MEASURED from the
+      catalogue rather than asserted anywhere — so adding a key to `en` without
+      translating it must immediately drop the others below 1.
+    */
+    for (const locale of LOCALES) {
+      const measured =
+        MESSAGE_KEYS.filter((k) => {
+          const v = CATALOGUES[locale.code]?.[k];
+          return typeof v === "string" && v.trim().length > 0;
+        }).length / MESSAGE_KEYS.length;
+      expect(coverage(locale.code), `${locale.code} coverage is not measured`).toBeCloseTo(measured);
     }
   });
 
@@ -205,7 +255,20 @@ describe("UI message catalogue", () => {
   });
 
   it("falls back to English for an untranslated key", () => {
-    expect(translate("fr", "nav.pricing")).toBe(translate("en", "nav.pricing"));
+    /*
+      Exercised through a locale with NO catalogue at all, because every declared
+      one is complete as of 2026-08-09 — asserting `fr === en` now proves the
+      opposite of what it used to (it would mean French had failed to translate).
+
+      The per-key fallback still matters and still needs a test: the moment a new
+      key is added to `en`, five catalogues are missing it, and the fallback is
+      what keeps those pages legible instead of rendering `nav.newThing` at a
+      visitor.
+    */
+    const unknown = "zz" as Parameters<typeof translate>[0];
+    expect(translate(unknown, "nav.pricing")).toBe(translate("en", "nav.pricing"));
+    // And a real locale returns its OWN string, not the English one.
+    expect(translate("fr", "nav.pricing")).not.toBe(translate("en", "nav.pricing"));
   });
 
   it("interpolates named placeholders and leaves unknown ones visible", () => {
@@ -258,16 +321,29 @@ describe("the catalogue is actually wired in", () => {
 /* --------------------------------- alternates --------------------------------- */
 
 describe("hreflang alternates", () => {
-  it("emits no alternate for a locale nobody can read", () => {
+  it("emits no alternate for a locale with no ROUTE, however well translated", () => {
     /*
      * Wrong hreflang is worse than absent hreflang. Absent says "no
      * translations"; wrong says "translations that do not work", and search
      * engines act on the second by crawling a French URL, finding English, and
      * counting it against the pages that currently earn all the traffic.
+     *
+     * ── Why this test nearly stopped protecting anything (2026-08-09) ───────
+     * It used to pass because the catalogues were empty, so `availableLocales()`
+     * returned only English. The moment those were filled, this file began
+     * advertising `/fr/help`, `/ar/help` and four more — none of which resolve,
+     * because there is no `[locale]` segment anywhere in `app/`. The guard was
+     * measuring translation when the thing that makes a URL claimable is
+     * ROUTING. Hence `LOCALE_ROUTING_BUILT`.
      */
+    expect(LOCALE_ROUTING_BUILT, "flip this only when /fr/... actually resolves").toBe(false);
     const { languages } = localeAlternates("/help");
     expect(Object.keys(languages).sort()).toEqual(["en", "x-default"]);
     expect(languages["/fr/help"]).toBeUndefined();
+    // Every emitted target must be a path this app really serves.
+    for (const href of Object.values(languages)) {
+      expect(href, `${href} points at an unbuilt locale route`).not.toMatch(/^\/(fr|ar|sw|pt|ha)\//);
+    }
   });
 
   it("keeps the default locale unprefixed", () => {
@@ -282,10 +358,21 @@ describe("hreflang alternates", () => {
     expect(localeAlternates("help").languages["x-default"]).toBe("/help");
   });
 
-  it("offers no switcher while there is nothing to switch to", () => {
-    // A control with one option is not a choice; it is furniture implying a
-    // capability the product does not have yet.
-    expect(switchableLocales()).toEqual([]);
+  it("offers a switcher now that there is something to switch to", () => {
+    /*
+      Was `[]`: a control with one option is not a choice, it is furniture
+      implying a capability the product does not have. Six translated locales
+      is a real choice, so the switcher is real.
+
+      Note this is about the CATALOGUES, not the routing tree — the header
+      picker changes the language in place, it does not navigate to `/fr/...`.
+      That is why `switchableLocales` gates on availability while
+      `localeAlternates` gates on `LOCALE_ROUTING_BUILT`; the two answer
+      different questions and conflating them is what nearly shipped broken
+      hreflang.
+    */
+    expect(switchableLocales().length).toBeGreaterThan(1);
+    expect(switchableLocales().map((l) => l.code)).toContain("en");
   });
 });
 

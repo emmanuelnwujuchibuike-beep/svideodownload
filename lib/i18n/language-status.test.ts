@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { LANGUAGES } from "./languages";
-import { languageNote, languageStatus, liveLanguageCodes } from "./language-status";
+import { isRtlCode, languageNote, languageStatus, liveLanguageCodes } from "./language-status";
 import { LOCALES } from "./locales";
 
 /**
@@ -24,21 +24,37 @@ describe("languageStatus — derived from the catalogues, never declared", () =>
     expect(languageStatus("en")).toBe("live");
   });
 
-  it("marks a DECLARED but untranslated locale as saved, not live", () => {
-    // fr/ar/sw/pt/ha are declared in locales.ts with `{}` catalogues.
-    expect(languageStatus("fr")).toBe("saved");
-    expect(languageNote("fr")).toMatch(/English/i);
+  it("marks a translated locale live, with no apology under it", () => {
+    // fr/ar/sw/pt/ha were `{}` until 2026-08-09 and read "saved". They are
+    // written now, so they must read as working — the caption existed only to
+    // stop the picker silently promising something it could not do.
+    for (const code of ["fr", "ar", "sw", "pt", "ha"]) {
+      expect(languageStatus(code), `${code}`).toBe("live");
+      expect(languageNote(code), `${code} still apologises`).toBeNull();
+    }
   });
 
-  it("marks a language that is only on the 53-item wishlist as unplanned", () => {
-    // Spanish is in LANGUAGES but is not a declared locale — this is the pick
-    // that used to set a cookie no consumer would ever match.
-    expect(LANGUAGES.some((l) => l.code === "es")).toBe(true);
-    // Widened to string on purpose: the whole point is that "es" is NOT a
-    // LocaleCode, which is exactly what makes the narrow comparison a type error.
-    expect((LOCALES as { code: string }[]).some((l) => l.code === "es")).toBe(false);
-    expect(languageStatus("es")).toBe("unplanned");
-    expect(languageNote("es")).toMatch(/English/i);
+  it("marks every language the picker offers as live", () => {
+    /*
+      As of 2026-08-09 the wishlist and the locale registry are the SAME set —
+      the owner asked for every language in the selector to be configured, so
+      each of the 50 has a catalogue. There is no longer an "unplanned" entry to
+      test with, and that is the intended end state.
+
+      The status function still distinguishes the three cases; this asserts the
+      outcome, and the case-by-case behaviour is covered below with codes the
+      picker does not offer.
+    */
+    for (const l of LANGUAGES) {
+      expect(languageStatus(l.code), `${l.code} is offered but not live`).toBe("live");
+    }
+  });
+
+  it("still refuses a code nobody declared", () => {
+    // Icelandic is not offered and not declared — the fail-closed path.
+    expect(LANGUAGES.some((l) => l.code === "is")).toBe(false);
+    expect(languageStatus("is")).toBe("unplanned");
+    expect(languageNote("is")).toMatch(/English/i);
   });
 
   it("gives every offered language an honest caption unless it truly works", () => {
@@ -49,10 +65,52 @@ describe("languageStatus — derived from the catalogues, never declared", () =>
     }
   });
 
-  it("reports only genuinely translated locales as live", () => {
-    // Today that is English alone. This assertion is meant to CHANGE when a
-    // catalogue is actually written — it is not a claim that English is enough.
-    expect(liveLanguageCodes()).toEqual(["en"]);
+  it("reports every declared locale as live", () => {
+    // Still DERIVED from coverage, never declared — emptying a catalogue must
+    // drop that language straight back out of this list.
+    expect(liveLanguageCodes().sort()).toEqual(LOCALES.map((l) => l.code).sort());
+    expect(liveLanguageCodes()).toHaveLength(LANGUAGES.length);
+  });
+});
+
+describe("right-to-left is applied, not just translated", () => {
+  /*
+    Arabic text inside a left-to-right document is WORSE than English:
+    punctuation lands on the wrong side, and any line mixing Arabic with the
+    brand name or a number renders in an order nobody can read.
+
+    `app/layout.tsx` sets `dir` from `DEFAULT_LOCALE`, a constant — so before
+    2026-08-09 translating `ar` would have shipped exactly that page. The fix is
+    a `<head>` script, NOT a root-layout client component, because those have
+    silently broken App Router prefetch on this project before.
+  */
+  const boot = fs.readFileSync(path.join(process.cwd(), "components/i18n/locale-boot-script.tsx"), "utf8");
+
+  it("sets dir=rtl for Arabic before first paint", () => {
+    expect(boot).toMatch(/rtl/);
+    expect(boot).toMatch(/setAttribute\('dir'/);
+  });
+
+  it("runs as a bare inline script, never a client component", () => {
+    // "use client" here would put a component in the root layout — the exact
+    // shape that has broken prefetch before.
+    expect(boot).not.toContain('"use client"');
+    expect(boot).toContain("dangerouslySetInnerHTML");
+  });
+
+  it("is mounted in <head>, above the boot splash", () => {
+    const layout = fs.readFileSync(path.join(process.cwd(), "app/layout.tsx"), "utf8");
+    expect(layout).toContain("<LocaleBootScript />");
+  });
+
+  it("knows RTL languages beyond the six declared locales", () => {
+    // The picker can offer Urdu or Hebrew; those need direction too, even with
+    // no strings, because the visitor's own device is about to translate the page.
+    expect(isRtlCode("ar")).toBe(true);
+    expect(isRtlCode("ur")).toBe(true);
+    expect(isRtlCode("he")).toBe(true);
+    expect(isRtlCode("fr")).toBe(false);
+    expect(isRtlCode("en-GB")).toBe(false);
   });
 });
 

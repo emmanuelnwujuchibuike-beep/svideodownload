@@ -1,4 +1,5 @@
 import type { LocaleCode } from "../locales";
+import { CATALOGUES as TRANSLATED } from "./catalogues";
 import { MESSAGE_KEYS, en, type MessageKey, type Messages } from "./en";
 
 /**
@@ -28,26 +29,53 @@ import { MESSAGE_KEYS, en, type MessageKey, type Messages } from "./en";
 /**
  * Every locale's catalogue.
  *
- * The five non-English entries are deliberately empty rather than absent. An
- * empty catalogue is a measured 0% — it appears in coverage reports, in the admin
- * view, and in tests, as a language we intend to ship and have not written. A
- * missing key in this map would instead be indistinguishable from a locale nobody
- * has considered.
+ * ── These were written on 2026-08-09, on the owner's instruction ─────────────
  *
- * NOTHING here is machine-translated. Filling these with an automatic translation
- * would produce a switcher that works and a product that reads as careless in
- * five languages, and the `translations` workflow in migration 0086 already says
- * how this project treats that: `machine` is a status that must be reviewed
- * before it counts as done. The same standard applies to chrome.
+ * This block previously held five empty objects and a note refusing to fill
+ * them: *"NOTHING here is machine-translated. Filling these with an automatic
+ * translation would produce a switcher that works and a product that reads as
+ * careless in five languages."* That reasoning was raised with the owner and the
+ * owner asked for the catalogues to be built anyway. They are built. The
+ * concern has not evaporated, so it is recorded rather than deleted — see
+ * `TRANSLATION_REVIEW` below, which is the mechanism that replaces the refusal.
+ *
+ * The `translations` workflow in migration 0086 models exactly this: `machine`
+ * is a real status that exists *before* `reviewed`, not a forbidden one. These
+ * catalogues are at that stage. They are careful, idiomatic translations of 22
+ * short chrome strings — not a find-and-replace — and each file documents the
+ * judgement calls a reviewer would otherwise have to reverse-engineer.
  */
 export const CATALOGUES: Record<LocaleCode, Partial<Messages>> = {
   en,
-  fr: {},
-  ar: {},
-  sw: {},
-  pt: {},
-  ha: {},
+  ...TRANSLATED,
 };
+
+/**
+ * Which catalogues a native speaker has actually signed off.
+ *
+ * ── Why this exists rather than a comment ────────────────────────────────────
+ * `catalogueCoverage` measures COMPLETENESS — how many keys have a string. It
+ * cannot measure CORRECTNESS, and after 2026-08-09 those two are no longer the
+ * same thing: every locale is now 100% complete and none has been read by a
+ * native speaker. Without this flag the system would report five fully-shipped
+ * languages and be unable to express the one fact that matters about them.
+ *
+ * Flip an entry to `true` only when a speaker of that language has actually
+ * read the file. The admin globalization panel surfaces this, so "translated"
+ * and "verified" stay visibly different states.
+ *
+ * `ha` is the one to get checked first: it has the least localisation prior art
+ * to draw on, and it serves core audience (northern Nigeria, the Sahel) rather
+ * than a long tail.
+ */
+export const TRANSLATION_REVIEW: Record<LocaleCode, boolean> = Object.fromEntries(
+  Object.keys(CATALOGUES).map((code) => [code, code === "en"]),
+) as Record<LocaleCode, boolean>;
+
+/** True when a locale is complete AND a human has checked it. */
+export function isReviewed(locale: LocaleCode): boolean {
+  return TRANSLATION_REVIEW[locale] === true;
+}
 
 /* --------------------------------- coverage ---------------------------------- */
 

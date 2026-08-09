@@ -1,4 +1,4 @@
-import { LOCALES, localeAvailability, type LocaleCode } from "./locales";
+import { isRtl, LOCALES, localeAvailability, type LocaleCode } from "./locales";
 
 /**
  * What picking a language in the header switcher will actually DO.
@@ -54,4 +54,22 @@ export function languageNote(code: string): string | null {
 /** Codes the app can genuinely render in. Used by the picker's "Available now" group. */
 export function liveLanguageCodes(): string[] {
   return LOCALES.filter((l) => localeAvailability(l.code) !== "planned").map((l) => l.code);
+}
+
+/**
+ * Text direction for any code the picker can offer — including the ~47 that are
+ * not declared locales.
+ *
+ * `isRtl` in ./locales only answers for the six declared `LocaleCode`s. The
+ * picker lets someone choose Urdu or Hebrew, and a right-to-left language
+ * rendered in a left-to-right document is unreadable whether or not we have
+ * strings for it — the visitor's own device is about to translate the page, and
+ * the direction should be right when it does.
+ */
+const RTL_LANGUAGES = new Set(["ar", "he", "fa", "ur", "ps", "sd", "ug", "yi", "dv", "ku"]);
+
+export function isRtlCode(code: string): boolean {
+  const base = code.split("-")[0]!.toLowerCase();
+  if (LOCALES.some((l) => l.code === base)) return isRtl(base as LocaleCode);
+  return RTL_LANGUAGES.has(base);
 }

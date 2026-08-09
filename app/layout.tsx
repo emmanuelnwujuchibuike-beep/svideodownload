@@ -6,6 +6,7 @@ import { ThemeCacheSync } from "@/components/theme-cache-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AnalyticsTracker } from "@/features/analytics/analytics-tracker";
 import { BootHead, BootSplash, ThemeBootScript } from "@/features/app-shell/boot-splash";
+import { LocaleBootScript } from "@/components/i18n/locale-boot-script";
 import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
 import { CommandCenterMount } from "@/features/navigation/command-center-mount";
@@ -217,6 +218,12 @@ export default function RootLayout({
             where the empty body flashes the default light background for
             dark users (see boot-splash.tsx's THEME_JS comment). */}
         <ThemeBootScript />
+        {/* Language + text DIRECTION, same reasoning as the theme above: the
+            landing is statically prerendered so the server cannot know the
+            locale, and Arabic rendered inside an LTR document is worse than
+            English. Setting it here makes the first paint correct instead of
+            reflowing the whole page after hydration. */}
+        <LocaleBootScript />
         {/* Boot-splash STYLE + dismissal DECISION — also in <head>, before
             first paint, so a streamed force-dynamic page (e.g. /messages)
             can't paint the F splash and then leave it up for seconds waiting

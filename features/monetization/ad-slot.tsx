@@ -19,6 +19,56 @@ function beacon(kind: "impression" | "click", zone: string, adId: string) {
 }
 
 /**
+ * Will this ad row actually paint a visible box?
+ *
+ * ── The bug this fixes (owner, 2026-08-09) ───────────────────────────────────
+ * "the hero section in the landing and download page turns pure black when I
+ * click on download, especially a multiple download."
+ *
+ * `onResolved` used to report `Boolean(found)` — whether a ROW EXISTS. But the
+ * render below returns `null` for several rows that do exist, and `pop` renders
+ * `display: contents`, which is deliberately invisible. So a slot could answer
+ * "yes, I have an ad" and then paint nothing at all.
+ *
+ * `FullscreenInterstitial` believes that answer literally: `shown = open &&
+ * hasAd === true` puts up an **opaque full-screen `bg-black`** and waits for the
+ * creative. With an invisible one it is a pure black screen over the whole page.
+ * The every-3rd-download trigger is why a BATCH surfaces it — several
+ * completions in a row walk the counter onto a multiple of three.
+ *
+ * The predicate below mirrors the render branches exactly. Keep them in step: a
+ * new format needs a case here AND a branch there, and the test file asserts
+ * they agree.
+ *
+ * `adsense` is excluded on purpose — a configured AdSense unit may still return
+ * no creative (unapproved account, no demand) and collapse to nothing, so only
+ * the unit itself can answer. That comes back later through `onFill`.
+ */
+function rendersVisibly(ad: AdSlotData | null): boolean {
+  if (!ad) return false;
+  switch (ad.format) {
+    case "native":
+      return !!ad.targetUrl;
+    case "display":
+      return !!ad.scriptCode;
+    case "adsense":
+      return !!ad.adClient && !!ad.adSlotId;
+    /*
+      `pop` and `video` are REAL ads that paint no box of their own: a pop binds
+      a handler for the next interaction (`display: contents`), and a video is
+      played by the placement that owns a player, not by this component. Both
+      must report "nothing to frame", or every wrapper that reserves space for a
+      creative reserves it around emptiness.
+    */
+    case "pop":
+    case "video":
+      return false;
+    default:
+      return false;
+  }
+}
+
+/**
  * Async, non-blocking ad slot. Premium users get nothing. Rendering depends on
  * the ad's format:
  *  - "native"  → declarative house card (we track the click)
@@ -94,7 +144,12 @@ export function AdSlot({
         */
         if (!notified.current && found?.format !== "adsense") {
           notified.current = true;
-          onResolved?.(Boolean(found));
+          /*
+            Whether it will PAINT, not whether a row was found — see
+            `rendersVisibly`. Reporting mere existence is what let an invisible
+            creative raise a full-screen black interstitial over the page.
+          */
+          onResolved?.(rendersVisibly(found));
         }
       })
       .catch(() => {

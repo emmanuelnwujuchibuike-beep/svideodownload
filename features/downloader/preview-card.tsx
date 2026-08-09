@@ -407,28 +407,51 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         <ResultAd className="mt-4" />
 
         {isBatchable ? (
-          <div className="mt-4">
-            {/* Select items header — count + Select All.
-                The PRO chip is gone (owner, 2026-08-09): batch downloads are
-                free now, paid for by an ad, so badging them Pro would be
-                advertising a wall that no longer exists. */}
-            <div className="mb-2.5 flex items-center justify-between">
-              <p className="text-sm font-semibold">
+          /*
+            ── The multi-select panel, built to public/mulitpleselection modal.jpg ──
+            Owner: "make it look exactly like it and more professional and
+            arranged and less cluttered."
+
+            The reference's arrangement, and the reasoning where it differs:
+
+            • ONE panel with its own surface and border, instead of controls
+              floating loose on the card. The header, the grid and the count
+              read as a single tool you are operating rather than three
+              unrelated rows.
+
+            • FOUR columns, as drawn. At four a tile is small, which is exactly
+              why the number moved to a corner badge and the tick to the
+              opposite one — the middle of the tile stays the picture.
+
+            • The centred play button is gone. At this size it covered most of
+              the frame it was describing; a video now says so with a small
+              corner glyph, which is the same information and none of the
+              obstruction.
+
+            • No PRO chip. The reference has one, but batch downloads are free
+              now and paid for by an ad, so badging them Pro would advertise a
+              wall that no longer exists (owner, earlier the same day).
+          */
+          <div className="mt-4 overflow-hidden rounded-2xl border border-border/60 bg-secondary/25">
+            <div className="flex items-center justify-between gap-3 border-b border-border/60 px-3.5 py-3">
+              <p className="text-sm font-bold">
                 Select items{" "}
-                <span className="font-normal text-muted-foreground">
+                <span className="font-semibold text-muted-foreground tabular-nums">
                   ({selected.size}/{batchItems.length})
                 </span>
               </p>
               <button
                 type="button"
                 onClick={() => setSelected(allSelected ? new Set() : new Set(batchItems.map((f) => f.formatId)))}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-violet-500 transition hover:text-violet-400"
+                className="inline-flex shrink-0 items-center gap-1.5 text-sm font-bold text-violet-500 transition hover:text-violet-400 active:scale-95"
               >
-                {allSelected ? "Deselect All" : "Select All"}
+                {allSelected ? "Deselect all" : "Select all"}
                 <span
                   className={cn(
                     "flex h-5 w-5 items-center justify-center rounded-full border transition",
-                    allSelected ? "border-transparent bg-gradient-to-br from-blue-600 to-violet-600 text-white" : "border-border text-transparent",
+                    allSelected
+                      ? "border-transparent bg-gradient-to-br from-blue-600 to-violet-600 text-white"
+                      : "border-border text-transparent",
                   )}
                 >
                   <Check className="h-3 w-3" strokeWidth={3} />
@@ -436,8 +459,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
               </button>
             </div>
 
-            {/* Numbered selection grid — tap toggles; also previews the photo */}
-            <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto pr-1">
+            <div className="grid max-h-[19rem] grid-cols-4 gap-2 overflow-y-auto p-3">
               {batchItems.map((f, i) => {
                 const on = selected.has(f.formatId);
                 return (
@@ -451,8 +473,8 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
                     aria-pressed={on}
                     aria-label={`${f.label || `Item ${i + 1}`}${on ? " selected" : ""}`}
                     className={cn(
-                      "group/tile relative aspect-square overflow-hidden rounded-2xl ring-2 transition-all active:scale-[0.97]",
-                      on ? "ring-violet-500 shadow-lg shadow-violet-500/20" : "ring-border/60 hover:ring-foreground/25",
+                      "group/tile relative aspect-square overflow-hidden rounded-xl ring-2 transition-all active:scale-[0.96]",
+                      on ? "shadow-lg shadow-violet-500/20 ring-violet-500" : "ring-border/60 hover:ring-foreground/25",
                     )}
                   >
                     {/*
@@ -481,27 +503,40 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
                         {f.kind === "video" ? <Video className="h-5 w-5" /> : <ImageIcon className="h-5 w-5" />}
                       </span>
                     )}
-                    {/* A play badge so a video item is distinguishable from a photo. */}
-                    {f.kind === "video" ? (
-                      <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
-                          <Play className="h-4 w-4" />
-                        </span>
-                      </span>
-                    ) : null}
-                    {/* number badge */}
-                    <span className="absolute left-1.5 top-1.5 flex h-5 min-w-5 items-center justify-center rounded-md bg-black/60 px-1 text-[10px] font-bold text-white backdrop-blur">
+
+                    {/* Unselected tiles dim slightly, so what IS selected reads
+                        at a glance without having to find four small ticks. */}
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "pointer-events-none absolute inset-0 transition",
+                        on ? "bg-transparent" : "bg-black/25",
+                      )}
+                    />
+
+                    <span className="absolute left-1 top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-black/65 px-1 text-[10px] font-bold tabular-nums text-white backdrop-blur">
                       {i + 1}
                     </span>
-                    {/* animated check */}
-                    <motion.span
-                      initial={false}
-                      animate={on ? { scale: 1, opacity: 1 } : { scale: 0.5, opacity: 0 }}
-                      transition={{ type: "spring", stiffness: 500, damping: 26 }}
-                      className="absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-md"
+
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full transition duration-200",
+                        on
+                          ? "scale-100 bg-gradient-to-br from-blue-600 to-violet-600 text-white opacity-100 shadow"
+                          : "scale-75 bg-black/35 text-white/70 opacity-90 ring-1 ring-inset ring-white/40",
+                      )}
                     >
-                      <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                    </motion.span>
+                      <Check className="h-3 w-3" strokeWidth={3} />
+                    </span>
+
+                    {/* A video says so in a corner rather than under a badge
+                        covering the frame. */}
+                    {f.kind === "video" ? (
+                      <span className="pointer-events-none absolute bottom-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm">
+                        <Play className="h-2.5 w-2.5 fill-white" />
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -575,20 +610,30 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
               : "Fast, private & free — no app, no sign-up."}
         </p>
 
-        {/* Feature strip — what every download gets */}
-        <div className="mt-4 grid grid-cols-4 divide-x divide-border/60 rounded-2xl border border-border/60 bg-card/60 py-3 text-center">
+        {/*
+          Feature strip — what every download gets.
+
+          One quiet inline row, as in the reference (public/mulitpleselection
+          modal.jpg), rather than the bordered four-cell table it was. Same four
+          claims, none dropped: they are reassurance you read once, and giving
+          them a box, dividers and a background made them compete with the
+          download button directly above for the same attention.
+
+          Every one is a checkable product fact — no counts, no ratings.
+        */}
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-muted-foreground">
           {(
             [
-              { icon: Zap, label: "Fast Download" },
-              { icon: ShieldCheck, label: "Private & Secure" },
-              { icon: Ban, label: "No Watermark" },
-              { icon: UserX, label: "No Sign-up" },
+              { icon: Zap, label: "Lightning fast" },
+              { icon: ShieldCheck, label: "Private & secure" },
+              { icon: Ban, label: "No watermark" },
+              { icon: UserX, label: "No app, no sign-up" },
             ] as const
           ).map(({ icon: Icon, label }) => (
-            <div key={label} className="flex flex-col items-center gap-1 px-1">
-              <Icon className="h-4 w-4 text-muted-foreground" strokeWidth={1.9} />
-              <span className="text-[10px] font-medium leading-tight text-muted-foreground">{label}</span>
-            </div>
+            <span key={label} className="inline-flex items-center gap-1.5 text-[11px] font-medium">
+              <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+              {label}
+            </span>
           ))}
         </div>
 

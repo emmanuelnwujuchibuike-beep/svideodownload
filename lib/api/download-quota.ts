@@ -49,6 +49,27 @@ export async function checkDownloadQuota(
    * past the limit by reusing a rejected id.
    */
   downloadId?: string | null,
+  /**
+   * A stable id shared by every file of ONE batch, sent by the client as `b=`.
+   *
+   * 🔴 Why (owner, 2026-08-09: "multiple download should be recorded as one in
+   * the free user daily limit for download but not the rest api request"):
+   *
+   * A story or a photo slideshow is many files but ONE thing the member asked
+   * for. Charged per file, a 12-photo TikTok slideshow spent 12 of a free
+   * visitor's 30 — and when the cap ran out mid-batch the remaining files came
+   * back 429 while the earlier ones had already saved, which is the reported
+   * "some failed in the multiple download".
+   *
+   * When present this REPLACES the per-download receipt, so the first file of a
+   * batch pays and every sibling rides on it. It changes only the member-facing
+   * quota; each file still makes its own request and does its own work.
+   *
+   * Same safety property as `downloadId`: a receipt is written only on a
+   * SUCCESSFUL charge, so a batch that was refused cannot smuggle its siblings
+   * through on an id that never paid.
+   */
+  batchId?: string | null,
 ): Promise<DownloadQuota> {
   // Resolve the caller's identity from the session cookie (null = anonymous).
   // Skip the Supabase round-trip entirely when there's no auth cookie — the
@@ -71,11 +92,20 @@ export async function checkDownloadQuota(
   const limit = (await getPlanLimits())[plan].dailyDownloads;
   const key = userId ? `dl:u:${userId}` : `dl:ip:${clientIp}`;
 
-  // A retry of a download that already paid for itself passes straight through.
-  if (downloadId && (await alreadyCounted(`${key}:${downloadId}`))) {
+  /*
+    The unit of work being charged, most-inclusive first.
+
+    A BATCH is one charge for all its files; otherwise a DOWNLOAD is one charge
+    for all its retries. Preferring the batch id is what makes a 12-photo
+    slideshow cost one instead of twelve.
+  */
+  const receipt = batchId ? `${key}:b:${batchId}` : downloadId ? `${key}:${downloadId}` : undefined;
+
+  // A retry — or a sibling of an already-paid batch — passes straight through.
+  if (receipt && (await alreadyCounted(receipt))) {
     return { allowed: true, used: 0, limit, plan };
   }
 
-  const r = await consumeDaily(key, limit, downloadId ? `${key}:${downloadId}` : undefined);
+  const r = await consumeDaily(key, limit, receipt);
   return { allowed: r.allowed, used: r.used, limit: r.limit, plan };
 }

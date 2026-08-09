@@ -131,6 +131,22 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
 
   /** Actually enqueue — called by the gate once the ad (if any) is done. */
   const runBatch = (items: typeof batchItems) => {
+    /*
+      ONE id for the whole batch (owner, 2026-08-09: "multiple download should
+      be recorded as one in the free user daily limit for download but not the
+      rest api request").
+
+      A story or a slideshow is many files but ONE thing the member asked for.
+      The daily cap was charged per FILE, so a 12-photo TikTok slideshow spent
+      12 of a free visitor's 30 — and once the cap ran out mid-batch the
+      remaining files came back 429 while the earlier ones had already
+      succeeded. That is the reported "some failed in the multiple download".
+
+      Every item carries this id; the server writes one receipt against it and
+      charges once. The API requests themselves are untouched — each file still
+      needs its own extraction and transfer.
+    */
+    const batchId = crypto.randomUUID();
     items.forEach((f, i) => {
       // Each item carries its OWN kind — a story can mix video snaps and photo
       // snaps, and sending them all as "image" would have saved the videos with
@@ -145,6 +161,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         platformName: metadata.platformName,
         qualityLabel: f.label,
         durationSeconds: metadata.durationSeconds,
+        batchId,
       });
     });
     // No "started" toast — the floating card shows "Downloading N items…".

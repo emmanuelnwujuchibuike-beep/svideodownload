@@ -162,24 +162,26 @@ export function Hero() {
               exists to intercept the submit so the result appears in place
               instead of navigating. Full reasoning in hero-cta-form.tsx.
             */}
-            <HeroCtaForm />
-
             {/*
-              Supported platforms, directly under the hero download button
-              (owner, 2026-08-09).
+              Supported platforms, ABOVE the download button (owner,
+              2026-08-09: "the platform supported is supposed to be at the top
+              of the download button not below").
 
-              This row already existed further down, inside the "Download
-              anything" card — but that card is most of a screen away, and the
-              hero button is where a first-time visitor decides whether this
-              tool handles the link already on their clipboard. Eight
-              recognisable marks answer that in the moment they are asking.
+              It reads better here for a reason worth keeping: the marks answer
+              "does this handle my link?", and that question comes BEFORE the
+              decision to tap, not after it. Below the button it also split the
+              CTA stack in half — three tall rows with a two-line badge grid
+              wedged between the first and second, which is most of why the
+              stack looked scattered.
 
-              It is deliberately NOT removed from the lower card: that placement
-              comes from the owner's own reference (`public/newlanding.jpg`), so
-              both are intended. Shared component, one definition — see
-              `supported-platforms.tsx` for why that matters.
+              It is deliberately NOT removed from the "Download anything" card
+              further down: that placement comes from the owner's own reference
+              (`public/newlanding.jpg`), so both are intended. One shared
+              component — see `supported-platforms.tsx`.
             */}
-            <SupportedPlatforms className="-mt-0.5 px-1" />
+            <SupportedPlatforms className="mb-1 justify-start px-0.5" />
+
+            <HeroCtaForm />
 
             <Link
               href="/features"

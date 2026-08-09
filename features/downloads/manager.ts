@@ -47,6 +47,15 @@ export interface DownloadTask {
   attempts?: number;
   /** True once preparing has run long enough to be worth explaining. */
   slowPrepare?: boolean;
+  /**
+   * Shared by every item of one batch — a story's snaps, a slideshow's photos.
+   *
+   * The server charges the daily cap ONCE per batch id (owner, 2026-08-09:
+   * "multiple download should be recorded as one in the free user daily limit
+   * for download but not the rest api request"). Absent for a single download,
+   * which is charged on its own id.
+   */
+  batchId?: string;
   /** Clip length in seconds when the extractor reported one — shown in history. */
   durationSeconds?: number | null;
 }
@@ -221,8 +230,23 @@ export function getServerSnapshot(): DownloadTask[] {
   return EMPTY;
 }
 
-function buildUrl(t: Pick<DownloadTask, "url" | "formatId" | "kind" | "title" | "id">): string {
+function buildUrl(t: Pick<DownloadTask, "url" | "formatId" | "kind" | "title" | "id" | "batchId">): string {
   const sp = new URLSearchParams({ url: t.url, formatId: t.formatId, kind: t.kind, title: t.title });
+  /*
+    `b` — the BATCH this download belongs to, when it belongs to one.
+
+    A story or a slideshow is N items from ONE post, and the member asked for
+    one thing. Charging the daily cap per item meant a 12-photo TikTok
+    slideshow spent 12 of a free visitor's 30 — and the twelfth request came
+    back 429 while the first eleven succeeded, which is the "some failed with
+    429" being reported.
+
+    The server keys its receipt on this, so the whole batch costs ONE unit
+    however many files it contains. It deliberately does NOT reduce the number
+    of API requests — each file still needs its own extraction and transfer;
+    it is only the member-facing QUOTA that treats the batch as one download.
+  */
+  if (t.batchId) sp.set("b", t.batchId);
   /*
     `t` — this download's identity, stable across automatic retries.
 
@@ -253,6 +277,34 @@ function extFor(type: string): string {
   if (type.includes("audio")) return type.includes("mp4") || type.includes("m4a") ? "m4a" : "mp3";
   if (type.includes("image")) return type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg";
   return "mp4";
+}
+
+/**
+ * The message to show for a failed request — the SERVER's, when it wrote one.
+ *
+ * ── Why this exists (owner, 2026-08-09) ──────────────────────────────────────
+ * "when there is a free limit reach it should show and not just an error."
+ *
+ * This used to throw `HTTP ${res.status}`, so the card said "Download failed —
+ * HTTP 429" and nothing else. Meanwhile `/api/download` was already answering
+ * with exactly the right sentence — "Daily download limit reached (30/day).
+ * Sign up or upgrade for more." — and the client threw it away without reading
+ * the body. The explanation existed the whole time; nobody was shown it.
+ *
+ * Falls back to the status only when there is genuinely nothing better: a
+ * response with no JSON body, or one whose body does not name a reason.
+ */
+async function failureMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.clone().json()) as { error?: unknown };
+    if (typeof body.error === "string" && body.error.trim().length > 0) return body.error;
+  } catch {
+    /* not JSON — fall through to the status */
+  }
+  // 429 is the one status worth naming in plain words even without a body: it
+  // is a limit, not a fault, and "HTTP 429" reads like something broke.
+  if (res.status === 429) return "Daily download limit reached. Try again tomorrow or upgrade.";
+  return `HTTP ${res.status}`;
 }
 
 async function run(id: string) {
@@ -298,7 +350,7 @@ async function run(id: string) {
 
   try {
     const res = await fetch(task.directUrl ?? buildUrl(task), { signal: controller.signal });
-    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok || !res.body) throw new Error(await failureMessage(res));
 
     const total = Number(res.headers.get("content-length")) || 0;
     patch(id, { totalBytes: total });
@@ -506,6 +558,8 @@ export function startDownload(input: {
   qualityLabel: string;
   directUrl?: string;
   durationSeconds?: number | null;
+  /** Shared across one batch so the daily cap is charged once. See DownloadTask. */
+  batchId?: string;
 }): string {
   /*
     A double tap is ONE download (owner audit, 2026-08-09).

@@ -43,42 +43,40 @@ export function WallpaperCta({ className }: { className?: string }) {
     <Link
       href="/wallpapers"
       prefetch
+      /*
+        ── The colour is the element's OWN BACKGROUND ─────────────────────────
+        Owner, 2026-08-09: "the colours are spilling at the edge, make the
+        colour to have zero border radius." Then, after the first attempt: the
+        button rendered with no text at all.
+
+        Both symptoms, and why this shape is the right one:
+
+        1. THE SPILL. There were two sources, and neither was the background.
+           An outer bloom at `-inset-1` with `rounded-3xl` sat behind a
+           `rounded-2xl` button — a BIGGER box with a BIGGER radius, so its
+           corners bulged past the button's own. And `shadow-violet-500/30`
+           throws colour in every direction by definition; a shadow is never
+           clipped by a border radius. Both are gone.
+
+        2. THE MISSING TEXT — my own regression. Moving the gradient into an
+           `absolute inset-0` CHILD made it a POSITIONED element, and positioned
+           elements paint above static siblings. So the colour layer covered the
+           title and the subtitle. (The icon and the "VIEW" cue survived only
+           because their CSS animations apply a transform, which promotes them.)
+
+        A `background-image` on the element itself has neither problem: a
+        background is always painted behind its own content, and it is clipped
+        by `border-radius` for free. There is no layer to disagree about the
+        shape and nothing to paint over the words.
+      */
       className={cn(
-        "frenz-wp group relative isolate flex w-full items-center gap-4 overflow-hidden rounded-2xl px-4 py-3.5 text-left",
-        "text-white ring-1 ring-inset ring-white/15",
-        "transition duration-200 hover:-translate-y-0.5 active:scale-[0.995]",
+        "frenz-wp group relative flex w-full items-center gap-4 overflow-hidden rounded-2xl px-4 py-3.5 text-left",
+        "bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 text-white",
+        "ring-1 ring-inset ring-white/15 shadow-md",
+        "transition duration-200 hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.995]",
         className,
       )}
     >
-      {/*
-        ── The colour is a CLIPPED LAYER, with no radius of its own ────────────
-        Owner, 2026-08-09: "the wallpaper button isn't trimmed well in the
-        button's rounded [corners], the colours are spilling at the edge, make
-        the colour to have zero border radius."
-
-        Exactly right, and there were two spills:
-
-        1. An outer bloom at `-inset-1` with `rounded-3xl` sat behind a
-           `rounded-2xl` button — a BIGGER box with a BIGGER radius, so its
-           corners bulged past the button's own. `-z-10` also pushed it outside
-           the parent's paint order, where `overflow-hidden` no longer reliably
-           trimmed it.
-        2. A `shadow-violet-500/30` glow throws colour in every direction by
-           definition, and a shadow is never clipped by the parent's radius.
-
-        Both are gone. The gradient is now a plain `inset-0` layer with NO
-        border radius at all — the parent's `overflow-hidden rounded-2xl` is the
-        only thing that decides the shape, so the colour cannot disagree with it.
-        `isolate` keeps the layer in this element's own stacking context rather
-        than escaping behind it.
-
-        Depth now comes from a neutral shadow, which casts grey rather than
-        violet and so reads as lift instead of leakage.
-      */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600"
-      />
       <span className="frenz-wp-icon relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/20 text-white ring-1 ring-inset ring-white/25 backdrop-blur-sm">
         <ImageIcon className="relative h-5 w-5" />
         <span

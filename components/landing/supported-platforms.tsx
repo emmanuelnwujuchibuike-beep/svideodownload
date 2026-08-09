@@ -45,10 +45,28 @@ export function SupportedPlatforms({
 }) {
   const onGradient = surface === "onGradient";
   return (
-    <div className={cn("flex flex-wrap items-center justify-center gap-2", className)}>
+    /*
+      ONE line that scrolls, never a wrapping grid.
+
+      With the label plus eight badges, `flex-wrap` broke onto a second row on
+      a phone — six marks, then two orphans — which is most of what made the
+      hero's CTA stack look scattered (owner, 2026-08-09). A single row that
+      scrolls horizontally keeps the rhythm of the stack intact at every width
+      and matches how the category pills already behave elsewhere.
+
+      The scrollbar is hidden because this is an eight-item strip, not a
+      browsing surface; the marks are recognisable enough that a partially
+      visible one still reads as "and more".
+    */
+    <div
+      className={cn(
+        "flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        className,
+      )}
+    >
       <span
         className={cn(
-          "text-xs font-semibold",
+          "shrink-0 text-xs font-semibold",
           onGradient ? "text-white/80" : "text-slate-500 dark:text-white/60",
         )}
       >
@@ -66,7 +84,7 @@ export function SupportedPlatforms({
               colour, and a recognisable logo is the entire job of this row.
             */
             className={cn(
-              "flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm",
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm",
               !onGradient && "ring-1 ring-inset ring-slate-200/70 dark:ring-white/10",
             )}
           >

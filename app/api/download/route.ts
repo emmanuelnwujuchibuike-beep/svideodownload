@@ -35,9 +35,11 @@ async function enforceDailyCap(
   clientIp: string,
   /** The client's stable id for this download — see `checkDownloadQuota`. */
   downloadId?: string | null,
+  /** The batch this file belongs to, when it belongs to one. One charge per batch. */
+  batchId?: string | null,
 ): Promise<Response | null> {
   if (isInternalWorkerCall(request)) return null;
-  const quota = await checkDownloadQuota(request, clientIp, downloadId);
+  const quota = await checkDownloadQuota(request, clientIp, downloadId, batchId);
   if (quota.allowed) return null;
   return NextResponse.json<ApiError>(
     {
@@ -169,7 +171,14 @@ export async function GET(request: Request) {
     key it becomes is already scoped to their own user id or IP.
   */
   const downloadId = (sp.get("t") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || null;
-  const capped = await enforceDailyCap(request, clientIp, downloadId);
+  /*
+    `b` — the batch this file belongs to. Sanitised identically to `t` and for
+    the same reason: it is untrusted input used only as part of a Redis key,
+    and the key it becomes is already scoped to the caller's own user id or IP,
+    so a forged value can only ever collide with themselves.
+  */
+  const batchId = (sp.get("b") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || null;
+  const capped = await enforceDailyCap(request, clientIp, downloadId, batchId);
   if (capped) return capped;
 
   return processDownload(parsed.data, clientIp);

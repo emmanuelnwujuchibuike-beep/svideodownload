@@ -41,25 +41,6 @@ interface VideoMeta {
   creator?: unknown;
 }
 
-/** Find the snap the URL targets by matching its snapId anywhere in the link. */
-function matchSnap(snaps: Snap[], url: string): Snap | null {
-  let dec = url;
-  try {
-    dec = decodeURIComponent(url);
-  } catch {
-    /* keep raw */
-  }
-  // 1) the snap's id appears verbatim in the URL (most reliable)
-  const exact = snaps.find((s) => s.snapId && (url.includes(s.snapId) || dec.includes(s.snapId)));
-  if (exact) return exact;
-  // 2) a long token in the URL overlaps a snapId (handles wrapped/short ids)
-  for (const t of dec.match(/[A-Za-z0-9_-]{16,}/g) ?? []) {
-    const m = snaps.find((s) => s.snapId && (s.snapId.includes(t) || t.includes(s.snapId)));
-    if (m) return m;
-  }
-  return null;
-}
-
 function snapFormat(snap: Snap, i: number, count: number): MediaFormat {
   const isVideo = snap.snapMediaType !== 0; // 1 = video, 0 = image
   const headers = { "User-Agent": MOBILE_UA, Referer: "https://www.snapchat.com/" };
@@ -227,39 +208,50 @@ export const snapchatExtractor: Extractor = {
           curatedHighlights?: { snapList?: Snap[] }[];
         };
 
-        // Spotlight (single video page) — the clean, no-watermark H.264 URL.
-        if (pp.videoMetadata?.contentUrl) {
+        /*
+          ── The STORY is read first, and it wins ─────────────────────────
+          Owner (2026-08-09): "the snapchat story download falls into the
+          profile spotlight and picks one from it — it's supposed to fetch all
+          videos from the story link and never fall into the profile story or
+          spotlight."
+
+          Spotlight used to be checked FIRST, and it set `mediaUrl`, which made
+          the story branch below unreachable. A page carrying both — a story
+          page that also serialises a `videoMetadata` block for its featured
+          clip, or a profile with a Spotlight rail — therefore returned that
+          ONE spotlight video and never looked at the story at all. That is
+          exactly the reported symptom, and it was not a page-shape guess: the
+          precedence in this file was simply the wrong way round.
+
+          A story link means the story. Spotlight is now only consulted when
+          there is no story on the page, which is what a real Spotlight
+          permalink looks like.
+        */
+        const snapList = pp.story?.snapList ?? [];
+        const snaps = (Array.isArray(snapList) ? snapList : []).filter((s) => s.snapUrls?.mediaUrl);
+
+        if (snaps.length) {
+          /*
+            EVERY snap in the story, and the member picks.
+
+            Owner: "snapchat story fetch all and users have to select which to
+            download." There is deliberately no attempt to guess which single
+            snap a share link means — a `/t/` code carries no snap id, so any
+            "match" against one was a coincidence between a short code and part
+            of an id, and getting it wrong silently discarded the rest of the
+            story.
+
+            `curatedHighlights` — the saved folders on a profile — is never
+            read. Using it as a fallback is what let a plain story link return
+            an account's archive.
+          */
+          formats = snaps.map((s, i) => snapFormat(s, i, snaps.length));
+          title = snaps[0]?.snapTitle;
+        } else if (pp.videoMetadata?.contentUrl) {
+          // A real Spotlight permalink: one video, and no story on the page.
           vm = pp.videoMetadata;
           mediaUrl = pp.videoMetadata.contentUrl;
           title = pp.videoMetadata.name;
-        }
-
-        // Story page — return the EXACT snap the link points to. If we can't
-        // identify it from the URL, return every snap so the user picks the
-        // right one (instead of guessing and serving a random snap).
-        if (!mediaUrl) {
-          /*
-            The live 24-hour story, and ONLY that.
-
-            Owner (2026-08-09): "it doesn't fetch the story folder from the
-            profile, just the story on status that stays for 24hrs."
-
-            `curatedHighlights` — the saved folders on a profile — is
-            deliberately not read. Reading it as a fallback is what let a plain
-            story link return an account's archive, and every attempt to have
-            both behaviours from one code path made normal stories worse. If a
-            page has no live story, the generic CDN scan below handles it.
-          */
-          const snapList = pp.story?.snapList ?? [];
-          const snaps = (Array.isArray(snapList) ? snapList : []).filter(
-            (s) => s.snapUrls?.mediaUrl,
-          );
-          if (snaps.length) {
-            const matched = matchSnap(snaps, url);
-            const chosen = matched ? [matched] : snaps;
-            formats = chosen.map((s, i) => snapFormat(s, i, chosen.length));
-            title = matched?.snapTitle ?? snaps[0]?.snapTitle;
-          }
         }
       } catch {
         /* fall through to regex */

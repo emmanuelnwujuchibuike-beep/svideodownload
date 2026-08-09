@@ -13,6 +13,7 @@ import {
   Loader2,
   MonitorSmartphone,
   Radio,
+  Search,
   Server,
   ShieldAlert,
   TrendingUp,
@@ -229,6 +230,9 @@ export function AnalyticsDashboard() {
           <BreakdownCard icon={Globe2} title="Region" rows={data?.byRegion ?? []} />
           <BreakdownCard icon={Eye} title="Top pages" rows={data?.engagement.topPages ?? []} />
           <BreakdownCard icon={Globe2} title="Referrers" rows={data?.engagement.topReferrers ?? []} />
+          {/* Search grouped by ENGINE — Google alone arrives as a dozen country
+              domains, so it never surfaced in the raw referrer list. */}
+          <BreakdownCard icon={Search} title="Search engines" rows={data?.engagement.searchEngines ?? []} />
           <NewReturningCard newV={data?.engagement.newVisitors ?? 0} ret={data?.engagement.returningVisitors ?? 0} />
         </div>
       </div>

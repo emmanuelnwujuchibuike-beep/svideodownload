@@ -261,6 +261,17 @@ export const AD_METRICS: MetricSpec[] = [
     },
   },
   {
+    id: "ad-rewards",
+    title: "Reward ads watched",
+    description: "Visitors who watched a rewarded ad and claimed the HD unlock.",
+    measurement:
+      "Counted when the unlock is CLAIMED, not when the timer runs out — an ad that finished playing in a tab nobody returned to is not a reward anyone watched. This had no source at all before 2026-08-09: the gate granted the reward but recorded nothing, so the metric could only ever have shown zero.",
+    format: "count",
+    higherIsBetter: true,
+    value: (s) => s.rewardsWatched,
+    previous: () => null,
+  },
+  {
     id: "ad-revenue",
     title: "Estimated ad revenue",
     description: "A projection, not money received.",

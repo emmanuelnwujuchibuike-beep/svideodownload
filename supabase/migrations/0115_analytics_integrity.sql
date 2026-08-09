@@ -144,7 +144,8 @@ returns table (
   live_visitors    bigint,
   bounced_sessions bigint,
   dwell_samples    bigint,
-  dwell_seconds    numeric
+  dwell_seconds    numeric,
+  rewards_watched  bigint
 )
 language sql
 stable
@@ -175,7 +176,9 @@ as $$
        and (properties ->> 'dwellMs') ~ '^[0-9]+$'),
     (select coalesce(sum(least((properties ->> 'dwellMs')::numeric, 1800000)) / 1000.0, 0)
        from human where event_type = 'page_exit'
-       and (properties ->> 'dwellMs') ~ '^[0-9]+$');
+       and (properties ->> 'dwellMs') ~ '^[0-9]+$'),
+    -- Rewarded ads actually watched to the point of claiming the unlock.
+    (select count(*) from human where event_type = 'reward_completed');
 $$;
 
 /**
@@ -233,6 +236,31 @@ as $$
      and is_bot = false
      and (p_until is null or created_at < p_until)
    group by status;
+$$;
+
+/**
+ * Downloads per platform — exact.
+ *
+ * This was the last sampled number on the dashboard: it read up to 20 000
+ * download rows and tallied them in JS, so on a busy month the platform split
+ * described the most recent 20 000 downloads rather than the range.
+ */
+create or replace function public.analytics_platform_totals(
+  p_since timestamptz,
+  p_limit integer default 12
+)
+returns table (key text, count bigint)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce(nullif(platform, ''), 'unknown')::text, count(*)::bigint
+    from public.analytics_downloads
+   where created_at >= p_since and is_bot = false
+   group by 1
+   order by 2 desc
+   limit p_limit;
 $$;
 
 /**
@@ -394,6 +422,7 @@ begin
     'analytics_traffic_totals(timestamptz, timestamptz, timestamptz)',
     'analytics_breakdown(timestamptz, text, integer)',
     'analytics_download_totals(timestamptz, timestamptz)',
+    'analytics_platform_totals(timestamptz, integer)',
     'analytics_visitor_split(timestamptz)',
     'analytics_page_traffic(timestamptz)',
     'analytics_timeseries(timestamptz, text)',

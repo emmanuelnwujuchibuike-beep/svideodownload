@@ -23,6 +23,13 @@ export type AnalyticsEventType =
   | "download_retried"
   | "ad_impression"
   | "ad_click"
+  /**
+   * A rewarded ad watched to completion — the visitor actually earned the HD
+   * unlock, as distinct from an impression (the ad was shown) or a skip.
+   * Nothing emitted this before 2026-08-09, so "reward ads watched" had no
+   * source at all.
+   */
+  | "reward_completed"
   | "custom";
 
 /** A download's lifecycle status, mirrored into `analytics_downloads.status`. */

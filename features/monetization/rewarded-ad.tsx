@@ -245,7 +245,21 @@ export function RewardedAdGate({
             ) : (
               <button
                 type="button"
-                onClick={onReward}
+                onClick={() => {
+                  /*
+                    "Reward ads watched" — the metric that had no source.
+
+                    Recorded HERE, on the claim, rather than when the timer
+                    reaches zero: an ad that ran to completion in a tab nobody
+                    came back to is not a reward anyone watched. This fires once
+                    per gate (the gate unmounts on reward), and the collector
+                    dedups on the event id regardless.
+                  */
+                  void import("@/lib/analytics/client").then((m) =>
+                    m.track("reward_completed", { zone: "reward_video", adId: ad.id, seconds: Math.round(watched) }),
+                  );
+                  onReward();
+                }}
                 className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 px-4 py-3.5 text-base font-semibold text-white shadow-lg transition hover:opacity-90 active:scale-[0.99]"
               >
                 <Download className="h-5 w-5" /> Download in HD

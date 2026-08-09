@@ -86,6 +86,8 @@ export interface PageStat {
 export interface Engagement {
   topPages: Breakdown[];
   topReferrers: Breakdown[];
+  /** Referrers that are search engines, grouped by engine rather than host. */
+  searchEngines: Breakdown[];
   /** EVERY catalogued page, grouped, including the ones with no traffic. */
   pages: PageStat[];
   newVisitors: number;
@@ -198,6 +200,8 @@ export interface AnalyticsSummary {
   byRegion: Breakdown[];
   timeseries: { granularity: "hour" | "day"; buckets: TimeBucket[] };
   ads: AdAnalytics;
+  /** Rewarded ads watched through to claiming the unlock. */
+  rewardsWatched: number;
   engagement: Engagement;
   monitoring: Monitoring;
   /** Always false now — retained so the dashboard's contract does not change. */
@@ -414,7 +418,8 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
     byRegion: [],
     timeseries: { granularity, buckets: emptyBuckets },
     ads: { impressions: 0, clicks: 0, ctr: 0, cpmUsd: DEFAULT_CPM_USD, revenueUsd: 0, byZone: [] },
-    engagement: { topPages: [], topReferrers: [], pages: emptyPageStats(), newVisitors: 0, returningVisitors: 0 },
+    rewardsWatched: 0,
+    engagement: { topPages: [], topReferrers: [], searchEngines: [], pages: emptyPageStats(), newVisitors: 0, returningVisitors: 0 },
     monitoring: { errorRatePct: 0, failedDownloads: 0, recentErrors: [], recentSecurity: [] },
     approxBreakdowns: false,
     rpcHealth: { exactAggregates: false, note: "Analytics tables are not available." },
@@ -459,6 +464,7 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
           bounced_sessions: number;
           dwell_samples: number;
           dwell_seconds: number;
+          rewards_watched: number;
         }>("analytics_traffic_totals", { p_since: since, p_live_since: liveSince }),
         rpc<{ new_visitors: number; returning_visitors: number }>("analytics_visitor_split", { p_since: since }),
         rpc<{ status: string; downloads: number; bytes: number }>("analytics_download_totals", { p_since: since }),
@@ -496,6 +502,7 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
       bounced_sessions: 0,
       dwell_samples: 0,
       dwell_seconds: 0,
+      rewards_watched: 0,
     };
 
     const num0 = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0);
@@ -543,6 +550,22 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
+    /*
+      Search traffic, grouped by ENGINE rather than by host.
+
+      Google alone arrives as a dozen country domains, so search was scattered
+      across the referrer list with no single row big enough to surface. This is
+      the acquisition number the owner asked for and it had no home before.
+    */
+    const searchTally = new Map<string, number>();
+    for (const [host, count] of refByHost) {
+      const engine = searchEngineFor(host);
+      if (engine) searchTally.set(engine, (searchTally.get(engine) ?? 0) + count);
+    }
+    const searchEngines = [...searchTally.entries()]
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => b.count - a.count);
+
     const topPages = (paths ?? []).map((r) => ({ key: r.key, count: num0(r.count) }));
 
     // Per-PAGE stats over the catalogue: every surface reports, including the
@@ -585,21 +608,9 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
     const newVisitors = num0(split?.[0]?.new_visitors);
     const returningVisitors = num0(split?.[0]?.returning_visitors);
 
-    /* ── platform split (downloads) ────────────────────────────────────────── */
-    const { data: platRows } = await db
-      .from("analytics_downloads")
-      .select("platform")
-      .gte("created_at", since)
-      .limit(SAMPLE_CAP);
-    const pm = new Map<string, number>();
-    for (const r of (platRows ?? []) as { platform: string | null }[]) {
-      const p = r.platform || "unknown";
-      pm.set(p, (pm.get(p) ?? 0) + 1);
-    }
-    const topPlatforms = [...pm.entries()]
-      .map(([key, count]) => ({ key, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+    /* ── platform split (downloads) — exact, the last one to stop sampling ── */
+    const platRows = await rpc<Breakdown>("analytics_platform_totals", { p_since: since, p_limit: 12 });
+    const topPlatforms = (platRows ?? []).map((r) => ({ key: r.key, count: num0(r.count) }));
 
     /* ── timeseries: exact buckets, dropped into the gap-free grid ─────────── */
     const idxByBucket = new Map<number, number>();
@@ -644,7 +655,8 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
       byRegion: clean(regions),
       timeseries: { granularity, buckets },
       ads,
-      engagement: { topPages, topReferrers, pages, newVisitors, returningVisitors },
+      rewardsWatched: num0(t.rewards_watched),
+      engagement: { topPages, topReferrers, searchEngines, pages, newVisitors, returningVisitors },
       monitoring,
       approxBreakdowns: false,
       rpcHealth: { exactAggregates: true, note: null },
@@ -727,4 +739,34 @@ function normalizeReferrer(ref: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The search engine a referrer host belongs to, or null if it is not search.
+ *
+ * ── Why a name table and not "does the host contain 'search'" ────────────────
+ * Google alone arrives as dozens of country hosts (google.com, google.co.uk,
+ * google.com.ng…), and Yahoo/Bing/DuckDuckGo each have their own. Grouped by
+ * ENGINE, "Google" is usually the largest acquisition channel on the site; left
+ * as raw hosts it is scattered across a dozen rows, none individually large
+ * enough to appear in a top-8 referrer list — which is why search traffic
+ * looked smaller than it is.
+ *
+ * Matched on the registrable prefix rather than a substring, so a host like
+ * `notgoogle.example.com` cannot be miscredited to Google.
+ */
+const SEARCH_ENGINES: { name: string; test: RegExp }[] = [
+  { name: "Google", test: /(^|\.)google\.[a-z.]+$/i },
+  { name: "Bing", test: /(^|\.)bing\.com$/i },
+  { name: "Yahoo", test: /(^|\.)search\.yahoo\.[a-z.]+$|(^|\.)yahoo\.[a-z.]+$/i },
+  { name: "DuckDuckGo", test: /(^|\.)duckduckgo\.com$/i },
+  { name: "Yandex", test: /(^|\.)yandex\.[a-z.]+$/i },
+  { name: "Baidu", test: /(^|\.)baidu\.com$/i },
+  { name: "Ecosia", test: /(^|\.)ecosia\.org$/i },
+  { name: "Brave", test: /(^|\.)search\.brave\.com$/i },
+  { name: "Startpage", test: /(^|\.)startpage\.com$/i },
+];
+
+export function searchEngineFor(host: string): string | null {
+  return SEARCH_ENGINES.find((e) => e.test.test(host))?.name ?? null;
 }

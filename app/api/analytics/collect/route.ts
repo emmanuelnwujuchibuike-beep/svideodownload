@@ -24,6 +24,7 @@ const eventSchema = z.object({
     "download_retried",
     "ad_impression",
     "ad_click",
+    "reward_completed",
     "custom",
   ]),
   visitorId: z.string().min(1).max(64),

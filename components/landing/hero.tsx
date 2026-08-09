@@ -97,10 +97,24 @@ export async function Hero() {
      * because neon trails that read as "light travelling" on #050816 read as dirt
      * on white. Same geometry, different palette and much lower intensity.
      */
-    <section className="relative overflow-hidden bg-gradient-to-b from-slate-50 to-indigo-50/60 pb-5 pt-[calc(var(--frenz-safe-top)+7rem)] text-foreground dark:from-[#050816] dark:to-[#050816] dark:text-white sm:pb-7 sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
+    /*
+      ── Native-app rhythm (owner, 2026-08-09) ────────────────────────────────
+      "the h1 text and title description should be arranged upwards in a more
+      moderate and smaller text so the landing page looks like a native iOS app."
+
+      The top padding was `safe-top + 7rem`, which pushed the headline most of a
+      screen down and made the page read as a marketing poster. iOS starts its
+      content directly under the navigation bar; `+4.5rem` clears the fixed
+      header and nothing more, so the first thing on screen is the product.
+    */
+    <section className="relative overflow-hidden bg-gradient-to-b from-slate-50 to-indigo-50/60 pb-5 pt-[calc(var(--frenz-safe-top)+4.5rem)] text-foreground dark:from-[#050816] dark:to-[#050816] dark:text-white sm:pb-7 sm:pt-[calc(var(--frenz-safe-top)+5.5rem)]">
       <HeroEffects />
 
-      <div className="container relative z-10 grid items-center gap-10 lg:grid-cols-2 lg:gap-8" id="hero">
+      {/* `items-start`, not `items-center`: centring the two columns against
+          each other pushed the text column down by half the phone mockup's
+          overflow on tall screens. `gap-6` on mobile keeps the mockup close
+          without the 40px trough. */}
+      <div className="container relative z-10 grid items-start gap-6 lg:grid-cols-2 lg:items-center lg:gap-8" id="hero">
         {/* Left — copy + CTAs */}
         {/*
           Left-aligned at every width (owner, 2026-08-04: "the landing page hero
@@ -152,14 +166,26 @@ export async function Hero() {
             If it survives this, the cause is a positioned element from outside
             the hero and the next step is to find out which — see the handoff.
           */}
-          <span className="relative z-10 mb-6 flex w-fit max-w-full flex-wrap items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase leading-relaxed tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
+          <span className="relative z-10 mb-4 flex w-fit max-w-full flex-wrap items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase leading-relaxed tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
             <Sparkles className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
             All-in-One Downloader &amp; Social Hub
           </span>
 
           {/* "Download. Connect. Explore." — the reference H1, middle word in the
               brand gradient (public/newlandingfull.jpg). */}
-          <h1 className="text-5xl font-extrabold leading-[1.02] tracking-[-0.04em] text-slate-900 dark:text-white sm:text-6xl lg:text-[4.25rem]">
+          {/*
+            Scaled to iOS's Large Title, not to a web hero.
+
+            The type was `text-5xl → 6xl → 4.25rem` (48–68px). Apple's Large
+            Title is 34pt and its Title 1 is 28pt; a native app never opens with
+            68px type. `text-[2rem] → 4xl → 5xl` (32–48px) keeps the three-line
+            stack and the brand gradient while reading as an app screen rather
+            than a landing page.
+
+            `leading-[1.05]` over `1.02`: at this size the tighter figure was
+            clipping the descender on "Download." and "Explore.".
+          */}
+          <h1 className="text-[2rem] font-extrabold leading-[1.05] tracking-[-0.035em] text-slate-900 dark:text-white sm:text-4xl lg:text-5xl">
             Download.
             <br />
             <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
@@ -169,10 +195,31 @@ export async function Hero() {
             Explore.
           </h1>
 
-          <p className="mt-6 max-w-lg text-pretty text-base leading-relaxed text-slate-600 dark:text-white/70 sm:text-lg">
-            Frenz lets you download videos, photos, stories and reels — no watermark,
-            full HD, completely free — from the platforms you already use. Then share,
-            connect and explore, all in{" "}
+          {/*
+            iOS body copy is 17pt and stays 17pt — it does not grow with the
+            viewport the way web hero text does. `text-[15px] → 16px` sits in
+            that range, and dropping the `sm:text-lg` step is most of what stops
+            the paragraph competing with the headline.
+          */}
+          {/*
+            ── Shortened so the buttons sit higher (owner, 2026-08-09) ────────
+            "make the landing hero feel like an app so the buttons can go
+            upwards."
+
+            This was four lines on a phone, and it was the single biggest block
+            between the headline and the CTA. Cutting it is not a compression
+            trick — "no watermark, full HD, completely free" is now stated
+            VERBATIM by the proof strip inside the paste card a few rows down,
+            so the paragraph was repeating the three claims the reader is about
+            to meet again. What is left is the one thing nothing else says: what
+            Frenz is.
+
+            Two lines on a phone instead of four lifts the CTA by roughly 48px,
+            which on a 600px viewport is the difference between the paste box
+            being below the fold and above it.
+          */}
+          <p className="mt-3 max-w-md text-pretty text-[15px] leading-relaxed text-slate-600 dark:text-white/70 sm:text-base">
+            Download from the platforms you already use, then share, connect and explore — all in{" "}
             <span className="font-medium text-blue-600 dark:text-blue-300">one super app.</span>
           </p>
 
@@ -189,7 +236,8 @@ export async function Hero() {
             CSS but not a single byte of client JavaScript — the arrows and the
             sheen are CSS, and nothing here hydrates.
           */}
-          <div className="mt-8 flex flex-col gap-3">
+          {/* Tighter stack — iOS groups related controls at ~16-20px, not 32. */}
+          <div className="mt-5 flex flex-col gap-2.5">
             {/* Primary — goes straight to the paste-link tool (owner, 2026-07-18):
                 the downloader needs no account, so a signup wall in front of the
                 one thing the page asks for was the wrong door. */}

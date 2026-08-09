@@ -108,6 +108,9 @@ export function WallpaperManager({
     }
   };
 
+  /** The wallpaper currently behind the Gallery button, if it is still listed. */
+  const current = ctaId ? wallpapers.find((w) => w.id === ctaId) : undefined;
+
   const remove = async (w: AdminWallpaper) => {
     if (!confirm(`Delete "${w.name}" permanently? Its likes and comments go with it. Hiding keeps them.`)) return;
     setRowBusy(w.id);
@@ -131,6 +134,54 @@ export function WallpaperManager({
         Images here fill the Wallpapers section on the download page and the full-screen gallery at /wallpapers. Until
         you upload any, a built-in placeholder set is shown instead.
       </p>
+
+      {/*
+        ── The button background, as a NAMED slot (owner, 2026-08-09) ─────────
+        "I couldn't find the wallpaper button background image slot in admin
+        dashboard."
+
+        Fair — the control shipped as an unlabelled icon on each row, which is
+        discoverable only if you already know it exists. The setting now has a
+        panel of its own that says what it does, shows the current choice, and
+        points at where to change it. The per-row control is still how you pick
+        one (that is where the wallpapers are), but it is labelled now and this
+        block is what makes it findable.
+      */}
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-violet-500/30 bg-violet-500/5 p-3">
+        <span
+          aria-hidden
+          className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 bg-cover bg-center text-white ring-1 ring-inset ring-white/20"
+          style={current?.thumbUrl ? { backgroundImage: `url(${JSON.stringify(current.thumbUrl)})` } : undefined}
+        >
+          {current ? null : <ImageIcon className="h-5 w-5" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">Wallpaper Gallery button background</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {current ? (
+              <>
+                Showing <strong className="font-semibold text-foreground">{current.name}</strong> behind the button on
+                the landing page and the download page.
+              </>
+            ) : (
+              <>
+                No image set — the button shows its plain gradient. Pick one with the{" "}
+                <ImageIcon className="inline h-3 w-3 align-[-1px]" /> button on any published wallpaper below.
+              </>
+            )}
+          </p>
+        </div>
+        {current ? (
+          <button
+            type="button"
+            disabled={rowBusy === current.id}
+            onClick={() => void patch(current.id, { ctaBackground: false })}
+            className="rounded-xl border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-secondary disabled:opacity-50"
+          >
+            Remove
+          </button>
+        ) : null}
+      </div>
 
       {/* Upload */}
       <div className="rounded-2xl border border-dashed border-border p-4">
@@ -262,21 +313,24 @@ export function WallpaperManager({
                     served, so using it would put a broken image behind the
                     button on the front page.
                   */}
+                  {/* Labelled, not a bare glyph — an unlabelled icon is why the
+                      owner could not find this at all. */}
                   {w.status === "published" ? (
                     <button
                       type="button"
                       disabled={rowBusy === w.id}
                       onClick={() => void patch(w.id, { ctaBackground: ctaId !== w.id })}
                       aria-pressed={ctaId === w.id}
-                      title={ctaId === w.id ? "Remove as button background" : "Use as the Wallpaper Gallery button background"}
+                      title={ctaId === w.id ? "Remove as the Wallpaper Gallery button background" : "Use as the Wallpaper Gallery button background"}
                       className={cn(
-                        "flex h-7 w-7 items-center justify-center rounded-lg border transition disabled:opacity-50",
+                        "inline-flex flex-1 items-center justify-center gap-1 rounded-lg border py-1.5 text-[11px] font-semibold transition disabled:opacity-50",
                         ctaId === w.id
                           ? "border-violet-500 bg-violet-500/15 text-violet-500"
                           : "border-border text-muted-foreground hover:bg-secondary",
                       )}
                     >
                       <ImageIcon className="h-3 w-3" />
+                      {ctaId === w.id ? "Button bg" : "Set as bg"}
                     </button>
                   ) : null}
                   <button

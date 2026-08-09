@@ -502,24 +502,63 @@ export function FloatingDownloadProgress({
                   <p className="px-1 text-[11px] font-semibold text-muted-foreground">
                     This one&apos;s big — it keeps going in the background. Have a look around?
                   </p>
+                  {/*
+                    ── Premium, and alive (owner, 2026-08-09) ──────────────────
+                    "make the view wallpaper and watch reels buttons more
+                    premium and luxurious, it should feel alive, and it should
+                    always prefetch instant and never load when clicked."
+
+                    Three separate asks, three separate answers:
+
+                    • PREMIUM — a tinted gradient tile with its own coloured
+                      icon chip and a light sweeping across it, rather than two
+                      grey pills. They are the only way out of a wait, so they
+                      should look worth taking.
+
+                    • ALIVE — the sweep runs on a slow loop while the card is
+                      up, staggered between the two so they breathe rather than
+                      blink in unison. It is `transform`-only, so it costs the
+                      compositor and nothing else, and it exists only while a
+                      download is genuinely slow — never on an idle page.
+
+                    • NEVER LOADS — `prefetch` warms the route as soon as the
+                      card appears, and both destinations have a `loading.tsx`,
+                      so the shell paints on the tap and the data streams in
+                      behind it. Prefetch alone would still show a blank frame
+                      on a cold route; the pair is what makes it instant.
+                  */}
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <Link
                       href="/wallpapers"
                       prefetch
                       onClick={() => setMinimised(true)}
-                      className="flex items-center justify-center gap-1.5 rounded-xl bg-card px-3 py-2 text-xs font-bold shadow-soft ring-1 ring-inset ring-border/60 transition hover:ring-violet-400/50 active:scale-95"
+                      className="frenz-alive group relative flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-br from-violet-500/12 to-fuchsia-500/10 px-3 py-2.5 text-xs font-bold ring-1 ring-inset ring-violet-400/25 transition hover:ring-violet-400/60 active:scale-95"
                     >
-                      <ImageIcon className="h-3.5 w-3.5 text-violet-500" /> Wallpapers
+                      <span
+                        aria-hidden
+                        className="frenz-alive-sheen pointer-events-none absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/20"
+                      />
+                      <span className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-sm">
+                        <ImageIcon className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="relative">Wallpapers</span>
                     </Link>
                     <Link
                       href="/reels"
                       prefetch
                       onClick={() => setMinimised(true)}
-                      className="flex items-center justify-center gap-1.5 rounded-xl bg-card px-3 py-2 text-xs font-bold shadow-soft ring-1 ring-inset ring-border/60 transition hover:ring-blue-400/50 active:scale-95"
+                      className="frenz-alive frenz-alive-2 group relative flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-br from-blue-500/12 to-violet-500/10 px-3 py-2.5 text-xs font-bold ring-1 ring-inset ring-blue-400/25 transition hover:ring-blue-400/60 active:scale-95"
                     >
-                      {/* A video glyph, not a sparkle (owner): the icon should say
-                          what is on the other side of the tap, not decorate it. */}
-                      <PlaySquare className="h-3.5 w-3.5 text-blue-500" /> Watch reels
+                      <span
+                        aria-hidden
+                        className="frenz-alive-sheen pointer-events-none absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/20"
+                      />
+                      <span className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-violet-500 text-white shadow-sm">
+                        {/* A video glyph, not a sparkle (owner): the icon should
+                            say what is on the other side of the tap. */}
+                        <PlaySquare className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="relative">Watch reels</span>
                     </Link>
                   </div>
                 </div>

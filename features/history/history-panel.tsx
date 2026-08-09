@@ -43,7 +43,24 @@ const KIND_FILTERS: { key: KindFilter; label: string }[] = [
   { key: "audio", label: "Audio" },
 ];
 
-export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
+export function HistoryPanel({
+  standalone = false,
+  embedded = false,
+}: {
+  /** The dedicated /history page: its own top padding, and an empty state. */
+  standalone?: boolean;
+  /**
+   * Rendered INSIDE another page's card (the signed-in Downloads page).
+   *
+   * Same panel, no outer chrome: the host already provides the border, the
+   * background and the padding, and the "‹ History" back link would be a
+   * second way out of a page you are still on. Everything else — the headline,
+   * the meta line, search, the filter pills, Select mode — is identical, which
+   * is the entire point of sharing the component rather than keeping two
+   * headers over one gallery.
+   */
+  embedded?: boolean;
+}) {
   const { items, toggleFavorite, removeDownload, clearHistory } = useHistory();
   const [tab, setTab] = useState<"recent" | "favorites">("recent");
   const [kind, setKind] = useState<KindFilter>("all");
@@ -137,7 +154,7 @@ export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
   if (items.length === 0) {
     // Embedded (e.g. on /library) → render nothing so it doesn't take space; the
     // dedicated history page passes `standalone` so it shows an empty state instead.
-    if (!standalone) return null;
+    if (!standalone && !embedded) return null;
     return (
       <section className="py-16 text-center">
         <div className="mx-auto max-w-md px-4">
@@ -153,9 +170,12 @@ export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
     // Standalone (the /history page) has the header directly above it, so it needs
     // almost no top padding — the big gap was the embedded py-14 stacking on the
     // page's own top padding (owner). Embedded on /library it keeps the divider + gap.
-    <section id="history" className={cn(standalone ? "pb-16 pt-2" : "border-t border-border/60 py-14 sm:py-20")}>
+    <section
+      id="history"
+      className={cn(embedded ? "" : standalone ? "pb-16 pt-2" : "border-t border-border/60 py-14 sm:py-20")}
+    >
       {/* Minimal side padding (owner) so the media grid stretches to the far edges. */}
-      <div className="mx-auto max-w-6xl px-2 sm:px-4">
+      <div className={cn(embedded ? "" : "mx-auto max-w-6xl px-2 sm:px-4")}>
         {/*
           ── Built to public/mainhistorypage.jpg, top to bottom ──────────────
             1. a quiet bar: "‹ History" on the left, "Select" on the right
@@ -172,12 +192,16 @@ export function HistoryPanel({ standalone = false }: { standalone?: boolean }) {
           reference simply doesn't show a library with favourites in it.
         */}
         <div className="mb-4 flex items-center justify-between gap-3">
-          <Link
-            href="/"
-            className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[15px] font-semibold text-primary transition active:scale-95"
-          >
-            <ChevronLeft className="h-5 w-5" /> History
-          </Link>
+          {embedded ? (
+            <span className="text-[15px] font-semibold text-muted-foreground">History</span>
+          ) : (
+            <Link
+              href="/"
+              className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[15px] font-semibold text-primary transition active:scale-95"
+            >
+              <ChevronLeft className="h-5 w-5" /> History
+            </Link>
+          )}
 
           <div className="flex items-center gap-1">
             {confirmClear ? (

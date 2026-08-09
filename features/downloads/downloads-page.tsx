@@ -26,6 +26,7 @@ import {
 } from "@/features/downloads/downloads-sections";
 import { HubWarmup } from "@/features/downloads/hub-warmup";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
+import { HistoryPanel } from "@/features/history/history-panel";
 import { useHistory } from "@/features/history/use-history";
 import { MediaGallery } from "@/features/history/media-gallery";
 import { AdSurface } from "@/features/monetization/ad-surface";
@@ -259,27 +260,25 @@ export function DownloadsPage({ wallpapers }: { wallpapers: Wallpaper[] }) {
               Full Bleed ONLY: its bottom nav has no History tab, so the history
               lives here. Downloader mode has a dedicated History page, so this is
               hidden there to avoid duplicating it (owner). */}
+          {/*
+            🔴 The SAME panel /history renders (owner, 2026-08-09: "the download
+            history doesn't look like the image I saved in public").
+
+            It didn't, and this is why. `public/mainhistorypage.jpg` was built
+            into `HistoryPanel`, which only `/history` and the guest library
+            used. This page had its own hand-rolled header — a small
+            "Downloaded (n)" heading and a shrink-to-fit search box — wrapped
+            around the bare gallery, so a signed-in member looking at their
+            downloads here saw none of the redesign.
+
+            Two headers over one gallery was always going to drift; there is now
+            one. Everything this section had is still here, because HistoryPanel
+            has all of it and more: search (full width now), the type filters,
+            Select mode, day sections and the column picker.
+          */}
           {showHistory ? (
             <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-base font-bold">Downloaded ({filtered.length})</h2>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search"
-                    aria-label="Search downloads"
-                    className="h-9 w-32 rounded-lg bg-secondary/60 pl-8 pr-2 text-sm text-foreground outline-none ring-1 ring-inset ring-transparent transition focus:w-44 focus:bg-background focus:ring-primary sm:w-40"
-                  />
-                </div>
-              </div>
-              <MediaGallery
-                items={filtered}
-                onToggleFavorite={toggleFavorite}
-                onRemove={removeDownload}
-                emptyText="No downloads yet — paste a link above to download your first video."
-              />
+              <HistoryPanel embedded />
             </section>
           ) : null}
 

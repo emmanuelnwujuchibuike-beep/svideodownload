@@ -49,7 +49,20 @@ export function HeroCtaForm() {
         e.preventDefault();
         setHeroLink(value);
       }}
-      className="frenz-cta group relative flex w-full items-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-1.5 shadow-lg shadow-violet-600/30 transition duration-200 focus-within:shadow-xl focus-within:shadow-violet-600/40"
+      /*
+        `isolate` and a floor on the height.
+
+        `isolate` gives the form its own stacking context, so the face — which
+        is `absolute inset-0 z-10` — can never paint against anything outside
+        this form, whatever z-index its neighbours acquire later.
+
+        `min-h-[4.25rem]` is the height the in-flow children already produce
+        (h-14 + p-1.5). Stating it means the form cannot collapse to the size of
+        its absolutely-positioned label if those children are ever hidden — the
+        one shape that would put the download tile up where the eyebrow badge
+        is, which is what the owner's screenshot shows.
+      */
+      className="frenz-cta group relative isolate flex min-h-[4.25rem] w-full items-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-1.5 shadow-lg shadow-violet-600/30 transition duration-200 focus-within:shadow-xl focus-within:shadow-violet-600/40"
     >
       <span
         aria-hidden

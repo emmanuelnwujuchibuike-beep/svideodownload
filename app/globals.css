@@ -1430,3 +1430,37 @@
     animation: none;
   }
 }
+
+/* ── "Alive" — the escape-hatch tiles on a slow download ──────────────────
+   Owner (2026-08-09): the Wallpapers / Watch reels buttons "should feel alive".
+
+   A light travels across each tile on a slow loop, offset between the two so
+   they breathe rather than blink together. Two things make an infinite
+   animation acceptable here where it would not be on the landing: it exists
+   ONLY while a download is genuinely taking a while (the card unmounts the
+   moment it finishes), and it animates `transform` alone, so it runs on the
+   compositor and never touches layout or paint. */
+@keyframes frenz-alive-sheen {
+  0% {
+    transform: translateX(0) skewX(-18deg);
+  }
+  55%,
+  100% {
+    transform: translateX(420%) skewX(-18deg);
+  }
+}
+
+.frenz-alive-sheen {
+  animation: frenz-alive-sheen 3.2s var(--ease-out) infinite;
+}
+/* The second tile trails the first, so the pair reads as a wave. */
+.frenz-alive-2 .frenz-alive-sheen {
+  animation-delay: 0.9s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frenz-alive-sheen {
+    animation: none;
+    opacity: 0;
+  }
+}

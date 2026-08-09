@@ -170,7 +170,7 @@ function buildImageFormats(item: TikTokItem): MediaFormat[] {
   return formats;
 }
 
-function buildFormats(item: TikTokItem): MediaFormat[] {
+export function buildFormats(item: TikTokItem): MediaFormat[] {
   const video = item.video!;
   const headers: Record<string, string> = {
     "User-Agent": DESKTOP_UA,
@@ -202,11 +202,56 @@ function buildFormats(item: TikTokItem): MediaFormat[] {
     }
   }
 
-  for (const [height, tier] of [...byHeight.entries()].sort((a, b) => b[0] - a[0])) {
+  /*
+    ── H.264 FIRST, then by height (owner, carried over from 2026-08-09) ───────
+
+    "TikTok native fallback still needs a transcode (23s TTFB when TikWM refuses
+    a video)."
+
+    This is the same defect that was fixed on the TikWM path in `3135d28`
+    ("default to the stream that doesn't need re-encoding") — but only that path
+    was fixed. Here the list was still ordered by HEIGHT alone, and the loop
+    above only prefers H.264 *within* one height. So whenever TikTok offered
+    1080p as bytevc1 and 720p as H.264 — its normal shape, since the top gears
+    are the ones it encodes in bytevc1 — the tallest tier led the list, became
+    the default pick, and every download of that video paid for a full server
+    re-encode. That is the 23 seconds.
+
+    Ordering by "plays everywhere" first and resolution second makes the default
+    a stream that can be handed straight to the browser. The taller bytevc1 tier
+    is still OFFERED, immediately below and truthfully labelled, so nobody loses
+    the option — they just stop getting it without asking.
+
+    Height still breaks ties inside each group, so this is "the best H.264", not
+    "any H.264".
+  */
+  const ordered = [...byHeight.entries()].sort((a, b) => {
+    const aFast = a[1].codec === "h264" ? 1 : 0;
+    const bFast = b[1].codec === "h264" ? 1 : 0;
+    if (aFast !== bFast) return bFast - aFast;
+    return b[0] - a[0];
+  });
+
+  for (const [height, tier] of ordered) {
+    const fast = tier.codec === "h264";
     formats.push({
       formatId: `tt-${formats.length}`,
       kind: "video",
-      label: height ? `${height}p` : "HD",
+      /*
+        Say what the slow one costs.
+
+        A row labelled plainly "1080p" next to one labelled "720p" reads as
+        strictly better, which is how the expensive path kept getting chosen.
+        It is better *pixels* and worse *everything else*, and the label is the
+        only place that can be said.
+      */
+      label: fast
+        ? height
+          ? `${height}p`
+          : "HD"
+        : height
+          ? `${height}p · converts on download`
+          : "Best quality · converts on download",
       ext: "mp4",
       resolution: height ? `${height}p` : null,
       fps: null,

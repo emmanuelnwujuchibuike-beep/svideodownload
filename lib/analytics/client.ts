@@ -64,19 +64,48 @@ function getVisitorId(): string {
   return id;
 }
 
-/** Returns the current session id, opening a new one after 30 min of inactivity. */
+/**
+ * The current session id, opening a new one after 30 minutes of inactivity.
+ *
+ * 30 minutes is the GA/Plausible/Adobe convention, and the reason to match it is
+ * comparability rather than correctness — any threshold is arbitrary, but a
+ * non-standard one makes every session-derived number incomparable to the tools
+ * the owner will sanity-check against.
+ *
+ * ── The two-tab race (owner audit, 2026-08-09) ───────────────────────────────
+ * localStorage is shared across tabs but offers no lock. Two tabs waking from
+ * the same expired session both read the old timestamp, both decide the session
+ * has ended, and both mint a DIFFERENT session id — so one returning visitor
+ * became two sessions, and both tabs then wrote conflicting ids for the rest of
+ * the visit.
+ *
+ * The re-read below closes the window to a single storage round-trip: whichever
+ * tab writes second immediately sees the other's id and adopts it, rather than
+ * keeping the one it just generated. It is not a mutex and cannot be — but the
+ * remaining race is two writes landing in the same microtask, which is far
+ * narrower than the multi-second window it replaces.
+ *
+ * The count itself is now belt-and-braces: `analytics_traffic_totals` counts
+ * DISTINCT session ids rather than `session_start` events, so even a session
+ * that manages to announce itself twice is one session.
+ */
 function ensureSession(): { id: string; started: boolean } {
   const now = Date.now();
-  let id = lsGet(SESSION_KEY);
+  const id = lsGet(SESSION_KEY);
   const ts = Number(lsGet(SESSION_TS_KEY)) || 0;
-  let started = false;
-  if (!id || now - ts > SESSION_WINDOW_MS) {
-    id = uuid();
-    lsSet(SESSION_KEY, id);
-    started = true;
+
+  if (id && now - ts <= SESSION_WINDOW_MS) {
+    lsSet(SESSION_TS_KEY, String(now));
+    return { id, started: false };
   }
+
+  const minted = uuid();
+  lsSet(SESSION_KEY, minted);
   lsSet(SESSION_TS_KEY, String(now));
-  return { id, started };
+  // Did another tab write one between our read and our write? Adopt theirs —
+  // whoever loses the race defers, so both tabs converge on one id.
+  const settled = lsGet(SESSION_KEY) ?? minted;
+  return { id: settled, started: settled === minted };
 }
 
 let queue: AnalyticsEventInput[] = [];
@@ -139,7 +168,75 @@ export function track(type: AnalyticsEventType, props?: Record<string, unknown>,
   scheduleFlush();
 }
 
+/* ───────────────────────── time on page / bounce rate ─────────────────────── */
+
+/**
+ * Dwell measurement for the page currently open.
+ *
+ * ── Why a measured exit event rather than a derived estimate ─────────────────
+ * "Time on page" is usually derived as `next event time − this event time`,
+ * which cannot see the LAST page of a session at all and scores it zero. Since
+ * bouncing sessions are entirely made of last pages, that estimate reports the
+ * shortest visits as the longest-engaged, and the error grows with bounce rate.
+ * A real `page_exit` carrying the dwell it actually observed has neither
+ * problem.
+ *
+ * Only time the tab is VISIBLE is counted. A tab left open in the background for
+ * six hours did not hold anyone's attention for six hours, and counting it would
+ * make the average meaningless. The accumulator is paused on `visibilitychange`
+ * and resumed when the tab comes back — so 30 seconds of reading, an hour in
+ * another tab, then 30 more seconds is one minute, which is the truth.
+ *
+ * The server additionally clamps a single dwell to 30 minutes (migration 0115),
+ * because a device that sleeps mid-page can still report an implausible span.
+ */
+let dwellPath: string | null = null;
+let dwellVisibleSince = 0;
+let dwellAccrued = 0;
+
+function dwellNow(): number {
+  const live = dwellVisibleSince > 0 ? Date.now() - dwellVisibleSince : 0;
+  return dwellAccrued + live;
+}
+
+/** Ends the current page's dwell and queues the `page_exit` that carries it. */
+function closeDwell(): void {
+  if (!dwellPath) return;
+  const ms = dwellNow();
+  const path = dwellPath;
+  dwellPath = null;
+  dwellVisibleSince = 0;
+  dwellAccrued = 0;
+  // Sub-second dwell is a bounce-through or a redirect, not a read. Sending it
+  // would drag the average down with time nobody spent.
+  if (ms < 1000) return;
+  if (!enabled()) return;
+  const { id: sessionId } = ensureSession();
+  const ev = build("page_exit", sessionId, { dwellMs: Math.round(ms), path });
+  // Stamp the path the dwell BELONGS to — `build` reads location, which may
+  // already be the next page by the time an exit fires on a client navigation.
+  ev.path = path;
+  queue.push(ev);
+  scheduleFlush();
+}
+
+function startDwell(path: string): void {
+  dwellPath = path;
+  dwellAccrued = 0;
+  dwellVisibleSince = hasWindow && document.visibilityState === "visible" ? Date.now() : 0;
+}
+
 export function trackPageView(): void {
+  const path = hasWindow ? window.location.pathname : "";
+  /*
+    Close the previous page BEFORE opening the next, so a client navigation
+    produces exactly one exit for the page being left. Re-firing for the same
+    path is ignored: React can re-run an effect (Strict Mode, a re-mount) without
+    the visitor having gone anywhere, and that must not manufacture a page view.
+  */
+  if (dwellPath === path) return;
+  closeDwell();
+  startDwell(path);
   track("page_view");
 }
 
@@ -156,6 +253,17 @@ export function trackDownload(
     durationMs?: number | null;
     errorReason?: string | null;
     retryOf?: string | null;
+    /**
+     * The page the download came from, and its title.
+     *
+     * Sent on `requested` only — it is the same for every later stage, and
+     * repeating it would store the same URL four times per download. The admin
+     * download log joins it back from this first event (migration 0115,
+     * `analytics_download_log`); it is what makes the owner's "see the details
+     * and link" possible at all, since `analytics_downloads` has no URL column.
+     */
+    sourceUrl?: string | null;
+    title?: string | null;
   },
 ): void {
   const type: AnalyticsEventType =
@@ -173,8 +281,20 @@ export function trackDownload(
 // Flush on the way out so queued events aren't lost. `pagehide` fires on both real
 // unloads and iOS bfcache freezes; a hidden `visibilitychange` covers backgrounding.
 if (hasWindow) {
-  window.addEventListener("pagehide", () => void flush(true));
+  window.addEventListener("pagehide", () => {
+    closeDwell(); // the last page of a session reports its real time, not zero
+    void flush(true);
+  });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") void flush(true);
+    if (document.visibilityState === "hidden") {
+      // Pause the dwell clock — background time is not attention.
+      if (dwellVisibleSince > 0) {
+        dwellAccrued += Date.now() - dwellVisibleSince;
+        dwellVisibleSince = 0;
+      }
+      void flush(true);
+    } else if (dwellPath && dwellVisibleSince === 0) {
+      dwellVisibleSince = Date.now();
+    }
   });
 }

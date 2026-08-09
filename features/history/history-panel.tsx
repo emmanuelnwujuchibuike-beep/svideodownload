@@ -157,10 +157,26 @@ export function HistoryPanel({
     if (!standalone && !embedded) return null;
     return (
       <section className="py-16 text-center">
-        <div className="mx-auto max-w-md px-4">
-          <History className="mx-auto h-10 w-10 text-muted-foreground/40" />
-          <h2 className="mt-4 text-xl font-bold">No downloads yet</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Videos, reels, photos and audio you download will show up here.</p>
+        <div className="lux-enter mx-auto max-w-md px-4">
+          {/* An empty page is still the product. A gradient tile and a real
+              invitation read as "nothing here YET"; a grey outline glyph reads
+              as something failing to load. */}
+          <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-lg shadow-violet-500/25">
+            <History className="h-8 w-8" />
+          </span>
+          <h2 className="lux-title mt-5 text-2xl font-extrabold tracking-[-0.02em]">No downloads yet</h2>
+          <p className="mt-1.5 text-[15px] text-muted-foreground">
+            Videos, reels, photos and audio you download will show up here.
+          </p>
+          <Link
+            href="/"
+            prefetch
+            className="lux-btn mt-5 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-md shadow-violet-500/25 transition hover:shadow-lg hover:shadow-violet-500/30 active:scale-[0.97]"
+          >
+            <span className="relative z-[2] inline-flex items-center gap-2">
+              <Download className="h-4 w-4" /> Download something
+            </span>
+          </Link>
         </div>
       </section>
     );
@@ -231,30 +247,55 @@ export function HistoryPanel({
                 <Trash2 className="h-[18px] w-[18px]" />
               </button>
             )}
+            {/* Select reads as a real control now — it toggles the whole page
+                into a different mode, which a bare text link never signalled. */}
             <button
               type="button"
               onClick={() => { tap(); setSelecting((v) => !v); setSelected(new Set()); }}
               aria-pressed={selecting}
               className={cn(
-                "rounded-lg px-2 py-1.5 text-[15px] font-semibold transition active:scale-95",
-                selecting ? "text-foreground" : "text-primary",
+                "lux-btn rounded-xl px-3 py-1.5 text-[15px] font-bold transition duration-150 active:scale-95",
+                selecting
+                  ? "bg-foreground text-background shadow-sm"
+                  : "bg-primary/10 text-primary ring-1 ring-inset ring-primary/25 hover:bg-primary/15",
               )}
             >
-              {selecting ? "Done" : "Select"}
+              <span className="relative z-[2]">{selecting ? "Done" : "Select"}</span>
             </button>
           </div>
         </div>
 
-        <h2 className="text-[2rem] font-extrabold leading-none tracking-[-0.03em] sm:text-4xl">Your Downloads</h2>
+        {/*
+          ── Premium, and paid for in paint rather than in frames ────────────
+          Owner, 2026-08-09: "premium, alive, luxurious and professional
+          without breaking the performance rule."
+
+          The glow is a single static radial and the headline is a gradient
+          fill — both painted once, neither animated. The only motion on this
+          page is the one-shot entrance and the sheen that plays under a
+          finger. See the `.lux-btn` note in globals.css for why nothing here
+          loops.
+        */}
+        <div className="relative">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -left-10 -top-12 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(37,99,255,0.12),transparent_70%)]"
+          />
+          <h2 className="lux-title lux-enter relative text-[2rem] font-extrabold leading-none tracking-[-0.03em] sm:text-4xl">
+            Your Downloads
+          </h2>
+        </div>
         {/* One line, three real facts. The size is measured from the records
             themselves, not estimated from a count. */}
-        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted-foreground">
-          <span>{items.length} item{items.length === 1 ? "" : "s"}</span>
+        <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted-foreground">
+          <span className="font-semibold text-foreground">
+            {items.length} item{items.length === 1 ? "" : "s"}
+          </span>
           <span aria-hidden>·</span>
-          <span>{formatBytes(usedBytes)}</span>
+          <span className="font-semibold text-foreground">{formatBytes(usedBytes)}</span>
           <span aria-hidden>·</span>
-          <span className="inline-flex items-center gap-1.5">
-            Private Cloud <Cloud className="h-4 w-4 text-primary" />
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[13px] font-semibold text-primary ring-1 ring-inset ring-primary/20">
+            Private Cloud <Cloud className="h-3.5 w-3.5" />
           </span>
         </p>
 
@@ -267,7 +308,7 @@ export function HistoryPanel({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search downloads…"
             aria-label="Search downloads"
-            className="h-14 w-full rounded-2xl bg-secondary/60 pl-12 pr-11 text-[15px] outline-none ring-1 ring-inset ring-transparent transition focus:bg-background focus:ring-2 focus:ring-primary"
+            className="h-14 w-full rounded-2xl bg-secondary/60 pl-12 pr-11 text-[15px] font-medium shadow-sm outline-none ring-1 ring-inset ring-border/40 transition focus:bg-background focus:shadow-md focus:ring-2 focus:ring-primary"
           />
           {query ? (
             <button
@@ -313,23 +354,104 @@ export function HistoryPanel({
           "Delete" can never be a surprise. */}
       {selecting ? (
         <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] z-30 mx-auto mt-4 max-w-6xl px-2 sm:px-4">
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/70 bg-card/95 p-3 shadow-elevated backdrop-blur-xl">
-            <span className="mr-auto text-sm text-muted-foreground">
-              {selected.size === 0 ? "Select items to take action" : `${selected.size} selected`}
-            </span>
-            <button type="button" disabled={selected.size === 0} onClick={() => void shareSelected()} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm font-semibold transition hover:bg-secondary disabled:opacity-40">
-              <Share2 className="h-4 w-4" /> Share
-            </button>
-            <button type="button" disabled={selected.size === 0} onClick={() => redownloadSelected()} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm font-semibold transition hover:bg-secondary disabled:opacity-40">
-              <Download className="h-4 w-4" /> Download again
-            </button>
-            <button type="button" disabled={selected.size === 0} onClick={() => deleteSelected()} className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/40 px-3 py-2 text-sm font-semibold text-rose-500 transition hover:bg-rose-500/10 disabled:opacity-40">
-              <Trash2 className="h-4 w-4" /> Delete
-            </button>
+          <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/95 p-3 shadow-elevated backdrop-blur-xl">
+            {/* The same hairline of brand light the download card uses, so the
+                two floating surfaces in this app read as one family. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#2563FF]/60 to-transparent"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-auto text-sm font-semibold text-muted-foreground">
+                {selected.size === 0 ? "Select items to take action" : `${selected.size} selected`}
+              </span>
+              {/*
+                Three actions, weighted by what they do rather than styled alike.
+
+                "Download again" is the one people came to press, so it is the
+                only filled button. Share sits beside it as a tinted secondary,
+                and Delete stays outlined in rose — destructive actions should
+                never be the easiest thing to hit by accident. All three carry
+                the hover/focus sheen; none animates at rest.
+              */}
+              <LuxAction
+                onClick={() => void shareSelected()}
+                disabled={selected.size === 0}
+                icon={<Share2 className="h-4 w-4" />}
+                tone="tinted"
+              >
+                Share
+              </LuxAction>
+              <LuxAction
+                onClick={() => redownloadSelected()}
+                disabled={selected.size === 0}
+                icon={<Download className="h-4 w-4" />}
+                tone="primary"
+              >
+                Download again
+              </LuxAction>
+              <LuxAction
+                onClick={() => deleteSelected()}
+                disabled={selected.size === 0}
+                icon={<Trash2 className="h-4 w-4" />}
+                tone="danger"
+              >
+                Delete
+              </LuxAction>
+            </div>
           </div>
         </div>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * A selection-bar action.
+ *
+ * Three tones rather than three copies of one class string, so the weighting
+ * (which action is the filled one) is a decision made once and visible here
+ * instead of buried in three near-identical `className`s that drift apart.
+ *
+ * The sheen comes from `.lux-btn` (globals.css) and plays only on hover/focus —
+ * see that comment for why nothing on this page loops.
+ */
+function LuxAction({
+  onClick,
+  disabled,
+  icon,
+  tone,
+  children,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  icon: ReactNode;
+  tone: "primary" | "tinted" | "danger";
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => {
+        tap();
+        onClick();
+      }}
+      className={cn(
+        "lux-btn inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-bold transition duration-150",
+        "active:scale-[0.96] disabled:pointer-events-none disabled:opacity-40",
+        tone === "primary" &&
+          "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/30",
+        tone === "tinted" &&
+          "bg-secondary/80 text-foreground ring-1 ring-inset ring-border/50 hover:bg-secondary hover:ring-border",
+        tone === "danger" &&
+          "text-rose-500 ring-1 ring-inset ring-rose-500/40 hover:bg-rose-500/10 hover:ring-rose-500/60",
+      )}
+    >
+      <span className="relative z-[2] inline-flex items-center gap-1.5">
+        {icon} {children}
+      </span>
+    </button>
   );
 }
 
@@ -340,17 +462,36 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       onClick={() => { tap(); onClick(); }}
       aria-pressed={active}
       className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold transition duration-150 active:scale-[0.95]",
+        "lux-btn inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-bold transition duration-150 active:scale-[0.95]",
         active
-          ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm"
-          : "bg-secondary/70 text-muted-foreground ring-1 ring-inset ring-border/40 hover:text-foreground",
+          ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25 [&_[data-count]]:bg-white/25 [&_[data-count]]:text-white"
+          : "bg-secondary/70 text-muted-foreground ring-1 ring-inset ring-border/40 hover:bg-secondary hover:text-foreground",
       )}
     >
-      {children}
+      <span className="relative z-[2] inline-flex items-center gap-1.5">{children}</span>
     </button>
   );
 }
 
 function Count({ children }: { children: ReactNode }) {
-  return <span className="rounded-full bg-muted-foreground/15 px-1.5 text-[10px] font-bold text-muted-foreground">{children}</span>;
+  /*
+    `data-count` is the hook the ACTIVE chip uses to re-tint this — see Chip's
+    `[&_[data-count]]:bg-white/25`. The count is styled from the parent because
+    only the parent knows whether it is sitting on the gradient.
+
+    The obvious version was `bg-current/15`, so the pill would inherit whatever
+    ink the chip had. It compiles to NOTHING: Tailwind 3 has no opacity modifier
+    for `currentColor`, so the class is silently dropped and the pill loses its
+    background entirely — verified by running the Tailwind CLI over it rather
+    than by reading the docs. Same shape as the undefined-colour-token bug that
+    `lib/design-tokens.test.ts` exists to catch.
+  */
+  return (
+    <span
+      data-count
+      className="rounded-full bg-muted-foreground/15 px-1.5 text-[10px] font-bold tabular-nums"
+    >
+      {children}
+    </span>
+  );
 }

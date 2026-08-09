@@ -12,21 +12,23 @@ import {
   Globe2,
   Loader2,
   MonitorSmartphone,
-  MousePointerClick,
   Radio,
   Server,
   ShieldAlert,
   TrendingUp,
   Users,
 } from "lucide-react";
-import { type ComponentType, useCallback, useEffect, useRef, useState } from "react";
+import { type ComponentType, useEffect, useRef, useState } from "react";
 
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
+import { AD_METRICS, DOWNLOAD_METRICS, TRAFFIC_METRICS } from "@/lib/analytics/metric-catalogue";
 import type { AdZoneStat, AnalyticsSummary, Breakdown, MonitorRow, PageStat, Range, TimeBucket } from "@/lib/analytics/queries";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
+import { DownloadLogTable } from "./download-log";
 import { GeoMap } from "./geo-map";
+import { MetricCard } from "./metric-card";
 
 /**
  * Live admin analytics dashboard. Streams a fresh snapshot over Server-Sent Events
@@ -150,21 +152,62 @@ export function AnalyticsDashboard() {
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <Stat icon={Radio} label="Live visitors" value={data?.liveVisitors ?? 0} accent="emerald" />
-        <Stat icon={Users} label="Unique visitors" value={data?.uniqueVisitors ?? 0} accent="blue" />
-        <Stat icon={Activity} label="Sessions" value={data?.sessions ?? 0} accent="violet" />
-        <Stat icon={Eye} label="Page views" value={data?.pageViews ?? 0} accent="cyan" />
-        <Stat icon={Download} label="Downloads" value={data?.downloads.total ?? 0} accent="fuchsia" />
-        <Stat icon={TrendingUp} label="Success rate" value={data ? `${data.downloads.successRate}%` : "—"} accent="amber" raw />
-      </div>
+      {/*
+        A missing migration is REPORTED, never rendered as zeros.
+
+        Until 0115 is applied every exact aggregate is unavailable, and a grid of
+        confident zeros on a site with real traffic is precisely the failure this
+        dashboard was audited for.
+      */}
+      {data && !data.rpcHealth.exactAggregates ? (
+        <p className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <strong>Numbers unavailable, not zero.</strong> {data.rpcHealth.note} Everything below stays blank until
+            that migration runs.
+          </span>
+        </p>
+      ) : null}
+
+      {/*
+        Every metric now carries its own title, description, trend, status and a
+        tooltip explaining how it is measured (owner). The definitions live in
+        lib/analytics/metric-catalogue so a description cannot drift away from
+        the query that produces the number.
+      */}
+      {data ? (
+        <>
+          <SectionLabel icon={Users}>Audience</SectionLabel>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {TRAFFIC_METRICS.map((m) => (
+              <MetricCard key={m.id} spec={m} summary={data} />
+            ))}
+          </div>
+
+          <SectionLabel icon={Download}>Downloads</SectionLabel>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+            {DOWNLOAD_METRICS.map((m) => (
+              <MetricCard key={m.id} spec={m} summary={data} />
+            ))}
+          </div>
+        </>
+      ) : null}
 
       {/* Trend chart */}
       <TrendChart buckets={data?.timeseries.buckets ?? []} granularity={data?.timeseries.granularity ?? "hour"} />
 
-      {/* Ad performance */}
-      <AdPerformance ads={data?.ads} range={range} />
+      {/* Ad performance — the four headline numbers explained, then the zones. */}
+      {data ? (
+        <>
+          <SectionLabel icon={DollarSign}>Advertising</SectionLabel>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {AD_METRICS.map((m) => (
+              <MetricCard key={m.id} spec={m} summary={data} />
+            ))}
+          </div>
+        </>
+      ) : null}
+      <AdPerformance ads={data?.ads} />
 
       {/* Geography */}
       <div>
@@ -178,12 +221,26 @@ export function AnalyticsDashboard() {
           <BreakdownCard icon={TrendingUp} title="Top platforms" rows={data?.topPlatforms ?? []} />
           <BreakdownCard icon={MonitorSmartphone} title="Device" rows={data?.byDevice ?? []} />
           <BreakdownCard icon={Globe2} title="Browser" rows={data?.byBrowser ?? []} />
-          <BreakdownCard icon={Eye} title="Top pages" rows={data?.engagement.topPages ?? []} />
+          {/* Operating system and region were listed by the owner and had no
+              card at all — the data was always collected, never surfaced. */}
+          <BreakdownCard icon={Server} title="Operating system" rows={data?.byOs ?? []} />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
+          <BreakdownCard icon={Globe2} title="Region" rows={data?.byRegion ?? []} />
+          <BreakdownCard icon={Eye} title="Top pages" rows={data?.engagement.topPages ?? []} />
           <BreakdownCard icon={Globe2} title="Referrers" rows={data?.engagement.topReferrers ?? []} />
           <NewReturningCard newV={data?.engagement.newVisitors ?? 0} ret={data?.engagement.returningVisitors ?? 0} />
         </div>
+      </div>
+
+      {/*
+        Every user's downloads, successful and failed, with the source link
+        (owner, 2026-08-09). Placed under the aggregate numbers because it is
+        the drill-down FROM them: "success rate dipped" → "which ones failed?"
+      */}
+      <div>
+        <SectionLabel icon={FileDown}>Download history</SectionLabel>
+        <DownloadLogTable range={range} />
       </div>
 
       {/* Every page — including the ones nobody visited */}
@@ -446,7 +503,7 @@ function TrendChart({ buckets, granularity }: { buckets: TimeBucket[]; granulari
 
 /* ------------------------------------------------------------------ ads */
 
-function AdPerformance({ ads, range }: { ads: AnalyticsSummary["ads"] | undefined; range: Range }) {
+function AdPerformance({ ads }: { ads: AnalyticsSummary["ads"] | undefined }) {
   const [cpm, setCpm] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -507,15 +564,14 @@ function AdPerformance({ ads, range }: { ads: AnalyticsSummary["ads"] | undefine
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat icon={Eye} label="Impressions" value={ads?.impressions ?? 0} accent="blue" />
-        <Stat icon={MousePointerClick} label="Clicks" value={ads?.clicks ?? 0} accent="violet" />
-        <Stat icon={TrendingUp} label="CTR" value={ads ? `${ads.ctr}%` : "—"} accent="amber" raw />
-        <Stat icon={DollarSign} label={`Est. revenue`} value={ads ? `$${ads.revenueUsd.toLocaleString()}` : "—"} accent="green" raw />
-      </div>
-
+      {/*
+        The four headline ad numbers are NOT repeated here — they are the
+        explained MetricCards above, with their trend and their measurement
+        note. This block keeps only what those cards cannot show: the CPM input
+        that drives the revenue estimate, and the per-placement split.
+      */}
       {ads && ads.byZone.length > 0 ? (
-        <div className="mt-3">
+        <div>
           <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">By placement</p>
           <ul className="space-y-1.5">
             {ads.byZone.map((z: AdZoneStat) => (

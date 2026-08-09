@@ -31,6 +31,40 @@ export interface UAInfo {
   os: string;
 }
 
+/**
+ * Automated traffic, by user agent.
+ *
+ * ── Why this was missing and why it matters (owner audit, 2026-08-09) ────────
+ * Nothing in the pipeline looked at the UA, so anything that executed our JS was
+ * a "visitor". Most classic crawlers never run JS and so never reached the
+ * collector at all — which is exactly what made the gap easy to miss, because
+ * the numbers looked plausible. What DOES run JS: headless Chrome (scrapers,
+ * screenshot and SEO tools), uptime and synthetic monitors, link-preview
+ * fetchers, and our own Playwright e2e runs. Each one inflated unique visitors,
+ * sessions and page views, and none of them can ever become a download.
+ *
+ * ── Matched conservatively, on purpose ───────────────────────────────────────
+ * A false positive here silently deletes a REAL person from every metric, which
+ * is worse than the noise it removes. So this matches only tokens that are
+ * unambiguous in a user agent — `bot`, `spider`, `crawler`, `headless`, named
+ * monitors and named preview fetchers — and deliberately does not guess from
+ * missing headers or odd version strings. `Mobile Safari` visitors from an
+ * in-app browser are people, not bots, however unusual their UA looks.
+ *
+ * Events are MARKED rather than dropped (see migration 0115): the row stays
+ * queryable, so a mis-classification can be found and reversed instead of
+ * having silently deleted data.
+ */
+const BOT_PATTERN =
+  /bot\b|bots\b|spider|crawler|crawling|scrap(?:er|y)|headless|phantomjs|puppeteer|playwright|selenium|webdriver|lighthouse|pagespeed|gtmetrix|pingdom|uptimerobot|statuscake|datadog|newrelic|semrush|ahrefs|mj12|dotbot|petalbot|yandex|baiduspider|bingpreview|slurp|duckduckbot|facebookexternalhit|whatsapp|telegrambot|twitterbot|linkedinbot|discordbot|slackbot|embedly|preview|monitor|curl\/|wget\/|python-requests|axios\/|okhttp|java\/|go-http-client|node-fetch|libwww|httpclient/i;
+
+export function isBotUA(uaRaw: string | null): boolean {
+  const ua = (uaRaw ?? "").trim();
+  // No UA at all is not a browser doing normal navigation.
+  if (ua.length === 0) return true;
+  return BOT_PATTERN.test(ua);
+}
+
 export function parseUA(uaRaw: string | null): UAInfo {
   const ua = uaRaw || "";
   const os =

@@ -77,15 +77,16 @@ const RatingPrompt = dynamic(() => import("@/features/feedback/rating-prompt").t
 const RATING_AFTER = 2;
 
 /**
- * How long a download runs before we stop pretending it is nearly done and
- * offer somewhere to go instead (owner, 2026-08-09).
+ * The one sentence shown whenever a download is taking a while — as the reason
+ * the card is still up, and as the heading over the two places to go.
  *
- * Eight seconds because that is roughly where "it's about to finish" stops
- * being a reasonable thing to believe. Below it, offering an escape route reads
- * as us apologising for something that was fine; above it, a visitor staring at
- * a progress bar has already been given nothing to do for too long.
+ * Owner, 2026-08-09: "the 'this file is big have a look around' and the large
+ * file text should just be 'please wait, have a look around while is
+ * downloading in background'". It was two different sentences that both
+ * asserted the file was large — which we do not actually know at that point,
+ * only that the server has not answered yet.
  */
-const SLOW_MS = 8_000;
+const WAIT_COPY = "Please wait — have a look around while it downloads in the background.";
 
 /**
  * "Your download is done" — for the visitor who took us up on the offer and
@@ -237,14 +238,25 @@ export function FloatingDownloadProgress({
   /*
     "Taking longer" — the trigger for the escape hatch.
 
-    `slowPrepare` covers the case with no progress to show at all (the server is
-    still muxing a large file); the elapsed check covers a transfer that is
-    simply big. Elapsed is read from `createdAt` on each render rather than from
-    a timer, because a running download re-renders this component constantly and
-    a `preparing` one flips `slowPrepare` at six seconds — so both states already
-    have something waking us up, and an interval would only add a second one.
+    Owner, 2026-08-09: "the prompt should only show when the prepare download
+    takes more than 5 secs". So this is now `slowPrepare` ALONE — the manager
+    raises that flag after 5s of a still-unanswered prepare — where it used to
+    also fire on any transfer older than 8 seconds.
+
+    That reads as a narrowing but it is the right line. `preparing` is the state
+    with nothing on screen to look at: no bytes, no percentage, no ETA, just a
+    spinner while the server extracts and muxes. That is the wait that needs
+    both an explanation and somewhere to go. Once bytes are flowing there is a
+    progress bar, a size, a speed and a time remaining — the visitor can see it
+    working, which is the very thing the prompt was standing in for.
+
+    Nothing is lost for a long transfer: the Hide button sits on EVERY running
+    download, so carrying on browsing is always one tap away.
+
+    No timer needed here — `slowPrepare` arrives as a task update, which
+    re-renders this component on its own.
   */
-  const takingLong = running && (task.slowPrepare === true || Date.now() - task.createdAt > SLOW_MS);
+  const takingLong = running && task.slowPrepare === true;
 
   /* ── Minimised: a thumb-sized bubble, and nothing else ──────────────────────
      Everything the card was saying collapses to the one number that matters and
@@ -350,7 +362,7 @@ export function FloatingDownloadProgress({
                       ? `Downloading ${activeCount} items…`
                       : task.status === "preparing"
                         ? task.slowPrepare
-                          ? "Still preparing — large file"
+                          ? "Still preparing…"
                           : "Preparing your file…"
                         : task.status === "queued"
                           ? (task.attempts ?? 1) > 1
@@ -361,17 +373,18 @@ export function FloatingDownloadProgress({
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{task.title || "Your file"}</p>
 
               {/*
-                Say what is happening, in the two cases where silence reads as
-                a hang. A large file genuinely takes time to mux, and a retry
-                is us fixing our own hiccup — neither is the member's problem
-                to solve, and both are better than a spinner with no words.
+                The slow-prepare explanation is NOT repeated here.
+
+                It used to be: an amber line under the title AND a heading over
+                the escape tiles, in different words, both saying the file was
+                large. They are raised by the same flag at the same moment, so
+                they always appeared together — two explanations of one wait,
+                which reads as two problems. The single sentence now lives with
+                the tiles (below), where it is also the reason for them.
+
+                A retry still speaks up here, because that one is genuinely
+                separate: it is us fixing our own hiccup, not a slow file.
               */}
-              {task.status === "preparing" && task.slowPrepare ? (
-                <p className="mt-1 text-[11px] leading-snug text-amber-600 dark:text-amber-400">
-                  This is a large file, so it takes a little longer to put together. It will start on its own —
-                  no need to wait here.
-                </p>
-              ) : null}
               {task.status === "queued" && (task.attempts ?? 1) > 1 ? (
                 <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
                   The server hiccuped. Retrying automatically — attempt {task.attempts} of 3.
@@ -486,10 +499,10 @@ export function FloatingDownloadProgress({
                 "be directed to view wallpaper or watch reels while download is
                 processing in background".
 
-                Only once it is genuinely taking a while. Offering an exit from
-                a download that finishes in two seconds reads as an apology for
-                something that was fine, and it would put two links under every
-                single transfer.
+                Only once the PREPARE has genuinely run long (5s — owner). An
+                exit from a download that finishes in two seconds reads as an
+                apology for something that was fine, and it would put two links
+                under every single transfer.
 
                 Tapping one minimises the card on the way out rather than
                 dismissing it: the download keeps running (it always did — the
@@ -499,9 +512,7 @@ export function FloatingDownloadProgress({
               */}
               {takingLong ? (
                 <div className="mt-3 rounded-2xl bg-secondary/60 p-2.5">
-                  <p className="px-1 text-[11px] font-semibold text-muted-foreground">
-                    This one&apos;s big — it keeps going in the background. Have a look around?
-                  </p>
+                  <p className="px-1 text-[11px] font-semibold leading-snug text-muted-foreground">{WAIT_COPY}</p>
                   {/*
                     ── Premium, and alive (owner, 2026-08-09) ──────────────────
                     "make the view wallpaper and watch reels buttons more

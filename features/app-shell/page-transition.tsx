@@ -95,6 +95,23 @@ const navStack: string[] = [];
  *    via `.thread-enter` (globals.css) so entering a chat still slides in.
  */
 function noSlideFor(pathname: string): boolean {
+  /*
+    The LANDING PAGE never slides (owner, 2026-08-09: "the landing page
+    shouldn't carry any animation while opening, to reduce landing page opening
+    time").
+
+    Cold entry was already still — the `firstMount` guard below owns that. What
+    the owner was seeing is a NAVIGATION back to `/` (from Reels, from the
+    wallpapers, from the bottom nav), which played the full 520ms slide over the
+    one page in the app with a hard opening-time budget. `/` is the front door;
+    it should be there the instant it is asked for, and a half-second of movement
+    on top of it is the opposite of fast even when the bytes have already
+    arrived.
+
+    Note this is the exact-match `/` only. The other marketing routes keep the
+    transition, which is what makes the group feel native to move around in.
+  */
+  if (pathname === "/") return true;
   return pathname === "/messages" || pathname.startsWith("/messages/");
 }
 

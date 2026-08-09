@@ -5,6 +5,22 @@
  * by the i18n catalogue (lib/i18n/messages), which falls back to the default locale
  * for any string not yet translated — so a pick is honoured as far as translations
  * exist and is remembered for when more are added.
+ *
+ * ── This list is a WISHLIST, not a capability (owner, 2026-08-09) ─────────────
+ * "the language selections still doesn't work". Measured, it does not, and this
+ * file is where the misunderstanding starts: it offers 53 languages while the
+ * app declares 6 locales (`./locales`) and has written strings for exactly ONE
+ * of them (`./messages` — `fr`/`ar`/`sw`/`pt`/`ha` are all `{}`).
+ *
+ * So a member picking Español got a cookie, a checkmark, and an English page,
+ * with nothing on screen admitting why. `locales.ts` opens by calling that exact
+ * outcome "worse than no switcher" — the picker was simply built against this
+ * list instead of against `availableLocales()`.
+ *
+ * The list is KEPT, because remembering a preference for later is a real
+ * feature and the intent to reach these languages is real. What changes is that
+ * the picker now says which of them it can actually render today, derived from
+ * the catalogues rather than asserted here — see `languageStatus`.
  */
 export interface Language {
   code: string;
@@ -72,3 +88,11 @@ const DEFAULT_LANGUAGE: Language = { code: "en", name: "English", native: "Engli
 export function findLanguage(code: string | null | undefined): Language {
   return LANGUAGES.find((l) => l.code === code) ?? DEFAULT_LANGUAGE;
 }
+
+/*
+ * What a pick actually DOES is answered by `./language-status`, deliberately a
+ * separate module: it reaches the message catalogues to measure coverage, and
+ * this file is imported by the profile menu and the appearance page. Keeping the
+ * measurement out of here means those surfaces never pull `messages/en` into
+ * their first-load JS.
+ */

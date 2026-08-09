@@ -112,10 +112,83 @@ export function AdSlot({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone]);
 
+  /*
+    An impression is counted when the slot is SEEN, not when its data arrives.
+
+    ── What this was measuring before (owner audit, 2026-08-09) ──────────────
+    The beacon fired as soon as `loadZoneAd` resolved, which happens for every
+    placement on the page during hydration — including the ones far below the
+    fold that the visitor never scrolls to. So "ad impressions" was really "ad
+    slots rendered", and since estimated revenue is `impressions / 1000 × CPM`,
+    every revenue figure on the dashboard inherited that inflation. It also made
+    CTR structurally too low, because the clicks were real while the
+    denominator was not.
+
+    ── The rule ──────────────────────────────────────────────────────────────
+    50% of the slot visible for one continuous second — the IAB Display standard,
+    and what every ad network reconciles against. Matching it means our number
+    can be compared to the network's instead of merely disagreeing with it.
+
+    A tab in the background does not accrue: `IntersectionObserver` reports a
+    hidden tab's elements as intersecting, so the timer is also gated on
+    `visibilityState`. Counted at most once per slot, and the observer
+    disconnects the moment it fires.
+
+    Where there is no IntersectionObserver, the impression is counted on load as
+    before. Under-reporting a real impression costs revenue we earned; the old
+    behaviour is the safer fallback for the handful of browsers that need it.
+  */
+  const hostRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!ad || tracked.current) return;
-    tracked.current = true;
-    beacon("impression", zone, ad.id);
+
+    const fire = () => {
+      if (tracked.current) return;
+      tracked.current = true;
+      beacon("impression", zone, ad.id);
+    };
+
+    /*
+      A `pop` creative has NO visible box — it renders `display: contents` and
+      binds a handler for the next interaction. There is nothing to be 50%
+      visible, so viewability does not apply and it counts on load.
+    */
+    const host = hostRef.current;
+    if (ad.format === "pop" || !host || typeof IntersectionObserver === "undefined") {
+      fire();
+      return;
+    }
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const stop = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+    };
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const visible = !!entry?.isIntersecting && document.visibilityState === "visible";
+        if (visible && !timer) {
+          timer = setTimeout(() => {
+            fire();
+            observer.disconnect();
+          }, 1000);
+        } else if (!visible) {
+          stop();
+        }
+      },
+      { threshold: 0.5 },
+    );
+    observer.observe(host);
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") stop();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      stop();
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [ad, zone]);
 
   if (!ad || closed) return null;
@@ -149,7 +222,7 @@ export function AdSlot({
   // Native / house ad.
   if (ad.format === "native" && ad.targetUrl) {
     return (
-      <div className={cn("relative", className)}>
+      <div ref={hostRef} className={cn("relative", className)}>
         {closeBtn}
         <a
           href={ad.targetUrl}
@@ -206,7 +279,7 @@ export function AdSlot({
     const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden}</style></head><body>${ad.scriptCode}</body></html>`;
     return (
       <div className={cn("flex justify-center", className)}>
-        <div className="relative w-full" style={w ? { width: w, maxWidth: "100%" } : undefined}>
+        <div ref={hostRef} className="relative w-full" style={w ? { width: w, maxWidth: "100%" } : undefined}>
           {closeBtn}
           <iframe
             title="Advertisement"
@@ -254,7 +327,7 @@ export function AdSlot({
   // AdSense — must run in the top-level document, never in the display iframe.
   if (ad.format === "adsense" && ad.adClient && ad.adSlotId) {
     return (
-      <div className={cn("relative flex justify-center", className)}>
+      <div ref={hostRef} className={cn("relative flex justify-center", className)}>
         {closeBtn}
         <AdSenseUnit
           client={ad.adClient}

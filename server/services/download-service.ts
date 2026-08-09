@@ -102,8 +102,67 @@ function headerArgFor(format: MediaFormat): string[] {
   return h ? ["-headers", h] : [];
 }
 
-/** Probes a remote URL's video codec via ffmpeg (always available). */
-function probeUrlCodec(format: MediaFormat): Promise<string | null> {
+/**
+ * Codec probes, memoised per direct URL (owner, carried over from 2026-08-09:
+ * "probe+cache per directUrl").
+ *
+ * ── What this actually saves ─────────────────────────────────────────────────
+ * The probe spawns ffmpeg and opens a network connection to the CDN to read a
+ * container header. That is fast, but it is not free, and it was being paid
+ * more than once for the same bytes in three real situations:
+ *
+ *   • the fast path probes, decides the stream is NOT H.264, and hands the
+ *     codec to `transcodeToH264` — which is already threaded through, but any
+ *     other caller re-probes;
+ *   • a retry (the client retries up to 3 times) re-probes the same URL;
+ *   • a batch — every photo/clip of one post — probes siblings back-to-back.
+ *
+ * ── Why the TTL is short ─────────────────────────────────────────────────────
+ * These URLs are signed and expire, and a stale "h264" answer for a URL that has
+ * since died is harmless (the fetch fails and falls through to the validated
+ * path) but a stale answer that outlives a URL's replacement is pointless. Ten
+ * minutes comfortably covers a retry storm and a batch without pretending to be
+ * a persistent cache.
+ *
+ * Bounded so a long-running worker cannot grow this without limit.
+ */
+const CODEC_TTL_MS = 10 * 60_000;
+const CODEC_CACHE_MAX = 500;
+const codecCache = new Map<string, { codec: string | null; at: number }>();
+
+function cachedCodec(url: string): string | null | undefined {
+  const hit = codecCache.get(url);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > CODEC_TTL_MS) {
+    codecCache.delete(url);
+    return undefined;
+  }
+  return hit.codec;
+}
+
+function rememberCodec(url: string, codec: string | null): void {
+  codecCache.set(url, { codec, at: Date.now() });
+  // Oldest-first eviction — Map preserves insertion order.
+  while (codecCache.size > CODEC_CACHE_MAX) {
+    const oldest = codecCache.keys().next().value;
+    if (oldest === undefined) break;
+    codecCache.delete(oldest);
+  }
+}
+
+/** Probes a remote URL's video codec via ffmpeg (always available). Memoised. */
+async function probeUrlCodec(format: MediaFormat): Promise<string | null> {
+  const url = format.directUrl;
+  if (url) {
+    const hit = cachedCodec(url);
+    if (hit !== undefined) return hit;
+  }
+  const codec = await runCodecProbe(format);
+  if (url) rememberCodec(url, codec);
+  return codec;
+}
+
+function runCodecProbe(format: MediaFormat): Promise<string | null> {
   return new Promise((resolve) => {
     let child;
     try {

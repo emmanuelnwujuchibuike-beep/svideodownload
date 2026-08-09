@@ -75,12 +75,13 @@ const MAX_CONCURRENT = 2;
  * download cap ran away. See that file and its test.
  */
 /**
- * How long a prepare may run before the card explains itself.
+ * How long a prepare may run before the card explains itself and offers a way
+ * to spend the wait.
  *
- * 6 seconds: long enough that a normal extraction never trips it, short enough
- * that nobody has decided the app is broken yet.
+ * FIVE seconds, set by the owner (2026-08-09: "the prompt should only show when
+ * the prepare download takes more than 5 secs"). It was six.
  */
-const SLOW_PREPARE_MS = 6_000;
+const SLOW_PREPARE_MS = 5_000;
 
 let activeRuns = 0;
 const runQueue: string[] = [];
@@ -506,6 +507,30 @@ export function startDownload(input: {
   directUrl?: string;
   durationSeconds?: number | null;
 }): string {
+  /*
+    A double tap is ONE download (owner audit, 2026-08-09).
+
+    Every call minted a fresh UUID, so two taps on the same button — the norm on
+    a laggy phone when the first tap produces no instant feedback — started two
+    identical transfers. That is two rows in `analytics_downloads`, two units off
+    the daily cap, twice the extractor load for one file, and a success rate
+    computed against a denominator the visitor never intended.
+
+    Matching on the exact (url, formatId, kind) triple while a task for it is
+    still in flight returns the ORIGINAL id, so the caller's UI still gets an id
+    to follow and nothing downstream can tell the difference. A finished or
+    failed task is not matched — re-downloading something you already have is a
+    real second download.
+  */
+  const inFlight = tasks.find(
+    (t) =>
+      t.url === input.url &&
+      t.formatId === input.formatId &&
+      t.kind === input.kind &&
+      (t.status === "queued" || t.status === "preparing" || t.status === "downloading"),
+  );
+  if (inFlight) return inFlight.id;
+
   const id = crypto.randomUUID();
   tasks = [
     {
@@ -523,7 +548,16 @@ export function startDownload(input: {
   emit();
   // Analytics: the download was REQUESTED (one canonical row per download_id, so a
   // refresh/retry never double-counts). `started`/`completed`/`failed` follow in run().
-  trackDownload("requested", { downloadId: id, platform: input.platform, mediaKind: input.kind, quality: input.qualityLabel });
+  // `sourceUrl`/`title` ride this first event only — the admin download log joins
+  // them back from here (migration 0115).
+  trackDownload("requested", {
+    downloadId: id,
+    platform: input.platform,
+    mediaKind: input.kind,
+    quality: input.qualityLabel,
+    sourceUrl: input.url,
+    title: input.title,
+  });
   // No "started" toast — the floating progress card IS the notification.
   enqueueRun(id);
   return id;
@@ -543,6 +577,27 @@ export function retryDownload(id: string) {
 }
 export function cancelDownload(id: string) {
   dequeueRun(id);
+  /*
+    Report the cancellation before the task is dropped (owner audit,
+    2026-08-09).
+
+    This used to delete the task silently, so `download_cancelled` — a declared
+    event type with a column in `analytics_downloads` and a card on the
+    dashboard — was NEVER emitted by anything. "Downloads cancelled" was a
+    permanent zero, and worse, the abandoned download stayed in the table as
+    'requested' forever, which dragged the success-rate denominator down. A
+    visitor changing their mind was being counted as a download we failed to
+    deliver.
+  */
+  const task = tasks.find((t) => t.id === id);
+  if (task && (task.status === "queued" || task.status === "preparing" || task.status === "downloading")) {
+    trackDownload("cancelled", {
+      downloadId: id,
+      platform: task.platform,
+      mediaKind: task.kind,
+      quality: task.qualityLabel,
+    });
+  }
   controllers.get(id)?.abort();
   controllers.delete(id);
   finishedBlobs.delete(id);

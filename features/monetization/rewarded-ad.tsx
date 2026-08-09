@@ -76,9 +76,23 @@ export function RewardedAdGate({
 
   const videoSrc = ad && ad.format === "video" ? ad.scriptCode : null;
 
-  // Beacon an impression once we have an ad.
+  /*
+    Beacon an impression ONLY for the video this component renders itself.
+
+    ── The double count (owner audit, 2026-08-09) ────────────────────────────
+    This fired for every ad, including the ones handed to the `<AdSlot
+    zone="reward_video">` below — and AdSlot beacons its own impression for the
+    same zone the moment its ad resolves. So every non-video reward ad was
+    counted TWICE: once here, once there.
+
+    That is not a rounding error. `reward_video` impressions were doubled, its
+    CTR was halved (real clicks over inflated impressions), and because revenue
+    is `impressions / 1000 × CPM`, the estimated income from this placement was
+    exactly 2× the truth. Whichever component owns the rendering owns the count;
+    for a network ad that is AdSlot, so this now stays out of its way.
+  */
   useEffect(() => {
-    if (ad && ad.id) beacon("impression", ad.id);
+    if (ad?.id && ad.format === "video" && ad.scriptCode) beacon("impression", ad.id);
   }, [ad]);
 
   // Signal the "rewarded" moment so a Monetag placement can load then (no-op

@@ -8,6 +8,11 @@
 
 export type AnalyticsEventType =
   | "page_view"
+  /**
+   * Emitted when a page is LEFT, carrying `properties.dwellMs` — the visible
+   * time actually spent on it. Powers "Time on page"; see lib/analytics/client.
+   */
+  | "page_exit"
   | "session_start"
   | "download_requested"
   | "download_started"

@@ -26,6 +26,16 @@ const COLUMNS: Record<ExportType, { table: string; timeCol: string; cols: string
   },
 };
 
+/**
+ * Bot rows are excluded, so an export AGREES with the dashboard.
+ *
+ * The dashboard filters `is_bot`; this did not, so the CSV of the same range
+ * would have contained more rows than the number on screen — and a spreadsheet
+ * that disagrees with the dashboard is how people stop trusting both. Applied
+ * with a tolerant fallback because the column only exists after migration 0115.
+ */
+const BOT_COLUMN = "is_bot";
+
 function sinceIso(range: string): string {
   const days = range === "7d" ? 7 : range === "30d" ? 30 : 1;
   return new Date(Date.now() - days * 86_400_000).toISOString();
@@ -57,12 +67,19 @@ export async function GET(request: Request) {
   let rows: Record<string, unknown>[] = [];
   try {
     const db = createAdminClient();
-    const { data } = await db
-      .from(spec.table)
-      .select(spec.cols.join(","))
-      .gte(spec.timeCol, since)
-      .order(spec.timeCol, { ascending: false })
-      .limit(MAX_ROWS);
+    const query = () =>
+      db
+        .from(spec.table)
+        .select(spec.cols.join(","))
+        .gte(spec.timeCol, since)
+        .order(spec.timeCol, { ascending: false })
+        .limit(MAX_ROWS);
+
+    const filtered = await query().eq(BOT_COLUMN, false);
+    // Before migration 0115 the column does not exist and PostgREST errors.
+    // Falling back keeps the export working rather than handing back an empty
+    // file, which would read as "no traffic" instead of "not migrated yet".
+    const { data } = filtered.error ? await query() : filtered;
     rows = (data ?? []) as unknown as Record<string, unknown>[];
   } catch {
     rows = [];

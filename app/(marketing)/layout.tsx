@@ -58,10 +58,18 @@ export default async function MarketingLayout({ children }: { children: React.Re
           (--frenz-announce-h) plus the content-page top ad stacked below it
           (--frenz-topbanner-h). Each is 0 when absent, so an unbannered page keeps
           its exact layout; this padding pushes the page's content clear of both. */}
-      <div
-        style={{ paddingTop: "calc(var(--frenz-announce-h, 0px) + var(--frenz-topbanner-h, 0px))" }}
-        className="transition-[padding] duration-200"
-      >
+      {/*
+        No `transition-[padding]` here (owner, 2026-08-09: "the landing page
+        shouldn't carry any animation while opening").
+
+        Both custom properties start at 0 and are published by the bars AFTER
+        they mount, so the transition had exactly one job on a cold load:
+        animating the whole page downwards for 200ms while a visitor was trying
+        to read it. It did not soften the layout shift either — CLS scores the
+        movement whether it is eased or instant — it only made the page take a
+        fifth of a second longer to stop moving.
+      */}
+      <div style={{ paddingTop: "calc(var(--frenz-announce-h, 0px) + var(--frenz-topbanner-h, 0px))" }}>
         {children}
       </div>
       {/* Reserve room for the fixed BOTTOM ad bar (it now sits above the bottom nav
@@ -69,7 +77,8 @@ export default async function MarketingLayout({ children }: { children: React.Re
           hiding under it. The bar publishes its height as --frenz-bottomad-h (0 when
           there's no ad, so an ad-free page keeps its exact layout). The fixed
           header/nav/ad ignore this spacer — only the in-flow content shifts. */}
-      <div aria-hidden style={{ height: "var(--frenz-bottomad-h, 0px)" }} className="transition-[height] duration-200" />
+      {/* Same reasoning as the top spacer — reserved instantly, never eased. */}
+      <div aria-hidden style={{ height: "var(--frenz-bottomad-h, 0px)" }} />
       {/* App-style edge-to-edge bottom nav on every marketing page (mobile only),
           and a spacer so a page's last content clears the fixed bar. */}
       <div aria-hidden className="h-20 lg:hidden" />

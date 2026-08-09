@@ -12,11 +12,33 @@ function emptyPageStats(): PageStat[] {
 
 /**
  * Admin analytics reads over the Phase-1 tables plus the monetization + security
- * tables. Totals use accurate COUNT filters; breakdowns, timeseries + unique/live
- * visitor tallies use a capped recent sample aggregated in JS (exact grouped/distinct
- * aggregates at very high volume are a later phase via a SQL RPC). Degrades to zeros
- * before the analytics tables exist — every block is independently try/caught so one
- * missing table never blanks the whole dashboard.
+ * tables.
+ *
+ * ── Everything here is now an EXACT aggregate (owner audit, 2026-08-09) ──────
+ *
+ * It used to pull up to `SAMPLE_CAP` (20 000) recent event rows and compute
+ * unique visitors, live visitors, breakdowns, engagement and the trend chart
+ * over that sample in JavaScript. The failure mode was quiet and bad: past
+ * 20 000 events in a range, "Unique visitors" stopped growing and converged on
+ * however many distinct visitors happened to be inside the most recent 20 000
+ * events. On a dashboard, an undercount that stops rising is indistinguishable
+ * from a plateau in real traffic — so the number would have been read as a
+ * business signal rather than a measurement artefact.
+ *
+ * New vs returning was worse still: it sampled 500 visitors, measured what
+ * fraction of THOSE had prior events, and multiplied that rate up to the full
+ * unique count. A ratio estimated from a sample, presented as a count, with no
+ * error bar.
+ *
+ * All of it now runs in Postgres through the RPCs in migration 0115, which also
+ * exclude bot traffic. `approxBreakdowns` is retained in the response shape but
+ * is always false — the dashboard still reads it, and removing the field would
+ * be a silent contract change for a value that is now simply always exact.
+ *
+ * Degrades to zeros before the analytics tables exist — every block is
+ * independently try/caught so one missing table never blanks the whole
+ * dashboard. A MISSING RPC (the migration not yet applied) is reported rather
+ * than silently zeroed: see `rpcHealth` on the summary.
  */
 export type Range = "24h" | "7d" | "30d";
 
@@ -83,32 +105,125 @@ export interface Monitoring {
   recentSecurity: MonitorRow[];
 }
 
+/**
+ * Download counts by lifecycle stage.
+ *
+ * `total` deliberately EXCLUDES cancelled downloads, and `successRate` is
+ * measured against attempts that were actually carried through
+ * (completed + failed) rather than against every row.
+ *
+ * Why: a row sits at 'requested' from the moment a visitor presses the button.
+ * Someone who changes their mind, or closes the tab, leaves a 'requested' row
+ * behind forever. Counting those as downloads we failed to deliver made the
+ * success rate a measure of visitor intent as much as of our reliability — and
+ * it moved in the wrong direction whenever the site got busier. `attempted` is
+ * the honest denominator; `abandoned` is reported separately, because it is a
+ * real and interesting number, just not a failure.
+ */
+export interface DownloadStats {
+  /** Requested and not cancelled — every download we were asked to deliver. */
+  total: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  /** Requested, never cancelled, never reached a terminal state (tab closed, etc). */
+  abandoned: number;
+  /** completed + failed — the denominator for `successRate`. */
+  attempted: number;
+  successRate: number;
+  /** Bytes actually delivered for completed downloads, summed exactly. */
+  bytesDelivered: number;
+}
+
+/**
+ * Which exact-aggregate RPCs answered.
+ *
+ * Reported rather than swallowed. Every block in this file is try/caught so one
+ * missing table cannot blank the dashboard — but a caught error and a genuine
+ * zero look identical to a reader, and "0 unique visitors" on a site with
+ * traffic is exactly the kind of confident wrong number this audit was about.
+ * The dashboard renders a warning instead of a zero when this is false.
+ */
+export interface RpcHealth {
+  /** False when migration 0115 has not been applied — numbers are unavailable, not zero. */
+  exactAggregates: boolean;
+  note: string | null;
+}
+
+/**
+ * The same headline numbers for the IMMEDIATELY PRECEDING window of equal
+ * length, so every card can show a real change instead of a bare number.
+ *
+ * Compared against the previous PERIOD rather than "the same day last week":
+ * this site's traffic is driven by shares and search, not by a weekly office
+ * rhythm, so period-over-period is the comparison that actually reflects
+ * whether something changed today.
+ *
+ * Null when the previous window could not be read. The dashboard then shows no
+ * trend arrow at all — an unknown trend must not render as 0%, which reads as
+ * "flat" rather than "unknown".
+ */
+export interface PreviousPeriod {
+  uniqueVisitors: number;
+  sessions: number;
+  pageViews: number;
+  downloadsCompleted: number;
+  downloadsFailed: number;
+  successRate: number;
+  bounceRatePct: number;
+  avgTimeOnPageSec: number;
+  adImpressions: number;
+  adClicks: number;
+}
+
 export interface AnalyticsSummary {
   range: Range;
   liveVisitors: number;
   uniqueVisitors: number;
+  newVisitors: number;
+  returningVisitors: number;
   sessions: number;
   pageViews: number;
   totalEvents: number;
-  downloads: { total: number; completed: number; failed: number; successRate: number };
+  /** Sessions with exactly one page view, as a percentage of all sessions. */
+  bounceRatePct: number;
+  /** Mean visible seconds per page, from measured `page_exit` dwell. */
+  avgTimeOnPageSec: number;
+  downloads: DownloadStats;
   topPlatforms: Breakdown[];
   byDevice: Breakdown[];
   byBrowser: Breakdown[];
+  byOs: Breakdown[];
   byCountry: Breakdown[];
+  byRegion: Breakdown[];
   timeseries: { granularity: "hour" | "day"; buckets: TimeBucket[] };
   ads: AdAnalytics;
   engagement: Engagement;
   monitoring: Monitoring;
+  /** Always false now — retained so the dashboard's contract does not change. */
   approxBreakdowns: boolean;
+  rpcHealth: RpcHealth;
+  /** Null when unknown — never render an unknown trend as 0%. */
+  previous: PreviousPeriod | null;
   generatedAt: string;
 }
 
 const SAMPLE_CAP = 20_000;
 const DEFAULT_CPM_USD = 2.5;
 
+function rangeDays(range: Range): number {
+  return range === "24h" ? 1 : range === "7d" ? 7 : 30;
+}
+
 function sinceIso(range: Range): string {
-  const days = range === "24h" ? 1 : range === "7d" ? 7 : 30;
-  return new Date(Date.now() - days * 86_400_000).toISOString();
+  return new Date(Date.now() - rangeDays(range) * 86_400_000).toISOString();
+}
+
+/** The window immediately before the current one, same length. */
+function priorWindow(range: Range): { from: string; to: string } {
+  const ms = rangeDays(range) * 86_400_000;
+  const now = Date.now();
+  return { from: new Date(now - 2 * ms).toISOString(), to: new Date(now - ms).toISOString() };
 }
 
 /** Ordered, gap-free bucket keys from the start of the range to now. */
@@ -274,104 +389,185 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
     range,
     liveVisitors: 0,
     uniqueVisitors: 0,
+    newVisitors: 0,
+    returningVisitors: 0,
     sessions: 0,
     pageViews: 0,
     totalEvents: 0,
-    downloads: { total: 0, completed: 0, failed: 0, successRate: 0 },
+    bounceRatePct: 0,
+    avgTimeOnPageSec: 0,
+    downloads: {
+      total: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+      abandoned: 0,
+      attempted: 0,
+      successRate: 0,
+      bytesDelivered: 0,
+    },
     topPlatforms: [],
     byDevice: [],
     byBrowser: [],
+    byOs: [],
     byCountry: [],
+    byRegion: [],
     timeseries: { granularity, buckets: emptyBuckets },
     ads: { impressions: 0, clicks: 0, ctr: 0, cpmUsd: DEFAULT_CPM_USD, revenueUsd: 0, byZone: [] },
     engagement: { topPages: [], topReferrers: [], pages: emptyPageStats(), newVisitors: 0, returningVisitors: 0 },
     monitoring: { errorRatePct: 0, failedDownloads: 0, recentErrors: [], recentSecurity: [] },
     approxBreakdowns: false,
+    rpcHealth: { exactAggregates: false, note: "Analytics tables are not available." },
+    previous: null,
     generatedAt: new Date().toISOString(),
   };
 
   try {
     const db = createAdminClient();
     const since = sinceIso(range);
-    const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    /*
+      The live window.
+
+      Five minutes, matching Plausible's "current visitors". It has to be longer
+      than the client's flush debounce (3s) plus a slow round trip, or someone
+      genuinely reading a page drops out of the count between beacons and the
+      number flickers. It also has to be short enough that "live" means live —
+      GA's 30-minute realtime window reports people who left twenty minutes ago.
+    */
+    const liveSince = new Date(Date.now() - 5 * 60_000).toISOString();
 
     const countOf = async (build: CountBuild): Promise<number> => {
       const { count } = await build;
       return count ?? 0;
     };
 
-    const [totalEvents, pageViews, sessions, dlTotal, dlCompleted, dlFailed] = await Promise.all([
-      countOf(db.from("analytics_events").select("event_id", { head: true, count: "exact" }).gte("received_at", since)),
-      countOf(db.from("analytics_events").select("event_id", { head: true, count: "exact" }).eq("event_type", "page_view").gte("received_at", since)),
-      countOf(db.from("analytics_events").select("event_id", { head: true, count: "exact" }).eq("event_type", "session_start").gte("received_at", since)),
-      countOf(db.from("analytics_downloads").select("download_id", { head: true, count: "exact" }).gte("created_at", since)),
-      countOf(db.from("analytics_downloads").select("download_id", { head: true, count: "exact" }).eq("status", "completed").gte("created_at", since)),
-      countOf(db.from("analytics_downloads").select("download_id", { head: true, count: "exact" }).eq("status", "failed").gte("created_at", since)),
-    ]);
-
-    // Sample recent events for the visitor tallies, breakdowns, engagement + timeseries.
-    const { data: sample } = await db
-      .from("analytics_events")
-      .select("visitor_id, event_type, path, referrer, device, browser, country, received_at")
-      .gte("received_at", since)
-      .order("received_at", { ascending: false })
-      .limit(SAMPLE_CAP);
-    type Row = {
-      visitor_id: string;
-      event_type: string;
-      path: string | null;
-      referrer: string | null;
-      device: string | null;
-      browser: string | null;
-      country: string | null;
-      received_at: string;
-    };
-    const rows = (sample ?? []) as Row[];
-
-    const uniq = new Set<string>();
-    const live = new Set<string>();
-    for (const r of rows) {
-      uniq.add(r.visitor_id);
-      if (r.received_at >= fiveMinAgo) live.add(r.visitor_id);
-    }
-
-    const tally = (get: (r: Row) => string | null): Breakdown[] => {
-      const m = new Map<string, number>();
-      for (const r of rows) {
-        const k = get(r) || "Unknown";
-        m.set(k, (m.get(k) ?? 0) + 1);
-      }
-      return [...m.entries()].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count).slice(0, 8);
+    /** One RPC call. Returns null (never throws) when the function is absent. */
+    const rpc = async <T>(name: string, args: Record<string, unknown>): Promise<T[] | null> => {
+      const { data, error } = await db.rpc(name, args);
+      if (error) return null;
+      return (data ?? []) as T[];
     };
 
-    // Engagement: top pages + referrers (page_view rows only), new vs returning.
-    const pageTally = new Map<string, number>();
-    const refTally = new Map<string, number>();
-    for (const r of rows) {
-      if (r.event_type !== "page_view") continue;
-      if (r.path) pageTally.set(r.path, (pageTally.get(r.path) ?? 0) + 1);
-      const ref = normalizeReferrer(r.referrer);
-      if (ref) refTally.set(ref, (refTally.get(ref) ?? 0) + 1);
+    const [totals, split, dlTotals, series, pageRows, devices, browsers, oses, countries, regions, paths, referrers] =
+      await Promise.all([
+        rpc<{
+          total_events: number;
+          page_views: number;
+          unique_visitors: number;
+          sessions: number;
+          live_visitors: number;
+          bounced_sessions: number;
+          dwell_samples: number;
+          dwell_seconds: number;
+        }>("analytics_traffic_totals", { p_since: since, p_live_since: liveSince }),
+        rpc<{ new_visitors: number; returning_visitors: number }>("analytics_visitor_split", { p_since: since }),
+        rpc<{ status: string; downloads: number; bytes: number }>("analytics_download_totals", { p_since: since }),
+        rpc<{ bucket: string; visitors: number; page_views: number; downloads: number }>("analytics_timeseries", {
+          p_since: since,
+          p_bucket: granularity,
+        }),
+        rpc<{ path: string; views: number; visitors: number }>("analytics_page_traffic", { p_since: since }),
+        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "device", p_limit: 8 }),
+        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "browser", p_limit: 8 }),
+        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "os", p_limit: 8 }),
+        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "country", p_limit: 12 }),
+        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "region", p_limit: 8 }),
+        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "path", p_limit: 8 }),
+        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "referrer", p_limit: 200 }),
+      ]);
+
+    /*
+      A missing RPC is REPORTED, not zeroed.
+
+      Until migration 0115 is applied every call above returns null, and a
+      dashboard full of confident zeros is precisely the failure this audit
+      exists to remove. The flag drives a banner instead.
+    */
+    if (!totals) {
+      return { ...empty, rpcHealth: { exactAggregates: false, note: "Run migration 0115 — exact analytics aggregates are unavailable." } };
     }
-    const topPages = [...pageTally.entries()].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count).slice(0, 8);
-    const topReferrers = [...refTally.entries()].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count).slice(0, 8);
+
+    const t = totals[0] ?? {
+      total_events: 0,
+      page_views: 0,
+      unique_visitors: 0,
+      sessions: 0,
+      live_visitors: 0,
+      bounced_sessions: 0,
+      dwell_samples: 0,
+      dwell_seconds: 0,
+    };
+
+    const num0 = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0);
+
+    const totalEvents = num0(t.total_events);
+    const pageViews = num0(t.page_views);
+    const sessions = num0(t.sessions);
+    const bounceRatePct = sessions > 0 ? Math.round((num0(t.bounced_sessions) / sessions) * 1000) / 10 : 0;
+    const dwellSamples = num0(t.dwell_samples);
+    const avgTimeOnPageSec = dwellSamples > 0 ? Math.round(num0(t.dwell_seconds) / dwellSamples) : 0;
+
+    /* ── downloads, by lifecycle stage ─────────────────────────────────────── */
+    const byStatus = new Map<string, { n: number; bytes: number }>();
+    for (const r of dlTotals ?? []) byStatus.set(r.status, { n: num0(r.downloads), bytes: num0(r.bytes) });
+    const stat = (s: string) => byStatus.get(s)?.n ?? 0;
+    const completed = stat("completed");
+    const failed = stat("failed");
+    const cancelled = stat("cancelled");
+    const inFlight = stat("requested") + stat("started") + stat("preparing");
+    const attempted = completed + failed;
+    const downloads: DownloadStats = {
+      total: completed + failed + inFlight,
+      completed,
+      failed,
+      cancelled,
+      abandoned: inFlight,
+      attempted,
+      // Against ATTEMPTS, not against everything ever requested — see DownloadStats.
+      successRate: attempted > 0 ? Math.round((completed / attempted) * 1000) / 10 : 0,
+      bytesDelivered: byStatus.get("completed")?.bytes ?? 0,
+    };
+
+    /* ── engagement ────────────────────────────────────────────────────────── */
+    // Referrers are normalised to a host AFTER the SQL tally, so several raw
+    // URLs from one site collapse into one row; a generous limit goes in so the
+    // top 8 hosts survive that collapse.
+    const refByHost = new Map<string, number>();
+    for (const r of referrers ?? []) {
+      const host = normalizeReferrer(r.key === "Unknown" ? null : r.key);
+      if (!host) continue;
+      refByHost.set(host, (refByHost.get(host) ?? 0) + num0(r.count));
+    }
+    const topReferrers = [...refByHost.entries()]
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const topPages = (paths ?? []).map((r) => ({ key: r.key, count: num0(r.count) }));
 
     // Per-PAGE stats over the catalogue: every surface reports, including the
     // ones nobody visited, and dynamic routes collapse into a single row.
     const pageViewTally = new Map<string, number>();
-    const pageVisitors = new Map<string, Set<string>>();
-    for (const r of rows) {
-      if (r.event_type !== "page_view") continue;
+    const pageVisitorTally = new Map<string, number>();
+    for (const r of pageRows ?? []) {
       const id = matchPage(r.path) ?? OTHER_PAGE_ID;
-      pageViewTally.set(id, (pageViewTally.get(id) ?? 0) + 1);
-      let seen = pageVisitors.get(id);
-      if (!seen) pageVisitors.set(id, (seen = new Set()));
-      seen.add(r.visitor_id);
+      pageViewTally.set(id, (pageViewTally.get(id) ?? 0) + num0(r.views));
+      /*
+        Distinct visitors are summed across the paths a catalogue entry owns.
+
+        This can over-count one person who visited two paths of the same entry
+        (two different profiles, say) — a true distinct-per-entry count would
+        need the catalogue's regexes inside SQL, which would mean maintaining
+        them in two languages. The over-count is bounded by the page's own view
+        count and only affects the per-page visitor column, so it is the one
+        approximation left in this file and it is named here rather than hidden.
+      */
+      pageVisitorTally.set(id, (pageVisitorTally.get(id) ?? 0) + num0(r.visitors));
     }
     const pages: PageStat[] = emptyPageStats().map((p) => ({
       ...p,
       views: pageViewTally.get(p.id) ?? 0,
-      visitors: pageVisitors.get(p.id)?.size ?? 0,
+      visitors: Math.min(pageVisitorTally.get(p.id) ?? 0, pageViewTally.get(p.id) ?? 0),
     }));
     // Uncatalogued paths are surfaced, never dropped — an "Other" row with a
     // count is how a forgotten page gets noticed and catalogued.
@@ -382,102 +578,141 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
         label: "Other (uncatalogued)",
         group: "Other",
         views: otherViews,
-        visitors: pageVisitors.get(OTHER_PAGE_ID)?.size ?? 0,
+        visitors: Math.min(pageVisitorTally.get(OTHER_PAGE_ID) ?? 0, otherViews),
       });
     }
 
-    // New vs returning: over a bounded sample of this range's visitors, how many
-    // also have an event STRICTLY BEFORE the range started. Scaled to the full
-    // unique count by the observed returning rate (flagged approximate).
-    let returningVisitors = 0;
-    let newVisitors = uniq.size;
-    try {
-      const sampledVisitors = [...uniq].slice(0, 500);
-      if (sampledVisitors.length > 0) {
-        const { data: prior } = await db
-          .from("analytics_events")
-          .select("visitor_id")
-          .in("visitor_id", sampledVisitors)
-          .lt("received_at", since)
-          .limit(5000);
-        const returningSet = new Set(((prior ?? []) as { visitor_id: string }[]).map((r) => r.visitor_id));
-        const rate = returningSet.size / sampledVisitors.length;
-        returningVisitors = Math.round(uniq.size * rate);
-        newVisitors = Math.max(0, uniq.size - returningVisitors);
-      }
-    } catch {
-      /* keep defaults */
-    }
+    const newVisitors = num0(split?.[0]?.new_visitors);
+    const returningVisitors = num0(split?.[0]?.returning_visitors);
 
-    // Downloads sample for platform split + timeseries.
-    const { data: dlSample } = await db
+    /* ── platform split (downloads) ────────────────────────────────────────── */
+    const { data: platRows } = await db
       .from("analytics_downloads")
-      .select("platform, created_at")
+      .select("platform")
       .gte("created_at", since)
-      .order("created_at", { ascending: false })
       .limit(SAMPLE_CAP);
-    const dlRows = (dlSample ?? []) as { platform: string | null; created_at: string }[];
     const pm = new Map<string, number>();
-    for (const r of dlRows) {
+    for (const r of (platRows ?? []) as { platform: string | null }[]) {
       const p = r.platform || "unknown";
       pm.set(p, (pm.get(p) ?? 0) + 1);
     }
-    const topPlatforms = [...pm.entries()].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count).slice(0, 10);
+    const topPlatforms = [...pm.entries()]
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
 
-    // Timeseries — bucket the samples into the gap-free key grid.
+    /* ── timeseries: exact buckets, dropped into the gap-free grid ─────────── */
     const idxByBucket = new Map<number, number>();
     keys.forEach((k, i) => idxByBucket.set(bucketStartMs(k, granularity), i));
-    const buckets = keys.map((t) => ({ t, visitors: 0, pageViews: 0, downloads: 0 }));
-    const seenPerBucket: Map<number, Set<string>> = new Map();
-    for (const r of rows) {
-      const bi = idxByBucket.get(bucketStartMs(r.received_at, granularity));
+    const buckets = keys.map((t2) => ({ t: t2, visitors: 0, pageViews: 0, downloads: 0 }));
+    for (const r of series ?? []) {
+      const bi = idxByBucket.get(bucketStartMs(r.bucket, granularity));
       if (bi === undefined) continue;
       const b = buckets[bi];
       if (!b) continue;
-      if (r.event_type === "page_view") b.pageViews += 1;
-      let set = seenPerBucket.get(bi);
-      if (!set) {
-        set = new Set<string>();
-        seenPerBucket.set(bi, set);
-      }
-      if (!set.has(r.visitor_id)) {
-        set.add(r.visitor_id);
-        b.visitors += 1;
-      }
-    }
-    for (const r of dlRows) {
-      const bi = idxByBucket.get(bucketStartMs(r.created_at, granularity));
-      if (bi === undefined) continue;
-      const b = buckets[bi];
-      if (b) b.downloads += 1;
+      b.visitors = num0(r.visitors);
+      b.pageViews = num0(r.page_views);
+      b.downloads = num0(r.downloads);
     }
 
-    const [ads, monitoring] = await Promise.all([
+    const [ads, monitoring, previous] = await Promise.all([
       getAdAnalytics(db, since, countOf),
-      getMonitoring(db, since, dlCompleted, dlFailed),
+      getMonitoring(db, since, completed, failed),
+      getPreviousPeriod(db, range, rpc, countOf),
     ]);
+
+    const clean = (rows: Breakdown[] | null): Breakdown[] =>
+      (rows ?? []).map((r) => ({ key: r.key, count: num0(r.count) }));
 
     return {
       range,
-      liveVisitors: live.size,
-      uniqueVisitors: uniq.size,
+      liveVisitors: num0(t.live_visitors),
+      uniqueVisitors: num0(t.unique_visitors),
+      newVisitors,
+      returningVisitors,
       sessions,
       pageViews,
       totalEvents,
-      downloads: { total: dlTotal, completed: dlCompleted, failed: dlFailed, successRate: dlTotal ? Math.round((dlCompleted / dlTotal) * 100) : 0 },
+      bounceRatePct,
+      avgTimeOnPageSec,
+      downloads,
       topPlatforms,
-      byDevice: tally((r) => r.device),
-      byBrowser: tally((r) => r.browser),
-      byCountry: tally((r) => r.country),
+      byDevice: clean(devices),
+      byBrowser: clean(browsers),
+      byOs: clean(oses),
+      byCountry: clean(countries),
+      byRegion: clean(regions),
       timeseries: { granularity, buckets },
       ads,
       engagement: { topPages, topReferrers, pages, newVisitors, returningVisitors },
       monitoring,
-      approxBreakdowns: rows.length >= SAMPLE_CAP,
+      approxBreakdowns: false,
+      rpcHealth: { exactAggregates: true, note: null },
+      previous,
       generatedAt: new Date().toISOString(),
     };
   } catch {
     return empty; // tables not migrated yet, or a transient error
+  }
+}
+
+/**
+ * The preceding window of equal length — the baseline every trend is measured
+ * against.
+ *
+ * Returns null rather than zeros on any failure. A card showing "0%" claims the
+ * metric was flat; a card showing nothing admits it does not know. Those are
+ * very different statements and only one of them is true here.
+ */
+async function getPreviousPeriod(
+  db: ReturnType<typeof createAdminClient>,
+  range: Range,
+  rpc: <T>(name: string, args: Record<string, unknown>) => Promise<T[] | null>,
+  countOf: (b: CountBuild) => Promise<number>,
+): Promise<PreviousPeriod | null> {
+  try {
+    const { from, to } = priorWindow(range);
+    const [totals, dl, impressions, clicks] = await Promise.all([
+      rpc<{
+        page_views: number;
+        unique_visitors: number;
+        sessions: number;
+        bounced_sessions: number;
+        dwell_samples: number;
+        dwell_seconds: number;
+      }>("analytics_traffic_totals", { p_since: from, p_live_since: from, p_until: to }),
+      rpc<{ status: string; downloads: number }>("analytics_download_totals", { p_since: from, p_until: to }),
+      countOf(
+        db.from("ad_impressions").select("id", { head: true, count: "exact" }).gte("created_at", from).lt("created_at", to),
+      ),
+      countOf(
+        db.from("ad_clicks").select("id", { head: true, count: "exact" }).gte("created_at", from).lt("created_at", to),
+      ),
+    ]);
+    if (!totals) return null;
+
+    const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0);
+    const t = totals[0];
+    const sessions = n(t?.sessions);
+    const samples = n(t?.dwell_samples);
+    const byStatus = new Map((dl ?? []).map((r) => [r.status, n(r.downloads)]));
+    const done = byStatus.get("completed") ?? 0;
+    const bad = byStatus.get("failed") ?? 0;
+
+    return {
+      uniqueVisitors: n(t?.unique_visitors),
+      sessions,
+      pageViews: n(t?.page_views),
+      downloadsCompleted: done,
+      downloadsFailed: bad,
+      successRate: done + bad > 0 ? Math.round((done / (done + bad)) * 1000) / 10 : 0,
+      bounceRatePct: sessions > 0 ? Math.round((n(t?.bounced_sessions) / sessions) * 1000) / 10 : 0,
+      avgTimeOnPageSec: samples > 0 ? Math.round(n(t?.dwell_seconds) / samples) : 0,
+      adImpressions: impressions,
+      adClicks: clicks,
+    };
+  } catch {
+    return null;
   }
 }
 

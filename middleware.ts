@@ -56,7 +56,11 @@ export async function middleware(request: NextRequest) {
   // A signed-in visitor's `/` goes to their HOME for the mode (owner, 2026-08-02):
   // the download page in Downloader mode, the app home in Full Bleed. A cheap
   // cookie read at the edge — no DB, no per-render cost.
-  const downloaderMode = request.cookies.get("frenz_mode")?.value === "downloader";
+  // Downloader is the DEFAULT (owner, 2026-08-09), so an absent cookie means
+  // downloader and only an explicit "full" opts into Full Bleed. Kept in step
+  // with `normalizeMode` in lib/app-mode.ts — the two must agree, or `/` and
+  // the chrome would disagree about which home a member has.
+  const downloaderMode = request.cookies.get("frenz_mode")?.value !== "full";
   // Downloader mode has no feed homepage — so `/home` (a cold entry, a restored tab,
   // or a bookmark) goes to the download page, never the Full-Bleed feed (owner).
   if (downloaderMode && path === "/home") {

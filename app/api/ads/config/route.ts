@@ -12,6 +12,19 @@ export const dynamic = "force-dynamic";
  * interstitial needs it whether or not a creative ends up filling. Cached
  * briefly so it costs about nothing.
  */
+/**
+ * Clamp an admin-set countdown.
+ *
+ * A stored value outside the sane range — hand-edited, or written by an older
+ * build — must not become a 10-minute ad the visitor cannot escape. Falls back
+ * to the default rather than to zero: zero would silently give the feature away
+ * for free, which is the opposite of what the setting is for.
+ */
+function clampSeconds(raw: unknown, fallback: number, max: number): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return fallback;
+  return Math.min(max, Math.max(0, Math.round(raw)));
+}
+
 export async function GET() {
   const settings = await getMonetizationSettings();
   return NextResponse.json(
@@ -22,6 +35,10 @@ export async function GET() {
       // them before an ad fills to know whether to arm the trigger at all.
       interstitialWallpaper: settings.interstitialWallpaper === true,
       interstitialHistoryVideo: settings.interstitialHistoryVideo === true,
+      // Batch downloads: free, paid for by an ad before and a short one after.
+      interstitialBatchDownload: settings.interstitialBatchDownload === true,
+      batchGateSeconds: clampSeconds(settings.batchGateSeconds, 30, 60),
+      batchCompleteSeconds: clampSeconds(settings.batchCompleteSeconds, 5, 30),
     },
     { headers: { "Cache-Control": "public, max-age=60" } },
   );

@@ -12,6 +12,7 @@ import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
 import { CommandCenterMount } from "@/features/navigation/command-center-mount";
 import { RegisterServiceWorker } from "@/features/notifications/register-sw";
 import { AdSenseSiteScript, VerificationTags } from "@/features/monetization/adsense-site-script";
+import { GoogleTag } from "@/features/monetization/google-tag";
 import { MonetagScript } from "@/features/monetization/monetag-script";
 import { WebVitals } from "@/features/perf/web-vitals";
 import { DEFAULT_LOCALE, getLocale, isRtl } from "@/lib/i18n/locales";
@@ -263,6 +264,8 @@ export default function RootLayout({
             which is the method this site supports, because the FILE method
             collides with the PWA service worker at /sw.js. */}
         <VerificationTags />
+        {/* GA4 / Google Ads / Tag Manager, from an admin-set ID. */}
+        <GoogleTag />
       </head>
       <body className={`${displaySans.variable} font-sans`}>
         {/* Monetag (site-wide) — the owner's network alongside AdSense. The admin

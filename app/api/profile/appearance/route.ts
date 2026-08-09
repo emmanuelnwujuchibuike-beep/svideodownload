@@ -9,6 +9,7 @@ import {
   RADIUS_KEYS,
   SURFACE_KEYS,
 } from "@/lib/profile/theme";
+import { captureVersion } from "@/lib/social/profile-versions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -64,6 +65,9 @@ export async function PATCH(request: Request) {
 
   const { error } = await supabase.from("profile_appearance").upsert(update, { onConflict: "user_id" });
   if (error) return unavailable();
+  // Journal the layout AFTER the member's change landed. Fire-and-forget:
+  // failing to record history must never fail their save.
+  void captureVersion(user.id);
   return NextResponse.json({ ok: true });
 }
 
@@ -145,5 +149,6 @@ export async function POST(request: Request) {
   }
 
   if (failed.length === 3) return unavailable();
+  void captureVersion(user.id);
   return NextResponse.json({ ok: true, applied: preset.key, ...(failed.length ? { partial: failed } : {}) });
 }

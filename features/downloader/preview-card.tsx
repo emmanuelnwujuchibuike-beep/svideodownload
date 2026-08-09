@@ -22,7 +22,7 @@ import {
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
-import { BatchUpgradeGate } from "@/features/downloader/batch-upgrade-gate";
+import { BatchAdGate } from "@/features/downloader/batch-ad-gate";
 import { startDownload as enqueueDownload } from "@/features/downloads/manager";
 import { ResultAd } from "@/features/monetization/result-ad";
 import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
@@ -100,14 +100,24 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     });
   const allSelected = isBatchable && selected.size === batchItems.length;
   const batchBytes = batchItems.reduce((n, f) => (selected.has(f.formatId) ? n + (f.filesize ?? 0) : n), 0);
-  const [showUpgradeGate, setShowUpgradeGate] = useState(false);
+  /*
+    ── Batch is free, and an ad pays for it (owner, 2026-08-09) ────────────
+    It used to be a Pro wall. An upgrade prompt earns nothing from the people
+    who will never buy; it just takes the feature away. So the batch is queued
+    behind a full-screen ad and runs the moment that ad is dismissed — and it
+    runs regardless if the slot is empty, the config never loaded, or the
+    member is premium.
+  */
+  const [pendingBatch, setPendingBatch] = useState<typeof batchItems | null>(null);
+  const [batchFinished, setBatchFinished] = useState(false);
 
+  /** Queue the items and let the gate decide whether an ad runs first. */
   const batchDownload = (explicit?: typeof batchItems) => {
-    if (showAds) {
-      setShowUpgradeGate(true);
-      return;
-    }
-    const items = explicit ?? batchItems.filter((f) => selected.has(f.formatId));
+    setPendingBatch(explicit ?? batchItems.filter((f) => selected.has(f.formatId)));
+  };
+
+  /** Actually enqueue — called by the gate once the ad (if any) is done. */
+  const runBatch = (items: typeof batchItems) => {
     items.forEach((f, i) => {
       // Each item carries its OWN kind — a story can mix video snaps and photo
       // snaps, and sending them all as "image" would have saved the videos with
@@ -125,6 +135,9 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     });
     // No "started" toast — the floating card shows "Downloading N items…".
     setSelected(new Set());
+    // The closing ad fires AFTER the files are queued, so dismissing it can
+    // never cost the member their download.
+    setBatchFinished(true);
   };
 
   /*
@@ -595,16 +608,16 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       onCancel={() => setGate(null)}
     />
 
-    <BatchUpgradeGate
-      open={showUpgradeGate}
-      itemCount={selected.size}
-      onUseSingleDownload={() => {
-        setShowUpgradeGate(false);
-        // Drop the multi-select so the primary button reverts to the free
-        // single-item download the currently-active photo already offers.
-        setSelected(new Set());
+    <BatchAdGate
+      pending={pendingBatch !== null}
+      onProceed={() => {
+        const items = pendingBatch;
+        setPendingBatch(null);
+        if (items) runBatch(items);
       }}
-      onClose={() => setShowUpgradeGate(false)}
+      onCancel={() => setPendingBatch(null)}
+      showComplete={batchFinished}
+      onCompleteClosed={() => setBatchFinished(false)}
     />
     </>
   );

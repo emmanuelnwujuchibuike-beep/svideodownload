@@ -6,6 +6,7 @@ import { AUDIENCE_KEYS, LIVE_MODULE_KEYS } from "@/lib/profile/modules";
 import { profileType } from "@/lib/profile/profile-types";
 import { circleAudienceId } from "@/lib/social/graph/circles";
 import { ownedCircleIds } from "@/lib/social/graph/store";
+import { captureVersion } from "@/lib/social/profile-versions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -106,5 +107,6 @@ export async function PUT(request: Request) {
     );
   }
 
+  void captureVersion(user.id);
   return NextResponse.json({ ok: true, saved: rows.length });
 }

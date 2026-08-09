@@ -112,6 +112,8 @@ export const DATA_DOMAINS: DataDomain[] = [
       "profile_goals",
       "profile_snapshots",
       "profile_view_stats",
+      // Migration 0114 — layout version history.
+      "profile_versions",
     ],
     storage: ["relational"],
   },

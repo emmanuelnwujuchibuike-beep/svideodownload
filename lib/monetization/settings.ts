@@ -69,6 +69,23 @@ export interface MonetizationSettings {
    * or careless admin session should not be able to put a script on every page.
    */
   verificationTags: string;
+  /**
+   * The Google tag: a GA4 measurement id, a Google Ads conversion id, or a
+   * Tag Manager container id. One field, because Google's own installer emits
+   * the same snippet shape for all three and only the id differs.
+   *
+   * Stored as the ID ONLY, never as pasted markup. Google's install page hands
+   * you a block of <script> to copy, and accepting that verbatim would put an
+   * admin-editable script on every page of the site — a stored-XSS primitive
+   * with a friendly name. The id is validated against the real formats and the
+   * snippet is rendered from a template here, exactly as `verificationTags`
+   * takes name/content pairs rather than raw <meta> markup.
+   *
+   *   G-XXXXXXXXXX   GA4
+   *   AW-XXXXXXXXX   Google Ads
+   *   GTM-XXXXXXX    Tag Manager
+   */
+  googleTagId: string;
   /** Adsterra networks. */
   adsterra: boolean;
   /** PropellerAds networks. */
@@ -154,6 +171,28 @@ export interface MonetizationSettings {
    */
   interstitialHistoryVideo: boolean;
   /**
+   * Batch (multi-item) downloads are FREE, paid for by a full-screen ad before
+   * the batch runs and a short one after it finishes.
+   *
+   * Owner (2026-08-09): batch used to be a Pro gate. An upgrade prompt earns
+   * nothing from the overwhelming majority who will never buy; an ad earns
+   * something from all of them and still lets them have the feature. Pro
+   * members skip both ads, which is what they are paying for.
+   *
+   * Defaults OFF like every other interstitial: the most intrusive placements
+   * are opt-in, never inherited by a site that configured nothing.
+   */
+  interstitialBatchDownload: boolean;
+  /**
+   * Seconds before the PRE-batch ad can be skipped (owner: 30). Separate from
+   * `interstitialSkipSeconds` because this one is the price of the feature
+   * rather than an interruption, and a 30-second countdown on an idle ad would
+   * be intolerable.
+   */
+  batchGateSeconds: number;
+  /** Seconds before the POST-batch ad can be skipped (owner: 5). */
+  batchCompleteSeconds: number;
+  /**
    * Allow pop-under / OnClick units (the `pop` format).
    *
    * Defaults OFF, unlike the original switch which defaulted ON. These take
@@ -179,6 +218,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   adsensePublisherId: "",
   adsTxt: "",
   verificationTags: "",
+  googleTagId: "",
   /*
     Adsterra + PropellerAds default OFF (owner, 2026-07-26: "use just Monetag and
     AdSense"). They remain fully wired so a site can re-enable them from the admin,
@@ -201,6 +241,9 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   interstitialSkipSeconds: 5,
   interstitialWallpaper: false,
   interstitialHistoryVideo: false,
+  interstitialBatchDownload: false,
+  batchGateSeconds: 30,
+  batchCompleteSeconds: 5,
   popunder: false,
 };
 

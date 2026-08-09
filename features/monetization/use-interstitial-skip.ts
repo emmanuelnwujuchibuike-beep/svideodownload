@@ -17,9 +17,26 @@ export interface InterstitialConfig {
   skipSeconds: number;
   wallpaper: boolean;
   historyVideo: boolean;
+  /** Batch downloads are free, paid for by the two ads below. */
+  batchDownload: boolean;
+  /** Seconds the PRE-batch ad must run before it can be skipped. */
+  batchGateSeconds: number;
+  /** Seconds the POST-batch ad must run before it can be skipped. */
+  batchCompleteSeconds: number;
 }
 
-const DEFAULTS: InterstitialConfig = { skipSeconds: 5, wallpaper: false, historyVideo: false };
+const DEFAULTS: InterstitialConfig = {
+  skipSeconds: 5,
+  wallpaper: false,
+  historyVideo: false,
+  // OFF by default like every other interstitial — but note the consequence
+  // here is the opposite of the others: with this off, batch downloads simply
+  // run with no ad. A failed config fetch gives the feature away rather than
+  // showing an ad nobody configured.
+  batchDownload: false,
+  batchGateSeconds: 30,
+  batchCompleteSeconds: 5,
+};
 
 let cached: InterstitialConfig | null = null;
 let inflight: Promise<void> | null = null;
@@ -39,6 +56,11 @@ export function useInterstitialConfig(): InterstitialConfig {
           skipSeconds: typeof d?.interstitialSkipSeconds === "number" ? d.interstitialSkipSeconds : DEFAULTS.skipSeconds,
           wallpaper: d?.interstitialWallpaper === true,
           historyVideo: d?.interstitialHistoryVideo === true,
+          batchDownload: d?.interstitialBatchDownload === true,
+          batchGateSeconds:
+            typeof d?.batchGateSeconds === "number" ? d.batchGateSeconds : DEFAULTS.batchGateSeconds,
+          batchCompleteSeconds:
+            typeof d?.batchCompleteSeconds === "number" ? d.batchCompleteSeconds : DEFAULTS.batchCompleteSeconds,
         };
       })
       .catch(() => {

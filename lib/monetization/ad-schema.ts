@@ -18,6 +18,8 @@ export const AD_ZONES = [
   "download_result_page",
   "download_complete",
   "idle_interstitial",
+  "batch_download_gate",
+  "batch_download_complete",
   "reward_video",
   "sidebar",
   "bottom_banner",
@@ -193,6 +195,24 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
   download_complete: {
     label: "After a download finishes",
     description: "A skippable panel shown once the file has actually been saved.",
+    persistent: false,
+    supportsSkip: true,
+    prefetch: false,
+  },
+  batch_download_gate: {
+    label: "Batch download — before",
+    description:
+      "Full-screen ad shown BEFORE a multi-item batch download starts. This is what pays for batch being free, so an empty slot means the batch simply RUNS with no ad — never blocked behind a placement that failed to fill.",
+    persistent: false,
+    supportsSkip: true,
+    // Prefetched: the creative has to be on screen the instant the member taps
+    // Download, or the gate reads as the app hanging.
+    prefetch: true,
+  },
+  batch_download_complete: {
+    label: "Batch download — after",
+    description:
+      "Short full-screen ad once a batch download finishes. Fires after the files are already saved, never before — so dismissing it can never cost the member their download.",
     persistent: false,
     supportsSkip: true,
     prefetch: false,

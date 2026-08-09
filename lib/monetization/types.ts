@@ -16,6 +16,10 @@ export type AdZone =
   | "download_result_page"
   | "download_complete"
   | "idle_interstitial"
+  // Batch downloads are free, paid for by these two placements: a full-screen
+  // ad before the batch runs and a short one once the files are saved.
+  | "batch_download_gate"
+  | "batch_download_complete"
   | "reward_video"
   | "sidebar"
   | "bottom_banner"

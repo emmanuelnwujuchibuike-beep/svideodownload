@@ -57,6 +57,17 @@ const schema = z.object({
   // intrusive placement silently switched on.
   interstitialWallpaper: z.boolean().default(false),
   interstitialHistoryVideo: z.boolean().default(false),
+  /*
+    Batch downloads: free, paid for by an ad before and a short one after.
+    Defaulted rather than required so a saved settings row written before these
+    existed still validates — an operator should not have their whole
+    monetization form rejected because we added a field.
+  */
+  interstitialBatchDownload: z.boolean().default(false),
+  // 30s is the owner's figure. Capped at 60: past that an "ad you must watch"
+  // stops being a price and becomes a reason to leave.
+  batchGateSeconds: z.number().int().min(0).max(60).default(30),
+  batchCompleteSeconds: z.number().int().min(0).max(30).default(5),
   popunder: z.boolean().default(false),
   /*
     Validated as "empty, or a well-formed publisher id" rather than just a
@@ -81,6 +92,20 @@ const schema = z.object({
   // Free text, parsed into name|content pairs at render time and emitted as
   // real meta elements — never as markup. See VerificationTags.
   verificationTags: z.string().max(4000).default(""),
+  /*
+    The ID only — validated here as well as at render. An empty string clears
+    it. Anything that is not one of Google's three id shapes is rejected at the
+    door rather than stored and silently ignored, so an operator who pastes the
+    whole <script> block is told, instead of wondering why nothing tracked.
+  */
+  googleTagId: z
+    .string()
+    .trim()
+    .max(32)
+    .refine((v) => v === "" || /^(?:G-[A-Z0-9]{6,12}|AW-[0-9]{9,12}|GTM-[A-Z0-9]{6,10})$/i.test(v), {
+      message: "Enter a Google tag ID like G-XXXXXXXXXX, AW-XXXXXXXXX or GTM-XXXXXXX — not the whole script.",
+    })
+    .default(""),
 });
 
 /** Admin-only: flip the global monetization subsystems on/off. */
@@ -96,7 +121,11 @@ export async function POST(request: Request) {
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid settings payload." }, { status: 400 });
+    // The FIRST field message, not a generic one. "Invalid settings payload"
+    // leaves an operator who pasted a whole <script> block with no idea which
+    // of twenty fields is wrong or why.
+    const issue = parsed.error.issues[0];
+    return NextResponse.json({ error: issue?.message ?? "Invalid settings payload." }, { status: 400 });
   }
 
   try {

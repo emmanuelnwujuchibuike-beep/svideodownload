@@ -54,6 +54,11 @@ const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
     hint: "A skippable full-screen ad after every 2nd wallpaper download, on /wallpapers and the download page. Off by default.",
   },
   {
+    key: "interstitialBatchDownload",
+    label: "Batch download ads",
+    hint: "Makes multi-item batch downloads FREE, paid for by a full-screen ad before the batch and a short one after it finishes. With this off, batch downloads simply run with no ad. Pro and Business skip both.",
+  },
+  {
     key: "interstitialHistoryVideo",
     label: "History video interstitial",
     hint: "A skippable full-screen ad when the 2nd video watched from download history finishes. Never interrupts a clip mid-watch. Off by default.",
@@ -66,7 +71,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const setText = (key: "adsensePublisherId" | "adsTxt" | "verificationTags" | "monetagSnippet", value: string) =>
+  const setText = (key: "adsensePublisherId" | "adsTxt" | "verificationTags" | "monetagSnippet" | "googleTagId", value: string) =>
     setState((s) => ({ ...s, [key]: value }));
 
   const persist = async (next: MonetizationSettings) => {
@@ -168,6 +173,68 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
             <option value={5}>After 5 seconds</option>
             <option value={10}>After 10 seconds</option>
           </select>
+        </div>
+      ) : null}
+
+      {/*
+        Batch ad lengths. Shown only when batch ads are on: two countdown
+        selectors nobody is using are just noise on an already dense screen.
+
+        The "before" ad is the PRICE of the feature and the "after" one is a
+        courtesy, which is why they are configured separately rather than
+        sharing the interstitial skip delay above — 30 seconds on an idle ad
+        would be intolerable, and 5 seconds before a batch would not pay for it.
+      */}
+      {state.interstitialBatchDownload ? (
+        <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold">Before a batch</span>
+              <span className="block truncate text-xs text-muted-foreground">Skippable after…</span>
+            </span>
+            <select
+              value={state.batchGateSeconds}
+              disabled={busy}
+              onChange={async (e) => {
+                const v = Number(e.target.value);
+                const prev = state.batchGateSeconds;
+                const next = { ...state, batchGateSeconds: v };
+                setState(next);
+                const ok = await persist(next);
+                if (!ok) setState((x) => ({ ...x, batchGateSeconds: prev }));
+              }}
+              className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
+            >
+              <option value={0}>Immediately</option>
+              <option value={5}>5 seconds</option>
+              <option value={15}>15 seconds</option>
+              <option value={30}>30 seconds</option>
+              <option value={45}>45 seconds</option>
+            </select>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold">After a batch</span>
+              <span className="block truncate text-xs text-muted-foreground">Files are already saved.</span>
+            </span>
+            <select
+              value={state.batchCompleteSeconds}
+              disabled={busy}
+              onChange={async (e) => {
+                const v = Number(e.target.value);
+                const prev = state.batchCompleteSeconds;
+                const next = { ...state, batchCompleteSeconds: v };
+                setState(next);
+                const ok = await persist(next);
+                if (!ok) setState((x) => ({ ...x, batchCompleteSeconds: prev }));
+              }}
+              className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
+            >
+              <option value={0}>Immediately</option>
+              <option value={5}>5 seconds</option>
+              <option value={10}>10 seconds</option>
+            </select>
+          </div>
         </div>
       ) : null}
 
@@ -485,6 +552,34 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
           Rendered as real <code className="font-mono">&lt;meta&gt;</code> tags in the page head on
           every page. The AdSense one is added automatically from the publisher ID above — you only
           need a line here for other networks.
+        </p>
+      </div>
+
+      {/* ── Google tag ──────────────────────────────────────────────────
+          GA4 / Google Ads / Tag Manager, from an ID rather than a pasted
+          script. Google's install page gives you a <script> block; taking that
+          verbatim would put an admin-editable script on every page, so only
+          the ID is stored and the snippet is rendered from a template. */}
+      <div className="mt-5 space-y-2 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <label htmlFor="google-tag-id" className="block text-sm font-semibold">
+          Google tag ID
+        </label>
+        <input
+          id="google-tag-id"
+          value={state.googleTagId}
+          onChange={(e) => setText("googleTagId", e.target.value)}
+          placeholder="G-XXXXXXXXXX"
+          spellCheck={false}
+          autoCapitalize="characters"
+          className="w-full rounded-xl bg-background p-3 font-mono text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+        />
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Paste the <strong>ID only</strong>, not the whole script Google shows you.{" "}
+          <code className="font-mono">G-…</code> for Analytics,{" "}
+          <code className="font-mono">AW-…</code> for Google Ads,{" "}
+          <code className="font-mono">GTM-…</code> for Tag Manager — the right loader is chosen from
+          the prefix. It loads on every page after the content, so it never slows the first paint.
+          Leave empty to remove it.
         </p>
       </div>
 

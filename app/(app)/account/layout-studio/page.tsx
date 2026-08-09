@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { SettingsPage } from "@/features/account/settings-page";
 import { LayoutStudio } from "@/features/profile/layout-studio";
 import { accentHex, getProfileExtras } from "@/lib/social/profile";
+import { VersionHistory } from "@/features/profile/version-history";
 import { getProfileAppearance } from "@/lib/social/profile-appearance";
+import { listVersions } from "@/lib/social/profile-versions";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -27,11 +29,19 @@ export default async function LayoutStudioPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [appearance, extras] = await Promise.all([getProfileAppearance(user.id), getProfileExtras(user.id)]);
+  const [appearance, extras, versions] = await Promise.all([
+    getProfileAppearance(user.id),
+    getProfileExtras(user.id),
+    // Empty until 0114 is applied — the section then explains itself rather
+    // than the page failing.
+    listVersions(user.id),
+  ]);
 
   return (
     <SettingsPage title="Layout Studio" description="How your profile looks. Changes preview instantly." bare>
       <LayoutStudio initial={appearance} accent={accentHex(extras.accent)} />
+
+      <VersionHistory initial={versions} />
 
       <p className="mt-5 rounded-2xl bg-secondary/40 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
         Looking for which sections appear and in what order?{" "}

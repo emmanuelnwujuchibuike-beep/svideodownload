@@ -42,6 +42,10 @@ export interface DownloadTask {
   directUrl?: string;
   /** On iOS the finished file waits for a tap (share sheet needs a gesture). */
   awaitingSave?: boolean;
+  /** How many times this task has been attempted, including the current one. */
+  attempts?: number;
+  /** True once preparing has run long enough to be worth explaining. */
+  slowPrepare?: boolean;
 }
 
 let tasks: DownloadTask[] = [];
@@ -56,18 +60,78 @@ const listeners = new Set<() => void>();
 // hold the rest as "queued"; the first request also warms the metadata cache so
 // the siblings resolve instantly instead of each re-extracting.
 const MAX_CONCURRENT = 2;
+
+/**
+ * Automatic retry (owner, 2026-08-09: "make failed downloads automatically
+ * retry... let there be zero fail rate").
+ *
+ * The owner's own error log is almost entirely `HTTP 502` — a transient
+ * upstream failure, the exact class that succeeds on a second attempt. Making
+ * a person tap Retry for something that would have worked on its own is
+ * pushing our flakiness onto them.
+ *
+ * What is NOT retried matters just as much: a 404 or a 403 is a settled
+ * answer, and hammering it three times only makes the failure slower to
+ * report. Only transient causes are retried.
+ */
+const MAX_ATTEMPTS = 3;
+/** Backoff between attempts. Short — the member is watching a progress card. */
+const RETRY_DELAY_MS = [800, 2500];
+
+/**
+ * How long a prepare may run before the card explains itself.
+ *
+ * 6 seconds: long enough that a normal extraction never trips it, short enough
+ * that nobody has decided the app is broken yet.
+ */
+const SLOW_PREPARE_MS = 6_000;
+
+/** Is this failure worth another go? */
+function isRetryable(reason: string): boolean {
+  // A definitive "not there" or "not allowed" will say the same thing again.
+  if (/(?:404|403|401|410)/.test(reason)) return false;
+  if (/private|removed|expired|not found|unavailable in your/i.test(reason)) return false;
+  return true;
+}
 let activeRuns = 0;
 const runQueue: string[] = [];
 
+/**
+ * Source URLs currently being extracted.
+ *
+ * A batch is N items from ONE post, so all N hit the same extraction. Running
+ * two of them at once means two simultaneous requests for the same page, which
+ * the platform rate-limits — and the loser comes back 502. That is the owner's
+ * "in batch download, one file always fails until I retry": not a random
+ * failure, a self-inflicted one.
+ *
+ * Serialising per URL costs nothing, because the FIRST request warms the
+ * metadata cache and every sibling then resolves from it instantly. Different
+ * URLs still run in parallel up to MAX_CONCURRENT.
+ */
+const activeSources = new Set<string>();
+
 function pump() {
-  while (activeRuns < MAX_CONCURRENT && runQueue.length > 0) {
-    const id = runQueue.shift();
-    if (id === undefined) break;
+  let scanned = 0;
+  while (activeRuns < MAX_CONCURRENT && scanned < runQueue.length) {
+    const id = runQueue[scanned]!;
     const task = tasks.find((t) => t.id === id);
-    if (!task || task.status === "canceled" || task.status === "completed") continue;
+    if (!task || task.status === "canceled" || task.status === "completed") {
+      runQueue.splice(scanned, 1);
+      continue;
+    }
+    // Another item from the same post is mid-flight — leave this one queued
+    // and look at the next, rather than blocking the whole queue behind it.
+    if (activeSources.has(task.url)) {
+      scanned += 1;
+      continue;
+    }
+    runQueue.splice(scanned, 1);
     activeRuns += 1;
+    activeSources.add(task.url);
     void run(id).finally(() => {
       activeRuns -= 1;
+      activeSources.delete(task.url);
       pump();
     });
   }
@@ -199,7 +263,29 @@ async function run(id: string) {
   // server extracts + transcodes the file, before a single byte streams back.
   // Showing "Preparing…" here (instead of a stuck 0% "Downloading") is the fix
   // for "it takes time showing downloading but isn't actually downloading yet".
-  patch(id, { status: "preparing", error: null, receivedBytes: 0, speed: 0 });
+  patch(id, {
+    status: "preparing",
+    error: null,
+    receivedBytes: 0,
+    speed: 0,
+    slowPrepare: false,
+    attempts: task.attempts ?? 1,
+  });
+
+  /*
+    A long prepare is EXPLAINED, not left silent (owner: "when a preparing
+    download takes longer they should be informed that this is taking longer
+    due to large file, please wait").
+
+    The server blocks while it extracts and, for a large file, muxes video and
+    audio — that is genuinely slow and nothing is wrong. A progress card stuck
+    on "Preparing…" with no explanation reads as a hang, and people cancel
+    perfectly good downloads because of it.
+  */
+  const slowTimer = setTimeout(() => {
+    const current = tasks.find((t) => t.id === id);
+    if (current?.status === "preparing") patch(id, { slowPrepare: true });
+  }, SLOW_PREPARE_MS);
   const startedAt = performance.now();
   trackDownload("started", { downloadId: task.id, platform: task.platform, mediaKind: task.kind, quality: task.qualityLabel });
 
@@ -286,10 +372,33 @@ async function run(id: string) {
   } catch (err) {
     if (controller.signal.aborted) return; // paused/canceled handled elsewhere
     const reason = err instanceof Error ? err.message : "Download failed";
+    const attempt = (tasks.find((t) => t.id === id)?.attempts ?? 1);
+
+    /*
+      Retry transient failures automatically before telling anybody.
+
+      The owner's error log is almost entirely HTTP 502 — an upstream hiccup
+      that succeeds on a second try. Surfacing that as "Download failed — tap
+      retry" makes our flakiness the member's job. It is only reported once the
+      attempts are genuinely spent, or when the cause is settled (a 404 says
+      the same thing however many times it is asked).
+    */
+    if (attempt < MAX_ATTEMPTS && isRetryable(reason)) {
+      const delay = RETRY_DELAY_MS[attempt - 1] ?? 2500;
+      patch(id, { status: "queued", error: null, speed: 0, receivedBytes: 0, attempts: attempt + 1 });
+      setTimeout(() => {
+        // Still wanted? A pause or cancel in the meantime wins.
+        const current = tasks.find((t) => t.id === id);
+        if (current && current.status === "queued") enqueueRun(id);
+      }, delay);
+      return;
+    }
+
     patch(id, { status: "failed", error: reason });
     trackDownload("failed", { downloadId: task.id, platform: task.platform, mediaKind: task.kind, quality: task.qualityLabel, errorReason: reason });
     toast("Download failed — tap retry", "error");
   } finally {
+    clearTimeout(slowTimer);
     controllers.delete(id);
     endCriticalActivity();
   }

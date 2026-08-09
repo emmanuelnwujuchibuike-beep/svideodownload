@@ -1243,3 +1243,85 @@
     var(--frenz-profile-wash-to, hsl(255 85% 60% / 0.25))
   );
 }
+
+/* ── Landing CTA → paste field, with no JavaScript ────────────────────────
+   Owner (2026-08-09): the "Start Free Download" button transforms into a
+   paste-your-link field and Download button, "smoothly and fast without lag on
+   small devices... not cause performance issue".
+
+   That constraint is what dictates the technique. The landing page sits
+   exactly on its cold-entry JS ceiling, so a React island here would both fail
+   the budget test and BE the lag being complained about. There is therefore no
+   state, no handler and no hydration: the form is always in the HTML and a
+   <label> painted like the button sits over it. Tapping the label focuses the
+   input (native behaviour), and `:focus-within` swaps them.
+
+   Everything animated is `opacity` and `transform` only — no width, height or
+   layout property — so the whole transition runs on the compositor and never
+   triggers a reflow. On a low-end phone that is the difference between a
+   smooth swap and a visible stutter.
+
+   The field is present and usable even while JavaScript is still downloading,
+   which is the fastest the page can possibly be. */
+.frenz-cta-face {
+  opacity: 1;
+  transition:
+    opacity 180ms var(--ease-out),
+    transform 220ms var(--ease-out);
+}
+.frenz-cta-input,
+.frenz-cta-go {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 260ms var(--ease-out);
+}
+.frenz-cta-go {
+  transition-delay: 40ms;
+}
+
+/* Focus anywhere inside — including the label, which forwards focus to the
+   input — reveals the field. */
+.frenz-cta:focus-within .frenz-cta-face {
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+}
+.frenz-cta:focus-within .frenz-cta-input,
+.frenz-cta:focus-within .frenz-cta-go {
+  opacity: 1;
+  transform: none;
+}
+
+/* Once something has been typed the field STAYS, even after the input loses
+   focus — losing your pasted link to a stray tap would be maddening. `:valid`
+   on a `type="url"` input with content is the closest CSS gets to "has a
+   value", and it needs no script. */
+.frenz-cta-input:not(:placeholder-shown) {
+  opacity: 1;
+  transform: none;
+}
+.frenz-cta:has(.frenz-cta-input:not(:placeholder-shown)) .frenz-cta-face {
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+}
+.frenz-cta:has(.frenz-cta-input:not(:placeholder-shown)) .frenz-cta-go {
+  opacity: 1;
+  transform: none;
+}
+
+/* The sheen is decoration; it must never sweep while someone is typing. */
+.frenz-cta:focus-within .frenz-cta-sheen {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frenz-cta-face,
+  .frenz-cta-input,
+  .frenz-cta-go {
+    transition: none;
+    transform: none;
+  }
+}

@@ -1,4 +1,3 @@
-import { MotionConfig } from "framer-motion";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
@@ -304,15 +303,20 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <ThemeCacheSync />
-          {/* App-wide reduced-motion: every framer-motion animation anywhere in
-              the app (hundreds of hand-authored transitions across dozens of
-              files) automatically respects the OS/browser "reduce motion"
-              setting from here — x/y/scale/rotate collapse to instant, opacity
-              fades still play, with zero per-component opt-in required. This
-              is Frenz Motion's accessibility baseline; individual components
-              can still layer their own `prefers-reduced-motion` handling
-              (e.g. pausing a decorative loop) on top where needed. */}
-          <MotionConfig reducedMotion="user">
+          {/*
+            MotionConfig lives in the (app) layout, NOT here.
+
+            Importing it at the ROOT put framer-motion — 39 kB gzipped — into
+            every page's first load, including the landing, whose whole budget
+            is 305 kB and which uses no framer animation at all. The marketing
+            tree is CSS-animated throughout (see `.frenz-cta`, the nav lift and
+            the theme pill), so it was paying for a library it never called.
+
+            The app tree still gets the identical accessibility baseline —
+            every framer transition there collapses under "reduce motion" with
+            no per-component opt-in — because that is where the provider now
+            sits, wrapping every route that actually animates with it.
+          */}
             {/* Owner ask (2026-07-15): remove the purple/blue ambient wash
                 everywhere — messages, profile, friends, home, every page —
                 in favor of a flat, pure background. This decoration was the
@@ -340,7 +344,6 @@ export default function RootLayout({
             {/* Enterprise Analytics — fires page_view / session events. Passive
                 (reads usePathname only), flushed on a debounce well after LCP. */}
             <AnalyticsTracker />
-          </MotionConfig>
         </ThemeProvider>
       </body>
     </html>

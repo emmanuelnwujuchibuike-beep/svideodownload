@@ -6,7 +6,6 @@ import {
   BadgeCheck,
   Check,
   CheckCircle2,
-  Crown,
   Download,
   Eye,
   Heart,
@@ -68,7 +67,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     setActiveId(listFor(next)[0]?.formatId ?? "best");
   };
 
-  // ── Batch download (Pro & Above) — multi-photo posts ────────────────────
+  // ── Batch download — multi-photo posts and multi-snap stories ──────────
   // Premium selection grid per the design: numbered tiles, animated checkmarks,
   // Select All, live counter + total size, one button downloads everything in
   // the background (each item streams through the download manager).
@@ -76,19 +75,33 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   useEffect(() => setSelected(new Set()), [metadata.id]);
 
   /*
-    What can be batch-downloaded on the CURRENT tab.
+    What can be batch-downloaded.
 
     Two cases, both "these are distinct pieces of media, not alternatives":
       · a multi-photo post — more than one image format (the original case), and
       · anything an extractor explicitly flagged `isSeparateItem`, which is how
         a Snapchat story with several snaps arrives.
 
-    Before this, batching was hardcoded to images, so a multi-snap story rendered
-    as a QUALITY picker: choosing "Story 1" downloaded one snap and the rest were
-    unreachable. Keying off the active tab means the same grid serves both, and
-    multi-photo behaviour is unchanged (an image tab with >1 image still batches).
+    ── Separate items are read from EVERY format, not the active tab ────────
+    Owner (2026-08-09), with a link: a story fetched only one snap. The
+    extractor returned all three — verified against the live page — but this
+    line filtered the TAB'S list, and that story was one video plus two photos.
+    On the Video tab exactly one separate item survived, so `isBatchable` was
+    false and the whole story collapsed to a single download; on Photos it
+    would have offered two and silently lost the video.
+
+    The tabs exist to choose a QUALITY of one item, which is a question that
+    does not apply to separate items: a story is one collection whether its
+    snaps are video, photo or both. So they are collected from all formats and
+    the grid offers the entire story, each tile carrying its own kind.
+
+    Multi-photo posts are unchanged — an image tab with more than one image
+    still batches through the second branch.
   */
-  const separateItems = useMemo(() => formats.filter((f) => f.isSeparateItem), [formats]);
+  const separateItems = useMemo(
+    () => metadata.formats.filter((f) => f.isSeparateItem),
+    [metadata.formats],
+  );
   const batchItems = separateItems.length > 1 ? separateItems : tab === "image" ? imageFormats : [];
   const isBatchable = batchItems.length > 1;
   const toggleSelect = (formatId: string) =>
@@ -394,15 +407,15 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
 
         {isBatchable ? (
           <div className="mt-4">
-            {/* Select items header — count + Select All (Pro & Above batch) */}
+            {/* Select items header — count + Select All.
+                The PRO chip is gone (owner, 2026-08-09): batch downloads are
+                free now, paid for by an ad, so badging them Pro would be
+                advertising a wall that no longer exists. */}
             <div className="mb-2.5 flex items-center justify-between">
               <p className="text-sm font-semibold">
                 Select items{" "}
                 <span className="font-normal text-muted-foreground">
                   ({selected.size}/{batchItems.length})
-                </span>
-                <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                  <Crown className="h-3 w-3" /> Pro
                 </span>
               </p>
               <button
@@ -578,24 +591,12 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
           ))}
         </div>
 
-        {/* Pro & Above — batch is a premium capability */}
-        {isBatchable && showAds ? (
-          <div className="mt-3 flex items-center gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-3.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/25">
-              <Crown className="h-[18px] w-[18px]" />
-            </span>
-            <p className="min-w-0 flex-1 text-xs leading-relaxed text-muted-foreground">
-              <span className="font-semibold text-foreground">Pro &amp; Above</span> — unlimited batch downloads, high
-              quality, no ads and more.
-            </p>
-            <Link
-              href="/pricing"
-              className="shrink-0 rounded-xl bg-secondary px-3 py-2 text-xs font-semibold transition hover:bg-secondary/70"
-            >
-              Learn More
-            </Link>
-          </div>
-        ) : null}
+        {/*
+          The "Pro & Above — unlimited batch downloads" upsell is gone (owner,
+          2026-08-09): batch is free now, paid for by an ad, so selling it back
+          would be advertising a wall that no longer exists. The honest pitch
+          moved onto the ad itself, where "skip these" is a real benefit.
+        */}
       </div>
     </motion.div>
 

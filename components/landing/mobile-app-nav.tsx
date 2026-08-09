@@ -1,6 +1,5 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
 import { History, Headset } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -21,7 +20,6 @@ import { PressIcon } from "@/components/motion/press-icon";
 import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { haptic } from "@/lib/motion/haptics";
-import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 
@@ -143,18 +141,31 @@ export function MobileAppNav() {
   );
 }
 
-/** A couple of px of spring-animated lift when a tab becomes active — the same
- *  micro-lift the signed-in nav uses, never a floating badge. */
+/**
+ * A couple of px of lift when a tab becomes active — the same micro-lift the
+ * signed-in nav uses, never a floating badge.
+ *
+ * ── Why this is CSS and not framer-motion ────────────────────────────────
+ * It used to be a `motion.span`, and that ONE element pulled the whole of
+ * framer-motion — 39 kB gzipped — into the LANDING page's first load. The
+ * result card that genuinely needs the library is already lazy-loaded; this
+ * nav was the only thing keeping it on the cold-entry path, for a two-pixel
+ * translate.
+ *
+ * A CSS transform does the same thing on the compositor, costs nothing, and
+ * honours `prefers-reduced-motion` through the shared `motion-reduce` variant
+ * rather than a hook that has to run on every render.
+ */
 function NavLift({ active, children }: { active: boolean; children: ReactNode }) {
-  const reduceMotion = useReducedMotion();
   return (
-    <motion.span
-      className="relative flex h-8 w-8 items-center justify-center"
-      animate={reduceMotion ? undefined : { y: active ? -2 : 0 }}
-      transition={reduceMotion ? { duration: 0 } : springs.bounce}
+    <span
+      className={cn(
+        "relative flex h-8 w-8 items-center justify-center transition-transform duration-300 [transition-timing-function:var(--ease-spring)] motion-reduce:transition-none",
+        active ? "-translate-y-0.5" : "translate-y-0",
+      )}
     >
       {children}
-    </motion.span>
+    </span>
   );
 }
 

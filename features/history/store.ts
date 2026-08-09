@@ -17,7 +17,21 @@ import {
  */
 
 const STORAGE_KEY = "svd:history:v1";
-const MAX_ITEMS = 60;
+
+/**
+ * History is NEVER trimmed on its own (owner, 2026-08-09): "history should
+ * never clear or delete on its own, unless a user deletes or clears it
+ * manually."
+ *
+ * It used to be capped at 60 and sliced on every add, so a member's 61st
+ * download silently destroyed their first — with no warning, no undo, and
+ * nothing in the UI to suggest it had happened. A cap that deletes a person's
+ * own records to save a few kilobytes is the wrong trade in every direction.
+ *
+ * The in-memory list is now unbounded. Only `persist` deals with the browser's
+ * storage quota, and it does so WITHOUT touching what is on screen — see below.
+ */
+const PERSIST_FLOOR = 50;
 
 let items: DownloadRecord[] = [];
 let loaded = false;
@@ -57,19 +71,34 @@ async function syncFromRemote(): Promise<void> {
       seen.add(key(r));
     }
   }
-  items = merged
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, MAX_ITEMS);
+  items = merged.sort((a, b) => b.createdAt - a.createdAt);
   persist();
   emit();
 }
 
+/**
+ * Write to localStorage, degrading gracefully instead of losing records.
+ *
+ * The full list is tried first. If the browser refuses it — quota, private
+ * mode — progressively fewer of the NEWEST entries are written until one
+ * succeeds. Crucially this never touches `items`: what is on screen stays
+ * complete for the session, and only what survives a reload is reduced.
+ *
+ * That is the honest failure: the browser physically cannot store more, so
+ * something must give, and it should be the oldest rather than the newest. It
+ * takes tens of thousands of records to reach that point.
+ */
 function persist(): void {
   if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  } catch {
-    /* quota / private mode — keep in-memory only */
+  let count = items.length;
+  for (;;) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, count)));
+      return;
+    } catch {
+      if (count <= PERSIST_FLOOR) return; // private mode — in-memory only
+      count = Math.max(PERSIST_FLOOR, Math.floor(count / 2));
+    }
   }
 }
 
@@ -108,10 +137,7 @@ export function addDownload(
     createdAt: Date.now(),
     favorite: existing?.favorite ?? false,
   };
-  items = [
-    next,
-    ...items.filter((r) => r.id !== next.id),
-  ].slice(0, MAX_ITEMS);
+  items = [next, ...items.filter((r) => r.id !== next.id)];
   persist();
   emit();
 

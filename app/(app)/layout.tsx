@@ -1,3 +1,4 @@
+import { MotionConfig } from "framer-motion";
 import type { ReactNode } from "react";
 
 import { AppOverlays } from "@/features/app-shell/app-overlays";
@@ -37,6 +38,21 @@ import { Toaster } from "@/features/ui/toast";
  */
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
+    /*
+      App-wide reduced-motion for the SIGNED-IN tree.
+
+      Every framer-motion transition below this point — hundreds across dozens
+      of files — collapses x/y/scale/rotate to instant under the OS "reduce
+      motion" setting, with zero per-component opt-in. Opacity fades still
+      play, which is the behaviour the setting actually asks for.
+
+      It sits here rather than in the root layout because the root put
+      framer-motion (39 kB gzipped) into the LANDING page's first load, and the
+      marketing tree animates entirely in CSS — it was paying for a library it
+      never called. Every route that genuinely uses framer is inside this
+      layout, so the guarantee is unchanged where it matters.
+    */
+    <MotionConfig reducedMotion="user">
     <div className="flex min-h-screen">
       <AppSidebar handle={null} />
       <div className="flex min-w-0 flex-1 flex-col">
@@ -100,5 +116,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       {/* App-level quick-lock PIN — gates Secret Chats and /account/security only. */}
       <PinLockGate />
     </div>
+    </MotionConfig>
   );
 }

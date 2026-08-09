@@ -131,23 +131,75 @@ export function Hero() {
             {/* Primary — goes straight to the paste-link tool (owner, 2026-07-18):
                 the downloader needs no account, so a signup wall in front of the
                 one thing the page asks for was the wrong door. */}
-            <Link
-              href="#download"
-              className="group relative flex w-full items-center gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-4 py-4 text-left text-white shadow-lg shadow-violet-600/30 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-violet-600/40 active:scale-[0.995]"
+            {/*
+              ── The CTA becomes the paste field, with ZERO JavaScript ───────
+              Owner (2026-08-09): "make the Start Free Download button
+              transform to a paste-your-link placeholder and download button,
+              smoothly and fast without lag on small devices... and still leave
+              the download section below the iPhone mockup."
+
+              The landing sits exactly on its cold-entry ceiling, so a client
+              island here would fail the budget test AND be the very lag the
+              request is trying to avoid. So there is no state and no
+              hydration: the FORM is always in the markup, and a <label>
+              painted to look like the button covers it. Tapping the label
+              focuses the input — native behaviour, no handler — and
+              `:focus-within` fades the label out and the field in.
+
+              That makes the transform a compositor-only opacity/transform
+              change on a phone, which is the fastest thing a browser can do,
+              and it works with JavaScript still downloading.
+
+              It submits to `/?url=…`, the same contract the PWA share target
+              already uses, so a pasted link lands in the existing tool below
+              rather than needing a second implementation. `#download` is
+              untouched and still sits under the mockup.
+            */}
+            <form
+              action="/"
+              method="get"
+              className="frenz-cta group relative flex w-full items-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-1.5 shadow-lg shadow-violet-600/30 transition duration-200 focus-within:shadow-xl focus-within:shadow-violet-600/40"
             >
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full"
+                className="frenz-cta-sheen pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full"
               />
-              <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 ring-1 ring-inset ring-white/25">
+
+              {/* The face. A real <label>, so tapping it focuses the input with
+                  no script — and screen readers announce the field it names. */}
+              <label
+                htmlFor="hero-url"
+                className="frenz-cta-face absolute inset-0 z-10 flex cursor-text items-center gap-4 px-4 text-left text-white"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 ring-1 ring-inset ring-white/25">
+                  <Download className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-base font-bold leading-tight">Start Free Download</span>
+                  <span className="mt-0.5 block text-xs text-white/80">100% Free</span>
+                </span>
+                <ArrowRight className="h-5 w-5 shrink-0" />
+              </label>
+
+              <input
+                id="hero-url"
+                name="url"
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="Paste your link here"
+                aria-label="Paste a link to download"
+                className="frenz-cta-input h-14 min-w-0 flex-1 rounded-xl border-0 bg-white px-4 text-base text-slate-900 outline-none placeholder:text-slate-400 dark:bg-white/95"
+              />
+              <button
+                type="submit"
+                className="frenz-cta-go inline-flex h-14 shrink-0 items-center gap-2 rounded-xl bg-white/20 px-5 text-base font-bold text-white ring-1 ring-inset ring-white/30 transition hover:bg-white/30 active:scale-[0.98]"
+              >
                 <Download className="h-5 w-5" />
-              </span>
-              <span className="relative min-w-0 flex-1">
-                <span className="block text-base font-bold leading-tight">Start Free Download</span>
-                <span className="mt-0.5 block text-xs text-white/85">100% Free</span>
-              </span>
-              <ArrowRight className="relative h-5 w-5 shrink-0 transition-transform group-hover:translate-x-0.5" />
-            </Link>
+                <span className="hidden sm:inline">Download</span>
+              </button>
+            </form>
 
             <Link
               href="/features"

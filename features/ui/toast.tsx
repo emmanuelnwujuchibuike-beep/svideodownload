@@ -1,6 +1,5 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, CheckCircle2, Info, Loader2, X } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
@@ -67,16 +66,26 @@ export function Toaster() {
 
   return (
     <div className="pointer-events-none fixed bottom-20 right-4 z-[100] flex w-[min(92vw,22rem)] flex-col gap-2 lg:bottom-4">
-      <AnimatePresence initial={false}>
-        {items.map((t) => {
+      {/*
+        ── Entry animation in CSS, not framer-motion ─────────────────────────
+        This component is mounted on the LANDING page, and its `motion.div`
+        was the last thing pulling framer-motion — 39 kB gzipped — into the
+        cold-entry bundle, for one fade-and-rise on a toast nobody has seen
+        yet when the page loads.
+
+        The entry is a keyframe (`animate-in` / `slide-in-from-bottom`), which
+        is what the rest of this codebase already uses for exactly this. The
+        EXIT animation is dropped deliberately rather than reimplemented: it
+        needs a component to stay mounted after removal, which is the one thing
+        `AnimatePresence` is genuinely for, and a toast disappearing instantly
+        is a fair trade for 13% of the landing page's budget.
+      */}
+      {items.map((t) => {
           const Icon = ICON[t.type];
           return (
-            <motion.div
+            <div
               key={t.id}
-              initial={{ opacity: 0, y: 16, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 24 }}
-              className="pointer-events-auto flex items-center gap-3 rounded-xl border border-border/70 bg-card p-3.5 text-sm shadow-elevated"
+              className="pointer-events-auto flex items-center gap-3 rounded-xl border border-border/70 bg-card p-3.5 text-sm shadow-elevated animate-in fade-in slide-in-from-bottom-4 duration-200 motion-reduce:animate-none"
             >
               <Icon className={cn("h-5 w-5 shrink-0", TINT[t.type], t.type === "loading" && "animate-spin")} />
               <span className="min-w-0 flex-1 font-medium text-foreground">{t.message}</span>
@@ -95,10 +104,9 @@ export function Toaster() {
               <button type="button" onClick={() => dismissToast(t.id)} aria-label="Dismiss" className="shrink-0 text-muted-foreground transition hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
-            </motion.div>
+            </div>
           );
         })}
-      </AnimatePresence>
     </div>
   );
 }

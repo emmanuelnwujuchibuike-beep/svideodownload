@@ -19,8 +19,8 @@ import type { Destination } from "@/lib/navigation/types";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { signOutClient } from "@/lib/auth/sign-out";
-import { DEFAULT_LOCALE } from "@/lib/i18n/locales";
 import { translator, type MessageKey } from "@/lib/i18n/messages";
+import { useLocale } from "@/lib/i18n/use-locale";
 import { getPrimaryPages } from "@/lib/seo/seo-pages";
 import { cn } from "@/lib/utils";
 
@@ -144,12 +144,10 @@ function MenuMark({ shown }: { shown: boolean }) {
 }
 
 export function SiteHeader({ social = false, desktopHidden = false }: { social?: boolean; desktopHidden?: boolean }) {
-  /*
-    Locale is fixed to the default until a second locale is genuinely translated.
-    It is resolved through one call rather than scattered literals so the switch
-    is a one-line change here, not an audit of every string in the header.
-  */
-  const t = translator(DEFAULT_LOCALE);
+  // The member's chosen language, clamped to catalogues that exist. Re-reads
+  // on the switcher's event, so changing language updates the chrome with no
+  // reload — see lib/i18n/use-locale.
+  const t = translator(useLocale());
   const [open, setOpen] = useState(false);
   /**
    * Slide state, kept separate from mount state.

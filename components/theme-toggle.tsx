@@ -1,9 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { getCachedThemeMode, setThemeModeLocal, subscribeThemeMode, type ThemeMode } from "@/lib/theme/theme-mode-client";
 import { cn } from "@/lib/utils";
@@ -29,7 +28,6 @@ export function ThemeToggle({ size = "md" }: { size?: "sm" | "md" }) {
   const { setTheme } = useTheme();
   const [mode, setMode] = useState<ThemeMode>(getCachedThemeMode());
   const [mounted, setMounted] = useState(false);
-  const pillId = useId();
   useEffect(() => setMounted(true), []);
   useEffect(() => subscribeThemeMode(setMode), []);
 
@@ -73,20 +71,26 @@ export function ThemeToggle({ size = "md" }: { size?: "sm" | "md" }) {
             title={label}
             onClick={() => choose(value)}
             className={cn(
-              "relative inline-flex items-center justify-center rounded-full transition-colors",
+              /*
+                The selected pill is a background on the BUTTON.
+
+                It was a `motion.span` with a `layoutId`, and that one element
+                pulled the whole of framer-motion — 39 kB gzipped — onto the
+                LANDING page's first load, because this toggle sits in the site
+                header on every page. A shared-layout animation is a lovely
+                effect and a very expensive way to move a pill three abreast.
+
+                A background plus a colour transition reads the same at this
+                size, costs nothing, and cannot charge the cold-entry budget.
+              */
+              "relative inline-flex items-center justify-center rounded-full transition-colors duration-200",
+              active && "bg-background shadow-sm ring-1 ring-border",
               dim,
               active
                 ? "text-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {active && (
-              <motion.span
-                layoutId={`theme-pill-${pillId}`}
-                transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                className="absolute inset-0 rounded-full bg-background shadow-sm ring-1 ring-border"
-              />
-            )}
             <Icon className="relative z-10 h-4 w-4" />
           </button>
         );

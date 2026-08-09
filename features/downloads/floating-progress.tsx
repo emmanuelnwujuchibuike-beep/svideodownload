@@ -141,16 +141,29 @@ export function FloatingDownloadProgress() {
         role="status"
         aria-live="polite"
       >
-        <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/95 p-4 shadow-elevated backdrop-blur-xl">
+        <div className="lux-enter relative overflow-hidden rounded-3xl border border-border/60 bg-card/95 p-4 shadow-elevated backdrop-blur-xl">
+          {/* A hairline of brand light across the top edge — the whole card is
+              otherwise white, so this is the only colour it needs to read as
+              considered rather than plain. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#2563FF]/60 to-transparent"
+          />
+          {/* A soft radial behind the status badge, the same restraint the
+              profile header uses: depth from light, not from a coloured block. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -left-8 -top-10 h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(37,99,255,0.10),transparent_70%)]"
+          />
           <div className="flex items-start gap-3">
             <span
               className={cn(
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl",
+                "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-1 ring-inset transition",
                 task.status === "failed"
-                  ? "bg-rose-500/15 text-rose-500"
+                  ? "bg-rose-500/12 text-rose-500 ring-rose-500/20"
                   : task.status === "completed"
-                    ? "bg-emerald-500/15 text-emerald-500"
-                    : "bg-gradient-to-br from-blue-600 to-violet-600 text-white",
+                    ? "bg-emerald-500/12 text-emerald-500 ring-emerald-500/20"
+                    : "bg-gradient-to-br from-[#2563FF] to-[#6D5CFF] text-white shadow-[0_6px_16px_-8px_rgba(37,99,255,0.7)] ring-white/20",
               )}
             >
               {task.status === "completed" ? (
@@ -175,12 +188,34 @@ export function FloatingDownloadProgress() {
                     : activeCount > 1
                       ? `Downloading ${activeCount} items…`
                       : task.status === "preparing"
-                        ? "Preparing your file…"
+                        ? task.slowPrepare
+                          ? "Still preparing — large file"
+                          : "Preparing your file…"
                         : task.status === "queued"
-                          ? "Queued…"
+                          ? (task.attempts ?? 1) > 1
+                            ? "Hit a snag — trying again…"
+                            : "Queued…"
                           : "Downloading…"}
               </p>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{task.title || "Your file"}</p>
+
+              {/*
+                Say what is happening, in the two cases where silence reads as
+                a hang. A large file genuinely takes time to mux, and a retry
+                is us fixing our own hiccup — neither is the member's problem
+                to solve, and both are better than a spinner with no words.
+              */}
+              {task.status === "preparing" && task.slowPrepare ? (
+                <p className="mt-1 text-[11px] leading-snug text-amber-600 dark:text-amber-400">
+                  This is a large file, so it takes a little longer to put together. It will start on its own —
+                  no need to wait here.
+                </p>
+              ) : null}
+              {task.status === "queued" && (task.attempts ?? 1) > 1 ? (
+                <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                  The server hiccuped. Retrying automatically — attempt {task.attempts} of 3.
+                </p>
+              ) : null}
 
               {isActive(task.status) ? (
                 <>

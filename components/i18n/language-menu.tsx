@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { LANGUAGE_COOKIE, LANGUAGES } from "@/lib/i18n/languages";
@@ -24,6 +25,7 @@ export function LanguageMenu({
   onChoose: (code: string) => void;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -45,9 +47,21 @@ export function LanguageMenu({
       document.cookie = `${LANGUAGE_COOKIE}=${code}; path=/; max-age=31536000; samesite=lax${secure}`;
       localStorage.setItem(LANGUAGE_COOKIE, code);
       document.documentElement.setAttribute("lang", code);
+      /*
+        Tell every mounted consumer at once (owner: "language doesn't update
+        instantly when switched").
+
+        The cookie alone changed nothing on screen — nothing read it. This
+        event is what makes `useLocale` re-resolve in the chrome immediately,
+        and `router.refresh()` below re-renders server components with the new
+        cookie. Neither is a page reload, so scroll position and any in-flight
+        download survive.
+      */
+      window.dispatchEvent(new Event("frenz:locale"));
     } catch {
       /* storage blocked */
     }
+    router.refresh();
     onChoose(code);
   };
 

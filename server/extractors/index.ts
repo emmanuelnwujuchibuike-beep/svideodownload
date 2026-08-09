@@ -42,8 +42,26 @@ const METADATA_TTL_SECONDS = Number(
   process.env.METADATA_CACHE_TTL_SECONDS || 1800, // 30 min
 );
 
+/**
+ * Bump when the SHAPE of an extractor's output changes — a format's id, order,
+ * label, or what its `filesize` means.
+ *
+ * 🔴 Why this exists: the TikTok ordering fix (H.264 first, so the default
+ * stream no longer needs a 55-second re-encode) deployed correctly and changed
+ * nothing, because every URL anyone had already looked at was being served from
+ * a 30-minute cache holding the OLD format list. The code was right and the
+ * product was still wrong, which is the worst kind of "fixed".
+ *
+ * A cached entry is a snapshot of the extractor that produced it. Versioning
+ * the key retires those snapshots the moment the extractor changes, instead of
+ * waiting out a TTL and wondering why a deploy did nothing.
+ *
+ * v2 — 2026-08-09: TikTok format order + `filesize` semantics.
+ */
+const EXTRACTOR_SHAPE_VERSION = "v2";
+
 function metadataKey(url: string): string {
-  return `meta:${url}`;
+  return `meta:${EXTRACTOR_SHAPE_VERSION}:${url}`;
 }
 
 /** Runs the custom-first, yt-dlp-fallback extraction chain (no caching). */

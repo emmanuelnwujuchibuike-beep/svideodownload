@@ -283,14 +283,38 @@ interface TikWmData {
 function abs(u: string): string {
   return u.startsWith("http") ? u : `https://www.tikwm.com${u}`;
 }
+/**
+ * How long the fast path gets before we stop calling it the fast path.
+ *
+ * 🔴 It previously had NO timeout at all (owner, 2026-08-09: "TikTok fetching
+ * now takes time to fetch" — measured 15.4s and 18.0s on cold links, against
+ * 0.96s cached).
+ *
+ * TikWM is tried FIRST precisely because it is normally sub-second. With no
+ * deadline, a slow or wedged TikWM meant the whole chain waited on it before
+ * even starting the native parse (8s) and yt-dlp behind that — so the one route
+ * chosen for being quick was setting the floor for how slow everything else
+ * could be.
+ *
+ * Five seconds is many times its normal response and still leaves room for the
+ * fallbacks inside a tolerable total. A JSON API that has not answered in five
+ * seconds is not going to rescue this request.
+ */
+const TIKWM_TIMEOUT_MS = Number(process.env.TIKWM_TIMEOUT_MS || 5000);
+
 async function tikwmExtract(
   url: string,
   platform: ReturnType<typeof detectPlatform>,
 ): Promise<VideoMetadata | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIKWM_TIMEOUT_MS);
   try {
     const res = await extractorFetch(
       `https://www.tikwm.com/api/?hd=1&url=${encodeURIComponent(url)}`,
-      { headers: { "User-Agent": DESKTOP_UA, Accept: "application/json" } },
+      {
+        headers: { "User-Agent": DESKTOP_UA, Accept: "application/json" },
+        signal: controller.signal,
+      },
       "tiktok",
     );
     if (!res.ok) return null;
@@ -412,7 +436,13 @@ async function tikwmExtract(
       extractor: "tiktok",
     };
   } catch {
+    // Includes the abort above: a TikWM that missed its deadline is simply
+    // "no answer", and the caller falls through to the native parse.
     return null;
+  } finally {
+    // Every return path passes through here — a leaked timer would hold the
+    // serverless invocation open long after the response has been sent.
+    clearTimeout(timer);
   }
 }
 

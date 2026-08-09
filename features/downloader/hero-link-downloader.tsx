@@ -2,10 +2,15 @@
 
 import { AlertCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Downloader } from "@/features/downloader/downloader";
-import { getHeroLink, getServerHeroLink, subscribeHeroLink } from "@/features/downloader/hero-link-store";
+import {
+  getHeroLink,
+  getServerHeroLink,
+  setHeroLink,
+  subscribeHeroLink,
+} from "@/features/downloader/hero-link-store";
 import { sourceUrlSchema } from "@/lib/validation";
 
 /**
@@ -54,7 +59,35 @@ import { sourceUrlSchema } from "@/lib/validation";
 export function HeroLinkDownloader() {
   const submitted = useSyncExternalStore(subscribeHeroLink, getHeroLink, getServerHeroLink);
   const fromUrl = useSearchParams().get("paste")?.trim() ?? "";
-  const raw = submitted || fromUrl;
+
+  /*
+    🔴 A submission is CONSUMED, not remembered (owner, 2026-08-09: "the hero
+    section placeholder auto-fetches when I back-swipe from any page to the
+    landing page").
+
+    Exactly what a module-level store does if nobody clears it: the link stayed
+    set for the whole session, so every later return to `/` — a back swipe, the
+    logo, the bottom nav — remounted this component with the old value and
+    re-ran the extraction. An action the visitor performed once was being
+    replayed every time they walked past it.
+
+    So the store hands the link over and is emptied in the same breath. What is
+    on screen lives in local state, which dies with the page, and a fresh
+    submit refills the store. Coming back to the landing now shows the landing.
+
+    Clearing on UNMOUNT would have been the obvious version and it is wrong:
+    React's Strict Mode mounts, unmounts and remounts in development, which
+    would wipe the link immediately after every submit. Consuming on arrival
+    behaves identically in both.
+  */
+  const [shown, setShown] = useState("");
+  useEffect(() => {
+    if (!submitted) return;
+    setShown(submitted);
+    setHeroLink("");
+  }, [submitted]);
+
+  const raw = shown || fromUrl;
   if (!raw) return null;
 
   /*

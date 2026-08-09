@@ -76,6 +76,33 @@ function snapFormat(snap: Snap, i: number, count: number): MediaFormat {
   };
 }
 
+const IMAGE_EXT = /\.(?:jpe?g|png|webp|gif|heic)(?:$|\?)/i;
+
+/** The media id — the filename segment before the `.<rendition>.` marker. */
+function mediaKey(u: string): string {
+  const path = u.split("?")[0] ?? u;
+  const file = path.slice(path.lastIndexOf("/") + 1);
+  return file.split(".")[0] || path;
+}
+
+/**
+ * Reduce raw CDN matches to DISTINCT videos.
+ *
+ * Drops posters/previews, then collapses several renditions of one clip onto
+ * the first — `<id>.27.<tok>` and `<id>.1034.<tok>` are the same video at two
+ * qualities. Exported because this is the function that decides whether a page
+ * becomes one item or nineteen, and that decision earned its own tests.
+ */
+export function distinctVideos(urls: readonly string[]): string[] {
+  const out = new Map<string, string>();
+  for (const u of urls) {
+    if (IMAGE_EXT.test(u)) continue;
+    const key = mediaKey(u);
+    if (!out.has(key)) out.set(key, u);
+  }
+  return [...out.values()];
+}
+
 function cleanUrl(u: string): string {
   return unescapeJsonUrl(u.replace(/&amp;/g, "&"));
 }
@@ -228,7 +255,23 @@ export const snapchatExtractor: Extractor = {
           permalink looks like.
         */
         const snapList = pp.story?.snapList ?? [];
-        const snaps = (Array.isArray(snapList) ? snapList : []).filter((s) => s.snapUrls?.mediaUrl);
+        /*
+          De-duplicated (owner: "the multiple story just fetches duplicates").
+
+          Keyed on `snapId`, falling back to the media URL with its QUERY
+          STRING STRIPPED — the CDN signs these links, so the same snap can
+          appear twice in one list with two different full URLs and keying on
+          the whole URL de-duplicates nothing.
+        */
+        const seenSnaps = new Set<string>();
+        const snaps = (Array.isArray(snapList) ? snapList : [])
+          .filter((s) => s.snapUrls?.mediaUrl)
+          .filter((s) => {
+            const key = s.snapId || (s.snapUrls!.mediaUrl!.split("?")[0] ?? "");
+            if (!key || seenSnaps.has(key)) return false;
+            seenSnaps.add(key);
+            return true;
+          });
 
         if (snaps.length) {
           /*
@@ -291,14 +334,44 @@ export const snapchatExtractor: Extractor = {
         push(m[0]);
       }
 
-      if (found.length > 1) {
-        formats = found.map((u, i) => ({
+      /*
+        ── The scrape must not FABRICATE a story ────────────────────────────
+        Owner (2026-08-09), with a screenshot: a share link produced 19 items,
+        every tile the same picture, none of them the right video.
+
+        That is this blanket scan doing exactly what it was told — collecting
+        every `sc-cdn.net` string on the page. A Snapchat page carries far more
+        than its story: poster images, preview renditions, the SAME clip at
+        several qualities, and whatever else the page links. Emitting one
+        "Story N" per URL turns page furniture into a 19-item download picker,
+        which is worse than finding nothing: it is confidently wrong, and the
+        member has no way to tell which item is real.
+
+        So the raw matches are reduced to distinct VIDEOS before anything is
+        offered:
+          · drop posters and previews — a `.jpg`/`.png` is not a story snap;
+          · collapse renditions of one clip — `<id>.27.<tok>` and
+            `<id>.1034.<tok>` are the same video at two qualities, and
+            `stripSnapWatermark` already rewrites one into the other;
+          · only then, if two or more DISTINCT media ids remain, offer a batch.
+
+        When it cannot tell them apart it offers ONE item rather than many
+        guesses. A single correct download beats nineteen wrong ones.
+      */
+      const unique = distinctVideos(found);
+
+      if (unique.length > 1) {
+        formats = unique.map((u, i) => ({
           ...videoFormat(stripSnapWatermark(cleanUrl(u))),
           formatId: `snap-${i}`,
           label: `Story ${i + 1}`,
           isSeparateItem: true,
         }));
-      } else if (found.length === 1) {
+      } else if (unique.length === 1) {
+        mediaUrl = unique[0];
+      } else if (found.length > 0) {
+        // Everything on the page was an image. Serve the first as a single
+        // item rather than claiming there is nothing here at all.
         mediaUrl = found[0];
       }
     }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { distinctVideos, stripSnapWatermark } from "./snapchat";
+import { distinctVideos, snapFormat, stripSnapWatermark } from "./snapchat";
 
 /**
  * Snapchat Spotlight watermark removal.
@@ -113,5 +113,71 @@ describe("distinctVideos — the scrape must not fabricate a story", () => {
   it("preserves the first URL seen for each video", () => {
     const first = `${CDN}/d/abc.1034.tok`;
     expect(distinctVideos([first, `${CDN}/d/abc.27.tok`])).toEqual([first]);
+  });
+});
+
+/**
+ * ── The five-fix bug, pinned ──────────────────────────────────────────────
+ * A story link kept returning duplicates, the wrong media, or nothing. Five
+ * reasoned fixes failed because none of them ever touched a real page.
+ *
+ * The actual cause, found the moment a live page was fetched: Snapchat wraps
+ * SOME string fields as `{ value: "..." }` and leaves others plain, inside the
+ * same object. `snapUrls.mediaUrl` is a plain string; `snapId`,
+ * `mediaPreviewUrl` and `snapTitle` are wrappers.
+ *
+ * Treating a wrapper as a string threw a TypeError, the surrounding try/catch
+ * swallowed it, and extraction fell through to the blanket CDN scan — which is
+ * what produced a picker of 19 identical wrong tiles. A crash in the good path
+ * became garbage in the UI instead of an error anyone could see.
+ *
+ * The fixtures below use the EXACT shape observed on a live page.
+ */
+describe("wrapped {value} fields — the real page shape", () => {
+  const CDN = "https://cf-st.sc-cdn.net";
+  const liveSnap = (id: string, media: string) => ({
+    // Wrapped, exactly as Snapchat sends it.
+    snapId: { value: id },
+    snapMediaType: 1,
+    snapTitle: null,
+    snapUrls: {
+      // Plain string — in the SAME object as the wrappers above.
+      mediaUrl: `${CDN}/d/${media}.1034.TOK?mo=abc`,
+      mediaPreviewUrl: { value: `${CDN}/d/${media}.256.TOK?mo=xyz` },
+      overlayUrl: null,
+    },
+  });
+
+  it("reads a wrapped preview without throwing", () => {
+    // The exact call that crashed and dumped extraction into the fallback.
+    expect(() => snapFormat(liveSnap("a", "aaa"), 0, 3)).not.toThrow();
+  });
+
+  it("uses the wrapped preview as that snap's own cover", () => {
+    const f = snapFormat(liveSnap("a", "aaa"), 0, 3);
+    expect(f.thumbnail).toBe(`${CDN}/d/aaa.256.TOK?mo=xyz`);
+    expect(f.directUrl).toContain("aaa.1034.TOK");
+  });
+
+  it("flags every snap of a multi-snap story as a separate item", () => {
+    const f = snapFormat(liveSnap("a", "aaa"), 0, 3);
+    expect(f.isSeparateItem).toBe(true);
+    expect(f.label).toBe("Story 1");
+  });
+
+  it("does not flag a single-snap story as a batch", () => {
+    expect(snapFormat(liveSnap("a", "aaa"), 0, 1).isSeparateItem).toBe(false);
+  });
+
+  it("survives a snap with no preview at all", () => {
+    const bare = { snapId: { value: "x" }, snapMediaType: 1, snapUrls: { mediaUrl: `${CDN}/d/x.1034.T` } };
+    expect(snapFormat(bare, 0, 2).thumbnail).toBeNull();
+  });
+
+  it("treats an image snap as an image", () => {
+    const img = { ...liveSnap("i", "iii"), snapMediaType: 0 };
+    const f = snapFormat(img, 0, 7);
+    expect(f.kind).toBe("image");
+    expect(f.ext).toBe("jpg");
   });
 });

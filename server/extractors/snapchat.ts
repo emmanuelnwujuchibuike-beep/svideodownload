@@ -23,12 +23,36 @@ const MOBILE_UA =
 
 const TIMEOUT_MS = Number(process.env.SNAPCHAT_EXTRACTOR_TIMEOUT_MS || 9000);
 
+/**
+ * Snapchat wraps SOME string fields as `{ value: "..." }` and leaves others
+ * plain, in the same object.
+ *
+ * Verified against a live page (2026-08-09): in one `snapList` entry,
+ * `snapUrls.mediaUrl` is a plain string while `snapId`,
+ * `snapUrls.mediaPreviewUrl`, `snapUrls.overlayUrl` and `snapTitle` are all
+ * `{ value }` wrappers. There is no way to tell from the key name, so every
+ * string read from this blob goes through `strValue`.
+ *
+ * This mattered enormously: treating a wrapper as a string threw a TypeError,
+ * the surrounding try/catch swallowed it, and extraction fell through to the
+ * blanket CDN scan — which is what produced a picker of 19 identical wrong
+ * tiles. A crash in the good path became garbage in the UI rather than an
+ * error anybody could see.
+ */
+type Wrapped = string | { value?: string } | null | undefined;
+
+function strValue(v: Wrapped): string | null {
+  if (typeof v === "string") return v.trim() ? v : null;
+  if (v && typeof v === "object" && typeof v.value === "string") return v.value.trim() ? v.value : null;
+  return null;
+}
+
 interface Snap {
-  snapId?: string;
+  snapId?: Wrapped;
   snapMediaType?: number;
-  snapTitle?: string;
+  snapTitle?: Wrapped;
   timestampInSec?: number | string;
-  snapUrls?: { mediaUrl?: string; mediaPreviewUrl?: string };
+  snapUrls?: { mediaUrl?: Wrapped; mediaPreviewUrl?: Wrapped };
 }
 
 interface VideoMeta {
@@ -41,9 +65,11 @@ interface VideoMeta {
   creator?: unknown;
 }
 
-function snapFormat(snap: Snap, i: number, count: number): MediaFormat {
+export function snapFormat(snap: Snap, i: number, count: number): MediaFormat {
   const isVideo = snap.snapMediaType !== 0; // 1 = video, 0 = image
   const headers = { "User-Agent": MOBILE_UA, Referer: "https://www.snapchat.com/" };
+  const media = strValue(snap.snapUrls?.mediaUrl) ?? "";
+  const preview = strValue(snap.snapUrls?.mediaPreviewUrl);
   return {
     formatId: `snap-${i}`,
     kind: isVideo ? "video" : "image",
@@ -55,7 +81,7 @@ function snapFormat(snap: Snap, i: number, count: number): MediaFormat {
     tbr: null,
     vcodec: isVideo ? "h264" : null,
     acodec: isVideo ? "aac" : null,
-    directUrl: stripSnapWatermark(cleanUrl(snap.snapUrls!.mediaUrl!)),
+    directUrl: stripSnapWatermark(cleanUrl(media)),
     httpHeaders: headers,
     /*
       Each snap's OWN poster (owner: "each media should show their respective
@@ -67,7 +93,7 @@ function snapFormat(snap: Snap, i: number, count: number): MediaFormat {
       behaviour, because it is independent of which snaps get returned — it
       only decides what each one looks like in the picker.
     */
-    thumbnail: snap.snapUrls?.mediaPreviewUrl ? cleanUrl(snap.snapUrls.mediaPreviewUrl) : null,
+    thumbnail: preview ? cleanUrl(preview) : null,
     // A story with several snaps is several PIECES OF MEDIA, not several
     // qualities of one. Without this the UI treats them as a quality picker and
     // downloads only whichever is selected — the owner's "it only downloads the
@@ -229,10 +255,23 @@ export const snapchatExtractor: Extractor = {
         const data = JSON.parse(blob[1]!) as {
           props?: { pageProps?: Record<string, unknown> };
         };
+        /*
+          The profile's own collections are NOT in this type, and that is the
+          point.
+
+          Owner: "make sure it doesn't fall into any profile folder." A live
+          page carries `curatedHighlights` (saved story folders) and
+          `spotlightHighlights` (the Spotlight rail) alongside the live
+          `story`. Every regression in this file has been one of those leaking
+          into a story download.
+
+          They are deliberately absent from this shape, so reading one is a
+          compile error rather than a judgement call. The only list this
+          extractor can reach is `story.snapList`.
+        */
         const pp = (data.props?.pageProps ?? {}) as {
           videoMetadata?: VideoMeta;
           story?: { snapList?: Snap[] };
-          curatedHighlights?: { snapList?: Snap[] }[];
         };
 
         /*
@@ -264,14 +303,17 @@ export const snapchatExtractor: Extractor = {
           the whole URL de-duplicates nothing.
         */
         const seenSnaps = new Set<string>();
-        const snaps = (Array.isArray(snapList) ? snapList : [])
-          .filter((s) => s.snapUrls?.mediaUrl)
-          .filter((s) => {
-            const key = s.snapId || (s.snapUrls!.mediaUrl!.split("?")[0] ?? "");
-            if (!key || seenSnaps.has(key)) return false;
-            seenSnaps.add(key);
-            return true;
-          });
+        const snaps = (Array.isArray(snapList) ? snapList : []).filter((s) => {
+          const media = strValue(s.snapUrls?.mediaUrl);
+          if (!media) return false;
+          // `snapId` is a `{ value }` wrapper on a live page, so it MUST be
+          // unwrapped — comparing raw objects in a Set makes every entry
+          // unique and the de-duplication a silent no-op.
+          const key = strValue(s.snapId) ?? (media.split("?")[0] ?? media);
+          if (seenSnaps.has(key)) return false;
+          seenSnaps.add(key);
+          return true;
+        });
 
         if (snaps.length) {
           /*
@@ -289,7 +331,7 @@ export const snapchatExtractor: Extractor = {
             an account's archive.
           */
           formats = snaps.map((s, i) => snapFormat(s, i, snaps.length));
-          title = snaps[0]?.snapTitle;
+          title = strValue(snaps[0]?.snapTitle) ?? undefined;
         } else if (pp.videoMetadata?.contentUrl) {
           // A real Spotlight permalink: one video, and no story on the page.
           vm = pp.videoMetadata;

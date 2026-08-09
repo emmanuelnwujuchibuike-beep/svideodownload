@@ -44,11 +44,17 @@ import { cn } from "@/lib/utils";
  * Three changes, each aimed at the same thing — this screen exists to show ONE
  * picture, and every control on top of it is covering part of the product:
  *
- * 1. TAP TO IMMERSE. A tap on the artwork fades every control away, so the
- *    wallpaper really is full-screen and unobstructed; a second tap brings them
- *    back. Not a swipe or a long-press: a tap is the gesture people already try
- *    here, it cannot be confused with the vertical scroll that drives the
- *    viewer, and it is reversible in the same motion.
+ * 1. THE CHROME STAYS PUT. A tap-to-clear-everything mode shipped here first
+ *    and was reversed the same day (owner): "the wallpapers in wallpaper reels
+ *    shouldn't show clear complete screen on tap, so users won't screenshot to
+ *    skip downloading through the download button that has ad and limit."
+ *
+ *    That is the correct call and worth writing down, because "let the artwork
+ *    breathe" is such an appealing instinct. A viewer that clears every control
+ *    on tap hands over a pristine full-screen wallpaper to screenshot — the
+ *    same picture, without the ad, without the daily count, without ever
+ *    touching the button this page's whole economy runs through. Decluttering
+ *    here means FEWER, SMALLER controls; it does not mean none.
  *
  * 2. THE RAIL LOST ITS FOURTH BUTTON AND ITS CAPTIONS. "Save to device" was a
  *    duplicate of the Download button an inch below it, so it is gone rather
@@ -108,15 +114,19 @@ export function WallpaperReels({
   startIndex = 0,
   canEngage,
   onClose,
-  onDownloaded,
+  onDownload,
 }: {
   items: Wallpaper[];
   startIndex?: number;
   canEngage: boolean;
   onClose: () => void;
-  /** Fired after each successful download — the standalone page counts these
-   *  to decide when to show its interstitial. */
-  onDownloaded?: (wallpaper: Wallpaper) => void;
+  /**
+   * Start a download. Owned by the PARENT, not this component, because the
+   * allowance, the ad and the notification are one policy shared by the grid and
+   * the viewer — see `useWallpaperDownload`. When the viewer had its own copy,
+   * the two surfaces drifted into showing ads on different schedules.
+   */
+  onDownload: (wallpaper: Wallpaper) => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(startIndex);
@@ -125,10 +135,19 @@ export function WallpaperReels({
   );
   const [comments, setComments] = useState<string | null>(null);
   const [signInPrompt, setSignInPrompt] = useState(false);
-  /* Immersive mode — every control off the picture, one tap away in both
-     directions. See the note at the top of the file. */
-  const [chromeHidden, setChromeHidden] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  /*
+    Drag down to dismiss (owner: "users can drag down to close wallpaper in
+    wallpaper reels").
+
+    Armed ONLY at the very top of the scroller. Below that, a downward drag
+    already means "go to the previous wallpaper", and a gesture that means two
+    things depending on momentum is a gesture nobody can rely on. At scrollTop 0
+    there is nothing above to scroll to, so the drag is free — which is exactly
+    where every viewer that does this puts it.
+  */
+  const [dragY, setDragY] = useState(0);
+  const dragFrom = useRef<number | null>(null);
   const { isPremium, ready: planReady } = useEntitlements();
 
   const current = items[index];
@@ -168,7 +187,6 @@ export function WallpaperReels({
       if (e.key !== "Escape") return;
       if (comments) setComments(null);
       else if (upgradeOpen) setUpgradeOpen(false);
-      else if (chromeHidden) setChromeHidden(false);
       else onClose();
     };
     window.addEventListener("keydown", onKey);
@@ -178,7 +196,7 @@ export function WallpaperReels({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflowY = prev;
     };
-  }, [onClose, comments, upgradeOpen, chromeHidden]);
+  }, [onClose, comments, upgradeOpen]);
 
   const engage = useCallback(
     async (wallpaper: Wallpaper, action: "like" | "unlike" | "save" | "unsave") => {
@@ -236,31 +254,52 @@ export function WallpaperReels({
  * A relative path (the built-in wallpapers ship with the app) is already
  * same-origin and is left alone — proxying it would spend egress for nothing.
  */
-  const download = useCallback(
-    (wallpaper: Wallpaper) => {
-      haptic("selection");
-      playSound("tap");
-      const filename = `${wallpaper.name || "wallpaper"}.jpg`;
-      startDownload({
-        url: wallpaper.downloadUrl,
-        formatId: "wallpaper",
-        kind: "image",
-        title: `${wallpaper.name} wallpaper`,
-        thumbnail: wallpaper.thumbUrl,
-        platform: "generic",
-        platformName: "Wallpaper",
-        qualityLabel: "Full resolution",
-        directUrl: fetchableUrl(wallpaper.downloadUrl, filename),
-      });
-      onDownloaded?.(wallpaper);
-    },
-    [onDownloaded],
-  );
 
   if (!current) return null;
 
+  /** How far down the viewer must travel before letting go closes it. */
+  const DISMISS_PX = 110;
+
   return (
-    <div className="fixed inset-0 z-[100] bg-black">
+    <div
+      className="fixed inset-0 z-[100] bg-black"
+      onTouchStart={(e) => {
+        // Only from the top, and only a single finger — a pinch is a zoom.
+        const atTop = (scroller.current?.scrollTop ?? 0) <= 0;
+        dragFrom.current = atTop && e.touches.length === 1 ? (e.touches[0]?.clientY ?? null) : null;
+      }}
+      onTouchMove={(e) => {
+        if (dragFrom.current === null) return;
+        const dy = (e.touches[0]?.clientY ?? 0) - dragFrom.current;
+        // Downward only. An upward drag from the top is a normal scroll and must
+        // stay one, or the first flick of every session would feel broken.
+        if (dy <= 0) {
+          setDragY(0);
+          return;
+        }
+        // Damped, so it tracks the finger without running away and reads as
+        // resistance rather than a free fall.
+        setDragY(Math.min(dy * 0.6, 260));
+      }}
+      onTouchEnd={() => {
+        dragFrom.current = null;
+        setDragY((y) => {
+          if (y > DISMISS_PX) {
+            haptic("light");
+            onClose();
+          }
+          return 0;
+        });
+      }}
+      style={{
+        transform: dragY ? `translateY(${dragY}px) scale(${1 - Math.min(dragY / 2200, 0.06)})` : undefined,
+        // No transition WHILE dragging (it must track the finger exactly), one
+        // on release so it springs back instead of snapping.
+        transition: dragY ? "none" : "transform 220ms var(--ease-out)",
+        borderRadius: dragY ? "1.5rem" : undefined,
+        overflow: dragY ? "hidden" : undefined,
+      }}
+    >
       {/*
         The scroller itself is edge to edge and full height — `100dvh` so mobile
         browser chrome collapsing doesn't leave a strip of page showing. The
@@ -284,11 +323,7 @@ export function WallpaperReels({
               matters inside a scroll-snap viewer. Rolling our own from
               touchstart/touchend would have to re-derive that, badly.
             */
-            onClick={() => {
-              haptic("light");
-              setChromeHidden((h) => !h);
-              setUpgradeOpen(false);
-            }}
+            onClick={() => setUpgradeOpen(false)}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -305,14 +340,12 @@ export function WallpaperReels({
               aria-hidden
               className={cn(
                 "pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-black/50 to-transparent transition-opacity duration-300",
-                chromeHidden && "opacity-0",
               )}
             />
             <div
               aria-hidden
               className={cn(
                 "pointer-events-none absolute inset-x-0 bottom-0 h-52 bg-gradient-to-t from-black/70 to-transparent transition-opacity duration-300",
-                chromeHidden && "opacity-0",
               )}
             />
           </div>
@@ -326,12 +359,7 @@ export function WallpaperReels({
         on the artwork underneath instead of on an invisible button.
       */}
       <div
-        className={cn(
-          "transition-opacity duration-300 motion-reduce:transition-none",
-          chromeHidden && "pointer-events-none opacity-0",
-        )}
-        aria-hidden={chromeHidden}
-      >
+>
 
       {/* Close */}
       <button
@@ -432,7 +460,7 @@ export function WallpaperReels({
         {/* One full-width primary action, as in the reference. */}
         <button
           type="button"
-          onClick={() => download(current)}
+          onClick={() => onDownload(current)}
           className="pointer-events-auto mt-3 flex w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-[#2563FF] to-[#6D5CFF] px-5 py-3.5 text-base font-bold text-white shadow-[0_10px_30px_-10px_rgba(37,99,255,0.9)] ring-1 ring-inset ring-white/20 transition active:scale-[0.98]"
         >
           <Download className="h-5 w-5" />

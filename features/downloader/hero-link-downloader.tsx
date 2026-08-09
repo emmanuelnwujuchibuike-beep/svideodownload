@@ -2,8 +2,10 @@
 
 import { AlertCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { useSyncExternalStore } from "react";
 
 import { Downloader } from "@/features/downloader/downloader";
+import { getHeroLink, getServerHeroLink, subscribeHeroLink } from "@/features/downloader/hero-link-store";
 import { sourceUrlSchema } from "@/lib/validation";
 
 /**
@@ -11,50 +13,69 @@ import { sourceUrlSchema } from "@/lib/validation";
  * visitor was looking.
  *
  * ── Two entry points, two results (owner, 2026-08-09) ─────────────────────────
- * "users who use below download section should get review from the below
+ * "Users who use below download section should get review from the below
  * section but users who use the button should get a different review that
  * appears at below the wallpaper button."
  *
- * Both used to land in the same place: the hero CTA submitted `?url=`, which is
- * the PWA Share Target's parameter, so its result appeared inside the purple
- * download card under the phone mockup — a scroll away from the button that had
- * just been tapped, past the whole mockup. The two paths are now told apart by
- * WHICH parameter carries the link:
+ * Both used to land in the same place, because the hero CTA submitted `?url=` —
+ * the PWA Share Target's parameter — so its result appeared inside the purple
+ * download card under the phone mockup, a scroll away past the whole mockup.
+ * The two paths are now separate:
  *
- *   ?paste=…  → the hero CTA        → renders here, under Wallpaper Gallery
- *   ?url=…    → PWA / shared link   → renders in the download section below
+ *   hero CTA          → the store below → renders here, under Wallpaper Gallery
+ *   ?url= / ?text=    → PWA share target → renders in the download section
  *
- * Separate parameters rather than a `?from=hero` flag, because the parameter IS
- * the routing decision: each tool reads its own and ignores the other, so
- * neither can accidentally claim the other's link and there is no shared state
- * between them to get out of step.
+ * ── Instant, with no navigation ───────────────────────────────────────────────
+ * The link arrives through a module-level store, so submitting the CTA is a
+ * `setState` and a fetch — no route change, no page-transition animation, no
+ * reload (owner: "it shouldn't refresh, it should show instantly the review
+ * modal below").
+ *
+ * `?paste=` is still read as a fallback: it is what the form submits before
+ * hydration and with JavaScript disabled, and it makes a result shareable as a
+ * link. Store first, URL second — so a fresh submit always beats a stale query
+ * string left in the address bar.
+ *
+ * ── Why the Downloader is keyed on the url ────────────────────────────────────
+ * `Downloader` fetches `initialUrl` once, on mount. Without the key, pasting a
+ * SECOND link would update the prop and fetch nothing, leaving the first
+ * result on screen — which looks exactly like the button being broken.
  *
  * ── Why it renders nothing until there is a link ──────────────────────────────
- * The overwhelming majority of visitors never submit anything, and an empty
- * panel wedged between the CTA stack and the trust row would push the page down
- * for all of them to serve none of them. No parameter, no markup, no layout.
+ * Most visitors never submit anything, and an empty panel wedged between the CTA
+ * stack and the trust row would push the page down for all of them to serve
+ * none. No link, no markup, no layout.
  *
  * Must sit inside <Suspense>: useSearchParams() suspends during prerender, and
- * the boundary is what keeps `/` statically generated. The fallback is `null`,
- * which is also the state for every visitor without a link — so the static HTML
- * and the hydrated page agree and nothing shifts.
+ * that boundary is what keeps `/` statically generated. Its fallback is `null`,
+ * which is also the no-link state, so the static HTML and the hydrated page
+ * agree and nothing shifts.
  */
 export function HeroLinkDownloader() {
-  const raw = useSearchParams().get("paste")?.trim();
+  const submitted = useSyncExternalStore(subscribeHeroLink, getHeroLink, getServerHeroLink);
+  const fromUrl = useSearchParams().get("paste")?.trim() ?? "";
+  const raw = submitted || fromUrl;
   if (!raw) return null;
 
   /*
-    Validated here, with the same schema the server uses, because `Downloader`
-    treats `initialUrl` as already-checked and fetches it on mount. A hand-typed
-    or truncated `?paste=` would otherwise go straight to the extractor and come
-    back as a generic failure.
+    Validated with the same schema the server uses, because `Downloader` treats
+    `initialUrl` as already-checked and fetches it on mount. A typo or a
+    truncated `?paste=` would otherwise reach the extractor and come back as a
+    generic failure instead of a sentence that says what is wrong.
   */
   const parsed = sourceUrlSchema.safeParse(raw);
 
   return (
-    <div id="hero-result" className="mt-4 scroll-mt-28">
+    /*
+      `overflow-hidden` plus `min-w-0` so nothing inside can set the width of the
+      hero's grid column — a wide format row used to stretch the whole track and
+      push the page past the viewport on a phone. The negative top margin cancels
+      the result card's own `mt-10`, which is spacing for a card that sits alone
+      under a paste box, not one tucked into a CTA stack.
+    */
+    <div id="hero-result" className="min-w-0 -mb-6 overflow-hidden scroll-mt-28 [&>div>div]:mt-4">
       {parsed.success ? (
-        <Downloader initialUrl={parsed.data} resultOnly />
+        <Downloader key={parsed.data} initialUrl={parsed.data} resultOnly />
       ) : (
         <div
           role="alert"
@@ -65,7 +86,7 @@ export function HeroLinkDownloader() {
           </span>
           <div className="min-w-0">
             <p className="text-sm font-bold text-slate-900 dark:text-white">That doesn&apos;t look like a link</p>
-            <p className="mt-0.5 text-xs text-slate-600 dark:text-white/60">
+            <p className="mt-0.5 break-words text-xs text-slate-600 dark:text-white/60">
               {parsed.error.issues[0]?.message ?? "Paste the full address of the post, starting with https://"}
             </p>
           </div>

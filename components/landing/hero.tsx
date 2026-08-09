@@ -1,7 +1,6 @@
 import {
   ArrowRight,
   Compass,
-  Download,
   Image as ImageIcon,
   Lock,
   Microscope,
@@ -18,8 +17,8 @@ import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { Downloader } from "@/features/downloader/downloader";
+import { HeroCtaForm } from "@/features/downloader/hero-cta-form";
 import { HeroLinkDownloader } from "@/features/downloader/hero-link-downloader";
-import { HeroPasteButton } from "@/features/downloader/hero-paste-button";
 import { SharedLinkDownloader } from "@/features/downloader/shared-link-downloader";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { PlatformId } from "@/types";
@@ -92,7 +91,19 @@ export function Hero() {
           four-line paragraph centred on a narrow screen give the eye a new
           starting point on every line, which is measurably slower to read.
         */}
-        <div className="text-left">
+        {/*
+          🔴 `min-w-0` is load-bearing (owner, 2026-08-09: "the hero section
+          spread to large screen when the top placeholder fetches a file, it
+          breaks the mobile view").
+
+          A grid item defaults to `min-width: auto`, which means it refuses to
+          shrink below its content. The moment the CTA's result panel appeared in
+          this column, the widest thing inside it — a format row, a long title —
+          set the width of the whole grid TRACK, and the page grew past the
+          viewport on a phone. Nothing was wrong with the panel; the column was
+          simply never told it could be narrower than its contents.
+        */}
+        <div className="min-w-0 text-left">
           <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
             <Sparkles className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
             All-in-One Downloader &amp; Social Hub
@@ -135,81 +146,12 @@ export function Hero() {
                 the downloader needs no account, so a signup wall in front of the
                 one thing the page asks for was the wrong door. */}
             {/*
-              ── The CTA becomes the paste field, with ZERO JavaScript ───────
-              Owner (2026-08-09): "make the Start Free Download button
-              transform to a paste-your-link placeholder and download button,
-              smoothly and fast without lag on small devices... and still leave
-              the download section below the iPhone mockup."
-
-              The landing sits exactly on its cold-entry ceiling, so a client
-              island here would fail the budget test AND be the very lag the
-              request is trying to avoid. So there is no state and no
-              hydration: the FORM is always in the markup, and a <label>
-              painted to look like the button covers it. Tapping the label
-              focuses the input — native behaviour, no handler — and
-              `:focus-within` fades the label out and the field in.
-
-              That makes the transform a compositor-only opacity/transform
-              change on a phone, which is the fastest thing a browser can do,
-              and it works with JavaScript still downloading.
-
-              ── Where the result lands (owner, 2026-08-09) ──────────────────
-              It submits `?paste=…`, NOT the share target's `?url=…`. That one
-              difference is what separates the two entry points: the hero's link
-              opens its result under the Wallpaper Gallery button a few rows
-              below, where the visitor is already looking, while `#download`
-              under the mockup keeps serving anyone who pastes into it. Before
-              this, tapping the CTA sent you past the entire phone mockup to
-              find your own result.
+              The CTA — a button that becomes a paste field. The transform is
+              still pure CSS (see `.frenz-cta*` in globals.css); the island only
+              exists to intercept the submit so the result appears in place
+              instead of navigating. Full reasoning in hero-cta-form.tsx.
             */}
-            <form
-              action="/"
-              method="get"
-              className="frenz-cta group relative flex w-full items-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-1.5 shadow-lg shadow-violet-600/30 transition duration-200 focus-within:shadow-xl focus-within:shadow-violet-600/40"
-            >
-              <span
-                aria-hidden
-                className="frenz-cta-sheen pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full"
-              />
-
-              {/* The face. A real <label>, so tapping it focuses the input with
-                  no script — and screen readers announce the field it names. */}
-              <label
-                htmlFor="hero-url"
-                className="frenz-cta-face absolute inset-0 z-10 flex cursor-text items-center gap-4 px-4 text-left text-white"
-              >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 ring-1 ring-inset ring-white/25">
-                  <Download className="h-5 w-5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-base font-bold leading-tight">Start Free Download</span>
-                  <span className="mt-0.5 block text-xs text-white/80">100% Free</span>
-                </span>
-                <ArrowRight className="h-5 w-5 shrink-0" />
-              </label>
-
-              <input
-                id="hero-url"
-                name="paste"
-                type="url"
-                inputMode="url"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder="Paste your link here"
-                aria-label="Paste a link to download"
-                className="frenz-cta-input h-14 min-w-0 flex-1 rounded-xl border-0 bg-white px-4 text-base text-slate-900 outline-none placeholder:text-slate-400 dark:bg-white/95"
-              />
-              {/* Paste sits NEXT to Download (owner) — the two things you do
-                  here, side by side, so the link never has to be typed. */}
-              <HeroPasteButton targetId="hero-url" />
-              <button
-                type="submit"
-                className="frenz-cta-go inline-flex h-14 shrink-0 items-center gap-2 rounded-xl bg-white/20 px-5 text-base font-bold text-white ring-1 ring-inset ring-white/30 transition hover:bg-white/30 active:scale-[0.98]"
-              >
-                <Download className="h-5 w-5" />
-                <span className="hidden sm:inline">Download</span>
-              </button>
-            </form>
+            <HeroCtaForm />
 
             <Link
               href="/features"

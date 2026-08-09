@@ -9,9 +9,9 @@ import {
   Loader2,
   Minus,
   Play,
+  PlaySquare,
   RotateCcw,
   Share,
-  Sparkles,
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -517,7 +517,9 @@ export function FloatingDownloadProgress({
                       onClick={() => setMinimised(true)}
                       className="flex items-center justify-center gap-1.5 rounded-xl bg-card px-3 py-2 text-xs font-bold shadow-soft ring-1 ring-inset ring-border/60 transition hover:ring-blue-400/50 active:scale-95"
                     >
-                      <Sparkles className="h-3.5 w-3.5 text-blue-500" /> Watch reels
+                      {/* A video glyph, not a sparkle (owner): the icon should say
+                          what is on the other side of the tap, not decorate it. */}
+                      <PlaySquare className="h-3.5 w-3.5 text-blue-500" /> Watch reels
                     </Link>
                   </div>
                 </div>

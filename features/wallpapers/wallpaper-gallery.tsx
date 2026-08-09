@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, Download, Heart, Loader2, Share2, X } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -8,7 +9,8 @@ import { AdSlot } from "@/features/monetization/ad-slot";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { useInterstitialConfig } from "@/features/monetization/use-interstitial-skip";
 import { WallpaperReels } from "@/features/wallpapers/wallpaper-reels";
-import { useWallpaperInterstitial } from "@/features/wallpapers/use-wallpaper-interstitial";
+import { WallpaperLimitSheet, WallpaperRewardAd } from "@/features/wallpapers/wallpaper-reward-ad";
+import { useWallpaperDownload } from "@/features/wallpapers/use-wallpaper-download";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
@@ -31,11 +33,13 @@ const PREVIEW_COUNT = 6;
 
 export function WallpaperGallery({ items, canEngage }: { items: Wallpaper[]; canEngage: boolean }) {
   const [viewer, setViewer] = useState<number | null>(null);
-  // Every 2nd wallpaper download, not every one (owner, 2026-08-04). This used
-  // to fire an interstitial on EVERY download here while the standalone
-  // /wallpapers page fired from the 2nd onwards — the shared hook is what keeps
-  // the two surfaces telling the same story.
-  const { adOpen, onDownloaded, close: closeAd } = useWallpaperInterstitial();
+  /*
+    The SAME download policy as the standalone gallery — allowance, 30-second
+    ad, notifications — because it is the same product rule and these two
+    surfaces have drifted apart once already. One hook, one behaviour.
+  */
+  const { allowance, download, adOpen, closeAd, limitHit, closeLimit, adSeconds } = useWallpaperDownload();
+  const [adFor, setAdFor] = useState("");
 
   if (items.length === 0) return null;
   const preview = items.slice(0, PREVIEW_COUNT);
@@ -60,20 +64,30 @@ export function WallpaperGallery({ items, canEngage }: { items: Wallpaper[]; can
 
       {canEngage ? <ShareYourOwn /> : null}
 
-      {/* See more — opens the reels viewer from the beginning (owner). */}
-      <button
-        type="button"
+      {/*
+        See more — opens the Wallpaper GALLERY, not the reels viewer (owner,
+        2026-08-09).
+
+        It used to drop straight into full-screen reels from wallpaper #1. That
+        is the wrong door for this button: "see more" is a browsing intent, and
+        answering it by starting a linear slideshow takes away the categories,
+        the search and the ability to look at anything except what comes next.
+        The gallery has all of that, and the reels viewer is one tap from it —
+        the reverse was not true.
+      */}
+      <Link
+        href="/wallpapers"
+        prefetch
         onClick={() => {
           haptic("light");
           playSound("tap");
-          setViewer(0);
         }}
         className="group relative mt-3 flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 transition active:scale-[0.99]"
       >
         <span aria-hidden className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full" />
         <span className="relative">See more wallpapers</span>
         <ArrowRight className="relative h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-      </button>
+      </Link>
 
       {viewer !== null ? (
         <WallpaperReels
@@ -81,11 +95,22 @@ export function WallpaperGallery({ items, canEngage }: { items: Wallpaper[]; can
           startIndex={viewer}
           canEngage={canEngage}
           onClose={() => setViewer(null)}
-          onDownloaded={onDownloaded}
+          onDownload={(w) => {
+            setAdFor(w.name);
+            download(w);
+          }}
         />
       ) : null}
 
-      {adOpen ? <WallpaperInterstitial onClose={closeAd} /> : null}
+      {adOpen ? (
+        <WallpaperRewardAd
+          seconds={adSeconds}
+          wallpaperName={adFor}
+          remaining={allowance?.remaining ?? null}
+          onClose={closeAd}
+        />
+      ) : null}
+      {limitHit ? <WallpaperLimitSheet limit={allowance?.limit ?? 5} onClose={closeLimit} /> : null}
     </section>
   );
 }

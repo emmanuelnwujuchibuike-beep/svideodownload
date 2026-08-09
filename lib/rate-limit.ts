@@ -129,6 +129,26 @@ export interface DailyResult {
 }
 
 /**
+ * Today's count for a daily key, WITHOUT spending anything.
+ *
+ * For interfaces that want to say "3 left today" before someone commits to an
+ * action. Reading an allowance must never consume it — a page that charged a
+ * download just by rendering would be the same class of bug as the runaway
+ * counter this module is recovering from.
+ */
+export async function peekDaily(key: string): Promise<number> {
+  if (!dailyRedis) return 0;
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const v = await dailyRedis.get<number | string>(`svd:daily2:${day}:${key}`);
+    const n = typeof v === "string" ? Number.parseInt(v, 10) : v;
+    return Number.isFinite(n) && n ? Number(n) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Has this exact unit of work already been counted against a daily cap?
  *
  * The companion to `consumeDaily`'s `receiptKey`. A retry asks this first and,
@@ -165,7 +185,22 @@ export async function consumeDaily(
   }
   try {
     const day = new Date().toISOString().slice(0, 10); // UTC date
-    const rk = `svd:daily:${day}:${key}`;
+    /*
+      🔴 `daily2`, not `daily` (2026-08-09).
+
+      The counters under the old prefix are KNOWN CORRUPT. For part of a day,
+      auto-retry spent up to three units per download and then retried the
+      resulting 429s, spending three more per failure — so the recorded tallies
+      bear no relation to what anyone actually downloaded, and they are keyed by
+      UTC day, meaning everyone affected stayed locked out until midnight.
+
+      Renaming the namespace discards them at deploy time and starts every
+      visitor from zero. That is the right remedy specifically because the
+      inflation was OUR fault: leaving people to serve out a lockout earned by
+      our bug would be charging them for it. The old keys expire on their own
+      26-hour TTL.
+    */
+    const rk = `svd:daily2:${day}:${key}`;
     const used = await dailyRedis.incr(rk);
     if (used === 1) {
       // Expire ~26h after first hit so the bucket self-cleans the next UTC day.

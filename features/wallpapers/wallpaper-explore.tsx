@@ -15,11 +15,10 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
 import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
-import { startDownload } from "@/features/downloads/manager";
 import { categoryIcon } from "@/features/wallpapers/wallpaper-categories";
-import { WallpaperInterstitial } from "@/features/wallpapers/wallpaper-gallery";
 import { WallpaperReels } from "@/features/wallpapers/wallpaper-reels";
-import { useWallpaperInterstitial } from "@/features/wallpapers/use-wallpaper-interstitial";
+import { WallpaperLimitSheet, WallpaperRewardAd } from "@/features/wallpapers/wallpaper-reward-ad";
+import { useWallpaperDownload } from "@/features/wallpapers/use-wallpaper-download";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
@@ -88,7 +87,9 @@ export function WallpaperExplore({
 }) {
   const router = useRouter();
   const [viewer, setViewer] = useState<number | null>(openReels ? 0 : null);
-  const { adOpen, onDownloaded, close: closeAd } = useWallpaperInterstitial();
+  const { allowance, download, adOpen, closeAd, limitHit, closeLimit, adSeconds } = useWallpaperDownload();
+  // The name shown on the ad card — the wallpaper whose download is running.
+  const [adFor, setAdFor] = useState("");
 
   const [category, setCategory] = useState<string>("all");
   const [type, setType] = useState<WallpaperType | "all">("all");
@@ -161,30 +162,6 @@ export function WallpaperExplore({
     setViewer(null);
   }, [openReels, router]);
 
-  const download = useCallback(
-    (wallpaper: Wallpaper) => {
-      haptic("selection");
-      playSound("tap");
-      const filename = `${wallpaper.name || "wallpaper"}.jpg`;
-      startDownload({
-        url: wallpaper.downloadUrl,
-        formatId: "wallpaper",
-        kind: "image",
-        title: `${wallpaper.name} wallpaper`,
-        thumbnail: wallpaper.thumbUrl,
-        platform: "generic",
-        platformName: "Wallpaper",
-        qualityLabel: resolutionBadge(wallpaper.width, wallpaper.height)?.long ?? "Full resolution",
-        // Same-origin, so the browser saves rather than being blocked by CORS —
-        // see the note on `fetchableUrl` in the reels viewer.
-        directUrl: /^https?:\/\//i.test(wallpaper.downloadUrl)
-          ? `/api/media/download?url=${encodeURIComponent(wallpaper.downloadUrl)}&name=${encodeURIComponent(filename)}`
-          : wallpaper.downloadUrl,
-      });
-      onDownloaded();
-    },
-    [onDownloaded],
-  );
 
   const empty = items.length === 0;
   const deck = items.slice(0, 3);
@@ -490,7 +467,10 @@ export function WallpaperExplore({
                       wp={wp}
                       index={i}
                       onOpen={() => open(wp)}
-                      onDownload={() => download(wp)}
+                      onDownload={() => {
+                        setAdFor(wp.name);
+                        download(wp);
+                      }}
                     />
                   ))}
                 </div>
@@ -506,7 +486,10 @@ export function WallpaperExplore({
           startIndex={viewer}
           canEngage={canEngage}
           onClose={closeViewer}
-          onDownloaded={onDownloaded}
+          onDownload={(w) => {
+            setAdFor(w.name);
+            download(w);
+          }}
         />
       ) : null}
 
@@ -529,7 +512,18 @@ export function WallpaperExplore({
       */}
       <FloatingDownloadProgress layerClass="z-[115]" />
 
-      {adOpen ? <WallpaperInterstitial onClose={closeAd} /> : null}
+      {/* The 30-second ad a free member sees while their wallpaper saves, and
+          the sheet shown once the day's five are gone. Both are per-download
+          and neither blocks the transfer. */}
+      {adOpen ? (
+        <WallpaperRewardAd
+          seconds={adSeconds}
+          wallpaperName={adFor}
+          remaining={allowance?.remaining ?? null}
+          onClose={closeAd}
+        />
+      ) : null}
+      {limitHit ? <WallpaperLimitSheet limit={allowance?.limit ?? 5} onClose={closeLimit} /> : null}
     </>
   );
 }

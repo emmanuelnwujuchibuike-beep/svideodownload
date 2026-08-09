@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/admin/guard";
+import { imageSizeOf } from "@/lib/media/image-size";
 import { wallpaperTitle } from "@/lib/wallpaper-title";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -88,11 +89,22 @@ export async function POST(request: Request) {
         category,
       });
 
+      /*
+        Measured from the header bytes we are already holding — never asked for,
+        never assumed. This is what the "4K · Ultra HD" badge is derived from,
+        and a file whose header we can't parse stores nulls and shows no badge
+        rather than a flattering guess. Costs a 32-byte read; cannot fail the
+        upload.
+      */
+      const size = await imageSizeOf(file);
+
       const { error: rowErr } = await db.from("wallpapers").insert({
         title,
         category,
         image_url: pub.publicUrl,
         bytes: file.size,
+        width: size?.width ?? null,
+        height: size?.height ?? null,
         status: "published",
         source: "admin",
         uploaded_by: admin.id,

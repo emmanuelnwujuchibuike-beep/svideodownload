@@ -18,6 +18,7 @@
     "backfill:r2": "node scripts/backfill-r2.mjs",
     "backfill:thumbs": "node scripts/backfill-thumbnails.mjs",
     "backfill:posters": "node scripts/backfill-video-posters.mjs",
+    "backfill:wallpaper-dims": "node scripts/backfill-wallpaper-dimensions.mjs",
     "setup:r2-cors": "node scripts/setup-r2-cors.mjs",
     "format": "prettier --write .",
     "content:seed": "node scripts/content-compile.mjs seed",

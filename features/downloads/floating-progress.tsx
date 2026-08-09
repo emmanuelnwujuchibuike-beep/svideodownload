@@ -1,10 +1,25 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { Check, Download, History, Loader2, Play, RotateCcw, Share, X } from "lucide-react";
+import {
+  Check,
+  ChevronUp,
+  Download,
+  History,
+  Image as ImageIcon,
+  Loader2,
+  Minus,
+  Play,
+  RotateCcw,
+  Share,
+  Sparkles,
+  X,
+} from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+
+import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 
 import { useUser } from "@/features/auth/use-user";
 import {
@@ -61,6 +76,43 @@ const RatingPrompt = dynamic(() => import("@/features/feedback/rating-prompt").t
 
 const RATING_AFTER = 2;
 
+/**
+ * How long a download runs before we stop pretending it is nearly done and
+ * offer somewhere to go instead (owner, 2026-08-09).
+ *
+ * Eight seconds because that is roughly where "it's about to finish" stops
+ * being a reasonable thing to believe. Below it, offering an escape route reads
+ * as us apologising for something that was fine; above it, a visitor staring at
+ * a progress bar has already been given nothing to do for too long.
+ */
+const SLOW_MS = 8_000;
+
+/**
+ * "Your download is done" — for the visitor who took us up on the offer and
+ * wandered off to the wallpapers.
+ *
+ * ── Why the system notification is opportunistic ──────────────────────────────
+ * It fires only when permission is ALREADY granted and only while the tab is
+ * hidden. Asking for notification permission because someone downloaded a video
+ * is the exact prompt-spam that makes people block a site forever, and a
+ * notification for a tab you are currently looking at is noise — the card is
+ * right there. The card, the sound and the haptic are the notification when the
+ * tab is in front.
+ */
+function notifyComplete(title: string): void {
+  try {
+    if (typeof document === "undefined" || !document.hidden) return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    new Notification("Download complete", {
+      body: title || "Your file is ready to save.",
+      icon: "/icon-192.png",
+      tag: "frenz-download-complete",
+    });
+  } catch {
+    /* notifications unavailable — the card still says so */
+  }
+}
+
 // Only one card layer app-wide even if two surfaces mount it (app shell +
 // landing downloader) — the first mount wins.
 let layerClaimed = false;
@@ -77,6 +129,18 @@ let layerClaimed = false;
 export function FloatingDownloadProgress() {
   const claimed = useRef(false);
   const tasks = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  /*
+    Minimised state (owner, 2026-08-09): "make users who are downloading a file
+    taking longer to be able to minimise and be directed to view wallpaper or
+    watch reels while download is processing in background".
+
+    Local state, not manager state, and that is the right place for it: minimising
+    is a preference about THIS screen. The transfer already runs in the background
+    — it is a fetch in a module-level manager, entirely independent of this card —
+    so hiding the card changes nothing about the download, which is exactly the
+    promise being made.
+  */
+  const [minimised, setMinimised] = useState(false);
   // Where the "Downloads" button lands: the public library for signed-out
   // visitors (no login wall), the full dashboard for signed-in ones.
   const { user } = useUser();
@@ -120,6 +184,34 @@ export function FloatingDownloadProgress() {
     return () => clearTimeout(t);
   }, [task, reviewing]);
 
+  /*
+    A finished download ALWAYS comes back into view, even if the card was
+    minimised and the visitor is three wallpapers deep.
+
+    This is the other half of the offer: sending someone away mid-download is
+    only honest if the result finds them again. Leaving the bubble collapsed
+    would mean the file quietly finished behind a dot — and "Save to device" on
+    iOS needs a real tap, so a hidden completion is a download that never lands.
+  */
+  const finishedStatus = task && !isActive(task.status) ? task.status : null;
+  useEffect(() => {
+    if (!finishedStatus) return;
+    setMinimised(false);
+  }, [finishedStatus, task?.id]);
+
+  // The completion alert itself — sound and haptic for the visitor who is
+  // watching, a system notification for the one who isn't. Keyed on the task id
+  // so a batch announces each file once and never re-announces on a re-render.
+  const announced = useRef<string | null>(null);
+  useEffect(() => {
+    if (!task || task.status !== "completed" || !claimed.current) return;
+    if (announced.current === task.id) return;
+    announced.current = task.id;
+    haptic("medium");
+    playSound("mention");
+    notifyComplete(task.title);
+  }, [task?.id, task?.status]);
+
   // The prompt owns its own timing, dismissal and "already asked" memory; this
   // only decides when the chunk is worth fetching at all.
   const askForRating = claimed.current && completed >= RATING_AFTER;
@@ -128,19 +220,69 @@ export function FloatingDownloadProgress() {
 
   const pct = task.totalBytes > 0 ? Math.min(100, Math.round((task.receivedBytes / task.totalBytes) * 100)) : null;
   const remaining = eta(task);
+  const running = isActive(task.status);
+  /*
+    "Taking longer" — the trigger for the escape hatch.
+
+    `slowPrepare` covers the case with no progress to show at all (the server is
+    still muxing a large file); the elapsed check covers a transfer that is
+    simply big. Elapsed is read from `createdAt` on each render rather than from
+    a timer, because a running download re-renders this component constantly and
+    a `preparing` one flips `slowPrepare` at six seconds — so both states already
+    have something waking us up, and an interval would only add a second one.
+  */
+  const takingLong = running && (task.slowPrepare === true || Date.now() - task.createdAt > SLOW_MS);
+
+  /* ── Minimised: a thumb-sized bubble, and nothing else ──────────────────────
+     Everything the card was saying collapses to the one number that matters and
+     the fact that it is still moving. It stays a real button with a real label,
+     so restoring it is one tap and a screen reader still announces the state. */
+  if (minimised && running) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          haptic("light");
+          setMinimised(false);
+        }}
+        aria-label={`Download in progress${pct !== null ? `, ${pct} percent` : ""} — tap to expand`}
+        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-3 z-[85] flex items-center gap-2 rounded-full border border-border/60 bg-card/95 py-2 pl-2 pr-3.5 shadow-elevated backdrop-blur-xl transition active:scale-95 lg:bottom-6 lg:right-6"
+      >
+        <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#2563FF] to-[#6D5CFF] text-white">
+          <Download className="h-4 w-4" />
+          <span
+            aria-hidden
+            className="absolute inset-0 animate-ping rounded-full bg-[#2563FF]/30 motion-reduce:animate-none"
+          />
+        </span>
+        <span className="text-xs font-bold tabular-nums">
+          {pct !== null ? `${pct}%` : "Working…"}
+        </span>
+        <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
+    );
+  }
 
   return (
-    <AnimatePresence>
-      <motion.div
-        key={task.id + task.status}
-        initial={{ y: 72, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 72, opacity: 0 }}
-        transition={{ type: "spring", stiffness: 380, damping: 32 }}
-        className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[85] mx-auto max-w-md lg:inset-x-auto lg:right-6 lg:bottom-6 lg:w-96"
-        role="status"
-        aria-live="polite"
-      >
+    /*
+      ── Why this slide-up is CSS and not framer-motion ────────────────────────
+      This component is statically imported by `Downloader`, and `Downloader` is
+      on the landing page. That one import was putting the WHOLE of
+      framer-motion — 39 kB gzipped, 13% of the cold-entry budget — in front of
+      every first-time visitor, to spring a card that only ever appears after
+      they have already started a download.
+
+      Re-keying on `task.id + task.status` is what replays it on each state
+      change, exactly as the old AnimatePresence key did. There is no exit
+      animation any more and it isn't missed: a completed card auto-dismisses on
+      a timer and a dismissed one should leave the moment it is tapped.
+    */
+    <div
+      key={task.id + task.status}
+      className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[85] mx-auto max-w-md animate-in fade-in slide-in-from-bottom-8 duration-300 [animation-timing-function:var(--ease-out)] motion-reduce:animate-none lg:inset-x-auto lg:bottom-6 lg:right-6 lg:w-96"
+      role="status"
+      aria-live="polite"
+    >
         <div className="lux-enter relative overflow-hidden rounded-3xl border border-border/60 bg-card/95 p-4 shadow-elevated backdrop-blur-xl">
           {/* A hairline of brand light across the top edge — the whole card is
               otherwise white, so this is the only colour it needs to read as
@@ -319,19 +461,78 @@ export function FloatingDownloadProgress() {
                   </button>
                 ) : null}
               </div>
+
+              {/*
+                ── Somewhere to go while it finishes (owner, 2026-08-09) ───────
+                "be directed to view wallpaper or watch reels while download is
+                processing in background".
+
+                Only once it is genuinely taking a while. Offering an exit from
+                a download that finishes in two seconds reads as an apology for
+                something that was fine, and it would put two links under every
+                single transfer.
+
+                Tapping one minimises the card on the way out rather than
+                dismissing it: the download keeps running (it always did — the
+                manager owns it, not this card), and the bubble stays as proof,
+                so nobody has to wonder whether leaving cancelled it. The card
+                un-minimises itself the moment the file lands.
+              */}
+              {takingLong ? (
+                <div className="mt-3 rounded-2xl bg-secondary/60 p-2.5">
+                  <p className="px-1 text-[11px] font-semibold text-muted-foreground">
+                    This one&apos;s big — it keeps going in the background. Have a look around?
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <Link
+                      href="/wallpapers"
+                      prefetch
+                      onClick={() => setMinimised(true)}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-card px-3 py-2 text-xs font-bold shadow-soft ring-1 ring-inset ring-border/60 transition hover:ring-violet-400/50 active:scale-95"
+                    >
+                      <ImageIcon className="h-3.5 w-3.5 text-violet-500" /> Wallpapers
+                    </Link>
+                    <Link
+                      href="/reels"
+                      prefetch
+                      onClick={() => setMinimised(true)}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-card px-3 py-2 text-xs font-bold shadow-soft ring-1 ring-inset ring-border/60 transition hover:ring-blue-400/50 active:scale-95"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-blue-500" /> Watch reels
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
-            <button
-              type="button"
-              aria-label={isActive(task.status) ? "Cancel download" : "Dismiss"}
-              onClick={() => (isActive(task.status) ? cancelDownload(task.id) : dismissTask(task.id))}
-              className="shrink-0 rounded-lg p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex shrink-0 flex-col items-center gap-1">
+              {/* Minimise — offered on ANY running download, not just a slow one:
+                  by the time someone wants the card out of the way they should not
+                  have to wait for us to agree that it is taking too long. */}
+              {running ? (
+                <button
+                  type="button"
+                  aria-label="Minimise — keep downloading in the background"
+                  onClick={() => {
+                    haptic("light");
+                    setMinimised(true);
+                  }}
+                  className="rounded-lg p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                aria-label={running ? "Cancel download" : "Dismiss"}
+                onClick={() => (running ? cancelDownload(task.id) : dismissTask(task.id))}
+                className="rounded-lg p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-        </div>
-      </motion.div>
-    </AnimatePresence>
+      </div>
+    </div>
   );
 }

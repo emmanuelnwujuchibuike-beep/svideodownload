@@ -21,6 +21,13 @@ export function builtInWallpapers(): Wallpaper[] {
     // A placeholder has no database row, so it has nothing real to count and
     // is never given an invented number.
     views: 0,
+    downloads: 0,
+    // Not a guess: `sourceFor(id, "full")` asks the upstream for exactly
+    // 1080×1920, so this is the size of the bytes that will actually arrive.
+    // It earns the built-ins an honest "Full HD" badge — and, correctly, never
+    // a 4K one.
+    width: 1080,
+    height: 1920,
     builtIn: true,
   }));
 }

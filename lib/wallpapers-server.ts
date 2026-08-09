@@ -23,6 +23,9 @@ interface Row {
   saves_count: number | null;
   comments_count: number | null;
   created_at: string;
+  width: number | null;
+  height: number | null;
+  downloads_count: number | null;
   /** Migration 0108 — absent until it is applied. */
   views_count?: number | null;
   views_boost?: number | null;
@@ -30,8 +33,15 @@ interface Row {
   saves_boost?: number | null;
 }
 
+/*
+  `width`, `height` and `downloads_count` are all 0105 columns, so they are safe
+  in the base select — they exist wherever the table does. They were simply never
+  read: dimensions were never even WRITTEN until the upload routes started
+  measuring them (see lib/media/image-size.ts), which is why the resolution badge
+  could not exist before now and why old rows need the backfill script.
+*/
 const BASE_COLUMNS =
-  "id, title, category, image_url, thumb_url, status, likes_count, saves_count, comments_count, created_at";
+  "id, title, category, image_url, thumb_url, status, likes_count, saves_count, comments_count, downloads_count, width, height, created_at";
 /** Migration 0108: real views + the signed operator adjustments. */
 const METRIC_COLUMNS = "views_count, views_boost, likes_boost, saves_boost";
 
@@ -59,6 +69,13 @@ function toWallpaper(row: Row): Wallpaper {
     saves: shown(row.saves_count, row.saves_boost),
     comments: row.comments_count ?? 0,
     views: shown(row.views_count, row.views_boost),
+    // Deliberately NOT boostable — "Popular" is ranked on this, and a ranking an
+    // operator can move is a promotion, not a measurement.
+    downloads: row.downloads_count ?? 0,
+    // Null until measured. `resolutionBadge` shows nothing for a null, which is
+    // the whole point: an unmeasured wallpaper never gets a flattering 4K chip.
+    width: row.width ?? null,
+    height: row.height ?? null,
     builtIn: false,
   };
 }
@@ -190,7 +207,7 @@ export async function listAllWallpapers(limit = 300) {
   const rows = await selectWallpapers((columns) =>
     createAdminClient()
       .from("wallpapers")
-      .select(`${columns}, sort_order, bytes, width, height`)
+      .select(`${columns}, sort_order, bytes`)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false })
       .limit(limit),

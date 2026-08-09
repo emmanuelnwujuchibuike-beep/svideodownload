@@ -1,11 +1,12 @@
 "use client";
 
-import { Bookmark, Download, Heart, Loader2, MessageCircle, Send, X } from "lucide-react";
+import { Bookmark, Crown, Download, Heart, Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import { startDownload } from "@/features/downloads/manager";
-import type { Wallpaper, WallpaperComment } from "@/lib/wallpapers";
+import { resolutionBadge, type Wallpaper, type WallpaperComment } from "@/lib/wallpapers";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,31 @@ import { cn } from "@/lib/utils";
  * from the landing's "Explore wallpapers" can still scroll the whole library and
  * download from it. Rather than hiding the actions (which would make the page
  * look broken), they prompt a sign-in.
+ *
+ * ── Less chrome, more wallpaper (owner, 2026-08-09) ───────────────────────────
+ * "make the reels wallpaper premium to be less cluster so the wallpaper can show
+ * fully, make the upgrade prompt to not occupy spaces."
+ *
+ * Three changes, each aimed at the same thing — this screen exists to show ONE
+ * picture, and every control on top of it is covering part of the product:
+ *
+ * 1. TAP TO IMMERSE. A tap on the artwork fades every control away, so the
+ *    wallpaper really is full-screen and unobstructed; a second tap brings them
+ *    back. Not a swipe or a long-press: a tap is the gesture people already try
+ *    here, it cannot be confused with the vertical scroll that drives the
+ *    viewer, and it is reversible in the same motion.
+ *
+ * 2. THE RAIL LOST ITS FOURTH BUTTON AND ITS CAPTIONS. "Save to device" was a
+ *    duplicate of the Download button an inch below it, so it is gone rather
+ *    than shrunk. What remains — like, comment, save — carries counts and no
+ *    word labels: three glyphs everyone already knows, taking a third of the
+ *    height the old rail did.
+ *
+ * 3. THE UPGRADE PROMPT COSTS NO SPACE. It was a full card pinned above the
+ *    fold, permanently covering a band of every wallpaper. It is now a crown
+ *    chip on the caption line that expands into the offer only when tapped —
+ *    and it is not rendered at all for a member who already pays, who was
+ *    previously being sold something they own.
  */
 
 /**
@@ -99,6 +125,11 @@ export function WallpaperReels({
   );
   const [comments, setComments] = useState<string | null>(null);
   const [signInPrompt, setSignInPrompt] = useState(false);
+  /* Immersive mode — every control off the picture, one tap away in both
+     directions. See the note at the top of the file. */
+  const [chromeHidden, setChromeHidden] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const { isPremium, ready: planReady } = useEntitlements();
 
   const current = items[index];
 
@@ -130,7 +161,16 @@ export function WallpaperReels({
   }, [items.length]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && (comments ? setComments(null) : onClose());
+    // Escape unwinds one layer at a time — sheet, then offer, then the viewer.
+    // Closing the whole viewer from inside a comment sheet loses the wallpaper
+    // as well as the sheet, which is never what the key meant.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (comments) setComments(null);
+      else if (upgradeOpen) setUpgradeOpen(false);
+      else if (chromeHidden) setChromeHidden(false);
+      else onClose();
+    };
     window.addEventListener("keydown", onKey);
     const prev = document.body.style.overflowY;
     document.body.style.overflowY = "hidden";
@@ -138,7 +178,7 @@ export function WallpaperReels({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflowY = prev;
     };
-  }, [onClose, comments]);
+  }, [onClose, comments, upgradeOpen, chromeHidden]);
 
   const engage = useCallback(
     async (wallpaper: Wallpaper, action: "like" | "unlike" | "save" | "unsave") => {
@@ -233,7 +273,23 @@ export function WallpaperReels({
         className="h-[100dvh] w-full snap-y snap-mandatory overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {items.map((w, i) => (
-          <div key={w.id} data-i={i} className="relative h-[100dvh] w-full snap-start snap-always">
+          <div
+            key={w.id}
+            data-i={i}
+            className="relative h-[100dvh] w-full snap-start snap-always"
+            /*
+              Tap the artwork to clear the screen. A `click` — not a touch
+              handler — because the browser only fires one when the gesture was
+              a tap and NOT a scroll, which is precisely the distinction that
+              matters inside a scroll-snap viewer. Rolling our own from
+              touchstart/touchend would have to re-derive that, badly.
+            */
+            onClick={() => {
+              haptic("light");
+              setChromeHidden((h) => !h);
+              setUpgradeOpen(false);
+            }}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={w.url}
@@ -242,13 +298,40 @@ export function WallpaperReels({
               decoding="async"
               className="h-full w-full object-cover"
             />
-            {/* Scrims: the top one keeps the close button readable over a light
-                image, the bottom one does the same for the caption. */}
-            <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/55 to-transparent" />
-            <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/75 to-transparent" />
+            {/* Scrims exist to keep the controls legible over a light image, so
+                they leave with the controls — a darkened band over an
+                unobstructed wallpaper would be dimming it for no reason. */}
+            <div
+              aria-hidden
+              className={cn(
+                "pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-black/50 to-transparent transition-opacity duration-300",
+                chromeHidden && "opacity-0",
+              )}
+            />
+            <div
+              aria-hidden
+              className={cn(
+                "pointer-events-none absolute inset-x-0 bottom-0 h-52 bg-gradient-to-t from-black/70 to-transparent transition-opacity duration-300",
+                chromeHidden && "opacity-0",
+              )}
+            />
           </div>
         ))}
       </div>
+
+      {/*
+        One wrapper for ALL the chrome, so immersive mode is a single opacity
+        change on a single element rather than a class toggled on nine of them.
+        `pointer-events-none` while hidden is what makes the tap-to-restore land
+        on the artwork underneath instead of on an invisible button.
+      */}
+      <div
+        className={cn(
+          "transition-opacity duration-300 motion-reduce:transition-none",
+          chromeHidden && "pointer-events-none opacity-0",
+        )}
+        aria-hidden={chromeHidden}
+      >
 
       {/* Close */}
       <button
@@ -268,98 +351,193 @@ export function WallpaperReels({
       </span>
 
       {/*
-        Action rail — hard right, bottom-aligned (owner, 2026-08-04: "at the
-        very right and at the bottom just like tiktok and snapchat").
+        Action rail — hard right, and now three buttons instead of four.
 
-        It used to float 7rem up, which left a band of dead space under it and
-        put the buttons in the middle of the picture rather than out of the way
-        of it. TikTok and Snapchat both anchor the rail to the bottom-right
-        corner so the image is unobstructed and the thumb reaches the controls
-        without moving — on a large phone the old position sat above the
-        natural thumb arc.
-
-        The caption's `pr-28` is what keeps the two from colliding; the rail is
-        the fixed-width column and the caption flows around it.
+        "Save to device" left because it did exactly what the Download button an
+        inch below it does; two controls for one action is clutter that also
+        makes people wonder which one is right. What remains is glyph-only: a
+        heart, a speech bubble and a bookmark need no captions, and dropping them
+        took the rail from roughly 260px of the picture to about 150.
       */}
       <div
-        className="absolute right-1.5 z-20 flex flex-col items-center gap-4"
-        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}
+        className="absolute right-2 z-20 flex flex-col items-center gap-2.5"
+        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 8.5rem)" }}
       >
         <RailButton
-          label={`${state[current.id]?.likes ?? current.likes}`}
+          count={state[current.id]?.likes ?? current.likes}
           active={state[current.id]?.liked}
           onClick={() => void engage(current, state[current.id]?.liked ? "unlike" : "like")}
           aria-label={state[current.id]?.liked ? "Unlike" : "Like"}
         >
-          <Heart className={cn("h-6 w-6", state[current.id]?.liked && "fill-rose-500 text-rose-500")} />
-        </RailButton>
-        <RailButton label={`${current.comments}`} onClick={() => (canEngage ? setComments(current.id) : setSignInPrompt(true))} aria-label="Comments">
-          <MessageCircle className="h-6 w-6" />
+          <Heart className={cn("h-5 w-5", state[current.id]?.liked && "fill-rose-500 text-rose-500")} />
         </RailButton>
         <RailButton
-          label="Save"
+          count={current.comments}
+          onClick={() => (canEngage ? setComments(current.id) : setSignInPrompt(true))}
+          aria-label="Comments"
+        >
+          <MessageCircle className="h-5 w-5" />
+        </RailButton>
+        <RailButton
           active={state[current.id]?.saved}
           onClick={() => void engage(current, state[current.id]?.saved ? "unsave" : "save")}
           aria-label={state[current.id]?.saved ? "Remove from saved" : "Save to profile"}
         >
-          <Bookmark className={cn("h-6 w-6", state[current.id]?.saved && "fill-white")} />
-        </RailButton>
-        <RailButton label="Save to device" onClick={() => download(current)} aria-label="Download">
-          <Download className="h-6 w-6" />
+          <Bookmark className={cn("h-5 w-5", state[current.id]?.saved && "fill-white")} />
         </RailButton>
       </div>
 
-      {/* Caption */}
+      {/* Caption + the one primary action */}
       <div
-        className="pointer-events-none absolute inset-x-0 z-10 px-4 pr-28 text-white"
-        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}
+        className="pointer-events-none absolute inset-x-0 z-10 px-4 text-white"
+        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.25rem)" }}
       >
-        <p className="text-lg font-bold tracking-tight drop-shadow">{current.name}</p>
-        <p className="mt-0.5 flex items-center gap-1.5 text-sm text-white/70">
-          {current.category}
+        <p className="pr-16 text-lg font-bold tracking-tight drop-shadow">{current.name}</p>
+
+        {/* Category, resolution and the upgrade chip share ONE line. The chip is
+            what used to be a full card pinned above this — same offer, no
+            vertical footprint until someone asks for it. */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pr-16">
+          <span className="text-sm text-white/70">{current.category}</span>
+          {(() => {
+            const badge = resolutionBadge(current.width, current.height);
+            return badge ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-2.5 py-1 text-[11px] font-bold text-white ring-1 ring-inset ring-white/20 backdrop-blur-md">
+                {badge.short}
+                <span aria-hidden className="text-white/35">
+                  |
+                </span>
+                <span className="font-semibold text-white/75">{badge.long}</span>
+              </span>
+            ) : null;
+          })()}
           {/* Views appear only once there are some — a fresh wallpaper shows no
               number rather than a "0 views" that reads like nobody cares. */}
           {current.views > 0 ? (
-            <>
-              <span aria-hidden>·</span>
-              <span>{current.views.toLocaleString()} views</span>
-            </>
+            <span className="text-xs text-white/55">{current.views.toLocaleString()} views</span>
           ) : null}
-        </p>
+          {/* Never shown to someone who already pays for it. `planReady` gates
+              the render so a Pro member never sees it flash on first paint. */}
+          {planReady && !isPremium ? (
+            <button
+              type="button"
+              onClick={() => setUpgradeOpen(true)}
+              className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400/25 to-amber-200/15 px-2.5 py-1 text-[11px] font-bold text-amber-200 ring-1 ring-inset ring-amber-300/35 backdrop-blur-md transition active:scale-95"
+            >
+              <Crown className="h-3 w-3" /> Pro
+            </button>
+          ) : null}
+        </div>
+
+        {/* One full-width primary action, as in the reference. */}
         <button
           type="button"
           onClick={() => download(current)}
-          className="pointer-events-auto mt-3 inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-2.5 text-sm font-bold text-neutral-900 shadow-lg transition active:scale-95"
+          className="pointer-events-auto mt-3 flex w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-[#2563FF] to-[#6D5CFF] px-5 py-3.5 text-base font-bold text-white shadow-[0_10px_30px_-10px_rgba(37,99,255,0.9)] ring-1 ring-inset ring-white/20 transition active:scale-[0.98]"
         >
-          <Download className="h-4 w-4" /> Download
+          <Download className="h-5 w-5" />
+          Download
+          {/* Honest label: downloads are free, and every second one is followed
+              by a skippable interstitial — so a member who pays sees the word
+              without the ad marker beside it. */}
+          <span className="ml-1 inline-flex items-center gap-1 rounded-lg bg-white/15 px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide">
+            {planReady && !isPremium ? <Sparkles className="h-3 w-3" /> : null}
+            Free
+          </span>
         </button>
       </div>
 
+      {/* The offer itself — only ever on screen because someone tapped for it. */}
+      {upgradeOpen ? <UpgradeSheet onClose={() => setUpgradeOpen(false)} /> : null}
+      </div>
+
+      {/* Outside the chrome wrapper: a sheet is a MODE, not chrome. Fading it
+          with the rest of the controls would leave a half-transparent,
+          untappable comment box over the picture. */}
       {comments ? <CommentSheet wallpaperId={comments} onClose={() => setComments(null)} /> : null}
       {signInPrompt ? <SignInPrompt onClose={() => setSignInPrompt(false)} /> : null}
     </div>
   );
 }
 
+/**
+ * One rail control. Glyph-only by design — the count rides on the button as a
+ * small badge instead of a caption underneath, which is what let the rail lose
+ * roughly 40% of its height without losing any information.
+ *
+ * A zero count renders nothing at all rather than a "0": on a library that is
+ * still filling up, a column of zeroes reads as failure, and the absence says
+ * the same thing more kindly.
+ */
 function RailButton({
   children,
-  label,
+  count,
   active,
   onClick,
   ...rest
 }: {
   children: React.ReactNode;
-  label: string;
+  count?: number;
   active?: boolean;
   onClick: () => void;
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button type="button" onClick={onClick} className="flex flex-col items-center gap-1 text-white transition active:scale-90" {...rest}>
-      <span className={cn("flex h-12 w-12 items-center justify-center rounded-full bg-black/35 backdrop-blur-md", active && "bg-black/55")}>
-        {children}
-      </span>
-      <span className="text-[11px] font-semibold drop-shadow">{label}</span>
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative flex h-11 w-11 items-center justify-center rounded-full bg-black/30 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition active:scale-90"
+      {...rest}
+    >
+      {children}
+      {count !== undefined && count > 0 ? (
+        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/65 px-1.5 text-[10px] font-bold leading-4 tabular-nums backdrop-blur-md">
+          {count > 999 ? `${Math.floor(count / 1000)}k` : count}
+        </span>
+      ) : null}
     </button>
+  );
+}
+
+/**
+ * The Pro offer, opened from the crown chip.
+ *
+ * A bottom sheet rather than the pinned card it replaced. The card was on screen
+ * for every wallpaper whether or not anyone was interested, permanently covering
+ * a band of the artwork the page exists to display — which is a poor trade even
+ * on its own terms, since an offer nobody asked for is also the one nobody
+ * reads. This says the same three things to the people who tapped a crown.
+ */
+function UpgradeSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="absolute inset-0 z-30 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm animate-in fade-in slide-in-from-bottom-4 rounded-3xl bg-card p-5 shadow-2xl duration-200 motion-reduce:animate-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-white shadow-lg shadow-amber-500/25">
+            <Crown className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="font-bold">Upgrade to Pro</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              An ad-free experience, unlimited downloads and exclusive premium wallpapers.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button type="button" onClick={onClose} className="btn-lux btn-lux-secondary flex-1 justify-center">
+            Not now
+          </button>
+          <Link href="/pricing" className="btn-lux btn-lux-primary flex-1 justify-center">
+            See plans
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }
 

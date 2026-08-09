@@ -1,6 +1,21 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { buildExists, formatKb, routeWeights } from "./budget";
+
+/** The JS chunks the landing page actually loads, straight from the manifest. */
+function landingChunks(): string[] {
+  try {
+    const manifest = JSON.parse(readFileSync(join(".next", "app-build-manifest.json"), "utf8")) as {
+      pages?: Record<string, string[]>;
+    };
+    return (manifest.pages?.["/(marketing)/page"] ?? []).filter((f) => f.endsWith(".js"));
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Route weight budget — the 2-second rule, enforced mechanically.
@@ -85,8 +100,26 @@ const GLOBAL_CEILING = 340 * 1024;
  * Second bump today, both correctness fixes on the download path (the other was
  * the lost file extension). Worth naming: the landing has no headroom left, and
  * the next FEATURE that wants a byte here should take one out first.
+ *
+ * ── 305 → 275 kB (2026-08-09): the first CUT this file has ever recorded ──────
+ * The owner tightened the cold-entry target from 2s to under 1.6s, and a ceiling
+ * that only ever ratchets upward cannot deliver that. Measured after the change:
+ * 265.1 kB, down from 305.0 kB.
+ *
+ * The whole 40 kB was ONE static import. `features/downloads/floating-progress`
+ * used framer-motion for a slide-up spring, `Downloader` imports it statically,
+ * and `Downloader` is on the landing — so every first-time visitor downloaded
+ * the entire animation library, 13% of the budget, to animate a card that only
+ * exists after they have already started a download. It is a CSS `animate-in`
+ * now and framer-motion is off the marketing tree completely (asserted below).
+ *
+ * The ceiling drops to 275 kB rather than to the measured 265 kB on purpose:
+ * pinning a gate to the exact current number makes it fire on rounding and
+ * teaches people to raise it. ~10 kB of working room, ~30 kB of the win locked
+ * in permanently. The rule is unchanged and now has somewhere to be spent from:
+ * a feature that wants bytes here still has to find them.
  */
-const ENTRY_CEILING = 305 * 1024;
+const ENTRY_CEILING = 275 * 1024;
 
 const ENTRY_ROUTES = [
   "/(marketing)/page",
@@ -122,6 +155,36 @@ describe.skipIf(!buildExists())("route weight budget", () => {
       `Cold-entry routes over ${formatKb(ENTRY_CEILING)}:\n  ${over.join("\n  ")}\n\n` +
         `These are the pages the 2-second budget exists for — a first visit from ` +
         `search, slow connection, empty cache.`,
+    ).toHaveLength(0);
+  });
+
+  it("keeps framer-motion off the landing page entirely", () => {
+    /*
+     * The byte ceiling above would catch this eventually, but only as an opaque
+     * "you are 40 kB over" on whichever commit happens to cross the line —
+     * which is how it stayed on the landing unnoticed for weeks in the first
+     * place. Naming the library makes the failure self-explanatory and points
+     * at the fix.
+     *
+     * A single static import anywhere in the landing's module graph is enough
+     * to pull the whole library in, and the import that did it
+     * (`floating-progress`, four files deep under `Downloader`) was nowhere
+     * near the landing in the source tree. Asserting on the BUILD ARTIFACT is
+     * the only check that can see that; reading imports cannot.
+     */
+    const chunks = landingChunks();
+    expect(chunks.length, "landing chunks not found in the build manifest").toBeGreaterThan(0);
+
+    const offenders = chunks.filter((f) =>
+      /framer-motion|AnimatePresence|useMotionValue/.test(readFileSync(join(".next", f), "utf8")),
+    );
+
+    expect(
+      offenders,
+      `framer-motion is back on the landing, in:\n  ${offenders.join("\n  ")}\n\n` +
+        `It is ~39 kB gzipped — 13% of the cold-entry budget — on a page that ` +
+        `animates entirely in CSS. Find the static import (it will be several ` +
+        `files deep) and either convert it to CSS or next/dynamic it.`,
     ).toHaveLength(0);
   });
 

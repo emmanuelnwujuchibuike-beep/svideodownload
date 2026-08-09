@@ -1270,12 +1270,16 @@
     transform 220ms var(--ease-out);
 }
 .frenz-cta-input,
+.frenz-cta-paste,
 .frenz-cta-go {
   opacity: 0;
   transform: translateY(6px);
   transition:
     opacity 200ms var(--ease-out),
     transform 260ms var(--ease-out);
+}
+.frenz-cta-paste {
+  transition-delay: 25ms;
 }
 .frenz-cta-go {
   transition-delay: 40ms;
@@ -1289,6 +1293,7 @@
   pointer-events: none;
 }
 .frenz-cta:focus-within .frenz-cta-input,
+.frenz-cta:focus-within .frenz-cta-paste,
 .frenz-cta:focus-within .frenz-cta-go {
   opacity: 1;
   transform: none;
@@ -1307,6 +1312,7 @@
   transform: translateY(-4px);
   pointer-events: none;
 }
+.frenz-cta:has(.frenz-cta-input:not(:placeholder-shown)) .frenz-cta-paste,
 .frenz-cta:has(.frenz-cta-input:not(:placeholder-shown)) .frenz-cta-go {
   opacity: 1;
   transform: none;
@@ -1320,8 +1326,97 @@
 @media (prefers-reduced-motion: reduce) {
   .frenz-cta-face,
   .frenz-cta-input,
+  .frenz-cta-paste,
   .frenz-cta-go {
     transition: none;
     transform: none;
+  }
+}
+
+/* ── Wallpaper Gallery — the 2-second dwell cue ───────────────────────────
+   Owner (2026-08-09): "when a user stays at the button section for 2 secs, the
+   wallpaper icon should animate premium attractive, writing a small text that
+   says view with a microscope".
+
+   ── Why this is CSS and not a timer ────────────────────────────────────────
+   A dwell timer means a client component with an effect and a piece of state,
+   on the one page that has no bytes to spare. Two seconds after the CTA stack
+   paints is two seconds after the visitor arrived at it — the hero is the top
+   of the page, so "at the button section" and "on the page" are the same
+   moment. A delayed CSS animation expresses that exactly, costs nothing, and
+   works on touch where `:hover` never fires at all.
+
+   The flourish is finite (two passes, then it rests) rather than an infinite
+   loop: a permanently animating element on the landing burns compositor time
+   for the whole visit and stops reading as an invitation once it never stops.
+   Hovering replays it, so the cue is still there for anyone who arrives late. */
+@keyframes frenz-wp-cue-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes frenz-wp-flourish {
+  0%,
+  100% {
+    transform: none;
+  }
+  22% {
+    transform: scale(1.12) rotate(-6deg);
+  }
+  48% {
+    transform: scale(1.04) rotate(4deg);
+  }
+  72% {
+    transform: scale(1.08) rotate(-2deg);
+  }
+}
+
+/* The light that travels across the tile — the "premium" half of the cue. */
+@keyframes frenz-wp-sheen {
+  from {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(230%) skewX(-18deg);
+  }
+}
+
+.frenz-wp-cue {
+  opacity: 0;
+  animation: frenz-wp-cue-in 520ms var(--ease-out) 2s both;
+}
+.frenz-wp-icon {
+  animation: frenz-wp-flourish 1400ms var(--ease-out) 2s 2 both;
+}
+.frenz-wp-sheen {
+  animation: frenz-wp-sheen 1400ms var(--ease-out) 2s 2 both;
+}
+
+/* Late arrivals: pointing at the row replays the flourish immediately. */
+.frenz-wp:hover .frenz-wp-icon {
+  animation: frenz-wp-flourish 1400ms var(--ease-out) 1;
+}
+.frenz-wp:hover .frenz-wp-sheen {
+  animation: frenz-wp-sheen 1400ms var(--ease-out) 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The CUE still appears — it carries information ("this opens a viewer").
+     Only the movement goes. */
+  .frenz-wp-cue {
+    animation: none;
+    opacity: 1;
+  }
+  .frenz-wp-icon,
+  .frenz-wp-sheen,
+  .frenz-wp:hover .frenz-wp-icon,
+  .frenz-wp:hover .frenz-wp-sheen {
+    animation: none;
   }
 }

@@ -4,6 +4,7 @@ import {
   Download,
   Image as ImageIcon,
   Lock,
+  Microscope,
   Shield,
   ShieldCheck,
   Sparkles,
@@ -17,6 +18,8 @@ import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { Downloader } from "@/features/downloader/downloader";
+import { HeroLinkDownloader } from "@/features/downloader/hero-link-downloader";
+import { HeroPasteButton } from "@/features/downloader/hero-paste-button";
 import { SharedLinkDownloader } from "@/features/downloader/shared-link-downloader";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { PlatformId } from "@/types";
@@ -150,10 +153,14 @@ export function Hero() {
               change on a phone, which is the fastest thing a browser can do,
               and it works with JavaScript still downloading.
 
-              It submits to `/?url=…`, the same contract the PWA share target
-              already uses, so a pasted link lands in the existing tool below
-              rather than needing a second implementation. `#download` is
-              untouched and still sits under the mockup.
+              ── Where the result lands (owner, 2026-08-09) ──────────────────
+              It submits `?paste=…`, NOT the share target's `?url=…`. That one
+              difference is what separates the two entry points: the hero's link
+              opens its result under the Wallpaper Gallery button a few rows
+              below, where the visitor is already looking, while `#download`
+              under the mockup keeps serving anyone who pastes into it. Before
+              this, tapping the CTA sent you past the entire phone mockup to
+              find your own result.
             */}
             <form
               action="/"
@@ -183,7 +190,7 @@ export function Hero() {
 
               <input
                 id="hero-url"
-                name="url"
+                name="paste"
                 type="url"
                 inputMode="url"
                 autoComplete="off"
@@ -192,6 +199,9 @@ export function Hero() {
                 aria-label="Paste a link to download"
                 className="frenz-cta-input h-14 min-w-0 flex-1 rounded-xl border-0 bg-white px-4 text-base text-slate-900 outline-none placeholder:text-slate-400 dark:bg-white/95"
               />
+              {/* Paste sits NEXT to Download (owner) — the two things you do
+                  here, side by side, so the link never has to be typed. */}
+              <HeroPasteButton targetId="hero-url" />
               <button
                 type="submit"
                 className="frenz-cta-go inline-flex h-14 shrink-0 items-center gap-2 rounded-xl bg-white/20 px-5 text-base font-bold text-white ring-1 ring-inset ring-white/30 transition hover:bg-white/30 active:scale-[0.98]"
@@ -225,17 +235,43 @@ export function Hero() {
               Link with `prefetch` costs ZERO client JavaScript and still opens
               instantly — `loading.tsx` on /wallpapers does the rest.
             */}
+            {/*
+              ── The 2-second dwell cue (owner, 2026-08-09) ───────────────────
+              "when a user stays at the button section for 2 secs, the wallpaper
+              icon should animate premium attractive, writing a small text that
+              says view with a microscope."
+
+              Every part of it is CSS with a 2s `animation-delay` (see
+              `.frenz-wp-*` in globals.css): the icon tile plays a short
+              flourish, a light sweeps across it, and the microscope "View" cue
+              fades in beside the title. No timer, no state, no client
+              component — which is the only way to add this to a page that has
+              no room left in its cold-entry budget.
+            */}
             <Link
               href="/wallpapers"
               prefetch
-              className="group flex w-full items-center gap-4 rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-left shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:shadow-card active:scale-[0.995] dark:border-white/15 dark:bg-white/5 dark:backdrop-blur dark:hover:border-violet-400/40"
+              className="frenz-wp group flex w-full items-center gap-4 rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-left shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:shadow-card active:scale-[0.995] dark:border-white/15 dark:bg-white/5 dark:backdrop-blur dark:hover:border-violet-400/40"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600 ring-1 ring-inset ring-violet-200/70 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-400/20">
-                <ImageIcon className="h-5 w-5" />
+              <span className="frenz-wp-icon relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-violet-100 to-fuchsia-100 text-violet-600 ring-1 ring-inset ring-violet-200/70 dark:from-violet-500/20 dark:to-fuchsia-500/15 dark:text-violet-300 dark:ring-violet-400/20">
+                <ImageIcon className="relative h-5 w-5" />
+                <span
+                  aria-hidden
+                  className="frenz-wp-sheen pointer-events-none absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/25"
+                />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-base font-bold leading-tight text-violet-600 dark:text-violet-300">
-                  View 4K Wallpapers
+                <span className="flex items-center gap-2">
+                  <span className="text-base font-bold leading-tight text-violet-600 dark:text-violet-300">
+                    Wallpaper Gallery
+                  </span>
+                  {/* The cue itself — a real label for what the tile does, not
+                      decoration, so `prefers-reduced-motion` keeps it and drops
+                      only the movement. */}
+                  <span className="frenz-wp-cue inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-violet-600 ring-1 ring-inset ring-violet-200/70 dark:bg-violet-500/15 dark:text-violet-200 dark:ring-violet-400/25">
+                    <Microscope className="h-3 w-3" />
+                    View
+                  </span>
                 </span>
                 <span className="mt-0.5 block text-xs text-slate-500 dark:text-white/60">
                   Stunning quality, updated daily
@@ -243,6 +279,18 @@ export function Hero() {
               </span>
               <ArrowRight className="h-5 w-5 shrink-0 text-violet-400 transition-transform group-hover:translate-x-0.5" />
             </Link>
+
+            {/*
+              The hero CTA's own result — under the Wallpaper Gallery button,
+              exactly where the tap happened (owner). Renders nothing at all
+              without a `?paste=` link, so it costs the other 99% of visitors no
+              markup and no layout. The Suspense boundary is what keeps `/`
+              statically generated; its fallback is `null`, which is also the
+              no-link state, so the static HTML and the hydrated page agree.
+            */}
+            <Suspense fallback={null}>
+              <HeroLinkDownloader />
+            </Suspense>
           </div>
 
           {/*

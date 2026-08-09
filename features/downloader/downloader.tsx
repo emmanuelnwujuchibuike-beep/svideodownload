@@ -78,7 +78,27 @@ export function Downloader({
   initialUrl,
   platformId,
   hideDisclaimer,
-}: { initialUrl?: string; platformId?: PlatformId; hideDisclaimer?: boolean } = {}) {
+  resultOnly,
+}: {
+  initialUrl?: string;
+  platformId?: PlatformId;
+  hideDisclaimer?: boolean;
+  /**
+   * Render the RESULT half only — no paste field, no ad surface, no platform
+   * link, no disclaimer.
+   *
+   * Owner (2026-08-09): a link submitted from the landing hero's CTA must open
+   * its result under the Wallpaper Gallery button, while the download section
+   * below the mockup keeps serving the people who paste into it. Two results in
+   * two places, from one tool.
+   *
+   * The alternative was a second copy of the fetch/preview/download flow for
+   * the hero, which would drift from this one within a release. This way the
+   * hero renders the same component with its own input suppressed — the field
+   * it would have drawn is the CTA itself, sitting a few rows above.
+   */
+  resultOnly?: boolean;
+} = {}) {
   const [url, setUrl] = useState(initialUrl ?? "");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [phIndex, setPhIndex] = useState(0);
@@ -278,6 +298,7 @@ export function Downloader({
 
   return (
     <div className="w-full">
+      {resultOnly ? null : (
       <form
         onSubmit={handleSubmit}
         className="glass rounded-[1.5rem] p-2 shadow-luxury ring-1 ring-inset ring-white/[0.06] transition-shadow focus-within:shadow-glow-blue focus-within:ring-primary/25"
@@ -340,6 +361,22 @@ export function Downloader({
           </p>
         ) : null}
       </form>
+      )}
+
+      {/*
+        The hero's own "fetching" state.
+
+        The spinner normally lives in the Download button, and `resultOnly` has
+        no button — so without this the CTA would appear to do nothing at all
+        for the second or two a fetch takes, which is exactly the moment a
+        visitor decides the site is broken.
+      */}
+      {resultOnly && isBusy ? (
+        <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3.5 text-sm font-semibold shadow-soft">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+          Fetching your link…
+        </div>
+      ) : null}
 
       {/*
         The under-download placement.
@@ -354,7 +391,7 @@ export function Downloader({
         `AdSurface` renders nothing at all until the zone is filled — so an
         unconfigured site has exactly the layout it had before.
       */}
-      <AdSurface zone="under_download" maxWidth="max-w-2xl" className="mt-5" />
+      {resultOnly ? null : <AdSurface zone="under_download" maxWidth="max-w-2xl" className="mt-5" />}
 
       {/*
         A route down to the platform section.
@@ -370,6 +407,7 @@ export function Downloader({
         the downloader pages' link grid carry that id, so this resolves on every
         page without knowing which one it is on.
       */}
+      {resultOnly ? null : (
       <div className="mt-4 flex justify-center">
         <a
           href="#platforms"
@@ -382,11 +420,12 @@ export function Downloader({
           />
         </a>
       </div>
+      )}
 
       {/* Trademark / non-affiliation disclaimer — below the download box on every
           page that renders this tool. The landing hides it here and shows it below
           its purple card instead (where the muted colour reads). */}
-      {!hideDisclaimer ? <DownloadDisclaimer /> : null}
+      {!hideDisclaimer && !resultOnly ? <DownloadDisclaimer /> : null}
 
       {/* Renders nothing until a transfer genuinely completes AND the zone is
           filled. Mounted here so it is scoped to the downloader flow rather
@@ -460,8 +499,13 @@ export function Downloader({
       <FloatingDownloadProgress />
 
       {/* In-browser review player — loads after hydration, renders only when a
-          download is opened for review (see ReviewPlayerMount). */}
-      <ReviewPlayerMount />
+          download is opened for review (see ReviewPlayerMount).
+
+          Skipped for `resultOnly`: unlike the progress card, this is not a
+          claimed singleton, and the landing now renders TWO of these tools —
+          two mounts would mean two players over one review. The download
+          section's copy is the one that owns it. */}
+      {resultOnly ? null : <ReviewPlayerMount />}
 
       {/* The storage gate — opens when a visitor at their plan ceiling
           taps download. Mounted lazily (code-split) on first open so it costs the

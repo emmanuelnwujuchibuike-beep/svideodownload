@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { imageSizeOf } from "@/lib/media/image-size";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -58,6 +59,9 @@ export async function POST(request: Request) {
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
     const { data: pub } = db.storage.from("wallpapers").getPublicUrl(key);
+    // Same measurement as the admin upload — a member's share earns its
+    // resolution badge on exactly the same evidence, or shows none.
+    const size = await imageSizeOf(file);
     const { data, error } = await db
       .from("wallpapers")
       .insert({
@@ -65,6 +69,8 @@ export async function POST(request: Request) {
         category,
         image_url: pub.publicUrl,
         bytes: file.size,
+        width: size?.width ?? null,
+        height: size?.height ?? null,
         status: "published",
         source: "member",
         uploaded_by: user.id,

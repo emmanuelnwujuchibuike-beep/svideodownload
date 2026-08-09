@@ -238,8 +238,19 @@ export const snapchatExtractor: Extractor = {
         // identify it from the URL, return every snap so the user picks the
         // right one (instead of guessing and serving a random snap).
         if (!mediaUrl) {
-          const snapList =
-            pp.story?.snapList ?? pp.curatedHighlights?.[0]?.snapList ?? [];
+          /*
+            The live 24-hour story, and ONLY that.
+
+            Owner (2026-08-09): "it doesn't fetch the story folder from the
+            profile, just the story on status that stays for 24hrs."
+
+            `curatedHighlights` — the saved folders on a profile — is
+            deliberately not read. Reading it as a fallback is what let a plain
+            story link return an account's archive, and every attempt to have
+            both behaviours from one code path made normal stories worse. If a
+            page has no live story, the generic CDN scan below handles it.
+          */
+          const snapList = pp.story?.snapList ?? [];
           const snaps = (Array.isArray(snapList) ? snapList : []).filter(
             (s) => s.snapUrls?.mediaUrl,
           );
@@ -258,15 +269,64 @@ export const snapchatExtractor: Extractor = {
     // Generic fallback: any Snapchat CDN media URL in the page (covers layout
     // changes). Spotlight uses extension-less /d/ or /y/ paths; stories use .mp4.
     if (!mediaUrl && !formats?.length) {
-      const m =
-        html.match(/"contentUrl":"(https:\\?\/\\?\/[a-z0-9.-]*sc-cdn\.net\\?\/[^"]+?)"/i) ??
-        html.match(/https:\/\/[a-z0-9.-]*sc-cdn\.net\/[^"'\\ ]+?\.(?:mp4|mov)[^"'\\ ]*/i);
-      if (m) mediaUrl = m[1] ?? m[0];
+      /*
+        Collect EVERY media URL on the page, not just the first.
+
+        `String.match` without /g returns a single match, so a story reaching
+        this path produced exactly one download. Gathering all of them is both
+        what the owner asks for — "fetch all and users select which to
+        download" — and strictly safer than matching once: this path can now
+        only ever find MORE than before, never less, so it cannot be the reason
+        a link stops working.
+
+        De-duplicated on the URL PATH, because the CDN signs these links and
+        the same snap can appear twice with different query strings.
+      */
+      const found: string[] = [];
+      const seenPaths = new Set<string>();
+      const push = (raw: string | undefined) => {
+        if (!raw) return;
+        const clean = unescapeJsonUrl(raw);
+        const key = clean.split("?")[0] ?? clean;
+        if (seenPaths.has(key)) return;
+        seenPaths.add(key);
+        found.push(clean);
+      };
+      for (const m of html.matchAll(/"contentUrl":"(https:\\?\/\\?\/[a-z0-9.-]*sc-cdn\.net\\?\/[^"]+?)"/gi)) {
+        push(m[1]);
+      }
+      for (const m of html.matchAll(/https:\/\/[a-z0-9.-]*sc-cdn\.net\/[^"'\\ ]+?\.(?:mp4|mov)[^"'\\ ]*/gi)) {
+        push(m[0]);
+      }
+
+      if (found.length > 1) {
+        formats = found.map((u, i) => ({
+          ...videoFormat(stripSnapWatermark(cleanUrl(u))),
+          formatId: `snap-${i}`,
+          label: `Story ${i + 1}`,
+          isSeparateItem: true,
+        }));
+      } else if (found.length === 1) {
+        mediaUrl = found[0];
+      }
     }
 
     if (!mediaUrl && !formats?.length) {
+      /*
+        Say WHY nothing was found.
+
+        This extractor has been debugged four times from a screenshot, because
+        the failure message was the same sentence whether the page was missing,
+        the JSON shape had changed, or the story had simply expired. Those need
+        completely different fixes. The counts below cost nothing and turn the
+        next report into evidence — they name no URL and no account, so there
+        is nothing sensitive in a log line.
+      */
+      const hasBlob = !!blob;
+      const cdnMentions = (html.match(/sc-cdn\.net/gi) ?? []).length;
       throw new ExtractionError(
-        "No Snapchat video found (story may be expired or image-only)",
+        `No Snapchat media found (story may be expired or image-only) ` +
+          `[page-data:${hasBlob ? "yes" : "no"} cdn-refs:${cdnMentions} html:${html.length}b]`,
       );
     }
 

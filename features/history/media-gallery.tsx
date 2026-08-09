@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   List as ListIcon,
   Loader2,
+  MoreHorizontal,
   Music,
   Play,
   Trash2,
@@ -68,6 +69,16 @@ const COLUMN_CHOICES = [2, 3, 4, 5] as const;
 const VIEW_KEY = "frenz:gallery-view";
 const COLS_KEY = "frenz:gallery-cols";
 const SORT_KEY = "frenz:gallery-sort";
+
+/** `137` → `2:17`. Used for the duration chip on a history tile. */
+function formatClock(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
+  return `${h > 0 ? `${h}:` : ""}${mm}:${String(sec).padStart(2, "0")}`;
+}
 
 function timeAgo(ts: number): string {
   const s = (Date.now() - ts) / 1000;
@@ -140,7 +151,18 @@ export function MediaGallery({
   selection?: GallerySelection;
 }) {
   const [view, setView] = useState<ViewMode>("grid");
-  const [cols, setCols] = useState<number>(3);
+  /*
+    TWO columns by default (owner, 2026-08-09: "make the grid cols selectable,
+    grid cols 2 as default").
+
+    The reference image is drawn at three, and three is what this defaulted to —
+    but at three, on a phone, a downloaded video is a 110px thumbnail with a
+    one-line title under it, and you cannot tell two clips of the same creator
+    apart. Two is the width at which a thumbnail is actually a preview. The
+    picker is right there for anyone who wants to see more at once, and the
+    choice persists per browser.
+  */
+  const [cols, setCols] = useState<number>(2);
   const [sort, setSort] = useState<SortKey>("time");
   const [limit, setLimit] = useState(initialGrid);
 
@@ -304,6 +326,7 @@ export function MediaGallery({
                       item={item}
                       onOpen={() => openAt(sorted.indexOf(item))}
                       onToggleFavorite={() => onToggleFavorite(item.id)}
+                      onRemove={() => onRemove(item.id)}
                       selection={selection}
                     />
                   ))}
@@ -315,7 +338,7 @@ export function MediaGallery({
       ) : view === "grid" ? (
         <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
           {shown.map((item, i) => (
-            <GalleryTile key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} selection={selection} />
+            <GalleryTile key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} selection={selection} />
           ))}
         </div>
       ) : (
@@ -346,15 +369,39 @@ export function MediaGallery({
 }
 
 /** iOS-Photos-style square tile. */
+/**
+ * One history tile — built to public/mainhistorypage.jpg.
+ *
+ * The reference's anatomy, corner by corner:
+ *   top-left     a small rounded badge for what the item IS
+ *   top-right    a circular "…" that opens the item's actions
+ *   bottom-left  a media glyph and, for a video, its length
+ *   bottom       the title over a scrim
+ *
+ * ── Why "…" replaced the heart ────────────────────────────────────────────────
+ * The heart was the only action a tile had, so everything else — copy the link,
+ * download it again, remove it — lived exclusively in List view. Someone in Grid
+ * view had no way to reach them at all. The menu keeps favouriting as its first
+ * entry and gives the other three a home, which is what the reference's "…"
+ * implies and what the page was missing.
+ *
+ * ── Why the duration is sometimes absent ──────────────────────────────────────
+ * `durationSeconds` is only known when the extractor reported it, and every
+ * record saved before that field existed has none. A missing length shows the
+ * glyph alone, exactly as the reference's photo tiles do — never "0:00", which
+ * would be a statement about the file rather than a gap in what we know.
+ */
 function GalleryTile({
   item,
   onOpen,
   onToggleFavorite,
+  onRemove,
   selection,
 }: {
   item: DownloadRecord;
   onOpen: () => void;
   onToggleFavorite: () => void;
+  onRemove: () => void;
   selection?: GallerySelection;
 }) {
   const platform = PLATFORMS[item.platform] ?? PLATFORMS.generic;
@@ -362,8 +409,24 @@ function GalleryTile({
   const KindIcon = KIND_ICON[item.kind] ?? Video;
   const selecting = !!selection?.active;
   const picked = !!selection?.selected.has(item.id);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Close on any outside tap. A menu pinned to a tile in a scrolling grid that
+  // stays open while you scroll away is worse than no menu.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = () => setMenuOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("pointerdown", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("pointerdown", close);
+    };
+  }, [menuOpen]);
+
   return (
-    <div className={cn("group relative aspect-square overflow-hidden rounded-xl bg-black/40", picked && "ring-2 ring-primary")}>
+    <div className={cn("group relative aspect-square overflow-hidden rounded-2xl bg-black/40", picked && "ring-2 ring-primary")}>
       <button
         type="button"
         // In select mode the whole tile toggles instead of opening the player —
@@ -374,8 +437,13 @@ function GalleryTile({
         className="absolute inset-0 h-full w-full"
       >
         <SmartThumb src={item.thumbnail} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]" fallback={<KindIcon className="h-7 w-7" />} />
-        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent px-2 pb-1.5 pt-6">
-          <span className="line-clamp-1 text-left text-[11px] font-medium text-white/95">{item.title}</span>
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent px-2 pb-1.5 pt-10">
+          {/* The duration chip sits ABOVE the title, as in the reference. */}
+          <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-white/90">
+            <KindIcon className="h-3.5 w-3.5 drop-shadow" />
+            {item.kind === "video" && item.durationSeconds ? formatClock(item.durationSeconds) : null}
+          </span>
+          <span className="line-clamp-1 block text-left text-[11px] font-medium text-white/95">{item.title}</span>
         </span>
         <span className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
@@ -383,11 +451,13 @@ function GalleryTile({
           </span>
         </span>
       </button>
+
       <span className={cn("pointer-events-none absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br text-white shadow", platform.accent)}>
         {Icon ? <Icon className="h-3.5 w-3.5" /> : <KindIcon className="h-3.5 w-3.5" />}
       </span>
-      {/* In select mode the corner shows the tick instead of the heart —
-          favouriting mid-selection would be an easy mis-tap. */}
+
+      {/* In select mode the corner shows the tick instead of the menu — opening
+          a menu mid-selection is an easy mis-tap with an annoying result. */}
       {selecting ? (
         <span
           aria-hidden
@@ -399,17 +469,103 @@ function GalleryTile({
           {picked ? <Check className="h-3.5 w-3.5" /> : null}
         </span>
       ) : (
-        <button
-          type="button"
-          onClick={() => { tap(); onToggleFavorite(); }}
-          aria-label={item.favorite ? "Unfavorite" : "Favorite"}
-          aria-pressed={item.favorite}
-          className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur transition duration-150 hover:bg-black/55 active:scale-[0.82]"
-        >
-          <Heart className={cn("h-3.5 w-3.5", item.favorite && "fill-rose-500 text-rose-500")} />
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); tap(); setMenuOpen((o) => !o); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            aria-label={`Actions for ${item.title}`}
+            aria-expanded={menuOpen}
+            className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition duration-150 hover:bg-black/60 active:scale-[0.85]"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+
+          {/* A favourite is worth seeing at a glance without opening anything,
+              so it keeps a corner of its own once it is set. */}
+          {item.favorite ? (
+            <span aria-hidden className="pointer-events-none absolute right-1.5 top-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/40 backdrop-blur">
+              <Heart className="h-3.5 w-3.5 fill-rose-500 text-rose-500" />
+            </span>
+          ) : null}
+
+          {menuOpen ? (
+            <div
+              role="menu"
+              onPointerDown={(e) => e.stopPropagation()}
+              className="absolute right-1.5 top-10 z-20 w-40 overflow-hidden rounded-xl border border-border/70 bg-card/95 text-left shadow-elevated backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none"
+            >
+              <TileAction
+                icon={<Heart className={cn("h-3.5 w-3.5", item.favorite && "fill-rose-500 text-rose-500")} />}
+                label={item.favorite ? "Unfavourite" : "Favourite"}
+                onClick={() => { onToggleFavorite(); setMenuOpen(false); }}
+              />
+              <TileAction
+                icon={<Download className="h-3.5 w-3.5" />}
+                label="Download again"
+                onClick={() => {
+                  startDownload({
+                    url: item.url,
+                    formatId: item.formatId,
+                    kind: item.kind,
+                    title: item.title,
+                    thumbnail: item.thumbnail,
+                    platform: item.platform,
+                    platformName: item.platformName,
+                    qualityLabel: item.qualityLabel,
+                    durationSeconds: item.durationSeconds ?? null,
+                  });
+                  setMenuOpen(false);
+                }}
+              />
+              <TileAction
+                icon={copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                label={copied ? "Copied" : "Copy link"}
+                onClick={() => {
+                  void navigator.clipboard?.writeText(item.url).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1200);
+                  }).catch(() => {});
+                }}
+              />
+              <TileAction
+                icon={<Trash2 className="h-3.5 w-3.5" />}
+                label="Remove"
+                destructive
+                onClick={() => { onRemove(); setMenuOpen(false); }}
+              />
+            </div>
+          ) : null}
+        </>
       )}
     </div>
+  );
+}
+
+function TileAction({
+  icon,
+  label,
+  destructive,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  destructive?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={() => { tap(); onClick(); }}
+      className={cn(
+        "flex w-full items-center gap-2 px-3 py-2.5 text-xs font-semibold transition hover:bg-secondary",
+        destructive && "text-rose-500 hover:bg-rose-500/10",
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 

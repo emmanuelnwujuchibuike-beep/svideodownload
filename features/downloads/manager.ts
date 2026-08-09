@@ -47,6 +47,8 @@ export interface DownloadTask {
   attempts?: number;
   /** True once preparing has run long enough to be worth explaining. */
   slowPrepare?: boolean;
+  /** Clip length in seconds when the extractor reported one — shown in history. */
+  durationSeconds?: number | null;
 }
 
 let tasks: DownloadTask[] = [];
@@ -365,6 +367,7 @@ async function run(id: string) {
       kind: task.kind,
       qualityLabel: task.qualityLabel,
       size: received, // exact downloaded bytes
+      durationSeconds: task.durationSeconds ?? null,
     });
     if (!ios) toast("Download complete — saved to your device & library", "success");
   } catch (err) {
@@ -501,6 +504,7 @@ export function startDownload(input: {
   platformName: string;
   qualityLabel: string;
   directUrl?: string;
+  durationSeconds?: number | null;
 }): string {
   const id = crypto.randomUUID();
   tasks = [

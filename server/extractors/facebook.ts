@@ -62,6 +62,64 @@ function buildFormats(html: string): MediaFormat[] {
   return formats;
 }
 
+/**
+ * A photo post's image, at the best resolution the page will give up.
+ *
+ * ── Why `og:image` alone is not enough ────────────────────────────────────────
+ * It is what this used to return, and it is a SHARE PREVIEW: Facebook sizes it
+ * for a link card, so a 4000px photo comes back as a ~600px thumbnail. The page
+ * also carries the real image in its embedded JSON, and that is what someone
+ * pressing "download" on a photo is asking for.
+ *
+ * So the JSON keys are tried first, in descending order of how large the image
+ * behind them tends to be, and `og:image` stays as the last resort — the one
+ * source that is present even on the sparsest render of the page.
+ *
+ * ── Every candidate is offered, not just the winner ───────────────────────────
+ * These keys move around between Facebook's renderers, and a URL that looks
+ * right can still be expired or region-signed. Returning them as separate
+ * qualities means a failed pick is a second tap rather than a dead end — and the
+ * labels say which is which instead of pretending we know the pixel size.
+ */
+function buildImageFormats(html: string): MediaFormat[] {
+  const seen = new Set<string>();
+  const out: MediaFormat[] = [];
+
+  const add = (raw: string | null | undefined, label: string) => {
+    if (!raw) return;
+    const url = unescapeJsonUrl(raw);
+    if (!url.startsWith("http")) return;
+    // Renditions of one photo differ only by size params, so collapse on path.
+    const key = url.split("?")[0] ?? url;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({
+      formatId: `fb-img-${out.length}`,
+      kind: "image",
+      label,
+      ext: /\.png(?:$|\?)/i.test(url) ? "png" : "jpg",
+      resolution: null,
+      fps: null,
+      filesize: null,
+      tbr: null,
+      vcodec: null,
+      acodec: null,
+      directUrl: url,
+      // scontent refuses requests without a browser UA and a facebook referer.
+      httpHeaders: { "User-Agent": DESKTOP_UA, Referer: "https://www.facebook.com/" },
+    });
+  };
+
+  // Full-size first: these are the keys the photo viewer itself reads.
+  add(firstMatch(html, /"photo_image"\s*:\s*\{[^}]*?"uri"\s*:\s*"([^"]+)"/), "Original");
+  add(firstMatch(html, /"image"\s*:\s*\{[^}]*?"uri"\s*:\s*"([^"]+)"/), "Full size");
+  add(firstMatch(html, /"currentMediaNode"[\s\S]{0,600}?"uri"\s*:\s*"([^"]+)"/), "Full size");
+  // The share preview — smaller, but present on renders where nothing else is.
+  add(metaContent(html, "og:image"), out.length === 0 ? "Photo" : "Preview");
+
+  return out;
+}
+
 export const facebookExtractor: Extractor = {
   name: "facebook",
   canHandle(_url: string, platform: PlatformId) {
@@ -88,25 +146,9 @@ export const facebookExtractor: Extractor = {
     const formats = buildFormats(html);
     if (formats.length === 0) {
       // Photo post → offer the image instead of failing.
-      const img = metaContent(html, "og:image");
-      if (img && img.startsWith("http")) {
-        formats.push({
-          formatId: "fb-img",
-          kind: "image",
-          label: "Photo",
-          ext: /\.png/i.test(img) ? "png" : "jpg",
-          resolution: null,
-          fps: null,
-          filesize: null,
-          tbr: null,
-          vcodec: null,
-          acodec: null,
-          directUrl: img,
-          httpHeaders: { "User-Agent": DESKTOP_UA, Referer: "https://www.facebook.com/" },
-        });
-      } else {
-        throw new ExtractionError("No Facebook media (likely login-walled)");
-      }
+      const images = buildImageFormats(html);
+      if (images.length > 0) formats.push(...images);
+      else throw new ExtractionError("No Facebook media (likely login-walled)");
     }
 
     return {

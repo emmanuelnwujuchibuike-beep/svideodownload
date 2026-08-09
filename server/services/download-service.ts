@@ -126,13 +126,16 @@ function probeUrlCodec(format: MediaFormat): Promise<string | null> {
   });
 }
 
-async function transcodeToH264(format: MediaFormat): Promise<DownloadResult> {
+async function transcodeToH264(format: MediaFormat, knownCodec?: string | null): Promise<DownloadResult> {
   const key = createHash("sha256")
     .update(`vh264|${format.directUrl}`)
     .digest("hex")
     .slice(0, 40);
 
-  const codec = (await probeUrlCodec(format))?.toLowerCase();
+  // The caller has usually just probed to decide whether it could stream the
+  // source raw; re-probing here would spend a second network round-trip to
+  // learn the same thing.
+  const codec = (knownCodec ?? (await probeUrlCodec(format)))?.toLowerCase();
   // Only a genuine H.264 stream is guaranteed to decode as VIDEO in every
   // browser — remux it as-is (fast, no quality loss). HEVC decodes fine on
   // iOS/Safari but not reliably on Chrome/Android/Windows, and TikTok's own
@@ -332,8 +335,40 @@ export async function resolveDownload(
   const needsCodecCheck = kind === "video" && ["facebook", "instagram", "threads", "tiktok"].includes(meta.platform);
 
   if (hasDirect && needsCodecCheck) {
+    /*
+      ── The fast path (owner, 2026-08-09: "TikTok download takes too long, I
+         want it to be below 2 to 3 seconds") ─────────────────────────────────
+
+      Every TikTok/Facebook/Instagram/Threads video went through
+      `transcodeToH264`, and even in its best case — a genuine H.264 source, so
+      `-c copy` with no re-encode — that still pulls the ENTIRE file to the
+      worker's disk before the first byte reaches the browser. Measured on a
+      7-second Facebook clip: 11.8 seconds. The transfer was never the slow
+      part; waiting for a complete server-side copy was.
+
+      The probe is what makes skipping it safe. It reads the container header
+      only (a fraction of a second) and, crucially, a non-null result comes from
+      ffmpeg's own `Video: <codec>` line — so "h264" is positive proof that a
+      real video stream exists. That is exactly the assurance the transcode was
+      standing in for, which is why proxying raw here does NOT reintroduce the
+      audio-only bug: the old raw path was unvalidated, and this one is not.
+
+      So: genuine H.264 streams straight through and starts immediately;
+      anything else (HEVC, TikTok's bytevc1, a source with no video track at
+      all) still goes the long way round and is re-encoded.
+    */
+    const probed = (await probeUrlCodec(format!))?.toLowerCase() ?? null;
+    if (probed === "h264") {
+      try {
+        return { ...(await proxyDownload(format!)), title };
+      } catch {
+        // The direct URL died between the probe and the fetch — fall through to
+        // the validated path rather than failing the download.
+      }
+    }
+
     try {
-      return { ...(await transcodeToH264(format!)), title };
+      return { ...(await transcodeToH264(format!, probed)), title };
     } catch (e) {
       // NEVER fall back to the raw, unvalidated stream here — that's exactly
       // what would silently reintroduce the audio-only bug this check exists
@@ -386,6 +421,30 @@ export async function resolveDownload(
         return { ...(await transcodeToH264(format!)), title };
       } catch {
         return { ...(await proxyDownload(format!)), title };
+      }
+    }
+
+    /*
+      🔴 A quality rung that does not exist must not be a dead end (owner,
+      2026-08-09: "this Facebook link is showing error 502").
+
+      Reproduced exactly: for that post yt-dlp advertised 2160p, 1440p, 1080p
+      and 720p; 2160p returned 502 while 1080p and 720p returned the same file,
+      byte for byte. yt-dlp lists what the platform's manifest CLAIMS, and
+      Facebook's manifest claims renditions it will not serve — so the top of
+      the list, which is what anyone picks, was the one guaranteed to fail.
+
+      We cannot know which rungs are real without trying them, so the honest
+      behaviour is to try another rather than hand back an error for a video
+      that is plainly downloadable. One retry, at the platform's own best
+      available format: the visitor gets the file, at a resolution that exists,
+      instead of a 502 for one that never did.
+    */
+    if (kind === "video" && formatId !== "best") {
+      try {
+        return { ...(await prepareDownload(url, "best", kind)), title };
+      } catch {
+        /* the whole video is genuinely unavailable — report the real error */
       }
     }
     throw err;

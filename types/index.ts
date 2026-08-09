@@ -162,6 +162,16 @@ export interface DownloadRecord {
   qualityLabel: string;
   /** Exact downloaded size in bytes, when known (recorded by the download manager). */
   size?: number | null;
+  /**
+   * Clip length in seconds, when the extractor reported one.
+   *
+   * Optional and often absent: it is only known for links whose metadata
+   * included it, and every record downloaded before this field existed has
+   * none. The history tile therefore shows a duration where there IS one and
+   * just the media-kind glyph where there isn't — never a "0:00", which would
+   * be a claim about the file rather than a gap in what we know.
+   */
+  durationSeconds?: number | null;
   createdAt: number;
   favorite: boolean;
 }

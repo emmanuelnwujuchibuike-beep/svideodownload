@@ -180,6 +180,10 @@ export function Downloader({
       platform: metadata.platform,
       platformName: metadata.platformName,
       qualityLabel: fmt?.label ?? (kind === "audio" ? "Audio" : kind === "image" ? "Image" : "Video"),
+      // Carried into history so a tile can show "0:14" the way the reference
+      // does — for the links whose metadata actually reported a length. Absent
+      // is left absent rather than shown as 0:00.
+      durationSeconds: metadata.durationSeconds,
     });
     setJustDownloaded(true);
     countDownload();
@@ -372,9 +376,41 @@ export function Downloader({
         visitor decides the site is broken.
       */}
       {resultOnly && isBusy ? (
-        <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3.5 text-sm font-semibold shadow-soft">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
-          Fetching your link…
+        /*
+          Loud on purpose (owner, 2026-08-09: "make the fetching your link
+          section at the hero to be more visible and with a more visible colour
+          so users don't see it and click download twice").
+
+          The first version was a quiet bordered card in the page's own colours,
+          which is indistinguishable from the layout at a glance — so people
+          concluded nothing had happened and pressed Download again, starting a
+          second extraction of the same link. It now uses the brand gradient the
+          CTA itself uses, so it reads as the SAME action continuing, and it says
+          plainly that pressing again is unnecessary.
+
+          The animated bar is a real progress indicator's honest cousin: an
+          extraction has no measurable percentage, so it shows motion rather than
+          a number it would have to invent.
+        */
+        <div
+          role="status"
+          aria-live="polite"
+          className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-4 shadow-lg shadow-violet-600/30"
+        >
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20 ring-1 ring-inset ring-white/25">
+              <Loader2 className="h-5 w-5 animate-spin text-white" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-extrabold text-white">Fetching your link…</p>
+              <p className="mt-0.5 text-xs text-white/85">
+                This takes a few seconds. No need to press Download again.
+              </p>
+            </div>
+          </div>
+          <span aria-hidden className="mt-3 block h-1 overflow-hidden rounded-full bg-white/25">
+            <span className="block h-full w-1/3 rounded-full bg-white/90 animate-[shimmer_1.2s_infinite] motion-reduce:w-full motion-reduce:animate-none" />
+          </span>
         </div>
       ) : null}
 

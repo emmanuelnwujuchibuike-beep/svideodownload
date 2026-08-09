@@ -144,6 +144,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         platform: metadata.platform,
         platformName: metadata.platformName,
         qualityLabel: f.label,
+        durationSeconds: metadata.durationSeconds,
       });
     });
     // No "started" toast — the floating card shows "Downloading N items…".

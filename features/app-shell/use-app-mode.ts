@@ -48,10 +48,30 @@ const subscribe = (l: () => void) => {
   listeners.add(l);
   return () => listeners.delete(l);
 };
-const getSnapshot = (): AppMode => optimistic ?? readModeCookie() ?? readModeLS() ?? "full";
+/*
+  🔴 The fallback is DOWNLOADER, and it must match `normalizeMode` exactly
+  (owner, 2026-08-09: "when a user signs in or logs in, they still land on full
+  bleed and the home page becomes the download page, which is wrong").
+
+  That is precisely what two disagreeing defaults produce. `normalizeMode` — the
+  one the edge middleware routes on — treats an absent cookie as "downloader",
+  so the server correctly turned `/` into the download page. These two lines
+  still said "full", so the client chrome rendered Full Bleed navigation around
+  it. A member with no cookie got downloader ROUTING inside full-bleed CHROME:
+  each half behaving exactly as written, and the combination nonsense.
+
+  There is now one default, expressed once. `normalizeMode(null)` is the only
+  thing either side may fall back to, so the two cannot drift apart again.
+*/
+const DEFAULT_MODE: AppMode = normalizeMode(null);
+
+const getSnapshot = (): AppMode => optimistic ?? readModeCookie() ?? readModeLS() ?? DEFAULT_MODE;
 
 export function useAppMode(): AppMode {
-  return useSyncExternalStore(subscribe, getSnapshot, () => "full");
+  // The server-render snapshot has to agree with the client's first read, or
+  // React swaps the whole shell out on hydration — a visible flash of the wrong
+  // navigation on the first paint after signing in.
+  return useSyncExternalStore(subscribe, getSnapshot, () => DEFAULT_MODE);
 }
 
 /**

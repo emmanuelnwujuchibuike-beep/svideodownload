@@ -104,7 +104,18 @@ export function Hero() {
           simply never told it could be narrower than its contents.
         */}
         <div className="min-w-0 text-left">
-          <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
+          {/*
+            `max-w-full` and a wrapping label (owner, 2026-08-09: "this section
+            on large screen is too compacted", with the icon sitting on top of
+            the text).
+
+            The badge is an `inline-flex` with wide letter-spacing, so on a
+            narrow column its text ran past the pill and collided with what was
+            beside it. Letting it wrap and capping it to the column keeps the
+            spacing intact at every width instead of only the ones it was
+            eyeballed at.
+          */}
+          <span className="mb-6 inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase leading-relaxed tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
             <Sparkles className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
             All-in-One Downloader &amp; Social Hub
           </span>

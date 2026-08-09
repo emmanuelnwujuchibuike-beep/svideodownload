@@ -29,6 +29,7 @@ import { redirect } from "next/navigation";
 
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { IdentityBadges } from "@/components/badges/identity-badges";
+import { SettingsSearch } from "@/features/account/settings-search";
 import { SETTINGS_TINTS } from "@/features/account/settings-ui";
 import { AppContent } from "@/features/app-shell/app-content";
 import { isAdmin } from "@/lib/admin";
@@ -279,6 +280,21 @@ export default async function AccountPage() {
             </div>
           </div>
         </div>
+
+        {/*
+          ── Settings Center™ (Feature 18 · Part 21) ──────────────────────────
+          Smart Settings Search + Quick Settings, above the category list.
+
+          The ONLY client island on this page. Everything below stays
+          server-rendered from the member's real plan, health and security
+          state, so the page paints its content first and the search box
+          hydrates after — which is the right order on a screen people open
+          when something is already annoying them.
+
+          Search runs entirely on the device against `lib/settings/registry`:
+          no request per keystroke, no loading state, and it works offline.
+        */}
+        <SettingsSearch />
 
         {/* Category list — each row is its own page, all prefetched on open */}
         <div className="space-y-5">

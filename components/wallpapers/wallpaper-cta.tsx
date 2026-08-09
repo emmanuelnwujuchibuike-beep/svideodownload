@@ -38,7 +38,24 @@ import { cn } from "@/lib/utils";
  * `prefetch` plus `/wallpapers`'s own `loading.tsx` is what makes the tap
  * instant. Nothing here hydrates. Keep it that way.
  */
-export function WallpaperCta({ className }: { className?: string }) {
+export function WallpaperCta({
+  className,
+  /**
+   * `row` — the full-width row used on the downloads dashboard.
+   * `card` — the tall two-column tile from `public/landing hero section.jpg`:
+   *          icon tile top-left, VIEW pill top-right, title and sub stacked
+   *          below, circular arrow bottom-right.
+   *
+   * Same component either way, so the icon, the dwell flourish, the sheen and
+   * the VIEW cue cannot drift between the two surfaces — which is exactly what
+   * happened when this markup existed twice.
+   */
+  variant = "row",
+}: {
+  className?: string;
+  variant?: "row" | "card";
+}) {
+  if (variant === "card") return <WallpaperCard className={className} />;
   return (
     <Link
       href="/wallpapers"
@@ -103,6 +120,58 @@ export function WallpaperCta({ className }: { className?: string }) {
         <span className="mt-0.5 block text-xs text-white/80">Stunning quality, updated daily</span>
       </span>
       <ArrowRight className="h-5 w-5 shrink-0 text-white/90 transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  );
+}
+
+/**
+ * The tall two-column tile from `public/landing hero section.jpg`.
+ *
+ * Same content and the SAME animations as the row — icon tile, dwell flourish,
+ * sheen, VIEW cue — rearranged into the reference's shape: icon top-left, VIEW
+ * top-right, title and sub-line stacked, a circular arrow bottom-right.
+ *
+ * The gradient is again the element's own background, for the reason recorded
+ * on the row above: a positioned colour layer paints over its own text, and a
+ * background is clipped by `border-radius` for free.
+ */
+function WallpaperCard({ className }: { className?: string }) {
+  return (
+    <Link
+      href="/wallpapers"
+      prefetch
+      className={cn(
+        "frenz-wp group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl p-4 text-left",
+        "bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white",
+        "ring-1 ring-inset ring-white/15 shadow-md",
+        "transition duration-200 hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.995]",
+        className,
+      )}
+    >
+      <span className="flex items-start justify-between gap-2">
+        <span className="frenz-wp-icon relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/20 text-white ring-1 ring-inset ring-white/25 backdrop-blur-sm">
+          <ImageIcon className="relative h-6 w-6" />
+          <span
+            aria-hidden
+            className="frenz-wp-sheen pointer-events-none absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/70 to-transparent"
+          />
+        </span>
+        {/* The 2-second dwell cue, in the reference's top-right position. */}
+        <span className="frenz-wp-cue inline-flex items-center gap-1 rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-white ring-1 ring-inset ring-white/30">
+          <Microscope className="h-3 w-3" />
+          View
+        </span>
+      </span>
+
+      <span className="mt-auto flex items-end justify-between gap-3 pt-4">
+        <span className="min-w-0">
+          <span className="block text-base font-bold leading-tight text-white">Wallpaper Gallery</span>
+          <span className="mt-1 block text-xs leading-snug text-white/80">Stunning quality, updated daily</span>
+        </span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/25 transition group-hover:bg-white/30">
+          <ArrowRight className="h-4 w-4 text-white transition-transform group-hover:translate-x-0.5" />
+        </span>
+      </span>
     </Link>
   );
 }

@@ -1,4 +1,13 @@
-import { ArrowRight, Compass, Lock, Shield, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import {
+  ArrowRight,
+  BadgeDollarSign,
+  Compass,
+  Lock,
+  MonitorSmartphone,
+  ShieldCheck,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -12,6 +21,7 @@ import { Downloader } from "@/features/downloader/downloader";
 import { HeroCtaForm } from "@/features/downloader/hero-cta-form";
 import { HeroLinkDownloader } from "@/features/downloader/hero-link-downloader";
 import { SharedLinkDownloader } from "@/features/downloader/shared-link-downloader";
+import { cn } from "@/lib/utils";
 /* The platform list and its badge markup now live in
    `components/landing/supported-platforms.tsx` — one definition, two surfaces. */
 
@@ -24,16 +34,33 @@ import { SharedLinkDownloader } from "@/features/downloader/shared-link-download
  * None of them asserts a user count or a rating — the Reality Ledger fails the
  * build on those, and there is no system behind either to make them true.
  */
+/*
+  One tone, not four. The reference (`public/landing hero section.jpg`) draws
+  all four icons as the same violet outline; the previous alternating blue/violet
+  made the row read as two pairs rather than one set. `tone` is gone rather than
+  set to the same value four times.
+*/
 const TRUST = [
-  { label: "100% Free", detail: "Always free, forever", Icon: Shield, tone: "blue" },
-  {
-    label: "No Sign Up Required",
-    detail: "Sign up only to track downloads across devices",
-    Icon: Lock,
-    tone: "violet",
-  },
-  { label: "Fast & Secure", detail: "Blazing fast downloads", Icon: Zap, tone: "blue" },
-  { label: "Safe & Private", detail: "Your data stays yours", Icon: ShieldCheck, tone: "violet" },
+  { label: "Always Free", detail: "No hidden fees", Icon: BadgeDollarSign },
+  { label: "Secure & Safe", detail: "Your data protected", Icon: ShieldCheck },
+  { label: "Private", detail: "We value privacy", Icon: Lock },
+  { label: "Cross Platform", detail: "Works everywhere", Icon: MonitorSmartphone },
+] as const;
+
+/**
+ * The four claims inside the paste card (`public/landing hero section.jpg`).
+ *
+ * Every one is a checkable product FACT, like the trust row below it: there is
+ * no watermark, the source's full quality is offered, it costs nothing, and it
+ * streams rather than queueing. None of them is a scale claim — the Reality
+ * Ledger fails the build on those, and there is no system behind a user count
+ * or a rating to make one true.
+ */
+const HERO_PROOF = [
+  { label: "No Watermark", Icon: ShieldCheck },
+  { label: "Full HD", Icon: Sparkles },
+  { label: "100% Free", Icon: BadgeDollarSign },
+  { label: "Fast", Icon: Zap },
 ] as const;
 
 /**
@@ -179,48 +206,98 @@ export function Hero() {
               (`public/newlanding.jpg`), so both are intended. One shared
               component — see `supported-platforms.tsx`.
             */}
-            <SupportedPlatforms className="mb-1 justify-start px-0.5" />
-
-            <HeroCtaForm />
-
-            <Link
-              href="/features"
-              className="group flex w-full items-center gap-4 rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-left text-slate-900 shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-card active:scale-[0.995] dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur dark:hover:border-white/30"
-            >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200/70 dark:bg-white/10 dark:text-white dark:ring-white/15">
-                <Compass className="h-5 w-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-base font-bold leading-tight">Explore Features</span>
-                <span className="mt-0.5 block text-xs text-slate-500 dark:text-white/60">See what Frenz can do</span>
-              </span>
-              <ArrowRight className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 dark:text-white/50" />
-            </Link>
+            <SupportedPlatforms className="mb-1" />
 
             {/*
-              Wallpapers — opens the standalone library.
+              ── The paste card (public/landing hero section.jpg) ──────────────
+              The reference wraps the CTA and a four-item trust strip in ONE
+              light card with a gradient hairline ring — not a solid gradient
+              block. The ring is a `p-px` gradient wrapper around an inner
+              surface: one element, no pseudo-element, and it clips correctly at
+              the radius because the inner card carries its own background.
 
-              Deliberately a plain server-rendered Link, NOT a client island. The
-              first version was a client component warming the route on idle; it
-              added a client boundary to the landing and pushed the page straight
+              The trust strip sits INSIDE the card but OUTSIDE the form, so the
+              form's `absolute inset-0` face (the button-becomes-a-field
+              transform) covers only the input row — never the strip.
+            */}
+            <div className="rounded-[1.35rem] bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500 p-px shadow-lg shadow-violet-500/15">
+              <div className="rounded-[1.3rem] bg-white p-2 dark:bg-[#0b1020]">
+                <HeroCtaForm />
+                <ul className="mt-2 flex flex-wrap items-center justify-between gap-y-2 px-1 pb-1 pt-1.5">
+                  {HERO_PROOF.map((p, i) => (
+                    <li
+                      key={p.label}
+                      className={cn(
+                        "flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-1 text-[11px] font-semibold text-slate-600 dark:text-white/70",
+                        // Hairline dividers between columns, as in the reference.
+                        i > 0 && "border-l border-slate-200/80 dark:border-white/10",
+                      )}
+                    >
+                      <p.Icon className="h-3.5 w-3.5 shrink-0 text-violet-500 dark:text-violet-300" />
+                      {p.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/*
+              ── Two cards, side by side (the reference) ──────────────────────
+              These were two full-width stacked rows. The reference pairs them:
+              a light "Explore Features" tile beside the purple Wallpaper
+              Gallery tile, both tall, each with a circular arrow bottom-right.
+
+              Side by side is also the better shape here — they are alternatives
+              to each other, and stacking two full-width rows under a CTA reads
+              as a queue of three equal actions rather than one primary and two
+              choices.
+            */}
+            <div className="grid grid-cols-2 gap-3">
+              <Link
+                href="/features"
+                className="group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 text-left text-slate-900 shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-card active:scale-[0.995] dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur"
+              >
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-sm">
+                  <Compass className="h-6 w-6" />
+                </span>
+                <span className="mt-auto flex items-end justify-between gap-3 pt-4">
+                  <span className="min-w-0">
+                    <span className="block text-base font-bold leading-tight">Explore Features</span>
+                    <span className="mt-1 block text-xs leading-snug text-slate-500 dark:text-white/60">
+                      See what Frenz can do
+                    </span>
+                  </span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/70 transition group-hover:bg-slate-200 dark:bg-white/10 dark:ring-white/15">
+                    <ArrowRight className="h-4 w-4 text-slate-600 transition-transform group-hover:translate-x-0.5 dark:text-white" />
+                  </span>
+                </span>
+              </Link>
+
+              {/* Same component as the downloads dashboard — icon, dwell
+                  flourish, sheen and VIEW cue all preserved (owner: "don't
+                  remove the existing wallpaper button icon and design
+                  animation"), in the reference's card shape. */}
+              <WallpaperCta variant="card" />
+            </div>
+
+            {/*
+              ── Notes that still apply to the Wallpaper card above ───────────
+
+              It is a plain server-rendered Link, NOT a client island. The first
+              version was a client component warming the route on idle; it added
+              a client boundary to the landing and pushed the page straight
               through the cold-entry budget (budget.test caught it at 303 kB). A
               Link with `prefetch` costs ZERO client JavaScript and still opens
               instantly — `loading.tsx` on /wallpapers does the rest.
-            */}
-            {/*
-              ── The 2-second dwell cue (owner, 2026-08-09) ───────────────────
-              "when a user stays at the button section for 2 secs, the wallpaper
-              icon should animate premium attractive, writing a small text that
-              says view with a microscope."
 
-              Every part of it is CSS with a 2s `animation-delay` (see
-              `.frenz-wp-*` in globals.css): the icon tile plays a short
-              flourish, a light sweeps across it, and the microscope "View" cue
-              fades in beside the title. No timer, no state, no client
-              component — which is the only way to add this to a page that has
-              no room left in its cold-entry budget.
+              The 2-second dwell cue (owner, 2026-08-09: "when a user stays at
+              the button section for 2 secs, the wallpaper icon should animate
+              premium attractive, writing a small text that says view with a
+              microscope") is entirely CSS with a 2s `animation-delay` — see
+              `.frenz-wp-*` in globals.css. No timer, no state, no client
+              component, which is the only way to have it on a page with no
+              bytes to spare.
             */}
-            <WallpaperCta />
 
             {/*
               The hero CTA's own result — under the Wallpaper Gallery button,
@@ -244,16 +321,12 @@ export function Hero() {
             user count or a rating, which the Reality Ledger would fail the build
             on and which there is no system behind to make true.
           */}
-          <ul className="mt-8 grid grid-cols-4 gap-x-1 divide-x divide-slate-200/80 dark:divide-white/10">
-            {TRUST.map(({ label, detail, Icon, tone }) => (
+          {/* The reference wraps this row in its own light CARD rather than
+              letting it sit bare on the page background. */}
+          <ul className="mt-6 grid grid-cols-4 gap-x-1 divide-x divide-slate-200/80 rounded-3xl border border-slate-200 bg-white/80 px-1 py-4 shadow-soft backdrop-blur dark:divide-white/10 dark:border-white/10 dark:bg-white/5">
+            {TRUST.map(({ label, detail, Icon }) => (
               <li key={label} className="flex flex-col items-center px-1 text-center">
-                <span
-                  className={
-                    tone === "blue"
-                      ? "flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"
-                      : "flex h-9 w-9 items-center justify-center rounded-full bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300"
-                  }
-                >
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
                   <Icon className="h-[18px] w-[18px]" />
                 </span>
                 <span className="mt-2 text-[13px] font-bold leading-tight text-slate-900 dark:text-white">{label}</span>

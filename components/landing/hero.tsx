@@ -199,14 +199,71 @@ export async function Hero() {
             `leading-[1.05]` over `1.02`: at this size the tighter figure was
             clipping the descender on "Download." and "Explore.".
           */}
-          <h1 className="text-[2rem] font-extrabold leading-[1.05] tracking-[-0.035em] text-slate-900 dark:text-white sm:text-4xl lg:text-5xl">
-            Download.
-            <br />
-            <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
-              Connect.
+          {/*
+            ── ONE ROW, not three (owner, 2026-08-10) ────────────────────────
+            "make the landing hero h1 text, download, discover, explore to be in
+            flex row, and responsive on all devices so it looks like a pure
+            native app."
+
+            It was a three-line stack with `<br>` between the words. Two things
+            change and both matter:
+
+            • FLEX ROW. The three words now sit on one line as flex items. `<br>`
+              is gone entirely — it is a hard instruction that cannot respond to
+              anything, which is exactly what "responsive on all devices" rules
+              out.
+
+            • The middle word is DISCOVER, per the instruction. It was
+              "Connect." — the owner named the three words explicitly and
+              Discover is what they asked for.
+
+            ── How one line survives a 320px phone ──────────────────────────────
+            "Download. Discover. Explore." is 28 characters. At the old 32px it
+            needs roughly 470px and a small phone has ~272px of column, so a
+            fixed size cannot work at either end — it would either overflow the
+            narrow screen or look tiny on a desktop.
+
+            `text-[clamp(1.05rem,5.2vw,3rem)]` makes the type itself the
+            responsive part: it tracks the viewport between a 17px floor and a
+            48px ceiling, so the row fills the column at every width without ever
+            wrapping and without a single breakpoint. That is also what makes it
+            read as native — an iOS large title scales with the device rather
+            than snapping between three hard-coded sizes.
+
+            `flex-nowrap` + `whitespace-nowrap` state the guarantee rather than
+            leaving it to the clamp being right: no width may break these three
+            words onto a second line. `gap-[0.3em]` is in EM deliberately, so the
+            spacing between the words scales with the type instead of becoming a
+            gutter at small sizes and a hairline at large ones.
+
+            `items-baseline` so the three words sit on a shared baseline — with
+            `flex` they would otherwise align by box, and the gradient word's
+            clipped background makes that misalignment visible.
+          */}
+          {/*
+            🔴 The `lg` clamp is a SEPARATE ramp, and it has to be.
+
+            Measured at six widths: one line and no overflow from 320px up — and
+            overflow at 1280px. The reason is that `vw` measures the VIEWPORT
+            while this headline lives in a COLUMN, and at `lg` the hero becomes
+            `lg:grid-cols-2`. So the text keeps growing with the window while the
+            box holding it stops at roughly half of it: at 1280px the clamp had
+            reached its 48px ceiling, which needs about 700px of line, inside a
+            600px column.
+
+            A second ramp above `lg` sizes against what the column actually gets
+            (~46% of the viewport, capped by the container), so the row still
+            fills its space and still never wraps. Two ramps rather than a
+            container query because the layout only has one breakpoint that
+            changes the column width, and `@container` would mean making this a
+            containment context purely to solve a problem with one known cause.
+          */}
+          <h1 className="flex flex-nowrap items-baseline gap-[0.3em] text-[clamp(1.05rem,5.2vw,3rem)] font-extrabold leading-[1.1] tracking-[-0.035em] text-slate-900 dark:text-white lg:text-[clamp(1.5rem,2.9vw,2.35rem)]">
+            <span className="whitespace-nowrap">Download.</span>
+            <span className="whitespace-nowrap bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
+              Discover.
             </span>
-            <br />
-            Explore.
+            <span className="whitespace-nowrap">Explore.</span>
           </h1>
 
           {/*

@@ -52,15 +52,74 @@ export const dynamic = "force-dynamic";
  *      5xx is "ask again". A crawler must never be told a file is absent
  *      because our database was briefly unavailable.
  */
+/*
+  🔴 The publisher id, from the environment, as a LAST RESORT (2026-08-10).
+
+  ── Why the 503 was not the end of the story ─────────────────────────────────
+
+  The incident above was fixed by refusing to answer 404 when the settings read
+  fails. That is correct and it stays. But it leaves one real failure standing:
+  if Supabase is unreadable, this file is *unavailable*, and unavailable is still
+  not "here is your record". Google retries a 503 — it does not retry forever,
+  and this project has already had a day where the database answered 429 to
+  everything (see the download quota outage, 2026-08-09).
+
+  A full audit of why AdSense still showed "Not found" is what surfaced this.
+  The file itself is healthy — 200, `text/plain`, correct record, on the apex and
+  on www, over http and https, to every Google crawler user agent, 40 fetches out
+  of 40, in about 0.65s. Nothing is broken today. What is fragile is that a file
+  whose entire content is DERIVABLE FROM A CONSTANT was still gated on a network
+  round-trip to a database, on every single request, forever.
+
+  ── Why an env var is the right shape for this ───────────────────────────────
+
+  The AdSense record is not a preference, it is an identity:
+  `google.com, pub-…, DIRECT, f08c47fec0942fa0`, where the cert is a constant
+  Google publishes and the publisher id changes roughly never. A value that
+  never changes and that revenue depends on should not be reachable only through
+  the least reliable component in the request path.
+
+  So: settings still WIN — the operator can add networks, comments and ordering
+  in the admin, and that is what ships. This is consulted only when the read
+  failed, and it turns "temporarily unavailable" into a correct file for the one
+  publisher we can always name. If neither is available we still answer 503, not
+  404, because the verdict rule from the incident is unchanged: a 4xx is a
+  verdict, a 5xx is "ask again".
+
+  Unset by default, so a deployment that has not configured it behaves exactly
+  as before. NOT prefixed `NEXT_PUBLIC_` — this is read on the server only.
+*/
+const FALLBACK_PUBLISHER_ID = process.env.ADSENSE_PUBLISHER_ID ?? "";
+
 export async function GET() {
   const { settings, degraded } = await readMonetizationSettings();
 
-  /*
-    The read failed. We do not know what is configured, so we must not answer as
-    if we do — in either direction. `Retry-After` is short because verification
-    is usually an operator sitting in the AdSense dashboard pressing check.
-  */
   if (degraded) {
+    /*
+      The read failed, so we do not know what the operator configured. But we
+      may still know who the publisher is, and a correct file beats a correct
+      error every time — the crawler is here to find a record, and we have one.
+    */
+    const fallback = buildAdsTxt({ adsensePublisherId: FALLBACK_PUBLISHER_ID }).trim();
+    if (fallback) {
+      return new Response(`${fallback}\n`, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          // Not cached: this is the DEGRADED answer, and it must not outlive the
+          // outage that produced it. The moment the database is readable again
+          // the operator's own file is what should be served.
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    /*
+      Nothing configured anywhere, and we could not read. We must not answer as
+      if we know — in either direction. `Retry-After` is short because
+      verification is usually an operator sitting in the AdSense dashboard
+      pressing check.
+    */
     return new Response("ads.txt temporarily unavailable\n", {
       status: 503,
       headers: {

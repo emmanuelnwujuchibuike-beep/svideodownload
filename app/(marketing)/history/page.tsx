@@ -48,10 +48,13 @@ export default function HistoryPage() {
           both render these; this page was the one that did not, which is also
           why the ad "disappeared" when History became its own destination.
         */}
-        <div className="mx-auto max-w-6xl px-2 sm:px-4">
-          <DownloadHistoryAd position="top" maxWidth="max-w-3xl" />
-        </div>
-        <HistoryPanel standalone />
+        <HistoryPanel
+          standalone
+          /* Above the GRID, under the search and filter chips (owner, with a
+             screenshot). Placed at the top of the page it sat above the panel's
+             whole header, which is not where it was asked for. */
+          beforeGrid={<DownloadHistoryAd position="top" maxWidth="max-w-3xl" />}
+        />
         <div className="mx-auto mt-6 max-w-6xl px-2 sm:px-4">
           <DownloadHistoryAd position="bottom" maxWidth="max-w-3xl" />
         </div>

@@ -46,9 +46,19 @@ const KIND_FILTERS: { key: KindFilter; label: string }[] = [
 export function HistoryPanel({
   standalone = false,
   embedded = false,
+  beforeGrid,
 }: {
   /** The dedicated /history page: its own top padding, and an empty state. */
   standalone?: boolean;
+  /**
+   * Rendered between the filter chips and the media grid.
+   *
+   * Exists for the /history ad placement, which the owner asked to sit directly
+   * above the grid rather than above the panel's search and filters. A slot
+   * keeps that decision with the page that made it — the other two hosts of
+   * this panel place their ad differently and on purpose.
+   */
+  beforeGrid?: React.ReactNode;
   /**
    * Rendered INSIDE another page's card (the signed-in Downloads page).
    *
@@ -336,6 +346,20 @@ export function HistoryPanel({
             <Heart className={cn("h-3.5 w-3.5", tab === "favorites" && "fill-current")} /> Favorites <Count>{favCount}</Count>
           </Chip>
         </div>
+
+        {/*
+          Directly above the grid, below the search and the filter chips
+          (owner, 2026-08-09, with a screenshot: "the history page ad should be
+          above the media grid").
+
+          A slot rather than the ad itself, because this panel has three hosts —
+          /history, /downloads and /library — and only /history wants the unit
+          here. The other two place it around the whole panel, which is right
+          for them: on /downloads the panel sits inside a bordered card, and an
+          ad wedged between that card's chrome and its contents would read as
+          part of the history rather than as an advertisement.
+        */}
+        {beforeGrid}
 
         <div className="mt-5">
         <MediaGallery

@@ -99,10 +99,75 @@ export async function AdSenseSiteScript() {
         verification passes. The `ads.txt` method is covered by /ads.txt.
       */}
       <meta name="google-adsense-account" content={id} />
+      {/*
+        🔴 The loader is an inline BOOTSTRAP, not a bare `<script async src>`
+        (owner decision, 2026-08-10: "delay Auto ads until after LCP, landing
+        only").
+
+        ── What this is buying ──────────────────────────────────────────────────
+        Measured on the live landing page: of 314 KiB of unused JavaScript,
+        230 KiB is third-party, and 154 KiB of that is this chain —
+        adsbygoogle.js (30.5 KiB) pulling show_ads_impl_fy2021.js (123.6 KiB)
+        for Auto ads. As an `async` tag in <head> it starts competing for the
+        connection and the main thread during the LCP window, on the one page
+        with a hard cold-entry budget. TTI on that page is 9.1s.
+
+        ── Why the decision has to be made HERE, in the browser ─────────────────
+        This component renders from the ROOT layout, which is shared by every
+        route and cannot know which one it is on. The obvious server-side
+        answers are both closed: `headers()` would un-static `/`, which is the
+        single most expensive thing that can happen to this page (it is the only
+        prerendered route that was ever served uncached — see the note in
+        app/(marketing)/page.tsx), and a layout-level split would not isolate the
+        landing anyway, since ~150 marketing pages share its layout.
+
+        An inline script in <head> has the one piece of information the server
+        does not: `location.pathname`, available at parse time, before any
+        stylesheet or image request has been made. So the branch costs nothing
+        and happens as early as a server-rendered tag would have.
+
+        ── Every other route is UNCHANGED ───────────────────────────────────────
+        `load()` runs immediately on any path that is not the landing, appending
+        exactly the same async script this used to emit directly. The only
+        difference for those pages is that the tag is created microseconds later
+        by a parser-blocking inline script that is ~400 bytes.
+
+        ── On the landing, "after LCP" means after `load` THEN idle ─────────────
+        Not a fixed timer. `load` guarantees the LCP image and the rest of the
+        page's own resources have finished; the idle callback then waits for the
+        main thread to actually be free, so the ad chain cannot land on top of
+        hydration. The 1500ms setTimeout is the fallback for Safari, which only
+        shipped `requestIdleCallback` in 17 — without it, older iOS would never
+        load ads at all, which is a revenue bug disguised as a performance win.
+        The 3000ms `timeout` option is the other side of that: on a page that
+        never goes idle, ads must still eventually load.
+
+        ── Verification is not affected ─────────────────────────────────────────
+        AdSense accepts three methods and this site emits all three
+        independently: the `<meta name="google-adsense-account">` above (a
+        complete method on its own, unchanged), `/ads.txt` (see app/ads.txt),
+        and the code snippet. Only the third one's SHAPE changes here, and only
+        on `/` — every other page still ships a literal script tag. If AdSense
+        ever reports a verification problem, the meta tag is the method to point
+        it at, and reverting this block restores the previous behaviour exactly.
+
+        The guard flag makes `load()` idempotent so a bfcache restore or a
+        second call can never inject two copies.
+      */}
       <script
-        async
-        crossOrigin="anonymous"
-        src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(id)}`}
+        dangerouslySetInnerHTML={{
+          __html:
+            `(function(){var s=${JSON.stringify(
+              `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(id)}`,
+            )};` +
+            `function l(){if(window.__frenzAdsLoaded)return;window.__frenzAdsLoaded=1;` +
+            `var e=document.createElement("script");e.async=true;e.crossOrigin="anonymous";e.src=s;` +
+            `(document.head||document.documentElement).appendChild(e)}` +
+            `try{if(location.pathname!=="/"){l()}else{` +
+            `var i=function(){(window.requestIdleCallback||function(f){setTimeout(f,1500)})(l,{timeout:3000})};` +
+            `if(document.readyState==="complete"){i()}else{addEventListener("load",i,{once:true})}` +
+            `}}catch(err){l()}})();`,
+        }}
       />
     </>
   );

@@ -59,16 +59,44 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
   if (!hasSupabase) return [];
   try {
     const db = createAdminClient();
+
+    /*
+      🔴 A CATCH-UP fetch may return far more than a first page (owner,
+      2026-08-10: the feed "doesn't update in real time and must not miss or
+      skip any history").
+
+      `limit` sizes the initial page — 40 rows is a sensible screenful. It is
+      the wrong size for an incremental poll, because that one has to carry
+      EVERYTHING that happened since the cursor, and a busy few seconds can
+      produce more than forty. Anything past the limit was silently discarded
+      and, because the cursor then advanced to the newest row returned, it was
+      never fetched again. Gaps that could not be recovered from.
+    */
+    const take = since ? Math.max(limit, 500) : limit;
+
     let eventsQ = db
       .from("events")
       .select("id, user_id, type, metadata, created_at")
+      /*
+        🔴 Filter for notable types IN THE QUERY.
+
+        This used to run as `.filter(e => NOTABLE.has(e.type))` in JavaScript,
+        AFTER the database had already applied the limit. So the limit was
+        spent on rows that were about to be thrown away: forty page-views in
+        front of a subscription meant the subscription never arrived, and it
+        never would, because the next poll's cursor had moved past it.
+
+        The set is the same one; it is simply applied where the rows are
+        selected rather than after they have been counted.
+      */
+      .in("type", [...NOTABLE])
       .order("created_at", { ascending: false })
-      .limit(limit);
+      .limit(take);
     let dlQ = db
       .from("downloads")
       .select("id, user_id, platform, title, format, created_at")
       .order("created_at", { ascending: false })
-      .limit(limit);
+      .limit(take);
     if (since) {
       // `gte`, not `gt`: a row sharing the cursor's exact timestamp must not be
       // dropped. The client dedups by id, so re-returning the cursor row itself is
@@ -79,6 +107,10 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
     const [{ data: events }, { data: downloads }] = await Promise.all([eventsQ, dlQ]);
 
     const eventItems: (ActivityItem & { userId: string | null })[] = ((events ?? []) as EventRow[])
+      /* Kept as a belt to the query's braces: a type that reaches here despite
+         the `.in()` filter (a stale cached response, a future widening of the
+         select) still cannot flood the feed. It no longer decides what is
+         FETCHED, which was the bug. */
       .filter((e) => NOTABLE.has(e.type))
       .map((e) => ({
         id: `e:${e.id}`,

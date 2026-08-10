@@ -20,7 +20,16 @@ import { cn, formatCompactNumber } from "@/lib/utils";
  * same second) — so a download logged twice never shows twice.
  */
 
-const POLL_MS = 6000;
+/*
+  Two and a half seconds, down from six.
+
+  The feed is a live operations view — an operator watching it is watching for
+  something specific to appear, and six seconds is long enough to make them
+  reload the page instead, which costs far more than the poll does. The request
+  is incremental (a timestamp cursor, usually returning nothing), so the extra
+  frequency is a few hundred bytes rather than a query of the whole table.
+*/
+const POLL_MS = 2500;
 const MAX_ITEMS = 100;
 
 interface KindMeta {
@@ -107,10 +116,41 @@ export function ActivityFeed({ initial, totals }: { initial: ActivityItem[]; tot
       if (alive) timer = setTimeout(tick, POLL_MS);
     };
 
-    timer = setTimeout(tick, POLL_MS);
+    /*
+      🔴 Poll IMMEDIATELY, then on an interval (owner, 2026-08-10: the feed
+      "doesn't update instantly, in real time").
+
+      The first fetch used to wait a full interval. Opening the dashboard meant
+      staring at server-rendered rows for six seconds before anything could
+      arrive — and since that page is the thing an operator opens BECAUSE
+      something is happening, the first six seconds are the ones that matter
+      most. There is no cost to asking straight away: the request is small and
+      the cursor makes it incremental.
+    */
+    void tick();
+
+    /*
+      🔴 And catch up the moment the tab comes back.
+
+      A background tab is throttled hard by every browser — timers can be
+      clamped to once a minute or stopped entirely — so switching away and back
+      previously showed a feed that was minutes stale and only corrected on the
+      next tick. Now returning to the tab fetches at once, and because the
+      cursor is a timestamp rather than a page number, that single request
+      carries everything missed while away rather than only the newest few.
+    */
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        clearTimeout(timer);
+        void tick();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       alive = false;
       clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 

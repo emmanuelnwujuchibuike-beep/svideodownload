@@ -2,6 +2,7 @@
 
 import {
   Check,
+  ChevronRight,
   ChevronUp,
   Download,
   History,
@@ -9,9 +10,9 @@ import {
   Loader2,
   Minus,
   Play,
-  PlaySquare,
   RotateCcw,
   Share,
+  Sparkles,
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -86,7 +87,121 @@ const RATING_AFTER = 2;
  * asserted the file was large — which we do not actually know at that point,
  * only that the server has not answered yet.
  */
-const WAIT_COPY = "Please wait — have a look around while it downloads in the background.";
+/*
+  🔴 SUPERSEDED WORDING (owner, 2026-08-10, with `public/waiting premium
+  button.jpg`: "text and texture and color and everything exactly in the image").
+
+  This read "Please wait — have a look around while it downloads in the
+  background.", itself an owner rewrite from 2026-08-09. The reference image
+  draws a heading and a sentence as two separate things, so the sentence no
+  longer has to carry the invitation — "Almost there!" sits above it and the two
+  tiles below say where to go. What is left is the reference's own line.
+
+  It also stays honest about the same thing the 08-09 rewrite was protecting: it
+  claims the download is PREPARING, not that the file is large, because at this
+  point all we know is that the server has not answered yet.
+*/
+const WAIT_COPY = "Please wait while your download prepares in the background.";
+
+/**
+ * One gradient tile in the wait panel — built to `public/waiting premium
+ * button.jpg`.
+ *
+ * ── What the reference actually contains, layer by layer ─────────────────────
+ *
+ * The tiles are not flat gradients with an icon. Reproducing them means four
+ * stacked layers, in this paint order:
+ *
+ *  1. The base gradient. Violet → indigo on the left tile, sky → indigo on the
+ *     right one. Both travel toward the SAME indigo, which is what makes the
+ *     pair read as one family rather than as two unrelated buttons.
+ *  2. The wave texture — the soft lighter S-curve sweeping through the left
+ *     tile. Two large, very low-opacity white radial gradients at different
+ *     offsets, which is enough to read as an organic wave without an image. A
+ *     texture worth zero bytes: this card can appear on the landing page, which
+ *     has no budget for a decorative asset.
+ *  3. The glass rim — a white top-edge highlight plus an inset ring. This is
+ *     what makes the tile look like lit glass instead of painted plastic, and it
+ *     is the single most identifiable thing about the reference.
+ *  4. The content row: circular translucent disc, title, two-line subtitle, and
+ *     a circular chevron.
+ *
+ * ── The coloured glow ────────────────────────────────────────────────────────
+ * Each tile casts a shadow in its OWN hue, which is why the reference tiles look
+ * lit from within. A neutral shadow under a saturated tile reads as dirt.
+ *
+ * ── Kept from the previous version, because the owner asked for them ─────────
+ * `prefetch` plus each destination's `loading.tsx` is what makes the tap instant
+ * ("never load when clicked"), and the sheen loop is the "alive" ask. The sheen
+ * exists only while a download is genuinely slow — never on an idle page — and
+ * it is `transform`-only, so it costs the compositor and nothing else.
+ */
+function WaitTile({
+  href,
+  title,
+  sub,
+  tone,
+  delayed = false,
+  onNavigate,
+  children,
+}: {
+  href: string;
+  title: string;
+  sub: string;
+  tone: "violet" | "blue";
+  /** Stagger the second tile's sheen so the pair breathes instead of blinking in unison. */
+  delayed?: boolean;
+  onNavigate: () => void;
+  children: React.ReactNode;
+}) {
+  const violet = tone === "violet";
+  return (
+    <Link
+      href={href}
+      prefetch
+      onClick={onNavigate}
+      className={[
+        "frenz-alive group relative flex items-center gap-3 overflow-hidden rounded-[1.15rem] p-3 text-left",
+        "ring-1 ring-inset ring-white/25 transition duration-200 hover:-translate-y-px active:scale-[0.985]",
+        violet
+          ? "bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-500 shadow-[0_10px_26px_-12px_rgba(139,92,246,0.85)]"
+          : "bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 shadow-[0_10px_26px_-12px_rgba(59,130,246,0.85)]",
+        delayed ? "frenz-alive-2" : "",
+      ].join(" ")}
+    >
+      {/* (2) Wave texture. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_80%_at_15%_120%,rgba(255,255,255,0.22)_0%,transparent_55%),radial-gradient(100%_70%_at_85%_-20%,rgba(255,255,255,0.18)_0%,transparent_60%)]"
+      />
+      {/* (3) Glass rim — the lit top edge. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/22 to-transparent"
+      />
+      {/* The "alive" sweep, unchanged in behaviour from the version the owner
+          approved — only the surface under it is new. */}
+      <span
+        aria-hidden
+        className="frenz-alive-sheen pointer-events-none absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/35 to-transparent"
+      />
+
+      {/* (4) Circular glass disc. */}
+      <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/25 ring-1 ring-inset ring-white/40 backdrop-blur-sm">
+        {children}
+      </span>
+
+      <span className="relative min-w-0 flex-1">
+        <span className="block text-[14px] font-bold leading-tight text-white">{title}</span>
+        <span className="mt-0.5 block text-[11px] leading-snug text-white/85">{sub}</span>
+      </span>
+
+      <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/30 transition group-hover:bg-white/30">
+        <ChevronRight className="h-4 w-4 text-white transition-transform group-hover:translate-x-0.5" />
+      </span>
+    </Link>
+  );
+}
 
 /**
  * "Your download is done" — for the visitor who took us up on the offer and
@@ -511,8 +626,54 @@ export function FloatingDownloadProgress({
                 un-minimises itself the moment the file lands.
               */}
               {takingLong ? (
-                <div className="mt-3 rounded-2xl bg-secondary/60 p-2.5">
-                  <p className="px-1 text-[11px] font-semibold leading-snug text-muted-foreground">{WAIT_COPY}</p>
+                /*
+                  ── Built to `public/waiting premium button.jpg` (owner, 2026-08-10) ──
+                  "how i want the wait buttons, text and texture and color and
+                  everything exactly in the image to be in the wait section and
+                  buttons."
+
+                  The reference is a frosted panel carrying a titled message and
+                  two gradient glass tiles. Everything from it is here: the
+                  circular glass badge, the "Almost there!" heading over a
+                  two-line explanation, the violet and blue gradient tiles with
+                  their wave texture, the circular glass icon discs with white
+                  glyphs, the two-line subtitles and the round chevron affordance.
+
+                  🔴 ONE deviation, and it is forced by width, not preference.
+                  The reference places the two tiles SIDE BY SIDE, and it is a
+                  wide desktop mock — each tile is ~700px there. This panel lives
+                  inside the floating download card, which is `max-w-md` on a
+                  phone and `lg:w-96` (384px) on a desktop, so two columns give
+                  each tile about 172px. The reference tile's own anatomy — a
+                  56px icon disc, a title, a two-line subtitle and a 32px chevron
+                  in a row — cannot fit 172px; it would have to lose the subtitle
+                  and shrink the discs, which is losing the texture, the text and
+                  the proportions the instruction was specifically about.
+
+                  Stacked full-width tiles reproduce each tile EXACTLY as drawn.
+                  The only thing that changes is how the two relate to each
+                  other, which is the one part a 384px container genuinely cannot
+                  honour. Widening the card was the alternative and it is worse:
+                  this thing floats over live content on every surface in the app.
+                */
+                <div className="frenz-wait mt-3 overflow-hidden rounded-[1.35rem] bg-gradient-to-b from-white/85 to-slate-50/70 p-3 ring-1 ring-inset ring-white/70 backdrop-blur-xl dark:from-white/[0.07] dark:to-white/[0.03] dark:ring-white/10">
+                  {/* Header — glass badge + heading + explanation, per the reference. */}
+                  <div className="flex items-start gap-2.5">
+                    <span className="relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-[0_2px_8px_rgba(15,23,42,0.10)] ring-1 ring-inset ring-white dark:bg-white/10 dark:ring-white/20">
+                      {/* The reference's small violet spark. It pulses rather
+                          than spins — this panel is about waiting calmly, and a
+                          spinner is already doing the "working" job above. */}
+                      <Sparkles className="frenz-wait-spark h-4 w-4 text-violet-600 dark:text-violet-300" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[15px] font-extrabold leading-tight tracking-[-0.01em] text-slate-900 dark:text-white">
+                        Almost there!
+                      </span>
+                      <span className="mt-0.5 block text-[11.5px] leading-snug text-slate-500 dark:text-white/60">
+                        {WAIT_COPY}
+                      </span>
+                    </span>
+                  </div>
                   {/*
                     ── Premium, and alive (owner, 2026-08-09) ──────────────────
                     "make the view wallpaper and watch reels buttons more
@@ -538,39 +699,38 @@ export function FloatingDownloadProgress({
                       behind it. Prefetch alone would still show a blank frame
                       on a cold route; the pair is what makes it instant.
                   */}
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <Link
+                  {/*
+                    The two gradient tiles. Stacked — see the note above for why
+                    the reference's side-by-side pair cannot survive a 384px card
+                    without losing the tile design itself.
+                  */}
+                  <div className="mt-2.5 grid gap-2">
+                    <WaitTile
                       href="/wallpapers"
-                      prefetch
-                      onClick={() => setMinimised(true)}
-                      className="frenz-alive group relative flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-br from-violet-500/12 to-fuchsia-500/10 px-3 py-2.5 text-xs font-bold ring-1 ring-inset ring-violet-400/25 transition hover:ring-violet-400/60 active:scale-95"
+                      title="Wallpapers"
+                      sub="Explore beautiful HD wallpapers"
+                      tone="violet"
+                      onNavigate={() => setMinimised(true)}
                     >
-                      <span
-                        aria-hidden
-                        className="frenz-alive-sheen pointer-events-none absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/20"
-                      />
-                      <span className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-sm">
-                        <ImageIcon className="h-3.5 w-3.5" />
-                      </span>
-                      <span className="relative">Wallpapers</span>
-                    </Link>
-                    <Link
+                      <ImageIcon className="h-[18px] w-[18px] text-white" strokeWidth={2.25} />
+                    </WaitTile>
+                    <WaitTile
                       href="/reels"
-                      prefetch
-                      onClick={() => setMinimised(true)}
-                      className="frenz-alive frenz-alive-2 group relative flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-br from-blue-500/12 to-violet-500/10 px-3 py-2.5 text-xs font-bold ring-1 ring-inset ring-blue-400/25 transition hover:ring-blue-400/60 active:scale-95"
+                      title="Watch reels"
+                      sub="Discover trending videos and more"
+                      tone="blue"
+                      delayed
+                      onNavigate={() => setMinimised(true)}
                     >
-                      <span
-                        aria-hidden
-                        className="frenz-alive-sheen pointer-events-none absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/20"
-                      />
-                      <span className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-violet-500 text-white shadow-sm">
-                        {/* A video glyph, not a sparkle (owner): the icon should
-                            say what is on the other side of the tap. */}
-                        <PlaySquare className="h-3.5 w-3.5" />
+                      {/* The reference draws a WHITE rounded plate with the play
+                          triangle knocked out in the tile's own colour — not a
+                          white outline glyph. Rebuilt as exactly that, so the
+                          reels disc reads as a video badge rather than as a
+                          second image icon. */}
+                      <span className="flex h-[18px] w-[22px] items-center justify-center rounded-[5px] bg-white">
+                        <Play className="h-2.5 w-2.5 fill-blue-600 text-blue-600" />
                       </span>
-                      <span className="relative">Watch reels</span>
-                    </Link>
+                    </WaitTile>
                   </div>
                 </div>
               ) : null}

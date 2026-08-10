@@ -1492,6 +1492,37 @@
   }
 }
 
+/* ── The wait panel's spark (public/waiting premium button.jpg) ──────────────
+   A slow breath on the badge glyph, so the panel reads as "working" without a
+   second spinner competing with the real one above it.
+
+   `opacity` and `transform` only — no filter, no box-shadow — so it runs on the
+   compositor and never repaints. Like the sheen it loops, and like the sheen
+   that is acceptable HERE specifically because this panel exists only during a
+   genuinely slow download and is gone the moment the file lands; it is never on
+   an idle screen. See the note on `.frenz-alive-sheen` above. */
+@keyframes frenz-wait-spark {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+.frenz-wait-spark {
+  animation: frenz-wait-spark 2.4s var(--ease-out) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frenz-wait-spark {
+    animation: none;
+  }
+}
+
 /* ── Premium controls that cost nothing when nobody is looking ──────────────
    Owner, 2026-08-09: "make all button and text in the history page to be
    premium, alive, luxurious and professional without breaking the performance

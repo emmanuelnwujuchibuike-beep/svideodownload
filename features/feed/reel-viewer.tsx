@@ -27,6 +27,7 @@ import {
   Loader2,
   MessageCircle,
   MoreVertical,
+  Music,
   Pause,
   Pencil,
   Play,
@@ -53,7 +54,7 @@ import { createPortal } from "react-dom";
    architecture and reusable components — putting a design system inside the
    consumer of that design system is how the next surface ends up with a
    copy of it. */
-import { layer, scrimForLuminance } from "@/features/reels/viewer/design";
+import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design";
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
 import type { PulseEvent } from "@/features/reels/viewer/social-pulse";
@@ -497,6 +498,24 @@ function ReelCard({
   // Tapping below the caption reveals the full (unclamped) text plus post info
   // — currently the date posted — instead of navigating away.
   const [infoOpen, setInfoOpen] = useState(false);
+  /*
+    ── Feature 15: the panel collapses while you watch ──────────────────────
+    "Everything should collapse automatically while watching. Tapping restores
+    it smoothly."
+
+    An expanded caption used to stay expanded for the rest of the reel: tap
+    "More", keep watching, and a wall of text sat over the video indefinitely.
+    Tying it to the chrome's own idle timer means the video reclaims the screen
+    without the viewer having to undo anything, and the next tap — which brings
+    the chrome back — restores exactly the state they left.
+
+    Deliberately one-way. It collapses with the chrome but does NOT re-expand
+    when the chrome returns: re-opening a long caption unasked, every time
+    someone taps to pause, is the interruption this is meant to remove.
+  */
+  useEffect(() => {
+    if (!ui && infoOpen) setInfoOpen(false);
+  }, [ui, infoOpen]);
   const [loadingComments, setLoadingComments] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [editOpen, setEditOpen] = useState(false);
@@ -1595,8 +1614,43 @@ function ReelCard({
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
       </div>
 
-      {/* Author + caption (auto-hides) */}
-      <div className={cn("absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 pt-16 transition-opacity duration-200", captionPad, ui ? "opacity-100" : "pointer-events-none opacity-0")}>
+      {/*
+        ── Feature 15: THE BOTTOM INFORMATION PANEL ───────────────────────────
+        "Creator name, caption, music, sound, view more. Everything should
+        collapse automatically while watching. Tapping restores it smoothly."
+
+        Three real changes from the block this replaces.
+
+        1. IT SITS ON AN ADAPTIVE SCRIM, not a fixed `from-black/80` gradient.
+           That constant was a compromise between a night shot and a ski slope
+           and was wrong for both. It now uses the same measured-luminance value
+           as the top scrim, so the darkening tracks the actual frame. One
+           number drives both ends of the screen — see `scrimForLuminance`.
+
+        2. IT COLLAPSES WHEN THE CHROME HIDES. Previously an expanded caption
+           stayed expanded forever: tap "More", keep watching, and a wall of text
+           sat over the video for the rest of the reel. The brief asks for the
+           panel to collapse automatically while watching, and the effect below
+           ties `infoOpen` to `ui`, so the video wins back the screen on its own
+           and a tap restores exactly what was there.
+
+        3. THE SOUND ROW. Honest by construction — see the note on it below.
+
+        The creator AVATAR and FOLLOW button stay on the action rail rather than
+        being duplicated here. The brief lists them under both, but rendering two
+        follow buttons on one screen is the "less cluster" failure, and the rail's
+        is the one that is already in the thumb's reach.
+      */}
+      <div
+        style={{ ["--reel-scrim" as string]: String(scrim) }}
+        className={cn(
+          "absolute inset-x-0 bottom-0 px-4 pt-16 transition-opacity duration-200",
+          "bg-gradient-to-t from-[rgba(0,0,0,var(--reel-scrim,0.8))] via-black/30 to-transparent",
+          layer.info,
+          captionPad,
+          ui ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      >
         <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="inline-flex items-center gap-1.5 text-white">
           <span className="font-bold">@{item.publisher.handle}</span>
           {item.publisher.isVerified ? <VerifiedTick className="h-4 w-4" /> : null}
@@ -1611,6 +1665,7 @@ function ReelCard({
         <button
           type="button"
           onClick={() => setInfoOpen((v) => !v)}
+          aria-expanded={infoOpen}
           className="mt-1 flex items-center gap-1 text-xs font-semibold text-white/60 transition hover:text-white/90"
         >
           {infoOpen ? "Show less" : "More"}
@@ -1621,6 +1676,39 @@ function ReelCard({
             <Calendar className="h-3 w-3" /> Posted {formatPostedOn(item.createdAt)}
           </p>
         ) : null}
+
+        {/*
+          ── The sound row ─────────────────────────────────────────────────────
+          🔴 "Original sound · @handle" is TRUE BY CONSTRUCTION here, not a
+          placeholder dressed up as data.
+
+          `FeedItem` carries no music or attribution field, and this project has
+          no licensing or track system at all — so every reel on Frenzsave plays
+          the audio that arrived with its own video. For a post by @handle, "the
+          original sound of @handle's post" is a factual description of what you
+          are hearing, which is exactly what the label says.
+
+          What it deliberately does NOT do is invent a track title, an artist, or
+          a "trending sound" count — the fabrications this row invites, and the
+          kind the Reality Ledger fails the build on.
+
+          It is a LINK to the creator, because that is the only real destination
+          the sound has today. When a music system exists, this becomes the sound
+          page and the label becomes data — the row is already the right shape.
+        */}
+        <Link
+          href={`/u/${item.publisher.handle}`}
+          onClick={onClose}
+          className={cn(
+            "mt-2 inline-flex max-w-[min(70vw,20rem)] items-center gap-2 rounded-full px-2.5 py-1",
+            glass.ambient,
+          )}
+        >
+          <Music className="h-3 w-3 shrink-0 text-white/80" aria-hidden />
+          <span className="truncate text-[11px] font-semibold text-white/85">
+            Original sound · @{item.publisher.handle}
+          </span>
+        </Link>
         {item.hasPoll ? (
           <div className="mt-2 max-w-md text-white">
             <PostPollInline postId={item.id} compact />

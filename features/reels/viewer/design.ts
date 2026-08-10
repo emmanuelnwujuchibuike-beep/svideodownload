@@ -225,6 +225,21 @@ export const layer = {
   rail: "z-40",
   progress: "z-50",
   pulse: "z-[55]",
-  topNav: "z-60",
+  /*
+    🔴 `z-[60]`, NOT `z-60`.
+
+    Tailwind's default z scale stops at 50, so `z-60` is not a class — it emits
+    NO CSS, and the element falls back to `z-index: auto`. It compiles, it lints,
+    it builds, and it silently does nothing. Caught by looking at the running
+    page: the tab bar was in the DOM, `display: flex`, `opacity: 1`, and
+    `elementFromPoint` at its own centre returned the VIDEO, because the video's
+    `z-10` beat `auto`.
+
+    This is the exact trap already recorded for this codebase (undefined tokens
+    that pass every check and produce nothing). The arbitrary-value form is a
+    real declaration, which is why `pulse` and `sheet` below were already written
+    that way — this one was the odd one out.
+  */
+  topNav: "z-[60]",
   sheet: "z-[100]",
 } as const;

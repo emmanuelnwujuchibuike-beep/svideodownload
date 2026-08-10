@@ -43,9 +43,12 @@ export async function GoogleTag() {
     script URL and a JS string literal — the one place where "it was checked
     when it was saved" is not good enough.
   */
+  /* `lazyOnload` for the same reason as the gtag branch below: this loader
+     pulls gtm.js, which is the same weight class, and the dataLayer it seeds
+     queues anything fired before it arrives. */
   if (GTM.test(id)) {
     return (
-      <Script id="frenz-gtm" strategy="afterInteractive">
+      <Script id="frenz-gtm" strategy="lazyOnload">
         {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
 var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
 j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
@@ -60,7 +63,23 @@ j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNo
     <>
       <Script
         id="frenz-gtag-src"
-        strategy="afterInteractive"
+        /*
+          🔴 `lazyOnload`, not `afterInteractive` (owner, 2026-08-10: TBT 620ms,
+          main-thread work 4.2s).
+
+          Measured at 552 KiB — the largest single third-party asset on the
+          landing page. `afterInteractive` starts fetching and EXECUTING it as
+          soon as hydration finishes, so it lands directly on top of the busiest
+          moment on the main thread and shows up in Total Blocking Time.
+
+          Nothing is lost by waiting. The standard gtag snippet below defines
+          `window.dataLayer` and a `gtag()` that pushes to that array, and
+          gtag.js drains the queue when it eventually loads — so page views and
+          events fired before it arrives are still recorded, in order. That is
+          how Google designed the snippet, and it is why the SRC is the only
+          part deferred here while the init stays where it is.
+        */
+        strategy="lazyOnload"
         src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`}
       />
       <Script id="frenz-gtag-init" strategy="afterInteractive">

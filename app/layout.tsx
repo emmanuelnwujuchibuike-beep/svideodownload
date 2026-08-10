@@ -116,10 +116,26 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  // Zoom-lock: prevents the mobile auto-zoom when focusing inputs (and pinch-zoom)
-  // across the whole app, including the admin pages.
-  maximumScale: 1,
-  userScalable: false,
+  /*
+    🔴 ZOOM IS ALLOWED AGAIN (owner, 2026-08-10: accessibility is "the crucial
+    part"; Lighthouse a11y sat at 82).
+
+    This was `maximumScale: 1, userScalable: false`, to stop iOS auto-zooming
+    when an input is focused. It worked, and it did so by taking pinch-zoom away
+    from everybody on every page — including the admin.
+
+    That is a WCAG 2.1 SC 1.4.4 (Resize Text) failure and Lighthouse audits it
+    by name. It is also the single most user-hostile accessibility default a
+    site can ship: someone who needs to magnify a paragraph to read it cannot,
+    and there is no setting anywhere that gives it back. Our own Accessibility
+    Center (Part 22) offers a text-size control while this line was quietly
+    overriding the platform's own.
+
+    The auto-zoom it was preventing has a correct fix, and it is a font size,
+    not a lock: iOS zooms only when a focused field's text is under 16px. That
+    is now handled in globals.css for coarse pointers, which solves the actual
+    problem without confiscating the gesture.
+  */
   // viewportFit "cover" — content draws edge-to-edge (owner: "everything else can
   // go totally up except buttons, icons and logos"; reels/media stay full-bleed).
   // The chrome that must NOT go under the status bar (topbar, buttons, icons,

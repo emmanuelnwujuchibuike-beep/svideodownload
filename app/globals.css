@@ -1669,3 +1669,27 @@ html[data-a11y-motion="reduce"] *::after {
   transition-duration: 0.001ms !important;
   scroll-behavior: auto !important;
 }
+
+/* ── 16px form text on touch devices ──────────────────────────────────────────
+   The replacement for `user-scalable=no` (removed 2026-08-10, see app/layout.tsx).
+
+   iOS auto-zooms the viewport when a focused field's computed font-size is
+   under 16px, and it never zooms back out — which is the jarring behaviour the
+   old viewport lock existed to prevent. It prevented it by disabling pinch-zoom
+   for everyone, everywhere, which is a WCAG 1.4.4 failure and takes magnifying
+   a paragraph away from the people who need it most.
+
+   This solves the actual cause instead: on a COARSE pointer only, form controls
+   render at 16px so there is nothing to trigger the zoom. Desktop keeps the
+   designed sizes, since a mouse pointer never triggers this behaviour.
+
+   `pointer: coarse` rather than a width query on purpose — this is a property
+   of the input device, not of the screen, and a narrow desktop window should
+   not get phone typography. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

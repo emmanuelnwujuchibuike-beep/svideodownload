@@ -58,6 +58,7 @@ export function GlassButton({
   fill = false,
   activeClassName,
   count,
+  countNode,
   size = 48,
   hapticIntent = "light",
   press,
@@ -74,6 +75,11 @@ export function GlassButton({
   /** Colour for the active glyph. Defaults to the adaptive accent. */
   activeClassName?: string;
   count?: number;
+  /**
+   * Render the count yourself — for the rail, which uses `AnimatedCount` so a
+   * like ticks up instead of jumping. Wins over `count` when both are given.
+   */
+  countNode?: React.ReactNode;
   size?: number;
   hapticIntent?: HapticIntent;
   /** Long-press handlers, spread onto the button. */
@@ -151,11 +157,12 @@ export function GlassButton({
           ) : null)}
       </span>
 
-      {count !== undefined && count > 0 ? (
-        <span className="text-[11px] font-bold tabular-nums text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
-          {count > 999 ? `${(count / 1000).toFixed(count > 9999 ? 0 : 1)}k` : count}
-        </span>
-      ) : null}
+      {countNode ??
+        (count !== undefined && count > 0 ? (
+          <span className="text-[11px] font-bold tabular-nums text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+            {count > 999 ? `${(count / 1000).toFixed(count > 9999 ? 0 : 1)}k` : count}
+          </span>
+        ) : null)}
     </motion.button>
   );
 }

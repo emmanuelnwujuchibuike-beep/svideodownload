@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BrandLoader } from "@/features/app-shell/brand-loader";
 import { ReelDeck } from "@/features/feed/reel-viewer";
+import { ReelTabs } from "@/features/reels/viewer/reel-tabs";
 import { getApi } from "@/lib/sdk/browser";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn } from "@/lib/utils";
@@ -217,32 +218,25 @@ export function ReelsFeed({
           the app sidebar (16rem) on the left AND the persistent comments panel
           (400px) reserved on the right, so it never compresses against the
           top-right options (•••) button. */}
-      <div className="fixed left-1/2 top-[max(0.75rem,var(--frenz-safe-top))] z-40 flex -translate-x-1/2 items-center gap-6 lg:left-[calc(50%-4.5rem)]">
-        {([
-          { id: "for_you" as const, label: "For You" },
-          { id: "following" as const, label: "Following" },
-        ]).map((t) => {
-          const on = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => switchTab(t.id)}
-              aria-pressed={on}
-              className="relative flex flex-col items-center gap-1 px-0.5 py-1 transition active:scale-95"
-            >
-              <span className={cn("text-[13px] font-semibold drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)] transition-colors", on ? "text-white" : "text-white/60 hover:text-white/85")}>
-                {t.label}
-              </span>
-              {on ? (
-                <motion.span layoutId="reel-tab-underline" transition={{ type: "spring", stiffness: 420, damping: 34 }} className="h-[3px] w-5 rounded-full bg-white" />
-              ) : (
-                <span className="h-[3px] w-5" aria-hidden />
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/*
+        ── Feature 15: the tab bar is a shared component now ──────────────────
+        It was bare white text on video — legible on some frames, invisible on
+        others, and it is the one control that is always on screen. It now sits
+        on glass with a travelling pill, and its layout survives a language where
+        "Communities" is "Gemeinschaften".
+
+        `available` is what keeps it honest: the full five-tab set is DECLARED in
+        the component, and only the ids passed here are rendered. For You and
+        Following are the two `/api/reels` actually serves; Friends, Communities
+        and Nearby stay dark until they have a query behind them, because a tab
+        that opens an empty deck reads as broken rather than unbuilt.
+      */}
+      <ReelTabs
+        active={tab}
+        onChange={(id) => switchTab(id as Tab)}
+        available={["for_you", "following"]}
+        className="lg:left-[calc(50%-4.5rem)]"
+      />
 
       {switching ? (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black" aria-hidden>

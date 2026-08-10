@@ -54,6 +54,7 @@ import { createPortal } from "react-dom";
    consumer of that design system is how the next surface ends up with a
    copy of it. */
 import { layer, scrimForLuminance } from "@/features/reels/viewer/design";
+import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
 import type { PulseEvent } from "@/features/reels/viewer/social-pulse";
 import { useAdaptiveRail, type RailLayout } from "@/features/reels/viewer/use-adaptive-rail";
@@ -1367,8 +1368,47 @@ function ReelCard({
                 const v = e.currentTarget;
                 setDur(v.duration || 0);
                 if (v.videoWidth && v.videoHeight) {
+                  /*
+                    🔴 FULL BLEED ONLY WHEN NOTHING IS CUT OFF (owner, 2026-08-10)
+
+                    "make reels videos not to ever crop width when trying to go
+                    full edge to edge, only videos capable of full edge to edge
+                    should be full edge to edge and not every video, avoid width
+                    or height cropping out."
+
+                    This tested whether the video's aspect ratio was within 22%
+                    of the screen's and, if so, switched to `object-cover`. Two
+                    things were wrong with it.
+
+                    It measured the wrong quantity: a RATIO DIFFERENCE is not the
+                    amount lost. And 22% is enormous — on a 393x851 phone
+                    (aspect 0.462) that band runs from 0.360 to 0.563, so a
+                    standard 9:16 clip (0.5625) qualified and got `cover`, which
+                    scales it up until the screen is filled and throws away the
+                    overflow. Roughly a fifth of the frame could be cut, which is
+                    exactly the "cropping width" being reported — and it happened
+                    on the single most common reel shape there is.
+
+                    This computes the ACTUAL fraction that `object-cover` would
+                    discard, which is the thing the instruction is about:
+
+                      • video wider than the screen  -> width overflows
+                      • video taller than the screen -> height overflows
+
+                    and allows full bleed only when that is at most 1.5% — a few
+                    pixels, imperceptible, and never a face, a caption or a
+                    subtitle. Anything above it letterboxes with `object-contain`
+                    over the blurred backdrop, which is the treatment that shows
+                    the whole frame.
+
+                    So a clip genuinely shot at the device's aspect still goes
+                    edge to edge, exactly as asked; everything else keeps all of
+                    its picture.
+                  */
                   const screen = window.innerWidth / window.innerHeight;
-                  setFullBleed(Math.abs(v.videoWidth / v.videoHeight - screen) / screen < 0.22);
+                  const aspect = v.videoWidth / v.videoHeight;
+                  const cropped = aspect > screen ? 1 - screen / aspect : 1 - aspect / screen;
+                  setFullBleed(cropped <= 0.015);
                 }
                 // Resume where this reel last stopped (tab switch / reopen) —
                 // switching For You/Following continues, never restarts.
@@ -1975,27 +2015,48 @@ function RailButton({
   /** Long-press handlers (from useLongPress) for buttons with a hold action. */
   press?: ReturnType<typeof useLongPress>;
 }) {
+  /*
+    ── Feature 15: every rail control is now a GlassButton ────────────────────
+
+    This kept its own copy of the glass recipe, its own spring and its own press
+    scale, which is exactly how a "design system" ends up being nine buttons that
+    each look nearly right. Delegating means the rail inherits, for free and
+    identically everywhere:
+
+      • the ONE glass recipe from design.ts (blur + tint + ring together — blur
+        alone does not guarantee contrast, because a blurred white shirt is
+        still white);
+      • the adaptive ACTIVE colour, tinted from `--reel-accent`, so a liked
+        button is lit by the video instead of by a hardcoded violet;
+      • the ripple, the soft glow, and haptics routed through the app's shared
+        `haptic()` vocabulary rather than raw `navigator.vibrate`;
+      • a visible focus ring, which this never had — the rail was reachable by
+        keyboard and gave no indication of where focus was.
+
+    Every call site is unchanged: this signature is kept exactly as it was, so
+    the nine buttons below did not need touching and cannot drift from each other.
+
+    `countNode` keeps `AnimatedCount` — a like should tick up, not jump — which is
+    the one thing the generic button does not do on its own.
+  */
   return (
-    <motion.button
-      type="button"
+    <GlassButton
+      icon={Icon}
+      label={label}
       onClick={onClick}
-      aria-label={label}
-      aria-pressed={active}
-      whileTap={{ scale: 0.86 }}
-      transition={{ type: "spring", stiffness: 520, damping: 22 }}
-      className="flex flex-col items-center gap-1 text-white"
-      {...press}
-    >
-      <span
-        className={cn(
-          "flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors",
-          active && "bg-white/15 ring-white/25",
-        )}
-      >
-        <Icon className={cn("h-6 w-6 drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]", fill && "fill-current", active && activeClass)} strokeWidth={2.1} />
-      </span>
-      {count !== undefined && count > 0 ? <AnimatedCount value={count} className="text-[11px] font-bold tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]" /> : null}
-    </motion.button>
+      active={active}
+      fill={fill}
+      activeClassName={activeClass}
+      press={press}
+      countNode={
+        count !== undefined && count > 0 ? (
+          <AnimatedCount
+            value={count}
+            className="text-[11px] font-bold tabular-nums text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+          />
+        ) : undefined
+      }
+    />
   );
 }
 

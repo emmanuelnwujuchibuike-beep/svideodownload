@@ -80,6 +80,13 @@ export function MobileNav() {
 
   const profileHref = handle ? `/u/${handle}` : "/account";
   const profileActive = pathname.startsWith("/u/") || pathname.startsWith("/account");
+  /*
+    Surfaces where the CONTENT is full-bleed video and the nav should float over
+    it rather than slab across it — see the note on the <nav> below. Only /reels
+    today; a future full-screen player surface joins by adding its prefix here,
+    which is the whole reason this is a named condition and not an inline test.
+  */
+  const immersive = pathname.startsWith("/reels");
 
   // Warm the primary destinations once so the FIRST tap opens instantly — dynamic
   // routes (Messages/Friends) otherwise fetch on first navigation, which felt like
@@ -103,10 +110,59 @@ export function MobileNav() {
     <div className="fixed inset-x-0 bottom-0 z-40 lg:hidden">
       <nav
         aria-label="Primary"
-        // Pure opaque background (matches AppTopbar's bg-background, no blur)
-        // and a hairline top border — a native tab-bar look, not a frosted
-        // floating dock. Full width, square corners, flush with the bottom.
-        className="relative flex items-end justify-around border-t border-border/60 bg-background px-2 pb-[max(env(safe-area-inset-bottom),0.65rem)] pt-2.5"
+        /*
+          🔴 IMMERSIVE SURFACES GET A FLOATING BAR (owner, 2026-08-10: "i want
+          the reels to go the safe area like tiktok and instagram and doesnt crop
+          any content").
+
+          The video was already full-bleed — the deck is `fixed inset-0` and runs
+          to the physical bottom edge. What stopped it LOOKING that way was this
+          bar: `bg-background` is fully opaque, so it painted a solid slab over
+          the bottom of the picture. The reel reached the safe area and then had
+          it covered up.
+
+          That is precisely what TikTok and Instagram do differently. Their video
+          runs to the physical edges and the tab bar FLOATS over it — a dark
+          scrim, no border, white glyphs — so the frame is visible behind the
+          controls instead of being cropped by them.
+
+          So on `/reels` the bar keeps its size, its position and its safe-area
+          padding (the CONTROLS still must not sit in the home-indicator strip —
+          also the owner's instruction) and loses only its opacity: the hairline
+          border goes, and the ground becomes a bottom-weighted gradient rather
+          than a fill, so the glyphs stay legible on any frame while the video
+          shows through.
+
+          Nothing is cropped to achieve this. The picture is not scaled or
+          shifted; it was always there, and this stops hiding it.
+
+          Every other surface is untouched and keeps the native opaque tab bar —
+          a translucent nav over a scrolling document is a legibility problem,
+          which is exactly why it is scoped to the immersive route.
+        */
+        className={cn(
+          "relative flex items-end justify-around px-2 pb-[max(env(safe-area-inset-bottom),0.65rem)] pt-2.5",
+          immersive
+            ? [
+                "bg-gradient-to-t from-black/85 via-black/55 to-transparent",
+                /*
+                  The INACTIVE glyphs and labels turn white here.
+
+                  `text-muted-foreground` is a grey graded for a light page
+                  background; over video it is close to invisible. Re-pointing it
+                  at the descendants rather than threading an `immersive` prop
+                  through every NavTab keeps this entire treatment in one place —
+                  the tabs stay unaware they are on a dark surface, so no future
+                  tab can be added and forget to handle it.
+
+                  The ACTIVE tab keeps `text-primary`: it is the brand blue and it
+                  reads clearly against a dark scrim, so the current destination
+                  stays distinguishable rather than every tab going white.
+                */
+                "[&_.text-muted-foreground]:!text-white/75",
+              ].join(" ")
+            : "border-t border-border/60 bg-background",
+        )}
       >
         {mode === "downloader" ? (
           <>

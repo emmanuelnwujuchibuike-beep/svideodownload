@@ -411,6 +411,33 @@ export async function Hero() {
                   flourish, sheen and VIEW cue all preserved (owner: "don't
                   remove the existing wallpaper button icon and design
                   animation"), in the reference's card shape. */}
+              {/*
+                🔴 Preload the wallpaper CTA's backdrop.
+
+                It is a CSS `background-image`, which the browser's preload
+                scanner cannot see: a background is only discovered once the
+                stylesheet has been parsed AND the element has been laid out, so
+                the request starts several hundred milliseconds after everything
+                the scanner found in the HTML. For a 147 KB image sitting at the
+                fold, that late start lands squarely inside the LCP window.
+
+                A `<link rel="preload">` in the markup puts it back in front of
+                the scanner. `fetchPriority="low"` because it is a decorative
+                backdrop, not the largest element — it should start early
+                without competing with the hero poster above it, which is the
+                one carrying `priority`.
+
+                It cannot go through `next/image`: that renders an <img>, and
+                this is a background the text sits on top of.
+              */}
+              {landing.wallpaperCtaImageUrl ? (
+                <link
+                  rel="preload"
+                  as="image"
+                  href={landing.wallpaperCtaImageUrl}
+                  fetchPriority="low"
+                />
+              ) : null}
               <WallpaperCta variant="card" backgroundUrl={landing.wallpaperCtaImageUrl || null} />
             </div>
 

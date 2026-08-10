@@ -1,5 +1,5 @@
-import { BadgeCheck, Bell, MoreHorizontal, Play, Plus, Search, Users, VolumeX, Wifi } from "lucide-react";
-import Link from "next/link";
+import { BadgeCheck, Bell, MoreHorizontal, Play, Plus, Search, Users, Wifi } from "lucide-react";
+import Image from "next/image";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import {
@@ -48,11 +48,16 @@ const ORBIT: {
  *  • THE FEED PROFILE is Frenz — the brand's own verified account, with the Frenz
  *    logo as its avatar — not a stand-in person ("Chris" in the reference).
  *
- *  • THE REELS TILE NO LONGER PLAYS. It shows one admin-chosen still poster
- *    (settings.landing.reelsPosterUrl) and is a LINK to /reels, where the real
- *    full-screen deck lives. The tap-to-play deck that used to be embedded here is
- *    gone from the landing entirely — it moved to the actual reels page, which is
- *    the richer experience and keeps the landing's cold bundle small.
+ *  • THE REELS TILE IS NOW JUST A PICTURE (owner, 2026-08-10). It shows one
+ *    admin-chosen still (settings.landing.reelsPosterUrl) and nothing else — no
+ *    link, no play button, no REELS tag, no mute glyph, no caption. It went from
+ *    an embedded player, to a still that linked to /reels, to this.
+ *
+ *    The reason is that it is a MOCKUP: its job is to show what the app looks
+ *    like, and a still does that. The interactive chrome was a second, weaker
+ *    entrance to Reels layered on top of the largest image in the hero — while
+ *    the bottom nav already has a Reels button that works. Removing it takes six
+ *    overlay layers and two icon components off the LCP element.
  *
  * ── Why still a server component / still async ────────────────────────────────
  *
@@ -224,51 +229,65 @@ export async function PhoneMockup() {
                 </p>
               </div>
 
-              {/* Reels poster — STATIC image, a LINK to the real /reels deck. No
-                  autoplay, no embedded player: the play experience lives on the
-                  reels page in full screen now. */}
+              {/*
+                🔴 A plain picture, not a reels section (owner, 2026-08-10:
+                "remove the reels section on the phone mockup, make a normal
+                image uploaded from admin, so load reduces — users will use the
+                reels button instead").
+
+                What went with it: the link to /reels, the pulsing REELS tag,
+                the mute glyph, the play button, the hover-scale and the
+                "Trending on Frenz" caption. Six overlay layers and two icon
+                components, all of them advertising a destination the bottom nav
+                already offers — so it was a second, weaker entrance to Reels
+                sitting on top of the one image in the hero viewport.
+
+                It is a mockup. Its job is to show what the app looks like, and
+                a still does that. Everything removed here is markup, icons and
+                a compositing layer that the LCP element was rendering behind.
+              */}
               <div className="mt-2 flex-1 px-3 pb-2">
-                <Link
-                  href="/reels"
-                  aria-label="Open reels"
-                  className="group/reel relative block h-full w-full overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-black/5"
+                <div
+                  aria-hidden
+                  className="relative block h-full w-full overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-black/5"
                 >
                   {posterUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    /*
+                      🔴 This is the LCP ELEMENT (owner, 2026-08-10: "LCP is
+                      still really high"). Two compounding mistakes were on it.
+
+                      It was a raw <img> pointing at the bucket original —
+                      measured at 544 KB — for a slot that renders about 270px
+                      wide inside a 300px phone frame. The mockup is
+                      `mx-auto max-w-[300px]`, so it is visible on MOBILE too,
+                      sitting in the hero viewport where Lighthouse looks for
+                      the largest element.
+
+                      And it carried `loading="lazy"`. On an above-the-fold
+                      image that is actively harmful: the browser will not begin
+                      fetching until layout has decided the element is near the
+                      viewport, so the request starts late by construction —
+                      which is exactly the interval LCP measures. Lazy is right
+                      for the grid below; it was never right for this.
+
+                      `priority` is the fix for both halves: it emits a preload
+                      so the fetch starts from the HTML rather than after
+                      layout, and it opts out of lazy loading. `sizes` is what
+                      makes the optimizer serve ~300px of AVIF instead of a
+                      four-megapixel JPEG.
+                    */
+                    <Image
                       src={posterUrl}
                       alt=""
-                      loading="lazy"
-                      decoding="async"
-                      className="absolute inset-0 h-full w-full object-cover"
+                      fill
+                      sizes="300px"
+                      priority
+                      className="object-cover"
                     />
                   ) : (
                     <span className="absolute inset-0 bg-gradient-to-br from-blue-600 via-violet-600 to-fuchsia-600" />
                   )}
-                  <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/25" />
-
-                  {/* Reels tag + mute — the reference's top-corner chrome */}
-                  <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/50 px-1.5 py-[3px] text-[8px] font-bold uppercase tracking-wide text-white backdrop-blur">
-                    <span className="h-1 w-1 rounded-full bg-rose-400 motion-safe:animate-pulse" /> Reels
-                  </span>
-                  <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur">
-                    <VolumeX className="h-3 w-3" />
-                  </span>
-
-                  {/* Play affordance */}
-                  <span className="absolute inset-0 flex items-center justify-center">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/25 ring-1 ring-white/40 backdrop-blur transition-transform duration-300 group-hover/reel:scale-110">
-                      <Play className="ml-[1px] h-5 w-5 fill-white text-white" />
-                    </span>
-                  </span>
-
-                  {/* Caption overlay */}
-                  <span className="absolute inset-x-2 bottom-2">
-                    <span className="rounded-md bg-white/90 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-tight text-neutral-900">
-                      Trending on Frenz
-                    </span>
-                  </span>
-                </Link>
+                </div>
               </div>
 
               {/* Bottom tab bar — the REAL app nav (Home · Friends · [+] · Chats ·

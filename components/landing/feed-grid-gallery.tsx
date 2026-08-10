@@ -183,29 +183,29 @@ export function FeedGridGallery({ images }: { images: string[] }) {
                   sizes="(max-width: 640px) 50vw, 320px"
                   loading="lazy"
                   /*
-                    🔴 `object-contain`, NOT `object-cover` (owner, 2026-08-10:
-                    "the other section in my screenshot is showing zoom when i
-                    upload it, i want it to show the full image in full without
-                    zooming, unless i zoom it").
+                    🔴 `object-cover` — RESTORED (owner, 2026-08-10).
 
-                    `object-cover` scales an image up until it fills the tile and
-                    discards the overflow — which is exactly the "zoom" being
-                    reported. These tiles are a fixed 3:4-ish box and the admin
-                    uploads whatever shape they have, so a wide image lost its
-                    sides and a tall one lost its top and bottom. On an
-                    admin-curated grid that is the whole point of the upload
-                    being thrown away: the operator chose that framing.
+                    I briefly changed this to `object-contain` and that was wrong.
+                    The owner's clarification: "they should fill the whole space
+                    but not zoom, they could shrink, but not zoom" — and "the 4
+                    square wallpaper poster was like that before, since the
+                    wallpaper button you changed it."
 
-                    `contain` fits the entire image inside the tile. The
-                    letterbox it leaves is filled by the tile's own dark ground
-                    rather than by stretching, so a half-filled grid still reads
-                    as intentional — the same treatment the reel player uses over
-                    its blurred backdrop, for the same reason.
+                    Filling the tile is the requirement. `contain` letterboxes,
+                    which leaves visible bars and is precisely what was NOT asked
+                    for.
 
-                    The hover scale stays: that is a deliberate, user-initiated
-                    magnification ("unless i zoom it"), not a silent crop.
+                    And `cover` is not a zoom: it is the SMALLEST scale that fills
+                    the box. Admin uploads are far larger than a ~160px tile, so
+                    in practice cover always SHRINKS them — which is exactly the
+                    "could shrink, but not zoom" behaviour described. It never
+                    magnifies beyond what filling requires.
+
+                    The hover scale stays — a deliberate, user-initiated
+                    magnification, which is the one place "unless i zoom it"
+                    applies.
                   */
-                  className="object-contain transition-transform duration-500 group-hover/tile:scale-[1.05]"
+                  className="object-cover transition-transform duration-500 group-hover/tile:scale-[1.05]"
                 />
               ) : null}
               <span aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/45 to-transparent" />

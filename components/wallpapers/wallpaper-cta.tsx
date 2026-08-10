@@ -63,20 +63,21 @@ function WallpaperBackdrop({ url, sizes }: { url: string; sizes: string }) {
       sizes={sizes}
       priority
       /*
-        🔴 `object-contain` (owner, 2026-08-10: "same thing for the wallpaper
-        button" — show the full image, no zoom).
+        🔴 `object-cover` — RESTORED (owner, 2026-08-10).
 
-        `cover` scaled the admin's wallpaper up until it filled the tile and threw
-        the overflow away, so a portrait wallpaper in a landscape-ish card lost its
-        top and bottom. The operator picks that image deliberately; cropping it is
-        discarding the choice.
+        I briefly changed this to `object-contain` and it was the wrong reading of
+        "show the full image". The clarification: "they should FILL THE WHOLE
+        SPACE but not zoom, they could shrink, but not zoom."
 
-        `contain` shows all of it. What is left over is the tile's own brand
-        gradient, which is already painted underneath as the no-image fallback —
-        so the letterbox is a branded surface rather than a black bar, and the
-        no-image and image cases still read as the same control.
+        `contain` letterboxed the tile — the brand gradient showed as bands above
+        and below the wallpaper, which is the opposite of filling the space.
+
+        `cover` is not a zoom. It is the smallest scale that fills the box, and
+        since admin wallpapers are far larger than this tile it always SHRINKS
+        them to fit — exactly "could shrink, but not zoom". It never magnifies
+        beyond what filling requires.
       */
-      className="pointer-events-none select-none object-contain"
+      className="pointer-events-none select-none object-cover"
     />
   );
 }

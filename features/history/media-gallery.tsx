@@ -487,8 +487,31 @@ function GalleryTile({
             </span>
           ) : null}
         </span>
+        {/*
+          🔴 No `backdrop-blur` on anything that repeats per tile (owner,
+          2026-08-10: performance on the history page).
+
+          `backdrop-filter` is not a paint, it is a separate GPU pass that
+          re-samples everything behind the element. One of those is cheap. This
+          gallery renders a hundred-plus tiles and each carried up to three —
+          the play disc, the menu button and the favourite heart — so a scroll
+          asked the compositor for a few hundred blur passes per frame. That is
+          a phone getting hot for chrome nobody is looking at.
+
+          The blur was also doing almost no work: these chips sit on TOP of a
+          photo, and what makes the glyph readable is the dark fill, not the
+          blur behind it. The fills are two stops stronger to make that
+          explicit, which is a better contrast guarantee over a bright
+          thumbnail than the blur ever was.
+
+          This disc is `opacity-0` until hover, and that does NOT save anything:
+          a backdrop-filter still promotes the element to its own layer at zero
+          opacity, and on a touch device there is no hover, so it was pure cost
+          forever. The dialog menu below keeps its blur — one element, only
+          while open.
+        */}
         <span className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white">
             <Play className="ml-0.5 h-5 w-5 fill-white" />
           </span>
         </span>
@@ -518,7 +541,7 @@ function GalleryTile({
             onPointerDown={(e) => e.stopPropagation()}
             aria-label={`Actions for ${item.title}`}
             aria-expanded={menuOpen}
-            className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition duration-150 hover:bg-black/60 active:scale-[0.85]"
+            className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white transition duration-150 hover:bg-black/70 active:scale-[0.85]"
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
@@ -526,7 +549,7 @@ function GalleryTile({
           {/* A favourite is worth seeing at a glance without opening anything,
               so it keeps a corner of its own once it is set. */}
           {item.favorite ? (
-            <span aria-hidden className="pointer-events-none absolute right-1.5 top-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/40 backdrop-blur">
+            <span aria-hidden className="pointer-events-none absolute right-1.5 top-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/55">
               <Heart className="h-3.5 w-3.5 fill-rose-500 text-rose-500" />
             </span>
           ) : null}

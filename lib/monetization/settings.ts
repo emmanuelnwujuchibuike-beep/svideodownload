@@ -298,17 +298,52 @@ let cache: { at: number; value: MonetizationSettings } | null = null;
 */
 const TTL_MS = 10_000;
 
-/** Effective global monetization settings (defaults + admin overrides). */
-export async function getMonetizationSettings(): Promise<MonetizationSettings> {
-  if (cache && Date.now() - cache.at < TTL_MS) return cache.value;
-  if (!hasSupabase) return DEFAULT_MONETIZATION;
+/**
+ * Settings, plus whether they are REAL.
+ *
+ * ── Why the distinction has to exist (owner, 2026-08-10) ─────────────────────
+ * `getMonetizationSettings()` swallows every failure and returns the defaults.
+ * For every caller that decides whether to SHOW an ad that is the right
+ * behaviour: a database blip should not paint an ad frame, and defaults are the
+ * safe direction.
+ *
+ * `/ads.txt` is the one caller where it is exactly backwards. There, defaults
+ * mean an empty `adsTxt`, which the route reported as 404 — and a 4xx tells
+ * Google the file authoritatively does not exist, a verdict it then keeps for
+ * days. So one unlucky second of Supabase trouble showed up as "Ads.txt status:
+ * Not found" against a setting that was saved and a file that served perfectly
+ * on every manual check afterwards.
+ *
+ * A caller that must not confuse "nothing configured" with "could not read"
+ * uses this; everything else keeps the simpler function below.
+ */
+export interface MonetizationRead {
+  settings: MonetizationSettings;
+  /** True when the stored settings could not be read and these are defaults. */
+  degraded: boolean;
+}
+
+export async function readMonetizationSettings(): Promise<MonetizationRead> {
+  if (cache && Date.now() - cache.at < TTL_MS) return { settings: cache.value, degraded: false };
+  /*
+    No Supabase configured is NOT degraded — it is a complete, correct answer
+    for a deployment that has no settings store. Only a failed read is degraded.
+  */
+  if (!hasSupabase) return { settings: DEFAULT_MONETIZATION, degraded: false };
   try {
     const db = createAdminClient();
-    const { data } = await db
+    const { data, error } = await db
       .from("settings")
       .select("value")
       .eq("key", "monetization")
       .maybeSingle();
+    /*
+      🔴 `error` was previously destructured away and ignored, so a failed query
+      fell through to the merge and produced defaults that looked like a
+      successful read of an unconfigured site. That is the whole bug, in one
+      discarded variable.
+    */
+    if (error) return { settings: DEFAULT_MONETIZATION, degraded: true };
     const merged: MonetizationSettings = {
       ...DEFAULT_MONETIZATION,
       ...((data?.value ?? {}) as Partial<MonetizationSettings>),
@@ -323,10 +358,15 @@ export async function getMonetizationSettings(): Promise<MonetizationSettings> {
       : [];
     merged.monetagPlacements = normalizeMonetagPlacements(merged.monetagPlacements);
     cache = { at: Date.now(), value: merged };
-    return merged;
+    return { settings: merged, degraded: false };
   } catch {
-    return DEFAULT_MONETIZATION;
+    return { settings: DEFAULT_MONETIZATION, degraded: true };
   }
+}
+
+/** Effective global monetization settings (defaults + admin overrides). */
+export async function getMonetizationSettings(): Promise<MonetizationSettings> {
+  return (await readMonetizationSettings()).settings;
 }
 
 /** Admin: persist the global monetization switches. */

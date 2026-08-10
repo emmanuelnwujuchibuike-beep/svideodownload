@@ -207,15 +207,76 @@ function retainBlob(id: string, blob: Blob, filename: string) {
   }
 }
 
-function emit() {
-  tasks = [...tasks];
+/**
+ * Notify subscribers at most ONCE PER FRAME (owner, 2026-08-10: the landing
+ * page "becomes worse and overheats when I fetch multiple downloads media").
+ *
+ * ── What this was doing ──────────────────────────────────────────────────────
+ * Every `patch()` reassigned `tasks` to a new array and called every listener
+ * synchronously. Each subscriber reads that array through
+ * `useSyncExternalStore`, so a new identity means every one of them re-renders,
+ * and there are a lot of them: the floating progress card, the hero result
+ * panel, the download box, the history gallery, the topbar slot.
+ *
+ * A single download patches on a 400ms throttle, which is fine. A BATCH does
+ * not: two concurrent transfers each patch on their own timer, and every status
+ * transition, retry, save-queue step and completion patches too — all
+ * unbatched, all landing at arbitrary points inside a frame. React cannot
+ * coalesce them because they arrive from outside its event system, so each one
+ * is a separate render-and-commit, several times a second, for the whole
+ * lifetime of a batch. On a phone, with the landing's gradients and the
+ * progress card's `backdrop-blur` recompositing behind each commit, that is
+ * sustained GPU and main-thread work — which is what heat is.
+ *
+ * ── Why a frame, and why the snapshot still updates immediately ──────────────
+ * Coalescing to `requestAnimationFrame` means at most one notification per
+ * painted frame, which is the most a human can perceive anyway. The array
+ * itself is replaced eagerly, so `getSnapshot()` is always current — anything
+ * reading synchronously (a click handler deciding whether a download is already
+ * running) sees the truth, it is only the RE-RENDER that waits.
+ *
+ * Completion is deliberately NOT deferred: `flush()` is called directly at the
+ * points where a person is waiting for an answer, so "Saved" never lags a
+ * frame behind the bytes.
+ */
+let frame: number | null = null;
+
+function flush() {
+  if (frame !== null) {
+    if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(frame);
+    frame = null;
+  }
   for (const l of listeners) l();
+}
+
+function emit(immediate = false) {
+  // Eager, so a synchronous read after a patch is never stale.
+  tasks = [...tasks];
+  if (immediate || typeof requestAnimationFrame !== "function") {
+    flush();
+    return;
+  }
+  if (frame !== null) return;
+  frame = requestAnimationFrame(() => {
+    frame = null;
+    for (const l of listeners) l();
+  });
 }
 function patch(id: string, next: Partial<DownloadTask>) {
   const i = tasks.findIndex((t) => t.id === id);
   if (i === -1) return;
   tasks[i] = { ...tasks[i]!, ...next };
-  emit();
+  /*
+    A TERMINAL status paints now; progress waits for the frame.
+
+    The batching above exists to stop mid-transfer noise re-rendering the app
+    several times a second. It must not delay the moment a person is actually
+    waiting for — "Saved", "Failed", the file being ready — so the states
+    someone is watching for skip the queue. There are only three of them, and
+    each happens once per download.
+  */
+  const terminal = next.status === "completed" || next.status === "failed" || next.status === "canceled";
+  emit(terminal);
 }
 
 export function subscribe(listener: () => void): () => void {

@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Download, Heart, Loader2, Play, X } from "lucide-react";
+import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -151,13 +152,37 @@ export function FeedGridGallery({ images }: { images: string[] }) {
           const tile = (
             <>
               {url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                /*
+                  🔴 `next/image`, not a raw <img> (owner Lighthouse, 2026-08-10).
+
+                  Lighthouse named these tiles in "Avoid enormous network
+                  payloads": full-size originals straight out of the bucket —
+                  measured at 545 KB, 544 KB, 253 KB, 202 KB and 155 KB for
+                  tiles that render about 160px wide on a phone. That is most of
+                  the 3,448 KiB the page still weighs, and it is bytes spent on
+                  pixels no screen displays.
+
+                  The optimizer resizes to the requested width and serves AVIF
+                  or WebP, both of which `next.config` already configures, with
+                  a 31-day cache on the variant. `sizes` is what makes that
+                  work — without it the optimizer assumes full viewport width
+                  and the saving mostly evaporates.
+
+                  This is safe HERE specifically, and the distinction matters:
+                  `next/image` 403s on the platform CDNs our media comes from
+                  (a recorded failure in this codebase), because those hosts
+                  reject Vercel's fetcher. This bucket is ours and public, so
+                  there is nothing to reject.
+                */
+                <Image
                   src={url}
                   alt=""
+                  fill
+                  // Two columns on a phone, a fixed-width tile once the grid
+                  // stops growing.
+                  sizes="(max-width: 640px) 50vw, 320px"
                   loading="lazy"
-                  decoding="async"
-                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover/tile:scale-[1.05]"
+                  className="object-cover transition-transform duration-500 group-hover/tile:scale-[1.05]"
                 />
               ) : null}
               <span aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/45 to-transparent" />

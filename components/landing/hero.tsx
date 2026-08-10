@@ -22,7 +22,7 @@ import { HeroCtaForm } from "@/features/downloader/hero-cta-form";
 import { HeroLinkDownloader } from "@/features/downloader/hero-link-downloader";
 import { SharedLinkDownloader } from "@/features/downloader/shared-link-downloader";
 import { cn } from "@/lib/utils";
-import { getCtaWallpaper } from "@/lib/wallpapers-cta";
+import { getLandingSettings } from "@/lib/landing/settings";
 /* The platform list and its badge markup now live in
    `components/landing/supported-platforms.tsx` — one definition, two surfaces. */
 
@@ -79,14 +79,14 @@ const FACES = [
 
 export async function Hero() {
   /*
-    The admin's chosen wallpaper for the gallery tile.
+    The admin-uploaded background for the gallery tile (Landing page panel).
 
     A plain DB read with no request-scoped input, so `/` stays statically
     prerendered and simply picks the change up on its next revalidation — the
     same shape as the marketing layout's reels warm-up read. Never pass
     request data in here or the front door loses its CDN caching.
   */
-  const ctaWallpaper = await getCtaWallpaper();
+  const landing = await getLandingSettings();
   return (
     /*
      * Theme-aware, not pinned. `public/main landing page.jpg` is the DARK design;
@@ -335,7 +335,7 @@ export async function Hero() {
                   flourish, sheen and VIEW cue all preserved (owner: "don't
                   remove the existing wallpaper button icon and design
                   animation"), in the reference's card shape. */}
-              <WallpaperCta variant="card" backgroundUrl={ctaWallpaper.url} />
+              <WallpaperCta variant="card" backgroundUrl={landing.wallpaperCtaImageUrl || null} />
             </div>
 
             {/*

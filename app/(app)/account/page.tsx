@@ -1,4 +1,5 @@
 import {
+  Accessibility,
   BadgeCheck,
   BarChart3,
   Bell,
@@ -156,6 +157,7 @@ export default async function AccountPage() {
         { href: "/account/verification", Icon: BadgeCheck, title: "Verification", sub: verificationSub, tint: "blue" },
         { href: "/account/appearance", Icon: Palette, title: "Appearance", sub: "Theme, language, home & feed", tint: "purple" },
         { href: "/account/notifications", Icon: Bell, title: "Notifications", sub: "Alerts & activity", tint: "rose" },
+        { href: "/account/accessibility", Icon: Accessibility, title: "Accessibility", sub: "Text, contrast, motion & touch", tint: "cyan" },
       ],
     },
     {

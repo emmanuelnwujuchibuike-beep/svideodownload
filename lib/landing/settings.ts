@@ -40,11 +40,27 @@ export interface LandingSettings {
   reelsPosterUrl: string;
   /** Up to FEED_GRID_SLOTS images for the 2×2 showcase grid. */
   feedGridImages: string[];
+  /**
+   * Background photo for the "Wallpaper Gallery" button (owner, 2026-08-09:
+   * "the wallpaper button image upload is supposed to be in the landing page
+   * section in the admin dashboard").
+   *
+   * It lives HERE rather than in the Wallpapers manager, which is where it was
+   * first built. The owner is right and the reason is worth recording: this is
+   * a landing-page image slot, and it belongs beside the other two — one place
+   * an operator goes to change what the front page looks like, rather than a
+   * landing setting hidden inside a library manager.
+   *
+   * Empty ⇒ the button falls back to its brand gradient, so the hero can never
+   * render a broken image — the same fail-closed rule `reelsPosterUrl` follows.
+   */
+  wallpaperCtaImageUrl: string;
 }
 
 export const DEFAULT_LANDING: LandingSettings = {
   reelsPosterUrl: "",
   feedGridImages: [],
+  wallpaperCtaImageUrl: "",
 };
 
 /** URLs we are willing to render on the public landing. */
@@ -89,6 +105,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
     const value: LandingSettings = {
       reelsPosterUrl: isAllowedImageUrl(raw.reelsPosterUrl) ? raw.reelsPosterUrl : "",
       feedGridImages: normalizeFeedGridImages(raw.feedGridImages),
+      wallpaperCtaImageUrl: isAllowedImageUrl(raw.wallpaperCtaImageUrl) ? raw.wallpaperCtaImageUrl : "",
     };
     cache = { at: Date.now(), value };
     return value;
@@ -103,6 +120,7 @@ export async function setLandingSettings(s: LandingSettings): Promise<void> {
   const value: LandingSettings = {
     reelsPosterUrl: isAllowedImageUrl(s.reelsPosterUrl) ? s.reelsPosterUrl : "",
     feedGridImages: normalizeFeedGridImages(s.feedGridImages),
+    wallpaperCtaImageUrl: isAllowedImageUrl(s.wallpaperCtaImageUrl) ? s.wallpaperCtaImageUrl : "",
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;

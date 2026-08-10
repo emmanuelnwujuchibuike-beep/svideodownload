@@ -55,7 +55,31 @@ import { cn } from "@/lib/utils";
  * as the Wallpaper Gallery button rather than as an arbitrary photo, and so the
  * no-image case and the image case are recognisably the same control.
  */
-const SCRIM = "absolute inset-0 bg-gradient-to-br from-violet-900/85 via-purple-900/70 to-fuchsia-900/75";
+/*
+  ── NEUTRAL, and only where the words are (owner, 2026-08-09) ────────────────
+  "the wallpaper button should show the image clearly without blending it with
+  purple."
+
+  The first version was a violet→fuchsia wash at 70-85% opacity. That reads the
+  brief backwards: it guaranteed legibility by hiding the photo, and it tinted
+  whatever the admin uploaded into the same purple rectangle it replaced — so
+  choosing an image changed almost nothing.
+
+  Two changes fix it:
+
+  • BLACK, not violet. A neutral scrim darkens without recolouring, so a green
+    landscape stays green. The brand colour is still there — it is the fallback
+    gradient underneath, which is what shows when no image is set.
+
+  • A GRADIENT, not a flat fill, weighted toward the text. Most of the image is
+    barely touched; the darkening concentrates where the label actually sits.
+    Legibility is a local problem and it deserves a local answer.
+
+  Each variant gets its own direction because the text sits in a different
+  place: bottom-anchored on the card, left-to-right across the row.
+*/
+const SCRIM_CARD = "absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/5";
+const SCRIM_ROW = "absolute inset-0 bg-gradient-to-r from-black/80 via-black/55 to-black/25";
 
 export function WallpaperCta({
   className,
@@ -135,8 +159,8 @@ export function WallpaperCta({
       */
       style={backgroundUrl ? { backgroundImage: `url(${JSON.stringify(backgroundUrl)})` } : undefined}
     >
-      {/* Legibility layer — see SCRIM. Only when there is a photo to darken. */}
-      {backgroundUrl ? <span aria-hidden className={cn(SCRIM, "pointer-events-none")} /> : null}
+      {/* Legibility layer — see the SCRIM notes. Only when there is a photo to darken. */}
+      {backgroundUrl ? <span aria-hidden className={cn(SCRIM_ROW, "pointer-events-none")} /> : null}
       <span className="frenz-wp-icon relative z-[1] flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/20 text-white ring-1 ring-inset ring-white/25 backdrop-blur-sm">
         <ImageIcon className="relative h-5 w-5" />
         <span
@@ -201,7 +225,7 @@ function WallpaperCard({ className, backgroundUrl }: { className?: string; backg
          this project's external media CDNs. See the row variant above. */
       style={backgroundUrl ? { backgroundImage: `url(${JSON.stringify(backgroundUrl)})` } : undefined}
     >
-      {backgroundUrl ? <span aria-hidden className={cn(SCRIM, "pointer-events-none")} /> : null}
+      {backgroundUrl ? <span aria-hidden className={cn(SCRIM_CARD, "pointer-events-none")} /> : null}
       {/* 🔴 z-[1] on the content: the scrim is positioned and would otherwise
           paint over it. */}
       <span className="relative z-[1] flex items-start justify-between gap-2">

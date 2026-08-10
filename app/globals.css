@@ -1535,3 +1535,110 @@
     color: CanvasText;
   }
 }
+
+/* ── Accessibility Center™ (Feature 18 · Part 22) ───────────────────────────
+   Requirement 9 of the brief: "every new feature automatically inherits
+   accessibility support without requiring separate implementation."
+
+   That only holds if the mechanism is something components ALREADY consume.
+   These variables hang off :root and feed the existing type, focus and target
+   rules — so a new component built the normal way is accessible because the
+   normal way reads them. Nothing to remember per feature, which is the only
+   version of this that survives a growing codebase.
+
+   Defaults are the app exactly as it is today, so a visitor who never opens
+   the Accessibility Center sees no change at all. */
+:root {
+  --a11y-text-scale: 1;
+  --a11y-tap-min: 0px;
+  --a11y-focus-width: 2px;
+  --a11y-line-height: 1.6;
+  --a11y-letter-spacing: 0em;
+  --a11y-measure: none;
+  --a11y-font-weight-boost: 0;
+  --a11y-filter: none;
+}
+
+/* Type scale. Applied to the ROOT font size so every `rem` in the app follows
+   — which is why the codebase's relative units matter: a single variable moves
+   the whole interface, including spacing that should grow with the text. */
+html {
+  font-size: calc(100% * var(--a11y-text-scale));
+}
+
+/* The whole-page colour filter. On <html> rather than <body> so it covers
+   fixed-position overlays, which are body-level in this app. */
+html {
+  filter: var(--a11y-filter);
+}
+
+/* Reading comfort — spacing and measure, never a font swap. A dyslexia-specific
+   typeface is a 30-100 kB download on a page with a 1.6-second budget, and the
+   research on those faces is genuinely contested; increased spacing and a
+   shorter line are not. */
+body {
+  line-height: var(--a11y-line-height);
+  letter-spacing: var(--a11y-letter-spacing);
+}
+p,
+li {
+  max-width: var(--a11y-measure);
+}
+
+/* Bold text. A weight BOOST rather than a fixed weight, so the existing
+   hierarchy survives — a heading stays heavier than the body under it. */
+html[data-a11y-bold="on"] body {
+  font-weight: calc(400 + var(--a11y-font-weight-boost));
+}
+
+/* Minimum tap target. `0px` by default means the rule is inert until asked
+   for, so nothing shifts for the people who never open these settings. */
+button,
+a[href],
+[role="button"],
+input[type="checkbox"],
+input[type="radio"] {
+  min-height: var(--a11y-tap-min);
+  min-width: var(--a11y-tap-min);
+}
+
+*:focus-visible {
+  outline-width: var(--a11y-focus-width);
+}
+
+/* High contrast — darkens body ink and strengthens every border. Deliberately
+   NOT a separate palette: a second token set would drift from the real one the
+   first time anyone adds a colour. This raises the contrast of what is there. */
+html[data-a11y-contrast="high"] {
+  --muted-foreground: 215 25% 25%;
+  --border: 215 20% 45%;
+}
+html[data-a11y-contrast="high"].dark {
+  --muted-foreground: 210 20% 88%;
+  --border: 210 20% 65%;
+}
+html[data-a11y-contrast="high"] *:focus-visible {
+  outline: var(--a11y-focus-width) solid currentColor;
+  outline-offset: 2px;
+}
+
+/* Reduce transparency. Blur is also the most expensive thing this app paints,
+   so this is a battery win as well as a legibility one — the brief asks for
+   both. */
+html[data-a11y-transparency="reduce"] * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Motion. The in-app override, which must BEAT the media query — someone who
+   asked Frenz for less motion is answering a more specific question than their
+   OS setting did. `data-a11y-motion="full"` deliberately re-enables animation
+   for a visitor whose OS says reduce but who wants it here. */
+html[data-a11y-motion="reduce"] *,
+html[data-a11y-motion="reduce"] *::before,
+html[data-a11y-motion="reduce"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

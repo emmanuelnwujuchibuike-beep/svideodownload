@@ -71,7 +71,14 @@ export const A11Y_STANDARDS: A11yStandard[] = [
   { id: "keyboard", requirement: "All flows operable without a pointer; dialogs trap and restore focus.", howEnforced: "Escape closes overlays; the command centre is full arrow-key navigable." },
   { id: "reduced-motion", requirement: "Respect prefers-reduced-motion.", howEnforced: "App-wide MotionConfig + motion-safe: gating on CSS animations." },
   { id: "dynamic-text", requirement: "Layouts survive larger text and zoom.", howEnforced: "Relative units, no fixed heights on text containers, truncation only where safe." },
-  { id: "rtl", requirement: "Layout mirrors for RTL locales.", howEnforced: "Logical properties where used; deferred until an RTL locale ships (see gap ledger).", },
+  /*
+    🔴 Corrected 2026-08-09. This read "deferred until an RTL locale ships" —
+    and four of them shipped that day (Arabic, Hebrew, Persian, Urdu). A
+    contract that describes the app as it USED to be is worse than no contract,
+    because it is consulted and believed.
+  */
+  { id: "rtl", requirement: "Layout mirrors for RTL locales.", howEnforced: "`dir` is set on <html> before first paint by components/i18n/locale-boot-script, keyed off the SCRIPT rather than off whether we have strings — so ar/he/fa/ur render correctly whether the text is ours or the browser's own translation." },
+  { id: "user-control", requirement: "Members can override motion, contrast, text size and tap targets in-app.", howEnforced: "Accessibility Center (Part 22) writes CSS custom properties on <html> from a <head> script, so preferences apply before first paint, work offline, and need no restart. `motion: system` leaves prefers-reduced-motion in sole control." },
 ];
 
 export function getA11yStandards(): A11yStandard[] {

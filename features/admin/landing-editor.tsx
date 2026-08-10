@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 export function LandingEditor({ settings }: { settings: LandingSettings }) {
   const router = useRouter();
   const [reelsPosterUrl, setReelsPosterUrl] = useState(settings.reelsPosterUrl);
+  const [wallpaperCtaImageUrl, setWallpaperCtaImageUrl] = useState(settings.wallpaperCtaImageUrl);
   // A fixed 4-length array of nullable slots so each grid cell has a stable
   // position in the UI; compacted to the non-empty URLs on save.
   const [grid, setGrid] = useState<(string | null)[]>(() => {
@@ -51,6 +52,7 @@ export function LandingEditor({ settings }: { settings: LandingSettings }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reelsPosterUrl,
+          wallpaperCtaImageUrl,
           feedGridImages: grid.filter((v): v is string => !!v),
         }),
       });
@@ -105,6 +107,42 @@ export function LandingEditor({ settings }: { settings: LandingSettings }) {
           </div>
           <div className="max-w-xs">
             <ImageUpload kind="banner" value={reelsPosterUrl || null} onChange={setReelsPosterUrl} />
+          </div>
+        </div>
+
+        {/*
+          Wallpaper Gallery button background (owner, 2026-08-09: "the wallpaper
+          button image upload is supposed to be in the landing page section").
+
+          It shipped first inside the Wallpapers manager, as a pick-from-library
+          control. The owner is right that it belongs here: this is a
+          landing-page image slot and it sits beside the other two, so an
+          operator changes what the front page looks like in ONE place instead
+          of hunting through a library manager for a landing setting.
+        */}
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold">Wallpaper Gallery button</p>
+              <p className="text-xs text-muted-foreground">
+                The photo behind the &ldquo;Wallpaper Gallery&rdquo; button on the landing
+                page and the download page. A dark overlay sits on top so the
+                title and icon stay readable over any image. Landscape works
+                best. Leave empty for the brand gradient.
+              </p>
+            </div>
+            {wallpaperCtaImageUrl ? (
+              <button
+                type="button"
+                onClick={() => setWallpaperCtaImageUrl("")}
+                className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground transition hover:text-foreground"
+              >
+                <X className="h-3 w-3" /> Clear
+              </button>
+            ) : null}
+          </div>
+          <div className="max-w-xs">
+            <ImageUpload kind="banner" value={wallpaperCtaImageUrl || null} onChange={setWallpaperCtaImageUrl} />
           </div>
         </div>
 

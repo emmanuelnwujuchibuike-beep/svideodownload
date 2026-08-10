@@ -35,6 +35,8 @@ const reelsPoster = z
 const schema = z.object({
   reelsPosterUrl: reelsPoster.default(""),
   feedGridImages: z.array(gridImage).max(FEED_GRID_SLOTS).default([]),
+  // Same shape and same clearable rule as the reels poster.
+  wallpaperCtaImageUrl: reelsPoster.default(""),
 });
 
 /** Admin-only: set the landing page's reels poster and 2×2 feed-grid images. */

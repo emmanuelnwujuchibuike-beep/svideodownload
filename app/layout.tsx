@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AnalyticsTracker } from "@/features/analytics/analytics-tracker";
 import { BootHead, BootSplash, ThemeBootScript } from "@/features/app-shell/boot-splash";
 import { LocaleBootScript } from "@/components/i18n/locale-boot-script";
+import { A11yBootScript, A11yColorFilters } from "@/components/a11y/a11y-boot-script";
 import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
 import { CommandCenterMount } from "@/features/navigation/command-center-mount";
@@ -224,6 +225,11 @@ export default function RootLayout({
             English. Setting it here makes the first paint correct instead of
             reflowing the whole page after hydration. */}
         <LocaleBootScript />
+        {/* Accessibility preferences — text scale, contrast, motion, targets.
+            In <head> for the same reason as the two above: someone who set 150%
+            text because they cannot read the default must not be shown the
+            default first and a reflow second. Runs offline, needs no bundle. */}
+        <A11yBootScript />
         {/* Boot-splash STYLE + dismissal DECISION — also in <head>, before
             first paint, so a streamed force-dynamic page (e.g. /messages)
             can't paint the F splash and then leave it up for seconds waiting
@@ -283,6 +289,10 @@ export default function RootLayout({
         {/* Branded boot loader baked into the first HTML so cold entries never
             flash an empty page; it fades itself out once the document is ready. */}
         <BootSplash />
+        {/* Colour-blindness filter matrices — `filter: url(#…)` can only
+            reference a filter present in the document. Hidden, zero-size, and
+            costs no JavaScript. */}
+        <A11yColorFilters />
         {/* One-time cleanup (runs before the next-themes bootstrap): an earlier
             build force-migrated visitors to "dark". Owner decision: the default
             is SYSTEM; users pick light/dark themselves. Undo that forced value

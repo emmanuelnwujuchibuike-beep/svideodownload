@@ -159,7 +159,10 @@ export const SETTINGS: readonly SettingEntry[] = [
   { id: "data.saver", category: "data", label: "Data saver", description: "Use less mobile data for media.", keywords: ["data saver", "mobile data", "cellular", "reduce data", "save data"], href: null, status: "backend-only", note: "The app already honours Save-Data and effectiveType for reels warm-up and media; there is no member-facing switch." },
 
   /* ────────────────────────────── accessibility ─────────────────────────── */
-  { id: "accessibility.motion", category: "accessibility", label: "Reduce motion", description: "Turn off animations and movement.", keywords: ["motion", "animation", "reduce motion", "vestibular", "still"], href: null, status: "backend-only", note: "Every animation honours `prefers-reduced-motion` from the OS; there is no in-app override." },
+  { id: "accessibility.center", category: "accessibility", label: "Accessibility", description: "Text size, contrast, motion, colour filters and tap targets.", keywords: ["accessibility", "a11y", "text size", "larger text", "contrast", "colour blind", "color blind", "presets", "dyslexia", "low vision"], href: "/account/accessibility", status: "live" },
+  { id: "accessibility.motion", category: "accessibility", label: "Reduce motion", description: "Turn off animations and movement.", keywords: ["motion", "animation", "reduce motion", "vestibular", "still"], href: "/account/accessibility", status: "live" },
+  { id: "accessibility.text", category: "accessibility", label: "Text size", description: "Make everything in Frenz larger or smaller.", keywords: ["text size", "font size", "larger text", "bigger text", "dynamic type", "zoom"], href: "/account/accessibility", status: "live" },
+  { id: "accessibility.contrast", category: "accessibility", label: "High contrast", description: "Darker text and stronger borders throughout.", keywords: ["contrast", "high contrast", "readable", "faint text"], href: "/account/accessibility", status: "live" },
   { id: "accessibility.haptics", category: "accessibility", label: "Haptics & sounds", description: "Vibration and sound feedback for taps.", keywords: ["haptics", "vibration", "sound", "feedback", "silent"], href: "/account/appearance", status: "live" },
 
   /* ─────────────────────────── connected devices ────────────────────────── */

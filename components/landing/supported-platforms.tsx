@@ -1,4 +1,4 @@
-import { BRAND_ICONS } from "@/lib/platform-icons";
+import { BRAND_ICONS, BRAND_MARKS } from "@/lib/platform-icons";
 import { cn } from "@/lib/utils";
 import type { PlatformId } from "@/types";
 
@@ -64,31 +64,59 @@ export function SupportedPlatforms({
         className,
       )}
     >
+      {/*
+        "Platforms supported" (owner, 2026-08-10: "don't use the word work, use
+        platform supported").
+
+        The reference draws "Works with" here and I had followed it. Overruled,
+        and the owner's wording is the better one anyway: "works with" is the
+        language of compatibility — of a thing that plugs into something else —
+        while this row is a statement about what the product itself handles.
+        The colon from the original label is dropped; it bought nothing and this
+        row spends every pixel of width it can on the marks.
+      */}
       <span
         className={cn(
           "shrink-0 text-xs font-semibold",
           onGradient ? "text-white/80" : "text-slate-500 dark:text-white/60",
         )}
       >
-        Supported Platforms:
+        Platforms supported
       </span>
       {SUPPORTED_PLATFORMS.map((id) => {
         const Icon = BRAND_ICONS[id];
+        const mark = BRAND_MARKS[id];
         return Icon ? (
           <span
             key={id}
             /*
-              The badge stays a white disc on BOTH surfaces. Brand marks are
-              drawn for light backgrounds — tinting the disc to match the page
-              would make several of them (YouTube, Pinterest) lose their own
-              colour, and a recognisable logo is the entire job of this row.
+              ── Squircle tiles, brand colour (public/landingnew.jpg) ──────────
+              Owner, 2026-08-10: "use the way icons are on the button in the
+              design I saved in public."
+
+              Two changes from the discs this replaced. The tile is a rounded
+              SQUARE and a size bigger, which is what the reference draws and
+              which reads as an app icon rather than as a bullet point. And the
+              glyph is the brand's own colour instead of one flat near-black —
+              the row exists so someone can spot their app instantly, and seven
+              identical grey marks is the one treatment that cannot do that.
+
+              The tile stays WHITE on both surfaces, including the purple card.
+              Brand marks are drawn for light backgrounds; tinting the tile
+              would cost YouTube and Pinterest their own colour, and the logo IS
+              the message here.
+
+              `mark.bg` overrides that for the two brands whose identity is the
+              surface rather than the ink — see `BRAND_MARKS`, where the pairing
+              is contrast-tested.
             */
             className={cn(
-              "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm",
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm",
               !onGradient && "ring-1 ring-inset ring-slate-200/70 dark:ring-white/10",
             )}
+            style={mark?.bg ? { background: mark.bg } : undefined}
           >
-            <Icon className="h-3.5 w-3.5" />
+            <Icon className="h-[18px] w-[18px]" style={mark ? { color: mark.fg } : undefined} />
           </span>
         ) : null;
       })}

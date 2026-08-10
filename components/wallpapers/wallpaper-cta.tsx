@@ -226,19 +226,38 @@ function WallpaperCard({ className, backgroundUrl }: { className?: string; backg
       style={backgroundUrl ? { backgroundImage: `url(${JSON.stringify(backgroundUrl)})` } : undefined}
     >
       {backgroundUrl ? <span aria-hidden className={cn(SCRIM_CARD, "pointer-events-none")} /> : null}
-      {/* 🔴 z-[1] on the content: the scrim is positioned and would otherwise
-          paint over it. */}
-      <span className="relative z-[1] flex items-start justify-between gap-2">
-        <span className="frenz-wp-icon relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/20 text-white ring-1 ring-inset ring-white/25 backdrop-blur-sm">
-          <ImageIcon className="relative h-6 w-6" />
-          <span
-            aria-hidden
-            className="frenz-wp-sheen pointer-events-none absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/70 to-transparent"
-          />
-        </span>
-        {/* The 2-second dwell cue, in the reference's top-right position. */}
-        <span className="frenz-wp-cue inline-flex items-center gap-1 rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-white ring-1 ring-inset ring-white/30">
-          <Microscope className="h-3 w-3" />
+      {/*
+        ── ONE badge, not two (owner, 2026-08-10) ──────────────────────────────
+        "make the wallpaper button less cluster like in the design."
+
+        The clutter was structural, not stylistic: this card carried a 48px
+        icon tile in the top-left AND a View pill in the top-right, so a
+        160px-wide tile spent its entire top row on two competing badges before
+        the title had any room. `public/landingnew.jpg` has one — the pill —
+        and the artwork does the rest of the talking, which is the right call
+        for a tile whose whole subject is a picture.
+
+        🔴 The animations are NOT lost with the tile (owner, earlier: "don't
+        remove the existing wallpaper button icon and design animation"). They
+        move onto the pill's glyph: `frenz-wp-icon` is the 2s flourish and
+        `frenz-wp-sheen` the highlight sweep. They sit on a span INSIDE the
+        pill rather than on the pill itself because `frenz-wp-cue` is already
+        an `animation` on that element, and an element has only one animation
+        property — putting a second class there would silently cancel the
+        reveal.
+
+        🔴 z-[1] on the content: the scrim is positioned and would otherwise
+        paint over it.
+      */}
+      <span className="relative z-[1] flex items-start justify-end gap-2">
+        <span className="frenz-wp-cue inline-flex items-center gap-1.5 rounded-full bg-black/35 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-white ring-1 ring-inset ring-white/30 backdrop-blur-sm">
+          <span className="frenz-wp-icon relative flex h-3.5 w-3.5 items-center justify-center overflow-hidden rounded-[4px]">
+            <Microscope className="h-3 w-3" />
+            <span
+              aria-hidden
+              className="frenz-wp-sheen pointer-events-none absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/80 to-transparent"
+            />
+          </span>
           View
         </span>
       </span>
@@ -246,7 +265,11 @@ function WallpaperCard({ className, backgroundUrl }: { className?: string; backg
       <span className="relative z-[1] mt-auto flex items-end justify-between gap-3 pt-4">
         <span className="min-w-0">
           <span className="block text-base font-bold leading-tight text-white drop-shadow-sm">Wallpaper Gallery</span>
-          <span className="mt-1 block text-xs leading-snug text-white/85 drop-shadow-sm">Stunning quality, updated daily</span>
+          {/* Punctuated as in the reference — it sits beside "See everything
+              Frenz can do." and one sentence ending mid-air next to one that
+              does not is the kind of small inconsistency that reads as sloppy
+              without being nameable. */}
+          <span className="mt-1 block text-xs leading-snug text-white/85 drop-shadow-sm">Stunning quality, updated daily.</span>
         </span>
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/25 transition group-hover:bg-white/30">
           <ArrowRight className="h-4 w-4 text-white transition-transform group-hover:translate-x-0.5" />

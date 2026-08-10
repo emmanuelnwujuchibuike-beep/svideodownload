@@ -145,21 +145,45 @@ export async function Hero() {
         */}
         <div className="min-w-0 text-left">
           {/*
-            🔴 The "All-in-One Downloader & Social Hub" eyebrow is GONE (owner,
-            2026-08-09: "remove the top section that says all-in-one downloader
-            and social hub, to adjust the hero upwards without cluster").
+            ── The eyebrow, restored and rebuilt (owner, 2026-08-10) ──────────
+            "readd the top all-in-one downloader and social hub … but this time
+            make it more responsive on all screens and premium, it shouldn't
+            occupy much space."
 
-            It is not a loss. The pill claimed in eleven words what the headline
-            underneath it says in three, and the CTA rows below say properly —
-            so it was a row of vertical space spent restating the next two
-            elements, on a page whose whole design brief this week has been
-            getting the paste box above the fold on a phone. Removing it lifts
-            everything under it by roughly 44px.
+            It was removed earlier the same day and is back because the
+            reference (public/landingnew.jpg) opens with it. What is different
+            is the three things that made it worth removing:
 
-            It also retires the long-running overlap report (a screenshot of the
-            download tile painting over this badge) — a defect that was never
-            reproducible from the source, on an element that no longer exists.
+            • SPACE. It was `py-1.5`, 11px type, `leading-relaxed` and `mb-4` —
+              about 46px of column. This is `py-1`, fluid type and `mb-3`:
+              roughly 26px. Nearly half, for the same words.
+
+            • RESPONSIVENESS. Thirty-four characters at a fixed 11px with
+              0.14em tracking need ~285px of text width, which a 320px phone
+              does not have once the pill's padding and icon are removed — so
+              it wrapped to two lines and became the tallest thing above the
+              headline. The type is now `clamp(9px, 2.7vw, 11px)` and the
+              tracking relaxes only at `sm`, so it is ONE line at every width
+              from 320px up. `whitespace-nowrap` makes that a guarantee rather
+              than an expectation.
+
+            • PREMIUM. Flat violet text on a flat violet chip became the brand
+              gradient clipped to the glyphs — the same blue→violet mix the
+              headline's "Connect." uses, so the two read as one system.
+
+            `flex` + `w-fit` + `relative z-10` are kept from the previous
+            version deliberately. A block-level flex row cannot be overlapped by
+            an inline sibling the way an `inline-flex` box can, and that shape
+            was the response to an overlap report that was never reproducible
+            from source. The symptom has not recurred; the defence costs
+            nothing, so it stays.
           */}
+          <span className="relative z-10 mb-3 flex w-fit max-w-full items-center gap-1.5 rounded-full border border-violet-500/20 bg-violet-500/[0.07] px-2.5 py-1 backdrop-blur-sm dark:border-violet-400/25 dark:bg-violet-400/10 sm:px-3">
+            <Sparkles className="h-3 w-3 shrink-0 text-violet-500 dark:text-violet-300 sm:h-3.5 sm:w-3.5" />
+            <span className="whitespace-nowrap bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-[clamp(9px,2.7vw,11px)] font-bold uppercase leading-none tracking-[0.09em] text-transparent dark:from-blue-300 dark:to-violet-300 sm:tracking-[0.14em]">
+              All-in-One Downloader &amp; Social Hub
+            </span>
+          </span>
 
           {/* "Download. Connect. Explore." — the reference H1, middle word in the
               brand gradient (public/newlandingfull.jpg). */}
@@ -290,6 +314,28 @@ export async function Hero() {
             </div>
 
             {/*
+              🔴 The trademark disclaimer, directly under the CTA (owner,
+              2026-08-10: "put the logo disclaimer below the top hero
+              placeholder button").
+
+              MOVED, not added. It was rendered further down inside the purple
+              "Download anything" card, which is several screens away from the
+              logo strip it disclaims — and a disclaimer that appears long after
+              the marks it qualifies is doing its job in the wrong order. It now
+              sits immediately below the CTA, one row under the "Works with"
+              logos.
+
+              The copy is unchanged and still comes from one component, so there
+              is exactly one version of this sentence on the site. Left-aligned
+              via the `align` prop rather than a className — see the note in
+              that component for why passing `text-left` would silently lose.
+            */}
+            <DownloadDisclaimer
+              align="left"
+              className="mx-0 mt-1 max-w-none px-1 text-[10px] leading-snug"
+            />
+
+            {/*
               ── Two cards, side by side (the reference) ──────────────────────
               These were two full-width stacked rows. The reference pairs them:
               a light "Explore Features" tile beside the purple Wallpaper
@@ -301,18 +347,58 @@ export async function Hero() {
               choices.
             */}
             <div className="grid grid-cols-2 gap-3">
+              {/*
+                ── Explore Features, to the reference (public/landingnew.jpg) ─
+                Owner, 2026-08-10: "the premium colour mix in the explore
+                button".
+
+                Three changes, all from the image:
+
+                • The icon is a CIRCLE, not a rounded square, and the gradient
+                  is a three-stop blue → indigo → violet rather than a two-stop
+                  blue → violet. A two-stop ramp between those hues passes
+                  through a muddy mid-tone; the indigo stop is what makes it
+                  read as a deliberate mix instead of a fade. A soft coloured
+                  glow underneath lifts the disc off the white card.
+
+                • The reference has a large translucent glass shape drifting
+                  off the card's right edge. That is two blurred, rotated
+                  rounded squares here — no image, no bytes, and it survives
+                  dark mode because it is tinted rather than white.
+
+                • Subtitle wording matches the image.
+              */}
               <Link
                 href="/features"
                 className="group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 text-left text-slate-900 shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-card active:scale-[0.995] dark:border-white/15 dark:bg-white/5 dark:text-white dark:backdrop-blur"
               >
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-sm">
+                {/*
+                  🔴 Decoration first in the markup, and every content node
+                  below carries `relative z-[1]`.
+
+                  Positioned elements paint above static siblings, so an
+                  absolutely-positioned decoration will cover its own card's
+                  text — the exact regression that shipped on the Wallpaper
+                  tile when its gradient was briefly moved into an
+                  `inset-0` child.
+                */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -right-8 top-6 h-32 w-32 rotate-[18deg] rounded-[2rem] bg-gradient-to-br from-violet-400/25 via-indigo-400/15 to-transparent blur-[1px] transition-transform duration-500 group-hover:rotate-[22deg] motion-reduce:transition-none dark:from-violet-400/20 dark:via-indigo-400/10"
+                />
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -right-2 top-20 h-20 w-20 -rotate-12 rounded-3xl bg-gradient-to-br from-blue-400/20 to-transparent blur-[2px] dark:from-blue-400/15"
+                />
+
+                <span className="relative z-[1] flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30">
                   <Compass className="h-6 w-6" />
                 </span>
-                <span className="mt-auto flex items-end justify-between gap-3 pt-4">
+                <span className="relative z-[1] mt-auto flex items-end justify-between gap-3 pt-4">
                   <span className="min-w-0">
                     <span className="block text-base font-bold leading-tight">Explore Features</span>
                     <span className="mt-1 block text-xs leading-snug text-slate-500 dark:text-white/60">
-                      See what Frenz can do
+                      See everything Frenz can do.
                     </span>
                   </span>
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/70 transition group-hover:bg-slate-200 dark:bg-white/10 dark:ring-white/15">
@@ -441,10 +527,14 @@ export async function Hero() {
           {/* Supported platforms, per the reference card. Same component as the
               hero's row, on the gradient surface. */}
           <SupportedPlatforms surface="onGradient" className="relative mt-4" />
-          {/* Trademark / non-affiliation disclaimer — INSIDE the download box
-              (owner), in a light tone that reads on the purple gradient. The tool
-              inside hides its own copy on the landing so this isn't doubled. */}
-          <DownloadDisclaimer className="relative mt-5 border-t border-white/15 pt-4 text-white/60" />
+          {/*
+            The disclaimer that used to live here has MOVED to directly under
+            the hero CTA (owner, 2026-08-10). It is not repeated here on
+            purpose: one page needs one copy of a legal sentence, and a second
+            one three screens down is the kind of accumulation the same
+            instruction ("less cluster") asked to stop. The `Downloader` in this
+            card still runs with `hideDisclaimer`, so nothing re-adds it.
+          */}
         </div>
       </div>
     </section>

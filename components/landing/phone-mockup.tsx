@@ -166,20 +166,43 @@ export async function PhoneMockup() {
               className="pointer-events-none absolute inset-0 z-20 rounded-[2.1rem] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.10),inset_0_0_18px_rgba(0,0,0,0.55)]"
             />
 
-            {/* SCREEN — the Frenz feed, on a light app ground like the reference. */}
-            <div className="flex h-full flex-col bg-neutral-50 text-neutral-900">
+            {/*
+              SCREEN — the Frenz feed, on a light app ground like the reference.
+
+              🔴 The whole screen is `aria-hidden` (axe, 2026-08-10).
+
+              Two things drove this. The narrow one: the signal and battery
+              glyphs carried `aria-label` on plain `<span>`s, which axe flags as
+              `aria-prohibited-attr` (serious) — an element with no role cannot
+              take a name, so those labels were not announced anywhere, they
+              just failed the audit.
+
+              The broad one is the better reason to hide the subtree rather than
+              patch two attributes. This is a PICTURE OF AN APP. Everything in
+              it — "9:41", the fake battery, "Frenz · @frenz · 2d", a post that
+              does not exist, a tab bar that navigates nowhere — was being read
+              out to a screen-reader user as though it were real content sitting
+              between the hero CTA and the rest of the page. A sighted visitor
+              perceives it in one glance as a product shot; a screen-reader user
+              got a dozen meaningless nodes with no way to tell they were
+              decoration.
+
+              The device frame keeps its visual role and loses its semantic one,
+              which is what a mockup should have been all along.
+            */}
+            <div aria-hidden className="flex h-full flex-col bg-neutral-50 text-neutral-900">
               {/* iOS status bar */}
               <div className="flex items-center justify-between px-5 pt-2.5 text-neutral-900">
                 <span className="text-[11px] font-semibold tracking-tight">9:41</span>
                 <div className="flex items-center gap-1.5">
-                  <span className="flex items-end gap-[1.5px]" aria-label="signal">
+                  <span className="flex items-end gap-[1.5px]">
                     <span className="h-[3px] w-[2.5px] rounded-[1px] bg-neutral-900" />
                     <span className="h-[5px] w-[2.5px] rounded-[1px] bg-neutral-900" />
                     <span className="h-[7px] w-[2.5px] rounded-[1px] bg-neutral-900" />
                     <span className="h-[9px] w-[2.5px] rounded-[1px] bg-neutral-900" />
                   </span>
                   <Wifi className="h-3 w-3" strokeWidth={2.5} />
-                  <span className="flex items-center gap-[1px]" aria-label="battery">
+                  <span className="flex items-center gap-[1px]">
                     <span className="relative h-[11px] w-[22px] rounded-[3px] ring-1 ring-neutral-900/80">
                       <span className="absolute inset-[1.5px] right-[4px] rounded-[1.5px] bg-neutral-900" />
                     </span>
@@ -270,18 +293,40 @@ export async function PhoneMockup() {
                       which is exactly the interval LCP measures. Lazy is right
                       for the grid below; it was never right for this.
 
-                      `priority` is the fix for both halves: it emits a preload
-                      so the fetch starts from the HTML rather than after
-                      layout, and it opts out of lazy loading. `sizes` is what
-                      makes the optimizer serve ~300px of AVIF instead of a
+                      `next/image` with `sizes` is the fix for the bytes: the
+                      optimizer serves ~300px of AVIF instead of a
                       four-megapixel JPEG.
+
+                      🔴 IT IS NOT THE LCP ELEMENT, and `priority` is gone
+                      (measured 2026-08-10, correcting a35cc7f).
+
+                      A `largest-contentful-paint` observer on the live page
+                      under mobile throttling reports two candidates and this is
+                      neither of them — the winner is the Wallpaper Gallery tile
+                      in the LEFT column. The reason is structural: this mockup
+                      is the second grid item, so on a phone it renders after
+                      the whole left-hand stack, roughly a thousand pixels below
+                      the fold, where LCP does not look.
+
+                      `priority` therefore did active harm. It emitted a
+                      high-priority preload for a below-the-fold decoration that
+                      competed for the same throttled connection as the image
+                      that IS the LCP element.
+
+                      `loading="eager"` with `fetchPriority="low"` is the right
+                      pair: the request still starts immediately rather than
+                      waiting on layout — which keeps the mockup filled on
+                      DESKTOP, where the two columns sit side by side and this
+                      IS above the fold — but the browser schedules it behind
+                      the real LCP image instead of alongside it.
                     */
                     <Image
                       src={posterUrl}
                       alt=""
                       fill
                       sizes="300px"
-                      priority
+                      loading="eager"
+                      fetchPriority="low"
                       className="object-cover"
                     />
                   ) : (

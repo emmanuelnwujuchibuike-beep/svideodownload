@@ -58,12 +58,48 @@ export function SupportedPlatforms({
       browsing surface; the marks are recognisable enough that a partially
       visible one still reads as "and more".
     */
-    <div
-      className={cn(
-        "flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-        className,
-      )}
-    >
+    /*
+      ── STACKED, and every mark visible at once (owner, 2026-08-10) ───────────
+      "make the platform logos beside platform supported to be under the platform
+      supported text so the logos shows full without sliding."
+
+      This was a single horizontal row — label first, then eight badges — that
+      scrolled, because the label plus 8×36px tiles plus gaps needs ~460px and a
+      320px phone has about 270px of container to give. So on the one form factor
+      that matters most, the last two or three marks were always off-screen
+      behind a hidden scrollbar, and finding them meant knowing to swipe a strip
+      that gives no sign it can be swiped.
+
+      Two changes, and the second is what actually solves it:
+
+      • The label moves to its OWN line, which hands the marks the full width
+        instead of the width left over after "Platforms supported".
+
+      • The marks become an 8-column GRID rather than a flex row. A grid column
+        is a share of the available width, so eight tiles always fit on one line
+        at any viewport — they get smaller on a narrow phone instead of falling
+        off the end. `aspect-square` keeps every tile a square as it scales, and
+        the glyph inside is a `clamp()` so it tracks the tile down without
+        becoming a speck.
+
+      This also deletes an accessibility failure at the source rather than
+      patching it. axe flagged both instances of this strip as
+      `scrollable-region-focusable` (serious): it was a scroll container whose
+      children are all plain `<span>`s, so there was nothing tabbable inside and
+      a keyboard-only user could not reach the scrolled-off marks at all. With
+      nothing to scroll, there is no dead end to give keyboard access to — and no
+      pointless tab stop added to the hero either.
+
+      The earlier objection to wrapping (owner, 2026-08-09: eight badges wrapped
+      to "six marks, then two orphans") does not apply here. That was a `flex-wrap`
+      row breaking wherever it ran out of room; this is a fixed eight-column grid
+      that cannot produce an orphan.
+
+      `max-w-md` caps the grid so the tiles do not inflate to 80px each inside
+      the wide "Download anything" card — the row is a recognition cue, not a
+      feature grid.
+    */
+    <div className={cn("flex flex-col gap-2", className)}>
       {/*
         "Platforms supported" (owner, 2026-08-10: "don't use the word work, use
         platform supported").
@@ -77,49 +113,79 @@ export function SupportedPlatforms({
       */}
       <span
         className={cn(
-          "shrink-0 text-xs font-semibold",
+          "text-xs font-semibold",
           onGradient ? "text-white/80" : "text-slate-500 dark:text-white/60",
         )}
       >
         Platforms supported
       </span>
-      {SUPPORTED_PLATFORMS.map((id) => {
-        const Icon = BRAND_ICONS[id];
-        const mark = BRAND_MARKS[id];
-        return Icon ? (
-          <span
-            key={id}
-            /*
-              ── Squircle tiles, brand colour (public/landingnew.jpg) ──────────
-              Owner, 2026-08-10: "use the way icons are on the button in the
-              design I saved in public."
+      <div className="grid w-full max-w-md grid-cols-8 gap-1.5 sm:gap-2">
+        {SUPPORTED_PLATFORMS.map((id) => {
+          const Icon = BRAND_ICONS[id];
+          const mark = BRAND_MARKS[id];
+          return Icon ? (
+            <span
+              key={id}
+              /*
+                ── Squircle tiles, brand colour (public/landingnew.jpg) ────────
+                Owner, 2026-08-10: "use the way icons are on the button in the
+                design I saved in public."
 
-              Two changes from the discs this replaced. The tile is a rounded
-              SQUARE and a size bigger, which is what the reference draws and
-              which reads as an app icon rather than as a bullet point. And the
-              glyph is the brand's own colour instead of one flat near-black —
-              the row exists so someone can spot their app instantly, and seven
-              identical grey marks is the one treatment that cannot do that.
+                Two changes from the discs this replaced. The tile is a rounded
+                SQUARE and a size bigger, which is what the reference draws and
+                which reads as an app icon rather than as a bullet point. And the
+                glyph is the brand's own colour instead of one flat near-black —
+                the row exists so someone can spot their app instantly, and seven
+                identical grey marks is the one treatment that cannot do that.
 
-              The tile stays WHITE on both surfaces, including the purple card.
-              Brand marks are drawn for light backgrounds; tinting the tile
-              would cost YouTube and Pinterest their own colour, and the logo IS
-              the message here.
+                The tile stays WHITE on both surfaces, including the purple card.
+                Brand marks are drawn for light backgrounds; tinting the tile
+                would cost YouTube and Pinterest their own colour, and the logo IS
+                the message here.
 
-              `mark.bg` overrides that for the two brands whose identity is the
-              surface rather than the ink — see `BRAND_MARKS`, where the pairing
-              is contrast-tested.
-            */
-            className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm",
-              !onGradient && "ring-1 ring-inset ring-slate-200/70 dark:ring-white/10",
-            )}
-            style={mark?.bg ? { background: mark.bg } : undefined}
-          >
-            <Icon className="h-[18px] w-[18px]" style={mark ? { color: mark.fg } : undefined} />
-          </span>
-        ) : null;
-      })}
+                `mark.bg` overrides that for the two brands whose identity is the
+                surface rather than the ink — see `BRAND_MARKS`, where the pairing
+                is contrast-tested.
+
+                🔴 `aspect-square w-full`, NOT `h-9 w-9` (owner, 2026-08-10 — all
+                eight visible, no sliding). A fixed 36px tile is what forced the
+                row to overflow on a phone in the first place: eight of them plus
+                gaps cannot fit 270px, so something had to scroll off. A tile
+                that is one-eighth of the width shrinks to fit instead — about
+                29px on a 320px screen, 38px on a Pixel — and the row always ends
+                where the column ends.
+              */
+              /*
+                🔴 A PERCENTAGE radius, not `rounded-2xl`.
+
+                `rounded-2xl` is a fixed 16px. That was a squircle on the old
+                36px tile, but the tile now scales with the viewport — and at
+                320px it is about 29px wide, where a 16px radius is more than
+                half the side and renders a perfect CIRCLE. The tiles turned back
+                into the discs the squircle deliberately replaced, only at the
+                narrow width where nobody would think to look.
+
+                `26%` holds the same shape at every size — close to the ~22.5%
+                iOS uses for its own app icons, which is the look this row is
+                imitating.
+              */
+              className={cn(
+                "flex aspect-square w-full items-center justify-center rounded-[26%] bg-white shadow-sm",
+                !onGradient && "ring-1 ring-inset ring-slate-200/70 dark:ring-white/10",
+              )}
+              style={mark?.bg ? { background: mark.bg } : undefined}
+            >
+              {/* The glyph tracks the tile down rather than staying 18px and
+                  crowding it at the narrow end — clamped so it never becomes a
+                  speck on a small phone or bloats on a wide card. */}
+              <Icon
+                className="h-[clamp(13px,3.6vw,18px)] w-[clamp(13px,3.6vw,18px)]"
+                style={mark ? { color: mark.fg } : undefined}
+              />
+            </span>
+          ) : null;
+        })}
+      </div>
     </div>
   );
 }

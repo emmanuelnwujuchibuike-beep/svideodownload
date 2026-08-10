@@ -167,7 +167,24 @@ export function SiteFooter({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } 
         <FooterTools />
       </div>
 
-      <div className="container mt-12 flex flex-col items-start justify-between gap-3 border-t border-border/40 pt-6 text-xs text-muted-foreground/70 sm:flex-row sm:items-center">
+      {/*
+        🔴 `text-muted-foreground`, NOT `text-muted-foreground/70` (axe, 2026-08-10).
+
+        The `/70` was the whole failure. `--muted-foreground` is a deliberately
+        graded token — 7.5:1 on white, comfortably past AA. Fading it to 70%
+        composites it toward the page background and lands at #86868C, which is
+        3.61:1: below the 4.5:1 minimum, at 12px, on the two lines that carry the
+        copyright and the "download only what you have the right to save"
+        notice. The legal text was the least readable text on the page.
+
+        An opacity modifier on a colour token silently re-grades it, and nothing
+        in the type system or the build can see that happen — which is why the
+        contrast guard now lives on the palette (design-tokens.registry.test.ts)
+        and why this line spends the token as authored. If this row ever needs to
+        recede visually again, the way to do it is a smaller/lighter WEIGHT, not
+        a transparency that eats the contrast.
+      */}
+      <div className="container mt-12 flex flex-col items-start justify-between gap-3 border-t border-border/40 pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center">
         <p>
           {t("footer.copyright", { year: new Date().getFullYear() })}
         </p>

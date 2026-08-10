@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import type { IconType } from "react-icons";
 import { FaLinkedin } from "react-icons/fa";
 import {
@@ -16,20 +17,71 @@ import {
 
 import type { PlatformId } from "@/types";
 
+/**
+ * Marks a brand glyph as DECORATION for assistive technology.
+ *
+ * ── The single largest accessibility failure on the site (axe, 2026-08-10) ────
+ *
+ * `svg-img-alt`, serious, FORTY-SEVEN nodes on the landing page alone — more
+ * than every other rule on the page put together. Every one of them is a
+ * react-icons glyph.
+ *
+ * The cause is a default nobody chose. react-icons stamps `role="img"` onto the
+ * `<svg>` it renders, which is an explicit promise to assistive technology that
+ * this element is an image conveying meaning — and an element making that
+ * promise must carry a name (a `<title>`, an `aria-label`). None of ours do, so
+ * every brand mark announced itself as an unnamed image. A screen-reader user
+ * on the hero met "image, image, image, image…" eight times in a row for a strip
+ * whose text already said "Platforms supported".
+ *
+ * ── Why decorative is the CORRECT answer, not the convenient one ──────────────
+ *
+ * These marks are never the only thing saying what they say. The platform strip
+ * is introduced by its own label; the downloader links pair every glyph with the
+ * platform's name; the showcase captions each tile. An `aria-label="TikTok"` on
+ * the glyph would therefore make the far more annoying failure — every one of
+ * those places would announce the platform TWICE in a row.
+ *
+ * `aria-hidden` on the glyph and real text beside it is the shape WCAG actually
+ * asks for. Where a brand mark is ever the ONLY content of a control, the
+ * accessible name belongs on that control (its `aria-label`), not on the
+ * decoration inside it — which is also what makes the name survive someone
+ * later swapping the icon.
+ *
+ * ── One place, so it cannot drift ─────────────────────────────────────────────
+ *
+ * `BRAND_ICONS` has eighteen call sites. Setting `aria-hidden` at each of them
+ * fixes today's 47 nodes and guarantees the nineteenth arrives without it, which
+ * is exactly how this became 47 nodes. The default lives with the registry
+ * instead. A caller that genuinely needs a named glyph can still pass
+ * `aria-hidden={false}` with a label — props spread last and win.
+ */
+function decorative(Icon: IconType): IconType {
+  const Decorative = ((props) =>
+    createElement(Icon, { "aria-hidden": true, focusable: "false", ...props })) as IconType & {
+    displayName?: string;
+  };
+  // `IconType` is declared as a bare function type, so `displayName` is not on
+  // it even though react-icons sets one at runtime — read it defensively.
+  const base = (Icon as { displayName?: string }).displayName ?? Icon.name ?? "Icon";
+  Decorative.displayName = `Decorative(${base})`;
+  return Decorative;
+}
+
 /** Real brand logos per platform (shared across hero, flagship, showcase). */
 export const BRAND_ICONS: Partial<Record<PlatformId, IconType>> = {
-  tiktok: SiTiktok,
-  instagram: SiInstagram,
-  facebook: SiFacebook,
-  twitter: SiX,
-  pinterest: SiPinterest,
-  reddit: SiReddit,
-  vimeo: SiVimeo,
-  youtube: SiYoutube,
-  threads: SiThreads,
-  snapchat: SiSnapchat,
-  linkedin: FaLinkedin,
-  telegram: SiTelegram,
+  tiktok: decorative(SiTiktok),
+  instagram: decorative(SiInstagram),
+  facebook: decorative(SiFacebook),
+  twitter: decorative(SiX),
+  pinterest: decorative(SiPinterest),
+  reddit: decorative(SiReddit),
+  vimeo: decorative(SiVimeo),
+  youtube: decorative(SiYoutube),
+  threads: decorative(SiThreads),
+  snapchat: decorative(SiSnapchat),
+  linkedin: decorative(FaLinkedin),
+  telegram: decorative(SiTelegram),
 };
 
 /**

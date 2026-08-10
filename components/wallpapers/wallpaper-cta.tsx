@@ -1,7 +1,71 @@
 import { ArrowRight, Image as ImageIcon, Microscope } from "lucide-react";
+import NextImage from "next/image";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
+
+/**
+ * The admin wallpaper, as an optimized <img> behind the content.
+ *
+ * ── 🔴 This tile is the LANDING PAGE'S LCP ELEMENT (measured, 2026-08-10) ─────
+ *
+ * Not a guess and not the same answer as last time. Running a
+ * `largest-contentful-paint` PerformanceObserver against the live page under
+ * Lighthouse's own mobile throttling (4x CPU, 1.6 Mbps) reports exactly two
+ * candidates: the hero paragraph at 5416ms (22508px²), then THIS anchor at
+ * 7960ms (27224px²). The card is bigger than the paragraph, so the moment its
+ * background finishes decoding it takes over as the largest paint — and the
+ * time it takes to arrive IS the reported LCP.
+ *
+ * The previous fix (a35cc7f) named the phone-mockup poster instead. That was
+ * wrong for a structural reason worth writing down: the mockup is the SECOND
+ * grid column, so on a phone it renders after the entire left-hand stack — a
+ * long way below the fold, where LCP does not look. It was never a candidate.
+ *
+ * ── Why a CSS background could not be made fast ──────────────────────────────
+ *
+ * Two faults, and neither is fixable while it stays a background:
+ *
+ *  • BYTES. It was the Supabase ORIGINAL — measured at 111 KB of JPEG for a
+ *    tile that renders about 170px wide. A background cannot go through the
+ *    image optimizer, so there was no size to serve but the full one.
+ *
+ *  • CACHING. Supabase storage answers that object with `Cache-Control:
+ *    no-cache` (verified with curl), so every visitor re-fetched all 111 KB on
+ *    every visit. Routing it through `next/image` re-serves it from Next's own
+ *    image cache with a 31-day immutable TTL (`minimumCacheTTL` in
+ *    next.config.ts), which fixes repeat views as well as first ones.
+ *
+ * `priority` emits the preload, so the fetch starts from the HTML rather than
+ * after the stylesheet parses and the element lays out — which is the extra
+ * few hundred milliseconds a background costs by construction. The manual
+ * `<link rel="preload" fetchPriority="low">` that used to sit in hero.tsx is
+ * removed with this: it was preloading the LCP element at LOW priority.
+ *
+ * ── Why this does not repeat the "positioned layer covers the text" bug ──────
+ *
+ * It is the FIRST child, painted below the scrim, and every content node in
+ * both variants already carries `relative z-[1]` for exactly this reason. The
+ * gradient stays on the element itself as the no-image fallback, so a failed
+ * or absent wallpaper still renders the branded tile.
+ *
+ * `next/image` is safe here specifically because this is a Supabase public URL
+ * (the same origin the phone mockup already optimizes). The recorded 403s are
+ * on SOURCE CDNs — yt-dlp-resolved thumbnails whose signatures expire — which
+ * never reach this component.
+ */
+function WallpaperBackdrop({ url, sizes }: { url: string; sizes: string }) {
+  return (
+    <NextImage
+      src={url}
+      alt=""
+      fill
+      sizes={sizes}
+      priority
+      className="pointer-events-none select-none object-cover"
+    />
+  );
+}
 
 /**
  * The "Wallpaper Gallery" entry tile — landing hero and the signed-in downloads
@@ -142,23 +206,18 @@ export function WallpaperCta({
       */
       className={cn(
         "frenz-wp group relative flex w-full items-center gap-4 overflow-hidden rounded-2xl px-4 py-3.5 text-left",
-        "bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 bg-cover bg-center text-white",
+        "bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 text-white",
         "ring-1 ring-inset ring-white/15 shadow-md",
         "transition duration-200 hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.995]",
         className,
       )}
-      /*
-        The wallpaper as a plain CSS background — no <img>, no `next/image`.
-
-        Two reasons. It costs ZERO client JavaScript, which is the whole
-        constraint on the landing page; and `next/image` 403s on the external
-        CDNs this project's media comes from, which is a recorded failure here.
-
-        The gradient above stays as the fallback: with no admin selection the
-        button is exactly what it was.
-      */
-      style={backgroundUrl ? { backgroundImage: `url(${JSON.stringify(backgroundUrl)})` } : undefined}
     >
+      {/* The wallpaper itself, optimized and preloaded — see WallpaperBackdrop.
+          The gradient above stays as the fallback: with no admin selection the
+          button is exactly what it was. */}
+      {backgroundUrl ? (
+        <WallpaperBackdrop url={backgroundUrl} sizes="(min-width: 1024px) 640px, 100vw" />
+      ) : null}
       {/* Legibility layer — see the SCRIM notes. Only when there is a photo to darken. */}
       {backgroundUrl ? <span aria-hidden className={cn(SCRIM_ROW, "pointer-events-none")} /> : null}
       <span className="frenz-wp-icon relative z-[1] flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/20 text-white ring-1 ring-inset ring-white/25 backdrop-blur-sm">
@@ -216,15 +275,17 @@ function WallpaperCard({ className, backgroundUrl }: { className?: string; backg
       prefetch
       className={cn(
         "frenz-wp group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl p-4 text-left",
-        "bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 bg-cover bg-center text-white",
+        "bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white",
         "ring-1 ring-inset ring-white/15 shadow-md",
         "transition duration-200 hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.995]",
         className,
       )}
-      /* CSS background, not <img> — zero client JS, and `next/image` 403s on
-         this project's external media CDNs. See the row variant above. */
-      style={backgroundUrl ? { backgroundImage: `url(${JSON.stringify(backgroundUrl)})` } : undefined}
     >
+      {/* 🔴 The landing page's LCP element — see WallpaperBackdrop for the
+          measurement and for why this stopped being a CSS background. */}
+      {backgroundUrl ? (
+        <WallpaperBackdrop url={backgroundUrl} sizes="(min-width: 1024px) 300px, 50vw" />
+      ) : null}
       {backgroundUrl ? <span aria-hidden className={cn(SCRIM_CARD, "pointer-events-none")} /> : null}
       {/*
         ── ONE badge, not two (owner, 2026-08-10) ──────────────────────────────

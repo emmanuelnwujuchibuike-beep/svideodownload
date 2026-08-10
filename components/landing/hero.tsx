@@ -412,32 +412,23 @@ export async function Hero() {
                   remove the existing wallpaper button icon and design
                   animation"), in the reference's card shape. */}
               {/*
-                🔴 Preload the wallpaper CTA's backdrop.
+                🔴 The manual `<link rel="preload" fetchPriority="low">` that
+                used to sit here is GONE, and the reasoning it carried was
+                backwards.
 
-                It is a CSS `background-image`, which the browser's preload
-                scanner cannot see: a background is only discovered once the
-                stylesheet has been parsed AND the element has been laid out, so
-                the request starts several hundred milliseconds after everything
-                the scanner found in the HTML. For a 147 KB image sitting at the
-                fold, that late start lands squarely inside the LCP window.
+                It preloaded this backdrop at LOW priority on the stated
+                assumption that the hero poster was the largest element and
+                should not be competed with. Measurement says the opposite: this
+                tile IS the LCP element (27224px² against the paragraph's
+                22508px²), so the one image on the page that needed the highest
+                priority was the one being explicitly demoted.
 
-                A `<link rel="preload">` in the markup puts it back in front of
-                the scanner. `fetchPriority="low"` because it is a decorative
-                backdrop, not the largest element — it should start early
-                without competing with the hero poster above it, which is the
-                one carrying `priority`.
-
-                It cannot go through `next/image`: that renders an <img>, and
-                this is a background the text sits on top of.
+                `WallpaperCta` now renders it through `next/image` with
+                `priority`, which emits the preload itself — at high priority,
+                pointing at an optimized AVIF rather than the 111 KB original.
+                Keeping this tag as well would preload the unoptimized source a
+                second time. See the notes in wallpaper-cta.tsx.
               */}
-              {landing.wallpaperCtaImageUrl ? (
-                <link
-                  rel="preload"
-                  as="image"
-                  href={landing.wallpaperCtaImageUrl}
-                  fetchPriority="low"
-                />
-              ) : null}
               <WallpaperCta variant="card" backgroundUrl={landing.wallpaperCtaImageUrl || null} />
             </div>
 

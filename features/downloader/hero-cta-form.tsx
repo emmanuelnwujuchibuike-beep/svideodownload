@@ -119,11 +119,30 @@ export function HeroCtaForm() {
       {/* Paste sits NEXT to Download (owner) — the two things you do here, side
           by side, so the link never has to be typed. */}
       <HeroPasteButton targetId="hero-url" />
+      {/*
+        🔴 `aria-label` — this button had NO accessible name on a phone (axe,
+        2026-08-10: `button-name`, CRITICAL, and the only critical finding on the
+        landing page).
+
+        The name was doing a disappearing act nobody would spot by reading the
+        markup: the word "Download" is in a `hidden sm:inline` span, so at every
+        width below 640px it is `display: none` — and `display: none` text is
+        removed from the accessibility tree, not merely hidden visually. What
+        was left is a lucide glyph, which renders a bare `<svg>` with no role and
+        no title and contributes nothing. So the primary submit control on the
+        site's front door announced itself as "button" to a screen reader, on
+        the exact form factor most visitors use.
+
+        The label matches the visible text at `sm` and up, which is what SC 2.5.3
+        (Label in Name) requires — a voice-control user saying "click Download"
+        must hit the thing that reads "Download".
+      */}
       <button
         type="submit"
+        aria-label="Download"
         className="frenz-cta-go inline-flex h-14 shrink-0 items-center gap-2 rounded-xl bg-white/20 px-3.5 text-sm font-bold text-white ring-1 ring-inset ring-white/30 transition hover:bg-white/30 active:scale-[0.98] sm:px-5 sm:text-base"
       >
-        <Download className="h-5 w-5" />
+        <Download aria-hidden className="h-5 w-5" />
         <span className="hidden sm:inline">Download</span>
       </button>
     </form>

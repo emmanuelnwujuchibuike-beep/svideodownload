@@ -43,7 +43,32 @@ export const COLOR_TOKENS: ColorToken[] = [
   { name: "foreground", light: "240 10% 8%", dark: "220 25% 97%" },
   { name: "card", light: "0 0% 100%", dark: "226 36% 10%" },
   { name: "card-foreground", light: "240 10% 8%", dark: "220 25% 97%" },
-  { name: "primary", light: "210 100% 50%", dark: "210 100% 58%", comment: "Electric Blue #0A84FF" },
+  /*
+    🔴 Light `primary` was `210 100% 50%` (#0080FF) and failed WCAG AA — axe,
+    on the live landing page, 2026-08-10.
+
+    #0080FF against white is 3.79:1. AA body text needs 4.5:1, and this token is
+    used on BOTH sides of that ratio: white type on a `bg-primary` button, and
+    `text-primary` type on a white card. So one value failing put six separate
+    elements on the landing page below the minimum — the download submit button,
+    two in-copy links, and the active label in the mobile tab bar among them.
+
+    `210 100% 45%` (#0073E6) is 4.57:1 against white. It is the same hue and the
+    same full saturation — the ONLY change is five points of lightness, which is
+    the smallest move that clears the threshold. It is still Electric Blue; it is
+    now Electric Blue that a person with low vision can read.
+
+    Dark stays at 58%: on the #050816 ground it measures 6.4:1 and darkening it
+    would take it the wrong way. (White type on dark-theme `primary` is 3.1:1 and
+    is a real, separate failure — but it is not what Lighthouse scores, since the
+    default theme is light, and fixing it means changing `primary-foreground`
+    rather than this value. Left deliberately, not overlooked.)
+
+    Verified with the same `contrastRatio` maths the Accessibility Center uses —
+    see design-tokens.registry.test.ts, which now fails the build if this
+    regresses.
+  */
+  { name: "primary", light: "210 100% 45%", dark: "210 100% 58%", comment: "Electric Blue #0073E6 — 4.57:1 on white" },
   { name: "primary-foreground", light: "0 0% 100%", dark: "0 0% 100%" },
   { name: "secondary", light: "240 5% 95%", dark: "224 30% 14%" },
   { name: "secondary-foreground", light: "240 10% 8%", dark: "220 25% 97%" },

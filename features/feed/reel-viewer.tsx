@@ -1149,9 +1149,34 @@ function ReelCard({
           The clip shows at its TRUE aspect (object-contain — nothing ever cropped);
           the blurred backdrop fills whatever the letterbox leaves. */}
       {slidePoster ? (
+        /*
+          🔴 The backdrop FILLS THE LETTERBOX (owner, 2026-08-10: reels should
+          read as full to the safe area, without cropping).
+
+          A 9:16 clip on a 9:19.5 phone already spans the full WIDTH under
+          `object-contain` — the gap is vertical. Filling it by scaling up would
+          discard 17.9% of the width, which is the crop that was just removed. So
+          the bands are filled instead of eliminated: the same frame, blurred and
+          overscanned, behind the true-aspect video.
+
+          The layer already existed and was invisible. At `opacity-40` over a
+          black ground a blurred frame resolves to near-black, which is why the
+          bands read as dead bars rather than as content. At 75% they read as
+          what they are — the video's own colour bleeding past its edges — so the
+          screen looks full-bleed into the safe areas while every pixel of the
+          clip is still on screen.
+
+          `bg-black` stays underneath as the floor for a reel with no poster,
+          where there is genuinely nothing to blur.
+
+          The CONTROLS are unaffected and stay out of the safe areas: the tabs,
+          the close/••• buttons, the rail and the progress bar all pad themselves
+          by `--frenz-safe-top` / `env(safe-area-inset-bottom)`. Only the picture
+          goes under the notch and the home indicator, which is exactly the ask.
+        */
         <div className="absolute inset-0 bg-black">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={slidePoster} alt="" aria-hidden loading="lazy" decoding="async" className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
+          <img src={slidePoster} alt="" aria-hidden loading="lazy" decoding="async" className="h-full w-full scale-125 object-cover opacity-75 blur-2xl" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={slidePoster} alt="" aria-hidden loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-contain" />
         </div>
@@ -2054,7 +2079,10 @@ function AlbumNeighborPreview({
   return (
     <motion.div className="pointer-events-none absolute inset-0 bg-black" style={{ x }} aria-hidden>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
+      {/* Matched to the active card's backdrop (2026-08-10) — the album
+          neighbour must letterbox the same way, or dragging between slides
+          visibly changes the ground behind the video mid-gesture. */}
+      <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-full w-full scale-125 object-cover opacity-75 blur-2xl" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-contain" />
     </motion.div>

@@ -42,7 +42,20 @@ export function SmartThumb({
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={alt} loading="lazy" onError={() => setBroken(true)} className={className} />
+    /*
+      `decoding="async"` alongside the lazy load (2026-08-10).
+
+      They solve different halves. `loading="lazy"` defers the FETCH; decoding
+      still happens on the main thread by default, so a screen's worth of
+      thumbnails arriving together blocks interaction while each is decoded —
+      which on the history page is the jank that reads as "it takes a moment to
+      open". `async` lets the browser decode off-thread and paint when ready.
+
+      Safe on a thumbnail specifically: the cost of `async` is that an image may
+      appear a frame late, which matters for a hero and does not matter for a
+      grid tile that already fades in.
+    */
+    // eslint-disable-next-line @next/next/no-img-element -- external CDNs; next/image 403s on this project's media hosts
+    <img src={src} alt={alt} loading="lazy" decoding="async" onError={() => setBroken(true)} className={className} />
   );
 }

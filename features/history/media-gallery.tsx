@@ -316,7 +316,40 @@ export function MediaGallery({
       ) : view === "grid" && grouped ? (
         <div className="space-y-5">
           {grouped.map((g) => (
-            <section key={g.key}>
+            /*
+              🔴 `content-visibility: auto` per day section (owner, 2026-08-10:
+              "the history is taking time to navigate because of load when there
+              are too many history").
+
+              The diagnosis, from the code above: the grouped view deliberately
+              renders EVERYTHING — and that is the right call, because the day
+              headings are how you navigate a long history and a "Show more"
+              under them would fight the thing that makes them useful. Paging
+              here would trade a real navigation aid for a loading trick.
+
+              So the fix keeps every item in the DOM and makes the OFF-SCREEN
+              ones free. `content-visibility: auto` lets the browser skip
+              layout, paint and image decode for a section until it approaches
+              the viewport. Nothing is removed: scroll height, in-page find,
+              Select-all and anchor scrolling all still see the whole list,
+              which is exactly what a virtualised list would have broken.
+
+              `contain-intrinsic-size: auto 420px` is the placeholder height
+              used before a section has ever been rendered; the `auto` keyword
+              makes the browser remember each section's REAL height afterwards,
+              so the scrollbar stops jumping after the first pass. Without a
+              stated size the sections would collapse to zero and the page would
+              have no scrollable length at all.
+
+              Thumbnails are already `loading="lazy"`, which stopped the
+              network cost but not the DOM/layout cost — a hundred tiles are
+              still a hundred trees to build and hydrate. This is the half that
+              was missing.
+            */
+            <section
+              key={g.key}
+              className="[content-visibility:auto] [contain-intrinsic-size:auto_420px]"
+            >
               <button
                 type="button"
                 onClick={() => { tap(); setCollapsed((c) => ({ ...c, [g.key]: !c[g.key] })); }}

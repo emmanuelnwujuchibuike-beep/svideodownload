@@ -1,11 +1,40 @@
 "use client";
 
 import { Play } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 
 import { FeedVideo } from "@/features/media/feed-video";
 import { ImageViewer } from "@/features/feed/image-viewer";
-import { ReelViewer } from "@/features/feed/reel-viewer";
+
+/*
+  🔴 The reels viewer is CODE-SPLIT off the post page (2026-08-10).
+
+  `lib/perf/budget.test.ts` went red at 342 kB against a 340 kB ceiling for
+  /p/[id] while Feature 15 was being built. Raising the ceiling was the wrong
+  answer — that guard exists specifically to stop that reflex — and the real
+  finding was much older than the few kB that tripped it.
+
+  This module statically imported `ReelViewer`, which is a ~1,800-line component
+  pulling the whole deck: gestures, adaptive HLS, comments, reactions, repost,
+  report, collections, the share sheet. Every visitor to every post permalink
+  downloaded and parsed all of it, and the viewer only ever renders after
+  someone TAPS the media — `items` is null until then, so it draws nothing at
+  all on load.
+
+  Splitting it means the post page ships what it actually shows. The chunk is
+  fetched on the tap, behind `loading.tsx`-style poster the page already paints,
+  and the deck's own readiness gate means the first frame is not waiting on JS
+  anyway.
+
+  `ssr: false` is correct rather than merely convenient here: the viewer is a
+  full-screen client overlay with no server markup worth streaming, and it reads
+  `window`/`navigator` on mount for gesture and network detection.
+*/
+const ReelViewer = dynamic(
+  () => import("@/features/feed/reel-viewer").then((m) => m.ReelViewer),
+  { ssr: false },
+);
 import { MediaCarousel } from "@/features/media/media-carousel";
 import { SmartVideo } from "@/features/media/smart-video";
 import type { FeedItem } from "@/lib/social/home-feed";

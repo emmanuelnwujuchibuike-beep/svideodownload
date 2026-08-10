@@ -115,10 +115,12 @@ export function DownloadsPage({
         in the download page").
 
         It used to sit inside that card, `mt-3` under `DownloadBox` — and the
-        last thing `DownloadBox` renders is the "Supported:" platform-badge
-        strip. Inside one bordered card with a small gap, the two read as one
-        block, so a link to an entirely different feature looked like a footnote
-        on the list of supported sites.
+        last thing `DownloadBox` renders is the supported-platforms strip (since
+        2026-08-10 the SAME `SupportedPlatforms` component the landing hero uses,
+        label above and logos below, rather than the hand-rolled "Supported:" row
+        that used to live here). Inside one bordered card with a small gap, the
+        two read as one block, so a link to an entirely different feature looked
+        like a footnote on the list of supported sites.
 
         Out here it is a sibling of the paste card with the section's own
         spacing around it, which is what it actually is: a second destination,

@@ -40,10 +40,24 @@ import {
   X,
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+/* ── Feature 15, Part 1 — the premium viewer layer ──────────────────────────
+   The design language, the two adaptive systems and the reusable controls all
+   live in `features/reels/viewer/`. Kept OUT of this file deliberately: this
+   component was already 1,800 lines, and the brief asks for modular
+   architecture and reusable components — putting a design system inside the
+   consumer of that design system is how the next surface ends up with a
+   copy of it. */
+import { layer, scrimForLuminance } from "@/features/reels/viewer/design";
+import { ReelProgress } from "@/features/reels/viewer/reel-progress";
+import type { PulseEvent } from "@/features/reels/viewer/social-pulse";
+import { useAdaptiveRail, type RailLayout } from "@/features/reels/viewer/use-adaptive-rail";
+import { useLivingInterface } from "@/features/reels/viewer/use-living-interface";
 
 import { RichText } from "@/components/social/rich-text";
 import { SmartVideo } from "@/features/media/smart-video";
@@ -92,6 +106,29 @@ function fmt(s: number): string {
   const r = Math.floor(s % 60);
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
+
+/*
+  ── Social Pulse™ is code-split, and the budget test is why ─────────────────
+
+  `lib/perf/budget.test.ts` failed this at 341 kB against a 340 kB global
+  ceiling on /p/[id], which pulls the whole viewer in. Raising the ceiling was
+  the wrong answer — the guard exists precisely to stop that reflex.
+
+  The right one is that this component CANNOT RENDER ANYTHING TODAY. It draws
+  friend-activity cards, the feed exposes no friend activity yet, so its event
+  list is always empty. Shipping its code to every visitor of every post page to
+  render nothing is pure cost.
+
+  `ssr: false` because it is purely decorative chrome over a video and has no
+  server markup worth streaming; it is mounted only once `pulseEvents` is
+  non-empty, so the chunk is fetched the first time there is genuinely something
+  to say. The moment the data source lands, this starts paying for itself
+  without any further change here.
+*/
+const SocialPulse = dynamic(
+  () => import("@/features/reels/viewer/social-pulse").then((m) => m.SocialPulse),
+  { ssr: false },
+);
 
 const QUALITY_LABELS: Record<QualityPreference, string> = {
   auto: "Auto (recommended)",
@@ -165,6 +202,9 @@ export function ReelDeck({
   // While a comments sheet is open the deck must NOT snap-scroll to the next
   // reel — the sheet stays put and the reel behind it is frozen.
   const [locked, setLocked] = useState(false);
+  /* Feature 15 — Adaptive Action Rail™. One reader for the whole deck; see the
+     note where it is passed to ReelCard. */
+  const rail = useAdaptiveRail();
 
   useEffect(() => {
     onActiveIndexChange?.(active);
@@ -271,6 +311,17 @@ export function ReelDeck({
             <div className="relative h-full w-full overflow-hidden bg-black lg:w-[min(100%,75vh)] lg:overflow-visible">
               <ReelCard
                 item={item}
+                /*
+                  Feature 15: ONE rail layout for the whole deck.
+
+                  Measured once at the deck level and passed down, not a hook per
+                  card. A per-card `useAdaptiveRail()` would mean N resize
+                  listeners and N state updates for N mounted reels on every
+                  rotation — the same per-subscriber pattern that had to be
+                  coalesced out of the download manager (2026-08-10). The value
+                  is a property of the DEVICE, so one reader is correct.
+                */
+                rail={rail}
                 isActive={i === active}
                 isNext={i === active + 1}
                 // Mount the previous clip + the next three so scrolling forward
@@ -297,6 +348,7 @@ export function ReelDeck({
 
 function ReelCard({
   item,
+  rail,
   isActive,
   isNext,
   nearby,
@@ -310,6 +362,8 @@ function ReelCard({
   initialSlide,
 }: {
   item: FeedItem;
+  /** Adaptive Action Rail™ geometry, measured once by the deck. */
+  rail: RailLayout;
   isActive: boolean;
   isNext: boolean;
   nearby: boolean;
@@ -335,6 +389,62 @@ function ReelCard({
   const railBottom = variant === "page" ? "bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-6" : "bottom-6";
   const captionPad = variant === "page" ? "pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-8" : "pb-6 lg:pb-8";
   const video = useRef<HTMLVideoElement | null>(null);
+  /*
+    ── Feature 15: Living Interface™ + Smart UI ─────────────────────────────
+    The sampler needs the ELEMENT, and `video` is a ref — assigning a ref never
+    re-renders, so a hook depending on `video.current` would read null forever.
+    Mirroring it into state when this card becomes mounted/active is what gives
+    the hook something to depend on. Cheap: it settles once per card.
+  */
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    setVideoEl(video.current);
+  }, [nearby, isActive]);
+  const palette = useLivingInterface(videoEl, isActive);
+  /*
+    Smart UI: ONE measured number drives the scrim, so "bright video → darker
+    overlay" and "dark video → more contrast" can never disagree with each other.
+    See `scrimForLuminance` for why the bright end is deliberately generous.
+  */
+  const scrim = scrimForLuminance(palette.luminance);
+  /*
+    ── Social Pulse™ events, from REAL data only ────────────────────────────
+    🔴 Derived strictly from fields the feed item already carries. Nothing here
+    invents a name, a count or a "trending" claim — fabricated social proof has
+    been declined three times on this project and the Reality Ledger fails the
+    build on invented scale claims.
+
+    Today the feed item exposes no friend-activity, so this is an empty list and
+    the Pulse renders nothing at all. That is the honest state, and it is the
+    correct one: the component is wired, the data source is the piece that does
+    not exist yet. When the feed starts returning "which of your friends
+    engaged", it is populated here and only here.
+  */
+  const pulseEvents = useMemo<PulseEvent[]>(() => [], []);
+
+  /*
+    ── Publishing the Living Interface™ accent ──────────────────────────────
+    Written to the document root rather than to a wrapper on this card, for a
+    structural reason: `ReelCard` renders a FRAGMENT of absolutely-positioned
+    siblings into the deck's own positioned box. Adding a wrapper to carry the
+    variable would introduce a new containing block between them and that box —
+    the precise mistake that once broke every `position: fixed` control inside
+    the deck (recorded in the reels-immersion notes, where a `motion.div`
+    wrapper silently re-anchored the whole chrome).
+
+    Only the ACTIVE card writes, and exactly one card is active, so there is no
+    contention. Cleared on the way out so a closed viewer never leaves the rest
+    of the app tinted by the last reel someone watched.
+  */
+  useEffect(() => {
+    if (!isActive) return;
+    const root = document.documentElement;
+    if (palette.accent) root.style.setProperty("--reel-accent", palette.accent);
+    else root.style.removeProperty("--reel-accent");
+    return () => {
+      root.style.removeProperty("--reel-accent");
+    };
+  }, [isActive, palette.accent]);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1027,8 +1137,30 @@ function ReelCard({
         </div>
       ) : null}
 
-      {/* Top / bottom legibility scrims */}
-      <div className={cn("pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-black/50 to-transparent transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")} />
+      {/*
+        Top legibility scrim — now SMART UI (Feature 15).
+
+        The opacity is derived from the sampled luminance of the actual frame
+        rather than fixed at 50%. A fixed scrim is a compromise between a black
+        night shot and a white ski slope, and it is wrong for both: too heavy on
+        the first, too light on the second. `scrimForLuminance` moves it, with a
+        floor (even a black frame needs some separation, because the NEXT frame
+        may not be black) and a generous bright end (a slightly-too-dark scrim
+        costs a little of the picture; a slightly-too-light one costs the
+        controls entirely).
+
+        Transitions over a second so the change is never perceived as flicker —
+        this is the one value in the viewer that tracks the content, and it has
+        to move slower than the content does.
+      */}
+      <div
+        style={{ ["--reel-scrim" as string]: String(scrim) }}
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[rgba(0,0,0,var(--reel-scrim,0.5))] to-transparent transition-opacity duration-700",
+          layer.scrim,
+          ui ? "opacity-100" : "opacity-0",
+        )}
+      />
 
       {/* Album position dots — this reel has several videos; swipe sideways */}
       {isAlbum ? (
@@ -1045,39 +1177,53 @@ function ReelCard({
         </div>
       ) : null}
 
-      {/* Progress / scrubber (auto-hides). Drag to seek when we own the <video>. */}
-      {(() => {
-        const scrubbable = native && dur > 0;
-        const displayPct = scrubbing ? scrubPct * 100 : progress;
-        return (
-          <div className={cn("absolute inset-x-0 top-[var(--frenz-safe-top)] z-40 transition-opacity duration-200", ui || scrubbing ? "opacity-100" : "opacity-0")}>
-            <div
-              ref={seekBar}
-              onPointerDown={scrubbable ? scrubStart : undefined}
-              onPointerMove={scrubbable ? scrubMove : undefined}
-              onPointerUp={scrubbable ? scrubEnd : undefined}
-              onPointerCancel={scrubbable ? scrubEnd : undefined}
-              className={cn("group/seek relative flex items-center", scrubbable ? "h-5 cursor-pointer touch-none" : "h-1")}
-            >
-              <div className={cn("absolute inset-x-0 top-0 bg-white/15 transition-[height] duration-150", scrubbing ? "h-1.5" : "h-1 group-hover/seek:h-1.5")}>
-                <div className="h-full rounded-r-full bg-gradient-to-r from-blue-400 via-violet-400 to-fuchsia-400 shadow-[0_0_8px] shadow-violet-400/50" style={{ width: `${displayPct}%` }} />
-              </div>
-              {scrubbable ? (
-                <span
-                  aria-hidden
-                  className={cn("absolute top-0 h-3 w-3 -translate-x-1/2 rounded-full bg-white shadow ring-2 ring-violet-400 transition-transform", scrubbing ? "scale-125 opacity-100" : "opacity-0 group-hover/seek:opacity-100")}
-                  style={{ left: `${displayPct}%` }}
-                />
-              ) : null}
-              {scrubbing ? (
-                <span className="absolute -top-8 -translate-x-1/2 rounded-md bg-black/80 px-2 py-1 text-[11px] font-bold tabular-nums text-white shadow-lg" style={{ left: `${displayPct}%` }}>
-                  {fmt(scrubPct * dur)}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        );
-      })()}
+      {/*
+        ── Feature 15: the premium progress indicator ──────────────────────────
+        Replaces the hand-rolled bar that used to live here. Three things it adds,
+        all from the brief: BUFFERED progress (the old bar showed played-vs-nothing,
+        so a stalled clip and a downloaded one looked the same), rounded ends on
+        BOTH ends, and a 20px touch target around the 3px visual — a 3px drag
+        target fails WCAG 2.5.8 and is genuinely hard to hit one-handed.
+
+        It also stops re-rendering this card ~4x/second: the component subscribes
+        to the element's own `timeupdate` and writes the fill through a ref, so
+        playback costs one style mutation and no React render. The old bar drove
+        `progress` state on this component, which re-rendered the rail, the
+        caption and everything else on every tick.
+
+        It is a real `slider` with arrow-key seeking too — the old one was a bare
+        div with pointer handlers, so seeking was pointer-only.
+      */}
+      <ReelProgress
+        video={native ? videoEl : null}
+        visible={ui}
+        seekable={native}
+        /* Hold the chrome up for the whole drag, then restart the idle timer —
+           otherwise the bar you are dragging fades out from under your finger. */
+        onSeekStart={() => {
+          setUi(true);
+          if (hideTimer.current) clearTimeout(hideTimer.current);
+        }}
+        onSeekEnd={scheduleHide}
+      />
+
+      {/*
+        ── Feature 15: Social Pulse™ ──────────────────────────────────────────
+        🔴 Fed ONLY real events. `pulseEvents` is empty until the reel actually
+        carries friend-activity data, and an empty list renders nothing — which
+        is the correct state for most reels and is what most will show today.
+
+        This is deliberate and it is a standing rule in this codebase, not
+        caution: fabricated social proof has been declined three times and the
+        Reality Ledger fails the build on invented scale claims. A convincing
+        "Emma liked this" for an Emma who does not exist is exactly that.
+
+        Bottom-left, clear of the rail and the caption — see the component for
+        why it never accepts a tap and never interrupts a screen reader.
+      */}
+      {pulseEvents.length > 0 ? (
+        <SocialPulse events={pulseEvents} active={isActive && !paused} className={cn("left-3", railBottom)} />
+      ) : null}
 
       {/* Elapsed / total time — top-center, below the For You/Following tabs;
           auto-hides with the rest of the UI and returns the moment the screen
@@ -1303,7 +1449,33 @@ function ReelCard({
           rail LOOKED fine but silently went dead once the 4s auto-hide timer fired
           (e.g. while reading comments), so re-opening Comment needed a fresh reel
           mount (scroll away and back, or refresh) to get a fresh `ui = true`. */}
-      <div className={cn("absolute right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 lg:-right-[4.5rem] lg:!pointer-events-auto lg:!opacity-100", railBottom, ui ? "opacity-100" : "pointer-events-none opacity-0")}>
+      {/*
+        ── Feature 15: ADAPTIVE ACTION RAIL™ ──────────────────────────────────
+        `right` and the button gap now come from the measured device class
+        instead of a fixed `right-3`/`gap-5`. The reason is reach, not style: on a
+        6.7" phone held one-handed the TOP of a flush-right rail (avatar, follow)
+        sits outside the comfortable thumb arc, which is the two-handed regrip
+        everybody does without noticing. See `use-adaptive-rail.ts` for why the
+        inset GROWS with the screen and why landscape tightens vertically instead.
+
+        `lg:` keeps the desktop behaviour exactly as it was — the rail moves out
+        into the right gutter beside the video, where reach is irrelevant because
+        there is a pointer. The inline `right` is overridden there by the class,
+        so this changes nothing on desktop.
+
+        Transitioned on `railShift`, the softest spring in the system: this is the
+        one movement the user did not ask for, so it should read as the interface
+        settling rather than as something being yanked.
+      */}
+      <div
+        style={{ right: rail.inset, rowGap: rail.gap }}
+        className={cn(
+          "absolute flex flex-col items-center transition-[right,row-gap,opacity] duration-300 lg:!right-[-4.5rem] lg:!pointer-events-auto lg:!opacity-100",
+          layer.rail,
+          railBottom,
+          ui ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      >
         <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="relative mb-1">
           {item.publisher.avatarUrl ? (
             <Image src={item.publisher.avatarUrl} alt="" width={44} height={44} className="h-11 w-11 rounded-full object-cover ring-2 ring-white" />

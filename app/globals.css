@@ -1492,6 +1492,29 @@
   }
 }
 
+/* ── Reels viewer: the interaction ripple (Feature 15, Part 1) ───────────────
+   The "luxury ripple" on every glass control in the action rail.
+
+   `transform` and `opacity` ONLY, so the whole thing composites and never
+   touches layout or paint — which is what lets it run at whatever rate the
+   panel supports instead of costing frames on a mid-range phone. It starts
+   slightly inset and expands past the button, so it reads as light spreading
+   from under the finger rather than as a box growing.
+
+   `forwards` holds the end state until React removes the node on animationend
+   (see GlassButton) — without it the ripple would flash back to full opacity
+   for one frame before unmounting. */
+@keyframes reel-ripple {
+  0% {
+    transform: scale(0.35);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
 /* ── The wait panel's spark (public/waiting premium button.jpg) ──────────────
    A slow breath on the badge glyph, so the panel reads as "working" without a
    second spinner competing with the real one above it.

@@ -4,6 +4,7 @@ import { ClipboardPaste, Loader2, Search, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { SupportedPlatforms } from "@/components/landing/supported-platforms";
 import { useUser } from "@/features/auth/use-user";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
@@ -20,8 +21,10 @@ import { ResultOffer } from "@/features/monetization/result-offer";
 import { getAutoDownload, getPreferredQuality } from "@/lib/download-hub/auto-download";
 import { buildDownloadContext, pickFormat } from "@/lib/download-hub/context";
 import type { DownloadContext } from "@/lib/download-hub/types";
-import { BRAND_ICONS, FLAGSHIP_IDS } from "@/lib/platform-icons";
-import { detectPlatform, PLATFORMS } from "@/lib/platforms";
+/* `BRAND_ICONS`, `FLAGSHIP_IDS` and `PLATFORMS` are gone with the hand-rolled
+   strip above — the shared `SupportedPlatforms` owns the marks now. Only
+   `detectPlatform` is still needed, for the live "Detected …" line. */
+import { detectPlatform } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 import { sourceUrlSchema } from "@/lib/validation";
 import type { MediaKind } from "@/types";
@@ -217,22 +220,43 @@ export function DownloadBox({ surface = "hero" }: { surface?: "hero" | "card" } 
         <p className={cn("mt-2 text-sm font-medium", onCard ? "text-emerald-600 dark:text-emerald-400" : "text-emerald-300")}>Added to your downloads ↓</p>
       ) : null}
 
-      {/* Supported platforms */}
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className={cn("text-xs font-semibold", onCard ? "text-muted-foreground" : "text-white/70")}>Supported:</span>
-        {[...FLAGSHIP_IDS, "youtube" as const, "telegram" as const].map((id) => {
-          const platform = PLATFORMS[id];
-          const Icon = BRAND_ICONS[id];
-          return (
-            <span key={id} title={platform.name} className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${platform.accent} text-white shadow-sm ring-1 ring-white/20`}>
-              {Icon ? <Icon className="h-4 w-4" /> : null}
-            </span>
-          );
-        })}
-        {url && detectPlatform(url).id !== "generic" ? (
-          <span className={cn("text-xs font-medium", onCard ? "text-foreground" : "text-white/80")}>· Detected {detectPlatform(url).name}</span>
-        ) : null}
-      </div>
+      {/*
+        ── ONE component, shared with the landing page (owner, 2026-08-10) ─────
+        "make the supported platform and logos in the landing page be the same in
+        the download page with same structure, the logos below the supported
+        text."
+
+        This was a SECOND, hand-rolled copy of the same strip: its own label
+        ("Supported:" vs "Platforms supported"), its own tiles (8px-radius
+        gradient squares tinted per platform vs white squircles carrying each
+        brand's real colour), and its own layout (a wrapping inline row vs label
+        above, logos below).
+
+        It is now the landing's `SupportedPlatforms`, which is the actual fix
+        rather than restyling this copy to match. Two copies of a shared strip is
+        how "I changed it and it still looks the same" happens — you change the
+        branch the owner is not looking at. Same trap the Wallpaper CTA was
+        collapsed out of.
+
+        It lists the SAME EIGHT platforms in the SAME ORDER — `SUPPORTED_PLATFORMS`
+        and `[...FLAGSHIP_IDS, youtube, telegram]` were already identical — so
+        nothing is added or dropped here; only the duplicate definition goes.
+
+        `surface` carries the one real difference between the two placements: on
+        the downloads dashboard it sits on a card, in the hero it sits on the
+        purple gradient, and the label needs different ink for each.
+      */}
+      <SupportedPlatforms surface={onCard ? "light" : "onGradient"} className="mt-4" />
+
+      {/* The detected-platform confirmation stays — it is live feedback about the
+          URL the visitor just pasted, not part of the static strip, and folding
+          it into the shared component would put a downloader concern inside a
+          marketing one. */}
+      {url && detectPlatform(url).id !== "generic" ? (
+        <p className={cn("mt-2 text-xs font-medium", onCard ? "text-foreground" : "text-white/80")}>
+          Detected {detectPlatform(url).name}
+        </p>
+      ) : null}
 
       {metadata ? (
         <div className="text-foreground">

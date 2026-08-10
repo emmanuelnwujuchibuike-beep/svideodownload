@@ -1328,6 +1328,33 @@
   pointer-events: auto;
 }
 
+/* 🔴 The third way to be open: the visitor SAID SO.
+
+   Both rules above infer the open state — one from focus, one from having a
+   value. Tapping Paste has neither at the moment it matters: the clipboard read
+   is permission-gated, and while iOS's native Paste sheet (or any browser's
+   permission prompt) is up, the page is not focused and nothing has been pasted
+   yet. So the field collapsed underneath the very gesture meant to fill it,
+   which is the "Paste closes the placeholder" report, twice.
+
+   `data-entering` is set by the Paste button and is a statement of intent
+   rather than an inference, so no amount of focus loss can contradict it.
+   Written as a separate rule set rather than folded into the selectors above
+   because these three reasons are genuinely independent, and a single
+   comma-joined list would hide which one is holding the field open. */
+.frenz-cta[data-entering="true"] .frenz-cta-face {
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+}
+.frenz-cta[data-entering="true"] .frenz-cta-input,
+.frenz-cta[data-entering="true"] .frenz-cta-paste,
+.frenz-cta[data-entering="true"] .frenz-cta-go {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
 /* The sheen is decoration; it must never sweep while someone is typing. */
 .frenz-cta:focus-within .frenz-cta-sheen {
   opacity: 0;

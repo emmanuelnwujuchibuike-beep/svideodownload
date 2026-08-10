@@ -51,8 +51,38 @@ export function HeroPasteButton({ targetId }: { targetId: string }) {
   const paste = () => {
     const input = document.getElementById(targetId);
     if (!(input instanceof HTMLInputElement)) return;
-    // Synchronous, before any await: keeps the transform open and, on iOS,
-    // keeps the keyboard — a focus() after an await is outside the gesture.
+
+    /*
+      🔴 LATCH THE FIELD OPEN BEFORE ANYTHING ELSE (owner, 2026-08-10, reporting
+      the same symptom a second time: "the paste link button on the placeholder
+      now closes the placeholder instead of pasting the link").
+
+      The first fix — `preventDefault` on pointerdown, below — is still correct
+      and is still here. It stops the button press itself from blurring the
+      input. What it cannot cover is the step AFTER that:
+
+        `navigator.clipboard.readText()` is permission-gated. On iOS Safari it
+        raises a NATIVE "Paste" confirmation, and on other browsers it can raise
+        a permission prompt. While that UI is up, the page is no longer focused,
+        so `:focus-within` goes false and the field collapses on its own. If the
+        person then dismisses the prompt — or simply takes a moment — nothing
+        was pasted, so `:not(:placeholder-shown)` does not hold it open either.
+
+      Both of the CSS rules that keep the field open therefore depend on
+      something outside our control: keeping focus, or already having a value.
+      A paste attempt has neither at the moment it matters.
+
+      So the open state stops being inferred and becomes a FACT we record.
+      Tapping Paste is an unambiguous statement of intent — this person is
+      entering a link — and the field now stays open until they say otherwise,
+      whatever the clipboard, the permission prompt or the focus does in
+      between. See `.frenz-cta[data-entering]` in globals.css.
+    */
+    const form = input.closest<HTMLElement>(".frenz-cta");
+    if (form) form.dataset.entering = "true";
+
+    // Synchronous, before any await: on iOS this keeps the keyboard, because a
+    // focus() after an await is outside the user gesture.
     input.focus();
 
     navigator.clipboard
@@ -62,14 +92,22 @@ export function HeroPasteButton({ targetId }: { targetId: string }) {
         if (!text) return;
         input.value = text;
         // What the form submits and what `:placeholder-shown` reports both read
-        // the live value, so this alone keeps the field open even once focus
-        // eventually moves on. The event is for anything else listening.
+        // the live value. The event is for anything else listening.
         input.dispatchEvent(new Event("input", { bubbles: true }));
         input.setSelectionRange(text.length, text.length);
       })
       .catch(() => {
-        /* blocked (Firefox, or no permission) — the field is focused and open,
-           so the visitor's own paste gesture lands in the right place */
+        /* blocked (Firefox, or permission denied) — nothing to report, and
+           nothing to undo: the field is latched open either way, so the
+           visitor's own paste gesture still lands in the right place */
+      })
+      .finally(() => {
+        /*
+          Focus again once the permission UI has gone. Harmless when focus never
+          left, and on iOS it is what puts the caret back in the field after the
+          native Paste sheet closes.
+        */
+        input.focus();
       });
   };
 

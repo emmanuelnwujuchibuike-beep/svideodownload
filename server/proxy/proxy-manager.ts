@@ -67,12 +67,34 @@ const PROXY_PLATFORMS = list(process.env.PROXY_PLATFORMS, [
   "linkedin",
   "youtube",
   "threads",
+  /*
+    🔴 TikTok moved here from DIRECT_PLATFORMS (owner, 2026-08-10: TikTok links
+    failing in production with "we couldn't reach that post").
+
+    Measured, not guessed. The same two links — a photo post and an ordinary
+    video — both return complete metadata when the extractor runs locally, and
+    both fail on frenzsave.com in about six seconds. So the extraction code is
+    correct and the production server simply cannot reach the upstream, which
+    is what a datacenter IP block looks like.
+
+    TikTok was listed as ALWAYS-DIRECT, "never proxy, even on a block". That was
+    a reasonable policy when TikWM answered datacenter IPs, and it is why there
+    was no recovery path: `isProxyEligible` returns false for a direct platform,
+    so `extractorFetch`'s block-detection retry could never fire, and every
+    TikTok request had exactly one route that had stopped working.
+
+    With `PROXY_FALLBACK_ONLY` on (the default) this costs nothing in the normal
+    case: attempt 0 still goes direct, and the proxy is only used after a block.
+    So a working TikWM stays as fast as it is today and a blocked one now has
+    somewhere to go.
+
+    Both lists remain env-overridable, so this can be reverted from the
+    dashboard without a deploy if the proxy ever becomes the slower route.
+  */
+  "tiktok",
 ]);
 // Platforms that ALWAYS stay direct (never proxy), even on a block.
-const DIRECT_PLATFORMS = list(process.env.PROXY_DIRECT_PLATFORMS, [
-  "tiktok",
-  "pinterest",
-]);
+const DIRECT_PLATFORMS = list(process.env.PROXY_DIRECT_PLATFORMS, ["pinterest"]);
 
 // Backward-compat: a single EXTRACTOR_PROXY URL still works if the structured
 // PROXY_* vars aren't set.

@@ -2,7 +2,6 @@ import { Suspense } from "react";
 
 import { CreatorsSection } from "@/components/landing/creators-section";
 import { CtaBanner } from "@/components/landing/cta-banner";
-import { DownloadMockup } from "@/components/landing/download-mockup";
 import { Faq } from "@/components/landing/faq";
 import { FeaturesGrid } from "@/components/landing/features-grid";
 import { Hero } from "@/components/landing/hero";
@@ -119,14 +118,46 @@ export default function HomePage() {
           real size. Pure CSS: no JS, no visual change, and it degrades to
           today's behaviour on browsers that do not support it.
         */}
-        <div className="[contain-intrinsic-size:auto_900px] [content-visibility:auto]">
-        {/* The second phone (Downloads screen) with the six feature cards — the
-            "download section mockup" from public/newlanding.jpg, right after the
-            "Download anything" card in the hero. Wrapped in the zero-JS scroll
-            reveal (see .frenz-reveal in globals.css) so it rises in on scroll. */}
-        <div className="frenz-reveal">
-          <DownloadMockup />
-        </div>
+        {/*
+          🔴 ONE wrapper with a 900px guess is a layout-shift machine (owner,
+          2026-08-10: CLS measured at 0.684, up from 0.009).
+
+          `content-visibility: auto` was applied to a SINGLE div wrapping every
+          section below the hero — the mockup, the creators grid, the showcase,
+          the tools, the CTA, the SEO links and the FAQ. `contain-intrinsic-size`
+          told the browser that whole subtree was 900px tall. It is several
+          thousand.
+
+          So the document reported one height, and the moment the wrapper came
+          near the viewport it rendered and grew by thousands of pixels. That is
+          not a small correction, it is the page changing length underneath a
+          scrolling finger, and CLS scores exactly that.
+
+          The technique is right and is still used on the history page — but
+          there it wraps ONE day section at a time, with `auto` remembering each
+          real height after the first pass. Applied to ten heterogeneous
+          sections at once, a single placeholder cannot be right for any of them.
+
+          The wrapper is removed rather than re-tuned. Its stated purpose was to
+          skip layout for the phone mockup, which no longer exists, so the cost
+          it was compensating for is gone with it.
+        */}
+        <div>
+        {/*
+          🔴 The Downloads phone mockup is REMOVED (owner, 2026-08-10, with a
+          screenshot of the section).
+
+          It was the single most expensive thing below the hero: a full phone
+          frame with its own shadow stack, a rendered Downloads screen inside
+          it, and six feature cards — all of it decoration, none of it something
+          a visitor can use. The comment above this block already named it as
+          the reason the LCP element waited on style and layout for a ten-section
+          document.
+
+          Removing it takes the markup, its images and its share of the
+          main-thread work out of the page entirely, which is worth more than
+          the `content-visibility` wrapper that was compensating for it.
+        */}
 
         {/* The admin-controlled 2×2 image grid — moved UP to sit directly below the
             download mockup (owner). Each tile opens full screen + downloads. */}

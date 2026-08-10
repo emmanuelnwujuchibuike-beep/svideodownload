@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { isPersistentZone, sizeFromScript } from "@/lib/monetization/ad-schema";
 import { cn } from "@/lib/utils";
@@ -444,7 +444,21 @@ function DisplayFrame({
 }) {
   const [scale, setScale] = useState(1);
 
-  useEffect(() => {
+  /*
+    🔴 `useLayoutEffect`, not `useEffect` (owner, 2026-08-10: CLS measured at
+    0.684 on the landing page).
+
+    The scale starts at 1 and the host's height is `height * scale`. With a
+    passive `useEffect` the browser PAINTS the full-height box first and the
+    measured scale arrives afterwards, so an oversized banner rendered tall and
+    then snapped shorter — a layout shift, on the page with the tightest budget
+    in the project, caused by the code that was meant to make ads behave.
+
+    `useLayoutEffect` measures and sets the scale before that first paint, so
+    the box is only ever the size it ends up. Same work, one frame earlier, and
+    the shift stops existing rather than being animated away.
+  */
+  useIsomorphicLayoutEffect(() => {
     const host = hostRef.current;
     if (!width || !host || typeof ResizeObserver === "undefined") return;
 
@@ -518,6 +532,15 @@ function DisplayFrame({
     </div>
   );
 }
+
+/**
+ * `useLayoutEffect` on the client, `useEffect` on the server.
+ *
+ * React warns when `useLayoutEffect` runs during SSR, and rightly — there is no
+ * layout to read. This component never renders anything meaningful on the
+ * server (it gates on a fetch), so the effect simply does not need to run there.
+ */
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 /** Injects a self-executing ad script into the page and cleans it up. */
 function PopHost({ code, className }: { code: string; className?: string }) {

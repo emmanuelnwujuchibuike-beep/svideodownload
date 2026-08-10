@@ -320,15 +320,48 @@ export async function PhoneMockup() {
                       IS above the fold — but the browser schedules it behind
                       the real LCP image instead of alongside it.
                     */
-                    <Image
-                      src={posterUrl}
-                      alt=""
-                      fill
-                      sizes="300px"
-                      loading="eager"
-                      fetchPriority="low"
-                      className="object-cover"
-                    />
+                    /*
+                      🔴 Two layers — the whole poster on a blurred copy of
+                      itself (owner, 2026-08-10: "the iphone mockup poster is
+                      still zooming onesided").
+
+                      Same geometric bind as the Wallpaper tile, same fix. This
+                      slot is a tall 9:16-ish window inside the phone frame, and
+                      the admin uploads whatever shape they have. `object-cover`
+                      filled it by matching the short axis and discarding the
+                      rest, so a landscape poster showed a magnified vertical
+                      slice of its middle — the one-sided zoom.
+
+                      `contain` in front shows the whole poster undistorted; the
+                      blurred, overscanned copy behind fills what is left, so the
+                      screen inside the mockup is still edge to edge with no
+                      empty bars. Full reasoning in wallpaper-cta.tsx.
+
+                      Both layers are the same optimized src, so the second is a
+                      cache hit and costs no extra bytes. Neither carries
+                      `priority` — measured, this is below the fold on mobile.
+                    */
+                    <>
+                      <Image
+                        src={posterUrl}
+                        alt=""
+                        fill
+                        sizes="300px"
+                        aria-hidden
+                        loading="eager"
+                        fetchPriority="low"
+                        className="scale-110 object-cover blur-lg"
+                      />
+                      <Image
+                        src={posterUrl}
+                        alt=""
+                        fill
+                        sizes="300px"
+                        loading="eager"
+                        fetchPriority="low"
+                        className="object-contain"
+                      />
+                    </>
                   ) : (
                     <span className="absolute inset-0 bg-gradient-to-br from-blue-600 via-violet-600 to-fuchsia-600" />
                   )}

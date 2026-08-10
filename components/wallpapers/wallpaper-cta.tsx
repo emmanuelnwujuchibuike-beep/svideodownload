@@ -55,30 +55,59 @@ import { cn } from "@/lib/utils";
  * never reach this component.
  */
 function WallpaperBackdrop({ url, sizes }: { url: string; sizes: string }) {
+  /*
+    🔴 TWO LAYERS: the whole image, on a blurred copy of ITSELF.
+
+    ── Why no single object-fit can do this (owner, 2026-08-10) ──────────────
+    "They should fill the whole space but not zoom, they could shrink, but not
+    zoom" — then, after `cover` was restored: "the wallpaper button and the
+    iphone mockup poster are still zooming onesided."
+
+    That is a genuine geometric bind, not a preference, and all three obvious
+    answers fail it:
+
+      • `cover`   fills by scaling until the SHORT axis matches, then discards
+                  the overflow on the long one. A 9:16 wallpaper in a roughly
+                  square tile keeps a narrow horizontal band of the middle — a
+                  magnified slice. That is the "one-sided zoom" precisely.
+      • `contain` shows all of it and leaves empty bars, which is not filling.
+      • `fill`    fills and shows everything by STRETCHING, distorting every face
+                  in the picture.
+
+    When the aspects differ, something must occupy the leftover. So the leftover
+    becomes the image itself, blurred — the same resolution the owner accepted
+    for the reels letterbox a few commits ago.
+
+    Result: the tile is filled edge to edge, the wallpaper is complete and
+    undistorted, and the bands read as the picture's own colour instead of as
+    gaps.
+
+    Cost is one extra <img> at the SAME src, so the second layer is a cache hit
+    and adds no bytes over the wire. The blur is a static filter on a static
+    image — painted once, never animated, so it never re-rasterizes.
+
+    `priority` stays on the sharp layer only: that is the measured LCP element,
+    and preloading the decoration would put a second image in front of it.
+  */
   return (
-    <NextImage
-      src={url}
-      alt=""
-      fill
-      sizes={sizes}
-      priority
-      /*
-        🔴 `object-cover` — RESTORED (owner, 2026-08-10).
-
-        I briefly changed this to `object-contain` and it was the wrong reading of
-        "show the full image". The clarification: "they should FILL THE WHOLE
-        SPACE but not zoom, they could shrink, but not zoom."
-
-        `contain` letterboxed the tile — the brand gradient showed as bands above
-        and below the wallpaper, which is the opposite of filling the space.
-
-        `cover` is not a zoom. It is the smallest scale that fills the box, and
-        since admin wallpapers are far larger than this tile it always SHRINKS
-        them to fit — exactly "could shrink, but not zoom". It never magnifies
-        beyond what filling requires.
-      */
-      className="pointer-events-none select-none object-cover"
-    />
+    <>
+      <NextImage
+        src={url}
+        alt=""
+        fill
+        sizes={sizes}
+        aria-hidden
+        className="pointer-events-none scale-110 select-none object-cover blur-xl"
+      />
+      <NextImage
+        src={url}
+        alt=""
+        fill
+        sizes={sizes}
+        priority
+        className="pointer-events-none select-none object-contain"
+      />
+    </>
   );
 }
 

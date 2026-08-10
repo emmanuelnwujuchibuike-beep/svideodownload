@@ -152,7 +152,7 @@ export const PORTABILITY: PortabilitySpec[] = [
     domain: "feedback",
     dataClass: "personal",
     holds: "Ratings and feedback you have given the app.",
-    purpose: "To know what to fix.",
+    purpose: "To know what to fix, and to stop asking you once you have answered.",
     retention: "As long as your account exists.",
   },
   {

@@ -236,8 +236,31 @@ export async function listAllWallpapers(limit = 300) {
   }));
 }
 
-/** Bump the real download counter. Never gates the download itself. */
-export async function recordWallpaperDownload(id: string): Promise<void> {
+/**
+ * Bump the real download counter, and record the download where the ADMIN can
+ * see it. Never gates the download itself.
+ *
+ * ── Why the second write exists (owner, 2026-08-10) ──────────────────────────
+ * "Make admin see in live activity and download history in admin dashboard when
+ * a user downloads a wallpaper from the wallpaper gallery."
+ *
+ * Wallpaper downloads were counted but never LOGGED. `wallpapers.downloads_count`
+ * is a per-wallpaper tally, and the admin dashboard's live activity and download
+ * history both read the `downloads` table — which the wallpaper route never
+ * wrote to. So an operator watching activity saw video downloads appear in real
+ * time and wallpaper downloads not at all, while the gallery's own counters
+ * climbed. Two numbers that should agree, disagreeing, with no way to reconcile
+ * them from either screen.
+ *
+ * The row is written in the same shape a media download uses, so it lands in the
+ * existing activity feed, the existing history table and the existing totals
+ * with no special-casing anywhere downstream. `format: "image"` and a
+ * `wallpaper:` source url are what distinguish it when someone wants to.
+ */
+export async function recordWallpaperDownload(
+  id: string,
+  meta?: { userId?: string | null; name?: string | null },
+): Promise<void> {
   if (getBuiltInWallpaper(id)) return;
   try {
     const admin = createAdminClient();
@@ -247,6 +270,25 @@ export async function recordWallpaperDownload(id: string): Promise<void> {
       .from("wallpapers")
       .update({ downloads_count: ((data.downloads_count as number) ?? 0) + 1 })
       .eq("id", id);
+
+    /*
+      Best-effort and separately caught: a failure to LOG must never roll back
+      the counter that did succeed, and neither may cost anyone their file.
+    */
+    try {
+      await admin.from("downloads").insert({
+        source_url: `wallpaper:${id}`,
+        platform: "generic",
+        title: meta?.name ?? "Wallpaper",
+        format: "image",
+        status: "completed",
+        // Null for a signed-out visitor, which the activity feed already renders
+        // as "Anonymous" — the same treatment a guest video download gets.
+        user_id: meta?.userId ?? null,
+      });
+    } catch {
+      /* activity logging is never worth failing a download over */
+    }
   } catch {
     /* a missed count must never cost someone their download */
   }

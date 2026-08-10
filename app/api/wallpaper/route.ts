@@ -45,7 +45,10 @@ const IMMUTABLE = "public, max-age=31536000, immutable";
  *
  * Returns null to proceed, or a 429 whose body is a sentence a person can read.
  */
-async function enforceWallpaperAllowance(request: Request, downloadId: string | null): Promise<Response | null> {
+async function enforceWallpaperAllowance(
+  request: Request,
+  downloadId: string | null,
+): Promise<{ denied: Response | null; userId: string | null }> {
   let userId: string | null = null;
   // Skip the Supabase round-trip when there is plainly no session — this
   // endpoint is anonymous-heavy and that lookup is the slowest thing in it.
@@ -62,18 +65,21 @@ async function enforceWallpaperAllowance(request: Request, downloadId: string | 
   }
 
   const limit = wallpaperDailyLimit(await getUserPlan(userId));
-  if (limit === 0) return null; // Pro / Business — no cap, no ad.
+  if (limit === 0) return { denied: null, userId }; // Pro / Business — no cap, no ad.
 
   const key = userId ? `wp:u:${userId}` : `wp:ip:${clientId(request.headers)}`;
-  if (downloadId && (await alreadyCounted(`${key}:${downloadId}`))) return null;
+  if (downloadId && (await alreadyCounted(`${key}:${downloadId}`))) return { denied: null, userId };
 
   const r = await consumeDaily(key, limit, downloadId ? `${key}:${downloadId}` : undefined);
-  if (r.allowed) return null;
+  if (r.allowed) return { denied: null, userId };
 
-  return new Response(JSON.stringify({ error: wallpaperLimitMessage(limit), code: "RATE_LIMITED", limit }), {
-    status: 429,
-    headers: { "Content-Type": "application/json", "Retry-After": "3600", "Cache-Control": "no-store" },
-  });
+  return {
+    denied: new Response(JSON.stringify({ error: wallpaperLimitMessage(limit), code: "RATE_LIMITED", limit }), {
+      status: 429,
+      headers: { "Content-Type": "application/json", "Retry-After": "3600", "Cache-Control": "no-store" },
+    }),
+    userId,
+  };
 }
 
 export async function GET(request: Request) {
@@ -88,9 +94,15 @@ export async function GET(request: Request) {
     viewer fetch the same route for their pixels, and charging someone for
     scrolling past a wallpaper would burn a free member's whole day in one flick.
   */
+  /* Carried out of the allowance check so the download can be attributed to a
+     member in the admin's activity feed — the check already resolves the
+     session, and doing it twice would be a second Supabase round-trip on the
+     hottest path in this route. */
+  let viewerId: string | null = null;
   if (isDownload) {
     const downloadId = (params.get("t") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || null;
-    const denied = await enforceWallpaperAllowance(request, downloadId);
+    const { denied, userId } = await enforceWallpaperAllowance(request, downloadId);
+    viewerId = userId;
     if (denied) return denied;
   }
 
@@ -127,7 +139,9 @@ export async function GET(request: Request) {
     const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
     headers.set("Content-Disposition", `attachment; filename="frenz-wallpaper-${safe}.${ext}"`);
     // Fire-and-forget: a counter write must never delay or fail the bytes.
-    void recordWallpaperDownload(id);
+    // `name` and `viewerId` are what make the row legible in admin activity —
+    // "Wallpaper" with no title and no actor is a log entry nobody can act on.
+    void recordWallpaperDownload(id, { userId: viewerId, name });
   }
   return new Response(upstream.body, { status: 200, headers });
 }

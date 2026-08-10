@@ -1,0 +1,249 @@
+import { exportableDomains } from "./registry";
+
+/**
+ * Which column ties each row to a person — and which tables must never be
+ * exported at all.
+ *
+ * ── Why this file exists ─────────────────────────────────────────────────────
+ * `registry.ts` decides which DOMAINS a member may take with them. That is not
+ * enough to actually build an export, because every table names its owner
+ * differently: `publisher_id`, `author_id`, `follower_id`, `owner_id`,
+ * `muter_id`, or just `id`. A generic exporter has to be told.
+ *
+ * Every entry below was READ OUT OF THE MIGRATIONS rather than guessed — each
+ * one is a column with a real `references auth.users` foreign key. Guessing
+ * here does not fail loudly; it either returns nothing (a silently empty
+ * section) or, far worse, returns somebody else's rows.
+ *
+ * ── The two lists are exhaustive, and that is the point ──────────────────────
+ * Every table in every exportable domain appears in exactly one of `OWNER_COLUMN`
+ * or `NOT_EXPORTED`, and `tables.test.ts` fails when one appears in neither.
+ * That is what makes the export's completeness structural: a new table lands in
+ * a catalogued domain, the test goes red, and somebody has to make a decision
+ * about it. The old hand-written export could not fail that way, which is how it
+ * came to cover nine tables out of ninety-four.
+ */
+
+/**
+ * 🔴 Material that must NEVER leave the server, even to its owner.
+ *
+ * This is the most important list in the file. An account export is a plain
+ * file that lands in a Downloads folder, gets synced to a cloud drive, and is
+ * sometimes forwarded to whoever asked for it. Recovery codes, encryption keys
+ * and PIN material in that file turn a data-portability feature into a
+ * credential-disclosure feature — the request is legitimate and the outcome is
+ * a compromised account.
+ *
+ * "It is their own data" is true and is not the test. The test is whether
+ * handing it over in this form makes them safer or less safe.
+ */
+export const SECRET_TABLES: Record<string, string> = {
+  mfa_recovery_codes: "One-time codes that bypass two-factor sign-in. Exporting them would put working account keys in a file.",
+  security_pin: "Your PIN material. The same reasoning as recovery codes.",
+  user_encryption_keys: "Private keys for end-to-end encrypted chats. Exporting them would let anyone holding the file read those conversations.",
+  webauthn_credentials: "Passkey material, which is bound to the device that holds it and is meaningless — and dangerous — anywhere else.",
+  webauthn_challenges: "Short-lived sign-in challenges. They expire in minutes and mean nothing outside a live sign-in.",
+};
+
+/**
+ * Tables in an exportable domain that are still not exported, with the reason.
+ *
+ * Every reason is shown to the person in the export's own coverage report, so
+ * they can see exactly what they did and did not receive. A gap they can read
+ * is a very different thing from a gap they cannot.
+ */
+export const NOT_EXPORTED: Record<string, string> = {
+  ...SECRET_TABLES,
+
+  /* Not about any individual — reference rows inside a personal domain. */
+  ads: "Ad inventory. Not personal data.",
+  affiliate_offers: "Affiliate catalogue. Not personal data.",
+  media_assets: "Shared media records, not owned by one member.",
+  asset_usage: "Links assets to places they appear. Not personal data.",
+  post_media: "Attachments belonging to a post; the post itself is exported.",
+  poll_options: "Options belonging to a poll; the poll itself is exported.",
+  collection_items: "Membership rows for a collection; the collection is exported.",
+  gateway_config: "Payment gateway configuration. Operational, not personal.",
+  notification_broadcasts: "Announcements sent to everyone. Not about you.",
+  product_waitlist: "Interest in unreleased products; exported with your profile instead.",
+
+  /*
+    Rows ABOUT you that were written BY someone else. Real personal data, and
+    still not ours to hand over in bulk: exporting them would disclose other
+    people's actions to you in a form they never agreed to.
+  */
+  post_views: "Who viewed your posts. Exporting it would identify other people's browsing.",
+  post_guest_likes: "Anonymous likes on your posts. There is no identity to return.",
+  profile_view_stats: "Aggregate view counts, not a list of viewers.",
+  profile_discovery_stats: "Aggregate discovery counts.",
+
+  /*
+    Genuinely ambiguous ownership — a symmetric row where neither column is
+    "yours". Reported as not exported rather than exported with a coin-flip.
+  */
+  friendships: "A friendship is one row shared by two people; neither side owns it alone. Your friend list is exported through friend_requests and friend_favorites.",
+  user_restrictions: "A restriction is a relationship between two accounts; the half you set is exported through blocks and muted_creators.",
+};
+
+/**
+ * table → the column holding the owner's user id.
+ *
+ * Where a table references `auth.users` twice, the column chosen is the one
+ * that means "this row is MINE" rather than "this row is ABOUT me", and the
+ * choice is noted. `follows` is exported twice, from both sides, because who
+ * you follow and who follows you are both facts about you and both are already
+ * visible to you in the product.
+ */
+export const OWNER_COLUMN: Record<string, string> = {
+  /* identity */
+  profiles: "id",
+  account_security_settings: "user_id",
+  trusted_devices: "user_id",
+  privacy_settings: "user_id",
+
+  /* social */
+  posts: "publisher_id",
+  post_comments: "author_id",
+  post_reactions: "user_id",
+  post_polls: "owner_id",
+  poll_votes: "user_id",
+  comment_reactions: "user_id",
+  reposts: "user_id",
+  stories: "user_id",
+  // follower_id = accounts you chose to follow. The other side is exported
+  // separately as `followers`, see FOLLOW_MIRROR.
+  follows: "follower_id",
+  blocks: "blocker_id",
+  muted_creators: "muter_id",
+
+  /* life memories */
+  time_capsules: "user_id",
+  journal_entries: "user_id",
+
+  /* profile platform */
+  profile_modules: "user_id",
+  profile_details: "user_id",
+  profile_credentials: "user_id",
+  profile_offerings: "user_id",
+  profile_widgets: "user_id",
+  profile_spaces: "user_id",
+  profile_featured: "user_id",
+  profile_goals: "user_id",
+  profile_events: "user_id",
+  profile_event_rsvps: "user_id",
+  profile_membership_tiers: "user_id",
+  profile_repositories: "user_id",
+  profile_snapshots: "user_id",
+  profile_versions: "user_id",
+  profile_appearance: "user_id",
+  profile_search_terms: "user_id",
+  // Reviews you WROTE. Reviews written about you are the reviewer's words.
+  profile_reviews: "author_id",
+  profile_team_members: "user_id",
+
+  /* social graph */
+  relationship_labels: "owner_id",
+  social_circles: "owner_id",
+  circle_members: "owner_id",
+  trusted_contacts: "owner_id",
+  friend_requests: "sender_id",
+  friend_favorites: "user_id",
+
+  /* discovery */
+  profile_discovery: "user_id",
+  profile_bookmarks: "owner_id",
+  profile_bookmark_lists: "owner_id",
+  collections: "user_id",
+
+  /* media & downloads */
+  downloads: "user_id",
+  download_events: "user_id",
+
+  /* monetization */
+  subscriptions: "user_id",
+  ad_clicks: "user_id",
+  ad_impressions: "user_id",
+  affiliate_clicks: "user_id",
+  gateway_impressions: "user_id",
+  api_keys: "user_id",
+  api_usage: "user_id",
+
+  /* feedback & support */
+  app_ratings: "user_id",
+  support_threads: "user_id",
+  support_messages: "sender_id",
+
+  /* wallpapers */
+  wallpapers: "uploaded_by",
+  wallpaper_likes: "user_id",
+  wallpaper_saves: "user_id",
+  wallpaper_comments: "user_id",
+
+  /* notifications */
+  notifications: "user_id",
+  notification_settings: "user_id",
+  notification_sound_prefs: "user_id",
+  push_subscriptions: "user_id",
+  push_delivery_log: "user_id",
+
+  /* learning */
+  learning_progress: "user_id",
+  personal_learning_items: "user_id",
+
+  /* audit + misc personal state */
+  security_audit_log: "user_id",
+  milestone_log: "user_id",
+  user_home_preferences: "user_id",
+  user_presence_status: "user_id",
+  user_stickers: "user_id",
+};
+
+/**
+ * The one table exported from BOTH sides.
+ *
+ * Who you follow and who follows you are two different facts and a person
+ * expects both. Kept as an explicit exception rather than a general "export
+ * every FK" rule, which would drag in everyone who blocked you.
+ */
+export const FOLLOW_MIRROR = { table: "follows", column: "following_id", as: "followers" } as const;
+
+export interface ExportPlan {
+  /** table → owner column, for everything that will be read. */
+  included: { table: string; column: string }[];
+  /** table → why it was left out, shown to the person in the file. */
+  excluded: { table: string; reason: string }[];
+  /** Tables in an exportable domain with no decision at all. Must be empty. */
+  undecided: string[];
+}
+
+/**
+ * What an export will actually cover, derived from the domain catalogue.
+ *
+ * The export route reads this rather than a list of its own, so adding a table
+ * to a catalogued domain changes the export without anybody editing the route.
+ */
+export function exportPlan(): ExportPlan {
+  const included: ExportPlan["included"] = [];
+  const excluded: ExportPlan["excluded"] = [];
+  const undecided: string[] = [];
+
+  for (const domain of exportableDomains()) {
+    for (const table of domain.tables) {
+      const column = OWNER_COLUMN[table];
+      if (column) {
+        included.push({ table, column });
+        continue;
+      }
+      const reason = NOT_EXPORTED[table];
+      if (reason) {
+        excluded.push({ table, reason });
+        continue;
+      }
+      undecided.push(table);
+    }
+  }
+
+  included.sort((a, b) => a.table.localeCompare(b.table));
+  excluded.sort((a, b) => a.table.localeCompare(b.table));
+  return { included, excluded, undecided: undecided.sort() };
+}

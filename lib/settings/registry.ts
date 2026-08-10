@@ -83,7 +83,21 @@ export const SETTINGS: readonly SettingEntry[] = [
   { id: "account.plan", category: "account", label: "Plan & billing", description: "Your plan, what it includes, and how to change it.", keywords: ["upgrade", "pro", "business", "premium", "subscription", "billing", "payment", "price", "cancel"], href: "/account/plan", status: "live" },
   { id: "account.password", category: "account", label: "Password", description: "Change the password you sign in with.", keywords: ["change password", "reset password", "credentials"], href: "/account/password", status: "live" },
   { id: "account.appeals", category: "account", label: "Appeals", description: "Challenge a moderation decision on your account or content.", keywords: ["appeal", "ban", "suspended", "restricted", "moderation", "dispute"], href: "/account/appeals", status: "live" },
-  { id: "account.delete", category: "account", label: "Delete account", description: "Permanently remove your account and its data.", keywords: ["delete", "close account", "remove account", "deactivate", "erase"], href: null, status: "planned", note: "No self-serve deletion flow yet — account removal is handled through Support.", affectsOthers: true },
+  /*
+    🔴 Corrected 2026-08-10. This was `planned`, with the note "no self-serve
+    deletion flow yet — account removal is handled through Support."
+
+    That has not been true for some time: `/api/account/delete` implements a
+    scheduled deletion with a 30-day grace period that the member can cancel,
+    and `DataControls` has shipped the UI for it. A LIVE feature marked planned
+    is the mirror image of the failure this registry's test guards against — the
+    test catches a live setting pointing at a dead route, and nothing catches a
+    real feature hidden behind a stale status. It made deletion unfindable in
+    Settings search, which for a deletion flow is close to not having one.
+  */
+  { id: "account.delete", category: "account", label: "Delete account", description: "Schedule permanent deletion, with 30 days to change your mind.", keywords: ["delete", "close account", "remove account", "deactivate", "erase", "gdpr"], href: "/account/data", status: "live", affectsOthers: true },
+  { id: "account.export", category: "account", label: "Download your data", description: "A copy of everything we hold about you, and a list of anything we do not include.", keywords: ["export", "download my data", "copy of my data", "gdpr", "subject access", "portability", "backup"], href: "/account/data", status: "live" },
+  { id: "privacy.transparency", category: "privacy", label: "What we store about you", description: "Every kind of record we keep, why it exists and how long we keep it.", keywords: ["what data", "transparency", "stored data", "retention", "why", "privacy policy"], href: "/account/data", status: "live" },
 
   /* ───────────────────────────────── profile ────────────────────────────── */
   { id: "profile.identity", category: "profile", label: "Identity", description: "Name, handle, photo, profile video, avatar and status.", keywords: ["name", "username", "handle", "photo", "picture", "avatar", "profile video", "bio", "status"], href: "/account/identity", status: "live" },

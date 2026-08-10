@@ -145,6 +145,22 @@ function buildImageFormats(item: TikTokItem): MediaFormat[] {
       acodec: null,
       directUrl: url,
       httpHeaders: headers,
+      /*
+        🔴 The flag that makes multi-select work (owner, 2026-08-10: "select all
+        button in multiple download still doesn't work").
+
+        `PreviewCard` decides a post is batchable from `formats.filter(f =>
+        f.isSeparateItem).length > 1`. TikTok never set it — Snapchat did — so
+        an eleven-photo slideshow produced eleven formats that the panel could
+        not see as separate items. It fell back to `tab === "image" ? imageFormats
+        : []`, which means the batch panel and its Select all appeared only when
+        the image tab happened to be active, and did nothing otherwise.
+
+        These ARE distinct media from one post, which is exactly what the flag
+        means. Set only when there is more than one, so a single-photo post is
+        still an ordinary download rather than a batch of one.
+      */
+      isSeparateItem: images.length > 1,
     });
   });
   // Slideshows usually carry a sound too.
@@ -394,6 +410,10 @@ async function tikwmExtract(
           acodec: null,
           directUrl: abs(img),
           httpHeaders: headers,
+          /* Same flag, same reason as `buildImageFormats` — this is the path
+             that actually serves photo posts in production, since TikTok gives
+             datacenter IPs a blank page. Missing it here is what the owner hit. */
+          isSeparateItem: d.images!.length > 1,
         }),
       );
     } else {

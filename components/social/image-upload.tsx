@@ -3,6 +3,7 @@
 import { Camera, ImagePlus, Loader2 } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { ImageCropper } from "@/components/social/image-cropper";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -25,14 +26,36 @@ export function ImageUpload({
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /*
+    The chosen file waits here until it has been FRAMED.
 
-  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    Previously the picker uploaded the original bytes straight through, so how a
+    photo sat in the circle was decided by `object-cover` at whatever size each
+    surface happened to render — a different crop in the header, the menu and a
+    comment row, none of them chosen. The crop is now baked into the file, so
+    every surface (including ones not written yet) shows the framing the person
+    picked. See image-cropper.tsx.
+  */
+  const [pending, setPending] = useState<File | null>(null);
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-selecting the same file
     if (!file) return;
     if (!file.type.startsWith("image/")) return setErr("Please choose an image.");
-    if (file.size > 5 * 1024 * 1024) return setErr("Image must be under 5 MB.");
+    /*
+      The limit applies to what is CHOSEN, not to what is uploaded. The crop
+      re-encodes to a ~512px JPEG, so the uploaded file is a fraction of this —
+      but decoding a 40 MP photo to crop it still costs memory on the phone
+      doing it, which is what this guards.
+    */
+    if (file.size > 15 * 1024 * 1024) return setErr("Image must be under 15 MB.");
+    setErr(null);
+    setPending(file);
+  };
 
+  /** Upload the CROPPED result and hand back its public URL. */
+  const upload = async (blob: Blob) => {
     setBusy(true);
     setErr(null);
     try {
@@ -44,19 +67,21 @@ export function ImageUpload({
         setErr("Please sign in.");
         return;
       }
-      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-      const path = `${user.id}/${kind}-${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from("media").upload(path, file, {
+      // Always .jpg: the cropper's canvas export is JPEG regardless of what went
+      // in, so carrying the original extension would mislabel the bytes.
+      const path = `${user.id}/${kind}-${Date.now()}.jpg`;
+      const { error } = await supabase.storage.from("media").upload(path, blob, {
         upsert: true,
         cacheControl: "3600",
-        contentType: file.type,
+        contentType: "image/jpeg",
       });
       if (error) {
-        setErr("Upload failed. Try a smaller image.");
+        setErr("Upload failed. Try again.");
         return;
       }
       const { data } = supabase.storage.from("media").getPublicUrl(path);
       onChange(`${data.publicUrl}?v=${Date.now()}`);
+      setPending(null);
     } catch {
       setErr("Upload failed.");
     } finally {
@@ -115,6 +140,20 @@ export function ImageUpload({
       )}
 
       {err ? <p className="mt-1.5 text-xs text-red-400">{err}</p> : null}
+
+      {/* The framing step. An avatar crops to a circle; a cover keeps its own
+          wide ratio, because those are the shapes each is actually rendered in
+          and cropping to the wrong one just moves the problem. */}
+      {pending ? (
+        <ImageCropper
+          file={pending}
+          aspect={kind === "avatar" ? 1 : 16 / 9}
+          round={kind === "avatar"}
+          busy={busy}
+          onCancel={() => setPending(null)}
+          onDone={(blob) => void upload(blob)}
+        />
+      ) : null}
     </div>
   );
 }

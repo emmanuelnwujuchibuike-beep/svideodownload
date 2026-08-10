@@ -4,18 +4,14 @@ import type { ReactNode } from "react";
 
 import { ThemeCacheSync } from "@/components/theme-cache-sync";
 import { ThemeProvider } from "@/components/theme-provider";
-import { AnalyticsTracker } from "@/features/analytics/analytics-tracker";
 import { BootHead, BootSplash, ThemeBootScript } from "@/features/app-shell/boot-splash";
+import { DeferredShell } from "@/features/app-shell/deferred-shell";
 import { LocaleBootScript } from "@/components/i18n/locale-boot-script";
 import { A11yBootScript, A11yColorFilters } from "@/components/a11y/a11y-boot-script";
-import { GlobalErrorCapture } from "@/features/app-shell/global-error-capture";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
-import { CommandCenterMount } from "@/features/navigation/command-center-mount";
-import { RegisterServiceWorker } from "@/features/notifications/register-sw";
 import { AdSenseSiteScript, VerificationTags } from "@/features/monetization/adsense-site-script";
 import { GoogleTag } from "@/features/monetization/google-tag";
 import { MonetagScript } from "@/features/monetization/monetag-script";
-import { WebVitals } from "@/features/perf/web-vitals";
 import { DEFAULT_LOCALE, getLocale, isRtl } from "@/lib/i18n/locales";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
@@ -362,21 +358,17 @@ export default function RootLayout({
                 so nothing behind app content is ever transparent. */}
             <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-background" />
             {children}
+            {/*
+              ⌘K, the service worker, error capture, web vitals and the
+              analytics tracker — all mounted one paint LATER (see
+              DeferredShell). They were hydrating inside the first task on every
+              page, and this landing's LCP is gated on that task finishing.
+            */}
+            <DeferredShell />
             {/* <AssistantWidget /> temporarily removed — re-add later */}
             {/* Ads are intentionally NOT global anymore — they live only on the
                 marketing landing page. The app/social surfaces (home, feed,
                 profiles, messages, …) are ad-free; social monetization comes later. */}
-            {/* Universal Command Center — ⌘K / Ctrl+K, or "/" outside a text
-                field. This mount is a keydown listener and a boolean; the palette
-                itself is dynamically imported on first use so it never taxes the
-                initial bundle on a page under a 2-second budget. */}
-            <CommandCenterMount />
-            <RegisterServiceWorker />
-            <GlobalErrorCapture />
-            <WebVitals />
-            {/* Enterprise Analytics — fires page_view / session events. Passive
-                (reads usePathname only), flushed on a debounce well after LCP. */}
-            <AnalyticsTracker />
         </ThemeProvider>
       </body>
     </html>

@@ -62,7 +62,21 @@ function WallpaperBackdrop({ url, sizes }: { url: string; sizes: string }) {
       fill
       sizes={sizes}
       priority
-      className="pointer-events-none select-none object-cover"
+      /*
+        🔴 `object-contain` (owner, 2026-08-10: "same thing for the wallpaper
+        button" — show the full image, no zoom).
+
+        `cover` scaled the admin's wallpaper up until it filled the tile and threw
+        the overflow away, so a portrait wallpaper in a landscape-ish card lost its
+        top and bottom. The operator picks that image deliberately; cropping it is
+        discarding the choice.
+
+        `contain` shows all of it. What is left over is the tile's own brand
+        gradient, which is already painted underneath as the no-image fallback —
+        so the letterbox is a branded surface rather than a black bar, and the
+        no-image and image cases still read as the same control.
+      */
+      className="pointer-events-none select-none object-contain"
     />
   );
 }
@@ -142,7 +156,22 @@ function WallpaperBackdrop({ url, sizes }: { url: string; sizes: string }) {
   Each variant gets its own direction because the text sits in a different
   place: bottom-anchored on the card, left-to-right across the row.
 */
-const SCRIM_CARD = "absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/5";
+/*
+  🔴 The card scrim is SHORTER and lighter than it was (owner, 2026-08-10:
+  "give more space for the background image").
+
+  It was `from-black/85 via-black/35 to-black/5` across the WHOLE tile, so even
+  the top of the picture was veiled to protect a subtitle that no longer exists.
+  With one line of title left, the darkening only has to cover the bottom third —
+  `via-transparent` at the midpoint means the upper two thirds of the artwork are
+  now completely untouched.
+
+  The floor stays deliberately dark (`from-black/80`) at the very bottom: the
+  admin can pick ANY wallpaper, including a white one, and the title is white.
+  Legibility still cannot depend on the picture — that reasoning is unchanged,
+  it just applies to a much smaller band now.
+*/
+const SCRIM_CARD = "absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent";
 const SCRIM_ROW = "absolute inset-0 bg-gradient-to-r from-black/80 via-black/55 to-black/25";
 
 export function WallpaperCta({
@@ -323,14 +352,28 @@ function WallpaperCard({ className, backgroundUrl }: { className?: string; backg
         </span>
       </span>
 
+      {/*
+        ── Less text, more picture (owner, 2026-08-10) ────────────────────────
+        "make the wallpaper button on the landing page to be less cluster in text
+        and give more space for the background image."
+
+        The subtitle is GONE. "Stunning quality, updated daily." was two lines of
+        the card's four, and it says nothing the tile does not already show — the
+        artwork behind it IS the argument for tapping. On a tile whose whole
+        subject is a picture, a sentence describing the picture is the clutter.
+
+        The title also drops to one line by shortening to "Wallpapers": at this
+        width "Wallpaper Gallery" wrapped, which is what made the bottom of the
+        card a four-line text block sitting on the image.
+
+        Net effect is roughly half the card handed back to the artwork, which is
+        what was asked for. The scrim shrinks to match — see SCRIM_CARD.
+      */}
       <span className="relative z-[1] mt-auto flex items-end justify-between gap-3 pt-4">
         <span className="min-w-0">
-          <span className="block text-base font-bold leading-tight text-white drop-shadow-sm">Wallpaper Gallery</span>
-          {/* Punctuated as in the reference — it sits beside "See everything
-              Frenz can do." and one sentence ending mid-air next to one that
-              does not is the kind of small inconsistency that reads as sloppy
-              without being nameable. */}
-          <span className="mt-1 block text-xs leading-snug text-white/85 drop-shadow-sm">Stunning quality, updated daily.</span>
+          <span className="block text-base font-bold leading-tight text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]">
+            Wallpapers
+          </span>
         </span>
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/25 transition group-hover:bg-white/30">
           <ArrowRight className="h-4 w-4 text-white transition-transform group-hover:translate-x-0.5" />

@@ -182,7 +182,30 @@ export function FeedGridGallery({ images }: { images: string[] }) {
                   // stops growing.
                   sizes="(max-width: 640px) 50vw, 320px"
                   loading="lazy"
-                  className="object-cover transition-transform duration-500 group-hover/tile:scale-[1.05]"
+                  /*
+                    🔴 `object-contain`, NOT `object-cover` (owner, 2026-08-10:
+                    "the other section in my screenshot is showing zoom when i
+                    upload it, i want it to show the full image in full without
+                    zooming, unless i zoom it").
+
+                    `object-cover` scales an image up until it fills the tile and
+                    discards the overflow — which is exactly the "zoom" being
+                    reported. These tiles are a fixed 3:4-ish box and the admin
+                    uploads whatever shape they have, so a wide image lost its
+                    sides and a tall one lost its top and bottom. On an
+                    admin-curated grid that is the whole point of the upload
+                    being thrown away: the operator chose that framing.
+
+                    `contain` fits the entire image inside the tile. The
+                    letterbox it leaves is filled by the tile's own dark ground
+                    rather than by stretching, so a half-filled grid still reads
+                    as intentional — the same treatment the reel player uses over
+                    its blurred backdrop, for the same reason.
+
+                    The hover scale stays: that is a deliberate, user-initiated
+                    magnification ("unless i zoom it"), not a silent crop.
+                  */
+                  className="object-contain transition-transform duration-500 group-hover/tile:scale-[1.05]"
                 />
               ) : null}
               <span aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/45 to-transparent" />

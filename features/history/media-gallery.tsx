@@ -355,7 +355,7 @@ export function MediaGallery({
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
           {shown.map((item, i) => (
-            <ListRow key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} />
+            <ListRow key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} selection={selection} />
           ))}
         </div>
       )}
@@ -635,7 +635,27 @@ function TileAction({
 }
 
 /** Compact, professional list row. */
-function ListRow({ item, onOpen, onToggleFavorite, onRemove }: { item: DownloadRecord; onOpen: () => void; onToggleFavorite: () => void; onRemove: () => void }) {
+/**
+ * 🔴 Select mode did NOTHING in list view (owner, 2026-08-10: "multiple select
+ * don't work when I use them").
+ *
+ * `GalleryTile` was passed `selection` and this row was not — so switching to
+ * the list layout silently turned the feature off. Every symptom pointed away
+ * from the cause: Select still highlighted in the header, the action bar still
+ * appeared, and tapping a row just opened the item, so it read as taps not
+ * registering rather than as a whole layout being unwired.
+ *
+ * The contract is now identical to the tile's: while selecting, the row's
+ * primary targets toggle instead of opening, the per-row actions are withdrawn
+ * (a Remove button next to a selection you are building is a mis-tap with an
+ * irreversible result), and the state is announced through `aria-pressed`.
+ */
+function ListRow({ item, onOpen, onToggleFavorite, onRemove, selection }: { item: DownloadRecord; onOpen: () => void; onToggleFavorite: () => void; onRemove: () => void; selection?: GallerySelection }) {
+  const selecting = !!selection?.active;
+  const picked = !!selection?.selected.has(item.id);
+  /* One handler for both hit areas — the thumbnail and the text block are two
+     buttons, and in select mode they must agree. */
+  const activate = selecting ? () => { tap(); selection!.onToggle(item.id); } : onOpen;
   const [copied, setCopied] = useState(false);
   const [redownloading, setRedownloading] = useState(false);
   const platform = PLATFORMS[item.platform] ?? PLATFORMS.generic;
@@ -668,8 +688,28 @@ function ListRow({ item, onOpen, onToggleFavorite, onRemove }: { item: DownloadR
   };
 
   return (
-    <div className="flex items-center gap-3 border-b border-border/50 px-2.5 py-2.5 last:border-b-0 hover:bg-secondary/40 sm:px-3">
-      <button type="button" onClick={onOpen} aria-label={`Watch ${item.title}`} className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-black/40 sm:h-16 sm:w-16">
+    <div className={cn("flex items-center gap-3 border-b border-border/50 px-2.5 py-2.5 last:border-b-0 hover:bg-secondary/40 sm:px-3", picked && "bg-primary/10")}>
+      {/* The tick, in the same slot the grid tile uses, so the two layouts read
+          as one feature. It leads the row here because a list is scanned down
+          the left edge. */}
+      {selecting ? (
+        <span
+          aria-hidden
+          className={cn(
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full ring-2 transition",
+            picked ? "bg-primary text-primary-foreground ring-primary" : "bg-transparent ring-border",
+          )}
+        >
+          {picked ? <Check className="h-3 w-3" /> : null}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        onClick={activate}
+        aria-label={selecting ? `${picked ? "Deselect" : "Select"} ${item.title}` : `Watch ${item.title}`}
+        aria-pressed={selecting ? picked : undefined}
+        className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-black/40 sm:h-16 sm:w-16"
+      >
         <SmartThumb src={item.thumbnail} alt="" className="h-full w-full object-cover" fallback={<KindIcon className="h-5 w-5" />} />
         <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100">
           <Play className="h-5 w-5 fill-white text-white drop-shadow" />
@@ -679,7 +719,12 @@ function ListRow({ item, onOpen, onToggleFavorite, onRemove }: { item: DownloadR
         </span>
       </button>
 
-      <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+      <button
+        type="button"
+        onClick={activate}
+        aria-pressed={selecting ? picked : undefined}
+        className="min-w-0 flex-1 text-left"
+      >
         <p className="truncate text-sm font-semibold leading-tight">{item.title}</p>
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
           {item.platformName} · {item.qualityLabel} · {formatBytes(estimateBytes(item))}
@@ -692,7 +737,11 @@ function ListRow({ item, onOpen, onToggleFavorite, onRemove }: { item: DownloadR
         </p>
       </button>
 
-      <div className="flex shrink-0 items-center">
+      {/* Withdrawn while selecting — the grid tile hides its menu for the same
+          reason. A Remove button beside a selection you are still building is a
+          mis-tap with an irreversible result, and the row's whole width should
+          be one target once Select is on. */}
+      <div className={cn("flex shrink-0 items-center", selecting && "hidden")}>
         <IconButton label="Favorite" onClick={onToggleFavorite} active={item.favorite}>
           <Heart className={cn("h-4 w-4", item.favorite && "fill-current")} />
         </IconButton>

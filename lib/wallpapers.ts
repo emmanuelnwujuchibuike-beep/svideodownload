@@ -92,6 +92,28 @@ export function resolutionBadge(
 }
 
 /**
+ * Alt text for a wallpaper image.
+ *
+ * ── Why this is a function and not a literal at the call site ─────────────────
+ * The gallery images shipped as `alt="" aria-hidden`, which is correct markup
+ * for decoration and wrong for the content of an image gallery: the one page on
+ * this site whose entire purpose is publishing pictures published none of them
+ * to Google Images, and a screen-reader user got a grid of unnamed buttons.
+ *
+ * The name and the category are the only things we truthfully know about the
+ * picture, so that is what the text says. It is deliberately NOT "beautiful
+ * stunning 4K HD free wallpaper background download" — keyword-stuffed alt text
+ * is a spam signal to a crawler, and it is read aloud, in full, to a person.
+ *
+ * It lives here rather than in lib/seo so the client gallery can import it
+ * without dragging four hundred words of page copy into its bundle.
+ */
+export function wallpaperAlt(w: Pick<Wallpaper, "name" | "category">): string {
+  const category = w.category?.trim();
+  return category ? `${w.name} — ${category.toLowerCase()} wallpaper` : `${w.name} wallpaper`;
+}
+
+/**
  * What SHAPE of screen a wallpaper is for — the reference's "Types" filter.
  *
  * Orientation is the only property of a wallpaper that a person filters on and

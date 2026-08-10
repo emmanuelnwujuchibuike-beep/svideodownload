@@ -12,18 +12,26 @@ import { SITE_URL as siteUrl } from "@/lib/site";
   ── No sitemap index, and no image/video sitemap. Both deliberate. ────────────
 
   A sitemap INDEX exists to split a corpus past Google's per-file limit of
-  50,000 URLs / 50MB. This sitemap carries 198. Adding an index would be a layer
-  of indirection serving no crawler, and one more file to keep in step.
-  Revisit if this passes ~10,000 URLs; the generated downloader pages are the
-  only thing that could plausibly get there.
+  50,000 URLs / 50MB. This sitemap carries a couple of hundred. Adding an index
+  would be a layer of indirection serving no crawler, and one more file to keep
+  in step. Revisit if this passes ~10,000 URLs; the generated downloader pages
+  are the only thing that could plausibly get there.
 
   An IMAGE sitemap was attempted and abandoned on evidence. The only per-page
   images we have are the generated OG cards, and their URLs are not stably
   addressable: `/tiktok-downloader/opengraph-image` 404s without the content
   hash Next appends. So the options were a sitemap full of URLs that break on
-  the next deploy, or the same generic OG card repeated against all 198 entries
-  — which tells an image crawler nothing and reads as spam. Neither is worth
+  the next deploy, or the same generic OG card repeated against every entry —
+  which tells an image crawler nothing and reads as spam. Neither is worth
   shipping. Real per-page artwork would change this.
+
+  /wallpapers is the one page where an image sitemap would genuinely earn its
+  keep — it publishes real, distinct photographs. It is still not listed here,
+  because the wallpaper set is operator-managed and changes between deploys
+  while this file is generated at BUILD time: a static image sitemap would
+  advertise yesterday's library. The page carries `ImageObject` structured data
+  instead (lib/seo/wallpapers.ts), which is generated per request from the live
+  list and so cannot go stale. A per-wallpaper route would change this.
 
   A VIDEO sitemap needs public pages whose primary content is a video. The
   marketing site has none — reels live behind the app, on user-generated
@@ -113,6 +121,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: siteUrl, lastModified: now, changeFrequency: "daily", priority: 1 },
     ...downloaders,
+    /*
+      Wallpapers — a product surface, not an article, which is why it sits up
+      here with the downloaders rather than down among the corpora.
+
+      Priority 0.8 alongside the other hubs. `daily` is honest rather than
+      aspirational: the library is operator-managed and gains wallpapers between
+      deploys, so the page's content really does change on that cadence even
+      though this file does not.
+    */
+    { url: `${siteUrl}/wallpapers`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
     { url: `${siteUrl}/help`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${siteUrl}/trust`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${siteUrl}/glossary`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },

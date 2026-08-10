@@ -164,11 +164,27 @@ export function AdSenseUnit({
   */
   const sized = typeof width === "number" && typeof height === "number" && width > 0 && height > 0;
 
+  /*
+    `maxWidth: 100%` on a fixed-size unit (owner, 2026-08-09: "the ad slot below
+    the download placeholder is not responsive on small screen device").
+
+    A hard `width: 468` with nothing capping it does not merely overflow its own
+    card — it widens the whole layout and gives the PAGE a horizontal scrollbar
+    on a phone, which is the most visible way an ad can break a design.
+
+    Note what this does NOT do: it does not scale the creative. The display
+    branch in ad-slot.tsx transforms an oversized banner down to fit, and that is
+    deliberately not done here — altering the rendered size of an AdSense
+    creative is against the program policies, and the placement is not worth the
+    account. The real fix for a fixed unit that keeps meeting narrow screens is
+    to leave width and height BLANK on the row, which makes it a responsive unit
+    that Google sizes itself.
+  */
   return (
     <ins
       ref={insRef}
       className={cn("adsbygoogle block", className)}
-      style={sized ? { display: "block", width, height } : { display: "block" }}
+      style={sized ? { display: "block", width, height, maxWidth: "100%" } : { display: "block" }}
       data-ad-client={client}
       data-ad-slot={slotId}
       data-ad-format={sized ? undefined : (layout ?? "auto")}

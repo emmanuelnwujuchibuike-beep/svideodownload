@@ -29,10 +29,21 @@ export default function WallpapersLoading() {
             <div className="min-w-0 flex-1 pb-2">
               {/* Real text, not a bar — the headline and the promise are correct
                   before any data loads, so there is no reason to make someone
-                  wait to read them. */}
-              <h1 className="text-[2.75rem] font-extrabold leading-[0.95] tracking-[-0.045em] sm:text-6xl">
+                  wait to read them.
+
+                  A <p> styled as the headline rather than an <h1>, and that is
+                  not a detail. A streamed dynamic route emits this fallback AND
+                  the real page into the SAME document, so an <h1> here left the
+                  served HTML carrying two `<h1>Wallpapers</h1>` — verified by
+                  fetching it. Identical classes, so nothing moves; the page's
+                  own heading is the only one a crawler finds. */}
+              {/* Type scale kept identical to the real headline — see the
+                  collision note in wallpaper-explore.tsx. A skeleton that sizes
+                  its text differently guarantees the jump it exists to
+                  prevent. */}
+              <p className="text-[clamp(1.75rem,8.6vw,2.75rem)] font-extrabold leading-[0.95] tracking-[-0.045em] sm:text-6xl">
                 Wallpapers
-              </h1>
+              </p>
               <p className="mt-3 text-[15px] leading-snug text-muted-foreground sm:text-base">
                 Stunning HD wallpapers
                 <br />
@@ -41,7 +52,7 @@ export default function WallpapersLoading() {
                 <span className="font-semibold text-primary">Free</span> to download.
               </p>
             </div>
-            <div className="relative h-[168px] w-[150px] shrink-0 sm:h-[210px] sm:w-[190px]">
+            <div className="relative aspect-[150/168] w-[38%] max-w-[190px] shrink-0">
               <span className="absolute inset-y-2 left-1/2 block w-[62%] -translate-x-[92%] -rotate-[11deg] rounded-2xl bg-foreground/10" />
               <span className="absolute inset-y-2 left-1/2 block w-[62%] -translate-x-[8%] rotate-[11deg] rounded-2xl bg-foreground/10" />
               <span className="absolute inset-y-2 left-1/2 block w-[62%] -translate-x-1/2 animate-pulse rounded-2xl bg-foreground/15" />

@@ -145,31 +145,21 @@ export async function Hero() {
         */}
         <div className="min-w-0 text-left">
           {/*
-            🔴 The eyebrow owns its own row and its own layer (owner,
-            2026-08-09: a screenshot of the CTA's download tile sitting ON TOP
-            of this badge's text on a large screen).
+            🔴 The "All-in-One Downloader & Social Hub" eyebrow is GONE (owner,
+            2026-08-09: "remove the top section that says all-in-one downloader
+            and social hub, to adjust the hero upwards without cluster").
 
-            I could not reproduce the overlap from the source — the markup is a
-            plain block flow (badge → h1 → p → CTA stack), the form is
-            `overflow-hidden` so its absolutely-positioned face cannot escape
-            it, and the live HTML confirms that order. So rather than guess at a
-            cause and call it fixed, this makes the symptom IMPOSSIBLE:
+            It is not a loss. The pill claimed in eleven words what the headline
+            underneath it says in three, and the CTA rows below say properly —
+            so it was a row of vertical space spent restating the next two
+            elements, on a page whose whole design brief this week has been
+            getting the paste box above the fold on a phone. Removing it lifts
+            everything under it by roughly 44px.
 
-            • `flex` + `w-fit` instead of `inline-flex` — an inline box sits on
-              a shared line box and can be overlapped by inline siblings; a
-              block-level flex row cannot.
-            • `relative z-10` — whatever was painting over it no longer can,
-              whichever element it turns out to be.
-            • `max-w-full` and wrapping, so wide letter-spacing can never push
-              the text past the pill on a narrow column.
-
-            If it survives this, the cause is a positioned element from outside
-            the hero and the next step is to find out which — see the handoff.
+            It also retires the long-running overlap report (a screenshot of the
+            download tile painting over this badge) — a defect that was never
+            reproducible from the source, on an element that no longer exists.
           */}
-          <span className="relative z-10 mb-4 flex w-fit max-w-full flex-wrap items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold uppercase leading-relaxed tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
-            <Sparkles className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
-            All-in-One Downloader &amp; Social Hub
-          </span>
 
           {/* "Download. Connect. Explore." — the reference H1, middle word in the
               brand gradient (public/newlandingfull.jpg). */}

@@ -334,47 +334,9 @@ export function AdSlot({
     const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden}</style></head><body>${ad.scriptCode}</body></html>`;
     return (
       <div className={cn("flex justify-center", className)}>
-        <div ref={hostRef} className="relative w-full" style={w ? { width: w, maxWidth: "100%" } : undefined}>
+        <DisplayFrame hostRef={hostRef} srcDoc={srcDoc} width={w} height={h}>
           {closeBtn}
-          <iframe
-            title="Advertisement"
-            srcDoc={srcDoc}
-            width={w}
-            height={h}
-            /*
-              EAGER, not lazy.
-
-              These placements are put where they are on purpose and are mostly
-              above the fold. Lazy-loading them meant the frame did not even
-              begin fetching until it neared the viewport, which on the
-              under-download slot is part of why an ad could still be blank when
-              the visitor had already pressed Download.
-            */
-            loading="eager"
-            /*
-              `allow-top-navigation-by-user-activation` is deliberately ABSENT.
-
-              With it, a script inside this frame can navigate the WHOLE PAGE on
-              any click it can attribute to the visitor — which is exactly the
-              reported "a blank slot that takes me to a different site when I
-              click it". Adsterra's Social Bar and OnClick creatives do this by
-              design, and pasting one into a `display` placement is enough: the
-              banner renders as an invisible full-size click layer.
-
-              Without the token, the frame simply cannot touch the top-level
-              location. `allow-popups` stays, so a legitimate banner click still
-              opens the advertiser in a new tab — the behaviour a real display
-              ad needs, and the only one it needs.
-
-              `allow-same-origin` stays because networks serve protocol-relative
-              (`//…`) script URLs that will not resolve in an opaque origin.
-            */
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-            /* `width: 100%` only when the row declared no size — otherwise the
-               `width` attribute above is the exact one the unit was built for. */
-            style={{ border: 0, display: "block", maxWidth: "100%", ...(w ? null : { width: "100%" }) }}
-          />
-        </div>
+        </DisplayFrame>
       </div>
     );
   }
@@ -432,6 +394,129 @@ export function AdSlot({
     nothing rather than a frame around nothing.
   */
   return null;
+}
+
+/**
+ * A network banner in an isolated frame, sized to FIT the screen it is on.
+ *
+ * ── The bug (owner, 2026-08-09) ──────────────────────────────────────────────
+ * "the ad slot below the download placeholder is not responsive on small screen
+ * device."
+ *
+ * Display creatives come at fixed pixel sizes — 468×60, 300×250, 728×90 — and
+ * this frame took the declared width with `max-width: 100%` on top. That reads
+ * like responsive markup and is not: `max-width` shrinks the IFRAME ELEMENT, and
+ * the document inside it keeps its own width and is simply cut off at the new
+ * edge (its body is `overflow: hidden`, so there is not even a scrollbar to
+ * reveal the rest). On a 360px phone a 468px leaderboard lost its right-hand
+ * third — the half of a banner that usually carries the offer and the button.
+ *
+ * ── Scale, do not crop ───────────────────────────────────────────────────────
+ * The frame keeps its real dimensions and is transformed down by whatever factor
+ * makes it fit, so the whole creative is visible, in proportion, and entirely
+ * clickable. Only ever DOWN: enlarging a banner past the size it was built for
+ * would just make it blurry.
+ *
+ * The host box takes the scaled height, because `transform` does not affect
+ * layout — without it the card would reserve the unscaled height and leave a
+ * band of blank underneath the ad, which is the "empty white space" complaint
+ * this component has already been through once.
+ *
+ * That also keeps viewability honest. The impression observer watches this host,
+ * so it measures the box the visitor can actually see rather than a taller one
+ * the layout was merely holding open.
+ *
+ * Rows that declare NO size are left alone — a responsive network tag sizes
+ * itself, and scaling one would fight it.
+ */
+function DisplayFrame({
+  hostRef,
+  srcDoc,
+  width,
+  height,
+  children,
+}: {
+  hostRef: React.RefObject<HTMLDivElement | null>;
+  srcDoc: string;
+  width: number | undefined;
+  height: number;
+  children?: React.ReactNode;
+}) {
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!width || !host || typeof ResizeObserver === "undefined") return;
+
+    /*
+      `clientWidth` is the width the host ACTUALLY got after `max-width: 100%`
+      clamped it, which is exactly the number needed. No feedback loop: the
+      transform changes nothing about layout width, so re-measuring after a
+      scale returns the same value and the observer settles immediately.
+    */
+    const measure = () => {
+      const available = host.clientWidth;
+      if (available > 0) setScale(Math.min(1, available / width));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [hostRef, width]);
+
+  return (
+    <div
+      ref={hostRef}
+      className="relative w-full overflow-hidden"
+      style={width ? { width, maxWidth: "100%", height: Math.round(height * scale) } : undefined}
+    >
+      {children}
+      <iframe
+        title="Advertisement"
+        srcDoc={srcDoc}
+        width={width}
+        height={height}
+        /*
+          EAGER, not lazy.
+
+          These placements are put where they are on purpose and are mostly
+          above the fold. Lazy-loading them meant the frame did not even begin
+          fetching until it neared the viewport, which on the under-download
+          slot is part of why an ad could still be blank when the visitor had
+          already pressed Download.
+        */
+        loading="eager"
+        /*
+          `allow-top-navigation-by-user-activation` is deliberately ABSENT.
+
+          With it, a script inside this frame can navigate the WHOLE PAGE on any
+          click it can attribute to the visitor — which is exactly the reported
+          "a blank slot that takes me to a different site when I click it".
+          Adsterra's Social Bar and OnClick creatives do this by design, and
+          pasting one into a `display` placement is enough: the banner renders
+          as an invisible full-size click layer.
+
+          Without the token, the frame simply cannot touch the top-level
+          location. `allow-popups` stays, so a legitimate banner click still
+          opens the advertiser in a new tab — the behaviour a real display ad
+          needs, and the only one it needs.
+
+          `allow-same-origin` stays because networks serve protocol-relative
+          (`//…`) script URLs that will not resolve in an opaque origin.
+        */
+        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+        style={{
+          border: 0,
+          display: "block",
+          // Scaled from the top-left so the creative stays flush with the card's
+          // padding instead of drifting toward the middle as it shrinks.
+          ...(width && scale < 1 ? { transform: `scale(${scale})`, transformOrigin: "top left" } : null),
+          // Only a row that declared no size is allowed to stretch.
+          ...(width ? null : { width: "100%" }),
+        }}
+      />
+    </div>
+  );
 }
 
 /** Injects a self-executing ad script into the page and cleans it up. */

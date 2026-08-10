@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import {
   popularity,
   resolutionBadge,
+  wallpaperAlt,
   wallpaperType,
   WALLPAPER_TYPES,
   type Wallpaper,
@@ -85,11 +86,20 @@ export function WallpaperExplore({
   items,
   canEngage,
   openReels = false,
+  children,
 }: {
   items: Wallpaper[];
   canEngage: boolean;
   /** Entered from a "browse full screen" link — skip the grid entirely. */
   openReels?: boolean;
+  /**
+   * Rendered inside `<main>`, below the grid — the page's readable content
+   * (`WallpaperSeoContent`). Passed in as a slot rather than imported here
+   * because it is a SERVER component: prose and links that ship as HTML with no
+   * JavaScript attached, which importing it into this client module would
+   * silently undo.
+   */
+  children?: React.ReactNode;
 }) {
   const router = useRouter();
   const [viewer, setViewer] = useState<number | null>(openReels ? 0 : null);
@@ -217,12 +227,18 @@ export function WallpaperExplore({
             <div className="flex items-start justify-between">
               {/*
                 The reference draws a hamburger here. This is a back control
-                instead, deliberately: the page already carries the app's bottom
-                navigation (Home / Reels / History / Support / Profile), so a
-                drawer would be a second, emptier copy of it — and a menu glyph
-                with nothing real behind it is the exact dead affordance this
-                codebase has had to remove before. Same slot, same white rounded
-                tile, an honest icon.
+                instead, deliberately: a drawer here would be a menu glyph with
+                nothing real behind it, the exact dead affordance this codebase
+                has had to remove before. Same slot, same white rounded tile, an
+                honest icon.
+
+                🔴 Corrected 2026-08-09. This comment previously justified itself
+                with "the page already carries the app's bottom navigation" —
+                it does not. `MobileNav` is mounted in the (app) layout and
+                /wallpapers sits outside it, so for as long as that sentence
+                stood, this arrow was the page's ONLY link to anywhere. The site
+                footer now renders below the grid, which is the real fix; the
+                back control stays because it is still the right control.
               */}
               <Link
                 href="/"
@@ -249,7 +265,24 @@ export function WallpaperExplore({
 
             <div className="relative mt-3 flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1 pb-2">
-                <h1 className="text-[2.75rem] font-extrabold leading-[0.95] tracking-[-0.045em] sm:text-6xl">
+                {/*
+                  🔴 Small-screen collision (owner, 2026-08-09, with a
+                  screenshot: the card deck painted straight over the word
+                  "Wallpapers").
+
+                  Not a z-index problem — an arithmetic one. The headline was a
+                  flat 2.75rem (44px) and the deck a flat 150px wide. On a 430px
+                  phone that leaves the text column 236px while "Wallpapers" at
+                  44px extra-bold needs about 240, and a single unbreakable word
+                  cannot wrap — so it overflowed its column and ran under the
+                  deck, which paints later and therefore on top.
+
+                  Both sides are now proportional instead of fixed, so the two
+                  columns can never trade places at some untested width:
+                  the type scales with the viewport up to its designed 44px, and
+                  the deck takes a share of the row rather than a pixel count.
+                */}
+                <h1 className="text-[clamp(1.75rem,8.6vw,2.75rem)] font-extrabold leading-[0.95] tracking-[-0.045em] sm:text-6xl">
                   Wallpapers
                 </h1>
                 <p className="mt-3 text-[15px] leading-snug text-muted-foreground sm:text-base">
@@ -267,7 +300,10 @@ export function WallpaperExplore({
                   type="button"
                   onClick={() => open(deck[0]!)}
                   aria-label="Browse wallpapers full screen"
-                  className="relative h-[168px] w-[150px] shrink-0 sm:h-[210px] sm:w-[190px]"
+                  /* A SHARE of the row (38%), capped at the design's 190px, and
+                     holding its shape with an aspect ratio rather than a fixed
+                     height — see the headline note above. */
+                  className="relative aspect-[150/168] w-[38%] max-w-[190px] shrink-0"
                 >
                   {deck.map((w, i) => (
                     <span
@@ -516,6 +552,8 @@ export function WallpaperExplore({
             </>
           )}
         </div>
+
+        {children}
       </main>
 
       {viewer !== null ? (
@@ -671,11 +709,21 @@ function ExploreTile({
       // Capped so a long library never staggers into a visible wait.
       style={{ animationDelay: `${Math.min(index, 11) * 35}ms` }}
     >
+      {/*
+        Real alt text, added 2026-08-09.
+
+        These shipped as `alt="" aria-hidden` — correct markup for decoration and
+        wrong for the content of an image gallery. It meant the one page on this
+        site whose whole purpose is publishing pictures published none of them:
+        Google Images had nothing to index, and a screen-reader user got a grid
+        of unnamed buttons. The name and category are the only things we
+        truthfully know about the picture, so that is exactly what it says — see
+        `wallpaperAlt` for why it is not stuffed with keywords.
+      */}
       {/* eslint-disable-next-line @next/next/no-img-element -- public storage CDN; next/image 403s on these */}
       <img
         src={wp.thumbUrl}
-        alt=""
-        aria-hidden
+        alt={wallpaperAlt(wp)}
         loading={index < 6 ? "eager" : "lazy"}
         className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
       />

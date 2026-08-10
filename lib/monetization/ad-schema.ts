@@ -256,10 +256,18 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
     supportsSkip: false,
     prefetch: true,
   },
+  /*
+    Both descriptions used to say "the library and Downloads pages" and left out
+    /history — which was accurate, and was the bug: the History nav destination
+    rendered neither zone, so an operator who filled the two placements named
+    after the download history saw nothing on the page that carries it. The page
+    now renders them, and the description names every surface it appears on,
+    because this text is what the operator reads when deciding where an ad goes.
+  */
   download_history_top: {
     label: "Download history — above the list",
     description:
-      "Directly above the download history on the library and Downloads pages. Collapses when empty.",
+      "Directly above the download history on the History, library and Downloads pages. Collapses when empty.",
     persistent: true,
     supportsSkip: false,
     prefetch: false,
@@ -267,7 +275,7 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
   download_history_bottom: {
     label: "Download history — below the list",
     description:
-      "Under the download history on the library and Downloads pages, where a user browsing what they've saved dwells. Collapses when empty.",
+      "Under the download history on the History, library and Downloads pages, where a user browsing what they've saved dwells. Collapses when empty.",
     persistent: true,
     supportsSkip: false,
     prefetch: false,

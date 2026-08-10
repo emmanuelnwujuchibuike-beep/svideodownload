@@ -367,6 +367,43 @@ describe("Ad slots — no decorated empty boxes", () => {
     expect(home, "landing page mounts a second idle interstitial").not.toMatch(/<IdleInterstitial\b/);
   });
 
+  it("puts the download-history slot on every surface that shows the history", () => {
+    /*
+     * The regression (owner, 2026-08-09: "I no longer see ad even after I turn
+     * on the ad").
+     *
+     * `download_history_top` and `download_history_bottom` were seeded and were
+     * rendered by /library and /downloads — but NOT by /history, the History nav
+     * destination, which is the page an operator would assume those two zones
+     * are named after. The only furniture it carried came from the marketing
+     * layout, whose zones were both empty. Verified against the live /api/ads
+     * before fixing: the two seeded zones had no slot, and the two slots had no
+     * ad.
+     *
+     * Nothing structural stopped this — the panel is a shared component and the
+     * placement is per page, so a fourth surface rendering the history would
+     * silently repeat it. The rule is therefore: show the history, show the
+     * history ad.
+     */
+    const panel = "<" + "HistoryPanel";
+    const ad = "<" + "DownloadHistoryAd";
+    const surfaces = FILES.filter((file) =>
+      stripComments(readFileSync(path.join(ROOT, file), "utf8")).includes(panel),
+    );
+
+    // Guards a vacuous pass: if the panel is renamed, this must not silently
+    // stop checking anything.
+    expect(surfaces.length, "found no surface rendering the download history").toBeGreaterThanOrEqual(3);
+
+    const missing = surfaces.filter(
+      (file) => !stripComments(readFileSync(path.join(ROOT, file), "utf8")).includes(ad),
+    );
+    expect(
+      missing,
+      `Surfaces that show the download history but not its ad zones:\n  ${missing.join("\n  ")}`,
+    ).toHaveLength(0);
+  });
+
   it("puts the under-download slot in the shared Downloader, not per page", () => {
     // One edit covering the home page and all ~148 generated downloader pages,
     // and inherited automatically by any SEO page added later.

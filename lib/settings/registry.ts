@@ -166,7 +166,15 @@ export const SETTINGS: readonly SettingEntry[] = [
   { id: "accessibility.haptics", category: "accessibility", label: "Haptics & sounds", description: "Vibration and sound feedback for taps.", keywords: ["haptics", "vibration", "sound", "feedback", "silent"], href: "/account/appearance", status: "live" },
 
   /* ─────────────────────────── connected devices ────────────────────────── */
-  { id: "devices.sessions", category: "devices", label: "Connected devices", description: "Devices signed in to your account.", keywords: ["devices", "sessions", "phones", "computers", "sign out device", "remote logout"], href: "/account/security", status: "live" },
+  /*
+    Repointed at the hub built in Part 23. It aimed at /account/security, which
+    was correct — that page has always carried the session list — but the list
+    could only END a device, never explain it. The hub is where a device's trust
+    level, what that level permits, and what we can and cannot see about it all
+    live. The security page keeps its compact list; this is the room.
+  */
+  { id: "devices.sessions", category: "devices", label: "Connected devices", description: "Devices signed in to your account, and how far each is trusted.", keywords: ["devices", "sessions", "phones", "computers", "sign out device", "remote logout", "trusted device"], href: "/account/devices", status: "live" },
+  { id: "devices.trust", category: "devices", label: "Device trust", description: "Mark a device as trusted so it stops asking for extra checks.", keywords: ["trust", "trusted device", "remember this device", "skip verification"], href: "/account/devices", status: "live" },
 
   /* ──────────────────────────────── business ────────────────────────────── */
   { id: "business.profile", category: "business", label: "Business settings", description: "Your business profile, hours and catalogue.", keywords: ["business", "shop", "store", "hours", "catalogue"], href: "/account/business", status: "live" },

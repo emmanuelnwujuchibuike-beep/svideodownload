@@ -20,6 +20,14 @@ export interface TrustedDeviceRow {
   label: string;
   is_trusted: boolean;
   last_seen_at: string;
+  /*
+    Both columns have existed since migration 0054; they were simply never
+    typed here because nothing read them. The Trust Engine (Part 23) does —
+    `first_seen_at` is what distinguishes a genuinely new device from an old
+    one that merely signed in again.
+  */
+  first_seen_at: string;
+  last_user_agent: string | null;
 }
 
 /** Reads the device-key cookie, minting + setting a new one if absent. Only
@@ -92,6 +100,25 @@ export interface MergedSession {
   isCurrent: boolean;
   isTrusted: boolean;
   deviceRowId: string | null;
+  /**
+   * The DEVICE's own first/last sighting, not the session's (Part 23).
+   *
+   * These are what the Trust Engine reasons from, and the distinction matters:
+   * a session is created on every sign-in, so session age would call a laptop
+   * of three years "new" every time someone signed out and back in — the exact
+   * false alarm that teaches people to ignore a security screen. The device row
+   * is keyed on a long-lived cookie and survives that, so it answers the
+   * question actually being asked.
+   *
+   * Null for rows that predate migration 0054; `evaluateTrust` treats missing
+   * timestamps as no evidence rather than as suspicion.
+   */
+  deviceFirstSeenAt: string | null;
+  deviceLastSeenAt: string | null;
+  /** The agent recorded on the device row, for the "browser changed" note. */
+  deviceUserAgent: string | null;
+  /** The agent on THIS session, compared against the one above. */
+  sessionUserAgent: string | null;
 }
 
 /**
@@ -111,9 +138,13 @@ export async function mergeSessionsWithDevices(
   const db = createAdminClient();
   const { data } = await db
     .from("trusted_devices")
-    .select("id, current_session_id, label, is_trusted")
+    .select("id, current_session_id, label, is_trusted, first_seen_at, last_seen_at, last_user_agent")
     .eq("user_id", userId);
-  const devices = (data ?? []) as Pick<TrustedDeviceRow, "id" | "current_session_id" | "label" | "is_trusted">[];
+  type DeviceCols = Pick<
+    TrustedDeviceRow,
+    "id" | "current_session_id" | "label" | "is_trusted" | "first_seen_at" | "last_seen_at" | "last_user_agent"
+  >;
+  const devices = (data ?? []) as DeviceCols[];
   const byCession = new Map(devices.filter((d) => d.current_session_id).map((d) => [d.current_session_id, d]));
 
   return rows.map((row) => {
@@ -127,6 +158,10 @@ export async function mergeSessionsWithDevices(
       isCurrent: row.id === currentSessionId,
       isTrusted: matched?.is_trusted ?? false,
       deviceRowId: matched?.id ?? null,
+      deviceFirstSeenAt: matched?.first_seen_at ?? null,
+      deviceLastSeenAt: matched?.last_seen_at ?? null,
+      deviceUserAgent: matched?.last_user_agent ?? null,
+      sessionUserAgent: row.user_agent ?? null,
     };
   });
 }

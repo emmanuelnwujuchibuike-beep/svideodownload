@@ -201,9 +201,34 @@ export function ReelProgress({
   const displayPct = scrubbing ? scrubPct * 100 : undefined;
 
   return (
+    /*
+      🔴 BOTTOM, not top (owner, 2026-08-10: "when you enter the reels part, move
+      the progress bar to the bottom").
+
+      It sat under the safe-area at the TOP, which is where this player has always
+      put it — and the owner is right that the bottom is the better home. Three
+      reasons it holds up beyond preference:
+
+      • REACH. Seeking is a drag gesture, and the bottom of the screen is inside
+        the thumb arc while the top is the least reachable strip on a tall phone.
+        This is the same argument as the Adaptive Action Rail™, applied to the one
+        control that is explicitly draggable.
+
+      • CONVENTION. Every video player a person has ever used puts the timeline at
+        the bottom edge. The top strip is where a status bar and a tab bar live,
+        and this one was competing with both.
+
+      • IT STOPS FIGHTING THE TABS. At the top it shared `--frenz-safe-top` with
+        the For You/Following nav and the album dots, so three things stacked into
+        the one region the notch already eats.
+
+      `bottom` is offset by the caller through `className` (the page variant has a
+      bottom nav to clear, the modal does not) with `env(safe-area-inset-bottom)`
+      as the floor, so it never lands under the home indicator.
+    */
     <div
       className={cn(
-        "absolute inset-x-0 top-[var(--frenz-safe-top)] px-3 transition-opacity duration-200",
+        "absolute inset-x-0 bottom-[max(0.5rem,env(safe-area-inset-bottom))] px-3 transition-opacity duration-200",
         layer.progress,
         visible || scrubbing ? "opacity-100" : "pointer-events-none opacity-0",
         className,

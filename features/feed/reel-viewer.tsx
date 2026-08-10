@@ -1198,6 +1198,9 @@ function ReelCard({
         video={native ? videoEl : null}
         visible={ui}
         seekable={native}
+        /* Clear the app's bottom nav on the /reels PAGE; the modal has no nav
+           under it, so it keeps the component's own safe-area floor. */
+        className={variant === "page" ? "!bottom-[calc(4.25rem+env(safe-area-inset-bottom))] lg:!bottom-4" : undefined}
         /* Hold the chrome up for the whole drag, then restart the idle timer —
            otherwise the bar you are dragging fades out from under your finger. */
         onSeekStart={() => {

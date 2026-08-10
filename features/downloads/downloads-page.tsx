@@ -1,11 +1,12 @@
 "use client";
 
 import { Pause, Play, RotateCw, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 
 import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { DownloadBox } from "@/features/downloads/download-box";
-import { DownloadsRail } from "@/features/downloads/downloads-rail";
+
 import {
   CloudStorageCard,
   DownloadQuickActions,
@@ -16,9 +17,53 @@ import {
 } from "@/features/downloads/downloads-sections";
 import { HubWarmup } from "@/features/downloads/hub-warmup";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
-import { HistoryPanel } from "@/features/history/history-panel";
 import { useHistory } from "@/features/history/use-history";
 import { MediaGallery } from "@/features/history/media-gallery";
+
+/*
+  ── /downloads held to the landing's discipline (owner, 2026-08-10) ──────────
+  "Make the download page use the same budget and performance and LCP as the
+  landing page, in case of users who have an account."
+
+  This page had ZERO dynamic imports — every panel on it, including several
+  screens below the fold, was in the first load. The three split here are the
+  ones a signed-in visitor cannot see until they scroll, and none of them is on
+  the path to the thing the page exists for (the paste box at the top):
+
+   • HistoryPanel      — behind a `showHistory` toggle, so it frequently never
+                         renders at all.
+   • WallpaperGallery  — a full media grid, several screens down.
+   • DownloadsRail     — the sidebar; at `xl` it is beside the content, below it
+                         everywhere else, and never above the fold on a phone.
+
+  `ssr: false` on all three: this route is behind a sign-in redirect and is
+  already `ƒ` (server-rendered on demand), so there is no prerendered HTML to
+  preserve, and each of these reads client state (history store, viewer,
+  entitlements) on mount anyway.
+
+  🔴 What is deliberately NOT split: `MotionConfig` in the (app) layout, which
+  is where the 39 kB of framer-motion on this route comes from. Deferring it
+  would change the element type wrapping the whole app subtree once the chunk
+  landed, which REMOUNTS every page below it — and removing it outright would
+  drop the app-wide reduced-motion baseline that makes every framer transition
+  collapse under `prefers-reduced-motion` with no per-component opt-in. That is
+  an accessibility regression, and this project just took accessibility from 87
+  to 100. Bytes do not get bought with that. See the ceiling note in
+  lib/perf/budget.test.ts for what byte-parity with the landing would actually
+  cost.
+*/
+const HistoryPanel = dynamic(
+  () => import("@/features/history/history-panel").then((m) => m.HistoryPanel),
+  { ssr: false },
+);
+const WallpaperGallery = dynamic(
+  () => import("@/features/wallpapers/wallpaper-gallery").then((m) => m.WallpaperGallery),
+  { ssr: false },
+);
+const DownloadsRail = dynamic(
+  () => import("@/features/downloads/downloads-rail").then((m) => m.DownloadsRail),
+  { ssr: false },
+);
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { DownloadHistoryAd } from "@/features/monetization/download-history-ad";
 import { DownloadInterstitial } from "@/features/monetization/download-interstitial";
@@ -26,7 +71,7 @@ import { ExitIntent } from "@/features/monetization/exit-intent";
 import { TiredOfAds } from "@/features/monetization/tired-of-ads";
 import { UsageDashboard } from "@/features/downloads/usage-dashboard";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
-import { WallpaperGallery } from "@/features/wallpapers/wallpaper-gallery";
+
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { Wallpaper } from "@/lib/wallpapers";
 import type { DownloadRecord, PlatformId } from "@/types";

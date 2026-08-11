@@ -158,9 +158,20 @@ as their full value, not the abbreviated "1.2K".
 - **Tranche 1 (shipped).** `pulse-activity.ts` — the batched who-of-my-friends
   -engaged query; `FeedItem.friendActivity`; Social Pulse™ fed with real events;
   Friend Energy™ line in the reel caption. 21 tests.
-- **Tranche 2.** Smart comment preview on the rail (friend > verified > creator
-  reply > newest), story ring on the rail avatar, share-ripple and follow-success
-  micro-interactions.
+- **Tranche 2 (mostly shipped).** Smart comment preview and the story ring.
+  - The preview lives in the CAPTION, not the rail — the rail was deliberately
+    shrunk and a line of text there would undo that.
+  - 🔴 Its badge states WHY the comment was chosen, and `reason` is produced by
+    the same branch that made the pick (`reel-extras.ts`), never decided in the
+    component. "Top" requires **at least two likes**: badging a single like as
+    top is the small inflation that makes every other badge less believable.
+  - The newest comment is the FLOOR of the ordering, not its default — on
+    anything popular it is the least considered thing anyone said.
+  - The story ring replaces the avatar's plain white ring rather than adding a
+    badge, so it costs no space. Liveness (`expires_at > now`) is evaluated in
+    the DATABASE — a story expiring between query and render would otherwise
+    draw a ring that opens nothing.
+  - **Still open:** share-ripple and follow-success micro-interactions.
 - **Tranche 3.** Realtime engagement sync, creator engagement insights, and
   intelligent notification batching.
 - **Tranche 4.** Voice/GIF comments and comment translation.

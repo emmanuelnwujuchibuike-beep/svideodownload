@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -69,6 +69,7 @@ export function ReelProgress({
   className,
   onSeekStart,
   onSeekEnd,
+  previewAt,
 }: {
   video: HTMLVideoElement | null;
   visible: boolean;
@@ -76,6 +77,16 @@ export function ReelProgress({
   className?: string;
   onSeekStart?: () => void;
   onSeekEnd?: () => void;
+  /**
+   * FRAME PREVIEW (Feature 15 Part 2, tranche 2) — a URL for the frame at a
+   * given second, or null when this clip has no thumbnail source.
+   *
+   * A function rather than a base URL so the caller owns the provider. Today
+   * that is Cloudflare Stream's per-time thumbnail; a clip with no `streamUid`
+   * simply has no preview and the scrub readout stays as it was, rather than
+   * showing a broken image.
+   */
+  previewAt?: (seconds: number) => string | null;
 }) {
   const fillRef = useRef<HTMLDivElement | null>(null);
   const bufferRef = useRef<HTMLDivElement | null>(null);
@@ -200,6 +211,20 @@ export function ReelProgress({
 
   const displayPct = scrubbing ? scrubPct * 100 : undefined;
 
+  /*
+    The preview frame, recomputed only when the WHOLE SECOND changes.
+
+    `Math.round` on the scrub time is the throttle: a pointermove fires per
+    frame, and a URL derived from the raw position would mean a new request and
+    a new decode ~60 times a second. Held in a memo so React does not even
+    rebuild the string on the moves in between.
+  */
+  const previewSecond = scrubbing && duration > 0 ? Math.round(scrubPct * duration) : null;
+  const previewFrame = useMemo(
+    () => (previewSecond === null || !previewAt ? null : previewAt(previewSecond)),
+    [previewSecond, previewAt],
+  );
+
   return (
     /*
       🔴 BOTTOM, not top (owner, 2026-08-10: "when you enter the reels part, move
@@ -302,10 +327,36 @@ export function ReelProgress({
             during normal playback. */}
         {scrubbing ? (
           <span
-            className="pointer-events-none absolute -top-9 -translate-x-1/2 rounded-lg bg-black/85 px-2 py-1 text-[11px] font-bold tabular-nums text-white shadow-lg ring-1 ring-inset ring-white/15"
-            style={{ left: `${scrubPct * 100}%` }}
+            className="pointer-events-none absolute -translate-x-1/2 rounded-lg bg-black/85 px-2 py-1 text-[11px] font-bold tabular-nums text-white shadow-lg ring-1 ring-inset ring-white/15"
+            style={{ left: `${scrubPct * 100}%`, bottom: previewFrame ? "4.9rem" : "1.75rem" }}
           >
             {fmt(scrubPct * duration)}
+          </span>
+        ) : null}
+
+        {/*
+          ── FRAME PREVIEW ────────────────────────────────────────────────────
+          "Frame preview" from the brief. Seeking blind on a short clip means
+          overshooting and correcting; a frame turns it into one movement.
+
+          🔴 The src is derived from the scrub time rounded to a WHOLE SECOND
+          (`previewSecond`), not from the raw position. A pointermove fires per
+          frame, so a per-move URL would issue ~60 image requests a second at the
+          CDN and give the browser a new decode each time — the preview would
+          lag exactly when it needs to feel instant. Rounding means the src
+          changes at most once per second and every repeat is a cache hit.
+
+          `translate-x-1/2` alone would push it off screen near either end, so
+          the position is clamped to keep the whole tile visible; the readout
+          above stays tied to the true position so the TIME never lies.
+        */}
+        {scrubbing && previewFrame ? (
+          <span
+            className="pointer-events-none absolute bottom-7 -translate-x-1/2 overflow-hidden rounded-xl bg-black/60 shadow-xl ring-1 ring-inset ring-white/20"
+            style={{ left: `${Math.min(88, Math.max(12, scrubPct * 100))}%`, width: 104, height: 58 }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={previewFrame} alt="" aria-hidden decoding="async" className="h-full w-full object-cover" />
           </span>
         ) : null}
       </div>

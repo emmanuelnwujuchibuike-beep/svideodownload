@@ -10,6 +10,7 @@ import { getTrendingSettings } from "./feed";
 import { getHomePreferences, type HomePreferences } from "./home-preferences";
 import { canSeePost, type MediaKind, type Visibility } from "./posts";
 import { pulseActivityForPosts, type PulseActivity } from "./pulse-activity";
+import { commentPreviewsForPosts, creatorsWithActiveStories, type CommentPreview } from "./reel-extras";
 import { followedReposters, repostCounts, viewerReposts } from "./reposts";
 
 /**
@@ -84,6 +85,15 @@ export interface FeedItem {
    * fabricated social proof this project has declined three times.
    */
   friendActivity?: PulseActivity;
+  /**
+   * The one comment worth showing beside the Comment button, and WHY it was
+   * chosen (Feature 15 Part 3, tranche 2). Absent when the post has no usable
+   * comment. See lib/social/reel-extras.ts — the newest comment is the FLOOR
+   * of that ordering, not its default.
+   */
+  commentPreview?: CommentPreview;
+  /** The creator has a story that is still live — draws the rail avatar's ring. */
+  publisherHasStory?: boolean;
   /** Natural pixel size of an image post — lets the feed render it with next/image. */
   mediaWidth?: number | null;
   mediaHeight?: number | null;
@@ -703,7 +713,7 @@ async function loadHomeFeed(
       // Repost state + counts + the followed-user badge (best-effort — before
       // migration 0025 these are 0/false/empty).
       const ids = items.map((i) => i.id);
-      const [reposted, counts, badges, friends] = await Promise.all([
+      const [reposted, counts, badges, friends, previews, storyAuthors] = await Promise.all([
         viewerReposts(ids, viewerId),
         repostCounts(ids),
         followedReposters(ids, followingIds),
@@ -716,12 +726,22 @@ async function loadHomeFeed(
           no viewer at all. See lib/social/friend-activity.ts.
         */
         pulseActivityForPosts(ids, followingIds, viewerId),
+        // Feature 15 Part 3 tranche 2 — the rail comment preview and story ring.
+        // Same batched, already-narrowed shape as everything else in this
+        // Promise.all, so they cost the page no extra wall-clock time.
+        commentPreviewsForPosts(
+          items.map((i) => ({ id: i.id, publisherId: i.publisher.id })),
+          followingIds,
+        ),
+        creatorsWithActiveStories(items.map((i) => i.publisher.id)),
       ]);
       for (const it of items) {
         it.viewerReposted = reposted.has(it.id);
         it.repostsCount = counts.get(it.id) ?? 0;
         it.repostBadge = badges.get(it.id);
         it.friendActivity = friends.get(it.id);
+        it.commentPreview = previews.get(it.id);
+        it.publisherHasStory = storyAuthors.has(it.publisher.id);
       }
 
       // Image dimensions for the feed photo's next/image (best-effort — before

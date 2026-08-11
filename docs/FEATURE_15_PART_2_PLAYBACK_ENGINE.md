@@ -218,6 +218,7 @@ Stated plainly rather than silently skipped or faked:
 | Live low-latency streaming, viewer sync | No live ingest or delivery infrastructure exists. Out of scope until it does. |
 | Encrypted offline storage, DRM | Requires EME/Widevine/FairPlay licensing. Offline caching in tranche 4 is unencrypted Cache Storage, which is appropriate for public reels and is not DRM. |
 | "1 billion users" | Not a testable claim. The architecture is per-view stateless (§7); that is the honest version of it. |
+| **Volume gestures** | **Not built, and should not be.** On iOS the audio level is under the user's physical control and `HTMLMediaElement.volume` is not settable from JavaScript — assigning to it is silently ignored. A vertical volume drag would therefore do nothing at all on the iPhone, which is this app's primary device, while adding a fifth gesture to a surface that already carries snap-scroll, album drag, double-tap seek, long-press and now pinch. Mute/unmute (which DOES work everywhere, via the `muted` attribute) is already on the rail and in the options sheet. |
 
 ---
 

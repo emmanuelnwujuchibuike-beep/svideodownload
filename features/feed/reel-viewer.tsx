@@ -63,9 +63,11 @@ import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design"
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
 import { shouldFullBleed, viewportAspect } from "@/features/reels/viewer/fit";
+import { LivingPlayback } from "@/features/reels/viewer/living-playback";
 import { applyRate, DEFAULT_RATE, formatRate, getPlaybackRate, nextRate, setPlaybackRate } from "@/lib/media/engine/playback-rate";
 import { currentPolicySync, recordClipCompleted } from "@/lib/media/engine/signals";
 import { usePictureInPicture } from "@/features/reels/viewer/use-pip";
+import { usePinchZoom } from "@/features/reels/viewer/use-pinch-zoom";
 import type { PulseEvent } from "@/features/reels/viewer/social-pulse";
 import { useAdaptiveRail, type RailLayout } from "@/features/reels/viewer/use-adaptive-rail";
 import { useLivingInterface } from "@/features/reels/viewer/use-living-interface";
@@ -95,7 +97,7 @@ import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { downloadPost } from "@/lib/media/download-post";
 import { getQualityPreference, setQualityPreference, type QualityPreference } from "@/lib/media/network-conditions";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
-import { streamHlsUrl } from "@/lib/media/stream";
+import { streamHlsUrl, streamThumbnailUrl } from "@/lib/media/stream";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
@@ -103,6 +105,7 @@ import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social
 import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
+import type { CommentPreview } from "@/lib/social/reel-extras";
 import { cn, formatCompactNumber, formatPostedOn } from "@/lib/utils";
 
 interface CommentsData {
@@ -213,6 +216,21 @@ const QUALITY_LABELS: Record<QualityPreference, string> = {
   high: "Highest quality",
 };
 const QUALITY_CYCLE: QualityPreference[] = ["auto", "data-saver", "balanced", "high"];
+
+/**
+ * The badge on the smart comment preview.
+ *
+ * One label per `reason`, and the mapping is exhaustive by type — so a new
+ * selection rule in `reel-extras.ts` cannot ship without a word for it here,
+ * which is how a badge ends up claiming the wrong thing.
+ */
+const COMMENT_REASON_LABEL: Record<CommentPreview["reason"], string> = {
+  friend: "Friend",
+  creator: "Creator",
+  verified: "Verified",
+  top: "Top",
+  newest: "New",
+};
 
 /**
  * Fullscreen reel deck. Reels stack in a native, snap-scrolling column — so
@@ -625,6 +643,31 @@ function ReelCard({
     setRate(getPlaybackRate());
   }, []);
   const pip = usePictureInPicture(videoEl);
+  const previewAt = useMemo(() => {
+    const uid = item.streamUid;
+    if (!uid) return undefined;
+    return (seconds: number) => streamThumbnailUrl(uid, { time: `${Math.max(0, seconds)}s` });
+  }, [item.streamUid]);
+  /*
+    Pinch-to-zoom targets the <video> ELEMENT, not the media stage. The stage
+    also holds the pause/buffering indicator and the seek flashes — zooming it
+    would scale those with the picture, so a pinched clip would show a giant
+    pause glyph. Only the picture moves.
+
+    `onSecondPointer` is what makes this safe alongside the existing gestures: it
+    fires the instant a second finger lands, BEFORE any move event, so a hold
+    timer or an album drag started by the first finger is cancelled rather than
+    racing the zoom.
+  */
+  const pinch = usePinchZoom(video, () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
+    holding.current = false;
+    if (dragActive.current) {
+      dragActive.current = false;
+      void animate(dragX, 0, springs.bounce);
+    }
+  });
   const [seekFlash, setSeekFlash] = useState<{ side: "back" | "fwd"; key: number } | null>(null);
   const [ui, setUi] = useState(true);
   const [scrubbing, setScrubbing] = useState(false);
@@ -703,6 +746,9 @@ function ReelCard({
   // the video element itself stays mounted throughout (adaptive-source/HLS
   // attachment is imperative and must never remount mid-swap).
   const [slideFade, setSlideFade] = useState(false);
+  /* Bumped on each pause so Living Playback replays its ripple — a second tap
+     must feel acknowledged, and re-running an animation needs a new key. */
+  const [pauseRipple, setPauseRipple] = useState(0);
   const [qualityPref, setQualityPref] = useState<QualityPreference>("auto");
   const fetched = useRef(false);
 
@@ -836,7 +882,10 @@ function ReelCard({
     } else {
       v.pause();
       pauseSignTimer.current = setTimeout(() => {
-        if (video.current?.paused) setPaused(true);
+        if (video.current?.paused) {
+          setPaused(true);
+          setPauseRipple((n) => n + 1);
+        }
       }, 1000);
     }
   }, [scheduleHide]);
@@ -1467,6 +1516,19 @@ function ReelCard({
         video={native ? videoEl : null}
         visible={ui}
         seekable={native}
+        /*
+          FRAME PREVIEW while scrubbing (Feature 15 Part 2, tranche 2).
+
+          Only for Stream-backed clips: Cloudflare generates a thumbnail at any
+          timestamp on demand, so there is nothing to precompute or store. A clip
+          with no `streamUid` (a plain MP4) returns null and simply has no
+          preview — better than a broken image or a frame from the wrong video.
+
+          Memoised on the uid so the callback identity is stable; the component
+          keys its cache on the rounded second and would otherwise re-derive the
+          URL on every render of this card.
+        */
+        previewAt={previewAt}
         /* Clear the app's bottom nav on the /reels PAGE; the modal has no nav
            under it, so it keeps the component's own safe-area floor.
 
@@ -1571,10 +1633,36 @@ function ReelCard({
           "absolute inset-0 flex items-center justify-center transition-opacity duration-200 ease-out",
           slideFade ? "opacity-0" : "opacity-100",
         )}
+        /*
+          ── Pinch-to-zoom composes IN FRONT of the four existing gestures ─────
+          (Feature 15 Part 2, tranche 2)
+
+          Order is the whole design. `pinch.onPointerDown` runs FIRST and returns
+          true once a second finger is down, at which point the card's own
+          handler is skipped — so a pinch never also starts a hold timer, an
+          album drag or a double-tap. `pinch.isPinching()` is a ref read, not the
+          `active` state, because state does not update inside the handler that
+          set it and the second finger's pointerdown would otherwise slip
+          through. See use-pinch-zoom.ts.
+
+          One finger is untouched: the hook returns false, nothing is suppressed,
+          and scroll/drag/tap/hold behave exactly as they did.
+        */
         style={{ touchAction: "pan-y", x: dragX }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
+        onPointerDown={(e) => {
+          if (pinch.onPointerDown(e)) return;
+          onPointerDown(e);
+        }}
+        onPointerMove={(e) => {
+          pinch.onPointerMove(e);
+          if (pinch.isPinching()) return;
+          onPointerMove(e);
+        }}
+        onPointerUp={(e) => {
+          pinch.onPointerUp(e);
+          if (pinch.isPinching()) return;
+          onPointerUp(e);
+        }}
         onPointerCancel={() => {
           if (holdTimer.current) clearTimeout(holdTimer.current);
           if (holding.current) {
@@ -1690,17 +1778,26 @@ function ReelCard({
           <SmartVideo streamUid={item.streamUid} src={item.mediaUrl} poster={item.thumbnailUrl} controls autoPlay={isActive} loop className="relative z-10 max-h-full" />
         )}
 
-        {/* Buffering — only when the network can't keep up */}
-        {native && nearby && buffering && !paused ? (
-          <span className="pointer-events-none absolute z-20 flex h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </span>
-        ) : null}
+        {/*
+          ── LIVING PLAYBACK™ (Feature 15 Part 2, tranche 3) ──────────────────
+          One indicator, chosen by state, replacing two overlapping ones.
 
-        {paused ? (
-          <span className="pointer-events-none absolute z-20 flex h-16 w-16 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur">
-            <Pause className="h-7 w-7 fill-white" />
-          </span>
+          🔴 The pause glyph and the buffering spinner used to be independent
+          conditionals drawn at the same point on screen. `buffering && !paused`
+          was the only thing keeping them apart, and it did not hold: a clip that
+          stalls WHILE paused sets both, so the spinner rendered on top of the
+          pause glyph. They are one state machine and are modelled as one now.
+
+          `phase` also fixes a subtler ordering bug — `buffering` outranks
+          `paused` here. A stall that begins while paused is still a stall, and
+          showing the pause glyph for it would tell the viewer the app is idle
+          when it is actually working.
+        */}
+        {native && nearby ? (
+          <LivingPlayback
+            phase={buffering ? "buffering" : paused ? "paused" : "playing"}
+            pauseKey={pauseRipple}
+          />
         ) : null}
 
         {/* Double-tap seek flashes */}
@@ -1788,15 +1885,40 @@ function ReelCard({
         )}
       >
         {/* 40px, down from 44px — it heads a rail of 42px discs, so it tracks
-            them (owner: "reduce the size of the engagement tray"). */}
+            them (owner: "reduce the size of the engagement tray").
+
+            🔴 THE STORY RING (Feature 15 Part 3, tranche 2) replaces the plain
+            white ring when this creator has a story that is still live. It is a
+            RING, not a badge: it costs no extra space on a rail that was
+            deliberately shrunk, and it is the convention people already read.
+
+            The liveness test runs in the DATABASE (`expires_at > now`), not in
+            JS — a story that expires between the query and the render would
+            otherwise draw a ring that opens nothing, which is the phantom-ring
+            bug the story cache already documents. */}
         <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="relative mb-1">
-          {item.publisher.avatarUrl ? (
-            <Image src={item.publisher.avatarUrl} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover ring-2 ring-white" />
-          ) : (
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white ring-2 ring-white">
-              {item.publisher.displayName.charAt(0).toUpperCase()}
-            </span>
-          )}
+          <span
+            className={cn(
+              "block rounded-full",
+              item.publisherHasStory
+                ? "bg-gradient-to-tr from-blue-500 via-violet-500 to-fuchsia-500 p-[2px]"
+                : "p-0",
+            )}
+          >
+            {item.publisher.avatarUrl ? (
+              <Image
+                src={item.publisher.avatarUrl}
+                alt=""
+                width={40}
+                height={40}
+                className={cn("h-10 w-10 rounded-full object-cover", item.publisherHasStory ? "ring-2 ring-black/70" : "ring-2 ring-white")}
+              />
+            ) : (
+              <span className={cn("flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white", item.publisherHasStory ? "ring-2 ring-black/70" : "ring-2 ring-white")}>
+                {item.publisher.displayName.charAt(0).toUpperCase()}
+              </span>
+            )}
+          </span>
           {!item.isOwner && !following ? (
             <button
               type="button"
@@ -2060,6 +2182,42 @@ function ReelCard({
           It is plain text in document order, so a screen reader gets it with the
           caption rather than as an interruption.
         */}
+        {/*
+          ── SMART COMMENT PREVIEW (Feature 15 Part 3, tranche 2) ──────────────
+          "Instead of always showing the latest comment, the system intelligently
+          displays: friend comment, verified comment, trending comment, creator
+          reply…"
+
+          It sits in the CAPTION, not on the rail. The rail was deliberately
+          shrunk two commits ago and a line of text there would undo that; the
+          caption is also where a reader is already looking for words.
+
+          🔴 The badge states WHY this comment was chosen, and it can only say
+          things that are true — `reason` is produced by the same branch that
+          made the pick (lib/social/reel-extras.ts), never decided here. "Top
+          comment" in particular requires at least two likes, because badging a
+          single like as "top" is the kind of small inflation that makes every
+          other badge less believable.
+
+          One line, clamped, and it opens the comments sheet — the preview is an
+          invitation to the conversation, not a replacement for it.
+        */}
+        {item.commentPreview ? (
+          <button
+            type="button"
+            onClick={openComments}
+            className="mt-2 flex w-full max-w-md items-center gap-2 rounded-xl px-2 py-1.5 text-left transition active:scale-[0.99] hover:bg-white/10"
+          >
+            <span className="shrink-0 rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white/90">
+              {COMMENT_REASON_LABEL[item.commentPreview.reason]}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[11px] text-white/85">
+              <span className="font-semibold text-white">@{item.commentPreview.authorHandle}</span>{" "}
+              {item.commentPreview.body}
+            </span>
+          </button>
+        ) : null}
+
         {item.friendActivity && item.friendActivity.total > item.friendActivity.actors.length ? (
           <p className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-white/70">
             <Users className="h-3 w-3 shrink-0" aria-hidden />

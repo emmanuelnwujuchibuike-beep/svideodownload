@@ -20,6 +20,8 @@ import {
   EyeOff,
   Maximize2,
   Minimize2,
+  PictureInPicture2,
+  Timer,
   Flag,
   FolderPlus,
   Gauge,
@@ -61,7 +63,9 @@ import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design"
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
 import { shouldFullBleed, viewportAspect } from "@/features/reels/viewer/fit";
+import { applyRate, DEFAULT_RATE, formatRate, getPlaybackRate, nextRate, setPlaybackRate } from "@/lib/media/engine/playback-rate";
 import { currentPolicySync, recordClipCompleted } from "@/lib/media/engine/signals";
+import { usePictureInPicture } from "@/features/reels/viewer/use-pip";
 import type { PulseEvent } from "@/features/reels/viewer/social-pulse";
 import { useAdaptiveRail, type RailLayout } from "@/features/reels/viewer/use-adaptive-rail";
 import { useLivingInterface } from "@/features/reels/viewer/use-living-interface";
@@ -606,6 +610,21 @@ function ReelCard({
   const [posterBleed, setPosterBleed] = useState(false);
   // Latch so a LOOPING reel reports its completion once, not every pass.
   const completionCounted = useRef(false);
+  /*
+    ── Playback speed (Feature 15 Part 2, tranche 2) ─────────────────────────
+    The REMEMBERED preference. The hold-to-skim rate is deliberately not stored —
+    see lib/media/engine/playback-rate.ts for why persisting a momentary hold is
+    the "why is everything fast now" bug.
+
+    Seeded in an effect rather than at useState, because `getPlaybackRate` reads
+    localStorage: doing that during render would differ between the server and
+    the client and hydrate mismatched.
+  */
+  const [rate, setRate] = useState<number>(DEFAULT_RATE);
+  useEffect(() => {
+    setRate(getPlaybackRate());
+  }, []);
+  const pip = usePictureInPicture(videoEl);
   const [seekFlash, setSeekFlash] = useState<{ side: "back" | "fwd"; key: number } | null>(null);
   const [ui, setUi] = useState(true);
   const [scrubbing, setScrubbing] = useState(false);
@@ -1109,6 +1128,30 @@ function ReelCard({
   // would be a different list every video. Takes effect from the next video that
   // attaches: hls.js takes its buffer geometry at construction, so applying it
   // to the CURRENT clip would mean tearing down the decoder mid-watch.
+  /*
+    🔴 The rate is re-applied on EVERY source attach, not set once.
+
+    `playbackRate` is a property of the ELEMENT and resets to 1 whenever a new
+    source is loaded — which in this deck happens on every card mount, every
+    album slide change, and every HLS-to-MP4 fallback. Setting it once at
+    selection time would mean the choice silently evaporated on the next reel,
+    which is exactly the kind of "it forgot" bug that reads as the setting not
+    working at all.
+  */
+  useEffect(() => {
+    if (!videoEl) return;
+    applyRate(videoEl, rate);
+  }, [videoEl, rate, srcReady, slide]);
+
+  const cycleSpeed = () => {
+    const next = nextRate(rate);
+    setRate(next);
+    setPlaybackRate(next);
+    applyRate(video.current, next);
+    setMoreOpen(false);
+    toast(`Playback speed: ${formatRate(next)}`, "info");
+  };
+
   const cycleQuality = () => {
     const order = QUALITY_CYCLE;
     const next = order[(order.indexOf(qualityPref) + 1) % order.length] ?? "auto";
@@ -2260,6 +2303,22 @@ function ReelCard({
                       </>
                     )}
                     {native ? <MoreItem icon={mutedAuto ? VolumeX : Volume2} label={mutedAuto ? "Unmute audio" : "Mute audio"} onClick={() => { toggleMute(); setMoreOpen(false); }} /> : null}
+                    {/* Speed sits beside quality: both are "how this plays",
+                        both cycle a fixed ladder, and pairing them keeps the
+                        sheet from growing a third playback group. */}
+                    {native ? <MoreItem icon={Timer} label={`Playback speed: ${formatRate(rate)}`} onClick={cycleSpeed} /> : null}
+                    {/* Rendered only where PiP genuinely works — see use-pip.ts
+                        for why the ELEMENT is asked, not just the browser. */}
+                    {native && pip.supported ? (
+                      <MoreItem
+                        icon={PictureInPicture2}
+                        label={pip.active ? "Exit picture-in-picture" : "Picture-in-picture"}
+                        onClick={() => {
+                          setMoreOpen(false);
+                          pip.toggle();
+                        }}
+                      />
+                    ) : null}
                     {hlsUrl ? <MoreItem icon={Gauge} label={`Video quality: ${QUALITY_LABELS[qualityPref]}`} onClick={cycleQuality} /> : null}
                   </MoreGroup>
 

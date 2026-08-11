@@ -226,8 +226,24 @@ Stated plainly rather than silently skipped or faked:
 - **Tranche 1 (shipped).** Capability detection, the governor, Pulse Buffer
   planner, the four-level quality preference, and the wiring that lets the
   policy drive hls.js buffers instead of hardcoded constants.
-- **Tranche 2.** Playback speed (0.5×–2× + hold-to-speed), Picture-in-Picture,
-  pinch-to-zoom, volume gestures, frame preview on scrub.
+- **Tranche 2 (partly shipped).** Playback speed (0.5×–2×, remembered) and
+  Picture-in-Picture are in, both in the reel options sheet.
+  - 🔴 The rate is re-applied on every source attach, not set once:
+    `playbackRate` is a property of the ELEMENT and resets to 1 on every new
+    source — which here means every card mount, album slide and HLS→MP4
+    fallback. Set once, the choice evaporates on the next reel.
+  - `preservesPitch` is set explicitly (plus the Safari spelling) because
+    engines disagree on the default, and the gap between a normal voice at 1.5×
+    and a chipmunk is not something to leave to chance.
+  - PiP asks the ELEMENT, not the browser: `document.pictureInPictureEnabled`
+    says the document may, while a given `<video>` can still refuse
+    (`disablePictureInPicture`, no video track yet). iPhone Safari has no
+    standard API at all — `webkitSupportsPresentationMode` is the only honest
+    answer and it is false until metadata loads.
+  - **Still open in this tranche:** pinch-to-zoom, volume gestures, frame
+    preview on scrub. Pinch in particular has to coexist with four existing
+    gestures on the same surface (vertical snap-scroll, horizontal album drag,
+    double-tap seek, long-press) and is deferred rather than bolted on.
 - **Tranche 3.** Living Playback™ — fade-in, pause glass ripple, resume, the
   completion transition — plus captions and subtitle customisation.
 - **Tranche 4.** Offline cache and resume, and the full error-recovery ladder

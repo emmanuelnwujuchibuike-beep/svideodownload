@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { SupportedPlatforms } from "@/components/landing/supported-platforms";
+import type { PlatformStatusMap } from "@/lib/platform-status";
 import { useUser } from "@/features/auth/use-user";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
@@ -45,7 +46,18 @@ const DiscoveryGateway = dynamic(
  * reference design puts it on (public/new downloadpage.jpg), where white text
  * and white/10 fills would be invisible.
  */
-export function DownloadBox({ surface = "hero" }: { surface?: "hero" | "card" } = {}) {
+export function DownloadBox({
+  surface = "hero",
+  /**
+   * Operator-declared platform health, resolved at the server page and threaded
+   * down (Feature: platform status, 2026-08-11).
+   *
+   * 🔴 A PROP, not a fetch. This component is `"use client"` — it cannot read
+   * the settings store, and turning it into a server component to do so would
+   * cost the download page its whole interactive paste flow.
+   */
+  platformStatus,
+}: { surface?: "hero" | "card"; platformStatus?: PlatformStatusMap } = {}) {
   const onCard = surface === "card";
   const [url, setUrl] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -246,7 +258,7 @@ export function DownloadBox({ surface = "hero" }: { surface?: "hero" | "card" } 
         the downloads dashboard it sits on a card, in the hero it sits on the
         purple gradient, and the label needs different ink for each.
       */}
-      <SupportedPlatforms surface={onCard ? "light" : "onGradient"} className="mt-4" />
+      <SupportedPlatforms surface={onCard ? "light" : "onGradient"} className="mt-4" statuses={platformStatus} />
 
       {/* The detected-platform confirmation stays — it is live feedback about the
           URL the visitor just pasted, not part of the static strip, and folding

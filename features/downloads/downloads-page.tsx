@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { DownloadBox } from "@/features/downloads/download-box";
+import type { PlatformStatusMap } from "@/lib/platform-status";
 
 import {
   CloudStorageCard,
@@ -103,9 +104,12 @@ export function DownloadsPage({
   wallpapers,
   /** Admin-chosen background for the Wallpaper Gallery tile — see lib/wallpapers-cta. */
   ctaWallpaperUrl = null,
+  /** Platform health for the supported-platforms strip inside DownloadBox. */
+  platformStatus,
 }: {
   wallpapers: Wallpaper[];
   ctaWallpaperUrl?: string | null;
+  platformStatus?: PlatformStatusMap;
 }) {
   const { items, toggleFavorite, removeDownload } = useHistory();
   const { tasks, pauseDownload, resumeDownload, retryDownload, cancelDownload, pauseAll } = useDownloadManager();
@@ -151,7 +155,7 @@ export function DownloadsPage({
           Link" quick action points at — the anchor previously existed only on
           the landing hero, so that control did nothing on this page. */}
       <section id="download" className="scroll-mt-20 rounded-3xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
-        <DownloadBox surface="card" />
+        <DownloadBox surface="card" platformStatus={platformStatus} />
       </section>
 
       {/*

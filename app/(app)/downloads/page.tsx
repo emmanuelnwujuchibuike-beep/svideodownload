@@ -7,6 +7,7 @@ import { DownloadsPage } from "@/features/downloads/downloads-page";
 import { DownloadsSkeleton } from "@/features/downloads/downloads-skeleton";
 import { getHomeProfile } from "@/lib/social/home";
 import { getLandingSettings } from "@/lib/landing/settings";
+import { getPlatformStatus } from "@/lib/platform-status-store";
 import { listWallpapers } from "@/lib/wallpapers-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -62,12 +63,15 @@ async function DownloadsData() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/downloads");
 
-  const [profile, wallpapers, landing] = await Promise.all([
+  const [profile, wallpapers, landing, platformStatus] = await Promise.all([
     getHomeProfile(user.id),
     listWallpapers(user.id),
     // The admin-uploaded tile background (admin → Landing page). Resolved HERE
     // because DownloadsPage is a client component and cannot read the DB itself.
     getLandingSettings(),
+    // Same reason: the supported-platforms strip lives inside a client
+    // component, so its status has to arrive as a prop from this boundary.
+    getPlatformStatus(),
   ]);
   if (!profile?.handle) redirect("/welcome");
 
@@ -81,6 +85,10 @@ async function DownloadsData() {
     */
     /* `AppContent` is on the synchronous shell above, so it flushes with the
        skeleton rather than waiting for this data. */
-    <DownloadsPage wallpapers={wallpapers} ctaWallpaperUrl={landing.wallpaperCtaImageUrl || null} />
+    <DownloadsPage
+      wallpapers={wallpapers}
+      ctaWallpaperUrl={landing.wallpaperCtaImageUrl || null}
+      platformStatus={platformStatus}
+    />
   );
 }

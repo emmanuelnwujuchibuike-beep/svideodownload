@@ -57,6 +57,7 @@ import { createPortal } from "react-dom";
 import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design";
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
+import { shouldFullBleed, viewportAspect } from "@/features/reels/viewer/fit";
 import type { PulseEvent } from "@/features/reels/viewer/social-pulse";
 import { useAdaptiveRail, type RailLayout } from "@/features/reels/viewer/use-adaptive-rail";
 import { useLivingInterface } from "@/features/reels/viewer/use-living-interface";
@@ -103,16 +104,29 @@ interface CommentsData {
 }
 
 /**
- * A clip at or below this width/height ratio counts as a "long" vertical video
- * and fills the screen to the safe area even when `cover` has to trim its sides.
+ * ── 🔴 THE LETTERBOX IS BLACK (owner, 2026-08-11) ──────────────────────────
  *
- * 9:16 is 0.5625, so this admits the standard reel shape and everything taller,
- * and excludes 2:3 (0.667), 4:5 (0.8), square and every landscape shape — the
- * "shorter videos" that keep their own size over the blurred backdrop. See the
- * long note at the `onLoadedMetadata` call site for the owner instruction and
- * why a pure "how much would be cropped" test could not express it.
+ * "even square short videos in reels are also stretching, i said only long
+ * videos."
+ *
+ * The FIT was already correct — `shouldFullBleed` refuses a square clip on every
+ * screen, and there is a test for it. What made square clips LOOK stretched was
+ * what filled the bands around them: an overscanned, blurred copy of the same
+ * frame at 75% opacity. On a 9:16 clip that band is a thin sliver and reads as
+ * the picture's own colour bleeding past its edge, which is what it was added
+ * for. On a SQUARE clip on a 0.46 phone the bands are 54% OF THE SCREEN — so
+ * most of what you see is a giant zoomed copy of the video, and the clip reads
+ * as filling the screen. Exactly the thing being reported.
+ *
+ * That filler also has no job left. It existed to make a 9:16 clip look like it
+ * reached the safe area; 9:16 now genuinely DOES reach it, by covering. The only
+ * clips that still letterbox are the ones the owner wants to "show their
+ * respective size", and a magnified copy of the frame is the opposite of that.
+ *
+ * So the ground is plain black — the classic letterbox, and the only treatment
+ * under which a square video reads as a square video.
  */
-const TALL_CLIP_ASPECT = 0.6;
+const LETTERBOX = "bg-black";
 
 /**
  * ── THE BOTTOM STACK ON /reels, in one place ────────────────────────────────
@@ -515,8 +529,13 @@ function ReelCard({
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
   const [buffering, setBuffering] = useState(false);
-  // Near-screen-aspect clips cover the screen edge-to-edge (TikTok full bleed).
+  // Whether this clip fills the screen. `shouldFullBleed` owns the rule and the
+  // reasoning; this is just where the answer is remembered once metadata lands.
   const [fullBleed, setFullBleed] = useState(false);
+  // The same question answered EARLIER, from the poster image's natural size, so
+  // the cover under the video is already the right shape before metadata
+  // arrives and there is no letterbox-to-full-bleed pop on entry.
+  const [posterBleed, setPosterBleed] = useState(false);
   const [seekFlash, setSeekFlash] = useState<{ side: "back" | "fwd"; key: number } | null>(null);
   const [ui, setUi] = useState(true);
   const [scrubbing, setScrubbing] = useState(false);
@@ -1193,35 +1212,43 @@ function ReelCard({
           the blurred backdrop fills whatever the letterbox leaves. */}
       {slidePoster ? (
         /*
-          🔴 The backdrop FILLS THE LETTERBOX (owner, 2026-08-10: reels should
-          read as full to the safe area, without cropping).
+          The cover, painted underneath so a snapped-in reel never flashes black.
 
-          A 9:16 clip on a 9:19.5 phone already spans the full WIDTH under
-          `object-contain` — the gap is vertical. Filling it by scaling up would
-          discard 17.9% of the width, which is the crop that was just removed. So
-          the bands are filled instead of eliminated: the same frame, blurred and
-          overscanned, behind the true-aspect video.
+          🔴 ONE layer on a black ground — see LETTERBOX for why the blurred,
+          overscanned second copy is gone.
 
-          The layer already existed and was invisible. At `opacity-40` over a
-          black ground a blurred frame resolves to near-black, which is why the
-          bands read as dead bars rather than as content. At 75% they read as
-          what they are — the video's own colour bleeding past its edges — so the
-          screen looks full-bleed into the safe areas while every pixel of the
-          clip is still on screen.
+          It also fits the SAME WAY the video will: `posterBleed` runs the poster
+          image's own natural size through `shouldFullBleed`, the identical rule
+          the <video> uses on its metadata. Without that the cover was always
+          `contain` and a 9:16 clip showed letterboxed for a moment and then
+          popped to full bleed the instant metadata arrived. The poster is a
+          frame OF the clip, so its shape is the clip's shape and the guess is
+          exact.
 
-          `bg-black` stays underneath as the floor for a reel with no poster,
-          where there is genuinely nothing to blur.
-
-          The CONTROLS are unaffected and stay out of the safe areas: the tabs,
-          the close/••• buttons, the rail and the progress bar all pad themselves
-          by `--frenz-safe-top` / `env(safe-area-inset-bottom)`. Only the picture
-          goes under the notch and the home indicator, which is exactly the ask.
+          The CONTROLS stay out of the safe areas either way: the tabs, the
+          close/••• buttons, the rail and the progress bar all pad themselves by
+          `--frenz-safe-top` / `env(safe-area-inset-bottom)`. Only the picture
+          goes under the notch and the home indicator, which is the ask.
         */
-        <div className="absolute inset-0 bg-black">
+        <div className={cn("absolute inset-0", LETTERBOX)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={slidePoster} alt="" aria-hidden loading="lazy" decoding="async" className="h-full w-full scale-125 object-cover opacity-75 blur-2xl" />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={slidePoster} alt="" aria-hidden loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-contain" />
+          <img
+            src={slidePoster}
+            alt=""
+            aria-hidden
+            loading="lazy"
+            decoding="async"
+            onLoad={(e) => {
+              const img = e.currentTarget;
+              if (img.naturalWidth && img.naturalHeight) {
+                setPosterBleed(shouldFullBleed(img.naturalWidth / img.naturalHeight, viewportAspect()));
+              }
+            }}
+            className={cn(
+              "absolute inset-0 h-full w-full",
+              (fullBleed || posterBleed) ? "object-cover" : "object-contain",
+            )}
+          />
         </div>
       ) : null}
 
@@ -1461,73 +1488,12 @@ function ReelCard({
                 setDur(v.duration || 0);
                 if (v.videoWidth && v.videoHeight) {
                   /*
-                    🔴 FULL BLEED ONLY WHEN NOTHING IS CUT OFF (owner, 2026-08-10)
-
-                    "make reels videos not to ever crop width when trying to go
-                    full edge to edge, only videos capable of full edge to edge
-                    should be full edge to edge and not every video, avoid width
-                    or height cropping out."
-
-                    This tested whether the video's aspect ratio was within 22%
-                    of the screen's and, if so, switched to `object-cover`. Two
-                    things were wrong with it.
-
-                    It measured the wrong quantity: a RATIO DIFFERENCE is not the
-                    amount lost. And 22% is enormous — on a 393x851 phone
-                    (aspect 0.462) that band runs from 0.360 to 0.563, so a
-                    standard 9:16 clip (0.5625) qualified and got `cover`, which
-                    scales it up until the screen is filled and throws away the
-                    overflow. Roughly a fifth of the frame could be cut, which is
-                    exactly the "cropping width" being reported — and it happened
-                    on the single most common reel shape there is.
-
-                    This computes the ACTUAL fraction that `object-cover` would
-                    discard, which is the thing the instruction is about:
-
-                      • video wider than the screen  -> width overflows
-                      • video taller than the screen -> height overflows
-
-                    and allows full bleed only when that is at most 1.5% — a few
-                    pixels, imperceptible, and never a face, a caption or a
-                    subtitle. Anything above it letterboxes with `object-contain`
-                    over the blurred backdrop, which is the treatment that shows
-                    the whole frame.
-
-                    So a clip genuinely shot at the device's aspect still goes
-                    edge to edge, exactly as asked; everything else keeps all of
-                    its picture.
-
-                    🔴 AND THEN: TALL CLIPS FILL REGARDLESS (owner, 2026-08-10)
-
-                    "i want it to go full screen to the safe area but shorter
-                    videos should show their respective size but long views
-                    should reach the safe area at all cost."
-
-                    The 1.5% rule above is correct for SHAPE MISMATCH and wrong
-                    for the one shape that matters most. A standard 9:16 reel
-                    (0.5625) on a 9:19.5 phone (0.462) loses 17.9% of its width
-                    to `cover`, so it failed the test and letterboxed — which is
-                    precisely the clip the owner means by "long views", and the
-                    one that has to reach the safe area "at all cost".
-
-                    So there are now two ways to earn full bleed, and the second
-                    one accepts the crop deliberately:
-
-                      • `cropped <= 1.5%` — any shape that already fills, free.
-                      • `aspect <= 0.6`   — the clip is at least as vertical as
-                        a 9:16 reel. These fill the screen top to bottom, which
-                        is what TikTok and Instagram do with the same footage.
-
-                    0.6 is the boundary on purpose: 9:16 is 0.5625 and anything
-                    taller is more vertical still, while 2:3 (0.667), 4:5 (0.8),
-                    1:1 and every landscape shape stay OUTSIDE it. Those are the
-                    "shorter videos" that keep "their respective size" — they
-                    letterbox over the blurred backdrop with every pixel intact.
+                    The fit rule and its whole history live in
+                    features/reels/viewer/fit.ts, next to the tests that pin
+                    every shape three separate owner instructions have been
+                    about — including the square clip that must NOT fill.
                   */
-                  const screen = window.innerWidth / window.innerHeight;
-                  const aspect = v.videoWidth / v.videoHeight;
-                  const cropped = aspect > screen ? 1 - screen / aspect : 1 - aspect / screen;
-                  setFullBleed(cropped <= 0.015 || aspect <= TALL_CLIP_ASPECT);
+                  setFullBleed(shouldFullBleed(v.videoWidth / v.videoHeight, viewportAspect()));
                 }
                 // Resume where this reel last stopped (tab switch / reopen) —
                 // switching For You/Following continues, never restarts.
@@ -2152,16 +2118,27 @@ function AlbumNeighborPreview({
   thumbnailUrl: string | null;
 }) {
   const x = useTransform(dragX, (v) => v + direction * (typeof window !== "undefined" ? window.innerWidth : 0));
+  // Fitted by the SAME rule as the active card, from the poster's own natural
+  // size — a neighbour that letterboxes differently makes the ground behind the
+  // video visibly change halfway through the drag.
+  const [bleed, setBleed] = useState(false);
   if (!thumbnailUrl) return null;
   return (
-    <motion.div className="pointer-events-none absolute inset-0 bg-black" style={{ x }} aria-hidden>
+    <motion.div className={cn("pointer-events-none absolute inset-0", LETTERBOX)} style={{ x }} aria-hidden>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {/* Matched to the active card's backdrop (2026-08-10) — the album
-          neighbour must letterbox the same way, or dragging between slides
-          visibly changes the ground behind the video mid-gesture. */}
-      <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-full w-full scale-125 object-cover opacity-75 blur-2xl" />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-contain" />
+      <img
+        src={thumbnailUrl}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onLoad={(e) => {
+          const img = e.currentTarget;
+          if (img.naturalWidth && img.naturalHeight) {
+            setBleed(shouldFullBleed(img.naturalWidth / img.naturalHeight, viewportAspect()));
+          }
+        }}
+        className={cn("absolute inset-0 h-full w-full", bleed ? "object-cover" : "object-contain")}
+      />
     </motion.div>
   );
 }

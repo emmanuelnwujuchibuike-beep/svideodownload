@@ -273,6 +273,28 @@ export async function Hero() {
             the paragraph competing with the headline.
           */}
           {/*
+            🔴 SMALLER AGAIN (owner, 2026-08-11: "make the landing hero
+            description text less bigger, make it smaller so the hero feels a
+            little spacious").
+
+            14px / 15px rather than 15px / 16px. The headline is a
+            `clamp(1.05rem, 5.2vw, 3rem)` display face, so the gap between it and
+            the body copy is what creates hierarchy — at 15px the paragraph was
+            close enough in weight to read as a second heading rather than as
+            supporting text.
+
+            `leading-relaxed` is KEPT on purpose. The ask is for the hero to feel
+            more spacious, and shrinking the type while also tightening the line
+            height would do the opposite: the block gets denser even as it gets
+            smaller. Smaller glyphs on the same generous leading is what turns
+            the saved height into air. `mt-3.5` gives the shorter paragraph a
+            little more separation from the headline for the same reason.
+
+            14px is the floor here — this is real body copy, not a caption, and
+            anything under it fails the readability bar the 16px `pointer:coarse`
+            form-control rule exists to protect.
+          */}
+          {/*
             ── Shortened so the buttons sit higher (owner, 2026-08-09) ────────
             "make the landing hero feel like an app so the buttons can go
             upwards."
@@ -289,7 +311,7 @@ export async function Hero() {
             which on a 600px viewport is the difference between the paste box
             being below the fold and above it.
           */}
-          <p className="mt-3 max-w-md text-pretty text-[15px] leading-relaxed text-slate-600 dark:text-white/70 sm:text-base">
+          <p className="mt-3.5 max-w-md text-pretty text-sm leading-relaxed text-slate-600 dark:text-white/70 sm:text-[15px]">
             Download from the platforms you already use, then share, connect and explore — all in{" "}
             <span className="font-medium text-blue-600 dark:text-blue-300">one super app.</span>
           </p>

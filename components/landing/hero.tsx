@@ -409,11 +409,6 @@ export async function Hero() {
               via the `align` prop rather than a className — see the note in
               that component for why passing `text-left` would silently lose.
             */}
-            <DownloadDisclaimer
-              align="left"
-              className="mx-0 mt-1 max-w-none px-1 text-[10px] leading-snug"
-            />
-
             {/*
               ── Two cards, side by side (the reference) ──────────────────────
               These were two full-width stacked rows. The reference pairs them:
@@ -510,6 +505,20 @@ export async function Hero() {
               */}
               <WallpaperCta variant="card" backgroundUrl={landing.wallpaperCtaImageUrl || null} />
             </div>
+
+            {/*
+              🔴 The disclaimer sits AFTER the two tiles and wears the card
+              treatment (owner, 2026-08-11: follow
+              `public/newnativeapplandingpage.jpg` — "100% exact").
+
+              It used to render between the CTA and the tiles, where a block of
+              grey legal text interrupted the two things a visitor is actually
+              choosing between. The reference puts it last, on its own tinted
+              surface with an info mark — the footnote position, which is what it
+              is. Same component and the same sentence, so there is still exactly
+              one copy of this text on the site.
+            */}
+            <DownloadDisclaimer variant="card" />
 
             {/*
               ── Notes that still apply to the Wallpaper card above ───────────

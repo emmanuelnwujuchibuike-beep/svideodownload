@@ -129,19 +129,23 @@ export function RevenueCharts({
         </div>
 
         {/*
-          Ad revenue is NAMED as absent. Leaving it out entirely would read as an
-          oversight; an estimate would be fiction in a screen decisions are made
-          from.
+          🔴 AD REVENUE IS NOT RENDERED AT ALL (owner, 2026-08-11: "remove ad
+          revenue chart from the dashboard entirely rather than showing not
+          available").
+
+          It briefly had a placeholder card explaining its absence. The owner's
+          call is the better one: a permanent "Not available" panel is a hole
+          somebody has to read past on every visit, and a dashboard is judged by
+          how fast it answers — an empty slot answers nothing.
+
+          The reason it cannot exist is recorded HERE instead, where the next
+          person to wonder "why is there no ad revenue chart" will look:
+          AdSense and Monetag report earnings only in their own dashboards and
+          never send them to us. Multiplying impressions by an assumed RPM would
+          produce a confident, untraceable number in a screen decisions are made
+          from. If earnings ever become available — an operator-entered monthly
+          figure would be the honest route — this is where that panel goes.
         */}
-        <div className="rounded-2xl border border-dashed border-border p-4">
-          <p className="text-xs font-medium text-muted-foreground">Ad revenue</p>
-          <p className="mt-1 text-2xl font-bold tracking-tight text-muted-foreground">Not available</p>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            AdSense and Monetag report earnings in their own dashboards and do not send them here.
-            Multiplying impressions by an assumed RPM would produce a confident number nobody can
-            trace, so it is not shown. Impressions and clicks below are exact counts.
-          </p>
-        </div>
 
         <AdminAreaChart
           title="Ad impressions"

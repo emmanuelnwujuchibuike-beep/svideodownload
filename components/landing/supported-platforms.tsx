@@ -153,13 +153,27 @@ export function SupportedPlatforms({
         The colon from the original label is dropped; it bought nothing and this
         row spends every pixel of width it can on the marks.
       */}
+      {/*
+        🔴 UPPERCASE, tracked, per `public/newnativeapplandingpage.jpg` (owner,
+        2026-08-11: "i want a 100% exact").
+
+        The reference draws this as a section EYEBROW — small caps with wide
+        letter-spacing — not as a sentence. That is the native-app idiom the
+        whole design is imitating: a quiet uppercase label is read as a heading
+        for the row beneath it, while sentence case reads as a statement in its
+        own right and competes with the headline above.
+
+        The words are unchanged from the owner's own 2026-08-10 correction
+        ("don't use the word work, use platform supported") — only the case and
+        tracking follow the new reference.
+      */}
       <span
         className={cn(
-          "text-xs font-semibold",
-          onGradient ? "text-white/80" : "text-slate-500 dark:text-white/60",
+          "text-[11px] font-bold uppercase tracking-[0.09em]",
+          onGradient ? "text-white/75" : "text-slate-500 dark:text-white/55",
         )}
       >
-        Platforms supported
+        Supported platforms
       </span>
       <div className="grid w-full max-w-md grid-cols-8 gap-1.5 sm:gap-2">
         {SUPPORTED_PLATFORMS.map((id) => {

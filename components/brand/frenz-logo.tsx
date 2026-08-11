@@ -87,6 +87,7 @@ export function FrenzWordmark({
   textClassName,
   priority,
   tile = false,
+  plate = false,
 }: {
   className?: string;
   size?: number;
@@ -94,7 +95,19 @@ export function FrenzWordmark({
   priority?: boolean;
   /** Dark-tiled app-icon mark — for the in-app webapp logo (sidebar). */
   tile?: boolean;
+  /**
+   * 🔴 The mark on a WHITE rounded plate, as in
+   * `public/newnativeapplandingpage.jpg` (owner, 2026-08-11).
+   *
+   * Deliberately NOT the `tile` asset: that PNG is the dark navy app icon, and
+   * the reference shows the transparent mark sitting on a light plate. Doing it
+   * in CSS rather than shipping a third artwork means no extra request, no extra
+   * bytes on a page held at its budget, and a plate that follows the theme
+   * instead of being baked into a file.
+   */
+  plate?: boolean;
 }) {
+  const mark = <FrenzLogo size={size} priority={priority} tile={tile} alt="" />;
   return (
     <span className={cn("inline-flex items-center gap-2 font-bold", className)}>
       {/*
@@ -111,7 +124,16 @@ export function FrenzWordmark({
         decorative image. The accessible name comes from the visible text, which
         is where it should come from anyway — it survives the artwork changing.
       */}
-      <FrenzLogo size={size} priority={priority} tile={tile} alt="" />
+      {plate ? (
+        <span
+          className="flex items-center justify-center rounded-[26%] bg-white shadow-sm ring-1 ring-inset ring-slate-900/[0.06] dark:bg-white/10 dark:ring-white/15"
+          style={{ padding: Math.round(size * 0.16) }}
+        >
+          {mark}
+        </span>
+      ) : (
+        mark
+      )}
       <span className={cn("text-gradient text-[17px] tracking-tight", textClassName)}>Frenz</span>
     </span>
   );

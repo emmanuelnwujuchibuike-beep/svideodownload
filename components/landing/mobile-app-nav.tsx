@@ -218,6 +218,29 @@ function NavTab({
       >
         {label}
       </span>
+      {/*
+        🔴 The active UNDERLINE (owner, 2026-08-11: follow
+        `public/newnativeapplandingpage.jpg` — "the bottom nav and everything").
+
+        The reference draws a short accent rule under the active tab's label.
+        It is not decoration: colour alone was the only thing marking the current
+        tab, and a second, non-colour channel is what makes that readable to
+        someone who cannot separate violet from grey. `aria-current="page"` on
+        the link above already carries it for assistive tech; this carries it
+        visually.
+
+        A static element, not an animated indicator that slides between tabs — a
+        shared-layout animation here would mean a client-side measurement and a
+        transform on every navigation, on the page whose whole brief is to stay
+        cheap and cool. It costs one span and no JavaScript.
+      */}
+      <span
+        aria-hidden
+        className={cn(
+          "mt-1 h-[2px] w-5 rounded-full transition-colors",
+          active ? "bg-primary" : "bg-transparent",
+        )}
+      />
     </Link>
   );
 }

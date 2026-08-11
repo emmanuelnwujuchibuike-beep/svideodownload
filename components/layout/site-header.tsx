@@ -269,7 +269,9 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
       <div className={cn("container flex items-center justify-between", social ? "h-0 lg:h-16" : "h-16")}>
         {/* Brand — hidden on mobile social surfaces (plain, full-bleed top bar) */}
         <Link href="/" className={cn("items-center", social ? "hidden lg:flex" : "flex")} onClick={() => setOpen(false)}>
-          <FrenzWordmark size={32} priority />
+          {/* The mark sits on a white plate per public/newnativeapplandingpage.jpg —
+              a CSS plate, not a third artwork, so the header costs no new bytes. */}
+          <FrenzWordmark size={28} priority plate />
         </Link>
 
         {/* Desktop nav — only at lg+; iPad-portrait (md) uses the roomy drawer so

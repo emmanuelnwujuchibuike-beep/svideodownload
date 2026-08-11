@@ -60,7 +60,6 @@ import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design"
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
 import { shouldFullBleed, viewportAspect } from "@/features/reels/viewer/fit";
-import { useFullscreen } from "@/features/reels/viewer/use-fullscreen";
 import { currentPolicySync, recordClipCompleted } from "@/lib/media/engine/signals";
 import type { PulseEvent } from "@/features/reels/viewer/social-pulse";
 import { useAdaptiveRail, type RailLayout } from "@/features/reels/viewer/use-adaptive-rail";
@@ -565,16 +564,6 @@ function ReelCard({
   const dragLastT = useRef(0);
   const dragVelocity = useRef(0); // px/ms, signed
   const mediaStage = useRef<HTMLDivElement | null>(null);
-  /*
-    Fullscreen targets the MEDIA STAGE, not the deck root and not the <video>.
-
-    The stage is the box the video and its overlays share, so the standard API
-    takes our own chrome — rail, caption, scrubber — into fullscreen with the
-    picture. Fullscreening the bare <video> would hand the clip to the browser's
-    built-in player and lose all of it, which is what iOS forces on us anyway
-    (see the hook) and what everywhere else should avoid.
-  */
-  const fullscreen = useFullscreen(mediaStage, video);
 
   const [paused, setPaused] = useState(false);
   const [mutedAuto, setMutedAuto] = useState(false);
@@ -643,6 +632,8 @@ function ReelCard({
   const [composerMode, setComposerMode] = useState<"create" | "edit">("create");
   const [composerCaption, setComposerCaption] = useState<string | null>(null);
   const [repostOptionsOpen, setRepostOptionsOpen] = useState(false);
+  /** Send's two-option chooser — see the note on the rail's Send control. */
+  const [sendChooserOpen, setSendChooserOpen] = useState(false);
   const [repostersOpen, setRepostersOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   // Long-press Wow → the reaction picker; the picked glyph replaces the icon.
@@ -746,33 +737,46 @@ function ReelCard({
   }, [nearby, native, item.id]);
 
   /*
-    ── 🔴 PAUSED MEANS THE CHROME STAYS (owner, 2026-08-11) ──────────────────
-    "let pause in reels view always show the engagement tray and other video
-    details like tiktok, and not full clear screen after 2sec."
+    ── 🔴 THE TRAY NEVER AUTO-HIDES ANY MORE (owner, 2026-08-11) ─────────────
+    "now only pause should keep the tray, when user is watching the tray should
+    not disappear after 2sec, rather users should use the full screen button to
+    open fullscreen."
 
-    The idle timer used to fire regardless of playback state, so pausing a reel
-    to actually READ the caption, check the sound row or tap Save gave you three
-    seconds before the screen cleared itself — and the only way back was another
-    tap, which resumed playback. Pausing to look at something and being unable to
-    look at it is the whole of the report.
+    There WAS a 3-second idle timer. The first pass at this made it skip while
+    paused, which was only half the instruction: while PLAYING the tray still
+    vanished, so reaching Save or reading the sound row during normal watching
+    meant tapping the screen first — and the tap that brought the chrome back
+    also paused the video, so you could not both watch and interact.
 
-    The guard is inside `scheduleHide` rather than at its call sites on purpose.
-    There are five of them — the active-reel effect, the tap toggle, the seek
-    end, the long-press release and the album slide change — and a rule enforced
-    in one place cannot be forgotten by the sixth.
+    The timer is gone entirely. Chrome visibility is now one deliberate choice
+    the viewer makes: the tray is up, or they have pressed Full screen. A control
+    that disappears on a timer is a control you have to hunt for, and the whole
+    argument for auto-hide — "let the video breathe" — is served better by a
+    button that does it on purpose and stays undone until it is undone.
 
-    It reads `video.current.paused`, the ELEMENT's own state, not the `paused`
-    React state: that one is set on a 1s delay so a quick play/pause tap never
-    flashes the pause glyph, and a timer that consulted it would still clear the
-    screen during that first second.
+    `scheduleHide` survives as a no-op rather than being deleted at five call
+    sites (the active-reel effect, the tap toggle, the seek end, the long-press
+    release, the album slide change). Each of those is a legitimate "the viewer
+    just did something" moment and a future timed behaviour would hang off
+    exactly them; removing the calls would lose that map.
   */
   const scheduleHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => {
-      if (video.current?.paused) return;
-      setUi(false);
-    }, 3000);
   }, []);
+
+  /*
+    Full screen = the overlay is hidden, nothing else. See the button near the
+    action rail for why this is NOT `Element.requestFullscreen`. Reset whenever a
+    different reel becomes active: it is a per-clip viewing choice, and inheriting
+    it silently would mean scrolling into a reel with no visible controls.
+  */
+  const [immersive, setImmersive] = useState(false);
+  useEffect(() => {
+    if (!isActive) setImmersive(false);
+  }, [isActive]);
+  useEffect(() => {
+    setUi(!immersive);
+  }, [immersive]);
   // A single tap toggles play/pause; the pause sign fades in ~1s after pausing
   // (so a quick play/pause tap never flashes it). Shows the controls too.
   const togglePauseTap = useCallback(() => {
@@ -1545,22 +1549,17 @@ function ReelCard({
                 video.current && claimPlayback(video.current);
                 setBuffering(false);
                 recordView(item.id);
-                // Playback resumed → the idle timer becomes meaningful again.
-                if (isActive) scheduleHide();
               }}
               onPause={() => {
                 const v = video.current;
                 if (v) savePlaybackPosition(playbackKey, v.currentTime, v.duration);
                 /*
-                  Bring the chrome BACK on pause, not merely stop hiding it.
-                  Long-pressing a reel whose chrome had already faded used to
-                  pause a screen with nothing on it — the tray and the caption
-                  are exactly what you paused to reach.
+                  Pausing leaves Full screen. Someone who hid the overlay to
+                  watch and then paused is asking to look at something — the
+                  caption, the sound row, Save — and every one of those is in the
+                  overlay they just hid.
                 */
-                if (isActive) {
-                  if (hideTimer.current) clearTimeout(hideTimer.current);
-                  setUi(true);
-                }
+                if (isActive) setImmersive(false);
               }}
               onWaiting={() => setBuffering(true)}
               onPlaying={() => setBuffering(false)}
@@ -1709,7 +1708,11 @@ function ReelCard({
       <div
         style={{ right: rail.inset, rowGap: rail.gap }}
         className={cn(
-          "absolute flex flex-col items-center transition-[right,row-gap,opacity] duration-300 lg:!right-[-4.5rem] lg:!pointer-events-auto lg:!opacity-100",
+          // `pb-11` clears the Full screen button, which sits at this same bottom
+          // anchor OUTSIDE this container (it has to survive the rail being
+          // hidden). Padding rather than a different `bottom` so both stay on one
+          // anchor and can never drift apart.
+          "absolute flex flex-col items-center pb-11 transition-[right,row-gap,opacity] duration-300 lg:!right-[-4.5rem] lg:!pointer-events-auto lg:!opacity-100",
           layer.rail,
           railBottom,
           ui ? "opacity-100" : "pointer-events-none opacity-0",
@@ -1766,6 +1769,28 @@ function ReelCard({
           />
         </span>
         <RailButton icon={MessageCircle} count={item.commentsCount} label="Comment" onClick={openComments} />
+        {/*
+          ── 🔴 REPOST MOVED INSIDE SEND (owner, 2026-08-11) ───────────────────
+          "put the reshare button inside the send button to avoid tray cluster,
+          so when a user click the send button two options show."
+
+          Repost and Send are the same intent — "put this in front of someone
+          else" — separated only by audience: your own followers, or specific
+          people. Two adjacent rail buttons for one intent is what made the tray
+          read as a wall, and it is the pair a viewer is least likely to tell
+          apart at a glance from two similar glyphs.
+
+          Send now opens a two-option chooser first. The REPOST BADGE (the
+          stacked avatars of people you follow who reposted this) stays on the
+          rail as its own affordance, because it is not an action — it is social
+          proof, and tapping it opens "who reposted", which has nothing to do
+          with sending. The burst animation stays anchored here too so a repost
+          still pops where the badge lives.
+
+          The long-press-for-repost-options gesture moves onto the Send button,
+          so nothing that existed is lost — it is reached from the control that
+          now owns reposting.
+        */}
         <div className="relative flex flex-col items-center gap-1">
           <RepostBurst triggerKey={repostBurst} />
           {item.repostBadge && item.repostBadge.count > 0 ? (
@@ -1787,52 +1812,70 @@ function ReelCard({
               {item.repostBadge.count > 3 ? <span className="ml-1 text-[10px] font-bold text-white drop-shadow">+{item.repostBadge.count - 3}</span> : null}
             </button>
           ) : null}
-          <RailButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-400" label="Repost" onClick={repost} press={repostPress} />
+          <RailButton
+            icon={SendIcon}
+            // The count on this control is the REPOST count, because that is the
+            // only one of the two that produces a public, countable object. A
+            // send is private by definition and counting it would be both
+            // meaningless and a privacy leak.
+            count={repostState.count}
+            active={repostState.reposted}
+            activeClass="text-emerald-400"
+            label="Send or repost"
+            onClick={() => setSendChooserOpen(true)}
+            press={repostPress}
+          />
         </div>
-        <RailButton icon={SendIcon} label="Send" onClick={() => setShareOpen(true)} />
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
 
-        {/*
-          ── The fullscreen control (owner, 2026-08-11) ────────────────────────
-          "add a full screen button at the bottom right corner, tiny to avoid
-          cluster."
-
-          It is the LAST child of the rail rather than a new floating element.
-          The rail is anchored by its bottom edge, so the last child IS the
-          bottom-right corner — and joining a group that already exists is what
-          keeps a sixth control from reading as clutter. A free-floating button
-          would also have had nowhere to go: the band below the rail is fully
-          spoken for by the scrubber, the nav scrim and the tab bar.
-
-          Deliberately smaller than the action buttons (32px against 42px, and no
-          count beneath it): this is a viewing preference, not an engagement
-          action, and sizing it like Like or Save would claim an importance it
-          does not have.
-
-          `supported` is false in a standalone PWA and wherever neither
-          fullscreen API exists, and the button is not rendered at all there — a
-          control that visibly does nothing is worse than no control. See
-          use-fullscreen.ts for why iOS gets a different, worse fullscreen and
-          is offered it anyway.
-        */}
-        {fullscreen.supported ? (
-          <button
-            type="button"
-            onClick={() => {
-              haptic("light");
-              fullscreen.toggle();
-            }}
-            aria-label={fullscreen.active ? "Exit full screen" : "Full screen"}
-            aria-pressed={fullscreen.active}
-            className={cn(
-              "mt-0.5 flex h-8 w-8 items-center justify-center rounded-full text-white transition active:scale-90",
-              glass.primary,
-            )}
-          >
-            {fullscreen.active ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </button>
-        ) : null}
       </div>
+
+      {/*
+        ── 🔴 FULL SCREEN IS AN IN-APP MODE, NOT THE FULLSCREEN API ────────────
+        (owner, 2026-08-11: "the fullscreen shouldnt be a system fullscreen, it
+        should be like tiktok fullscreen where users can still scroll on full
+        screen, the full screen will just remove the tray but not the bottom
+        nav.")
+
+        The first version called `Element.requestFullscreen`, and that was the
+        wrong tool for what was asked. The platform API takes the element out of
+        the document flow into the browser's own fullscreen presentation: the
+        deck's snap-scroller stops receiving the page's scroll on several
+        engines, the app's bottom nav goes with it because it is OUTSIDE the
+        fullscreened element, and on iOS it surrenders the clip to the native
+        player entirely. Every one of those contradicts the instruction.
+
+        "Full screen" here means what it means in a short-video app: the video
+        keeps the whole screen to itself by REMOVING THE OVERLAY. Nothing about
+        the document changes, so scrolling to the next reel works exactly as it
+        did, and the bottom nav stays exactly where it was.
+
+        The control lives OUTSIDE the rail because it has to survive the rail
+        being hidden — it is the only way back. It sits at the rail's own bottom
+        anchor and right inset so it reads as the foot of that column rather than
+        as a sixth floating thing, and it is 32px against the rail's 42px: a
+        viewing preference, not an engagement action.
+      */}
+      <button
+        type="button"
+        onClick={() => {
+          haptic("light");
+          setImmersive((v) => !v);
+        }}
+        aria-label={immersive ? "Show video details" : "Full screen"}
+        aria-pressed={immersive}
+        style={{ right: rail.inset }}
+        className={cn(
+          "absolute z-40 flex h-8 w-8 items-center justify-center rounded-full text-white transition active:scale-90 lg:!right-[-4.5rem]",
+          // Fades but never disappears in immersive mode — a viewer who has hidden
+          // the overlay still needs the one control that brings it back, and a
+          // hidden exit is how someone gets stuck.
+          immersive ? "bg-black/30 opacity-60 backdrop-blur-sm hover:opacity-100" : glass.primary,
+          railBottom,
+        )}
+      >
+        {immersive ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+      </button>
 
       {/*
         ── Feature 15: THE BOTTOM INFORMATION PANEL ───────────────────────────
@@ -2187,6 +2230,73 @@ function ReelCard({
 
                 <div className="p-1.5 pt-0">
                   <button type="button" onClick={() => setMoreOpen(false)} className="w-full rounded-2xl bg-secondary/70 py-3 text-sm font-semibold text-foreground transition hover:bg-secondary active:scale-[0.99]">
+                    Cancel
+                  </button>
+                </div>
+              </motion.div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {/*
+        ── Send's two-option chooser (owner, 2026-08-11) ─────────────────────
+        "when a user click the send button two options show."
+
+        Two rows and nothing else. It is a fork, not a menu: adding a third thing
+        here would rebuild the clutter that merging Repost into Send removed.
+
+        Each row states its AUDIENCE, because that is the only difference between
+        them and it is the thing a viewer is deciding. "Repost" alone does not
+        say "your followers will see this", and that is exactly the surprise
+        worth avoiding on a public action.
+
+        It reuses `MoreSheet`'s shell so it inherits the sheet's existing focus
+        trap, backdrop dismissal, safe-area padding and reduced-motion handling
+        rather than growing a second, subtly different sheet.
+      */}
+      {mounted && sendChooserOpen
+        ? createPortal(
+            <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center">
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setSendChooserOpen(false)}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ y: 24, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={springs.bounce}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Send or repost"
+                className="relative m-2 w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur-2xl"
+              >
+                <div className="p-2">
+                  <MoreGroup>
+                    <MoreItem
+                      icon={SendIcon}
+                      label="Send to friends"
+                      onClick={() => {
+                        setSendChooserOpen(false);
+                        setShareOpen(true);
+                      }}
+                    />
+                    <MoreItem
+                      icon={Repeat2}
+                      label={repostState.reposted ? "Remove repost" : "Repost to your followers"}
+                      onClick={() => {
+                        setSendChooserOpen(false);
+                        void repost();
+                      }}
+                    />
+                  </MoreGroup>
+                  <button
+                    type="button"
+                    onClick={() => setSendChooserOpen(false)}
+                    className="mt-1.5 w-full rounded-2xl bg-secondary/40 px-4 py-3 text-[15px] font-semibold transition hover:bg-secondary/70"
+                  >
                     Cancel
                   </button>
                 </div>

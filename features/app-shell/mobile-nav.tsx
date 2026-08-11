@@ -213,12 +213,39 @@ export function MobileNav() {
             : "border-t border-border/60 bg-background",
         )}
       >
-        {mode === "downloader" ? (
+        {mode === "downloader" || immersive ? (
           <>
-            {/* Downloader mode — downloads-focused destinations so the nav never
-                pulls into Full Bleed (owner). Home is the signed-in download page;
-                History is the shared history-only page. Profile is shared below. */}
-            <NavTab label="Home" href="/downloads" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/downloads"} onWarm={router.prefetch} />
+            {/*
+              🔴 THE SAME BAR ON /reels IN BOTH MODES (owner, 2026-08-11: "the
+              reels from the landing page and signed page suppose to be the
+              same").
+
+              Reels is one surface, and it was showing two different navigations
+              depending on a cookie the viewer never set deliberately. A
+              Downloader (and every signed-out visitor arriving from the landing,
+              since that is the default mode) got Home · Reels · History ·
+              Support · Profile with Reels lit. A Full Bleed member got Home ·
+              Friends · [+] · Chats · Profile — a bar with NO REELS TAB while
+              standing on Reels, plus a raised Create button over a full-screen
+              player.
+
+              `immersive` forces the first set for everyone. Home still points at
+              `/downloads` here, which is the correct destination in the mode this
+              set belongs to; a Full Bleed member reaching it lands on the
+              download page and their own nav returns on the next screen. That is
+              the trade for one consistent bar, and it is the one the owner
+              asked for.
+
+              The Create button is the specific thing worth losing on this
+              surface: a raised gradient circle over a full-screen video is the
+              single loudest element on the screen, and it opens a composer that
+              has nothing to do with watching.
+            */}
+            {/* `/home` is an ALIAS for this page in Downloader mode — middleware
+                rewrites it rather than redirecting, so the PWA's start_url costs
+                no extra round-trip. Without this the Home tab sat dark on the
+                one screen every cold launch lands on. */}
+            <NavTab label="Home" href="/downloads" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/downloads" || pathname === "/home"} onWarm={router.prefetch} />
             <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={router.prefetch} />
             <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
             <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />

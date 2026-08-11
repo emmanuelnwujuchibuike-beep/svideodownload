@@ -83,7 +83,22 @@ SWX.networkFirst = async function networkFirst(request, { cacheName, preload, of
       new Promise((_, reject) => setTimeout(() => reject(new Error("navigation timed out")), timeoutMs)),
     ]);
     if (!res) throw new Error("no response");
-    if (cacheName && res.ok) await SWX.safePut(cacheName, request, res.clone());
+    /*
+      🔴 The cache write must NOT be awaited (2026-08-11).
+
+      `cache.put()` reads the response body to completion before it resolves.
+      Awaiting it here meant the page got nothing until the ENTIRE document had
+      arrived — which was harmless while Next buffered every page and sent it in
+      one piece, and is actively wrong now that the entry routes STREAM their
+      shell first (18a4b05). A streamed page whose data takes two seconds would
+      have been held for the full two seconds by this line, turning the
+      white-screen fix into a white screen with extra steps.
+
+      Fire-and-forget on the clone instead: the response is returned the instant
+      its headers arrive, and the clone fills the cache in the background at its
+      own pace. `safePut` already swallows its own failures.
+    */
+    if (cacheName && res.ok) void SWX.safePut(cacheName, request, res.clone());
     return res;
   } catch {
     const cached = await caches.match(request);

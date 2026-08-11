@@ -61,10 +61,30 @@ export async function middleware(request: NextRequest) {
   // with `normalizeMode` in lib/app-mode.ts — the two must agree, or `/` and
   // the chrome would disagree about which home a member has.
   const downloaderMode = request.cookies.get("frenz_mode")?.value !== "full";
-  // Downloader mode has no feed homepage — so `/home` (a cold entry, a restored tab,
-  // or a bookmark) goes to the download page, never the Full-Bleed feed (owner).
+  /*
+    Downloader mode has no feed homepage — so `/home` (a cold entry, a restored
+    tab, or a bookmark) serves the download page, never the Full-Bleed feed.
+
+    🔴 REWRITE, NOT REDIRECT (owner, 2026-08-11: "the pwa takes more time to open
+    than usual").
+
+    `/home` is the PWA's `start_url` (app/manifest.ts) and Downloader is the
+    DEFAULT mode, so this branch ran on essentially EVERY cold launch of the
+    installed app. A redirect costs a second full request: the launch fetched
+    /home, got a 307, and fetched /downloads — one extra round-trip under the
+    splash screen, on a phone, before anything could paint. That is a real and
+    permanent tax on the one interaction that happens most.
+
+    A rewrite serves the download page AT /home in the same response. Zero extra
+    round-trips, identical content, and the auth guard on the page is untouched.
+
+    The visible cost is that the URL reads /home while the download page is
+    shown. Inside the installed PWA there is no URL bar at all, and in a browser
+    tab it is cosmetic — it is why the bottom nav's Home tab now treats /home as
+    an alias for /downloads, so the tab still lights up.
+  */
   if (downloaderMode && path === "/home") {
-    return NextResponse.redirect(new URL("/downloads", request.url));
+    return NextResponse.rewrite(new URL("/downloads", request.url));
   }
   const isLandingRedirect =
     path === "/" &&

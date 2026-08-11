@@ -1,3 +1,5 @@
+import { LoadingStripe } from "@/features/ui/page-loader";
+
 /**
  * The /downloads cold-entry skeleton (owner, 2026-08-10).
  *
@@ -46,6 +48,24 @@ function Bone({ className }: { className: string }) {
 export function DownloadsSkeleton() {
   return (
     <div className="space-y-5 pt-1" role="status" aria-label="Loading your downloads">
+      {/*
+        🔴 THE STRIPE WAS MISSING HERE (owner, 2026-08-11: "i didnt see the
+        loader in cold entry").
+
+        This is the surface a PWA cold launch actually lands on — `start_url` is
+        /home and Downloader mode, the default, serves this page there — so it is
+        the one place the loader had to appear and the one place it did not. The
+        shaped skeleton replaced `PageLoader` wholesale when it was added, and
+        `PageLoader` WAS the stripe. Structure arrived; the thing that says "this
+        is loading, not broken" did not.
+
+        Both, now. The stripe is the shared `LoadingStripe`, so a cold entry here
+        is indistinguishable from an in-app navigation to any other route.
+      */}
+      <div className="-mx-3 -mt-1 sm:-mx-4">
+        <LoadingStripe />
+      </div>
+
       {/* Hero — title + subtitle */}
       <div className="space-y-2 px-1">
         <Bone className="h-7 w-44 rounded-lg" />

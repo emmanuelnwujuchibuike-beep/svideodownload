@@ -5,10 +5,41 @@ import { downloadConcurrencyStats } from "@/lib/concurrency";
 import { checkStream } from "@/lib/media/stream";
 import { hasWebPush } from "@/lib/push/web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { hasWorker, WORKER_SECRET, WORKER_URL } from "@/lib/worker";
 import { ytdlpVersion } from "@/server/services/ytdlp-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/**
+ * Which yt-dlp is doing the work — asked of the machine that actually has one.
+ *
+ * 🔴 The first version of this just called `ytdlpVersion()` locally, and on the
+ * public site that is ALWAYS null: downloads run on the Docker worker, and
+ * Vercel has no yt-dlp to ask. So the field shipped, read `null`, and answered
+ * nothing — a diagnostic that cannot see the thing it was added to diagnose.
+ *
+ * On the frontend role it now asks the WORKER's own /api/health and reports what
+ * that says, with `role` naming which machine answered so a null is never
+ * ambiguous. Short timeout and fully guarded: /api/health is polled by the
+ * container's own HEALTHCHECK, and a slow worker must never make the frontend
+ * look unhealthy.
+ */
+async function extractorHealth(): Promise<{ role: string; ytdlp: string | null; error?: string }> {
+  if (!hasWorker) return { role: "worker", ytdlp: await ytdlpVersion() };
+  try {
+    const res = await fetch(`${WORKER_URL}/api/health`, {
+      headers: { "x-worker-secret": WORKER_SECRET },
+      signal: AbortSignal.timeout(4000),
+      cache: "no-store",
+    });
+    if (!res.ok) return { role: "frontend", ytdlp: null, error: `worker health ${res.status}` };
+    const body = (await res.json()) as { extractor?: { ytdlp?: string | null } };
+    return { role: "frontend", ytdlp: body.extractor?.ytdlp ?? null };
+  } catch (e) {
+    return { role: "frontend", ytdlp: null, error: e instanceof Error ? e.message : "worker unreachable" };
+  }
+}
 
 /**
  * Liveness + a real cache round-trip. `cacheBackend` only says whether Upstash is
@@ -88,11 +119,10 @@ export async function GET() {
         yt-dlp is installed at IMAGE BUILD time, so an image a few weeks old runs
         a few-week-old yt-dlp, and YouTube's player changes faster than that.
 
-        `null` on the frontend role (Vercel has no yt-dlp) and whenever the
-        binary cannot be run at all — which is itself the answer to a different
-        outage.
+        See `extractorHealth` for why this asks the WORKER rather than the
+        machine serving this request.
       */
-      extractor: { ytdlp: await ytdlpVersion() },
+      extractor: await extractorHealth(),
     },
     { headers: { "Cache-Control": "no-store" } },
   );

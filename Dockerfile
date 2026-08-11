@@ -44,11 +44,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # in the script. Installing it at BUILD time only (the RUN above) freezes it at
 # image-build date, and a few weeks of YouTube player changes is all it takes for
 # every YouTube download to fail while metadata still works.
+#
+# `chown` on the binary matters: the entrypoint writes the refreshed copy back
+# over this path while running as `nextjs`, and without ownership that write
+# silently no-ops and the update quietly does nothing.
+#
+# 🔴 NO COMMENTS INSIDE THE `RUN` CONTINUATION. A `#` line between `\`-joined
+# lines is not portable across Docker builders — some strip it, some pass it to
+# the shell, and the one that passes it fails the build with a syntax error.
+# That is what broke the Railway build (2026-08-11). Comments go above the
+# instruction, never inside it.
 COPY --chown=nextjs:nodejs docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
-  # The refreshed binary is written back over this path at boot, so the runtime
-  # user must own it. Without this the update silently no-ops as `nextjs`.
-  && chown nextjs:nodejs /usr/local/bin/yt-dlp
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && chown nextjs:nodejs /usr/local/bin/yt-dlp
 
 USER nextjs
 EXPOSE 3000

@@ -6,10 +6,15 @@
  * activation. */
 var SWX = (self.SWX = self.SWX || {});
 
+// v14 (2026-08-11): the cold-entry redirect for the stale `/home` start_url
+// (routes.js). The cache contents are unchanged, but the bump is what makes an
+// installed worker update at all — a routing change that never activates is a
+// change that never shipped.
+//
 // v13 (2026-08-11): PRECACHE_URLS gained /launch + the splash logo — the cache
 // CONTENTS changed, so the bucket must be new or an installed client keeps a v12
 // cache that has neither.
-SWX.VERSION = "v13";
+SWX.VERSION = "v14";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

@@ -109,6 +109,13 @@ export const OWNER_COLUMN: Record<string, string> = {
   poll_votes: "user_id",
   comment_reactions: "user_id",
   reposts: "user_id",
+  // Keyed on ACTOR, not on whose repost it was. A member is entitled to the
+  // record of what they themselves saw, opened and engaged with; the mirror
+  // direction ("everyone who saw your repost") is deliberately not exportable,
+  // for the same reason `post_views` is excluded below — it would hand one
+  // member a list of other people's browsing. Reach stays a number everywhere,
+  // including here.
+  repost_attributions: "actor_id",
   stories: "user_id",
   // follower_id = accounts you chose to follow. The other side is exported
   // separately as `followers`, see FOLLOW_MIRROR.

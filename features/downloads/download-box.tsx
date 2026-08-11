@@ -194,7 +194,33 @@ export function DownloadBox({
     <div className="w-full">
       <form onSubmit={onSubmit} className={cn("rounded-2xl p-1.5 ring-1 ring-inset", onCard ? "bg-secondary/40 ring-border/60" : "bg-white/10 ring-white/15 backdrop-blur")}>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="relative flex-1">
+          {/*
+            🔴 THE PURPLE STRIPE GOES AROUND THE PLACEHOLDER (owner, 2026-08-11:
+            "the stripe … is supposed to be around this placeholder and not the
+            parent container, and the stripe should be a bit bigger … so it can
+            fill in the existing white line around the placeholder").
+
+            It was first built as a `p-px` wrapper around the whole paste CARD.
+            That is one level too high: the thing the owner pointed at is the
+            input, and the card's own edge is a different boundary.
+
+            So the gradient sits here, and at `p-0.5` (2px) rather than a
+            hairline — it now OCCUPIES the pale ring the input used to draw for
+            itself, instead of adding a second line beside it. The input's
+            `ring-1 ring-border` is removed for exactly that reason: a grey
+            hairline immediately inside a violet one reads as a double border,
+            which is the same mistake already corrected once on the card.
+
+            Radii differ by 2px (0.9rem outer / 0.7rem inner) so the inner corner
+            sits concentrically inside the outer one. Equal radii leave a visibly
+            thick spot at each corner.
+
+            Focus moves to the WRAPPER (`focus-within`) because the input no
+            longer owns a ring. It is a real 2px ring plus a halo, not a colour
+            change — a gradient that merely brightens is not a focus indicator
+            anyone can see, and this is the primary control on the page.
+          */}
+          <div className="relative flex-1 rounded-[0.9rem] bg-gradient-to-r from-blue-500 via-violet-500 to-purple-500 p-0.5 transition focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-1 focus-within:ring-offset-transparent">
             <input
               type="url"
               inputMode="url"
@@ -202,9 +228,9 @@ export function DownloadBox({
               onChange={(e) => setUrl(e.target.value)}
               placeholder="Paste any link here (TikTok, Instagram, X, Facebook…)"
               aria-label="Video URL"
-              className="h-14 w-full rounded-xl bg-background px-4 pr-24 text-base text-foreground outline-none ring-1 ring-inset ring-border transition focus:ring-2 focus:ring-primary"
+              className="h-[3.25rem] w-full rounded-[0.7rem] bg-background px-4 pr-24 text-base text-foreground outline-none"
             />
-            <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+            <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
               {url ? (
                 <button type="button" onClick={clear} aria-label="Clear" className="rounded-lg p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
                   <X className="h-4 w-4" />

@@ -1,5 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import type { RepostAudience } from "./repost/audience";
+import { filterVisibleReposts, repostViewer } from "./repost/visibility";
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  FRIEND ACTIVITY — who that you follow engaged with this post (Part 3)
@@ -78,6 +81,14 @@ interface ActorRow {
   post_id: string;
   user_id: string;
   kind: PulseActivityKind;
+}
+
+/** A repost row as read here — 0116 columns optional, see the query below. */
+interface RepostActorRow {
+  post_id: string;
+  user_id: string;
+  audience?: string | null;
+  throttled_at?: string | null;
 }
 
 type ProfileRow = PulseProfileRow;
@@ -190,15 +201,32 @@ export async function pulseActivityForPosts(
           .order("created_at", { ascending: false })
           .limit(200),
       ),
-      safe<{ post_id: string; user_id: string }>(
-        db
-          .from("reposts")
-          .select("post_id, user_id")
-          .in("post_id", postIds)
-          .in("user_id", followingIds)
-          .order("created_at", { ascending: false })
-          .limit(200),
-      ),
+      /*
+        🔴 Part 4: `audience` and `throttled_at` ride along so a friends-only
+        repost never becomes a "David reposted this" card for someone who only
+        follows David. The columns arrive with 0116; `safe()` already swallows
+        the 42703 from a database without them, and the fallback below then
+        treats every row as public — which is what every row WAS.
+      */
+      (async (): Promise<RepostActorRow[]> => {
+        const fetchRows = (cols: string) =>
+          db
+            .from("reposts")
+            .select(cols)
+            .in("post_id", postIds)
+            .in("user_id", followingIds)
+            .order("created_at", { ascending: false })
+            .limit(200);
+        const rich = await safe<RepostActorRow>(
+          fetchRows("post_id, user_id, audience, throttled_at") as unknown as PromiseLike<{
+            data: RepostActorRow[] | null;
+          }>,
+        );
+        if (rich.length > 0) return rich;
+        return safe<RepostActorRow>(
+          fetchRows("post_id, user_id") as unknown as PromiseLike<{ data: RepostActorRow[] | null }>,
+        );
+      })(),
       safe<{ post_id: string; author_id: string }>(
         db
           .from("post_comments")
@@ -211,8 +239,15 @@ export async function pulseActivityForPosts(
       ),
     ]);
 
+    // The audience gate, applied before a repost can become a Pulse card.
+    const viewer = await repostViewer(viewerId);
+    const visibleReposts = filterVisibleReposts(
+      repostRows.map((r) => ({ ...r, audience: (r.audience ?? "public") as RepostAudience })),
+      viewer,
+    ).filter((r) => !r.throttled_at);
+
     const rows: ActorRow[] = [
-      ...repostRows.map((r) => ({ post_id: r.post_id, user_id: r.user_id, kind: "repost" as const })),
+      ...visibleReposts.map((r) => ({ post_id: r.post_id, user_id: r.user_id, kind: "repost" as const })),
       ...commentRows.map((r) => ({ post_id: r.post_id, user_id: r.author_id, kind: "comment" as const })),
       ...likeRows.map((r) => ({ post_id: r.post_id, user_id: r.user_id, kind: "like" as const })),
     ];

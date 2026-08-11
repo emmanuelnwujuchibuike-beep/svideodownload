@@ -1,5 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import type { RepostAudience } from "./repost/audience";
+import { ANONYMOUS_VIEWER, filterVisibleReposts, type RepostViewer } from "./repost/visibility";
+
 /**
  * Repost data access (Twitter-retweet model — a repost points at the original
  * post, media is never duplicated). Every function is BEST-EFFORT: if the
@@ -36,29 +39,55 @@ export interface RepostBadge {
   caption?: string | null;
 }
 
-type ReposterRow = { post_id: string; user_id: string; caption?: string | null };
+type ReposterRow = {
+  post_id: string;
+  user_id: string;
+  caption?: string | null;
+  audience?: RepostAudience | null;
+  throttled_at?: string | null;
+};
 
 /**
  * For each post, the people the viewer FOLLOWS who reposted it — powers the
  * premium repost badge (overlapping avatars + "+N") and, when the newest of
  * them wrote a recommendation caption, surfaces it in the feed. Best-effort.
+ *
+ * 🔴 `viewer` is not optional in practice. From migration 0116 a repost can be
+ * friends-only, close-friends-only or private, and this query is scoped to
+ * people the viewer FOLLOWS — which is exactly the set for whom "I follow them"
+ * is not enough to see a friends-only row. Passing `ANONYMOUS_VIEWER` here
+ * degrades to public-only, which is the safe direction.
  */
-export async function followedReposters(postIds: string[], followingIds: string[]): Promise<Map<string, RepostBadge>> {
+export async function followedReposters(
+  postIds: string[],
+  followingIds: string[],
+  viewer: RepostViewer = ANONYMOUS_VIEWER,
+): Promise<Map<string, RepostBadge>> {
   const out = new Map<string, RepostBadge>();
   if (!hasSupabase || postIds.length === 0 || followingIds.length === 0) return out;
   try {
     const db = createAdminClient();
     const fetchRows = (cols: string) =>
       db.from("reposts").select(cols).in("post_id", postIds).in("user_id", followingIds).order("created_at", { ascending: false });
-    // `caption` arrives with migration 0030 — fall back cleanly until it's applied.
+    // Columns arrive across migrations (caption 0030, audience/throttle 0116) —
+    // fall back down the chain so an unapplied migration costs the feature, not
+    // the feed.
     let rows: ReposterRow[];
-    const withCaption = await fetchRows("post_id, user_id, caption");
-    if (withCaption.error) {
-      const { data } = await fetchRows("post_id, user_id");
-      rows = (data ?? []) as unknown as ReposterRow[];
+    const withAudience = await fetchRows("post_id, user_id, caption, audience, throttled_at");
+    if (withAudience.error) {
+      const withCaption = await fetchRows("post_id, user_id, caption");
+      if (withCaption.error) {
+        const { data } = await fetchRows("post_id, user_id");
+        rows = (data ?? []) as unknown as ReposterRow[];
+      } else {
+        rows = (withCaption.data ?? []) as unknown as ReposterRow[];
+      }
     } else {
-      rows = (withCaption.data ?? []) as unknown as ReposterRow[];
+      rows = (withAudience.data ?? []) as unknown as ReposterRow[];
     }
+    // Audience gate, then the throttle. A throttled repost is real and its
+    // author sees it; it just does not get distributed as social proof.
+    rows = filterVisibleReposts(rows, viewer).filter((r) => !r.throttled_at);
     if (rows.length === 0) return out;
 
     const userIds = [...new Set(rows.map((r) => r.user_id))];

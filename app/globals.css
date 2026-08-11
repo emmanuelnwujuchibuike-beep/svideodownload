@@ -1825,6 +1825,24 @@ html[data-a11y-motion="reduce"] *::after {
    put a visible seam across the top of the page. */
 :root {
   --frenz-canvas: 234 45% 96%;
+
+  /* ── How much of the viewport bottom the mobile nav owns ───────────────────
+
+     Anything `position: fixed` to the bottom of the screen has to clear the
+     bottom bar, and until this token existed each such element guessed. The
+     platform-status sheet guessed wrong and landed UNDERNEATH the nav, so only
+     a sliver of it was ever visible (owner, 2026-08-11: "only a small black
+     line of the description shows").
+
+     The value mirrors `features/app-shell/mobile-nav.tsx`: `pt-2.5` + a ~46px
+     item (24px glyph, gap, 11px label) + `pb-[max(env(safe-area-inset-bottom),
+     0.65rem)]`. Keep the two in step — if the bar's padding or label size
+     changes, this changes with it.
+
+     Declared globally rather than on the app shell so a component can rely on
+     it without knowing which layout it rendered under; on desktop the bar is
+     `lg:hidden`, and a tooltip sitting a few rem higher there costs nothing. */
+  --frenz-bottom-nav: calc(3.5rem + max(env(safe-area-inset-bottom), 0.65rem));
 }
 .dark {
   --frenz-canvas: 229 55% 5%;

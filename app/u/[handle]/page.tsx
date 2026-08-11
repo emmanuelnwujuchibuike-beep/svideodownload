@@ -1183,7 +1183,10 @@ async function ProfileSectionsLoader({
     listUserPosts(profileId, viewerId),
     isOwner || allowedGoverned.includes("liked") ? listLikedPosts(profileId) : Promise.resolve([]),
     isOwner || allowedGoverned.includes("saved") ? listSavedPosts(profileId) : Promise.resolve([]),
-    isOwner || allowedGoverned.includes("reposted") ? listUserReposts(profileId) : Promise.resolve([]),
+    // The viewer id matters here for the same reason it does on `listUserPosts`
+    // above: from 0116 an individual repost can be friends-only or private, so
+    // the tab being visible is not the same question as each row being visible.
+    isOwner || allowedGoverned.includes("reposted") ? listUserReposts(profileId, viewerId) : Promise.resolve([]),
     cookies(),
     // Part 17 — which of THIS owner's circles the viewer is in, so a module
     // gated to "Family" resolves against real membership. Ids only; the viewer

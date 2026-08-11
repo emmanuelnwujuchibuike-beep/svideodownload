@@ -6,6 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { flagsOf, isAccountVisibleTo, relationTo } from "./account-visibility";
 import { type Category } from "./categories";
 import { friendIdSet } from "./friend-ids";
+import type { RepostAudience } from "./repost/audience";
+import { filterVisibleReposts, repostViewer } from "./repost/visibility";
 
 /**
  * Published-download ("post") data layer — directory model: metadata + a source
@@ -477,34 +479,65 @@ export async function listLikedPosts(userId: string, limit = 24): Promise<PostCa
   }
 }
 
-/** The user's reposted posts (original cards, attribution preserved), newest
- *  repost first. Best-effort — returns [] before the reposts table is migrated. */
-export async function listUserReposts(userId: string, limit = 24): Promise<PostCard[]> {
+/**
+ * The user's reposted posts (original cards, attribution preserved), newest
+ * repost first. Best-effort — returns [] before the reposts table is migrated.
+ *
+ * 🔴 `viewerId` is what keeps the Reposts tab honest from migration 0116 on.
+ * The tab as a whole is already gated by `tabVisible()`, but that is a single
+ * on/off switch for the tab; an individual repost can now be friends-only or
+ * private, and a visitor allowed to see the TAB must still not see those rows.
+ * Omitting the argument degrades to public-only — the safe direction, and the
+ * correct one for any caller that does not know who is looking.
+ */
+export async function listUserReposts(userId: string, viewerId: string | null = null, limit = 24): Promise<PostCard[]> {
   if (!hasSupabase) return [];
   try {
     const db = createAdminClient();
-    type RepostRow = { post_id: string; caption?: string | null; pinned_at?: string | null; edited_at?: string | null };
-    // Pinned reposts lead the tab. Caption/pin columns arrive with migration
-    // 0030 — fall back to the plain shape until it's applied.
+    type RepostRow = {
+      post_id: string;
+      caption?: string | null;
+      pinned_at?: string | null;
+      edited_at?: string | null;
+      audience?: RepostAudience | null;
+    };
+    // Pinned reposts lead the tab. Columns arrive across migrations (0030
+    // caption/pin, 0116 audience) — fall back down the chain.
     let rows: RepostRow[];
-    const rich = await db
-      .from("reposts")
-      .select("post_id, caption, pinned_at, edited_at")
-      .eq("user_id", userId)
-      .order("pinned_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(limit * 2);
-    if (rich.error) {
-      const { data } = await db
+    const fetchRows = (cols: string) =>
+      db
         .from("reposts")
-        .select("post_id, created_at")
+        .select(cols)
         .eq("user_id", userId)
+        .order("pinned_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(limit * 2);
-      rows = ((data ?? []) as { post_id: string }[]).map((r) => ({ post_id: r.post_id }));
+    const rich = await fetchRows("post_id, caption, pinned_at, edited_at, audience");
+    if (rich.error) {
+      const mid = await fetchRows("post_id, caption, pinned_at, edited_at");
+      if (mid.error) {
+        const { data } = await db
+          .from("reposts")
+          .select("post_id, created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(limit * 2);
+        rows = ((data ?? []) as { post_id: string }[]).map((r) => ({ post_id: r.post_id }));
+      } else {
+        rows = (mid.data ?? []) as unknown as RepostRow[];
+      }
     } else {
       rows = (rich.data ?? []) as unknown as RepostRow[];
     }
+
+    // Every row on this tab belongs to `userId`, so the audience check is
+    // against that one relationship — resolved once, not per row.
+    const viewer = await repostViewer(viewerId);
+    rows = filterVisibleReposts(
+      rows.map((r) => ({ ...r, user_id: userId, audience: (r.audience ?? "public") as RepostAudience })),
+      viewer,
+    );
+
     const ids = rows.map((r) => r.post_id);
     if (ids.length === 0) return [];
     const metaById = new Map(rows.map((r) => [r.post_id, r]));

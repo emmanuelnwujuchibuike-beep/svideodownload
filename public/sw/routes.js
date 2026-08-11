@@ -108,6 +108,59 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  /*
+    🔴 ALREADY-INSTALLED APPS STILL LAUNCH THE OLD start_url (2026-08-11).
+
+    `start_url` moved to `/launch.html` in the manifest, but an installed PWA
+    does not pick that up when the manifest changes: on Android the launcher
+    holds the URL baked into the WebAPK at install time, and Chrome only
+    refreshes it via a WebAPK update that can take a day or more. Every app
+    installed before that change therefore still opens `/home` — and never
+    reaches the loader at all. That is the "I no longer see the cold entry
+    loader" report: the loader is fine, nothing was routing to it.
+
+    So the worker forwards that entry itself. It costs NO network round-trip:
+    the redirect is generated here and `/launch.html` is served from PAGE_CACHE
+    by the branch above, so the loader paints immediately instead of after
+    /home's time to first byte.
+
+    ── The two guards, and why a loop here would be unrecoverable ────────────
+    A redirect loop in a service worker survives a reload, so both guards are
+    deliberately conservative and either one alone is sufficient:
+
+     1. `req.referrer` must be EMPTY. A launcher tap, a bookmark and a typed
+        URL have no referrer; `launch.html`'s own `location.replace()` back to
+        `/home` (Full Bleed mode) carries one, so the return trip never
+        re-enters this branch.
+     2. An in-memory debounce. If a browser ever omitted the referrer on that
+        return trip, this stops the second bounce rather than spinning. The
+        worker being evicted resets it, which only means the guard is
+        best-effort — the referrer check is the real one.
+
+    Deliberately NOT redirected: `/downloads`, `/`, or any other route. Only the
+    stale start_url is intercepted, so nothing a member navigates to normally
+    can be diverted.
+  */
+  if (
+    req.mode === "navigate" &&
+    url.origin === self.location.origin &&
+    url.pathname === "/home" &&
+    !url.search &&
+    !req.referrer &&
+    Date.now() - (SWX.__lastBootRedirect || 0) > 10000
+  ) {
+    SWX.__lastBootRedirect = Date.now();
+    // No `?next=`: launch.html reads the frenz_mode cookie itself and picks the
+    // right home. Passing a destination from here would mean the worker and the
+    // loader could disagree about the default mode — the 2026-08-09 bug.
+    //
+    // 🔴 ABSOLUTE url. `Response.redirect()` throws a TypeError on a relative
+    // one, and a throw inside respondWith fails the navigation outright — the
+    // app would not open at all.
+    event.respondWith(Response.redirect(new URL("/launch.html", self.location.origin).href, 302));
+    return;
+  }
+
   if (req.mode === "navigate") {
     const sameOrigin = url.origin === self.location.origin;
     const cacheable =

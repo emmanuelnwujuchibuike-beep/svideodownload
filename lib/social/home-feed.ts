@@ -11,6 +11,8 @@ import { getHomePreferences, type HomePreferences } from "./home-preferences";
 import { canSeePost, type MediaKind, type Visibility } from "./posts";
 import { pulseActivityForPosts, type PulseActivity } from "./pulse-activity";
 import { commentPreviewsForPosts, creatorsWithActiveStories, type CommentPreview } from "./reel-extras";
+import type { RepostAudience } from "./repost/audience";
+import { filterVisibleReposts, repostViewer } from "./repost/visibility";
 import { followedReposters, repostCounts, viewerReposts } from "./reposts";
 
 /**
@@ -716,7 +718,11 @@ async function loadHomeFeed(
       const [reposted, counts, badges, friends, previews, storyAuthors] = await Promise.all([
         viewerReposts(ids, viewerId),
         repostCounts(ids),
-        followedReposters(ids, followingIds),
+        // Part 4: the viewer's relations, so a friends-only or close-friends
+        // repost never becomes a badge for someone who merely follows the
+        // reposter. `repostViewer` is request-cached, so the three call sites in
+        // one render share one pair of round-trips.
+        repostViewer(viewerId).then((v) => followedReposters(ids, followingIds, v)),
         /*
           Feature 15 Part 3 — the data Social Pulse™ was built for in Part 1 and
           never had. Added to this SAME `Promise.all` deliberately: it is a
@@ -844,15 +850,29 @@ async function surfaceFollowedReposts(
 
   // Most-recent reposts by people you follow → distinct target posts not already
   // shown. Over-fetch so privacy filtering below still yields `max`.
-  const { data: repRows } = await db
-    .from("reposts")
-    .select("post_id, user_id, created_at")
-    .in("user_id", followingIds)
-    .order("created_at", { ascending: false })
-    .limit(60);
+  //
+  // 🔴 Part 4: this is the query that PULLS CONTENT IN, so an unfiltered read
+  // here is the worst of the four — it would put a friends-only repost in the
+  // feed of everyone who follows the reposter. The audience gate runs on the
+  // rows the moment they arrive, before dedupe and before anything is fetched.
+  const viewer = await repostViewer(viewerId);
+  const fetchReposts = (cols: string) =>
+    db.from("reposts").select(cols).in("user_id", followingIds).order("created_at", { ascending: false }).limit(60);
+  const rich = await fetchReposts("post_id, user_id, created_at, audience, throttled_at");
+  const repRows = (rich.error ? ((await fetchReposts("post_id, user_id, created_at")).data ?? []) : (rich.data ?? [])) as unknown as {
+    post_id: string;
+    user_id: string;
+    audience?: string | null;
+    throttled_at?: string | null;
+  }[];
+  const visible = filterVisibleReposts(
+    repRows.map((r) => ({ ...r, audience: (r.audience ?? "public") as RepostAudience })),
+    viewer,
+  ).filter((r) => !r.throttled_at);
+
   const wantIds: string[] = [];
   const dedupe = new Set<string>();
-  for (const r of (repRows ?? []) as { post_id: string }[]) {
+  for (const r of visible) {
     if (excludeIds.has(r.post_id) || dedupe.has(r.post_id)) continue;
     dedupe.add(r.post_id);
     wantIds.push(r.post_id);

@@ -63,6 +63,9 @@ export const DATA_DOMAINS: DataDomain[] = [
       "post_guest_likes",
       "comment_reactions",
       "reposts",
+      // What a repost actually caused — impressions, opens and onward reposts,
+      // one row per (repost, actor, event). Feature 15 Part 4, migration 0116.
+      "repost_attributions",
       "follows",
       "friendships",
       "friend_requests",

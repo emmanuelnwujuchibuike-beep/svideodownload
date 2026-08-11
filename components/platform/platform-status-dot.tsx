@@ -133,10 +133,31 @@ export function PlatformStatusDot({
 
         `pointer-events-none` so it can never swallow the tap that dismisses it.
       */}
+      {/*
+        🔴 IT HAS TO CLEAR THE BOTTOM NAV (owner, 2026-08-11: "the platform
+        status description is being covered at the bottom nav, only a small
+        black line of the description shows").
+
+        The sheet was pinned to `bottom: max(1rem, safe-area)` — the true bottom
+        of the viewport. On every app-shell page that is exactly where the mobile
+        nav sits (`fixed inset-x-0 bottom-0`, mobile-nav.tsx), so the sheet was
+        laid out UNDER the bar and all that showed was the few pixels poking out
+        above it.
+
+        `--frenz-bottom-nav` (globals.css) is the bar's real height, so the sheet
+        now sits on top of it with a gap rather than behind it.
+
+        z-index raised past the bar's `z-40` as well. Clearing it geometrically
+        is what fixes the report, but leaving the sheet at a lower stacking level
+        than the thing it has to appear in front of would be a bug waiting for
+        the next layout change. (`z-[60]` in brackets is a real arbitrary value —
+        the bare `z-60` class emits no CSS in this Tailwind version, which has
+        bitten this codebase before.)
+      */}
       <span
         role="tooltip"
         className={cn(
-          "pointer-events-none fixed inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[60] mx-auto w-auto max-w-sm translate-y-1.5 rounded-2xl bg-slate-900 px-3.5 py-3 text-left text-xs leading-snug text-white opacity-0 shadow-2xl transition duration-150",
+          "pointer-events-none fixed inset-x-3 bottom-[calc(var(--frenz-bottom-nav,0px)+0.75rem)] z-[60] mx-auto w-auto max-w-sm translate-y-1.5 rounded-2xl bg-slate-900 px-3.5 py-3 text-left text-xs leading-snug text-white opacity-0 shadow-2xl transition duration-150",
           "peer-hover:translate-y-0 peer-hover:opacity-100 peer-focus:translate-y-0 peer-focus:opacity-100",
           "motion-reduce:transition-none dark:bg-slate-800",
         )}

@@ -68,9 +68,12 @@ export async function middleware(request: NextRequest) {
     🔴 REWRITE, NOT REDIRECT (owner, 2026-08-11: "the pwa takes more time to open
     than usual").
 
-    `/home` is the PWA's `start_url` (app/manifest.ts) and Downloader is the
-    DEFAULT mode, so this branch ran on essentially EVERY cold launch of the
-    installed app. A redirect costs a second full request: the launch fetched
+    `/home` WAS the PWA's `start_url`, and it still is for every app installed
+    before the manifest moved it to `/launch.html` — an installed WebAPK keeps
+    the URL it was built with until Chrome regenerates it. So this branch still
+    runs on a large share of cold launches, and the service worker now forwards
+    those to the loader before they ever reach here (public/sw/routes.js).
+    Downloader is the DEFAULT mode. A redirect costs a second full request: the launch fetched
     /home, got a 307, and fetched /downloads — one extra round-trip under the
     splash screen, on a phone, before anything could paint. That is a real and
     permanent tax on the one interaction that happens most.
@@ -224,6 +227,26 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|twitter-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    /*
+      🔴 `launch.html` is excluded, and it is the most latency-critical exclusion
+      in this list (2026-08-11).
+
+      It is the PWA's cold-entry loader: a hand-written static file in `public/`
+      whose entire job is to be on screen before the origin answers. It contains
+      no user data and reads no session, so there is nothing for this middleware
+      to do to it — but the matcher does not exclude `.html`, so every request
+      for it was still entering the auth path above. For a signed-in member
+      whose access token is not comfortably fresh — which is precisely the state
+      of an installed app being opened after a few hours away, the single most
+      common cold entry there is — that means a Supabase `getUser()` round-trip
+      (~290ms, up to a 5s timeout) sitting in front of the document whose whole
+      purpose is to remove the wait. The loader was queued behind the wait it
+      exists to cover.
+
+      Measured live before this change: `x-vercel-cache: MISS` on every request,
+      because a middleware invocation makes the response uncacheable at the edge
+      — a static file that could have been served from the CDN never was.
+    */
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|twitter-image|launch.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

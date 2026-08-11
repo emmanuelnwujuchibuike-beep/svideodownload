@@ -219,6 +219,42 @@ export async function consumeDaily(
   }
 }
 
+/**
+ * A generic short-lived counter, for behaviour a table cannot remember.
+ *
+ * Added for repost repeat-detection: a repost row is DELETED on undo, so
+ * "reposted and removed this four times" leaves no trace in Postgres to count.
+ * Writing an audit table for it would keep a permanent record of something a
+ * member deliberately undid, which is worse than not detecting it — so the
+ * count lives in Redis with a TTL and disappears on its own.
+ *
+ * Fails to 0 (= "no history"), like everything else here. A missing Redis must
+ * never be what refuses a legitimate action.
+ */
+export async function bumpEphemeralCount(key: string, ttlSeconds: number): Promise<number> {
+  if (!dailyRedis) return 0;
+  try {
+    const rk = `svd:count:${key}`;
+    const n = await dailyRedis.incr(rk);
+    if (n === 1) await dailyRedis.expire(rk, ttlSeconds);
+    return n;
+  } catch {
+    return 0;
+  }
+}
+
+/** Read a short-lived counter without spending anything. */
+export async function peekEphemeralCount(key: string): Promise<number> {
+  if (!dailyRedis) return 0;
+  try {
+    const v = await dailyRedis.get<number | string>(`svd:count:${key}`);
+    const n = typeof v === "string" ? Number.parseInt(v, 10) : v;
+    return Number.isFinite(n) && n ? Number(n) : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** Derives a best-effort client identifier from request headers. */
 export function clientId(headers: Headers): string {
   const fwd = headers.get("x-forwarded-for");

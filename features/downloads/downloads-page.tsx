@@ -157,29 +157,24 @@ export function DownloadsPage({
           Link" quick action points at — the anchor previously existed only on
           the landing hero, so that control did nothing on this page. */}
       {/*
-        🔴 THE PURPLE STRIPE (owner, 2026-08-11: "i want a small purple stripe
-        around the paste link section placeholder").
+        🔴 THE PURPLE STRIPE MOVED OFF THIS CARD (owner, 2026-08-11: "the stripe
+        … is supposed to be around this placeholder and not the parent
+        container").
 
-        A `p-px` gradient wrapper around the white card — the outer element paints
-        the brand ramp, the inner one covers all but one pixel of it, so what
-        shows is a hairline that follows the radius exactly. One element, no
-        pseudo-element, and it clips correctly because the inner card carries its
-        own background.
+        It was originally a `p-px` gradient wrapper around this whole card. The
+        placeholder the owner meant is the paste INPUT, so the gradient now lives
+        on that field in `download-box.tsx` — at 2px, filling the pale ring the
+        input used to draw for itself.
 
-        Deliberately NOT `border: 1px solid <gradient>` — a border cannot take a
-        gradient at all — and not an `outline`, which does not follow a border
-        radius on every engine. The two radii differ by 1px on purpose so the
-        inner corner sits concentrically inside the outer one; equal radii leave a
-        visible thick spot at each corner.
-
-        The card keeps its soft shadow, but its inset ring is gone: a grey
-        hairline immediately inside a violet one reads as a double border.
+        This card goes back to being an ordinary surface: soft shadow plus the
+        faint inset ring every other card on the page has. The ring was removed
+        when the violet hairline was here (two lines side by side read as a
+        double border); with the hairline gone, its absence is what would look
+        wrong.
       */}
       <section id="download" className="scroll-mt-20">
-        <div className="rounded-[1.55rem] bg-gradient-to-r from-blue-500 via-violet-500 to-purple-500 p-px shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)]">
-          <div className="rounded-[1.5rem] bg-white p-4 dark:bg-[#0b1020] sm:p-5">
-            <DownloadBox surface="card" platformStatus={platformStatus} />
-          </div>
+        <div className="rounded-[1.5rem] bg-white p-4 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-[#0b1020] dark:ring-white/10 sm:p-5">
+          <DownloadBox surface="card" platformStatus={platformStatus} />
         </div>
       </section>
 

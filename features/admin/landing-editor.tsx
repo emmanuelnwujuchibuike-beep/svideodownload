@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
 import { ImageUpload } from "@/components/social/image-upload";
-import { FEED_GRID_SLOTS, type LandingSettings } from "@/lib/landing/settings";
+import { FEED_GRID_SLOTS, LANDING_IMAGE_ASPECT, type LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
 
 /**
@@ -82,6 +82,19 @@ export function LandingEditor({ settings }: { settings: LandingSettings }) {
         <code className="font-mono">/</code> is baked in for speed — these are the
         only pieces you drive from here.
       </p>
+      {/*
+        🔴 Says the one thing an operator needs to know and could not previously
+        rely on. Each picker below now crops to the exact shape of the box its
+        image lands in (see LANDING_IMAGE_ASPECT), so the crop frame is a real
+        preview rather than an approximation.
+      */}
+      <p className="mb-6 rounded-xl bg-secondary/60 px-3 py-2 text-xs text-muted-foreground">
+        Each slot crops to the shape it is shown in, so whatever you frame in{" "}
+        <strong className="font-semibold text-foreground">Position your photo</strong> is
+        exactly what appears on the page — nothing is cut off afterwards.
+        Images uploaded before this change were cropped to 16:9 and will be
+        trimmed to fit; re-upload them to reframe.
+      </p>
 
       <form onSubmit={save} className="space-y-8">
         {/* Reels-tile poster */}
@@ -90,9 +103,9 @@ export function LandingEditor({ settings }: { settings: LandingSettings }) {
             <div>
               <p className="text-sm font-semibold">Hero reels poster</p>
               <p className="text-xs text-muted-foreground">
-                The still shown in the phone mockup&rsquo;s reels tile. Tapping it
-                opens <code className="font-mono">/reels</code> in full screen.
-                Portrait (9:16) looks best. Leave empty for a branded gradient.
+                The still shown in the phone mockup&rsquo;s screen. Crops to the
+                shape of that window (portrait, about 7:10) — upload any photo and
+                frame it. Leave empty for a branded gradient.
               </p>
             </div>
             {reelsPosterUrl ? (
@@ -106,7 +119,15 @@ export function LandingEditor({ settings }: { settings: LandingSettings }) {
             ) : null}
           </div>
           <div className="max-w-xs">
-            <ImageUpload kind="banner" value={reelsPosterUrl || null} onChange={setReelsPosterUrl} />
+            <ImageUpload
+              kind="banner"
+              value={reelsPosterUrl || null}
+              onChange={setReelsPosterUrl}
+              aspect={LANDING_IMAGE_ASPECT.reelsPoster}
+              // The window renders ~262 CSS px wide, so 512 on the long edge is
+              // already soft on a 3x screen before the optimizer sees it.
+              outputLongEdge={1200}
+            />
           </div>
         </div>
 
@@ -126,9 +147,11 @@ export function LandingEditor({ settings }: { settings: LandingSettings }) {
               <p className="text-sm font-semibold">Wallpaper Gallery button</p>
               <p className="text-xs text-muted-foreground">
                 The photo behind the &ldquo;Wallpaper Gallery&rdquo; button on the landing
-                page and the download page. A dark overlay sits on top so the
-                title and icon stay readable over any image. Landscape works
-                best. Leave empty for the brand gradient.
+                page and the download page. Crops close to square, which is the
+                shape of the landing tile; the wide button on the download page
+                shows a band from the middle of it. A dark overlay sits on the bottom
+                third so the title stays readable over any image. Leave empty for
+                the brand gradient.
               </p>
             </div>
             {wallpaperCtaImageUrl ? (
@@ -142,7 +165,15 @@ export function LandingEditor({ settings }: { settings: LandingSettings }) {
             ) : null}
           </div>
           <div className="max-w-xs">
-            <ImageUpload kind="banner" value={wallpaperCtaImageUrl || null} onChange={setWallpaperCtaImageUrl} />
+            <ImageUpload
+              kind="banner"
+              value={wallpaperCtaImageUrl || null}
+              onChange={setWallpaperCtaImageUrl}
+              aspect={LANDING_IMAGE_ASPECT.wallpaperCta}
+              // The landing's measured LCP element. It renders ~185 CSS px wide
+              // on a phone and up to 300 in the desktop column.
+              outputLongEdge={1200}
+            />
           </div>
         </div>
 
@@ -155,15 +186,21 @@ export function LandingEditor({ settings }: { settings: LandingSettings }) {
               </p>
               <p className="text-xs text-muted-foreground">
                 The 2×2 showcase grid on the landing page. Only these images show
-                there — real posts never do. The section is hidden until you add at
-                least one.
+                there — real posts never do. Each crops to the cell&rsquo;s 4:5
+                portrait shape. The section is hidden until you add at least one.
               </p>
             </div>
           </div>
           <div className="grid max-w-md grid-cols-2 gap-3">
             {grid.map((url, i) => (
               <div key={i} className="relative">
-                <ImageUpload kind="banner" value={url} onChange={(u) => setSlot(i, u)} />
+                <ImageUpload
+                  kind="banner"
+                  value={url}
+                  onChange={(u) => setSlot(i, u)}
+                  aspect={LANDING_IMAGE_ASPECT.feedGrid}
+                  outputLongEdge={1000}
+                />
                 {url ? (
                   <button
                     type="button"

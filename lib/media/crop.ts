@@ -76,6 +76,22 @@ export function sourceRect(image: Size, frame: Size, scale: number, offset: Offs
   return { sx: cx - sw / 2, sy: cy - sh / 2, sw, sh };
 }
 
+/**
+ * On-screen size of the crop frame for a ratio, bounded on its LONG edge.
+ *
+ * Bounding the long edge rather than the width is what keeps a portrait frame
+ * inside the dialog. The landing page's phone-mockup slot is 0.72, and
+ * `viewport / aspect` would make that frame 367px tall — taller than the dialog
+ * can show on a short screen, which puts Cancel/Use photo off the bottom of a
+ * modal that has no scroll. Square and landscape ratios are unaffected: for
+ * `aspect >= 1` the long edge IS the width, so this returns what it always did.
+ */
+export function frameSize(aspect: number, viewport: number): Size {
+  return aspect >= 1
+    ? { width: viewport, height: Math.round(viewport / aspect) }
+    : { width: Math.round(viewport * aspect), height: viewport };
+}
+
 /** Output pixel size for a frame ratio, capped on the long edge. */
 export function outputSize(frame: Size, longEdge: number): Size {
   const ratio = frame.width / frame.height;

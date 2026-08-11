@@ -102,6 +102,48 @@ interface CommentsData {
   loggedIn: boolean;
 }
 
+/**
+ * A clip at or below this width/height ratio counts as a "long" vertical video
+ * and fills the screen to the safe area even when `cover` has to trim its sides.
+ *
+ * 9:16 is 0.5625, so this admits the standard reel shape and everything taller,
+ * and excludes 2:3 (0.667), 4:5 (0.8), square and every landscape shape — the
+ * "shorter videos" that keep their own size over the blurred backdrop. See the
+ * long note at the `onLoadedMetadata` call site for the owner instruction and
+ * why a pure "how much would be cropped" test could not express it.
+ */
+const TALL_CLIP_ASPECT = 0.6;
+
+/**
+ * ── THE BOTTOM STACK ON /reels, in one place ────────────────────────────────
+ *
+ * Four things share the bottom of a reel and they were each carrying their own
+ * hand-written `calc()`, which is how the progress bar ended up UNDER the app's
+ * tab bar and hard against the sound row at the same time (owner, 2026-08-10:
+ * "the progress bar is too close to the sound … push them upper so they can
+ * give more space for the progress bar").
+ *
+ * Measured from the true bottom edge, they now stack with real gaps:
+ *
+ *   0            the nav's own floor (it owns `env(safe-area-inset-bottom)`)
+ *   4.75rem      the top of the mobile tab bar
+ *   +2rem        the tab bar's feathered scrim above itself (mobile-nav.tsx)
+ *   PROGRESS     6.5rem  — the scrubber, clear of both
+ *   CONTENT      8.25rem — caption, sound row and action rail, clear of the
+ *                          scrubber's 20px touch row
+ *
+ * Every one of them adds `env(safe-area-inset-bottom)` so nothing lands in the
+ * home-indicator strip. The modal variant (no tab bar under it) keeps its own
+ * tighter floor — these are the `page` values only.
+ *
+ * 🔴 These are paired with the nav scrim's height in `features/app-shell/
+ * mobile-nav.tsx`: that scrim is painted at z-40 and this deck is z-30, so it
+ * paints OVER anything here that shares its band. Move one, check the other.
+ */
+const REEL_PROGRESS_BOTTOM = "!bottom-[calc(6.5rem+env(safe-area-inset-bottom))] lg:!bottom-4";
+const REEL_CONTENT_BOTTOM = "bottom-[calc(8.25rem+env(safe-area-inset-bottom))] lg:bottom-6";
+const REEL_CONTENT_PAD = "pb-[calc(8.25rem+env(safe-area-inset-bottom))] lg:pb-8";
+
 function fmt(s: number): string {
   if (!Number.isFinite(s) || s < 0) s = 0;
   const m = Math.floor(s / 60);
@@ -385,11 +427,12 @@ function ReelCard({
   /** A decisive horizontal swipe — switches For You/Following (page variant only). */
   onSwipeTab?: (dir: "left" | "right") => void;
 }) {
-  // Anchor the caption + action rail low. On the /reels route (page) they sit just
-  // above the mobile bottom nav and drop to the very bottom on large screens; in
-  // the modal (no nav) they hug the bottom on every size — no empty gap.
-  const railBottom = variant === "page" ? "bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-6" : "bottom-6";
-  const captionPad = variant === "page" ? "pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-8" : "pb-6 lg:pb-8";
+  // Anchor the caption + action rail low. On the /reels route (page) they clear
+  // the mobile bottom nav AND the scrubber above it — see REEL_CONTENT_BOTTOM for
+  // the whole stack — and drop to the very bottom on large screens; in the modal
+  // (no nav) they hug the bottom on every size, no empty gap.
+  const railBottom = variant === "page" ? REEL_CONTENT_BOTTOM : "bottom-6";
+  const captionPad = variant === "page" ? REEL_CONTENT_PAD : "pb-6 lg:pb-8";
   const video = useRef<HTMLVideoElement | null>(null);
   /*
     ── Feature 15: Living Interface™ + Smart UI ─────────────────────────────
@@ -1244,8 +1287,13 @@ function ReelCard({
         visible={ui}
         seekable={native}
         /* Clear the app's bottom nav on the /reels PAGE; the modal has no nav
-           under it, so it keeps the component's own safe-area floor. */
-        className={variant === "page" ? "!bottom-[calc(4.25rem+env(safe-area-inset-bottom))] lg:!bottom-4" : undefined}
+           under it, so it keeps the component's own safe-area floor.
+
+           🔴 It used to sit at 4.25rem — BELOW the 4.75rem nav floor, so the
+           scrubber was partly under the tab bar while simultaneously touching
+           the sound row above it. Both ends of that are fixed by the one stack
+           in REEL_PROGRESS_BOTTOM. */
+        className={variant === "page" ? REEL_PROGRESS_BOTTOM : undefined}
         /* Hold the chrome up for the whole drag, then restart the idle timer —
            otherwise the bar you are dragging fades out from under your finger. */
         onSeekStart={() => {
@@ -1448,11 +1496,38 @@ function ReelCard({
                     So a clip genuinely shot at the device's aspect still goes
                     edge to edge, exactly as asked; everything else keeps all of
                     its picture.
+
+                    🔴 AND THEN: TALL CLIPS FILL REGARDLESS (owner, 2026-08-10)
+
+                    "i want it to go full screen to the safe area but shorter
+                    videos should show their respective size but long views
+                    should reach the safe area at all cost."
+
+                    The 1.5% rule above is correct for SHAPE MISMATCH and wrong
+                    for the one shape that matters most. A standard 9:16 reel
+                    (0.5625) on a 9:19.5 phone (0.462) loses 17.9% of its width
+                    to `cover`, so it failed the test and letterboxed — which is
+                    precisely the clip the owner means by "long views", and the
+                    one that has to reach the safe area "at all cost".
+
+                    So there are now two ways to earn full bleed, and the second
+                    one accepts the crop deliberately:
+
+                      • `cropped <= 1.5%` — any shape that already fills, free.
+                      • `aspect <= 0.6`   — the clip is at least as vertical as
+                        a 9:16 reel. These fill the screen top to bottom, which
+                        is what TikTok and Instagram do with the same footage.
+
+                    0.6 is the boundary on purpose: 9:16 is 0.5625 and anything
+                    taller is more vertical still, while 2:3 (0.667), 4:5 (0.8),
+                    1:1 and every landscape shape stay OUTSIDE it. Those are the
+                    "shorter videos" that keep "their respective size" — they
+                    letterbox over the blurred backdrop with every pixel intact.
                   */
                   const screen = window.innerWidth / window.innerHeight;
                   const aspect = v.videoWidth / v.videoHeight;
                   const cropped = aspect > screen ? 1 - screen / aspect : 1 - aspect / screen;
-                  setFullBleed(cropped <= 0.015);
+                  setFullBleed(cropped <= 0.015 || aspect <= TALL_CLIP_ASPECT);
                 }
                 // Resume where this reel last stopped (tab switch / reopen) —
                 // switching For You/Following continues, never restarts.
@@ -1563,11 +1638,13 @@ function ReelCard({
           ui ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >
+        {/* 40px, down from 44px — it heads a rail of 42px discs, so it tracks
+            them (owner: "reduce the size of the engagement tray"). */}
         <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="relative mb-1">
           {item.publisher.avatarUrl ? (
-            <Image src={item.publisher.avatarUrl} alt="" width={44} height={44} className="h-11 w-11 rounded-full object-cover ring-2 ring-white" />
+            <Image src={item.publisher.avatarUrl} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover ring-2 ring-white" />
           ) : (
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white ring-2 ring-white">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white ring-2 ring-white">
               {item.publisher.displayName.charAt(0).toUpperCase()}
             </span>
           )}
@@ -2154,10 +2231,20 @@ function RailButton({
 
     `countNode` keeps `AnimatedCount` — a like should tick up, not jump — which is
     the one thing the generic button does not do on its own.
+
+    🔴 42px, not 48px (owner, 2026-08-10: "reduce the size of the engagement
+    tray"). Five 48px discs plus their counts plus the avatar made the rail about
+    450px of a 851px screen — over half the height of the video, on the side of
+    the frame where the subject usually is. 42px with a 21px glyph keeps it well
+    clear of the 44px minimum touch target (WCAG 2.5.5 measures the TARGET, and
+    the button's own tap area is the disc plus the count beneath it, ~56px tall)
+    while giving roughly 60px back to the picture.
   */
   return (
     <GlassButton
       icon={Icon}
+      size={42}
+      glyphClassName="h-[21px] w-[21px]"
       label={label}
       onClick={onClick}
       active={active}

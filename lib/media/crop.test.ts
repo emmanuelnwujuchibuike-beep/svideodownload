@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { clampOffset, coverScale, outputSize, sourceRect } from "./crop";
+import { clampOffset, coverScale, frameSize, outputSize, sourceRect } from "./crop";
+import { LANDING_IMAGE_ASPECT } from "@/lib/landing/settings";
 
 /**
  * Crop geometry.
@@ -110,5 +111,52 @@ describe("outputSize", () => {
     expect(outputSize({ width: 264, height: 264 }, 512)).toEqual({ width: 512, height: 512 });
     expect(outputSize({ width: 320, height: 180 }, 512)).toEqual({ width: 512, height: 288 });
     expect(outputSize({ width: 180, height: 320 }, 512)).toEqual({ width: 288, height: 512 });
+  });
+});
+
+describe("frameSize", () => {
+  it("keeps square and landscape frames exactly as they were", () => {
+    expect(frameSize(1, 264)).toEqual({ width: 264, height: 264 });
+    expect(frameSize(16 / 9, 264)).toEqual({ width: 264, height: 149 });
+  });
+
+  it("bounds a PORTRAIT frame on its height, not its width", () => {
+    // `264 / 0.72` is 367px — taller than the dialog, which has no scroll, so
+    // the Use photo button would sit off the bottom of a short screen.
+    const f = frameSize(0.72, 264);
+    expect(f.height).toBe(264);
+    expect(f.width).toBe(190);
+  });
+
+  it("holds the requested ratio to within a rounded pixel", () => {
+    for (const aspect of Object.values(LANDING_IMAGE_ASPECT)) {
+      const f = frameSize(aspect, 264);
+      expect(Math.max(f.width, f.height)).toBe(264);
+      expect(f.width / f.height).toBeCloseTo(aspect, 2);
+    }
+  });
+});
+
+describe("LANDING_IMAGE_ASPECT", () => {
+  /*
+    🔴 These are MEASURED against the rendered boxes (see the note in
+    lib/landing/settings.ts). A stale value here silently reintroduces exactly
+    the bug it exists to fix: the operator frames a photo in one shape and the
+    page shows it in another.
+  */
+  it("matches the boxes the images render in", () => {
+    // components/landing/feed-grid-gallery.tsx — `aspect-[4/5]`, verified 0.800.
+    expect(LANDING_IMAGE_ASPECT.feedGrid).toBeCloseTo(0.8, 3);
+    // components/landing/phone-mockup.tsx — measured 265.6x367.4 at every width
+    // (the frame is capped at max-w-[300px]).
+    expect(LANDING_IMAGE_ASPECT.reelsPoster).toBeCloseTo(265.6 / 367.4, 2);
+    // The wallpaper tile stretches to its sibling, so it has a RANGE (0.721 at
+    // 360px, 1.057 at 430px). 7/8 is the value whose worst-case symmetric crop
+    // across that range is smallest.
+    const range = [0.721, 0.869, 1.057];
+    const worst = Math.max(
+      ...range.map((b) => 1 - Math.min(b, LANDING_IMAGE_ASPECT.wallpaperCta) / Math.max(b, LANDING_IMAGE_ASPECT.wallpaperCta)),
+    );
+    expect(worst).toBeLessThan(0.2);
   });
 });

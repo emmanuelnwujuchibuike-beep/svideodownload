@@ -56,58 +56,41 @@ import { cn } from "@/lib/utils";
  */
 function WallpaperBackdrop({ url, sizes }: { url: string; sizes: string }) {
   /*
-    🔴 TWO LAYERS: the whole image, on a blurred copy of ITSELF.
+    🔴 ONE LAYER, `object-cover` — and the reason it is finally correct is that
+    the SHAPE PROBLEM MOVED UPSTREAM (owner, 2026-08-10: "i think this is what
+    causing it", on a screenshot of the crop dialog).
 
-    ── Why no single object-fit can do this (owner, 2026-08-10) ──────────────
-    "They should fill the whole space but not zoom, they could shrink, but not
-    zoom" — then, after `cover` was restored: "the wallpaper button and the
-    iphone mockup poster are still zooming onesided."
+    ── The three treatments this replaces, and why each failed ───────────────
+    The tile is roughly square and the uploader used to bake every landing image
+    to 16:9, so the aspects could never match and nothing done HERE could win:
 
-    That is a genuine geometric bind, not a preference, and all three obvious
-    answers fail it:
+      • `cover`   filled by matching the short axis and discarding the rest —
+                  a wide file lost most of its width. The "one-sided zoom".
+      • `contain` showed all of it and left the brand gradient as bars top and
+                  bottom, which is the "wallpaper button error" screenshot.
+      • contain over a blurred, overscanned copy of itself filled those bars,
+                  but the tile then read as a small picture floating in mush.
 
-      • `cover`   fills by scaling until the SHORT axis matches, then discards
-                  the overflow on the long one. A 9:16 wallpaper in a roughly
-                  square tile keeps a narrow horizontal band of the middle — a
-                  magnified slice. That is the "one-sided zoom" precisely.
-      • `contain` shows all of it and leaves empty bars, which is not filling.
-      • `fill`    fills and shows everything by STRETCHING, distorting every face
-                  in the picture.
+    The mismatch was never a rendering question. `LANDING_IMAGE_ASPECT` now
+    crops the upload to THIS tile's shape, so `cover` has nothing left to
+    discard: it fills the box with the exact frame the operator chose, edge to
+    edge, undistorted, no bars and no blur.
 
-    When the aspects differ, something must occupy the leftover. So the leftover
-    becomes the image itself, blurred — the same resolution the owner accepted
-    for the reels letterbox a few commits ago.
+    (Older uploads are still 16:9 files and `cover` will centre-crop them until
+    they are re-uploaded — stated in the admin panel, because framing that was
+    never recorded cannot be recovered.)
 
-    Result: the tile is filled edge to edge, the wallpaper is complete and
-    undistorted, and the bands read as the picture's own colour instead of as
-    gaps.
-
-    Cost is one extra <img> at the SAME src, so the second layer is a cache hit
-    and adds no bytes over the wire. The blur is a static filter on a static
-    image — painted once, never animated, so it never re-rasterizes.
-
-    `priority` stays on the sharp layer only: that is the measured LCP element,
-    and preloading the decoration would put a second image in front of it.
+    `priority` because this is the landing page's measured LCP element.
   */
   return (
-    <>
-      <NextImage
-        src={url}
-        alt=""
-        fill
-        sizes={sizes}
-        aria-hidden
-        className="pointer-events-none scale-110 select-none object-cover blur-xl"
-      />
-      <NextImage
-        src={url}
-        alt=""
-        fill
-        sizes={sizes}
-        priority
-        className="pointer-events-none select-none object-contain"
-      />
-    </>
+    <NextImage
+      src={url}
+      alt=""
+      fill
+      sizes={sizes}
+      priority
+      className="pointer-events-none select-none object-cover"
+    />
   );
 }
 

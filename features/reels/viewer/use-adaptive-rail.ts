@@ -50,6 +50,17 @@ import { useEffect, useState } from "react";
  * it ships it should be an explicit setting, which belongs with the other
  * viewer preferences rather than in a layout hook.
  *
+ * ── The gaps are TIGHTER than they were (owner, 2026-08-10) ────────────────
+ *
+ * "reduce the size of the engagement tray." The discs went from 48px to 42px
+ * (see RailButton) and the gaps came down with them — 22px between 48px buttons
+ * and 22px between 42px ones are not the same rhythm, and leaving them would
+ * have shrunk the buttons without shrinking the rail. Together they give roughly
+ * 90px of a phone screen back to the video.
+ *
+ * The INSETS are untouched: they answer reach, which has nothing to do with how
+ * big the buttons are.
+ *
  * ── Cost ───────────────────────────────────────────────────────────────────
  *
  * One resize listener, rAF-coalesced, shared by the whole deck through the
@@ -84,34 +95,34 @@ function resolve(w: number, h: number): RailLayout {
   // Landscape: height is scarce. Keep the rail close to the edge and tighten it
   // vertically so it does not eat the video.
   if (landscape && short < 600) {
-    return { inset: 10, gap: 14, compact: true, form: "large-phone" };
+    return { inset: 10, gap: 10, compact: true, form: "large-phone" };
   }
 
   if (short < 360) {
     // Small phone. The edge is already within reach and there is no width to
     // spare — almost no correction, or the rail starts covering the video.
-    return { inset: 8, gap: 20, compact: false, form: "phone" };
+    return { inset: 8, gap: 14, compact: false, form: "phone" };
   }
   if (short < 412) {
-    return { inset: 12, gap: 22, compact: false, form: "phone" };
+    return { inset: 12, gap: 16, compact: false, form: "phone" };
   }
   if (short < 500) {
     // Large phone — the case this system exists for. The top of a flush rail is
     // out of the thumb arc here.
-    return { inset: 18, gap: 24, compact: false, form: "large-phone" };
+    return { inset: 18, gap: 18, compact: false, form: "large-phone" };
   }
   if (short < 700) {
     // Unfolded foldable. Wide, and usually held with both hands, but the rail
     // still wants to be nearer the middle than the bezel.
-    return { inset: 26, gap: 26, compact: false, form: "foldable" };
+    return { inset: 26, gap: 20, compact: false, form: "foldable" };
   }
   if (short < 1024) {
     // Tablet. The edge is genuinely unreachable one-handed.
-    return { inset: 34, gap: 28, compact: false, form: "tablet" };
+    return { inset: 34, gap: 22, compact: false, form: "tablet" };
   }
   // Desktop — a pointer, so reach is irrelevant and the inset is purely
   // compositional: the rail sits off the video's shoulder rather than on it.
-  return { inset: 28, gap: 26, compact: false, form: "desktop" };
+  return { inset: 28, gap: 20, compact: false, form: "desktop" };
 }
 
 export function useAdaptiveRail(): RailLayout {

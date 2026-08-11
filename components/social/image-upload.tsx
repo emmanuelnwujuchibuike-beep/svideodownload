@@ -17,11 +17,28 @@ export function ImageUpload({
   value,
   onChange,
   className,
+  aspect,
+  outputLongEdge,
 }: {
   kind: "avatar" | "banner";
   value: string | null;
   onChange: (url: string) => void;
   className?: string;
+  /**
+   * Width ÷ height of the frame the operator crops in — and therefore of the
+   * file that gets uploaded, because the crop is baked into the bytes.
+   *
+   * 🔴 Pass the aspect of the box the image will actually RENDER in. Leaving it
+   * to the default means cropping to 16:9 and then hoping the destination is
+   * 16:9 too; when it is not, the render site has to either cut the picture or
+   * letterbox it, and both were reported as bugs on the landing page (see
+   * LANDING_IMAGE_ASPECT in lib/landing/settings.ts for the full history).
+   *
+   * Defaults preserve the original behaviour: a square avatar, a 16:9 cover.
+   */
+  aspect?: number;
+  /** Exported long edge. Raise it for slots that render bigger than an avatar. */
+  outputLongEdge?: number;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -141,14 +158,16 @@ export function ImageUpload({
 
       {err ? <p className="mt-1.5 text-xs text-red-400">{err}</p> : null}
 
-      {/* The framing step. An avatar crops to a circle; a cover keeps its own
-          wide ratio, because those are the shapes each is actually rendered in
-          and cropping to the wrong one just moves the problem. */}
+      {/* The framing step. An avatar crops to a circle; everything else crops to
+          the shape it will be shown in — `aspect` when the caller knows it,
+          otherwise the 16:9 a profile cover renders at. Cropping to the wrong
+          one does not solve the framing problem, it just moves it to the page. */}
       {pending ? (
         <ImageCropper
           file={pending}
-          aspect={kind === "avatar" ? 1 : 16 / 9}
+          aspect={aspect ?? (kind === "avatar" ? 1 : 16 / 9)}
           round={kind === "avatar"}
+          output={outputLongEdge}
           busy={busy}
           onCancel={() => setPending(null)}
           onDone={(blob) => void upload(blob)}

@@ -59,7 +59,19 @@ export function GlassButton({
   activeClassName,
   count,
   countNode,
+  /** Diameter of the glass disc, in px. */
   size = 48,
+  /**
+   * The glyph inside the disc. It is a CLASS and not a number derived from
+   * `size` on purpose: several of the icons rendered here (the Wow faces, the
+   * emotion glyphs) are hand-written components that forward `className` and
+   * nothing else, so an inline `style` would be silently dropped on exactly the
+   * buttons the rail uses most and they would render at their intrinsic size.
+   *
+   * Shrink it whenever `size` shrinks — a 42px disc around a 24px glyph reads
+   * as a cramped 48px button rather than as a smaller one.
+   */
+  glyphClassName = "h-6 w-6",
   hapticIntent = "light",
   press,
   className,
@@ -81,6 +93,7 @@ export function GlassButton({
    */
   countNode?: React.ReactNode;
   size?: number;
+  glyphClassName?: string;
   hapticIntent?: HapticIntent;
   /** Long-press handlers, spread onto the button. */
   press?: Record<string, unknown>;
@@ -146,7 +159,8 @@ export function GlassButton({
           (Icon ? (
             <Icon
               className={cn(
-                "relative h-6 w-6 transition-colors",
+                "relative transition-colors",
+                glyphClassName,
                 fill && active && "fill-current",
                 active
                   ? (activeClassName ?? "text-[hsl(var(--reel-accent,265_85%_65%))]")

@@ -3,7 +3,7 @@
 import { Loader2, Minus, Plus, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { clampOffset, coverScale, outputSize, sourceRect } from "@/lib/media/crop";
+import { clampOffset, coverScale, frameSize, outputSize, sourceRect } from "@/lib/media/crop";
 import { cn } from "@/lib/utils";
 
 /**
@@ -45,9 +45,9 @@ import { cn } from "@/lib/utils";
  * canvas, so the output is the exact region under the mask.
  */
 
-/** On-screen size of the crop square. */
+/** On-screen size of the crop frame's LONGER edge. */
 const VIEWPORT = 264;
-/** Exported edge length. Retina-sharp at every avatar size we render. */
+/** Default exported long edge. Retina-sharp at every avatar size we render. */
 const OUTPUT = 512;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
@@ -65,6 +65,7 @@ export function ImageCropper({
   onCancel,
   onDone,
   busy = false,
+  output = OUTPUT,
 }: {
   file: File;
   aspect?: number;
@@ -72,14 +73,21 @@ export function ImageCropper({
   onCancel: () => void;
   onDone: (blob: Blob) => void;
   busy?: boolean;
+  /**
+   * Exported long edge in pixels. 512 is right for an avatar; a slot that
+   * renders larger than ~170 CSS px needs more, or the file is upscaled on a
+   * retina screen no matter what the optimizer does with it downstream.
+   */
+  output?: number;
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState<Offset>({ x: 0, y: 0 });
   const [error, setError] = useState<string | null>(null);
   const dragRef = useRef<{ id: number; startX: number; startY: number; from: Offset } | null>(null);
-  const frameW = VIEWPORT;
-  const frameH = Math.round(VIEWPORT / aspect);
+  /* VIEWPORT bounds the LONGER edge, not the width — see `frameSize`, which is
+     where the reasoning and the unit tests live. */
+  const { width: frameW, height: frameH } = frameSize(aspect, VIEWPORT);
 
   /* Decode from an object URL and release it — a leaked blob URL keeps the
      whole original file in memory for the life of the tab. */
@@ -139,7 +147,7 @@ export function ImageCropper({
   const apply = () => {
     if (!img) return;
     const canvas = document.createElement("canvas");
-    const out = outputSize(frame, OUTPUT);
+    const out = outputSize(frame, output);
     canvas.width = out.width;
     canvas.height = out.height;
     const ctx = canvas.getContext("2d");

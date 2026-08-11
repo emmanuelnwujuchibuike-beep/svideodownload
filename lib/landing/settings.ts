@@ -35,6 +35,75 @@ import { createAdminClient } from "@/lib/supabase/admin";
 /** How many images the 2×2 feed grid shows. Fixed by the design (a 2×2 grid). */
 export const FEED_GRID_SLOTS = 4;
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 THE SHAPE OF EACH SLOT — the fix for "it's zooming one-sided"
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-08-10, pointing at a screenshot of the "Position your photo"
+ * dialog: "i think this is what causing it."
+ *
+ * They were right, and it is the whole bug. Every one of these three slots was
+ * uploaded through `ImageUpload kind="banner"`, which cropped to a hardcoded
+ * 16:9 — while the places the images actually render are nothing like 16:9:
+ *
+ *   • the hero phone's poster is a TALL window inside a phone frame;
+ *   • the Wallpaper Gallery tile is roughly SQUARE;
+ *   • the feed-grid cells are 4:5 PORTRAIT.
+ *
+ * So the operator framed a photo in a wide rectangle, the site then had to
+ * squeeze that wide rectangle into a tall hole, and whatever it did next was
+ * wrong: `cover` threw away half the width (the one-sided zoom), `contain`
+ * letterboxed it, and the blurred-backdrop compromise that followed filled the
+ * bands with mush. None of those is fixable at the render site, because the
+ * information — which part of the photo matters — was discarded at upload.
+ *
+ * Cropping to the DESTINATION shape removes the mismatch instead of decorating
+ * it. The dialog's promise, "everything inside the frame is what people will
+ * see", becomes literally true, and the render sites go back to a plain
+ * `object-cover` that has nothing left to crop.
+ *
+ * 🔴 These are width ÷ height and they are MEASURED against the rendered box,
+ * not guessed. If a layout changes shape, re-measure and change it here — a
+ * stale number here silently reintroduces the exact bug this replaces.
+ *
+ * 🔴 Images uploaded BEFORE this existed are still 16:9 files. They will be
+ * centre-cropped by `object-cover` until they are re-uploaded through the new
+ * frame; there is no way to recover framing that was never recorded.
+ */
+export const LANDING_IMAGE_ASPECT = {
+  /**
+   * The phone mockup's media window (`components/landing/phone-mockup.tsx`).
+   *
+   * Measured 265.6×367.4 CSS px = 0.723, and IDENTICAL at 360/393/430/768/1280
+   * because the device frame is capped at `max-w-[300px]`. So this one is exact:
+   * a photo cropped here fills that window with nothing left over.
+   */
+  reelsPoster: 0.72,
+  /**
+   * The Wallpaper Gallery tile in its `card` variant
+   * (`components/wallpapers/wallpaper-cta.tsx`).
+   *
+   * 🔴 This slot has NO single shape, which is worth stating rather than hiding
+   * behind a tidy-looking fraction. The tile is a grid cell that stretches to
+   * whatever height its "Explore Features" sibling needs, so its own aspect
+   * moves with the viewport — measured 0.721 at 360px, 0.869 at 393px and 1.057
+   * at 430px, and the WIDE `row` variant on /downloads is 2.1–2.6 on top of
+   * that.
+   *
+   * 7/8 is the value that minimises the worst case across the phone range: no
+   * more than ~18% trimmed at either end, symmetrically, which reads as a
+   * cropped photo rather than as the one-sided magnification being fixed here.
+   * Re-measure if that row's layout changes.
+   */
+  wallpaperCta: 7 / 8,
+  /**
+   * The 2×2 showcase cells (`components/landing/feed-grid-gallery.tsx`).
+   * `aspect-[4/5]`, verified 0.800 at every width. Exact.
+   */
+  feedGrid: 4 / 5,
+} as const;
+
 export interface LandingSettings {
   /** Still poster for the hero phone's reels tile. Empty ⇒ gradient fallback. */
   reelsPosterUrl: string;

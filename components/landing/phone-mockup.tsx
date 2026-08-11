@@ -321,47 +321,37 @@ export async function PhoneMockup() {
                       the real LCP image instead of alongside it.
                     */
                     /*
-                      🔴 Two layers — the whole poster on a blurred copy of
-                      itself (owner, 2026-08-10: "the iphone mockup poster is
-                      still zooming onesided").
+                      🔴 ONE LAYER, `object-cover` — the shape problem is fixed
+                      at UPLOAD now (owner, 2026-08-10: "i think this is what
+                      causing it", on a screenshot of the crop dialog).
 
-                      Same geometric bind as the Wallpaper tile, same fix. This
-                      slot is a tall 9:16-ish window inside the phone frame, and
-                      the admin uploads whatever shape they have. `object-cover`
-                      filled it by matching the short axis and discarding the
-                      rest, so a landscape poster showed a magnified vertical
-                      slice of its middle — the one-sided zoom.
+                      This window is portrait, about 7:10, and the uploader used
+                      to bake every landing image to 16:9. Nothing done here
+                      could reconcile that: `cover` cut ~44% of the width off a
+                      wide file (the one-sided zoom), `contain` letterboxed it,
+                      and contain-over-a-blurred-copy filled the bands with mush
+                      — which is the "iphonemockup error" screenshot.
 
-                      `contain` in front shows the whole poster undistorted; the
-                      blurred, overscanned copy behind fills what is left, so the
-                      screen inside the mockup is still edge to edge with no
-                      empty bars. Full reasoning in wallpaper-cta.tsx.
+                      `LANDING_IMAGE_ASPECT.reelsPoster` now crops the upload to
+                      this window's shape, so `cover` has nothing left to
+                      discard and the mockup shows the operator's exact frame,
+                      filling the phone's screen.
 
-                      Both layers are the same optimized src, so the second is a
-                      cache hit and costs no extra bytes. Neither carries
-                      `priority` — measured, this is below the fold on mobile.
+                      No `priority`: measured, this is below the fold on mobile
+                      and the real LCP element is the Wallpaper tile in the left
+                      column. `loading="eager"` + `fetchPriority="low"` keeps the
+                      request early (it IS above the fold on desktop) without
+                      competing with that one.
                     */
-                    <>
-                      <Image
-                        src={posterUrl}
-                        alt=""
-                        fill
-                        sizes="300px"
-                        aria-hidden
-                        loading="eager"
-                        fetchPriority="low"
-                        className="scale-110 object-cover blur-lg"
-                      />
-                      <Image
-                        src={posterUrl}
-                        alt=""
-                        fill
-                        sizes="300px"
-                        loading="eager"
-                        fetchPriority="low"
-                        className="object-contain"
-                      />
-                    </>
+                    <Image
+                      src={posterUrl}
+                      alt=""
+                      fill
+                      sizes="300px"
+                      loading="eager"
+                      fetchPriority="low"
+                      className="object-cover"
+                    />
                   ) : (
                     <span className="absolute inset-0 bg-gradient-to-br from-blue-600 via-violet-600 to-fuchsia-600" />
                   )}

@@ -144,7 +144,56 @@ export function MobileNav() {
           "relative flex items-end justify-around px-2 pb-[max(env(safe-area-inset-bottom),0.65rem)] pt-2.5",
           immersive
             ? [
-                "bg-gradient-to-t from-black/85 via-black/55 to-transparent",
+                /*
+                  🔴 THE DARK GROUND HAS TO REACH ABOVE THE GLYPHS (owner,
+                  2026-08-10: "the bottom nav didnt cover the icon properly in
+                  the reels, i want the dark section to go upper to cover the
+                  bottom nav icons professionally").
+
+                  The first version put `from-black/85 via-black/55 to-transparent`
+                  on the nav BOX. The box is only ~76px tall and the icons start
+                  10px below its top edge, so the glyphs were sitting in the part
+                  of the gradient that had already faded to nearly nothing —
+                  white icons on raw video, which is the "didn't cover it
+                  properly".
+
+                  Two layers fix it, and they do different jobs:
+
+                   • THE NAV ITSELF is a near-solid dark ground (95%→75%), so
+                     every glyph and label in the bar sits on a surface with
+                     guaranteed contrast rather than on whatever frame is
+                     playing. This is what TikTok and Instagram do — their tab
+                     bar over a reel is effectively black, not a wash.
+
+                   • `before:` EXTENDS 2rem ABOVE the bar and feathers out to
+                     transparent, so the dark ground arrives gradually instead
+                     of as a hard horizontal seam across the picture. That
+                     feather is the difference between "a black slab" and the
+                     professional look asked for.
+
+                  🔴 2rem and not more, deliberately. This wrapper is `z-40` and
+                  the reel deck is `z-30`, so anything painted here is painted
+                  OVER the reel's own chrome — a taller feather would quietly
+                  wash out the scrubber sitting just above it. The reel's bottom
+                  stack (REEL_PROGRESS_BOTTOM in reel-viewer.tsx) puts the
+                  scrubber at 6.5rem, clear of the 4.75rem bar plus this 2rem.
+                  The two numbers are a pair; move one and check the other.
+
+                  `before:pointer-events-none` is load-bearing for the same
+                  z-order reason: a pseudo-element is part of its originating
+                  element for hit-testing, so without it this strip would sit
+                  over the video and silently swallow every tap-to-pause and
+                  every swipe that started in it.
+                */
+                /* 🔴 /90 and not /88: this project's Tailwind opacity scale has
+                   no 88, so `via-black/88` compiled to NOTHING and the middle
+                   stop silently vanished (verified in the built CSS — the class
+                   had no rule at all, and the computed gradient came back with
+                   two stops). Same family of silent failure as the `z-60` that
+                   emitted nothing. Check the BUILT CSS, not the source. */
+                "bg-gradient-to-t from-black/95 via-black/90 to-black/75",
+                "before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-8",
+                "before:bg-gradient-to-t before:from-black/75 before:to-transparent",
                 /*
                   The INACTIVE glyphs and labels turn white here.
 

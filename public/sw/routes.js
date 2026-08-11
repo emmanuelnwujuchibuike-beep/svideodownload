@@ -85,6 +85,29 @@ self.addEventListener("fetch", (event) => {
   // API_CACHE_ALLOWLIST already applied to API responses, just missed here
   // originally. Every other page still gets the network-first + timeout +
   // offline-fallback behavior, just never reads/writes the page cache.
+  /*
+    🔴 THE COLD-ENTRY LOADER IS CACHE-FIRST, and it is the only navigation that
+    is (2026-08-11).
+
+    `/launch.html` is the PWA's start_url and the one screen whose entire job is
+    to be on screen before the network answers. Under the network-first rule
+    below it would still wait for a round-trip, and precaching it would buy
+    nothing — which is the trap this branch exists to avoid.
+
+    Cache-first is safe HERE and nowhere else for one reason: it is a hand-
+    written static file with NO user data in it at all, so a shared, URL-keyed
+    cache cannot leak one person's page to another. It is the same test "/" had
+    to pass. Any personalized route taking this path would be the stale/wrong-
+    user bug the allowlist below was written to prevent.
+
+    It still revalidates in the background, so a deploy that changes the loader
+    reaches the device on the next launch.
+  */
+  if (req.mode === "navigate" && url.origin === self.location.origin && url.pathname === "/launch.html") {
+    event.respondWith(SWX.staleWhileRevalidate(req, SWX.PAGE_CACHE));
+    return;
+  }
+
   if (req.mode === "navigate") {
     const sameOrigin = url.origin === self.location.origin;
     const cacheable =

@@ -13,16 +13,23 @@ self.addEventListener("install", (event) => {
       // IMAGE_CACHE, matching where routes.js will actually look these up
       // at runtime (they're all image requests) — precaching into a
       // different cache than the one that gets read back would be no-op work.
-      const cache = await caches.open(SWX.IMAGE_CACHE);
+      // Each list goes into the cache its own runtime strategy READS from —
+      // images to IMAGE_CACHE, documents to PAGE_CACHE. See the note on
+      // PRECACHE_DOCUMENTS in config.js for why the two cannot share one list.
+      const jobs = [
+        ...SWX.PRECACHE_URLS.map((url) => [url, SWX.IMAGE_CACHE]),
+        ...(SWX.PRECACHE_DOCUMENTS || []).map((url) => [url, SWX.PAGE_CACHE]),
+      ];
       const results = await Promise.allSettled(
-        SWX.PRECACHE_URLS.map(async (url) => {
+        jobs.map(async ([url, cacheName]) => {
+          const cache = await caches.open(cacheName);
           const res = await fetch(url, { cache: "no-store" });
           if (!SWX.isCacheable(res)) throw new Error(`bad response for ${url}`);
           await cache.put(url, res);
         }),
       );
       results.forEach((r, i) => {
-        if (r.status === "rejected") SWX.log("precache skipped:", SWX.PRECACHE_URLS[i], r.reason);
+        if (r.status === "rejected") SWX.log("precache skipped:", jobs[i][0], r.reason);
       });
       SWX.log("installed", SWX.VERSION);
       await self.skipWaiting();

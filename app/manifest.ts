@@ -11,8 +11,33 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Frenz",
     description:
       "Download videos free, connect with friends, watch trending reels, and stay updated — all in one place.",
+    /*
+      🔴 `id` stays "/home" — it is the app's IDENTITY, not its entry point.
+      Changing it makes the browser treat this as a DIFFERENT app: every
+      existing installation is orphaned, push subscriptions detach, and the user
+      ends up with two Frenz icons. `start_url` may move freely; `id` may not.
+    */
     id: "/home",
-    start_url: "/home",
+    /*
+      🔴 The cold-entry loader (owner, 2026-08-11: "make a separate premium cold
+      entry loader like tiktok and X").
+
+      Every other candidate entry is `force-dynamic` behind auth, so its first
+      byte is 0.66–2.3 seconds away — measured live — and until then the launch
+      is a white screen that no in-document loader can cover.
+
+      `/launch.html` is a hand-written static file in `public/`, NOT a Next
+      route. That distinction is the whole fix: a Next route inherits the root
+      layout and its two render-blocking stylesheets, so the loader would still
+      wait on the network. This document has zero subresources — inline CSS, the
+      logo as a data URI, no framework — so it paints on arrival, and the
+      service worker serves it from disk on every launch after the first. It
+      then hands off to the viewer's real home.
+
+      It shows ONLY in an installed display mode (a CSS `display-mode` guard in
+      the file), so a browser can never see it — owner, 2026-08-11.
+    */
+    start_url: "/launch.html",
     scope: "/",
     lang: "en",
     dir: "ltr",

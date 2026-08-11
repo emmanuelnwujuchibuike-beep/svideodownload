@@ -2,8 +2,10 @@
 
 import { useEffect } from "react";
 
+import { decidePolicy } from "@/lib/media/engine/governor";
+import { currentPolicySync, droppedFrameRatio, readSignals } from "@/lib/media/engine/signals";
 import { attachHls, supportsNativeHls, type HlsHandle } from "@/lib/media/hls";
-import { getPlaybackConditions, getSyncConditions } from "@/lib/media/network-conditions";
+import { getQualityPreference, getSyncConditions } from "@/lib/media/network-conditions";
 import { type PlaybackMode, reportPlayback } from "@/lib/media/playback-metrics";
 
 // Sample ~1 in 6 playbacks for metrics — representative signal, low beacon volume.
@@ -70,9 +72,15 @@ export function useAdaptiveSource(
       video.addEventListener("error", onError);
     }
 
-    // Never default to the highest rendition — cap by connection/data-saver
-    // synchronously (instant playback shouldn't wait on the async Battery API),
-    // then refine the cap once a battery reading resolves.
+    /*
+      ── FrenzStream™ governs the whole attach (Feature 15 Part 2) ───────────
+      One `decidePolicy` call now decides the ceiling AND the buffer geometry,
+      instead of the ceiling coming from `network-conditions` while the buffers
+      sat hardcoded in `hls.ts`. Read synchronously — instant playback must never
+      wait on the promise-based Battery API — and refined below once a battery
+      reading resolves, exactly as the cap alone used to be.
+    */
+    const initialPolicy = currentPolicySync(getQualityPreference());
     const initialConditions = getSyncConditions();
 
     // Plain MP4. #t seeks to a frame when there's no poster so it isn't black
@@ -112,7 +120,13 @@ export function useAdaptiveSource(
         mode = "hls";
         void attachHls(video, hlsUrl, {
           onReady,
-          maxHeight: initialConditions.maxHeight,
+          maxHeight: initialPolicy.maxHeight,
+          buffer: {
+            forwardSec: initialPolicy.forwardBufferSec,
+            maxForwardSec: initialPolicy.maxForwardBufferSec,
+            backSec: initialPolicy.backBufferSec,
+            startBitrateEstimate: initialPolicy.startBitrateEstimate,
+          },
           onFatal: () => {
             if (!destroyed) {
               mode = "mp4";
@@ -125,11 +139,24 @@ export function useAdaptiveSource(
             return;
           }
           hlsHandle = handle;
-          // Refine the cap once the (async) battery reading resolves — e.g. drop
-          // to 720p if the device just entered low-battery unplugged mode.
-          void getPlaybackConditions().then((full) => {
-            if (!destroyed && full.maxHeight !== initialConditions.maxHeight) {
-              hlsHandle?.setMaxHeightCap(full.maxHeight);
+          /*
+            Refine once the (async) battery reading resolves — e.g. drop to 720p
+            if the device is unplugged and low.
+
+            🔴 Only the CEILING is refined mid-playback, never the buffer
+            geometry: hls.js takes its buffer config at construction, and
+            rebuilding the instance to change it would tear down the decoder and
+            restart the clip. The buffer decision is therefore an attach-time
+            one, and the next clip in the deck picks up the new geometry — which
+            is a second or two away in a scrolling feed.
+          */
+          void readSignals(getQualityPreference(), {
+            droppedFrameRatio: droppedFrameRatio(video),
+          }).then((signals) => {
+            if (destroyed) return;
+            const refined = decidePolicy(signals);
+            if (refined.maxHeight !== initialPolicy.maxHeight) {
+              hlsHandle?.setMaxHeightCap(refined.maxHeight);
             }
           });
         });

@@ -32,6 +32,23 @@ export interface AttachHlsOptions {
    * extra cap beyond `capLevelToPlayerSize`.
    */
   maxHeight?: number | null;
+  /**
+   * Buffer geometry from the FrenzStream governor (Feature 15 Part 2).
+   *
+   * 🔴 These were HARDCODED here, and that was the bug the governor exists to
+   * fix: a data-saver viewer got a 480p cap (correct) alongside a 12-second
+   * forward buffer and a 6-second back buffer (not correct) — the cap saved data
+   * and the buffers spent it again. Quality and buffering are one decision and
+   * they are made together now. Omitted values keep the previous constants, so
+   * a caller that has not been migrated behaves exactly as before.
+   */
+  buffer?: {
+    forwardSec?: number;
+    maxForwardSec?: number;
+    backSec?: number;
+    /** hls.js's first-guess bandwidth, before it has measured anything. */
+    startBitrateEstimate?: number;
+  };
 }
 
 export interface HlsHandle {
@@ -102,13 +119,15 @@ export async function attachHls(
   }
 
   const hls = new Hls({
-    // Fast first frame, small footprint.
-    maxBufferLength: 12, // seconds buffered ahead
-    maxMaxBufferLength: 24,
-    backBufferLength: 6, // drop already-watched buffer → stable memory on long scroll
+    // Buffer geometry comes from the governor when the caller supplies one; the
+    // fallbacks are the constants this used to hardcode, so an unmigrated caller
+    // is byte-for-byte unchanged.
+    maxBufferLength: opts.buffer?.forwardSec ?? 12, // seconds buffered ahead
+    maxMaxBufferLength: opts.buffer?.maxForwardSec ?? 24,
+    backBufferLength: opts.buffer?.backSec ?? 6, // drop already-watched buffer → stable memory on long scroll
     capLevelToPlayerSize: true, // never fetch a level larger than the element
     startLevel: -1, // auto-pick by measured bandwidth
-    abrEwmaDefaultEstimate: 1_000_000, // reasonable first guess so startup isn't stuck low
+    abrEwmaDefaultEstimate: opts.buffer?.startBitrateEstimate ?? 1_000_000,
     enableWorker: true, // parse segments off the main thread (CPU/thermal)
     lowLatencyMode: false,
     // Fail fast so a not-yet-ready Stream video falls back to MP4 quickly.

@@ -58,6 +58,7 @@ import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design"
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
 import { shouldFullBleed, viewportAspect } from "@/features/reels/viewer/fit";
+import { currentPolicySync, recordClipCompleted } from "@/lib/media/engine/signals";
 import type { PulseEvent } from "@/features/reels/viewer/social-pulse";
 import { useAdaptiveRail, type RailLayout } from "@/features/reels/viewer/use-adaptive-rail";
 import { useLivingInterface } from "@/features/reels/viewer/use-living-interface";
@@ -188,11 +189,23 @@ const SocialPulse = dynamic(
   { ssr: false },
 );
 
+/*
+  The four levels the Part 2 brief asks for: "Auto / Data Saver / Balanced /
+  Best Quality". Balanced is the one that was missing — a 720p ceiling for
+  someone who wants HD without a 4K decode and a 4K data bill on a phone.
+
+  Labelled by what they DO, not by a resolution: a rung number is only
+  meaningful if you know the ladder, and the ceiling moves with the network
+  anyway. The cycle order walks from cheapest to most expensive so repeated taps
+  read as one axis rather than a shuffle.
+*/
 const QUALITY_LABELS: Record<QualityPreference, string> = {
   auto: "Auto (recommended)",
   "data-saver": "Data saver",
+  balanced: "Balanced · HD",
   high: "Highest quality",
 };
+const QUALITY_CYCLE: QualityPreference[] = ["auto", "data-saver", "balanced", "high"];
 
 /**
  * Fullscreen reel deck. Reels stack in a native, snap-scrolling column — so
@@ -263,6 +276,32 @@ export function ReelDeck({
   /* Feature 15 — Adaptive Action Rail™. One reader for the whole deck; see the
      note where it is passed to ReelCard. */
   const rail = useAdaptiveRail();
+  /*
+    ── Pulse Buffer™: the preload window is a BUDGET, not a constant ──────────
+    (Feature 15 Part 2 — docs/FEATURE_15_PART_2_PLAYBACK_ENGINE.md §3)
+
+    This was `active - 1 … active + 3` mounted and `active … active + 2` fully
+    buffered, hardcoded, for every viewer on every device. That is three clips of
+    real segment bytes fetched speculatively on a 2G phone at 6% battery, which
+    is the case where prefetching is most expensive and least likely to pay off.
+
+    The governor answers it instead, from the connection, the battery, the device
+    class, live decoder health and how much of the deck this viewer has actually
+    watched. Re-read per render — `decidePolicy` is a pure function over a
+    handful of numbers, so this costs nothing, and it means a battery reading or
+    a stall that lands mid-session changes the budget for the NEXT clip rather
+    than at the next page load.
+
+    🔴 `preloadBehind` is never 0 in any policy, and there is a test for it: an
+    unmounted previous clip means scrolling back shows a black frame while it
+    re-fetches, and the few KB of metadata it costs is never the reason a device
+    is struggling.
+  */
+  const [qualityPref, setQualityPrefForBudget] = useState<QualityPreference>("auto");
+  useEffect(() => {
+    setQualityPrefForBudget(getQualityPreference());
+  }, []);
+  const budget = currentPolicySync(qualityPref);
 
   useEffect(() => {
     onActiveIndexChange?.(active);
@@ -382,12 +421,13 @@ export function ReelDeck({
                 rail={rail}
                 isActive={i === active}
                 isNext={i === active + 1}
-                // Mount the previous clip + the next three so scrolling forward
-                // never hits an unmounted video. To protect battery/data we only
-                // FULLY buffer (preload=auto) the active clip and the next two you're
-                // about to reach; the neighbours load metadata only.
-                nearby={i >= active - 1 && i <= active + 3}
-                preload={i >= active && i <= active + 2 ? "auto" : "metadata"}
+                // Pulse Buffer™ — the mounted window and the fully-buffered
+                // window both come from the governor's budget (see the note on
+                // `budget` above). `metadata` on the rest is what makes the NEXT
+                // clip start instantly without paying for segments a fast scroll
+                // would discard.
+                nearby={i >= active - budget.preloadBehind && i <= active + budget.preloadAhead}
+                preload={i >= active && i <= active + budget.fullyBufferAhead ? "auto" : "metadata"}
                 onClose={onClose}
                 onCommentsOpen={setLocked}
                 autoOpenComments={item.id === autoOpenCommentsId}
@@ -536,6 +576,8 @@ function ReelCard({
   // the cover under the video is already the right shape before metadata
   // arrives and there is no letterbox-to-full-bleed pop on entry.
   const [posterBleed, setPosterBleed] = useState(false);
+  // Latch so a LOOPING reel reports its completion once, not every pass.
+  const completionCounted = useRef(false);
   const [seekFlash, setSeekFlash] = useState<{ side: "back" | "fwd"; key: number } | null>(null);
   const [ui, setUi] = useState(true);
   const [scrubbing, setScrubbing] = useState(false);
@@ -995,11 +1037,13 @@ function ReelCard({
   };
 
   // Manual quality override (spec: automatic selection is the default, but let
-  // the viewer force it). A three-way cycle — same shape as every major
-  // short-video app uses instead of a per-rendition picker. Takes effect from
-  // the next video that attaches (this one keeps playing at its current level).
+  // the viewer force it). A cycle rather than a per-rendition picker — the
+  // ladder is produced by the encoder and changes per clip, so a list of rungs
+  // would be a different list every video. Takes effect from the next video that
+  // attaches: hls.js takes its buffer geometry at construction, so applying it
+  // to the CURRENT clip would mean tearing down the decoder mid-watch.
   const cycleQuality = () => {
-    const order: QualityPreference[] = ["auto", "data-saver", "high"];
+    const order = QUALITY_CYCLE;
     const next = order[(order.indexOf(qualityPref) + 1) % order.length] ?? "auto";
     setQualityPref(next);
     setQualityPreference(next);
@@ -1504,6 +1548,24 @@ function ReelCard({
                 const v = e.currentTarget;
                 setCur(v.currentTime);
                 if (v.duration) setProgress((v.currentTime / v.duration) * 100);
+                /*
+                  Pulse Buffer™ engagement signal. A clip watched past 90% is the
+                  evidence that this viewer is WATCHING rather than flicking, and
+                  a deeper preload window is only worth its bandwidth for the
+                  former. Counted once per clip (`completionCounted`) — reels
+                  `loop`, so without the latch a single reel left playing would
+                  report a completion every few seconds and talk the budget up on
+                  its own.
+                */
+                if (
+                  !completionCounted.current &&
+                  v.duration &&
+                  Number.isFinite(v.duration) &&
+                  v.currentTime / v.duration >= 0.9
+                ) {
+                  completionCounted.current = true;
+                  recordClipCompleted();
+                }
               }}
             />
           ) : null

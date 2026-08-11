@@ -75,13 +75,29 @@ function heightCap(saveData: boolean, effectiveType: string | undefined, battery
  * the battery/data). Persisted locally; read synchronously so it never delays
  * stream attach.
  */
-export type QualityPreference = "auto" | "data-saver" | "high";
+/*
+  🔴 The TYPE is owned by the engine now (Feature 15 Part 2).
+
+  It was declared here and the governor needs the same union, and two copies of
+  a string union that must agree is a silent-drift bug waiting to happen — add a
+  level in one place and the other still compiles. Re-exported rather than moved
+  so every existing import path keeps working.
+
+  "balanced" is the fourth level the Part 2 brief asks for ("Auto / Data Saver /
+  Balanced / Best Quality"). The stored value is validated on read, so a profile
+  that saved a level before this existed still resolves, and a hand-edited
+  localStorage value can never reach the ladder.
+*/
+export type { QualityPreference } from "@/lib/media/engine/governor";
+import type { QualityPreference } from "@/lib/media/engine/governor";
+
 const QUALITY_PREF_KEY = "frenz:video-quality-pref";
+const QUALITY_LEVELS: readonly QualityPreference[] = ["auto", "data-saver", "balanced", "high"];
 
 export function getQualityPreference(): QualityPreference {
   try {
     const v = typeof localStorage !== "undefined" ? localStorage.getItem(QUALITY_PREF_KEY) : null;
-    return v === "data-saver" || v === "high" ? v : "auto";
+    return QUALITY_LEVELS.includes(v as QualityPreference) ? (v as QualityPreference) : "auto";
   } catch {
     return "auto";
   }
@@ -103,6 +119,7 @@ function resolveMaxHeight(
 ): number | null {
   if (pref === "high") return null; // explicit user override — never cap
   if (pref === "data-saver") return 480;
+  if (pref === "balanced") return 720;
   return heightCap(saveData, effectiveType, batterySaver);
 }
 

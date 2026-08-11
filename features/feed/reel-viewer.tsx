@@ -37,6 +37,7 @@ import {
   Send as SendIcon,
   Share2,
   UserPlus,
+  Users,
   UserX,
   Volume2,
   VolumeX,
@@ -521,7 +522,32 @@ function ReelCard({
     not exist yet. When the feed starts returning "which of your friends
     engaged", it is populated here and only here.
   */
-  const pulseEvents = useMemo<PulseEvent[]>(() => [], []);
+  const pulseEvents = useMemo<PulseEvent[]>(() => {
+    /*
+      🔴 REAL EVENTS AT LAST (Feature 15 Part 3, 2026-08-11).
+
+      Part 1 shipped this as a hardcoded empty array with the note "the
+      component is wired, the data source is the piece that does not exist yet".
+      `friendActivity` IS that data source: rows from `post_reactions`,
+      `reposts` and `post_comments`, filtered to people this viewer actually
+      follows, resolved to real handles. See lib/social/pulse-activity.ts.
+
+      Nothing is synthesised here. No event is emitted for a post with no friend
+      activity — which is most posts, and is the correct empty state. The
+      `trending` PulseKind stays unused: there is no measured trend signal
+      behind it, and emitting one would be the invented social proof this
+      project has declined three times.
+
+      Keyed by handle + kind so React never reuses a card across two different
+      people, which would cross-fade one name into another mid-animation.
+    */
+    const acts = item.friendActivity?.actors ?? [];
+    return acts.map((a) => ({
+      id: `${a.handle}:${a.kind}`,
+      kind: a.kind,
+      actor: a.displayName,
+    }));
+  }, [item.friendActivity]);
 
   /*
     ── Publishing the Living Interface™ accent ──────────────────────────────
@@ -1972,6 +1998,32 @@ function ReelCard({
             Original sound · @{item.publisher.handle}
           </span>
         </Link>
+        {/*
+          ── FRIEND ENERGY™ (Feature 15 Part 3) ────────────────────────────────
+          The same dataset as Social Pulse™, in the shape that costs nothing.
+
+          Pulse is a card that fades in over the video and spends a few seconds
+          of attention, so it names INDIVIDUALS and only a few of them. This line
+          is static, sits in the caption, and carries the AGGREGATE — which is
+          the part that stops being worth a card once there are more people than
+          Pulse will name.
+
+          🔴 So it renders only when the count EXCEEDS what Pulse already said.
+          With two engaged friends Pulse names both and this would be repetition;
+          with six it is the only place the six appears. `total` counts each
+          person once however many ways they engaged, so "4 friends" is four
+          people — see `groupFriendActivity`.
+
+          It is plain text in document order, so a screen reader gets it with the
+          caption rather than as an interruption.
+        */}
+        {item.friendActivity && item.friendActivity.total > item.friendActivity.actors.length ? (
+          <p className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-white/70">
+            <Users className="h-3 w-3 shrink-0" aria-hidden />
+            {item.friendActivity.total} people you follow engaged with this
+          </p>
+        ) : null}
+
         {item.hasPoll ? (
           <div className="mt-2 max-w-md text-white">
             <PostPollInline postId={item.id} compact />

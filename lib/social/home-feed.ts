@@ -9,6 +9,7 @@ import { friendIdSet } from "./friend-ids";
 import { getTrendingSettings } from "./feed";
 import { getHomePreferences, type HomePreferences } from "./home-preferences";
 import { canSeePost, type MediaKind, type Visibility } from "./posts";
+import { pulseActivityForPosts, type PulseActivity } from "./pulse-activity";
 import { followedReposters, repostCounts, viewerReposts } from "./reposts";
 
 /**
@@ -74,6 +75,15 @@ export interface FeedItem {
   /** Followed users who reposted this — the premium repost badge (avatars + "+N"),
       plus the newest reposter's recommendation caption when they wrote one. */
   repostBadge?: { avatars: (string | null)[]; handles: string[]; count: number; caption?: string | null };
+  /**
+   * People the viewer FOLLOWS who liked, reposted or commented on this post —
+   * the real data behind Social Pulse™ and Friend Energy™ (Feature 15 Part 3).
+   *
+   * 🔴 Absent when there is none, and there usually is none. Nothing downstream
+   * may substitute a placeholder: an invented "people are watching this" is the
+   * fabricated social proof this project has declined three times.
+   */
+  friendActivity?: PulseActivity;
   /** Natural pixel size of an image post — lets the feed render it with next/image. */
   mediaWidth?: number | null;
   mediaHeight?: number | null;
@@ -693,15 +703,25 @@ async function loadHomeFeed(
       // Repost state + counts + the followed-user badge (best-effort — before
       // migration 0025 these are 0/false/empty).
       const ids = items.map((i) => i.id);
-      const [reposted, counts, badges] = await Promise.all([
+      const [reposted, counts, badges, friends] = await Promise.all([
         viewerReposts(ids, viewerId),
         repostCounts(ids),
         followedReposters(ids, followingIds),
+        /*
+          Feature 15 Part 3 — the data Social Pulse™ was built for in Part 1 and
+          never had. Added to this SAME `Promise.all` deliberately: it is a
+          batched, already-narrowed read, so it costs the page no extra
+          wall-clock time. It returns an empty map when the tables are
+          unmigrated, when nobody the viewer follows engaged, or when there is
+          no viewer at all. See lib/social/friend-activity.ts.
+        */
+        pulseActivityForPosts(ids, followingIds, viewerId),
       ]);
       for (const it of items) {
         it.viewerReposted = reposted.has(it.id);
         it.repostsCount = counts.get(it.id) ?? 0;
         it.repostBadge = badges.get(it.id);
+        it.friendActivity = friends.get(it.id);
       }
 
       // Image dimensions for the feed photo's next/image (best-effort — before
@@ -874,7 +894,7 @@ async function surfaceFollowedReposts(
   const ids = rows.map((r) => r.id);
   const imageIds = rows.filter((r) => r.media_kind === "image").map((r) => r.id);
   const streamIds = rows.filter((r) => r.media_kind === "video" && r.stream_uid).map((r) => r.id);
-  const [badges, counts, reposted, pollSet, dims, streamStat] = await Promise.all([
+  const [badges, counts, reposted, pollSet, dims, streamStat, pulses] = await Promise.all([
     followedReposters(ids, followingIds),
     repostCounts(ids),
     viewerReposts(ids, viewerId),
@@ -888,6 +908,8 @@ async function surfaceFollowedReposts(
     })(),
     imageDimensions(db, imageIds),
     streamStatus(db, streamIds),
+    // Feature 15 Part 3 — see the note at the other attach site above.
+    pulseActivityForPosts(ids, followingIds, viewerId),
   ]);
 
   return rows.map((r) => {
@@ -928,6 +950,7 @@ async function surfaceFollowedReposts(
       viewerReposted: reposted.has(r.id),
       repostsCount: counts.get(r.id) ?? 0,
       repostBadge: badges.get(r.id),
+      friendActivity: pulses.get(r.id),
       mediaWidth: dims.get(r.id)?.w ?? null,
       mediaHeight: dims.get(r.id)?.h ?? null,
       streamReady: streamStat.get(r.id)?.ready ?? false,

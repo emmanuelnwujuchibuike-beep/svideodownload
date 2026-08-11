@@ -33,6 +33,18 @@ const MAX_PINS = 6;
 /** Pins a member starts with, so the row is never an empty box on first open. */
 const DEFAULT_PINS = ["appearance.theme", "privacy.ghost", "notifications.pause", "language.language"];
 
+/**
+ * Example searches, shown as chips under an empty field.
+ *
+ * 🔴 Each one was run through `searchSettings` and returns results — dark mode
+ * (1 hit), 2fa (1), notifications (4), privacy (8), language (2). A chip that
+ * finds nothing is a promise the page cannot keep, so re-check these if a
+ * settings entry is ever renamed.
+ *
+ * Five, and short ones, so they fit two rows at 393px without wrapping mid-word.
+ */
+const SUGGESTIONS = ["Dark mode", "2FA", "Notifications", "Privacy", "Language"];
+
 function readPins(): string[] {
   try {
     const raw = localStorage.getItem(PINS_KEY);
@@ -88,9 +100,41 @@ export function SettingsSearch() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           type="search"
-          placeholder="Search settings — try “dark mode” or “2fa”"
+          /*
+            🔴 SHORT, because the long one was never fully readable.
+
+            It was: Search settings — try “dark mode” or “2fa”. At 393px, behind
+            a 3rem icon inset and a 2.75rem clear-button inset, that is ~24
+            characters of room for a 44-character string, so every visitor saw it
+            cut mid-word — "…or “2". A placeholder that truncates is worse than a
+            short one: it reads as a layout bug, and the examples it was trying
+            to teach are the part that gets eaten.
+
+            The examples did not deserve to be in the placeholder at all. A
+            placeholder disappears the moment someone types, so it is the worst
+            place to put anything they might want to act on. They are tappable
+            chips below the field now — same information, always legible, and
+            they actually run the search.
+          */
+          placeholder="Search settings"
           aria-label="Search settings"
-          className="h-13 w-full rounded-2xl bg-secondary/60 py-3.5 pl-12 pr-11 text-[15px] font-medium shadow-sm outline-none ring-1 ring-inset ring-border/40 transition focus:bg-background focus:ring-2 focus:ring-primary"
+          /*
+            🔴 `h-13` EMITTED NO CSS. Tailwind's height scale has no 13
+            (…12, 14, 16), so the class compiled to nothing and the field has
+            never had the 52px its author intended — it was sized only by its
+            padding and line-height. Verified against the built stylesheet, the
+            same silent-class family as `z-60` and `via-black/88`.
+
+            `h-[3.25rem]` is that intended 52px, expressed as an arbitrary value
+            so it cannot silently vanish again. The vertical padding goes with
+            it: on a fixed-height input it does nothing, and leaving both invites
+            the next person to "fix" the height by changing the padding.
+          */
+          /* The placeholder is softened one step so it reads as a hint rather
+             than as a value someone has typed. Verified in the built stylesheet:
+             this token IS declared with `<alpha-value>`, so the opacity modifier
+             compiles to `color: hsl(var(--muted-foreground)/.7)`. */
+          className="h-[3.25rem] w-full rounded-2xl bg-secondary/60 pl-12 pr-11 text-[15px] font-medium shadow-sm outline-none ring-1 ring-inset ring-border/40 transition placeholder:text-muted-foreground/70 focus:bg-background focus:ring-2 focus:ring-primary"
         />
         {searching ? (
           <button
@@ -106,6 +150,41 @@ export function SettingsSearch() {
           </button>
         ) : null}
       </div>
+
+      {/*
+        ── The examples, moved out of the placeholder ─────────────────────────
+        This is where "try dark mode or 2fa" belonged all along. A placeholder
+        vanishes the instant someone types, so it is the worst possible home for
+        something you want them to act on — and at this width it could not even
+        be read in full.
+
+        🔴 Every chip is VERIFIED to return results. A suggestion that finds
+        nothing is worse than no suggestion, so these were each run through
+        `searchSettings` before being listed: dark mode (1), 2fa (1),
+        notifications (4), privacy (8), language (2). If a settings entry is ever
+        renamed, re-run them — a dead chip is a promise the page cannot keep.
+
+        Shown only on the empty state: once there is a query the results below
+        are the answer and these would be competing noise.
+      */}
+      {!searching ? (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {SUGGESTIONS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => {
+                haptic("selection");
+                setQuery(s);
+                inputRef.current?.focus();
+              }}
+              className="rounded-full bg-secondary/50 px-3 py-1.5 text-[13px] font-medium text-muted-foreground ring-1 ring-inset ring-border/30 transition hover:bg-secondary hover:text-foreground active:scale-[0.97]"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {searching ? (
         <Results hits={hits} query={query} pins={pins ?? DEFAULT_PINS} onTogglePin={togglePin} />

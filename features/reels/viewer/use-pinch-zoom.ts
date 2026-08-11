@@ -67,6 +67,24 @@ export interface PinchZoom {
   onPointerDown: (e: React.PointerEvent) => boolean;
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: (e: React.PointerEvent) => void;
+  /**
+   * 🔴 MUST be wired, not optional in practice (owner, 2026-08-11: "the pinch to
+   * zoom is faulty, it doesnt revert").
+   *
+   * On a real touchscreen the browser frequently ends a multi-touch gesture with
+   * `pointercancel` rather than `pointerup` — it does so the moment it decides
+   * the gesture belongs to it (a scroll, a system edge swipe, a second app
+   * gesture). The first version only listened for `pointerup`, so on a phone the
+   * cleanup often never ran and the video was left permanently scaled with no
+   * way back. It reverted perfectly in a desktop test, which is exactly why the
+   * bug shipped.
+   */
+  onPointerCancel: (e: React.PointerEvent) => void;
+  /**
+   * `touch-action` for the stage: `none` while pinching so the browser cannot
+   * claim the gesture halfway through, and the caller's own value otherwise.
+   */
+  touchAction: "none" | undefined;
 }
 
 function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
@@ -135,6 +153,21 @@ export function usePinchZoom(
     [onSecondPointer, target],
   );
 
+  /*
+    🔴 COALESCED TO A FRAME (owner: "not smooth and stable").
+
+    A two-finger gesture fires a pointermove PER FINGER, and on a 120Hz panel
+    that is ~240 style writes a second — each one invalidating the compositor
+    while the same device is decoding video. The first version wrote on every
+    event, which is what made the zoom judder.
+
+    Only the LATEST geometry matters, so the events are folded into one write
+    per animation frame. Same pattern the progress bar and the adaptive rail
+    already use, for the same reason.
+  */
+  const frame = useRef(0);
+  const pending = useRef<{ scale: number; dx: number; dy: number } | null>(null);
+
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
       if (!points.current.has(e.pointerId)) return;
@@ -149,26 +182,44 @@ export function usePinchZoom(
       // growing from the centre of the screen.
       const cx = (a!.x + b!.x) / 2;
       const cy = (a!.y + b!.y) / 2;
-      paint(scale, cx - s.cx, cy - s.cy);
+      pending.current = { scale, dx: cx - s.cx, dy: cy - s.cy };
+      if (!frame.current) {
+        frame.current = requestAnimationFrame(() => {
+          frame.current = 0;
+          const p = pending.current;
+          if (p) paint(p.scale, p.dx, p.dy);
+        });
+      }
     },
     [paint],
   );
 
-  const onPointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      points.current.delete(e.pointerId);
+  /**
+   * One release path for `pointerup`, `pointercancel` and `pointerleave`.
+   *
+   * 🔴 They must be identical. The first version handled only `pointerup`, and a
+   * touchscreen browser routinely ends a multi-touch gesture with
+   * `pointercancel` instead — at which point nothing reset the transform and the
+   * video stayed scaled with no way back. It reverted flawlessly on a desktop,
+   * which is precisely why the bug reached a phone.
+   */
+  const release = useCallback(
+    (pointerId: number) => {
+      points.current.delete(pointerId);
       if (points.current.size < 2 && start.current) {
         start.current = null;
-        reset();
-        // 🔴 `active` is cleared only when EVERY finger is up, not when the count
-        // drops below two. Lifting one finger of a pinch leaves the other one
-        // down, and re-enabling the single-finger gestures at that moment turns
-        // the tail of a zoom into an accidental album swipe.
-        if (points.current.size === 0) {
-          pinching.current = false;
-          setActive(false);
+        if (frame.current) {
+          cancelAnimationFrame(frame.current);
+          frame.current = 0;
         }
-      } else if (points.current.size === 0) {
+        pending.current = null;
+        reset();
+      }
+      // `pinching` clears only when EVERY finger is up, not when the count drops
+      // below two: lifting one finger of a pinch leaves the other down, and
+      // re-enabling the single-finger gestures at that instant turns the tail of
+      // a zoom into an accidental album swipe.
+      if (points.current.size === 0) {
         pinching.current = false;
         setActive(false);
       }
@@ -176,7 +227,21 @@ export function usePinchZoom(
     [reset],
   );
 
+  const onPointerUp = useCallback((e: React.PointerEvent) => release(e.pointerId), [release]);
+  const onPointerCancel = useCallback((e: React.PointerEvent) => release(e.pointerId), [release]);
+
   const isPinching = useCallback(() => pinching.current, []);
 
-  return { active, isPinching, onPointerDown, onPointerMove, onPointerUp };
+  return {
+    active,
+    isPinching,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
+    // While a pinch is live the browser must not be allowed to reinterpret it as
+    // a scroll — that is what produces the `pointercancel` above in the first
+    // place, and the stuck transform that followed it.
+    touchAction: active ? "none" : undefined,
+  };
 }

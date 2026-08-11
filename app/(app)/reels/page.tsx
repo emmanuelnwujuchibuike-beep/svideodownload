@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 
 import { ReelsFeed } from "@/features/reels/reels-feed";
-import { LoadingStripe } from "@/features/ui/page-loader";
 import { getFeedItemById, getHomeFeed } from "@/lib/social/home-feed";
 import { createClient } from "@/lib/supabase/server";
 
@@ -20,39 +18,35 @@ export const metadata: Metadata = {
  * like, infinite scroll) instead of only being reachable through "View all".
  */
 /*
-  🔴 Synchronous shell, streamed data — the cold-entry white-screen fix
-  (owner, 2026-08-11). Same structural change as /home and /downloads: this
-  awaited `searchParams`, `auth.getUser()` and a 24-item feed query at the top
-  level, so Next held the whole HTML response and the visitor saw a white
-  document instead of the shell plus the stripe. See the long note in
-  app/(app)/home/page.tsx for why `loading.tsx` alone cannot fix this.
+  🔴 REELS DELIBERATELY DOES NOT STREAM A SHELL (owner, 2026-08-11: "the reels
+  page now loads before opening, i dont want that").
 
-  The fallback is BLACK rather than the usual page ground: this route paints a
-  full-screen black deck, and a white flash before it would be worse than the
-  white screen being fixed. The stripe sits at the very top where the reel's own
-  chrome will be.
+  For one commit this page was synchronous with a `<Suspense>`d child, matching
+  /home and /u/[handle], so a cold document request could flush a black screen
+  and a stripe instead of white. That was right for those routes and wrong for
+  this one, and the reason is worth recording.
+
+  A Suspense boundary is not only a cold-entry mechanism — it is also what Next
+  paints during a CLIENT navigation. Reels is reached from the tab bar many times
+  a session, and on every one of those the boundary resolved BEFORE the deck and
+  showed a full-screen black loading state first. Watching a reel is meant to
+  begin the instant you tap; a loading screen in front of a route someone enters
+  constantly costs far more than a brief white screen on the rare cold entry
+  straight to /reels.
+
+  It is also no longer the surface that needs it: the PWA's cold entry is
+  `public/launch.html`, which paints its branded loader before the origin
+  answers, so the case this boundary was added for is covered somewhere it does
+  not tax a hot path.
+
+  `loading.tsx` stays for this segment — a 2px stripe under the persistent app
+  bar is not a screen and costs a navigation nothing.
 */
-export default function ReelsPage({
+export default async function ReelsPage({
   searchParams,
 }: {
   searchParams: Promise<{ start?: string }>;
 }) {
-  return (
-    <Suspense
-      fallback={
-        <div className="fixed inset-0 z-30 bg-black" aria-busy="true">
-          <div className="pt-[var(--frenz-safe-top)]">
-            <LoadingStripe />
-          </div>
-        </div>
-      }
-    >
-      <ReelsData searchParams={searchParams} />
-    </Suspense>
-  );
-}
-
-async function ReelsData({ searchParams }: { searchParams: Promise<{ start?: string }> }) {
   const { start } = await searchParams;
 
   let viewerId: string | null = null;

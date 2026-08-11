@@ -1480,20 +1480,76 @@ function ReelCard({
         )}
       />
 
-      {/* Album position dots — this reel has several videos; swipe sideways */}
-      {isAlbum ? (
-        <div className="pointer-events-none absolute left-1/2 top-[calc(max(0.75rem,var(--frenz-safe-top))+2.9rem)] z-20 flex -translate-x-1/2 items-center gap-1.5">
-          {albumVideos.map((_, i) => (
-            <span
-              key={i}
-              className={cn(
-                "h-1.5 rounded-full shadow-sm transition-all duration-300",
-                i === slide ? "w-5 bg-white" : "w-1.5 bg-white/45",
-              )}
-            />
-          ))}
-        </div>
-      ) : null}
+      {/*
+        ── 🔴 THE TOP STACK IS ONE FLOW COLUMN (owner, 2026-08-11) ────────────
+        "the time count, and tap for sound is only being covered in the pwa that
+        goes to the safe area and not in the browser" … "arrange them
+        professionally … never collide or sit on top of each other on both
+        browser and pwa."
+
+        The bug was mixed anchoring. The tabs, the close button and the •••
+        button all began at `max(0.75rem, var(--frenz-safe-top))`, so they move
+        DOWN by the notch inset in an installed PWA. The time readout (`top-14`)
+        and the tap-for-sound pill (`top-16`) were pinned to fixed offsets that
+        knew nothing about the safe area — so in a browser, where the inset is 0,
+        they cleared the tabs by a few pixels, and in the PWA the tabs slid down
+        ~59px on top of them. Two coordinate systems for one column.
+
+        Every centred element is now a CHILD of one absolutely-positioned column
+        that starts below the chrome row. Collisions are impossible by
+        construction rather than by arithmetic: the browser lays them out in
+        flow, the gap is uniform, and a row that is absent (no album, no
+        duration, already unmuted) simply collapses instead of leaving a hole.
+        There is one magic number left — where the column starts — and it is
+        derived from the SAME base the chrome row uses, so the two can never
+        drift apart again.
+
+        `pointer-events-none` on the column with `pointer-events-auto` on the
+        one interactive child: a full-width transparent strip across the top of a
+        video would otherwise swallow taps meant for the picture.
+      */}
+      <div
+        className="pointer-events-none absolute inset-x-0 z-30 flex flex-col items-center gap-2 px-4"
+        style={{ top: "calc(max(0.75rem, var(--frenz-safe-top)) + 3.25rem)" }}
+      >
+        {/* Album position dots — this reel has several videos; swipe sideways */}
+        {isAlbum ? (
+          <div className="flex items-center gap-1.5">
+            {albumVideos.map((_, i) => (
+              <span
+                key={i}
+                className={cn(
+                  "h-1.5 rounded-full shadow-sm transition-all duration-300",
+                  i === slide ? "w-5 bg-white" : "w-1.5 bg-white/45",
+                )}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {/* Elapsed / total — auto-hides with the rest of the chrome. */}
+        {native && dur > 0 ? (
+          <div
+            className={cn(
+              "rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur transition-opacity duration-200",
+              ui ? "opacity-100" : "opacity-0",
+            )}
+          >
+            {fmt(cur)} / {fmt(dur)}
+          </div>
+        ) : null}
+
+        {/* Tap-to-unmute — the one child that takes a tap. */}
+        {native && mutedAuto && isActive ? (
+          <button
+            type="button"
+            onClick={unmute}
+            className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-white/15 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur-md"
+          >
+            <VolumeX className="h-4 w-4" /> Tap for sound
+          </button>
+        ) : null}
+      </div>
 
       {/*
         ── Feature 15: the premium progress indicator ──────────────────────────
@@ -1564,14 +1620,9 @@ function ReelCard({
         <SocialPulse events={pulseEvents} active={isActive && !paused} className={cn("left-3", railBottom)} />
       ) : null}
 
-      {/* Elapsed / total time — top-center, below the For You/Following tabs;
-          auto-hides with the rest of the UI and returns the moment the screen
-          is tapped. */}
-      {native && dur > 0 ? (
-        <div className={cn("absolute left-1/2 top-14 z-30 -translate-x-1/2 rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
-          {fmt(cur)} / {fmt(dur)}
-        </div>
-      ) : null}
+      {/* The elapsed/total readout MOVED into the top stack above — it was
+          pinned to a fixed `top-14` that knew nothing about the safe area, which
+          is exactly why the tabs sat on top of it in the PWA. */}
 
       {/* Close — top-left, and Options (•••) — top-right. Both fade with the
           rest of the chrome (tap to bring back, or ~3s idle) instead of
@@ -1648,7 +1699,10 @@ function ReelCard({
           One finger is untouched: the hook returns false, nothing is suppressed,
           and scroll/drag/tap/hold behave exactly as they did.
         */
-        style={{ touchAction: "pan-y", x: dragX }}
+        /* 🔴 `none` while pinching: `pan-y` lets the browser reinterpret a live
+           two-finger gesture as a scroll, which cancels our pointers mid-zoom —
+           the cause of the stuck transform reported on a phone. */
+        style={{ touchAction: pinch.touchAction ?? "pan-y", x: dragX }}
         onPointerDown={(e) => {
           if (pinch.onPointerDown(e)) return;
           onPointerDown(e);
@@ -1663,7 +1717,11 @@ function ReelCard({
           if (pinch.isPinching()) return;
           onPointerUp(e);
         }}
-        onPointerCancel={() => {
+        onPointerCancel={(e) => {
+          // 🔴 The pinch MUST see this. A touchscreen browser ends a multi-touch
+          // gesture with `pointercancel` far more often than with `pointerup`,
+          // and without this the zoom never reverted.
+          pinch.onPointerCancel(e);
           if (holdTimer.current) clearTimeout(holdTimer.current);
           if (holding.current) {
             holding.current = false;
@@ -1833,17 +1891,6 @@ function ReelCard({
           </span>
         ))}
       </motion.div>
-
-      {/* Tap-to-unmute pill */}
-      {native && mutedAuto && isActive ? (
-        <button
-          type="button"
-          onClick={unmute}
-          className="absolute left-1/2 top-16 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-white/15 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur-md"
-        >
-          <VolumeX className="h-4 w-4" /> Tap for sound
-        </button>
-      ) : null}
 
       {/* Action rail — auto-hides over the video on mobile; on lg it lives OUTSIDE
           the video in the right gutter and stays put. */}

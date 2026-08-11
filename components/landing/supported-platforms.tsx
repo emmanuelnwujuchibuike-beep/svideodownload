@@ -1,6 +1,35 @@
+import { PlatformStatusDot } from "@/components/platform/platform-status-dot";
 import { BRAND_ICONS, BRAND_MARKS } from "@/lib/platform-icons";
+import { statusOf, type PlatformStatusMap } from "@/lib/platform-status";
+import { getPlatformStatus } from "@/lib/platform-status-store";
+import { PLATFORMS } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 import type { PlatformId } from "@/types";
+
+/**
+ * The strip with live platform health, for SERVER callers.
+ *
+ * 🔴 Two components rather than one async component, and the split is a
+ * performance requirement, not a style choice:
+ *
+ *  • `download-box.tsx` is `"use client"` and renders this strip. A client
+ *    component cannot render an async server component, so making the strip
+ *    itself async would break that page outright.
+ *  • The landing must stay STATIC. This wrapper reads through the service-role
+ *    client (no cookies, no headers), exactly like `PhoneMockup` already reads
+ *    the landing settings, so `/` is still prerendered and the read happens at
+ *    ISR revalidation rather than per request. LCP is untouched.
+ *
+ * Both components are server-only — no `"use client"` anywhere in this file or
+ * in `PlatformStatusDot` — so the landing's client bundle does not grow by a
+ * single byte. That is what keeps this inside the 275 kB cold-entry ceiling.
+ */
+export async function SupportedPlatformsLive(
+  props: Omit<Parameters<typeof SupportedPlatforms>[0], "statuses">,
+) {
+  const statuses = await getPlatformStatus();
+  return <SupportedPlatforms {...props} statuses={statuses} />;
+}
 
 /**
  * The "Supported Platforms:" badge strip.
@@ -39,9 +68,22 @@ export function SupportedPlatforms({
    */
   surface = "light",
   className,
+  /**
+   * Operator-declared platform health (Feature: platform status, 2026-08-11).
+   *
+   * 🔴 Passed IN rather than fetched here. This row renders on `/`, which is
+   * statically generated — a data read inside it would opt the landing page out
+   * of static generation and cost it the edge cache, the same trap recorded on
+   * `getLandingSettings`. Every caller resolves it at a server boundary.
+   *
+   * Omitted means "no data", which resolves to operational for every platform,
+   * so an unmigrated caller renders exactly what it did before.
+   */
+  statuses,
 }: {
   surface?: "light" | "onGradient";
   className?: string;
+  statuses?: PlatformStatusMap;
 }) {
   const onGradient = surface === "onGradient";
   return (
@@ -170,7 +212,9 @@ export function SupportedPlatforms({
                 imitating.
               */
               className={cn(
-                "flex aspect-square w-full items-center justify-center rounded-[26%] bg-white shadow-sm",
+                // `relative` is what the status light positions against — see
+                // PlatformStatusDot. Nothing else about the tile changes.
+                "relative flex aspect-square w-full items-center justify-center rounded-[26%] bg-white shadow-sm",
                 !onGradient && "ring-1 ring-inset ring-slate-200/70 dark:ring-white/10",
               )}
               style={mark?.bg ? { background: mark.bg } : undefined}
@@ -181,6 +225,13 @@ export function SupportedPlatforms({
               <Icon
                 className="h-[clamp(13px,3.6vw,18px)] w-[clamp(13px,3.6vw,18px)]"
                 style={mark ? { color: mark.fg } : undefined}
+              />
+              {/* Renders NOTHING while the platform is working — see the note on
+                  the component for why green is silent. */}
+              <PlatformStatusDot
+                status={statusOf(statuses, id)}
+                platformName={PLATFORMS[id]?.name ?? id}
+                size="sm"
               />
             </span>
           ) : null;

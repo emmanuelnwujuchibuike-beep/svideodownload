@@ -14,7 +14,7 @@ import { Suspense } from "react";
 import { HeroEffects } from "@/components/landing/hero-effects";
 import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
-import { SupportedPlatforms } from "@/components/landing/supported-platforms";
+import { SupportedPlatformsLive } from "@/components/landing/supported-platforms";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { Downloader } from "@/features/downloader/downloader";
@@ -357,7 +357,7 @@ export async function Hero() {
               (`public/newlanding.jpg`), so both are intended. One shared
               component — see `supported-platforms.tsx`.
             */}
-            <SupportedPlatforms className="mb-1" />
+            <SupportedPlatformsLive className="mb-1" />
 
             {/*
               ── The paste card (public/landing hero section.jpg) ──────────────
@@ -623,7 +623,7 @@ export async function Hero() {
           </div>
           {/* Supported platforms, per the reference card. Same component as the
               hero's row, on the gradient surface. */}
-          <SupportedPlatforms surface="onGradient" className="relative mt-4" />
+          <SupportedPlatformsLive surface="onGradient" className="relative mt-4" />
           {/*
             The disclaimer that used to live here has MOVED to directly under
             the hero CTA (owner, 2026-08-10). It is not repeated here on

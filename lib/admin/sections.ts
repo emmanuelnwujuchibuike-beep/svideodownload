@@ -143,6 +143,14 @@ export const ADMIN_SECTIONS: AdminSection[] = [
       "Upload and curate the wallpaper library shown on the download page and the full-screen gallery at /wallpapers. Hide a wallpaper to shelve it without losing its likes and comments.",
   },
   {
+    id: "platform-status",
+    label: "Platform status",
+    category: "content",
+    icon: "Activity",
+    blurb:
+      "Declare which download platforms are working, partly working or down. Sets the small green / amber / red light on every platform logo across the site — so when TikTok breaks people stop retrying instead of assuming Frenzsave is broken. Nothing detects this automatically: a failed download could be one bad link, a region block or a rate limit, and only a human can tell them apart.",
+  },
+  {
     id: "landing",
     label: "Landing page",
     category: "content",

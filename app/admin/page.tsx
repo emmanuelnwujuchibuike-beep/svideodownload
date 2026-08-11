@@ -156,6 +156,8 @@ import { listAllWallpapers } from "@/lib/wallpapers-server";
 import { fetchPushDeliveryStats } from "@/lib/social/push-delivery-stats";
 import { listAds } from "@/lib/monetization/ads";
 import { LandingEditor } from "@/features/admin/landing-editor";
+import { PlatformStatusEditor } from "@/features/admin/platform-status-editor";
+import { getPlatformStatus } from "@/lib/platform-status-store";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { getPlanLimits } from "@/lib/monetization/plan";
 import { getPricing } from "@/lib/monetization/pricing";
@@ -378,6 +380,12 @@ export default async function AdminPage() {
             </Suspense>
           </AdminPanel>
 
+          <AdminPanel id="platform-status">
+            <Suspense fallback={<PanelSkeleton />}>
+              <PlatformStatusSection />
+            </Suspense>
+          </AdminPanel>
+
           <AdminPanel id="landing">
             <Suspense fallback={<PanelSkeleton />}>
               <LandingSection />
@@ -556,6 +564,11 @@ async function ModerationSection() {
       <AppealsQueue appeals={pendingAppeals} />
     </>
   );
+}
+
+async function PlatformStatusSection() {
+  const statuses = await getPlatformStatus();
+  return <PlatformStatusEditor initial={statuses} />;
 }
 
 async function LandingSection() {

@@ -5,6 +5,7 @@ import { downloadConcurrencyStats } from "@/lib/concurrency";
 import { checkStream } from "@/lib/media/stream";
 import { hasWebPush } from "@/lib/push/web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ytdlpVersion } from "@/server/services/ytdlp-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,6 +80,19 @@ export async function GET() {
         subscriptions: pushSubscriptions,
       },
       downloads: downloadConcurrencyStats(),
+      /*
+        🔴 The extractor's own version, because its absence cost a whole
+        debugging session (2026-08-11). Every YouTube download was failing at
+        every quality, audio included, while metadata answered fine — which from
+        outside looks like a hundred different bugs and is nearly always one:
+        yt-dlp is installed at IMAGE BUILD time, so an image a few weeks old runs
+        a few-week-old yt-dlp, and YouTube's player changes faster than that.
+
+        `null` on the frontend role (Vercel has no yt-dlp) and whenever the
+        binary cannot be run at all — which is itself the answer to a different
+        outage.
+      */
+      extractor: { ytdlp: await ytdlpVersion() },
     },
     { headers: { "Cache-Control": "no-store" } },
   );

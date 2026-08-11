@@ -25,6 +25,7 @@ import { BatchAdGate } from "@/features/downloader/batch-ad-gate";
 import { startDownload as enqueueDownload } from "@/features/downloads/manager";
 import { ResultAd } from "@/features/monetization/result-ad";
 import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
+import { rewardAdsFor, type RewardAd } from "@/lib/monetization/reward-policy";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
@@ -206,17 +207,51 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
 
   const activeFormat = formats.find((f) => f.formatId === activeId);
 
-  // Rewarded-ad gate for high-quality downloads (highest-res video + any image).
-  // Free users watch a short ad; premium users (showAds=false) skip it.
+  /*
+    ── 🔴 THE REWARD GATE IS BY FILE SIZE NOW (owner, 2026-08-11) ────────────
+    "downloads above 100mb [a 30 sec reward ad], more than 500mb should show a
+    first 30 sec reward ad and after it finishes another 30 sec reward ad but
+    can be skipable after 15 secs."
+
+    It used to be `kind === "image" || formatId === topVideoId` — the
+    highest-RANKED format, with no reference to size. On the 60-minute video that
+    prompted this it was wrong in both directions at once: 720p is 1.03 GB and is
+    NOT the top format, so a gigabyte went through ungated, while a 15-second
+    clip's top format is a few MB and WAS gated. Cost scales with bytes, so the
+    gate is bytes. The policy and its thresholds live in
+    lib/monetization/reward-policy.ts with the tests.
+
+    `queue` holds the ads still to watch. Draining it one at a time — rather than
+    rendering two gates or nesting them — is what makes "after it finishes, show
+    another" literal, and it means the second ad's own props (its skip window)
+    come from the policy rather than from a flag threaded through the component.
+  */
   const { showAds } = useShowAds();
   const [gate, setGate] = useState<{ formatId: string; kind: MediaKind } | null>(null);
-  const topVideoId = videoFormats[0]?.formatId;
-  const needsReward = (formatId: string, kind: MediaKind) =>
-    showAds && (kind === "image" || (kind === "video" && formatId === topVideoId));
+  const [queue, setQueue] = useState<RewardAd[]>([]);
+  const [totalAds, setTotalAds] = useState(0);
   const startDownload = (formatId: string, kind: MediaKind) => {
-    if (needsReward(formatId, kind)) setGate({ formatId, kind });
-    else onDownload(formatId, kind);
+    const fmt = formats.find((f) => f.formatId === formatId && f.kind === kind);
+    const ads = rewardAdsFor({ filesize: fmt?.filesize ?? null, showAds, kind });
+    if (ads.length > 0) {
+      setQueue(ads);
+      setTotalAds(ads.length);
+      setGate({ formatId, kind });
+      return;
+    }
+    onDownload(formatId, kind);
   };
+
+  /*
+    How many ads the CURRENT selection would cost — drives the button's amber
+    treatment, so the colour is a promise the gate actually keeps. It was
+    previously `needsReward(activeId, tab)`, which asked the old rank-based rule
+    and so lit up for the wrong formats in both directions.
+  */
+  const gatedAdCount = useMemo(() => {
+    const fmt = formats.find((f) => f.formatId === activeId && f.kind === tab);
+    return rewardAdsFor({ filesize: fmt?.filesize ?? null, showAds, kind: tab }).length;
+  }, [formats, activeId, tab, showAds]);
 
   const platform = PLATFORMS[metadata.platform];
   const BrandIcon = BRAND_ICONS[metadata.platform];
@@ -584,7 +619,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
               ? "bg-emerald-600 text-white shadow-emerald-600/25"
               : isBatchable && selected.size !== 1
                 ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-violet-500/30 hover:shadow-violet-500/50 hover:shadow-xl disabled:opacity-70"
-                : needsReward(activeId, tab)
+                : gatedAdCount > 0
                   ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-amber-500/30 hover:shadow-amber-500/50 hover:shadow-xl disabled:opacity-70"
                   : "bg-primary text-primary-foreground shadow-primary/25 hover:shadow-glow-blue disabled:opacity-70",
           )}
@@ -663,13 +698,37 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       </div>
     </motion.div>
 
+    {/*
+      One gate, driven by the queue. `key` is the reason a SECOND ad actually
+      plays: without it React reuses the same mounted component and its internal
+      watch timer, so ad two would open already "watched" and grant instantly.
+      Keying on the position forces a fresh mount, a fresh fetch and a fresh
+      clock — which is what "after it finishes, show another" means.
+    */}
     <RewardedAdGate
-      open={!!gate}
+      key={`reward-${totalAds - queue.length}`}
+      open={!!gate && queue.length > 0}
+      durationSec={queue[0]?.durationSec ?? 30}
+      skipAfterSec={queue[0]?.skipAfterSec ?? null}
+      step={totalAds - queue.length + 1}
+      totalSteps={totalAds}
       onReward={() => {
-        if (gate) onDownload(gate.formatId, gate.kind);
+        const rest = queue.slice(1);
+        setQueue(rest);
+        // Only the LAST ad releases the download. Anything else would hand over
+        // the file after ad one and leave ad two playing to nobody.
+        if (rest.length === 0) {
+          if (gate) onDownload(gate.formatId, gate.kind);
+          setGate(null);
+        }
+      }}
+      onCancel={() => {
+        // ✕ abandons the whole sequence, not just this ad. Dropping the viewer
+        // into a second ad they just declined would be the opposite of a close
+        // button.
+        setQueue([]);
         setGate(null);
       }}
-      onCancel={() => setGate(null)}
     />
 
     <BatchAdGate

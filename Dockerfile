@@ -40,6 +40,16 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# 🔴 The entrypoint refreshes yt-dlp on every container START — see the long note
+# in the script. Installing it at BUILD time only (the RUN above) freezes it at
+# image-build date, and a few weeks of YouTube player changes is all it takes for
+# every YouTube download to fail while metadata still works.
+COPY --chown=nextjs:nodejs docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+  # The refreshed binary is written back over this path at boot, so the runtime
+  # user must own it. Without this the update silently no-ops as `nextjs`.
+  && chown nextjs:nodejs /usr/local/bin/yt-dlp
+
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0 YTDLP_PATH=/usr/local/bin/yt-dlp ARIA2C_PATH=/usr/bin/aria2c
@@ -47,4 +57,5 @@ ENV PORT=3000 HOSTNAME=0.0.0.0 YTDLP_PATH=/usr/local/bin/yt-dlp ARIA2C_PATH=/usr
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -fsS http://localhost:3000/api/health || exit 1
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "server.js"]

@@ -926,3 +926,55 @@ export async function prepareDownload(
     produceTo(args, finalPath),
   );
 }
+
+/**
+ * The yt-dlp build this worker is actually running.
+ *
+ * 🔴 Exposed because its absence cost a whole debugging session (2026-08-11).
+ * Every YouTube download was failing — every quality, audio too, a 19-second
+ * clip and a 60-minute one — while `/api/metadata` answered fine. From outside
+ * the box that looks like a hundred different bugs; the actual cause is nearly
+ * always the same one, and it is invisible: the binary is installed at IMAGE
+ * BUILD time, so a worker running a few-week-old image is running a few-week-old
+ * yt-dlp, and YouTube's player changes faster than that.
+ *
+ * Surfacing the version in /api/health turns "downloads are broken" into a
+ * one-glance answer. Cached for a minute — this shells out, and /api/health is
+ * polled by the container's own HEALTHCHECK every 30s.
+ */
+let versionCache: { at: number; value: string | null } | null = null;
+const VERSION_TTL_MS = 60_000;
+
+export async function ytdlpVersion(): Promise<string | null> {
+  if (versionCache && Date.now() - versionCache.at < VERSION_TTL_MS) return versionCache.value;
+  const value = await new Promise<string | null>((resolve) => {
+    try {
+      const child = spawn(YTDLP_BIN, ["--version"], { stdio: ["ignore", "pipe", "ignore"] });
+      let out = "";
+      const timer = setTimeout(() => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          /* already gone */
+        }
+        resolve(null);
+      }, 5_000);
+      child.stdout.on("data", (c: Buffer) => {
+        out += c.toString();
+      });
+      child.on("error", () => {
+        clearTimeout(timer);
+        resolve(null);
+      });
+      child.on("close", () => {
+        clearTimeout(timer);
+        const v = out.trim();
+        resolve(v.length > 0 ? v : null);
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+  versionCache = { at: Date.now(), value };
+  return value;
+}

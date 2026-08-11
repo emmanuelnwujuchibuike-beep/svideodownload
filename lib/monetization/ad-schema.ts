@@ -226,11 +226,14 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
     prefetch: true,
   },
   reward_video: {
-    label: "Rewarded video (unlock HD)",
+    label: "Rewarded video (large downloads)",
     description:
-      "Watched to completion in exchange for an HD download. Never skippable — it is an exchange. AdSense is the intended network.",
+      "Gated by FILE SIZE (2026-08-11): over 100 MB shows one 30s ad that must be watched out; over 500 MB shows that ad and then a second 30s ad the visitor may skip after 15s. Images are always gated. Premium members never see it, and if no ad is configured here the download is released immediately rather than blocked. AdSense is the intended network.",
     persistent: true,
-    supportsSkip: false,
+    // The FIRST ad is never skippable — it is the exchange. The second one is,
+    // after 15s, because sixty uninterrupted seconds in front of a download
+    // someone is already waiting for is how a downloader gets abandoned.
+    supportsSkip: true,
     prefetch: false,
   },
   sidebar: {

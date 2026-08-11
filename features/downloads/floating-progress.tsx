@@ -736,44 +736,67 @@ export function FloatingDownloadProgress({
               ) : null}
             </div>
 
-            <div className="flex shrink-0 flex-col items-center gap-1.5">
-              {/*
-                Minimise, as a LABELLED control (owner, 2026-08-09: "make the
-                minimise button more visible").
+            {/*
+              ── 🔴 THE TWO CONTROLS MEAN OPPOSITE THINGS (owner, 2026-08-11) ──
+              "differentiate the X and hide button and separate them so a user
+              with the intent of pressing hide wont mistake it for X, and change
+              the hide text to minimize, and make the X button to be bold and 3d
+              with clear description separated from the minimize button."
 
-                It was a bare 16px dash in muted grey, next to an identical-
-                looking dismiss — two anonymous glyphs, one of which cancels
-                your download. Nobody was going to find "you can carry on
-                browsing" in that. It now says the word, carries the brand tint
-                so it reads as an offer rather than chrome, and sits visually
-                above the close button instead of beside it as an equal.
+              One of these keeps your download and the other CANCELS it, and they
+              were an unlabelled 16px glyph sitting a few pixels from a small
+              pill. A mis-tap costs the whole transfer, so the two are now
+              separated on every axis a person actually reads:
 
-                Offered on ANY running download, not just a slow one: by the time
-                someone wants the card out of the way they should not have to
-                wait for us to agree that it is taking too long.
-              */}
-              <button
-                type="button"
-                aria-label={running ? "Cancel download" : "Dismiss"}
-                onClick={() => (running ? cancelDownload(task.id) : dismissTask(task.id))}
-                className="rounded-lg p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
+               • WORDS. "Minimize" says what it does; "Hide" reads like
+                 dismissal, which is the very thing it is not. The X gains
+                 "Cancel"/"Close" beside it, so neither control is a bare glyph.
+               • WEIGHT. The X is a raised, bordered disc with a shadow and a
+                 thick stroke — the "bold and 3d" asked for — while Minimize
+                 stays a flat tinted pill. Destructive reads as heavier.
+               • COLOUR. Destructive is red-tinted; the safe option keeps the
+                 brand blue.
+               • DISTANCE. A `mt-3` gap and a hairline divider between them, so
+                 they are no longer two items in one cluster.
+
+              Order is deliberate too: Minimize sits FIRST, because it is what
+              most people reaching for this corner actually want.
+            */}
+            <div className="flex shrink-0 flex-col items-stretch gap-1">
               {running ? (
                 <button
                   type="button"
-                  aria-label="Minimise — keep downloading in the background"
+                  aria-label="Minimize — keep downloading in the background"
                   onClick={() => {
                     haptic("light");
                     setMinimised(true);
                   }}
-                  className="inline-flex items-center gap-1 rounded-full bg-[#2563FF]/10 px-2 py-1 text-[10px] font-bold text-[#2563FF] ring-1 ring-inset ring-[#2563FF]/25 transition hover:bg-[#2563FF]/20 active:scale-95 dark:text-blue-300"
+                  className="inline-flex items-center justify-center gap-1 rounded-full bg-[#2563FF]/10 px-2.5 py-1.5 text-[10px] font-bold text-[#2563FF] ring-1 ring-inset ring-[#2563FF]/25 transition hover:bg-[#2563FF]/20 active:scale-95 dark:text-blue-300"
                 >
                   <Minus className="h-3 w-3" strokeWidth={3} />
-                  Hide
+                  Minimize
                 </button>
               ) : null}
+
+              {/* The divider is the separation made literal — without it the two
+                  still read as one control group however far apart they sit. */}
+              {running ? <span aria-hidden className="my-1 h-px w-full bg-border/70" /> : null}
+
+              <button
+                type="button"
+                aria-label={running ? "Cancel download — this stops the transfer" : "Dismiss"}
+                title={running ? "Cancel download" : "Dismiss"}
+                onClick={() => (running ? cancelDownload(task.id) : dismissTask(task.id))}
+                className={cn(
+                  "inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-1.5 text-[10px] font-bold transition active:scale-95 active:shadow-none",
+                  // The "3d": a real border, an inset highlight and a drop shadow,
+                  // so it sits ABOVE the card rather than on it.
+                  "border border-rose-500/40 bg-rose-500/10 text-rose-600 shadow-[0_2px_0_0_rgba(225,29,72,0.35),inset_0_1px_0_0_rgba(255,255,255,0.5)] hover:bg-rose-500/20 active:translate-y-[2px] dark:text-rose-300 dark:shadow-[0_2px_0_0_rgba(225,29,72,0.5),inset_0_1px_0_0_rgba(255,255,255,0.12)]",
+                )}
+              >
+                <X className="h-3 w-3" strokeWidth={3.2} />
+                {running ? "Cancel" : "Close"}
+              </button>
             </div>
           </div>
       </div>

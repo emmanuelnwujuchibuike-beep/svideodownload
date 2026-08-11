@@ -27,11 +27,28 @@ function beacon(kind: "impression" | "click", adId: string) {
 export function RewardedAdGate({
   open,
   durationSec = 30,
+  skipAfterSec = null,
+  /** "1 of 2" — shown only when a second ad follows, so the wait is honest. */
+  step,
+  totalSteps,
   onReward,
   onCancel,
 }: {
   open: boolean;
   durationSec?: number;
+  /**
+   * Seconds after which a Skip control appears; `null` means it must be watched
+   * out (Feature: size-gated rewards, 2026-08-11).
+   *
+   * A 500 MB+ file earns two ads, but sixty uninterrupted seconds in front of a
+   * download someone is already waiting for is how a downloader gets abandoned.
+   * The SECOND ad is skippable at 15s: the impression is still served and
+   * counted, and nobody who has already watched a full thirty seconds is
+   * punished further for the size of a file they did not choose.
+   */
+  skipAfterSec?: number | null;
+  step?: number;
+  totalSteps?: number;
   onReward: () => void;
   onCancel: () => void;
 }) {
@@ -114,6 +131,15 @@ export function RewardedAdGate({
   const done = watched >= required - 0.4;
   const remaining = Math.max(0, Math.ceil(required - watched));
   const pct = Math.min(100, (watched / required) * 100);
+  /*
+    The Skip affordance, on the second ad only.
+    Measured against the SAME `watched` clock the reward uses — which for a video
+    ad advances only while it is actually playing. Using wall-clock here instead
+    would let someone open the gate, pause, wait fifteen seconds and skip without
+    the ad ever having played a frame.
+  */
+  const canSkip = skipAfterSec !== null && watched >= skipAfterSec;
+  const skipIn = skipAfterSec === null ? 0 : Math.max(0, Math.ceil(skipAfterSec - watched));
 
   const onLoadedMeta = () => {
     const v = videoRef.current;
@@ -166,6 +192,14 @@ export function RewardedAdGate({
                   <Lock className="h-5 w-5 text-primary" /> Watch a short ad to download in HD
                 </>
               )}
+              {/* "1 of 2", only when a second ad actually follows. Someone who
+                  knows there are two waits differently from someone ambushed by
+                  a second one. */}
+              {totalSteps && totalSteps > 1 && step ? (
+                <span className="ml-auto shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                  {step} of {totalSteps}
+                </span>
+              ) : null}
             </h3>
 
             <div className="mt-4 overflow-hidden rounded-2xl bg-black">
@@ -241,6 +275,27 @@ export function RewardedAdGate({
                     <>Watch {remaining}s more to unlock HD — or tap ✕ to skip</>
                   )}
                 </p>
+
+                {/*
+                  SKIP — second ad only. It advances the sequence exactly as a
+                  completed watch does (`onReward`), rather than cancelling: the
+                  viewer has already earned the download by watching the first ad
+                  in full, and dropping them out here would take it away for
+                  using an affordance we offered.
+
+                  Counted down rather than appearing without warning, so the wait
+                  is legible instead of feeling arbitrary.
+                */}
+                {skipAfterSec !== null ? (
+                  <button
+                    type="button"
+                    onClick={canSkip ? onReward : undefined}
+                    disabled={!canSkip}
+                    className="mt-3 w-full rounded-xl border border-border px-4 py-2.5 text-sm font-semibold transition enabled:hover:bg-secondary disabled:opacity-50"
+                  >
+                    {canSkip ? "Skip ad" : `Skip in ${skipIn}s`}
+                  </button>
+                ) : null}
               </div>
             ) : (
               <button

@@ -143,7 +143,30 @@ function MenuMark({ shown }: { shown: boolean }) {
   );
 }
 
-export function SiteHeader({ social = false, desktopHidden = false }: { social?: boolean; desktopHidden?: boolean }) {
+export function SiteHeader({
+  social = false,
+  desktopHidden = false,
+  canvas = false,
+}: {
+  social?: boolean;
+  desktopHidden?: boolean;
+  /**
+   * 🔴 Wear the landing's native canvas instead of `bg-background`, and drop the
+   * hairline (owner, 2026-08-11 — `public/newnativeapplandingpage.jpg`).
+   *
+   * In the reference there is no header BAND: the bar is the same tint as the
+   * page and the two are indistinguishable until you scroll. A white header over
+   * a lavender page draws a hard horizontal edge across the top of every screen,
+   * which is exactly the "web page" tell the canvas exists to remove.
+   *
+   * Still fully OPAQUE — this only changes the colour. The bar must never become
+   * translucent or blurred (owner, 2026-08: "make it pure white and dark in dark
+   * mode… remove the glass feel"), and `backdrop-blur` on a fixed element is also
+   * a full-width GPU pass on every scroll frame, on the page whose brief is to
+   * keep cheap phones cool.
+   */
+  canvas?: boolean;
+}) {
   // The member's chosen language, clamped to catalogues that exist. Re-reads
   // on the switcher's event, so changing language updates the chrome with no
   // reload — see lib/i18n/use-locale.
@@ -256,6 +279,11 @@ export function SiteHeader({ social = false, desktopHidden = false }: { social?:
         // treatment so every top bar in the app looks the same material.
         // Fixed and pinned on scroll (owner, 2026-08-02) — no hide-on-scroll.
         "fixed inset-x-0 top-0 z-50 border-b border-border/40 bg-background pt-[var(--frenz-safe-top)]",
+        // The landing's canvas treatment — same colour as the page, no hairline.
+        // `border-transparent` rather than `border-0`: keeping the 1px border-box
+        // means the header's height is identical in both variants, so switching
+        // surfaces can never shift the content it is offset against.
+        canvas && "border-transparent bg-[hsl(var(--frenz-canvas))]",
         desktopHidden && "lg:hidden",
         social && "border-b-border/20",
       )}

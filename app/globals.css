@@ -1792,3 +1792,40 @@ html[data-a11y-motion="reduce"] *::after {
    full strength while the body stays recessive against the gridlines. */
 .viz-panel .viz-stop-a { stop-color: var(--viz); stop-opacity: 0.28; }
 .viz-panel .viz-stop-b { stop-color: var(--viz); stop-opacity: 0.02; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE NATIVE-APP CANVAS
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Owner, 2026-08-11: "make the background of the whole of the landing page to be
+   like in my screenshot, like a flutter and swift native app, and not just the
+   hero should be like that but all over the landing page."
+
+   A phone app does not put its content on pure white. It puts white CARDS on a
+   faintly tinted GROUND, and that one relationship is most of what separates a
+   native screen from a web page — it is what gives every card an edge without
+   drawing a single border. The landing had it in the hero only (a
+   `slate-50 → indigo-50` gradient) and then dropped to #FFFFFF for the other
+   nine sections, so the page announced "website" the moment you scrolled past
+   the fold.
+
+   This is a FLAT colour, not a gradient, and deliberately so: a gradient
+   spanning a page several thousand pixels tall is a full-height paint the
+   compositor cannot cheaply reuse while scrolling, and the brief here also
+   said "let smaller devices never get hot while on the landing page". A flat
+   background colour is the cheapest thing a browser can paint.
+
+   Sampled from `public/newnativeapplandingpage.jpg` (#EEF0FA). Dark mode keeps
+   the ground the rest of the dark theme already uses rather than tinting it —
+   the point is a ground that is not the card colour, and on dark the cards are
+   already lighter than the page.
+
+   It is a variable rather than three copies of a hex literal because the header
+   has to match it EXACTLY. Two hand-copied values that drift by one step would
+   put a visible seam across the top of the page. */
+:root {
+  --frenz-canvas: 234 45% 96%;
+}
+.dark {
+  --frenz-canvas: 229 55% 5%;
+}

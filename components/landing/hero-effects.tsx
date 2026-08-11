@@ -57,14 +57,42 @@ export function HeroEffects() {
       */}
       <div className="absolute inset-0 bg-[radial-gradient(120%_90%_at_70%_20%,rgba(191,219,254,0.55)_0%,rgba(233,213,255,0.4)_35%,transparent_70%)] dark:bg-[radial-gradient(120%_90%_at_70%_20%,rgba(76,29,149,0.45)_0%,rgba(30,27,75,0.35)_35%,transparent_70%)]" />
 
-      {/* Orbital light trails. Three ellipses at different tilts and speeds; the
-          conic gradient makes the stroke brighten along its length, which is what
-          reads as light travelling around the ring rather than a static outline. */}
+      {/* Orbital light trails. Three ellipses at different tilts; the conic
+          gradient makes the stroke brighten along its length, which is what reads
+          as light travelling around the ring rather than a static outline. */}
+      {/*
+        🔴🔴 THE ROTATION IS GONE. The rings are STILL (owner, 2026-08-11: "let
+        smaller devices never get hot while on the landing page for a while,
+        performance should be minimized").
+
+        These were `frenz-orbit-slow/mid/fast` — 38s, 26s and 18s, all `infinite`.
+        That is three ~600px conic-gradient layers being re-composited every frame
+        for as long as the tab is open, and it was the only thing on the landing
+        page that never stopped. Everything else here animates once on entry or
+        on input.
+
+        The usual defence — "it's a transform, so it's compositor-only and free" —
+        is the wrong bar for this ask. Compositor-only means it does not run
+        LAYOUT or PAINT; it does not mean it costs nothing. The GPU still
+        recomposites three large translucent layers 60 times a second, forever,
+        including while the visitor is reading the FAQ eleven thousand pixels
+        below with the hero long out of view (CSS animations do not pause
+        off-screen). Continuous GPU work with nothing to show for it is precisely
+        how a phone gets warm sitting on one page, which is the symptom named.
+
+        `prefers-reduced-motion` did NOT cover this: it protects people who ask to
+        be protected, and the owner's constraint is about every cheap device.
+
+        The rings themselves are KEPT, static, at their existing tilts — the ask
+        was for less heat, not less design, and a still frame of this effect is
+        visually all but identical to any single frame of the animated one. What
+        is removed is the 60fps redraw, not the artwork.
+      */}
       <div className="absolute left-1/2 top-1/2 h-[38rem] w-[38rem] -translate-x-1/2 -translate-y-1/2 sm:h-[46rem] sm:w-[46rem]">
         {[
-          { size: "inset-0", spin: "frenz-orbit-slow", tilt: "rotate-[18deg]" },
-          { size: "inset-[8%]", spin: "frenz-orbit-mid", tilt: "-rotate-[24deg]" },
-          { size: "inset-[18%]", spin: "frenz-orbit-fast", tilt: "rotate-[62deg]" },
+          { size: "inset-0", spin: "ring-a", tilt: "rotate-[18deg]" },
+          { size: "inset-[8%]", spin: "ring-b", tilt: "-rotate-[24deg]" },
+          { size: "inset-[18%]", spin: "ring-c", tilt: "rotate-[62deg]" },
         ].map((ring) => (
           <span
             key={ring.spin}
@@ -72,7 +100,7 @@ export function HeroEffects() {
                palettes can be swapped by a `dark:` utility — an inline `background`
                cannot carry a variant, and duplicating the element would double the
                animation cost for one that is always hidden. */
-            className={`absolute ${ring.size} ${ring.tilt} rounded-[50%] ${ring.spin} bg-[image:var(--ring-light)] dark:bg-[image:var(--ring-dark)]`}
+            className={`absolute ${ring.size} ${ring.tilt} rounded-[50%] bg-[image:var(--ring-light)] dark:bg-[image:var(--ring-dark)]`}
             style={
               {
                 "--ring-light":

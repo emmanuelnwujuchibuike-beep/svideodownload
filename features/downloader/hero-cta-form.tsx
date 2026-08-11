@@ -74,7 +74,25 @@ export function HeroCtaForm() {
         one shape that would put the download tile up where the eyebrow badge
         is, which is what the owner's screenshot shows.
       */
-      className="frenz-cta group relative isolate flex min-h-[4.25rem] w-full items-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-1.5 shadow-lg shadow-violet-600/30 transition duration-200 focus-within:shadow-xl focus-within:shadow-violet-600/40"
+      /*
+        🔴 SQUARE corners, no shadow, and the ramp stops at PURPLE (owner,
+        2026-08-11, from `public/newnativeapplandingpage.jpg`).
+
+        • `rounded-none`: the card above this form is `overflow-hidden` with the
+          radius, so the bar is clipped to the CARD's corners. Its own radius
+          would show as a second, smaller curve inside the first.
+        • No `shadow-violet-600/30`: the bar is flush inside the card now, so a
+          drop shadow had nothing to cast onto but the card's own white — it
+          just muddied the seam. The card carries the elevation.
+        • `to-purple-600`, not `to-fuchsia-600`: the old ramp turned magenta
+          across its right third. The reference stays in the blue→violet family
+          the rest of the brand uses and never reaches pink.
+
+        `min-h-[4.75rem]` matches the reference's bar height (~78px), up from
+        4.25rem — the taller bar is most of what makes it read as a native app
+        row rather than a web button.
+      */
+      className="frenz-cta group relative isolate flex min-h-[4.75rem] w-full items-center gap-2 overflow-hidden rounded-none bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 p-1.5 transition duration-200"
     >
       <span
         aria-hidden
@@ -85,16 +103,34 @@ export function HeroCtaForm() {
           script — and screen readers announce the field it names. */}
       <label
         htmlFor="hero-url"
-        className="frenz-cta-face absolute inset-0 z-10 flex cursor-text items-center gap-4 px-4 text-left text-white"
+        className="frenz-cta-face absolute inset-0 z-10 flex cursor-text items-center gap-3.5 px-4 text-left text-white sm:gap-4"
       >
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 ring-1 ring-inset ring-white/25">
-          <Download className="h-5 w-5" />
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-inset ring-white/25">
+          <Download className="h-[22px] w-[22px]" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-base font-bold leading-tight">Start Free Download</span>
-          <span className="mt-0.5 block text-xs text-white/80">100% Free</span>
+          <span className="block text-[17px] font-bold leading-tight">Start Free Download</span>
+          <span className="mt-1 block text-[13px] text-white/85">100% Free</span>
         </span>
-        <ArrowRight className="h-5 w-5 shrink-0" />
+        {/*
+          🔴 The arrow sits in a CIRCLE (owner, 2026-08-11 — the reference).
+
+          It was a bare glyph floating at the right edge, which read as a chevron
+          decoration rather than as the thing you tap. The reference draws a
+          translucent disc around it, and that is what makes the row look like a
+          native list item with a trailing action.
+
+          `aria-hidden` on the whole disc: the label it sits in already says
+          "Start Free Download", and the submit control beneath carries its own
+          name. An "arrow right" announcement here would be a third voice for one
+          action.
+        */}
+        <span
+          aria-hidden
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/25"
+        >
+          <ArrowRight className="h-[18px] w-[18px]" />
+        </span>
       </label>
 
       <input

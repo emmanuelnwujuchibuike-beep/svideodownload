@@ -107,7 +107,18 @@ export async function Hero() {
       content directly under the navigation bar; `+4.5rem` clears the fixed
       header and nothing more, so the first thing on screen is the product.
     */
-    <section className="relative overflow-hidden bg-gradient-to-b from-slate-50 to-indigo-50/60 pb-5 pt-[calc(var(--frenz-safe-top)+4.5rem)] text-foreground dark:from-[#050816] dark:to-[#050816] dark:text-white sm:pb-7 sm:pt-[calc(var(--frenz-safe-top)+5.5rem)]">
+    /*
+      🔴 NO BACKGROUND OF ITS OWN (owner, 2026-08-11: the canvas is "not just the
+      hero … but all over the landing page").
+
+      This section used to paint `slate-50 → indigo-50/60`, and that was the
+      whole problem: the hero had the tint and the nine sections below it did
+      not, so there was a visible horizontal seam where the gradient ran out and
+      the page turned white. Inheriting the wrapper's `--frenz-canvas` makes the
+      ground continuous from the header to the footer — which is what a native
+      app screen looks like, and is also one less full-width gradient to paint.
+    */
+    <section className="relative overflow-hidden pb-5 pt-[calc(var(--frenz-safe-top)+4.5rem)] text-foreground dark:text-white sm:pb-7 sm:pt-[calc(var(--frenz-safe-top)+5.5rem)]">
       <HeroEffects />
 
       {/* `items-start`, not `items-center`: centring the two columns against
@@ -360,36 +371,61 @@ export async function Hero() {
             <SupportedPlatformsLive className="mb-1" />
 
             {/*
-              ── The paste card (public/landing hero section.jpg) ──────────────
-              The reference wraps the CTA and a four-item trust strip in ONE
-              light card with a gradient hairline ring — not a solid gradient
-              block. The ring is a `p-px` gradient wrapper around an inner
-              surface: one element, no pseudo-element, and it clips correctly at
-              the radius because the inner card carries its own background.
+              ── The paste card, rebuilt to `public/newnativeapplandingpage.jpg`
+                 (owner, 2026-08-11: "the download placeholder and button is
+                 supposed to be like this one … cause that's how it is on the
+                 image i saved in public") ──────────────────────────────────────
 
-              The trust strip sits INSIDE the card but OUTSIDE the form, so the
+              One card holding two bands: the purple action bar, then the proof
+              strip on white. Three things changed from the previous version, and
+              each was a visible difference from the reference:
+
+              • THE BAR IS FULL-BLEED. It used to be inset inside a `p-2` white
+                frame, so a band of white ran all the way around the purple —
+                which is what made it read as "a button placed on a card" rather
+                than as the card's own header. In the reference the purple meets
+                the card's left, right and top edges and the radius is the
+                CARD's. `overflow-hidden` on the card does that clipping, so the
+                form itself needs no corner radius at all.
+
+              • NO GRADIENT RING. The card was wrapped in a `p-px`
+                blue→violet→fuchsia hairline. There is no ring in the reference,
+                and on a lavender canvas it read as a stray outline. A plain
+                surface with a soft neutral shadow is what the image shows.
+
+              • THE GRADIENT STOPS AT VIOLET. It ran to `fuchsia-600`, so the
+                right third of the bar went magenta/pink. The reference travels
+                indigo → violet → purple and never reaches pink. That ramp lives
+                on the form itself — see hero-cta-form.tsx.
+
+              The proof strip sits INSIDE the card but OUTSIDE the form, so the
               form's `absolute inset-0` face (the button-becomes-a-field
-              transform) covers only the input row — never the strip.
+              transform) covers only the action bar — never the strip.
             */}
-            <div className="rounded-[1.35rem] bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500 p-px shadow-lg shadow-violet-500/15">
-              <div className="rounded-[1.3rem] bg-white p-2 dark:bg-[#0b1020]">
-                <HeroCtaForm />
-                <ul className="mt-2 flex flex-wrap items-center justify-between gap-y-2 px-1 pb-1 pt-1.5">
-                  {HERO_PROOF.map((p, i) => (
-                    <li
-                      key={p.label}
-                      className={cn(
-                        "flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-1 text-[11px] font-semibold text-slate-600 dark:text-white/70",
-                        // Hairline dividers between columns, as in the reference.
-                        i > 0 && "border-l border-slate-200/80 dark:border-white/10",
-                      )}
-                    >
-                      <p.Icon className="h-3.5 w-3.5 shrink-0 text-violet-500 dark:text-violet-300" />
-                      {p.label}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            <div className="overflow-hidden rounded-[1.35rem] bg-white shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-[#0b1020] dark:ring-white/10">
+              <HeroCtaForm />
+              {/*
+                The strip's type is a clamp, not a fixed size. The reference is a
+                390px phone and reads at about 13px; four labels, four icons and
+                three dividers at a flat 13px overflow a 320px screen, which is
+                the width this row has broken at before. It tracks the viewport
+                between a 10px floor and the reference's 13px instead.
+              */}
+              <ul className="flex flex-wrap items-center justify-between gap-y-2 px-1.5 py-3">
+                {HERO_PROOF.map((p, i) => (
+                  <li
+                    key={p.label}
+                    className={cn(
+                      "flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-1 text-[clamp(10px,3vw,13px)] font-medium text-slate-600 dark:text-white/70",
+                      // Hairline dividers between columns, as in the reference.
+                      i > 0 && "border-l border-slate-200/80 dark:border-white/10",
+                    )}
+                  >
+                    <p.Icon className="h-4 w-4 shrink-0 text-violet-500 dark:text-violet-300" />
+                    {p.label}
+                  </li>
+                ))}
+              </ul>
             </div>
 
             {/*

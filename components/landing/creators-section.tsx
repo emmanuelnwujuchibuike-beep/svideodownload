@@ -73,16 +73,30 @@ function ArtPanel({ images }: { images: string[] }) {
       </div>
 
       {/* Chat bubble + rewards chip, for depth at the edges. */}
+      {/*
+        🔴 `backdrop-blur` removed from both chips (owner, 2026-08-11: nothing on
+        this page may cook a cheap phone).
+
+        A backdrop filter is a GPU pass over whatever sits behind the element, and
+        these two are also `frenz-float` — a 7s infinite translate. A blur behind a
+        MOVING element cannot be cached: the backdrop changes every frame, so the
+        pass is recomputed every frame, for both chips, for as long as the section
+        is on screen. That combination is the most expensive shape a decoration can
+        take, and it is on a page whose brief is to stay cool.
+
+        It also bought nothing: the surface is `bg-white/85`, so only 15% of the
+        backdrop ever showed through to be blurred. The chips look the same.
+      */}
       <span
         aria-hidden
-        className="frenz-float absolute left-[4%] top-[46%] flex items-center gap-1.5 rounded-full border border-white/20 bg-white/85 px-2.5 py-1.5 text-[10px] font-semibold text-slate-900 shadow-lg backdrop-blur dark:bg-white/10 dark:text-white"
+        className="frenz-float absolute left-[4%] top-[46%] flex items-center gap-1.5 rounded-full border border-white/20 bg-white/85 px-2.5 py-1.5 text-[10px] font-semibold text-slate-900 shadow-lg dark:bg-white/10 dark:text-white"
         style={{ animationDelay: "-2s" }}
       >
         <MessageCircle className="h-3 w-3 text-blue-500" /> Nice one!
       </span>
       <span
         aria-hidden
-        className="frenz-float absolute right-[3%] top-[30%] flex items-center gap-1.5 rounded-full border border-white/20 bg-white/85 px-2.5 py-1.5 text-[10px] font-semibold text-slate-900 shadow-lg backdrop-blur dark:bg-white/10 dark:text-white"
+        className="frenz-float absolute right-[3%] top-[30%] flex items-center gap-1.5 rounded-full border border-white/20 bg-white/85 px-2.5 py-1.5 text-[10px] font-semibold text-slate-900 shadow-lg dark:bg-white/10 dark:text-white"
         style={{ animationDelay: "-4s" }}
       >
         <Gem className="h-3 w-3 text-violet-500" /> +25 pts
@@ -97,7 +111,19 @@ export async function CreatorsSection() {
   // client — no cookies — so `/` stays statically generated.
   const { feedGridImages } = await getLandingSettings();
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-indigo-50/60 to-slate-50 py-16 text-foreground dark:from-[#050816] dark:to-[#050816] dark:text-white sm:py-20">
+    /*
+      🔴 No background of its own — it inherits the landing's `--frenz-canvas`
+      (owner, 2026-08-11: the native ground is "all over the landing page").
+
+      This section painted `indigo-50/60 → slate-50` across 1298px, and the
+      `slate-50` end is very nearly white and fully opaque. So a third of the way
+      down the page the canvas quietly faded out into a white band and then
+      resumed underneath — the one section on the page that broke the ground the
+      rest of it now shares. Found by walking every full-width block's computed
+      background rather than by eye; at 6% lightness difference it is easy to
+      scroll straight past and still feel that something is off.
+    */
+    <section className="relative overflow-hidden py-16 text-foreground dark:text-white sm:py-20">
       <div className="container max-w-6xl">
         <div className="grid items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
           <ArtPanel images={feedGridImages} />

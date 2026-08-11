@@ -96,8 +96,25 @@ export default function HomePage() {
         containing block and break the `position: fixed` header, its portalled
         mobile menu, and the sticky ad (the failure removed in 135ed36).
       */}
-      <div className="bg-background text-foreground">
-        <SiteHeader />
+      {/*
+        🔴 The whole page sits on the NATIVE CANVAS, not on white (owner,
+        2026-08-11: "make the background of the whole of the landing page to be
+        like in my screenshot … and not just the hero should be like that but
+        all over the landing page").
+
+        One declaration covers every section below, because none of them paints
+        a page-level background of its own — they were all inheriting this
+        wrapper's `bg-background`, i.e. #FFFFFF. Their inner cards are `bg-white`
+        / `bg-card` and stay white, which is the entire point: white cards on a
+        tinted ground is the native-app relationship, and it only reads if the
+        ground is not also white.
+
+        The colour is defined once as `--frenz-canvas` in globals.css — see the
+        note there for why it is flat rather than a gradient, and why the header
+        must read the same variable rather than carry its own copy.
+      */}
+      <div className="bg-[hsl(var(--frenz-canvas))] text-foreground">
+        <SiteHeader canvas />
         <main>
         <Hero />
         {/*

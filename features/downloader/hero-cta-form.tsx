@@ -1,9 +1,15 @@
 "use client";
 
-import { ArrowRight, Download } from "lucide-react";
+import { ArrowRight, Download, Loader2 } from "lucide-react";
+import { useSyncExternalStore } from "react";
 
 import { HeroPasteButton } from "@/features/downloader/hero-paste-button";
-import { setHeroLink } from "@/features/downloader/hero-link-store";
+import {
+  getHeroFetching,
+  getServerHeroFetching,
+  setHeroLink,
+  subscribeHeroFetching,
+} from "@/features/downloader/hero-link-store";
 
 /**
  * The landing hero's primary CTA: a button that becomes a paste field.
@@ -36,6 +42,12 @@ import { setHeroLink } from "@/features/downloader/hero-link-store";
  * load; it is not what makes the feature work.
  */
 export function HeroCtaForm() {
+  // Published by `Downloader` while it extracts — see the note on the button.
+  const fetching = useSyncExternalStore(
+    subscribeHeroFetching,
+    getHeroFetching,
+    getServerHeroFetching,
+  );
   return (
     <form
       action="/"
@@ -137,13 +149,40 @@ export function HeroCtaForm() {
         (Label in Name) requires — a voice-control user saying "click Download"
         must hit the thing that reads "Download".
       */}
+      {/*
+        🔴 THE BUTTON *IS* THE FETCHING STATE (owner, 2026-08-11: "i want the
+        placeholder button to turn to the fetching button section and not
+        opening a new fetching section below … it should change back to the
+        download placeholder immediately fetch is complete").
+
+        The extraction runs in `Downloader`, mounted several rows below, so its
+        progress used to open a card down there. A card appearing somewhere else
+        reads as a second thing happening rather than as this action continuing —
+        which is exactly why people pressed Download twice.
+
+        `fetching` comes from the shared hero store, so the button knows without
+        either component owning the other. It reverts the instant `status` leaves
+        "fetching", because the flag is published from an effect on that status
+        rather than on a timer.
+
+        Disabled while busy: a second submit would start a second extraction of
+        the same link, which was the original complaint behind the loud card.
+        `aria-live` is deliberately NOT here — the disabled state and the label
+        change are announced by the button itself, and a live region on a control
+        would interrupt a screen reader mid-sentence.
+      */}
       <button
         type="submit"
-        aria-label="Download"
-        className="frenz-cta-go inline-flex h-14 shrink-0 items-center gap-2 rounded-xl bg-white/20 px-3.5 text-sm font-bold text-white ring-1 ring-inset ring-white/30 transition hover:bg-white/30 active:scale-[0.98] sm:px-5 sm:text-base"
+        disabled={fetching}
+        aria-label={fetching ? "Fetching your link" : "Download"}
+        className="frenz-cta-go inline-flex h-14 shrink-0 items-center gap-2 rounded-xl bg-white/20 px-3.5 text-sm font-bold text-white ring-1 ring-inset ring-white/30 transition hover:bg-white/30 active:scale-[0.98] disabled:cursor-wait disabled:opacity-90 disabled:active:scale-100 sm:px-5 sm:text-base"
       >
-        <Download aria-hidden className="h-5 w-5" />
-        <span className="hidden sm:inline">Download</span>
+        {fetching ? (
+          <Loader2 aria-hidden className="h-5 w-5 animate-spin" />
+        ) : (
+          <Download aria-hidden className="h-5 w-5" />
+        )}
+        <span className="hidden sm:inline">{fetching ? "Fetching…" : "Download"}</span>
       </button>
     </form>
   );

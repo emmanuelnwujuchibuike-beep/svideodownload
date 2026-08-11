@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -66,6 +67,31 @@ export async function POST(request: Request) {
 
   try {
     await setPlatformStatus(map);
+    /*
+      🔴 REVALIDATE, or the badge does not appear (owner, 2026-08-11: "platform
+      status from admin dashboard doesnt show on the logos").
+
+      The save worked and the badge was correct — it was three caches away from
+      being seen. `/` is statically prerendered with `revalidate = 60`
+      (app/layout.tsx), so without this the page keeps serving its last build for
+      up to a minute AND only regenerates when a request happens to arrive after
+      that window. For a decorative setting that is fine. For an OUTAGE FLAG it
+      is not: the entire value of this switch is that it appears immediately when
+      a platform breaks, and a badge that lands minutes later is not fit for its
+      one purpose.
+
+      `revalidatePath` drops the cached render on save, so the next request
+      rebuilds with the new status.
+
+      Stated honestly, because it is not the whole story: two caches sit in FRONT
+      of Next and this cannot reach either. Cloudflare fronts Vercel, and the
+      installed PWA's service worker has "/" in its PAGE_CACHE allowlist — so an
+      installed app may keep showing the previous landing until its own cache
+      turns over. The badge is immediate on a fresh browser request and eventual
+      in the PWA.
+    */
+    revalidatePath("/");
+    revalidatePath("/downloads");
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Couldn't save platform status." }, { status: 500 });

@@ -49,3 +49,43 @@ export function getHeroLink(): string {
 export function getServerHeroLink(): string {
   return "";
 }
+
+/*
+  ── The hero CTA's FETCHING flag (owner, 2026-08-11) ────────────────────────
+  "i want the placeholder button to turn to the fetching button section and not
+  opening a new fetching section below, it should be on the download button and
+  it should change back to the download placeholder immediately fetch is
+  complete."
+
+  The extraction runs inside `Downloader`, which is mounted several rows below
+  the CTA — so the button that started it had no way to know it was working.
+  That is why the progress had to appear down there as its own card.
+
+  This is the same two-island pattern as the link itself, for the same reason:
+  lifting either component to share React state would pull the whole CTA stack
+  into the landing page's bundle, and that page is at its ceiling. Eleven more
+  lines of module state is far cheaper and keeps everything between them
+  server-rendered.
+*/
+let fetching = false;
+const fetchingListeners = new Set<() => void>();
+
+export function setHeroFetching(value: boolean): void {
+  if (fetching === value) return; // no-op guard: this is called from an effect
+  fetching = value;
+  for (const l of fetchingListeners) l();
+}
+
+export function subscribeHeroFetching(listener: () => void): () => void {
+  fetchingListeners.add(listener);
+  return () => fetchingListeners.delete(listener);
+}
+
+export function getHeroFetching(): boolean {
+  return fetching;
+}
+
+/** Never fetching during a prerender — and this must be a stable value. */
+export function getServerHeroFetching(): boolean {
+  return false;
+}

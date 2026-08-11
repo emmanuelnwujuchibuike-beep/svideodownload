@@ -108,7 +108,7 @@ export function HeroLinkDownloader() {
     */
     <div id="hero-result" className="min-w-0 -mb-6 overflow-hidden scroll-mt-28 [&>div>div]:mt-4">
       {parsed.success ? (
-        <Downloader key={parsed.data} initialUrl={parsed.data} resultOnly />
+        <Downloader key={parsed.data} initialUrl={parsed.data} resultOnly heroHandlesFetching />
       ) : (
         <div
           role="alert"

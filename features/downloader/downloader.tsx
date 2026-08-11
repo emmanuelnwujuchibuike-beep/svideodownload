@@ -36,6 +36,7 @@ import { PLATFORMS, detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
 import type { MediaKind, PlatformId } from "@/types";
 
+import { setHeroFetching } from "./hero-link-store";
 import { useDownloader } from "./use-downloader";
 
 // Result card (+ its framer-motion dependency) only ever appears after a
@@ -79,10 +80,17 @@ export function Downloader({
   platformId,
   hideDisclaimer,
   resultOnly,
+  heroHandlesFetching,
 }: {
   initialUrl?: string;
   platformId?: PlatformId;
   hideDisclaimer?: boolean;
+  /**
+   * The CALLER renders the fetching state (the landing hero puts it in its own
+   * Download button), so this component must not also open a progress card
+   * below. See the note at that card.
+   */
+  heroHandlesFetching?: boolean;
   /**
    * Render the RESULT half only — no paste field, no ad surface, no platform
    * link, no disclaimer.
@@ -106,6 +114,20 @@ export function Downloader({
   const previewRef = useRef<HTMLDivElement | null>(null);
 
   const isBusy = status === "fetching";
+  /*
+    Publish the fetch state so the landing hero's Download button can BE the
+    spinner. Effect rather than a render-time call because it writes to a module
+    store that other components subscribe to — doing that during render is a
+    side effect in the render phase.
+
+    The cleanup clears the flag on unmount: a visitor who navigates away
+    mid-fetch must not leave the CTA spinning forever on their return.
+  */
+  useEffect(() => {
+    if (!heroHandlesFetching) return;
+    setHeroFetching(isBusy);
+    return () => setHeroFetching(false);
+  }, [heroHandlesFetching, isBusy]);
   const detected = url ? detectPlatform(url) : null;
 
   // Set once the user taps download on this fetch's result — drives the
@@ -368,14 +390,27 @@ export function Downloader({
       )}
 
       {/*
-        The hero's own "fetching" state.
+        🔴 The hero's fetching state MOVED ONTO THE BUTTON (owner, 2026-08-11:
+        "i want the placeholder button to turn to the fetching button section and
+        not opening a new fetching section below … it should change back to the
+        download placeholder immediately fetch is complete").
 
-        The spinner normally lives in the Download button, and `resultOnly` has
-        no button — so without this the CTA would appear to do nothing at all
-        for the second or two a fetch takes, which is exactly the moment a
-        visitor decides the site is broken.
+        This card was the right answer to the previous complaint — `resultOnly`
+        has no Download button of its own, so the progress had to appear
+        somewhere, and it appeared here. But a card opening several rows below
+        the button you just pressed reads as a second thing happening, not as
+        the same action continuing.
+
+        The state is published to the hero store instead (see the effect above),
+        and the CTA's own Download button becomes the spinner. Nothing opens
+        below, and the button returns the instant `status` leaves "fetching".
+
+        Kept for the NON-hero use of `resultOnly`, should one ever exist: the
+        condition now also requires that nobody is listening for the flag, so a
+        caller that does not wire the button still gets visible progress rather
+        than silence.
       */}
-      {resultOnly && isBusy ? (
+      {resultOnly && isBusy && !heroHandlesFetching ? (
         /*
           Loud on purpose (owner, 2026-08-09: "make the fetching your link
           section at the hero to be more visible and with a more visible colour

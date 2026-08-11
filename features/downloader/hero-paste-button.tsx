@@ -1,6 +1,7 @@
 "use client";
 
 import { ClipboardPaste } from "lucide-react";
+import { useState } from "react";
 
 /**
  * "Paste" for the landing hero's CTA field (owner, 2026-08-09: "input a paste
@@ -48,9 +49,41 @@ import { ClipboardPaste } from "lucide-react";
  * step from done, with the field open rather than shut.
  */
 export function HeroPasteButton({ targetId }: { targetId: string }) {
+  /*
+    ── 🔴 THIRD REPORT, AND THE REAL DEFECT IS THE SILENCE ───────────────────
+    Owner, 2026-08-11: "nothing is pasted at all."
+
+    Two previous fixes here were reasoned from the symptom and both addressed a
+    real cause (the blur, then the permission prompt stealing focus). This is the
+    third report, so the thing to fix is not another guess about WHY the read
+    fails — it is that a failed read produced no signal whatsoever. The `catch`
+    swallowed it, the button did nothing visible, and the only possible bug
+    report was "it doesn't work", which is what arrived.
+
+    So failure is now VISIBLE, and it tells the person what to do instead. Two
+    genuine, unfixable-by-us causes exist and both end here:
+
+      • Firefox does not expose `readText()` to web pages AT ALL — not a
+        permission, not a prompt, it simply is not there.
+      • iOS Safari raises a native Paste confirmation; dismissing it, or
+        ignoring it, resolves as a rejection with nothing pasted.
+
+    Neither is a bug we can remove, and in both the visitor is one long-press
+    from done — so the honest response is to say so rather than to fail mutely.
+
+    The ORDER also changed, and it is a real hypothesis rather than a
+    certainty: `readText()` now runs FIRST, before `focus()` and before any DOM
+    write. Safari ties clipboard permission to the user activation that started
+    the gesture, and intervening work can spend it. The previous version focused
+    the input first. If this report recurs, the hint below is what will make the
+    next one diagnostic.
+  */
+  const [blocked, setBlocked] = useState(false);
+
   const paste = () => {
     const input = document.getElementById(targetId);
     if (!(input instanceof HTMLInputElement)) return;
+    setBlocked(false);
 
     /*
       🔴 LATCH THE FIELD OPEN BEFORE ANYTHING ELSE (owner, 2026-08-10, reporting
@@ -78,18 +111,35 @@ export function HeroPasteButton({ targetId }: { targetId: string }) {
       whatever the clipboard, the permission prompt or the focus does in
       between. See `.frenz-cta[data-entering]` in globals.css.
     */
+    /*
+      🔴 The clipboard read is STARTED FIRST — before `focus()`, before the
+      dataset write. Safari grants clipboard permission against the user
+      activation that began this gesture, and DOM work in between can spend it.
+      Only the promise is kicked off here; everything else happens after.
+    */
+    const read = navigator.clipboard?.readText?.();
+
     const form = input.closest<HTMLElement>(".frenz-cta");
     if (form) form.dataset.entering = "true";
-
-    // Synchronous, before any await: on iOS this keeps the keyboard, because a
-    // focus() after an await is outside the user gesture.
     input.focus();
 
-    navigator.clipboard
-      ?.readText()
+    if (!read) {
+      // The API is not there at all (Firefox, or a non-secure context). Say so
+      // rather than leaving the button looking broken.
+      setBlocked(true);
+      return;
+    }
+
+    read
       .then((raw) => {
         const text = raw.trim();
-        if (!text) return;
+        if (!text) {
+          // An EMPTY clipboard is its own case and used to be indistinguishable
+          // from a blocked one — both did nothing. It gets the same hint,
+          // because the remedy is the same: paste it yourself.
+          setBlocked(true);
+          return;
+        }
         input.value = text;
         // What the form submits and what `:placeholder-shown` reports both read
         // the live value. The event is for anything else listening.
@@ -97,9 +147,10 @@ export function HeroPasteButton({ targetId }: { targetId: string }) {
         input.setSelectionRange(text.length, text.length);
       })
       .catch(() => {
-        /* blocked (Firefox, or permission denied) — nothing to report, and
-           nothing to undo: the field is latched open either way, so the
-           visitor's own paste gesture still lands in the right place */
+        // Denied, dismissed, or unsupported. The field stays latched open so the
+        // visitor's own paste gesture still lands in the right place — and now
+        // they are TOLD that is what to do.
+        setBlocked(true);
       })
       .finally(() => {
         /*
@@ -112,16 +163,38 @@ export function HeroPasteButton({ targetId }: { targetId: string }) {
   };
 
   return (
-    <button
-      type="button"
-      // See the note above — this one line is the fix.
-      onPointerDown={(e) => e.preventDefault()}
-      onClick={paste}
-      aria-label="Paste a link from your clipboard"
-      className="frenz-cta-paste inline-flex h-14 shrink-0 items-center gap-2 rounded-xl bg-white/15 px-3.5 text-sm font-bold text-white ring-1 ring-inset ring-white/25 transition hover:bg-white/25 active:scale-[0.98] sm:px-4"
-    >
-      <ClipboardPaste className="h-5 w-5" />
-      <span className="hidden sm:inline">Paste</span>
-    </button>
+    <>
+      <button
+        type="button"
+        // See the note above — this one line stops the press blurring the input.
+        onPointerDown={(e) => e.preventDefault()}
+        onClick={paste}
+        aria-label="Paste a link from your clipboard"
+        className="frenz-cta-paste inline-flex h-14 shrink-0 items-center gap-2 rounded-xl bg-white/15 px-3.5 text-sm font-bold text-white ring-1 ring-inset ring-white/25 transition hover:bg-white/25 active:scale-[0.98] sm:px-4"
+      >
+        <ClipboardPaste className="h-5 w-5" />
+        <span className="hidden sm:inline">Paste</span>
+      </button>
+
+      {/*
+        The hint that replaces silence.
+
+        `aria-live="polite"` so a screen-reader user learns the read failed too —
+        for them the previous behaviour was even less discoverable, since there
+        was not even a missing character to notice.
+
+        Positioned absolutely so it cannot change the CTA's height: this bar sits
+        directly above the fold on the landing page and a reflow here would be a
+        layout shift on the one element LCP and CLS both watch.
+      */}
+      {blocked ? (
+        <span
+          aria-live="polite"
+          className="pointer-events-none absolute inset-x-0 -bottom-6 z-20 text-center text-[11px] font-semibold text-white/90 drop-shadow"
+        >
+          Clipboard blocked — press and hold the field to paste
+        </span>
+      ) : null}
+    </>
   );
 }

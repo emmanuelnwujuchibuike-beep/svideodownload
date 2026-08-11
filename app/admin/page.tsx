@@ -128,7 +128,10 @@ import {
   getRegisteredWorkspaces,
   getShellCapabilities,
 } from "@/lib/platform/workspace-platform";
+import { RevenueCharts } from "@/features/admin/revenue-charts";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
+import { getRevenueSeries } from "@/lib/monetization/revenue-series";
+import { getAnalyticsSummary } from "@/lib/analytics/queries";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
 import { BroadcastComposer } from "@/features/admin/broadcast-composer";
@@ -213,7 +216,7 @@ export default async function AdminPage() {
     bottom of this file, streaming in while the operator is already reading and
     able to navigate.
   */
-  const [revenue, subscribers, pricing, planLimits, monetization, affiliates, adRecords, analytics] =
+  const [revenue, subscribers, pricing, planLimits, monetization, affiliates, adRecords, analytics, revenueSeries, visitorSummary] =
     await Promise.all([
       fetchRevenueStats(),
       fetchSubscribers(),
@@ -223,6 +226,12 @@ export default async function AdminPage() {
       listAffiliates(),
       listAds(),
       fetchMonetizationAnalytics(),
+      // 90 days once; the range control narrows the already-fetched window rather
+      // than refetching, so switching 7/30/90 costs no round-trip.
+      getRevenueSeries(90),
+      // Visitors come from the ANALYTICS summary, not the monetization one —
+      // different object, and only this one carries a timeseries.
+      getAnalyticsSummary("30d").catch(() => null),
     ]);
 
   return (
@@ -282,6 +291,19 @@ export default async function AdminPage() {
         <AdminShell>
           <AdminPanel id="monetization">
             <RevenueOverview revenue={revenue} analytics={analytics} />
+            {/* The trend view sits UNDER the tiles: the tiles answer "where are
+                we now", the charts answer "how did we get here", and that is the
+                order somebody reads them in. */}
+            <RevenueCharts
+              series={revenueSeries}
+              mrr={revenue?.mrr ?? 0}
+              currency={revenue?.currency ?? "$"}
+              mrrComplete={revenue?.mrrComplete ?? true}
+              visitors={visitorSummary?.timeseries.buckets.map((b) => ({
+                date: b.t.slice(0, 10),
+                visitors: b.visitors,
+              }))}
+            />
           </AdminPanel>
 
           <AdminPanel id="ads">

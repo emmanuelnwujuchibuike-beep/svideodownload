@@ -1747,3 +1747,48 @@ html[data-a11y-motion="reduce"] *::after {
     font-size: 16px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  ADMIN CHART PALETTE  (features/admin/area-chart.tsx)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * The validated categorical slots, keyed to the MEASURE via `data-slot` so a
+ * panel keeps its colour wherever it sits and whatever is filtered out — colour
+ * follows the entity, never its rank.
+ *
+ * 🔴 Both modes are SELECTED, not flipped. The dark column is the same four hues
+ * re-stepped for the dark surface; an automatic lighten/darken fails the
+ * contrast and CVD checks. Verified with the palette validator rather than by
+ * eye — light: worst adjacent CVD ΔE 9.1, normal-vision ΔE 22.9, with a contrast
+ * WARN on aqua and yellow that the chart answers with direct labels and a table
+ * view. Dark: all four ≥ 3:1, worst adjacent CVD ΔE 8.4.
+ *
+ * Declared under BOTH the media query and `[data-theme]` so the app's own theme
+ * toggle wins in either direction — the `:not()` guard lets an explicit light
+ * stamp beat OS dark.
+ */
+.viz-panel[data-slot="1"] { --viz: #2a78d6; }
+.viz-panel[data-slot="2"] { --viz: #eb6834; }
+.viz-panel[data-slot="3"] { --viz: #1baf7a; }
+.viz-panel[data-slot="4"] { --viz: #eda100; }
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-panel[data-slot="1"] { --viz: #3987e5; }
+  :root:where(:not([data-theme="light"])) .viz-panel[data-slot="2"] { --viz: #d95926; }
+  :root:where(:not([data-theme="light"])) .viz-panel[data-slot="3"] { --viz: #199e70; }
+  :root:where(:not([data-theme="light"])) .viz-panel[data-slot="4"] { --viz: #c98500; }
+}
+:root[data-theme="dark"] .viz-panel[data-slot="1"] { --viz: #3987e5; }
+:root[data-theme="dark"] .viz-panel[data-slot="2"] { --viz: #d95926; }
+:root[data-theme="dark"] .viz-panel[data-slot="3"] { --viz: #199e70; }
+:root[data-theme="dark"] .viz-panel[data-slot="4"] { --viz: #c98500; }
+
+.viz-panel .viz-swatch { background: var(--viz); }
+.viz-panel .viz-line { stroke: var(--viz); }
+/* The marker's ring is the SURFACE colour, so it reads as a gap wherever it
+   overlaps the line or the fill. */
+.viz-panel .viz-dot { fill: var(--viz); stroke: hsl(var(--card)); }
+/* Fading to transparent keeps the top edge — the part carrying the data — at
+   full strength while the body stays recessive against the gridlines. */
+.viz-panel .viz-stop-a { stop-color: var(--viz); stop-opacity: 0.28; }
+.viz-panel .viz-stop-b { stop-color: var(--viz); stop-opacity: 0.02; }

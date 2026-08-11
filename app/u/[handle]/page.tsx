@@ -22,6 +22,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { IdentityBadges } from "@/components/badges/identity-badges";
+import { PageLoaderWithHeader } from "@/features/ui/page-loader";
 import { RankCrown } from "@/components/badges/rank-crown";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { AppModeSwitcher } from "@/features/app-shell/app-mode-switcher";
@@ -308,7 +309,28 @@ async function followsViewer(profileId: string, viewerId: string): Promise<boole
   }
 }
 
-export default async function ProfilePage({
+/*
+  🔴 Synchronous shell, streamed data — the cold-entry white-screen fix
+  (owner, 2026-08-11). This awaited params, the viewer, the profile and then
+  eleven parallel queries at the TOP LEVEL, so on a cold document request Next
+  held the entire HTML response and the visitor saw white. The mobile header for
+  this section lives in the PAGE, not the shell, so the fallback draws the
+  matching bar itself — the same PageLoaderWithHeader this route's loading.tsx
+  already uses, which is why a cold entry and an in-app navigation now look
+  identical. See app/(app)/home/page.tsx for the full reasoning.
+*/
+export default function ProfilePage(props: {
+  params: Promise<{ handle: string }>;
+  searchParams: Promise<{ tab?: string; preview?: string }>;
+}) {
+  return (
+    <Suspense fallback={<PageLoaderWithHeader />}>
+      <ProfileData {...props} />
+    </Suspense>
+  );
+}
+
+async function ProfileData({
   params,
   searchParams,
 }: {

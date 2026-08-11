@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { SiteFooter } from "@/components/layout/site-footer";
+import { PageLoaderWithHeader } from "@/features/ui/page-loader";
 import { WallpaperSeoContent } from "@/components/wallpapers/wallpaper-seo-content";
 import { WallpaperExplore } from "@/features/wallpapers/wallpaper-explore";
 import { jsonLd } from "@/lib/seo/json-ld";
@@ -78,7 +80,21 @@ export const metadata: Metadata = {
  * not a ranking factor; served HTML is, and a crawler gets the complete document
  * either way.
  */
-export default async function WallpapersPage({
+/*
+  🔴 Synchronous shell, streamed data — the cold-entry white-screen fix
+  (owner, 2026-08-11). The auth read and the wallpaper query were awaited at the
+  top level, so Next held the whole HTML response on a cold document request.
+  See app/(app)/home/page.tsx for why `loading.tsx` alone cannot fix that.
+*/
+export default function WallpapersPage(props: { searchParams: Promise<{ reels?: string }> }) {
+  return (
+    <Suspense fallback={<PageLoaderWithHeader />}>
+      <WallpapersData {...props} />
+    </Suspense>
+  );
+}
+
+async function WallpapersData({
   searchParams,
 }: {
   searchParams: Promise<{ reels?: string }>;

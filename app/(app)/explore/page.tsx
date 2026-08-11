@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { AppContent } from "@/features/app-shell/app-content";
+import { LoadingStripe } from "@/features/ui/page-loader";
 import { ExploreBrowser } from "@/features/explore/explore-browser";
 import { isCategory, type Category } from "@/lib/social/categories";
 import { getFeed, type FeedSort } from "@/lib/social/feed";
@@ -14,7 +16,28 @@ export const metadata: Metadata = {
   alternates: { canonical: "/explore" },
 };
 
-export default async function ExplorePage({
+/*
+  🔴 Synchronous shell, streamed data — the cold-entry white-screen fix
+  (owner, 2026-08-11). See app/(app)/home/page.tsx for why `loading.tsx` alone
+  cannot fix a page that awaits at its top level.
+*/
+export default function ExplorePage(props: {
+  searchParams: Promise<{ sort?: string; category?: string }>;
+}) {
+  return (
+    <Suspense
+      fallback={
+        <AppContent>
+          <LoadingStripe />
+        </AppContent>
+      }
+    >
+      <ExploreData {...props} />
+    </Suspense>
+  );
+}
+
+async function ExploreData({
   searchParams,
 }: {
   searchParams: Promise<{ sort?: string; category?: string }>;

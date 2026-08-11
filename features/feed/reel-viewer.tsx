@@ -18,6 +18,8 @@ import {
   Download,
   ExternalLink,
   EyeOff,
+  Maximize2,
+  Minimize2,
   Flag,
   FolderPlus,
   Gauge,
@@ -58,6 +60,7 @@ import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design"
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
 import { shouldFullBleed, viewportAspect } from "@/features/reels/viewer/fit";
+import { useFullscreen } from "@/features/reels/viewer/use-fullscreen";
 import { currentPolicySync, recordClipCompleted } from "@/lib/media/engine/signals";
 import type { PulseEvent } from "@/features/reels/viewer/social-pulse";
 import { useAdaptiveRail, type RailLayout } from "@/features/reels/viewer/use-adaptive-rail";
@@ -562,6 +565,16 @@ function ReelCard({
   const dragLastT = useRef(0);
   const dragVelocity = useRef(0); // px/ms, signed
   const mediaStage = useRef<HTMLDivElement | null>(null);
+  /*
+    Fullscreen targets the MEDIA STAGE, not the deck root and not the <video>.
+
+    The stage is the box the video and its overlays share, so the standard API
+    takes our own chrome — rail, caption, scrubber — into fullscreen with the
+    picture. Fullscreening the bare <video> would hand the clip to the browser's
+    built-in player and lose all of it, which is what iOS forces on us anyway
+    (see the hook) and what everywhere else should avoid.
+  */
+  const fullscreen = useFullscreen(mediaStage, video);
 
   const [paused, setPaused] = useState(false);
   const [mutedAuto, setMutedAuto] = useState(false);
@@ -732,9 +745,33 @@ function ReelCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nearby, native, item.id]);
 
+  /*
+    ── 🔴 PAUSED MEANS THE CHROME STAYS (owner, 2026-08-11) ──────────────────
+    "let pause in reels view always show the engagement tray and other video
+    details like tiktok, and not full clear screen after 2sec."
+
+    The idle timer used to fire regardless of playback state, so pausing a reel
+    to actually READ the caption, check the sound row or tap Save gave you three
+    seconds before the screen cleared itself — and the only way back was another
+    tap, which resumed playback. Pausing to look at something and being unable to
+    look at it is the whole of the report.
+
+    The guard is inside `scheduleHide` rather than at its call sites on purpose.
+    There are five of them — the active-reel effect, the tap toggle, the seek
+    end, the long-press release and the album slide change — and a rule enforced
+    in one place cannot be forgotten by the sixth.
+
+    It reads `video.current.paused`, the ELEMENT's own state, not the `paused`
+    React state: that one is set on a 1s delay so a quick play/pause tap never
+    flashes the pause glyph, and a timer that consulted it would still clear the
+    screen during that first second.
+  */
   const scheduleHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setUi(false), 3000);
+    hideTimer.current = setTimeout(() => {
+      if (video.current?.paused) return;
+      setUi(false);
+    }, 3000);
   }, []);
   // A single tap toggles play/pause; the pause sign fades in ~1s after pausing
   // (so a quick play/pause tap never flashes it). Shows the controls too.
@@ -1508,10 +1545,22 @@ function ReelCard({
                 video.current && claimPlayback(video.current);
                 setBuffering(false);
                 recordView(item.id);
+                // Playback resumed → the idle timer becomes meaningful again.
+                if (isActive) scheduleHide();
               }}
               onPause={() => {
                 const v = video.current;
                 if (v) savePlaybackPosition(playbackKey, v.currentTime, v.duration);
+                /*
+                  Bring the chrome BACK on pause, not merely stop hiding it.
+                  Long-pressing a reel whose chrome had already faded used to
+                  pause a screen with nothing on it — the tray and the caption
+                  are exactly what you paused to reach.
+                */
+                if (isActive) {
+                  if (hideTimer.current) clearTimeout(hideTimer.current);
+                  setUi(true);
+                }
               }}
               onWaiting={() => setBuffering(true)}
               onPlaying={() => setBuffering(false)}
@@ -1742,6 +1791,47 @@ function ReelCard({
         </div>
         <RailButton icon={SendIcon} label="Send" onClick={() => setShareOpen(true)} />
         <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
+
+        {/*
+          ── The fullscreen control (owner, 2026-08-11) ────────────────────────
+          "add a full screen button at the bottom right corner, tiny to avoid
+          cluster."
+
+          It is the LAST child of the rail rather than a new floating element.
+          The rail is anchored by its bottom edge, so the last child IS the
+          bottom-right corner — and joining a group that already exists is what
+          keeps a sixth control from reading as clutter. A free-floating button
+          would also have had nowhere to go: the band below the rail is fully
+          spoken for by the scrubber, the nav scrim and the tab bar.
+
+          Deliberately smaller than the action buttons (32px against 42px, and no
+          count beneath it): this is a viewing preference, not an engagement
+          action, and sizing it like Like or Save would claim an importance it
+          does not have.
+
+          `supported` is false in a standalone PWA and wherever neither
+          fullscreen API exists, and the button is not rendered at all there — a
+          control that visibly does nothing is worse than no control. See
+          use-fullscreen.ts for why iOS gets a different, worse fullscreen and
+          is offered it anyway.
+        */}
+        {fullscreen.supported ? (
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              fullscreen.toggle();
+            }}
+            aria-label={fullscreen.active ? "Exit full screen" : "Full screen"}
+            aria-pressed={fullscreen.active}
+            className={cn(
+              "mt-0.5 flex h-8 w-8 items-center justify-center rounded-full text-white transition active:scale-90",
+              glass.primary,
+            )}
+          >
+            {fullscreen.active ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
+        ) : null}
       </div>
 
       {/*

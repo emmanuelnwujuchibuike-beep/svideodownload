@@ -14,6 +14,7 @@ import { StoriesRow } from "@/features/app-shell/dashboard/stories-row";
 import { TrendingReels } from "@/features/app-shell/dashboard/trending-reels";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { SmartFeed } from "@/features/feed/smart-feed";
+import { LoadingStripe } from "@/features/ui/page-loader";
 import { Skeleton } from "@/features/ui/skeleton";
 import { friendsCount } from "@/lib/social/friends";
 import { getHomeProfile } from "@/lib/social/home";
@@ -29,7 +30,49 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function HomePage() {
+/*
+  🔴 SYNCHRONOUS, so the cold-entry shell FLUSHES (owner, 2026-08-11: "make pwa
+  and browser cold entry to show the top header and stripe loader, while page is
+  opening, to avoid white screen").
+
+  This is the PWA's `start_url` (app/manifest.ts) — the single most common cold
+  entry there is, and it had exactly the fault /downloads had before 1fe652b.
+
+  `loading.tsx` is a SUSPENSE FALLBACK, so Next can only paint it if there is
+  something to suspend on. `HomePage` was `async` and awaited at the TOP LEVEL —
+  `auth.getUser()`, then `getHomeProfile` + `getHomePreferences` + `cookies()` —
+  which is two sequential Supabase round-trips (~290ms each, measured) before a
+  single byte could be written. Next held the ENTIRE HTML response for that,
+  then sent a finished page. The persistent top bar lives in the (app) layout
+  and could have painted immediately; instead the visitor got a white document
+  for the whole of it. That is the white screen being reported.
+
+  Now the component returns the shell straight away, so the document, the CSS,
+  the app chrome and the stripe flush together, and every await moved into
+  `<HomeData>` below, which streams in behind them.
+
+  The redirects move with the data, and that is a real trade stated rather than
+  hidden: a `redirect()` inside a streaming boundary is emitted once the boundary
+  resolves, so a signed-out visitor sees the shell for an instant before being
+  sent to /login. The auth DECISION is unchanged — still server-side, still
+  gating every byte of real content.
+*/
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <AppContent>
+          <LoadingStripe />
+          <FeedSkeleton count={3} />
+        </AppContent>
+      }
+    >
+      <HomeData />
+    </Suspense>
+  );
+}
+
+async function HomeData() {
   const supabase = await createClient();
   const {
     data: { user },

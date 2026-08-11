@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { ReelsFeed } from "@/features/reels/reels-feed";
+import { LoadingStripe } from "@/features/ui/page-loader";
 import { getFeedItemById, getHomeFeed } from "@/lib/social/home-feed";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,11 +19,40 @@ export const metadata: Metadata = {
  * so every entry point opens the same rich deck (tabs, scrubber, double-tap
  * like, infinite scroll) instead of only being reachable through "View all".
  */
-export default async function ReelsPage({
+/*
+  🔴 Synchronous shell, streamed data — the cold-entry white-screen fix
+  (owner, 2026-08-11). Same structural change as /home and /downloads: this
+  awaited `searchParams`, `auth.getUser()` and a 24-item feed query at the top
+  level, so Next held the whole HTML response and the visitor saw a white
+  document instead of the shell plus the stripe. See the long note in
+  app/(app)/home/page.tsx for why `loading.tsx` alone cannot fix this.
+
+  The fallback is BLACK rather than the usual page ground: this route paints a
+  full-screen black deck, and a white flash before it would be worse than the
+  white screen being fixed. The stripe sits at the very top where the reel's own
+  chrome will be.
+*/
+export default function ReelsPage({
   searchParams,
 }: {
   searchParams: Promise<{ start?: string }>;
 }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="fixed inset-0 z-30 bg-black" aria-busy="true">
+          <div className="pt-[var(--frenz-safe-top)]">
+            <LoadingStripe />
+          </div>
+        </div>
+      }
+    >
+      <ReelsData searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function ReelsData({ searchParams }: { searchParams: Promise<{ start?: string }> }) {
   const { start } = await searchParams;
 
   let viewerId: string | null = null;

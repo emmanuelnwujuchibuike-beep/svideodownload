@@ -81,7 +81,8 @@ import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { RepostComposer } from "@/features/social/repost-composer";
-import { RepostOptionsSheet } from "@/features/social/repost-options";
+import { RepostSheet } from "@/features/social/repost/repost-sheet";
+import { WhyThisChip } from "@/features/social/repost/why-this";
 import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
 import { ReportSheet } from "@/features/social/report-sheet";
 import { RepostersSheet } from "@/features/social/reposters-sheet";
@@ -102,6 +103,7 @@ import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
+import type { RepostAudience } from "@/lib/social/repost/audience";
 import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
 import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
@@ -719,7 +721,9 @@ function ReelCard({
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerMode, setComposerMode] = useState<"create" | "edit">("create");
   const [composerCaption, setComposerCaption] = useState<string | null>(null);
-  const [repostOptionsOpen, setRepostOptionsOpen] = useState(false);
+  // The audience picked in the destination sheet, carried into the quote composer.
+  const [composerAudience, setComposerAudience] = useState<RepostAudience>("public");
+  const [repostSheetOpen, setRepostSheetOpen] = useState(false);
   /** Send's two-option chooser — see the note on the rail's Send control. */
   const [sendChooserOpen, setSendChooserOpen] = useState(false);
   const [repostersOpen, setRepostersOpen] = useState(false);
@@ -736,7 +740,7 @@ function ReelCard({
   const sidebarWowPress = useLongPress(() => setSidebarReactionsOpen(true));
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
   // Holding the Repost button opens the advanced options sheet.
-  const repostPress = useLongPress(() => setRepostOptionsOpen(true));
+  const repostPress = useLongPress(() => setRepostSheetOpen(true));
   const [repostBurst, setRepostBurst] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const [srcReady, setSrcReady] = useState(false);
@@ -1092,20 +1096,17 @@ function ReelCard({
     }
   };
 
-  // Repost is a recommendation, never a one-tap accident: opens the composer
-  // (quick "Post Now" or an optional caption). Tapping again undoes it.
-  const repost = async () => {
-    if (!repostState.reposted) {
-      openComposer("create", null);
-      return;
-    }
-    try {
-      await toggleRepost(item.id, false, repostState.count);
-      toast("Removed repost.", "success");
-    } catch (e) {
-      toast(e instanceof FrenzsaveError ? e.message : "Couldn't repost.", "error");
-    }
-  };
+  /*
+    Repost is a recommendation, never a one-tap accident (Part 4): it opens the
+    destination sheet, where the audience is chosen and every other destination
+    lives. Tapping when already reposted still goes through the sheet — removing
+    a repost is a deliberate act and the sheet is where the Remove row lives.
+
+    The old behaviour opened the caption composer straight away, which made
+    "recommend this" and "write about this" the same action and left no room for
+    the audience at all.
+  */
+  const repost = () => setRepostSheetOpen(true);
 
   const openComposer = (mode: "create" | "edit", caption: string | null) => {
     setComposerMode(mode);
@@ -2272,6 +2273,22 @@ function ReelCard({
           </p>
         ) : null}
 
+        {/*
+          "Why am I seeing this?" (Part 4). Present ONLY on a reel that was
+          surfaced as someone's recommendation — a reel here on its own merits
+          did not need explaining, and attaching a reason to it would imply a
+          recommendation that never happened.
+
+          It sits in the caption block rather than the rail for the reason Part 3
+          established: the rail was deliberately shrunk, and a line of text there
+          would undo that.
+        */}
+        {item.repostReason ? (
+          <div className="mt-2">
+            <WhyThisChip reason={item.repostReason} tone="dark" />
+          </div>
+        ) : null}
+
         {item.hasPoll ? (
           <div className="mt-2 max-w-md text-white">
             <PostPollInline postId={item.id} compact />
@@ -2601,10 +2618,10 @@ function ReelCard({
                     />
                     <MoreItem
                       icon={Repeat2}
-                      label={repostState.reposted ? "Remove repost" : "Repost to your followers"}
+                      label={repostState.reposted ? "Manage your repost" : "Repost"}
                       onClick={() => {
                         setSendChooserOpen(false);
-                        void repost();
+                        repost();
                       }}
                     />
                   </MoreGroup>
@@ -2634,17 +2651,35 @@ function ReelCard({
         onReposted={onReposted}
         mode={composerMode}
         initialCaption={composerCaption}
+        audience={composerAudience}
+        sourceRepostId={item.viaRepostId ?? null}
       />
 
-      {/* Advanced repost options — opened by holding the Repost button */}
-      <RepostOptionsSheet
+      {/*
+        The repost destination sheet (Part 4). Reached from the Send chooser's
+        Repost row AND from holding Send, so both paths land on the same
+        surface — the audience, the quote composer, chat, collections and the
+        link all live here rather than being scattered across two menus.
+
+        It replaced `repost-options.tsx`, which offered three rows and no
+        audience at all — that file is deleted rather than left orphaned, since
+        both surfaces now open this one.
+      */}
+      <RepostSheet
         postId={item.id}
+        post={{ title, thumbnailUrl: item.thumbnailUrl, handle: item.publisher.handle }}
         currentCount={repostState.count}
-        open={repostOptionsOpen}
-        onClose={() => setRepostOptionsOpen(false)}
+        open={repostSheetOpen}
+        onClose={() => setRepostSheetOpen(false)}
+        alreadyReposted={repostState.reposted}
+        sourceRepostId={item.viaRepostId ?? null}
         onReposted={onReposted}
-        onCompose={() => openComposer("create", null)}
-        onEditCaption={(caption) => openComposer("edit", caption)}
+        onQuote={(audience) => {
+          setComposerAudience(audience);
+          openComposer("create", null);
+        }}
+        onSendInChat={() => setShareOpen(true)}
+        onSaveForLater={() => setPickerOpen(true)}
       />
 
       {/* Who reposted — behind the avatar cluster */}

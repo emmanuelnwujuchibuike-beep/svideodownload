@@ -94,9 +94,24 @@ export function RepostersSheet({ postId, open, onClose }: { postId: string; open
               <h3 className="flex items-center gap-1.5 text-sm font-bold">
                 <Repeat2 className="h-4 w-4 text-emerald-500" /> Reposted by
               </h3>
-              <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                {/*
+                  The way through to the full Repost Page (Part 4) — search,
+                  the quote tab and Social Ripple™. This sheet stays the quick
+                  glance; anything more than a glance belongs on a page that can
+                  scroll and be linked to.
+                */}
+                <Link
+                  href={`/p/${postId}/reposts`}
+                  onClick={onClose}
+                  className="rounded-full px-2.5 py-1 text-xs font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                >
+                  See all
+                </Link>
+                <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             <div className="max-h-[56vh] overflow-y-auto px-2.5 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

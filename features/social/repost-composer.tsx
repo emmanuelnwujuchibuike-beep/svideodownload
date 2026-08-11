@@ -16,6 +16,7 @@ import { createPortal } from "react-dom";
 import { toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
 import { springs } from "@/lib/motion/springs";
+import { audienceSpec, type RepostAudience } from "@/lib/social/repost/audience";
 import { editRepostCaption, toggleRepost } from "@/lib/social/repost-store";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +47,8 @@ export function RepostComposer({
   onReposted,
   mode = "create",
   initialCaption = null,
+  audience = "public",
+  sourceRepostId = null,
 }: {
   post: RepostComposerPost;
   currentCount: number;
@@ -56,6 +59,10 @@ export function RepostComposer({
   /** "edit" reuses the sheet to change an existing repost's caption (15-min window). */
   mode?: "create" | "edit";
   initialCaption?: string | null;
+  /** Carried over from the destination sheet. Ignored in edit mode. */
+  audience?: RepostAudience;
+  /** Provenance — the repost this was found through. */
+  sourceRepostId?: string | null;
 }) {
   const [mounted, setMounted] = useState(false);
   const [caption, setCaption] = useState("");
@@ -113,7 +120,11 @@ export function RepostComposer({
         toast("Caption updated.", "success");
         return;
       }
-      await toggleRepost(post.id, true, currentCount, text);
+      // The audience chosen in the destination sheet travels with the quote —
+      // otherwise picking "Close friends" and then adding a note would silently
+      // publish it to everyone, which is the worst possible direction for that
+      // mistake to go.
+      await toggleRepost(post.id, true, currentCount, text, { audience, sourceRepostId });
       try {
         localStorage.removeItem(draftKey(post.id));
       } catch {
@@ -211,8 +222,13 @@ export function RepostComposer({
                 </div>
               </div>
 
+              {/* The reach is stated where the decision is made. The sentence
+                  used to say "your followers" unconditionally, which stopped
+                  being true the moment a repost could be friends-only. */}
               <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                Reposting shares this with your followers. The original creator keeps full ownership and credit.
+                {editing
+                  ? "Editing only changes your note. The original creator keeps full ownership and credit."
+                  : `${audienceSpec(audience).blurb} The original creator keeps full ownership and credit.`}
               </p>
 
               <div className="mt-3 flex items-center gap-2">

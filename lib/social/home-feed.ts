@@ -11,7 +11,10 @@ import { getHomePreferences, type HomePreferences } from "./home-preferences";
 import { canSeePost, type MediaKind, type Visibility } from "./posts";
 import { pulseActivityForPosts, type PulseActivity } from "./pulse-activity";
 import { commentPreviewsForPosts, creatorsWithActiveStories, type CommentPreview } from "./reel-extras";
+import { relationshipStrength } from "./graph/strength";
 import type { RepostAudience } from "./repost/audience";
+import { rankReposts, type RepostCandidate } from "./repost/ranking";
+import { repostReason } from "./repost/reason";
 import { filterVisibleReposts, repostViewer } from "./repost/visibility";
 import { followedReposters, repostCounts, viewerReposts } from "./reposts";
 
@@ -78,6 +81,24 @@ export interface FeedItem {
   /** Followed users who reposted this — the premium repost badge (avatars + "+N"),
       plus the newest reposter's recommendation caption when they wrote one. */
   repostBadge?: { avatars: (string | null)[]; handles: string[]; count: number; caption?: string | null };
+  /**
+   * Why this repost is in the feed (Feature 15 Part 4).
+   *
+   * 🔴 Produced by the SAME branch that ranked it — `reason.ts` reads the
+   * signals `scoreRepost` emitted. A component must never re-derive this from
+   * the props it happens to have: a guessed explanation is plausible,
+   * unfalsifiable and sometimes false, which is worse than none.
+   *
+   * Only present on a SURFACED repost — a post that is in the feed on its own
+   * merits did not need a reason, and attaching one would imply it was
+   * recommended when it was not.
+   */
+  repostReason?: { kind: string; text: string; emoji: string; detail: string[] };
+  /**
+   * The repost this item was surfaced through, so an interaction with it can be
+   * attributed back (Feature 15 Part 4). Absent on organic items.
+   */
+  viaRepostId?: string;
   /**
    * People the viewer FOLLOWS who liked, reposted or commented on this post —
    * the real data behind Social Pulse™ and Friend Energy™ (Feature 15 Part 3).
@@ -839,6 +860,68 @@ async function loadHomeFeed(
  * there's nothing to surface. Privacy still wins (suspended / blocked / your own
  * posts are dropped).
  */
+/** A repost row as read by the surfacing query. 0116 columns are optional. */
+interface SurfacedRepostRow {
+  id?: string;
+  post_id: string;
+  user_id: string;
+  created_at?: string;
+  caption?: string | null;
+  audience?: string | null;
+  source_repost_id?: string | null;
+  throttled_at?: string | null;
+}
+
+/**
+ * People the viewer has marked as favourites — their close friends.
+ *
+ * Note the direction: `friend_favorites (user_id, friend_id)` means "user_id
+ * pinned friend_id", so the VIEWER's favourites read `user_id = viewer`. This
+ * is the opposite direction from `visibility.ts`'s `closeFriendOf`, which asks
+ * who pinned the viewer. Both exist and confusing them is silent.
+ */
+async function viewerFavourites(
+  db: ReturnType<typeof createAdminClient>,
+  viewerId: string,
+): Promise<Set<string>> {
+  try {
+    const { data } = await db.from("friend_favorites").select("friend_id").eq("user_id", viewerId);
+    return new Set(((data ?? []) as { friend_id: string }[]).map((f) => f.friend_id));
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Categories the viewer has DELIBERATELY engaged with — liked, saved or
+ * reposted. Not what they watched.
+ *
+ * The distinction is the privacy line `ranking.ts` draws: passive viewing is
+ * observation, a like is a decision the member made and can see the
+ * consequences of. Best-effort; an empty set simply removes one ranking signal.
+ */
+async function viewerEngagedCategories(
+  db: ReturnType<typeof createAdminClient>,
+  viewerId: string,
+): Promise<Set<string>> {
+  try {
+    const { data: reactions } = await db
+      .from("post_reactions")
+      .select("post_id")
+      .eq("user_id", viewerId)
+      .order("created_at", { ascending: false })
+      .limit(60);
+    const ids = [...new Set(((reactions ?? []) as { post_id: string }[]).map((r) => r.post_id))];
+    if (ids.length === 0) return new Set();
+    const { data: posts } = await db.from("posts").select("category").in("id", ids);
+    return new Set(
+      ((posts ?? []) as { category: string | null }[]).map((p) => p.category).filter((c): c is string => !!c),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
 async function surfaceFollowedReposts(
   viewerId: string,
   followingIds: string[],
@@ -858,13 +941,10 @@ async function surfaceFollowedReposts(
   const viewer = await repostViewer(viewerId);
   const fetchReposts = (cols: string) =>
     db.from("reposts").select(cols).in("user_id", followingIds).order("created_at", { ascending: false }).limit(60);
-  const rich = await fetchReposts("post_id, user_id, created_at, audience, throttled_at");
-  const repRows = (rich.error ? ((await fetchReposts("post_id, user_id, created_at")).data ?? []) : (rich.data ?? [])) as unknown as {
-    post_id: string;
-    user_id: string;
-    audience?: string | null;
-    throttled_at?: string | null;
-  }[];
+  const rich = await fetchReposts("id, post_id, user_id, created_at, caption, audience, source_repost_id, throttled_at");
+  const repRows = (rich.error
+    ? ((await fetchReposts("id, post_id, user_id, created_at")).data ?? [])
+    : (rich.data ?? [])) as unknown as SurfacedRepostRow[];
   const visible = filterVisibleReposts(
     repRows.map((r) => ({ ...r, audience: (r.audience ?? "public") as RepostAudience })),
     viewer,
@@ -924,7 +1004,91 @@ async function surfaceFollowedReposts(
     } else if (r.type === "save") saved.add(r.post_id);
   }
 
-  rows = rows.filter((r) => !suspended.has(r.publisher_id) && !blocked.has(r.publisher_id)).slice(0, max);
+  rows = rows.filter((r) => !suspended.has(r.publisher_id) && !blocked.has(r.publisher_id));
+  if (rows.length === 0) return [];
+
+  /*
+    ── Ranked, not newest-first (Feature 15 Part 4) ─────────────────────────
+    Until now this took whatever had been reposted most recently. `ranking.ts`
+    scores each candidate and then applies the ceilings that actually stop a
+    feed flooding: one repost per person, one per creator, never the same post
+    twice. Ordering is the smaller half of that.
+
+    🔴 Strength is computed from the relationship facts THIS FUNCTION ALREADY
+    HAS — friend, follow, favourite. The full `relationshipStrength` also weighs
+    message and engagement recency, which is a per-person query pair, and a feed
+    page cannot afford one per candidate. Feeding it the fields we have is
+    honest (it treats a missing history as unknown, not as zero) and reuses the
+    reviewed scale instead of inventing a second one here.
+
+    Mutual friends are deliberately left at 0 for the same reason: real, but not
+    worth a query per candidate on the hot path.
+  */
+  const [favouritesOfViewer, viewerInterests] = await Promise.all([
+    viewerFavourites(db, viewerId),
+    viewerEngagedCategories(db, viewerId),
+  ]);
+  const repostsByPost = new Map<string, typeof visible>();
+  for (const r of visible) {
+    const arr = repostsByPost.get(r.post_id) ?? [];
+    arr.push(r);
+    repostsByPost.set(r.post_id, arr);
+  }
+
+  const strength = new Map<string, number>();
+  for (const r of visible) {
+    if (strength.has(r.user_id)) continue;
+    strength.set(
+      r.user_id,
+      relationshipStrength({
+        isFriend: friends.has(r.user_id),
+        isFollowing: followingIds.includes(r.user_id),
+        followsBack: false,
+        isFavorite: favouritesOfViewer.has(r.user_id),
+        sharedCircles: 0,
+        mutualFriends: 0,
+        daysSinceMessage: null,
+        daysSinceViewerEngaged: null,
+        daysKnown: null,
+      }).score,
+    );
+  }
+
+  const rowById = new Map(rows.map((r) => [r.id, r]));
+  const candidates: RepostCandidate[] = [];
+  for (const [postId, reposts] of repostsByPost) {
+    const post = rowById.get(postId);
+    if (!post) continue;
+    // The strongest tie is the one whose recommendation this is.
+    const lead = [...reposts].sort((a, b) => (strength.get(b.user_id) ?? 0) - (strength.get(a.user_id) ?? 0))[0]!;
+    candidates.push({
+      repostId: lead.id ?? postId,
+      postId,
+      reposterId: lead.user_id,
+      creatorId: post.publisher_id,
+      createdAt: Date.parse(lead.created_at ?? "") || Date.now(),
+      audience: (lead.audience ?? "public") as RepostAudience,
+      hasCaption: !!lead.caption,
+      reposterCount: new Set(reposts.map((x) => x.user_id)).size,
+      sourceRepostId: lead.source_repost_id ?? null,
+      category: (post.category as string | null) ?? null,
+    });
+  }
+
+  const ranked = rankReposts(candidates, {
+    strength,
+    mutualFriends: new Map(),
+    closeFriends: favouritesOfViewer,
+    interests: viewerInterests,
+    followedCreators: new Set(followingIds),
+    reputation: new Map(), // derived per read; too costly per candidate here
+    excludedPostIds: excludeIds,
+    dismissedPostIds: new Set(),
+    now: Date.now(),
+  }, { maxPerPage: max, maxPerReposter: 1, maxPerCreator: 1 });
+
+  const signalsByPost = new Map(ranked.map((r) => [r.candidate.postId, r]));
+  rows = ranked.map((r) => rowById.get(r.candidate.postId)!).filter(Boolean);
   if (rows.length === 0) return [];
 
   // The viewer follows the REPOSTER, not necessarily the original author — so the
@@ -935,7 +1099,7 @@ async function surfaceFollowedReposts(
   const imageIds = rows.filter((r) => r.media_kind === "image").map((r) => r.id);
   const streamIds = rows.filter((r) => r.media_kind === "video" && r.stream_uid).map((r) => r.id);
   const [badges, counts, reposted, pollSet, dims, streamStat, pulses] = await Promise.all([
-    followedReposters(ids, followingIds),
+    followedReposters(ids, followingIds, viewer),
     repostCounts(ids),
     viewerReposts(ids, viewerId),
     (async () => {
@@ -951,6 +1115,31 @@ async function surfaceFollowedReposts(
     // Feature 15 Part 3 — see the note at the other attach site above.
     pulseActivityForPosts(ids, followingIds, viewerId),
   ]);
+
+  /*
+    The reason each of these is here, built from the ranking's OWN signals plus
+    the names the badge query already resolved — no extra round-trip, and no
+    second opinion about why the item was picked.
+
+    `repostReason` can legitimately come back null (nothing nameable and no
+    signal that fired). That is left absent rather than replaced with a generic
+    line: a card with no explanation is honest, an invented one is not.
+  */
+  const reasonByPost = new Map<string, ReturnType<typeof repostReason>>();
+  for (const r of rows) {
+    const scored = signalsByPost.get(r.id);
+    const badge = badges.get(r.id);
+    if (!scored) continue;
+    reasonByPost.set(
+      r.id,
+      repostReason({
+        signals: scored.signals,
+        reposterNames: (badge?.handles ?? []).map((h) => `@${h}`),
+        reposterCount: badge?.count ?? scored.candidate.reposterCount,
+        categoryLabel: r.category,
+      }),
+    );
+  }
 
   return rows.map((r) => {
     const prof = profById.get(r.publisher_id) as Record<string, unknown>;
@@ -990,6 +1179,8 @@ async function surfaceFollowedReposts(
       viewerReposted: reposted.has(r.id),
       repostsCount: counts.get(r.id) ?? 0,
       repostBadge: badges.get(r.id),
+      repostReason: reasonByPost.get(r.id) ?? undefined,
+      viaRepostId: signalsByPost.get(r.id)?.candidate.repostId,
       friendActivity: pulses.get(r.id),
       mediaWidth: dims.get(r.id)?.w ?? null,
       mediaHeight: dims.get(r.id)?.h ?? null,

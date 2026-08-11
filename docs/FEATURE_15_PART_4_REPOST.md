@@ -334,17 +334,39 @@ grew someone's audience, never *who* it was.
 
 ---
 
-## 11. Delivery
+## 11. Delivery — what shipped
 
-- **Tranche 1 (this session).** Migration 0116; all five pure engines + tests;
-  audience-aware read path; premium button + destination sheet + audience picker;
-  quote composer; reason strings wired into feed and reels; anti-spam on the
-  write path.
-- **Tranche 2 (this session).** Attribution ledger + recording; reposter and
-  creator insights; Social Ripple™ visualisation; Recommendation Circle™; the
-  repost history page.
-- **Tranche 3.** Conversation Reposts™ (a thread linking the original, quotes
-  and discussions), notification batching for repost engagement, realtime
-  counters.
-- **Tranche 4.** Communities (unblocks Community/Business reposts), story
-  composer, voice/music in quotes.
+**Built and wired (78 tests across the seven repost modules):**
+
+| Piece | Where |
+|---|---|
+| Migration 0116 — audience, provenance, throttle, quote media, ledger | `supabase/migrations/0116_repost_intelligence.sql` |
+| Six pure engines | `lib/social/repost/{audience,ranking,reason,antispam,reputation,ripple}.ts` |
+| Audience gate on all four shipped read paths | `lib/social/repost/visibility.ts` |
+| Ranking + reasons driving For You | `surfaceFollowedReposts()` in `home-feed.ts` |
+| Premium button, dual-arrow mark, destination sheet, inline audience picker | `features/social/repost/` |
+| Quote composer carrying audience + provenance | `repost-composer.tsx` |
+| "Why am I seeing this?" chip + sheet | `why-this.tsx`, on the reel caption and the feed card |
+| Attribution ledger + batched client | `attribution.ts`, `attribution-client.ts` |
+| Reposter + creator insights, Recommendation Circle™ | `insights.ts`, `repost-insights-sheet.tsx` |
+| Social Ripple™ | `ripple.ts`, `social-ripple.tsx` |
+| Repost Page — tabs, search, ripple, insights | `app/p/[id]/reposts/` |
+
+`features/social/repost-options.tsx` was **deleted**: it offered three rows and
+no audience, and both surfaces now open the destination sheet.
+
+**Still open, deliberately:**
+
+- **Tranche 3.** Conversation Reposts™ (a thread linking the original, its
+  quotes and the discussions), notification batching for repost engagement,
+  realtime counters, quote-repost media UPLOAD (the column, the validation and
+  the render path exist; there is no picker wired to them yet).
+- **Tranche 4.** Communities (unblocks Community/Business reposts), a story
+  composer that accepts a post (unblocks Repost to Story), voice/music quotes.
+
+🔴 **Not verified in a real browser.** Typecheck, lint, 1914 tests and a clean
+production build are green, and the ranking, audience and ripple rules are unit
+-tested — but nobody has driven a repost through this UI, and `0116` has to be
+applied in Supabase before any of the audience, provenance or analytics data
+exists. Until it is applied every read falls back cleanly (`42703`) and the
+feature degrades to exactly what shipped in July.

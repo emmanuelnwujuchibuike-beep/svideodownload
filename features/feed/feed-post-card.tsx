@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
-import { memo, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { RichText } from "@/components/social/rich-text";
@@ -42,6 +42,8 @@ import Image from "next/image";
 
 import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
 import { RepostBurst } from "@/features/social/repost-burst";
+import { WhyThisChip } from "@/features/social/repost/why-this";
+import { attributeRepost } from "@/lib/social/repost/attribution-client";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 
@@ -51,7 +53,7 @@ import { haptic } from "@/lib/motion/haptics";
 const CollectionPicker = dynamic(() => import("@/features/social/collection-picker").then((m) => m.CollectionPicker), { ssr: false });
 const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").then((m) => m.PostEditSheet), { ssr: false });
 const RepostComposer = dynamic(() => import("@/features/social/repost-composer").then((m) => m.RepostComposer), { ssr: false });
-const RepostOptionsSheet = dynamic(() => import("@/features/social/repost-options").then((m) => m.RepostOptionsSheet), { ssr: false });
+const RepostSheet = dynamic(() => import("@/features/social/repost/repost-sheet").then((m) => m.RepostSheet), { ssr: false });
 const RepostersSheet = dynamic(() => import("@/features/social/reposters-sheet").then((m) => m.RepostersSheet), { ssr: false });
 const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m) => m.ShareSheet), { ssr: false });
 const ContentPreferencesSheet = dynamic(() => import("@/features/social/content-preferences-sheet").then((m) => m.ContentPreferencesSheet), { ssr: false });
@@ -65,6 +67,7 @@ import { isCategory } from "@/lib/social/categories";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
 import { FrenzsaveError } from "@/lib/sdk";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
+import type { RepostAudience } from "@/lib/social/repost/audience";
 import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
 import type { FeedItem } from "@/lib/social/home-feed";
 import type { SmartReason, SmartReasonTone } from "@/lib/social/smart-feed";
@@ -118,7 +121,9 @@ function FeedPostCardImpl({
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerMode, setComposerMode] = useState<"create" | "edit">("create");
   const [composerCaption, setComposerCaption] = useState<string | null>(null);
-  const [optionsOpen, setOptionsOpen] = useState(false);
+  // The audience picked in the destination sheet, carried into the quote composer.
+  const [composerAudience, setComposerAudience] = useState<RepostAudience>("public");
+  const [repostSheetOpen, setRepostSheetOpen] = useState(false);
   const [repostersOpen, setRepostersOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareReady, setShareReady] = useState(false);
@@ -131,7 +136,7 @@ function FeedPostCardImpl({
   const [editReady, setEditReady] = useState(false);
   const [pickerReady, setPickerReady] = useState(false);
   const [composerReady, setComposerReady] = useState(false);
-  const [optionsReady, setOptionsReady] = useState(false);
+  const [repostSheetReady, setRepostSheetReady] = useState(false);
   const [repostersReady, setRepostersReady] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [prefsReady, setPrefsReady] = useState(false);
@@ -140,10 +145,11 @@ function FeedPostCardImpl({
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentsReady, setCommentsReady] = useState(false);
 
-  // Holding the Repost button opens the advanced options sheet.
+  // Holding the Repost button opens the same destination sheet the tap does —
+  // one surface reached two ways, rather than a second menu to keep in step.
   const repostPress = useLongPress(() => {
-    setOptionsReady(true);
-    setOptionsOpen(true);
+    setRepostSheetReady(true);
+    setRepostSheetOpen(true);
   });
 
   // Plain toggle (Save, and the base Like on/off). Like/Save are idempotent
@@ -153,10 +159,39 @@ function FeedPostCardImpl({
   // Interactions" ask — while a genuine server rejection still rolls back as
   // before. Queued under `${type}:${postId}` so flipping the same toggle
   // multiple times offline coalesces into just the final desired state.
+  /*
+    Attribution (Part 4). `viaRepostId` is set ONLY on an item the ranking
+    surfaced as someone's recommendation, so on an organic post every one of
+    these calls is a no-op — the helper takes a null id deliberately, so callers
+    do not have to branch.
+
+    The impression fires on mount rather than on an intersection observer: this
+    card is only rendered inside the feed's own virtualisation, so mounting
+    already means "close enough to be seen", and an observer per card is a real
+    cost on a long feed for a distinction nobody would notice in the numbers.
+  */
+  useEffect(() => {
+    attributeRepost(item.viaRepostId, item.id, "impression");
+  }, [item.viaRepostId, item.id]);
+
+  /*
+    Opening it is the signal that actually matters — an impression is free, a
+    tap is a decision. Wrapping `onOpen` here rather than attributing at each of
+    the five call sites below means a new way to open a card cannot silently
+    stop being counted.
+  */
+  const open = (target: FeedItem, startComments?: boolean, startIndex?: number) => {
+    attributeRepost(item.viaRepostId, item.id, "open");
+    onOpen(target, startComments, startIndex);
+  };
+
   const react = async (type: "like" | "save") => {
     const isLike = type === "like";
     const cur = isLike ? liked : saved;
     const next = !cur;
+    // Only the positive direction is attributed — un-liking is not engagement,
+    // and the ledger's unique index would keep the first row anyway.
+    if (next) attributeRepost(item.viaRepostId, item.id, isLike ? "like" : "save");
     if (isLike) {
       setLiked(next);
       setLikes((n) => n + (next ? 1 : -1));
@@ -264,20 +299,16 @@ function FeedPostCardImpl({
     }
   };
 
-  // Repost is a recommendation, never a one-tap accident: opens the composer
-  // (quick "Post Now" or an optional caption). Tapping again undoes it.
-  const repost = async () => {
+  /*
+    Repost opens the destination sheet (Part 4) — where the audience is chosen
+    and every other destination lives. Same change, same reasoning, as the reel
+    viewer: going straight to the caption composer made "recommend this" and
+    "write about this" one action and left nowhere to say who it reaches.
+  */
+  const repost = () => {
     setMenuOpen(false);
-    if (!repostState.reposted) {
-      openComposer("create", null);
-      return;
-    }
-    try {
-      await toggleRepost(item.id, false, repostState.count);
-      toast("Removed repost.", "success");
-    } catch (e) {
-      toast(e instanceof FrenzsaveError ? e.message : "Couldn't repost.", "error");
-    }
+    setRepostSheetReady(true);
+    setRepostSheetOpen(true);
   };
 
   const openComposer = (mode: "create" | "edit", caption: string | null) => {
@@ -364,6 +395,17 @@ function FeedPostCardImpl({
             <p className="mt-1.5 border-l-2 border-emerald-500/40 pl-2.5 text-[13px] leading-relaxed text-foreground/90">
               <RichText text={item.repostBadge.caption} />
             </p>
+          ) : null}
+          {/*
+            "Why am I seeing this?" (Part 4) — only on a post that was SURFACED
+            as a recommendation. A post already in the feed on its own merits
+            did not need explaining, and a reason attached to it would claim a
+            recommendation that never happened.
+          */}
+          {item.repostReason ? (
+            <div className="mt-2">
+              <WhyThisChip reason={item.repostReason} />
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -500,7 +542,7 @@ function FeedPostCardImpl({
         <div className="mb-3 overflow-hidden">
           <MediaCarousel
             items={item.mediaItems}
-            onExpandItem={(index) => onOpen(item, false, index)}
+            onExpandItem={(index) => open(item, false, index)}
             liked={liked}
             onDoubleTapLike={() => {
               if (!liked) void react("like");
@@ -518,7 +560,7 @@ function FeedPostCardImpl({
             streamFailed={item.streamFailed}
             poster={item.thumbnailUrl}
             postId={item.id}
-            onExpand={() => onOpen(item)}
+            onExpand={() => open(item)}
             onDoubleTapLike={() => {
               if (!liked) void react("like");
             }}
@@ -549,7 +591,7 @@ function FeedPostCardImpl({
             onDoubleTapLike={() => {
               if (!liked) void react("like");
             }}
-            onExpand={() => onOpen(item)}
+            onExpand={() => open(item)}
             className="max-h-[85vh] w-full"
           />
           {item.viewsCount > 0 ? (
@@ -559,7 +601,7 @@ function FeedPostCardImpl({
           ) : null}
         </div>
       ) : item.mediaKind === "audio" ? (
-        <button type="button" onClick={() => onOpen(item)} className="block w-full text-left" aria-label="Play">
+        <button type="button" onClick={() => open(item)} className="block w-full text-left" aria-label="Play">
           <div className="mb-3 flex items-center gap-3 bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/15">
             <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white">
               <Music className="h-5 w-5" />
@@ -576,7 +618,7 @@ function FeedPostCardImpl({
           </div>
         </button>
       ) : (
-        <button type="button" onClick={() => onOpen(item)} className="block w-full text-left" aria-label="Open">
+        <button type="button" onClick={() => open(item)} className="block w-full text-left" aria-label="Open">
           <div className="relative mb-3 aspect-video overflow-hidden bg-neutral-900">
             {item.thumbnailUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -684,18 +726,33 @@ function FeedPostCardImpl({
           onReposted={onReposted}
           mode={composerMode}
           initialCaption={composerCaption}
+          audience={composerAudience}
+          sourceRepostId={item.viaRepostId ?? null}
         />
       ) : null}
 
-      {optionsReady ? (
-        <RepostOptionsSheet
+      {/* Part 4's destination sheet, replacing the three-row options sheet. Same
+          lazy `*Ready` gate as every other sheet on this card, so nothing is in
+          the first-load bundle until it is actually opened. */}
+      {repostSheetReady ? (
+        <RepostSheet
           postId={item.id}
+          post={{ title, thumbnailUrl: item.thumbnailUrl, handle: item.publisher.handle }}
           currentCount={repostState.count}
-          open={optionsOpen}
-          onClose={() => setOptionsOpen(false)}
+          open={repostSheetOpen}
+          onClose={() => setRepostSheetOpen(false)}
+          alreadyReposted={repostState.reposted}
+          sourceRepostId={item.viaRepostId ?? null}
           onReposted={onReposted}
-          onCompose={() => openComposer("create", null)}
-          onEditCaption={(caption) => openComposer("edit", caption)}
+          onQuote={(audience) => {
+          setComposerAudience(audience);
+          openComposer("create", null);
+        }}
+          onSendInChat={() => setShareOpen(true)}
+          onSaveForLater={() => {
+            setPickerReady(true);
+            setPickerOpen(true);
+          }}
         />
       ) : null}
 

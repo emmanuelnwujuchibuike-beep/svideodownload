@@ -42,19 +42,55 @@ import { cn, formatBytes, formatCompactNumber } from "@/lib/utils";
 
 /* ────────────────────────────────── Hero ─────────────────────────────────── */
 
+/**
+ * 🔴 THE HERO IS THE LANDING'S HERO NOW (owner, 2026-08-11: "i want the download
+ * page to be a blend of the landing page and the download page as it is in my
+ * screenshot").
+ *
+ * Three changes, all from that screenshot:
+ *
+ * • THE HEADLINE. It read "Downloads" over "All your downloaded content in one
+ *   place." — a page title, which is what a web app puts at the top of a route.
+ *   It is now the same "Download. Discover. Explore." line and the same
+ *   supporting sentence the landing opens with, so a visitor who signs in lands
+ *   somewhere continuous with where they came from instead of on a different
+ *   product. The words are deliberately IDENTICAL to the landing's; two
+ *   near-miss versions of one brand line is worse than either.
+ *
+ * • NO CARD. The section was a bordered, gradient-washed panel. On the canvas
+ *   that reads as a card containing a title, and the reference has the words
+ *   sitting directly on the ground with nothing behind them — the ground is what
+ *   supplies the depth now, so a wash on top of it just muddies the tint.
+ *
+ * • The Fast / Secure / Private pill KEEPS its surface, because it is the one
+ *   thing here that genuinely is a control-sized object, and it is in the
+ *   reference exactly as it was. `backdrop-blur` comes off it: it sits on a flat
+ *   canvas, so there is nothing behind it to blur, and it was costing a GPU pass
+ *   for no visible effect.
+ *
+ * The cloud illustration is untouched and still `hidden sm:block` — the owner
+ * asked that nothing be removed, and it never rendered on a phone anyway, which
+ * is why it is absent from the reference.
+ */
 export function DownloadsHero() {
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-blue-500/10 via-violet-500/8 to-fuchsia-500/10 p-5 shadow-soft sm:p-7">
+    <section className="relative px-1 pt-1">
       <div className="relative flex items-center gap-4">
         <div className="min-w-0 flex-1">
-          <h1 className="bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-3xl font-extrabold tracking-[-0.03em] text-transparent sm:text-4xl">
-            Downloads
+          {/* The same clamp ramp as the landing H1, so the three words stay on
+              one line from a 320px phone up without a single breakpoint. */}
+          <h1 className="flex flex-nowrap items-baseline gap-[0.3em] text-[clamp(1.05rem,5.2vw,2.25rem)] font-extrabold leading-[1.1] tracking-[-0.035em] text-slate-900 dark:text-white">
+            <span className="whitespace-nowrap">Download.</span>
+            <span className="whitespace-nowrap bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
+              Discover.
+            </span>
+            <span className="whitespace-nowrap">Explore.</span>
           </h1>
-          <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-            All your downloaded content in one place.
-            <Cloud className="h-4 w-4 shrink-0" />
+          <p className="mt-2.5 max-w-md text-pretty text-sm leading-relaxed text-slate-600 dark:text-white/70">
+            Download from the platforms you already use, then share, connect and explore — all in{" "}
+            <span className="font-medium text-blue-600 dark:text-blue-300">one super app.</span>
           </p>
-          <div className="mt-4 inline-flex flex-wrap items-center gap-x-1 gap-y-2 rounded-2xl border border-border/60 bg-card/70 px-3 py-2 text-xs font-semibold backdrop-blur">
+          <div className="mt-4 inline-flex flex-wrap items-center gap-x-1 gap-y-2 rounded-2xl bg-white px-3 py-2 text-xs font-semibold shadow-[0_2px_10px_-4px_rgba(15,23,42,0.15)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-white/[0.06] dark:ring-white/10">
             <Pill icon={Zap} label="Fast" />
             <Divider />
             <Pill icon={Lock} label="Secure" />

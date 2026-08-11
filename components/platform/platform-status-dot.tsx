@@ -86,26 +86,55 @@ export function PlatformStatusDot({
       </button>
 
       {/*
-        The description, revealed by the button's own focus/hover. `peer-focus`
-        covers the tap and the keyboard; `peer-hover` covers the pointer.
+        ── 🔴 A VIEWPORT SHEET, NOT AN ANCHORED TOOLTIP ────────────────────────
 
-        Right-anchored and width-capped so it cannot push the tile grid wide —
-        it is absolutely positioned, so it never participates in layout and can
-        never shift the row. `pointer-events-none` so it cannot swallow the tap
-        that dismisses it.
+        Owner, 2026-08-11: "the platform status description modal display isn't
+        professionally responsive when clicked — the ones at the edge or bottom."
+
+        It was `absolute right-0 top-7 w-44`, i.e. a 176px box hanging down and to
+        the LEFT of its dot. That has two failure modes and the owner hit both:
+
+        • THE EDGE. The first tiles in the row sit ~40px from the screen edge, so
+          a box extending 176px leftward from them lands at negative x and is cut
+          off by the viewport.
+        • THE CARD. On the download page this strip renders inside the purple
+          panel, which is `overflow-hidden` for its gradient and radius. An
+          absolutely-positioned child of an `overflow-hidden` ancestor is clipped
+          to it, full stop — so the box was sliced off by the card's rounded
+          corner regardless of where it was anchored.
+
+        There is no anchoring value that fixes both, because the second one is not
+        about position at all. `position: fixed` is: it takes the sheet out of
+        every ancestor's overflow AND out of the row's geometry, so it is placed
+        against the viewport and can never be clipped or pushed off-screen by
+        whichever tile happens to be tapped. Every dot now shows the same sheet in
+        the same place — which is also what a native app does with a tap-to-explain,
+        and is far easier to read than eight boxes appearing in eight positions.
+
+        🔴 Verified in the browser at four widths on both surfaces rather than
+        reasoned about: `position: fixed` resolves against the nearest ancestor
+        with a transform/filter/`will-change` instead of the viewport, and this
+        codebase HAS such ancestors (`.frenz-reveal` animates `translateY`). The
+        test asserts the sheet's measured rect against the viewport rect.
+
+        `pointer-events-none` so it can never swallow the tap that dismisses it.
       */}
       <span
         role="tooltip"
         className={cn(
-          "pointer-events-none absolute right-0 top-7 z-20 w-44 origin-top-right scale-95 rounded-xl bg-slate-900 px-2.5 py-2 text-left text-[11px] leading-snug text-white opacity-0 shadow-lg transition duration-150",
-          "peer-hover:scale-100 peer-hover:opacity-100 peer-focus:scale-100 peer-focus:opacity-100",
+          "pointer-events-none fixed inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[60] mx-auto w-auto max-w-sm translate-y-1.5 rounded-2xl bg-slate-900 px-3.5 py-3 text-left text-xs leading-snug text-white opacity-0 shadow-2xl transition duration-150",
+          "peer-hover:translate-y-0 peer-hover:opacity-100 peer-focus:translate-y-0 peer-focus:opacity-100",
           "motion-reduce:transition-none dark:bg-slate-800",
         )}
       >
-        <span className="block font-bold">
+        <span className="flex items-center gap-2 font-bold">
+          {/* The dot repeats inside the sheet so the colour just tapped is
+              restated beside its meaning — otherwise the sheet explains a status
+              without ever showing which one it belongs to. */}
+          <span className={cn("h-2 w-2 shrink-0 rounded-full", meta.dot)} />
           {platformName} · {meta.short}
         </span>
-        <span className="mt-0.5 block text-white/75">{meta.description}</span>
+        <span className="mt-1 block text-white/75">{meta.description}</span>
       </span>
     </span>
   );

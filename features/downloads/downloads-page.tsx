@@ -1,7 +1,8 @@
 "use client";
 
-import { Pause, Play, RotateCw, X } from "lucide-react";
+import { ArrowRight, Compass, Pause, Play, RotateCw, X } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { useAppMode } from "@/features/app-shell/use-app-mode";
@@ -65,6 +66,7 @@ const DownloadsRail = dynamic(
   () => import("@/features/downloads/downloads-rail").then((m) => m.DownloadsRail),
   { ssr: false },
 );
+import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { DownloadHistoryAd } from "@/features/monetization/download-history-ad";
 import { DownloadInterstitial } from "@/features/monetization/download-interstitial";
@@ -154,30 +156,78 @@ export function DownloadsPage({
       {/* Paste card. `id="download"` is the target the rail's "Download from
           Link" quick action points at — the anchor previously existed only on
           the landing hero, so that control did nothing on this page. */}
-      <section id="download" className="scroll-mt-20 rounded-3xl border border-border/60 bg-card p-4 shadow-soft sm:p-5">
+      {/* Native card treatment: a white surface on the canvas, held by a soft
+          shadow and a hairline INSET ring rather than a border. A border is part
+          of the box, so it draws a hard 1px edge; an inset ring at 6% reads as
+          the card catching light at its edge, which is what every iOS/Flutter
+          grouped-list surface does. Same recipe as the landing's CTA card, so
+          the two pages are visibly one product. */}
+      <section
+        id="download"
+        className="scroll-mt-20 rounded-3xl bg-white p-4 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-white/[0.04] dark:ring-white/10 sm:p-5"
+      >
         <DownloadBox surface="card" platformStatus={platformStatus} />
       </section>
 
       {/*
-        The Wallpaper Gallery — its OWN block, outside the paste card (owner,
-        2026-08-09: "separate the wallpaper button from the supported platform
-        in the download page").
+        🔴 Explore Features BESIDE Wallpapers — the landing's pair, brought over
+        (owner, 2026-08-11: "i want the download page to be a blend of the landing
+        page and the download page as it is in my screenshot").
 
-        It used to sit inside that card, `mt-3` under `DownloadBox` — and the
-        last thing `DownloadBox` renders is the supported-platforms strip (since
-        2026-08-10 the SAME `SupportedPlatforms` component the landing hero uses,
-        label above and logos below, rather than the hand-rolled "Supported:" row
-        that used to live here). Inside one bordered card with a small gap, the
-        two read as one block, so a link to an entirely different feature looked
-        like a footnote on the list of supported sites.
+        The Wallpaper tile was alone and full-width here, which made it read as a
+        banner for one feature. In the reference the two sit side by side as
+        equals, exactly as on the landing: two places to go next, offered
+        together. This ADDS the Explore tile; nothing is taken away, and the
+        Wallpaper card is the same component with the same dwell flourish it has
+        always had.
 
-        Out here it is a sibling of the paste card with the section's own
-        spacing around it, which is what it actually is: a second destination,
-        not part of the downloader. It stays directly BELOW the paste box —
-        still the one place on this page everybody already looks, which is the
-        whole reason it was moved up from the bottom of the dashboard.
+        Both are plain server-rendered links inside an already-client page — no
+        new state, no new effect, nothing that hydrates beyond what was here.
       */}
-      <WallpaperCta backgroundUrl={ctaWallpaperUrl} />
+      <div className="grid grid-cols-2 gap-3">
+        <Link
+          href="/features"
+          className="group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl bg-white p-4 text-left text-slate-900 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] transition duration-200 hover:-translate-y-0.5 active:scale-[0.995] dark:bg-white/[0.04] dark:text-white dark:ring-white/10"
+        >
+          {/* Decoration FIRST in the markup, content after with `relative z-[1]`.
+              A positioned element paints above static siblings, so an absolutely
+              positioned flourish declared last covers its own card's text — the
+              exact regression that shipped on the landing's Wallpaper tile. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -right-8 top-6 h-32 w-32 rotate-[18deg] rounded-[2rem] bg-gradient-to-br from-violet-400/25 via-indigo-400/15 to-transparent blur-[1px] transition-transform duration-500 group-hover:rotate-[22deg] motion-reduce:transition-none dark:from-violet-400/20 dark:via-indigo-400/10"
+          />
+          <span className="relative z-[1] flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30">
+            <Compass className="h-6 w-6" />
+          </span>
+          <span className="relative z-[1] mt-auto flex items-end justify-between gap-3 pt-4">
+            <span className="min-w-0">
+              <span className="block text-base font-bold leading-tight">Explore Features</span>
+              <span className="mt-1 block text-xs leading-snug text-slate-500 dark:text-white/60">
+                See everything Frenz can do.
+              </span>
+            </span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/70 transition group-hover:bg-slate-200 dark:bg-white/10 dark:ring-white/15">
+              <ArrowRight className="h-4 w-4 text-slate-600 transition-transform group-hover:translate-x-0.5 dark:text-white" />
+            </span>
+          </span>
+        </Link>
+
+        <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} />
+      </div>
+
+      {/*
+        ── Where the Wallpaper Gallery went ──────────────────────────────────
+
+        It is in the two-up grid directly above, paired with Explore Features
+        (owner, 2026-08-11 — the reference screenshot). The constraint it was
+        moved here for in the first place (2026-08-09: "separate the wallpaper
+        button from the supported platform in the download page") is still met
+        and is in fact met better: it is outside the paste card, a sibling of it,
+        directly below the one place on this page everybody already looks — it
+        simply now shares that row with its counterpart instead of spanning the
+        full width alone.
+      */}
 
       {/* Under the paste card — adjusts to whatever ad size the zone serves
           (AdSurface hugs the unit). The site's highest-attention placement. */}
@@ -341,6 +391,20 @@ export function DownloadsPage({
           still sees). */}
       <DownloadInterstitial />
       <ExitIntent />
+
+      {/*
+        🔴 The trademark disclaimer, in its card treatment (owner, 2026-08-11 —
+        it is in the reference screenshot of this page).
+
+        The same component and the same sentence the landing renders, so there is
+        still exactly one copy of this text in the codebase. It closes the page,
+        which is where a footnote belongs and where the reference puts it.
+
+        Checked before adding: nothing else in this tree rendered one. `/downloads`
+        shows the platform logos in `DownloadBox` and had no disclaimer under
+        them at all — so this is a gap being closed, not a second copy.
+      */}
+      <DownloadDisclaimer variant="card" />
     </div>
   );
 }

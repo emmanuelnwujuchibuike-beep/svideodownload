@@ -48,7 +48,12 @@ export const metadata: Metadata = {
 */
 export default function Downloads() {
   return (
-    <AppContent>
+    /* `canvas` — the native-app ground, shared with the landing page (owner,
+       2026-08-11). It is on the SYNCHRONOUS shell rather than inside the
+       boundary below, so the tint is in the very first bytes and the skeleton
+       already paints on it; putting it on the streamed child would mean a white
+       flash for exactly as long as the data takes. */
+    <AppContent canvas>
       <Suspense fallback={<DownloadsSkeleton />}>
         <DownloadsData />
       </Suspense>

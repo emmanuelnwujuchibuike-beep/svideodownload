@@ -82,7 +82,10 @@ export function AppTopbar() {
         // top nav background pure white and not blured transparent" — the
         // previous `bg-background/60 backdrop-blur-xl` frosted-glass look let
         // scrolled content show through instead of a clean solid bar).
-        "border-b border-border/20 bg-background",
+        // `frenz-app-topbar` is the hook the canvas rule in globals.css targets —
+        // a page that opts into the native ground retints this bar to match. It
+        // carries no styles of its own; see the `:has()` block there.
+        "frenz-app-topbar border-b border-border/20 bg-background",
         onMessagesIndex && "hidden lg:flex",
       )}
     >

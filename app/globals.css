@@ -1829,3 +1829,36 @@ html[data-a11y-motion="reduce"] *::after {
 .dark {
   --frenz-canvas: 229 55% 5%;
 }
+
+/* ── The canvas on an APP-SHELL page (owner, 2026-08-11) ───────────────────────
+
+   "make the same native app upgrade detailing and exact … to the download page
+   and features page … i want pure flutter native app style."
+
+   The marketing pages can simply colour their own wrapper, because they render
+   `SiteHeader` themselves and can pass it a prop. `/downloads` cannot: its topbar
+   and sidebar live in the persistent `(app)` layout, several levels above the
+   page, and a layout cannot know which of its ~12 routes wants the tint.
+
+   So the PAGE marks itself and the shell responds. `:has()` lets the chrome react
+   to a descendant without either component importing the other, without threading
+   a prop through a layout that would then have to be told about every future
+   route, and — the reason it is worth doing this way — without a single byte of
+   client JavaScript or a hydration pass to apply it. It is also correct on the
+   FIRST paint: a class in the streamed HTML, not a state update after mount, so
+   there is no flash of white before the tint arrives.
+
+   Scoped to `.frenz-canvas-page`, so /home, /reels, /messages and everything else
+   in the same layout are untouched. */
+body:has(.frenz-canvas-page) {
+  background-color: hsl(var(--frenz-canvas));
+}
+/* The topbar matches the ground exactly and drops its hairline — same reasoning
+   as the marketing header: a bar in a different colour draws a hard rule across
+   the top of the screen, which is the "web page" tell the canvas removes. It
+   stays fully OPAQUE; a translucent or blurred sticky bar was ruled out by the
+   owner and costs a GPU pass on every scroll frame. */
+body:has(.frenz-canvas-page) .frenz-app-topbar {
+  background-color: hsl(var(--frenz-canvas));
+  border-bottom-color: transparent;
+}

@@ -217,7 +217,23 @@ export function WallpaperExplore({
 
   return (
     <>
-      <main className="min-h-dvh pb-24">
+      {/*
+        🔴 The native-app ground (owner, 2026-08-11: "make same flutter native app
+        upgrade to the wallpaper page").
+
+        `frenz-canvas-page` is the same marker /downloads uses; the rule in
+        globals.css puts the tint on the BODY, which matters here specifically —
+        /wallpapers sits outside both layouts, `min-h-dvh` only covers this
+        element, and the SiteFooter renders as a sibling below it. Colouring just
+        this main would leave the footer on white and put a seam across the bottom
+        of a page that scrolls past it.
+
+        The controls needed no work: this page already dressed its back button,
+        filter chips and search field in `bg-card` + `shadow-soft` +
+        `ring-1 ring-inset` — the white-card-on-tinted-ground recipe. They simply
+        had no ground to sit on, so they read as white-on-white.
+      */}
+      <main className="frenz-canvas-page min-h-dvh pb-24">
         {/* ── 1 + 2 + 3: top bar, editorial hero, fanned deck ──────────────── */}
         <header
           className="relative"

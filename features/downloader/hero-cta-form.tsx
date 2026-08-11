@@ -108,9 +108,32 @@ export function HeroCtaForm() {
         <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-inset ring-white/25">
           <Download className="h-[22px] w-[22px]" />
         </span>
+        {/*
+          🔴 ONE LINE AT EVERY WIDTH — the type shrinks, the row never breaks
+          (owner, 2026-08-11: "start free download text … should not flex col on
+          small device, it should stay flex row on all device, rather the text
+          size should reduce on smaller device").
+
+          "Start Free Download" is 19 characters at a fixed 17px, and the row
+          only has the viewport minus ~144px of chrome (the 48px icon tile, the
+          36px arrow disc, two 14px gaps and 32px of padding). Below about 360px
+          that is not enough, so the words wrapped to a second line — which is
+          what turned the label into a stack.
+
+          `whitespace-nowrap` states the guarantee, and the clamp is what makes it
+          keepable: the type tracks the viewport between a 14px floor and the
+          reference's 17px instead of snapping at a breakpoint, so the line fits a
+          320px phone and still reads at full size on a 390px one. Fixing this
+          with `text-sm sm:text-[17px]` would have left every width between the
+          breakpoints wrong.
+        */}
         <span className="min-w-0 flex-1">
-          <span className="block text-[17px] font-bold leading-tight">Start Free Download</span>
-          <span className="mt-1 block text-[13px] text-white/85">100% Free</span>
+          <span className="block whitespace-nowrap text-[clamp(14px,4.4vw,17px)] font-bold leading-tight">
+            Start Free Download
+          </span>
+          <span className="mt-1 block whitespace-nowrap text-[clamp(11px,3.4vw,13px)] text-white/85">
+            100% Free
+          </span>
         </span>
         {/*
           🔴 The arrow sits in a CIRCLE (owner, 2026-08-11 — the reference).

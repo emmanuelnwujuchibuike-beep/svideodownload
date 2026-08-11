@@ -240,8 +240,10 @@ export function SupportedPlatforms({
                 className="h-[clamp(13px,3.6vw,18px)] w-[clamp(13px,3.6vw,18px)]"
                 style={mark ? { color: mark.fg } : undefined}
               />
-              {/* Renders NOTHING while the platform is working — see the note on
-                  the component for why green is silent. */}
+              {/* The status light — green, amber or red, always shown, and
+                  tappable for the description (owner, 2026-08-11). It used to
+                  render nothing for a healthy platform; that was overruled, and
+                  the reasoning for both positions is on the component. */}
               <PlatformStatusDot
                 status={statusOf(statuses, id)}
                 platformName={PLATFORMS[id]?.name ?? id}

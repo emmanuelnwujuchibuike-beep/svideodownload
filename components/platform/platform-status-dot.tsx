@@ -9,16 +9,29 @@ import { cn } from "@/lib/utils";
  * Owner, 2026-08-11: "green, yellow and red should show, not only red … when
  * they tap they should see the status description."
  *
- * ── 🔴 GREEN IS SHOWN. I had it silent, and that was overruled ────────────
+ * ── 🔴🔴 GREEN RENDERS NOTHING. This has now flipped TWICE — read before ────
+ *      changing it again
  *
- * The first version rendered nothing for `operational`, reasoning that eight
- * green dots become wallpaper and drown the one amber dot that matters. That is
- * a real argument and it is not the one that wins here: a light that only ever
- * appears when something is broken cannot be TRUSTED, because its absence is
- * indistinguishable from the feature being missing. A visitor who never sees a
- * dot learns nothing; one who sees green learns the platform was checked and is
- * working. Confidence is the product this badge sells, and it needs the healthy
- * state to say so out loud.
+ * Owner, 2026-08-11 (final): "make the platform status bar not show any status
+ * when i set it on active, it should only show a badge when is on yellow or
+ * red."
+ *
+ * The history, so nobody re-argues it a third time:
+ *  1. Originally silent for `operational` — eight green dots become wallpaper
+ *     and drown the one amber dot that actually matters.
+ *  2. Owner asked for green to show ("green, yellow and red should show, not
+ *     only red"), so it did, and this note argued the case: a light that only
+ *     appears when something is broken is hard to trust, because its absence is
+ *     indistinguishable from the feature not existing.
+ *  3. Owner saw it live and reversed it. That settles it — the argument in (2)
+ *     is about a hypothetical reader; the owner is looking at the real page,
+ *     where eight green dots on eight logos is visual noise on every surface
+ *     that renders the strip.
+ *
+ * So `showHealthy` defaults to FALSE again. Everything else built for (2) stays
+ * and still earns its place: the dot is a real focusable button and the
+ * description opens as a viewport sheet, which is what makes an amber or red
+ * badge explain itself on a phone instead of hiding behind a `title`.
  *
  * ── Why it is a dot, not a tick mark ──────────────────────────────────────
  *
@@ -48,10 +61,11 @@ export function PlatformStatusDot({
   status,
   platformName,
   /**
-   * Kept as an escape hatch for surfaces that genuinely only want exceptions.
-   * Defaults ON now — see the note above on why the healthy state must speak.
+   * Opt a surface into showing the healthy state too. Defaults OFF — a badge
+   * appears only for `partial` and `down` (owner). See the note above; this has
+   * been reversed twice, so check there before changing the default.
    */
-  showHealthy = true,
+  showHealthy = false,
   size = "md",
   className,
 }: {

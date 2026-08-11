@@ -13,6 +13,22 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+/*
+  🔴 THE TOP BAR AND SAFE AREA STAY WHITE — deliberately NOT the canvas (owner,
+  2026-08-11: "let the download page top header and safe area be white").
+
+  This was briefly built the other way: the bar was retinted to `--frenz-canvas`
+  and this route overrode `theme-color` to #EEF0FA so the PWA status strip
+  matched it. Both are reverted, and neither should be reintroduced as a
+  "consistency" fix — a white bar over a tinted body is the intended
+  relationship here, the same way an iOS navigation bar sits above a grouped
+  list rather than dissolving into it.
+
+  So the root layout's white `theme-color` is exactly right for this page and
+  needs no per-route override, and `AppTopbar` keeps its default `bg-background`.
+  The body below it is still the canvas — see `<AppContent canvas>`.
+*/
+
 export const metadata: Metadata = {
   title: "Downloads",
   robots: { index: false, follow: false },

@@ -1853,12 +1853,15 @@ html[data-a11y-motion="reduce"] *::after {
 body:has(.frenz-canvas-page) {
   background-color: hsl(var(--frenz-canvas));
 }
-/* The topbar matches the ground exactly and drops its hairline — same reasoning
-   as the marketing header: a bar in a different colour draws a hard rule across
-   the top of the screen, which is the "web page" tell the canvas removes. It
-   stays fully OPAQUE; a translucent or blurred sticky bar was ruled out by the
-   owner and costs a GPU pass on every scroll frame. */
-body:has(.frenz-canvas-page) .frenz-app-topbar {
-  background-color: hsl(var(--frenz-canvas));
-  border-bottom-color: transparent;
-}
+/* 🔴 The TOPBAR is deliberately NOT retinted (owner, 2026-08-11: "let the
+   download page top header and safe area be white").
+
+   There was a rule here that gave `.frenz-app-topbar` the canvas colour and
+   dropped its hairline, on the reasoning that a bar in a different colour draws
+   a hard rule across the top of the screen. The owner's call is the opposite and
+   it is a coherent one: a white navigation bar above a tinted body is what iOS
+   does over a grouped list, and it keeps the bar reading as chrome rather than
+   as the top of the content.
+
+   Do not re-add it. The matching `theme-color` override that made the PWA status
+   strip lavender on /downloads was removed with it — see the note in that page. */

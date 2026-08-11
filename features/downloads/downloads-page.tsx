@@ -156,17 +156,31 @@ export function DownloadsPage({
       {/* Paste card. `id="download"` is the target the rail's "Download from
           Link" quick action points at — the anchor previously existed only on
           the landing hero, so that control did nothing on this page. */}
-      {/* Native card treatment: a white surface on the canvas, held by a soft
-          shadow and a hairline INSET ring rather than a border. A border is part
-          of the box, so it draws a hard 1px edge; an inset ring at 6% reads as
-          the card catching light at its edge, which is what every iOS/Flutter
-          grouped-list surface does. Same recipe as the landing's CTA card, so
-          the two pages are visibly one product. */}
-      <section
-        id="download"
-        className="scroll-mt-20 rounded-3xl bg-white p-4 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-white/[0.04] dark:ring-white/10 sm:p-5"
-      >
-        <DownloadBox surface="card" platformStatus={platformStatus} />
+      {/*
+        🔴 THE PURPLE STRIPE (owner, 2026-08-11: "i want a small purple stripe
+        around the paste link section placeholder").
+
+        A `p-px` gradient wrapper around the white card — the outer element paints
+        the brand ramp, the inner one covers all but one pixel of it, so what
+        shows is a hairline that follows the radius exactly. One element, no
+        pseudo-element, and it clips correctly because the inner card carries its
+        own background.
+
+        Deliberately NOT `border: 1px solid <gradient>` — a border cannot take a
+        gradient at all — and not an `outline`, which does not follow a border
+        radius on every engine. The two radii differ by 1px on purpose so the
+        inner corner sits concentrically inside the outer one; equal radii leave a
+        visible thick spot at each corner.
+
+        The card keeps its soft shadow, but its inset ring is gone: a grey
+        hairline immediately inside a violet one reads as a double border.
+      */}
+      <section id="download" className="scroll-mt-20">
+        <div className="rounded-[1.55rem] bg-gradient-to-r from-blue-500 via-violet-500 to-purple-500 p-px shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)]">
+          <div className="rounded-[1.5rem] bg-white p-4 dark:bg-[#0b1020] sm:p-5">
+            <DownloadBox surface="card" platformStatus={platformStatus} />
+          </div>
+        </div>
       </section>
 
       {/*

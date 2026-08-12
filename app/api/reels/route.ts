@@ -13,10 +13,19 @@ export const dynamic = "force-dynamic";
 const SORTS: HomeFeedSort[] = ["for_you", "following", "recent", "trending"];
 
 /**
- * GET /api/reels?sort=&offset=&limit= — the Reels product's OWN paginated
- * feed: exclusively `format = 'reel'` posts (never text/photo feed content),
- * with its own cache keys. Same envelope as /api/home-feed so the deck client
- * is shared.
+ * GET /api/reels?sort=&offset=&limit=&seed=&exclude= — the Reels product's OWN
+ * paginated feed: exclusively `format = 'reel'` posts (never text/photo feed
+ * content), with its own cache keys. Same envelope as /api/home-feed so the
+ * deck client is shared.
+ *
+ * `seed` — this open's reshuffle token (owner: "it should reshuffle every
+ * open"). ONE value per open, reused for every page of it: the feed is offset
+ * paginated, so pages that disagree about the order skip some clips and repeat
+ * others. See `getHomeFeed`.
+ *
+ * `exclude` — comma-separated post ids this device has already watched
+ * ("never show one video twice every open"). A preference, not a filter: the
+ * loader drops it rather than hand back an empty deck.
  */
 export async function GET(request: Request) {
   const sp = new URL(request.url).searchParams;
@@ -24,6 +33,21 @@ export async function GET(request: Request) {
   const sort: HomeFeedSort = sortParam && SORTS.includes(sortParam) ? sortParam : "for_you";
   const offset = Math.max(0, Number(sp.get("offset") ?? 0) || 0);
   const limit = Math.min(24, Math.max(1, Number(sp.get("limit") ?? 12) || 12));
+  // Same sanitising as /api/home-feed: the seed lands in a cache key, so it is
+  // reduced to a safe alphabet and a bounded length rather than trusted. The
+  // worst a truncation can do is make two opens collide on one arrangement.
+  const seed = (sp.get("seed") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32) || undefined;
+  /*
+    The exclusion list is attacker-controlled in shape but not in consequence —
+    it can only ever REMOVE the sender's own results. Still bounded on both axes
+    (ids are UUIDs; 80 is what the client sends) so a hostile 2MB query string
+    cannot turn into a 2MB Set and a 400-row × 100k-entry filter.
+  */
+  const exclude = (sp.get("exclude") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => /^[0-9a-fA-F-]{36}$/.test(s))
+    .slice(0, 80);
 
   let viewerId: string | null = null;
   try {
@@ -36,9 +60,27 @@ export async function GET(request: Request) {
     /* anon */
   }
 
-  const page = await getHomeFeed({ viewerId, sort, offset, limit, format: "reel" });
-  const cacheControl = viewerId
-    ? "private, max-age=15, stale-while-revalidate=60"
+  const page = await getHomeFeed({
+    viewerId,
+    sort,
+    offset,
+    limit,
+    format: "reel",
+    seed,
+    excludeIds: exclude.length ? exclude : undefined,
+  });
+  /*
+    🔴 A seeded or excluded response is PER-DEVICE and must never sit in a shared
+    edge cache. Both values are in the URL so they are part of the cache key
+    already, but an anon request with `s-maxage` would still let one visitor's
+    "already watched" deck be served to the next visitor who happened to send the
+    same list — and, more likely, would pin one seed's arrangement at the edge
+    for 20 seconds of opens that each minted a fresh one. Personalised inputs get
+    a private response.
+  */
+  const personalised = Boolean(viewerId || seed || exclude.length);
+  const cacheControl = personalised
+    ? "private, max-age=0, must-revalidate"
     : "public, s-maxage=20, stale-while-revalidate=90";
   return NextResponse.json(page, { headers: { "Cache-Control": cacheControl } });
 }

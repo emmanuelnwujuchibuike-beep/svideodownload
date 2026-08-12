@@ -11,6 +11,15 @@ import { ReelDeck } from "@/features/feed/reel-viewer";
 import { ReelTabs } from "@/features/reels/viewer/reel-tabs";
 import { getApi } from "@/lib/sdk/browser";
 import type { FeedItem } from "@/lib/social/home-feed";
+import {
+  clearWatchedReels,
+  freshDeck,
+  markReelWatched,
+  newReelsSeed,
+  suppressedReels,
+  watchedForRequest,
+  watchedReels,
+} from "@/lib/social/reels-session";
 import { cn } from "@/lib/utils";
 
 type Tab = "for_you" | "following";
@@ -21,6 +30,25 @@ type Tab = "for_you" | "following";
 // clock. Resets only on a real page reload/new tab.
 let lastReelsFetchAt = 0;
 
+/*
+  ── The seed this module has already used, and why it lives out here ────────
+
+  Owner (2026-08-11): "make reels always refresh each opens … it should
+  reshuffle every open."
+
+  The page mints a seed per REQUEST, but opening /reels from the tab bar is a
+  client navigation: Next serves the cached RSC payload and the server component
+  never runs, so `initialSeed` arrives as the same token it arrived with last
+  time. That is indistinguishable from a fresh render by looking at props alone
+  — the only way to tell is to remember what was rendered before, and the
+  component itself cannot, because it is freshly mounted every open.
+
+  Hence module scope, like `lastReelsFetchAt` above: it survives remounts and
+  resets on a real reload, which is exactly the lifetime of "this browsing
+  session's opens".
+*/
+let lastRenderedSeed: string | null = null;
+
 /**
  * Full-screen /reels with a For You / Following toggle. "For You" is the
  * personalized deck (seeded from the server); "Following" refetches to reels only
@@ -29,6 +57,7 @@ let lastReelsFetchAt = 0;
 export function ReelsFeed({
   initialItems,
   initialOffset,
+  initialSeed,
   startId,
   startSlideIndex,
   commentsId,
@@ -36,6 +65,10 @@ export function ReelsFeed({
 }: {
   initialItems: FeedItem[];
   initialOffset: number | null;
+  /** This open's reshuffle token, minted server-side per request. Reused for
+   *  every page of the open so the whole scroll agrees on ONE arrangement; a
+   *  new one is minted here when the Router Cache replayed a stale payload. */
+  initialSeed?: string;
   /** Seed the For You deck on this video (feed/trending tap opens here). */
   startId?: string;
   /** Which video of that reel's own album to open on — a feed/post carousel
@@ -58,9 +91,24 @@ export function ReelsFeed({
     else router.push("/home");
   }, [router, onClose]);
   const [tab, setTab] = useState<Tab>("for_you");
+  /*
+    🔴 Initial state is `initialItems` VERBATIM — no shuffling, no filtering.
+
+    Everything this component does to the deck depends on localStorage, which
+    does not exist during SSR. Doing any of it in the state initialiser would
+    make the server's first render and the client's first render disagree, which
+    React reports as a hydration error and repairs by throwing away the server
+    HTML — on a full-screen video deck, the most expensive possible way to save a
+    reshuffle. The per-open work happens in an effect below, after hydration.
+  */
   const [items, setItems] = useState<FeedItem[]>(initialItems);
   const [offset, setOffset] = useState<number | null>(initialOffset);
   const [switching, setSwitching] = useState(false);
+  /*
+    This open's reshuffle token. A ref, not state: changing it must never
+    re-render on its own — it only decides what the NEXT request asks for.
+  */
+  const seedRef = useRef<string>(initialSeed ?? newReelsSeed());
   // Slide direction for the tab transition (For You ↔ Following).
   const [direction, setDirection] = useState(1);
   const seen = useRef<Set<string>>(new Set(initialItems.map((i) => i.id)));
@@ -84,9 +132,24 @@ export function ReelsFeed({
     try {
       // Reels has its OWN API (format='reel' posts only) — a separate product
       // from the feed, through the shared SDK like everything else.
+      //
+      // `seed` rides on EVERY page, not just the first: the feed is offset
+      // paginated and the seed decides the order, so a page fetched under a
+      // different seed slices a different arrangement and the deck starts
+      // skipping and repeating clips mid-scroll.
+      //
+      // `exclude` only rides on page 0. Deeper pages are offsets INTO the
+      // already-filtered list the server built for this open, so re-sending the
+      // list would filter twice and shift every offset out from under us.
       const res = await getApi().action<{ items: FeedItem[]; nextOffset: number | null }>("/api/reels", {
         method: "GET",
-        query: { sort, offset: off, limit: 24 },
+        query: {
+          sort,
+          offset: off,
+          limit: 24,
+          seed: seedRef.current,
+          ...(off === 0 ? { exclude: watchedForRequest().join(",") } : {}),
+        },
       });
       if (off === 0) lastReelsFetchAt = Date.now();
       return res;
@@ -95,19 +158,36 @@ export function ReelsFeed({
     }
   }, []);
 
+  /*
+    The one place a server page becomes deck material.
+
+    Every fetch path used to repeat this filter inline and they had drifted: the
+    suppression list ("not interested") was honoured at mount and nowhere else,
+    so a clip you had just dismissed could arrive again on the very next page.
+    Read fresh from storage per call rather than captured once, because
+    suppression happens DURING the session — from the sheet, while this deck is
+    on screen.
+  */
+  const acceptPage = useCallback((list: FeedItem[] | undefined) => {
+    const blocked = new Set(suppressedReels());
+    return (list ?? []).filter(
+      (i) => i.mediaKind === "video" && !seen.current.has(i.id) && !blocked.has(i.id),
+    );
+  }, []);
+
   const loadMore = useCallback(async () => {
     if (loading.current || offset === null) return;
     loading.current = true;
     try {
       const d = await fetchPage(tab, offset);
-      const fresh = (d.items ?? []).filter((i) => i.mediaKind === "video" && !seen.current.has(i.id));
+      const fresh = acceptPage(d.items);
       for (const i of fresh) seen.current.add(i.id);
       if (fresh.length) setItems((prev) => [...prev, ...fresh]);
       setOffset(d.nextOffset);
     } finally {
       loading.current = false;
     }
-  }, [offset, tab, fetchPage]);
+  }, [offset, tab, fetchPage, acceptPage]);
 
   const switchTab = useCallback(
     async (next: Tab) => {
@@ -131,14 +211,103 @@ export function ReelsFeed({
       setItems([]);
       setOffset(null);
       const d = await fetchPage(next, 0);
-      const fresh = (d.items ?? []).filter((i) => i.mediaKind === "video" && !seen.current.has(i.id));
+      const fresh = acceptPage(d.items);
       for (const i of fresh) seen.current.add(i.id);
       setItems(fresh);
       setOffset(d.nextOffset);
       setSwitching(false);
     },
-    [tab, switching, items, offset, fetchPage],
+    [tab, switching, items, offset, fetchPage, acceptPage],
   );
+
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     EVERY OPEN IS A NEW DECK (owner, 2026-08-11)
+    ═══════════════════════════════════════════════════════════════════════════
+
+    "make reels always refresh each opens and never show one video twice every
+     open, it should reshuffle every open."
+
+    Runs once, after hydration, and takes one of two paths depending on how this
+    open actually reached us — which is the distinction the whole feature turns
+    on:
+
+    ── FRESH SERVER RENDER (a reload, a cold entry, a deep link) ──────────────
+    `initialSeed` is a token this module has never seen, so the server already
+    ranked with a brand-new seed and the arrangement on screen IS this open's
+    arrangement. Re-ordering it here would only replace a good shuffle with a
+    different one, visibly, a frame after paint. So this path does the one thing
+    the server could not: drop anything already watched or suppressed on THIS
+    DEVICE, which the server cannot know about.
+
+    ── ROUTER-CACHE REPLAY (the tab bar — by far the common case) ─────────────
+    `initialSeed` is the token from a previous open, because Next replayed the
+    cached RSC payload instead of re-running the page. Nothing about this deck is
+    new. So: mint a seed, reshuffle locally for an instant result with no network
+    wait, and separately ask the server for a page that excludes what has been
+    watched. The local reshuffle is what the viewer sees immediately; the fetch
+    quietly extends it with genuinely unseen clips underneath.
+
+    ── Why the fetch APPENDS rather than replaces ─────────────────────────────
+    A replace would swap the deck a beat after it painted, under a finger that
+    may already be swiping. Appending means the reshuffle is instant and the
+    fresh material is simply what comes next — and since the local pass has
+    already moved unwatched clips to the front, "what comes next" arrives long
+    before anyone reaches it.
+  */
+  useEffect(() => {
+    const replayed = initialSeed != null && initialSeed === lastRenderedSeed;
+    lastRenderedSeed = initialSeed ?? null;
+
+    if (replayed) seedRef.current = newReelsSeed();
+
+    const watched = watchedReels();
+    const suppressed = suppressedReels();
+
+    // A deep link is an explicit request for ONE clip and outranks both the
+    // shuffle and the watched ledger — "open this reel" must open that reel even
+    // if it was watched a minute ago.
+    const pinned = startId ? initialItems.find((i) => i.id === startId) ?? null : null;
+    const pool = pinned ? initialItems.filter((i) => i.id !== pinned.id) : initialItems;
+
+    const { items: ordered, exhausted } = freshDeck(pool, {
+      seed: seedRef.current,
+      watched,
+      suppressed,
+      // A fresh server render is already arranged by the ranker; re-sorting it
+      // by a hash here would trade a real ranking for an arbitrary one.
+      shuffle: replayed,
+    });
+    const next = pinned ? [pinned, ...ordered] : ordered;
+
+    // Watched history that can no longer be honoured is history worth dropping —
+    // otherwise every subsequent open pays to compute the same fallback.
+    if (exhausted) clearWatchedReels();
+
+    if (next.length !== initialItems.length || next.some((it, i) => it.id !== initialItems[i]?.id)) {
+      seen.current = new Set(next.map((i) => i.id));
+      setItems(next);
+    }
+
+    // Only the replay path needs new material; a fresh render just fetched some.
+    if (!replayed) return;
+    let cancelled = false;
+    void (async () => {
+      const d = await fetchPage("for_you", 0);
+      if (cancelled) return;
+      const fresh = acceptPage(d.items);
+      if (!fresh.length) return;
+      for (const i of fresh) seen.current.add(i.id);
+      setItems((prev) => [...prev, ...fresh]);
+      setOffset(d.nextOffset);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Once per mount. `initialItems`/`startId` are props of this open and do not
+    // change within it; re-running on them would reshuffle mid-watch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Silently warm the Following tab in the background the moment the deck
   // mounts, so even the FIRST swipe/tap to it is instant instead of showing
@@ -149,15 +318,18 @@ export function ReelsFeed({
     void (async () => {
       const d = await fetchPage("following", 0);
       if (cancelled) return;
+      const blocked = new Set(suppressedReels());
       const freshSeen = new Set<string>();
-      const fresh = (d.items ?? []).filter((i) => i.mediaKind === "video" && !freshSeen.has(i.id));
+      const fresh = (d.items ?? []).filter(
+        (i) => i.mediaKind === "video" && !freshSeen.has(i.id) && !blocked.has(i.id),
+      );
       fresh.forEach((i) => freshSeen.add(i.id));
       cacheRef.current!.following = { items: fresh, offset: d.nextOffset, seen: freshSeen };
     })();
     return () => {
       cancelled = true;
     };
-  }, [fetchPage]);
+  }, [fetchPage, acceptPage]);
 
   // Alive on return: a reel posted while this installed PWA was backgrounded
   // (or the device was offline) never showed up even after switching back to
@@ -177,7 +349,7 @@ export function ReelsFeed({
       const activeTab = tabRef.current;
       const d = await fetchPage(activeTab, 0);
       if (tabRef.current !== activeTab) return; // switched tabs while this was in flight
-      const fresh = (d.items ?? []).filter((i) => i.mediaKind === "video" && !seen.current.has(i.id));
+      const fresh = acceptPage(d.items);
       if (!fresh.length) return;
       for (const i of fresh) seen.current.add(i.id);
       setItems((prev) => [...prev, ...fresh]);
@@ -207,7 +379,7 @@ export function ReelsFeed({
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("online", onOnline);
     };
-  }, [fetchPage]);
+  }, [fetchPage, acceptPage]);
 
   return (
     <>
@@ -318,6 +490,16 @@ export function ReelsFeed({
               onActiveIndexChange={(i) => {
                 lastIndexRef.current[tab] = i;
                 if (tab === "for_you") forYouSeeded.current = true;
+                /*
+                  The ledger that makes "never show one video twice" true across
+                  opens. Recorded on BECOMING ACTIVE rather than on completion:
+                  the promise the owner made is about not being shown the same
+                  clip again, and a clip you swiped past after half a second was
+                  still shown to you — re-serving it next open is exactly the
+                  repetition being complained about.
+                */
+                const shown = items[i];
+                if (shown) markReelWatched(shown.id);
               }}
             />
           </motion.div>

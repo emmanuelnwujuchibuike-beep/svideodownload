@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { ReelsFeed } from "@/features/reels/reels-feed";
 import { getFeedItemById, getHomeFeed } from "@/lib/social/home-feed";
+import { newReelsSeed } from "@/lib/social/reels-session";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -60,9 +61,32 @@ export default async function ReelsPage({
     /* anon — reels are public discovery */
   }
 
+  /*
+    This open's reshuffle token (owner, 2026-08-11: "it should reshuffle every
+    open"). Minted per request — the page is `force-dynamic`, so a genuine
+    document request gets a genuinely new arrangement in the FIRST paint, with
+    no client round trip and nothing to swap in afterwards.
+
+    🔴 It is not sufficient on its own, and the reason is the whole trick:
+    reaching /reels from the tab bar is a CLIENT navigation, and Next's Router
+    Cache replays the RSC payload rather than re-running this component. So on
+    most opens this line does not execute at all and the seed below is last
+    open's seed. `ReelsFeed` detects exactly that — it sees a token it has
+    already rendered — and mints a fresh one client-side. Between them, every
+    open reshuffles; neither half does it alone.
+  */
+  const shuffleSeed = newReelsSeed();
+
   // Pull a wide first page of the Reels product's OWN feed (format='reel'
   // posts only). The Following tab is fetched client-side on demand.
-  const page = await getHomeFeed({ viewerId, sort: "for_you", offset: 0, limit: 24, format: "reel" });
+  const page = await getHomeFeed({
+    viewerId,
+    sort: "for_you",
+    offset: 0,
+    limit: 24,
+    format: "reel",
+    seed: shuffleSeed,
+  });
   let reels = page.items.filter((i) => i.mediaKind === "video");
 
   if (start) {
@@ -70,5 +94,12 @@ export default async function ReelsPage({
     if (seed) reels = [seed, ...reels.filter((r) => r.id !== seed.id)];
   }
 
-  return <ReelsFeed initialItems={reels} initialOffset={page.nextOffset} />;
+  return (
+    <ReelsFeed
+      initialItems={reels}
+      initialOffset={page.nextOffset}
+      initialSeed={shuffleSeed}
+      startId={start}
+    />
+  );
 }

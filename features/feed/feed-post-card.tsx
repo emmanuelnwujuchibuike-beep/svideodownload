@@ -564,8 +564,14 @@ function FeedPostCardImpl({
             onDoubleTapLike={() => {
               if (!liked) void react("like");
             }}
-            // FeedVideo renders the clip at its TRUE aspect ratio (measured from
-            // the video) — tall clips expand, short/wide ones show as they are.
+            // FeedVideo renders the clip at its TRUE aspect ratio — tall clips
+            // expand, short/wide ones show as they are. Handing it the stored
+            // dimensions means it knows that shape on the FIRST paint instead of
+            // reserving a 3:4 guess and correcting once the browser has parsed
+            // the file (owner: "it just only show the exact height of the video
+            // or image").
+            width={item.mediaWidth ?? undefined}
+            height={item.mediaHeight ?? undefined}
             className="w-full"
           />
           {/* Views/duration — the two corners FeedVideo's own mute + expand
@@ -592,7 +598,11 @@ function FeedPostCardImpl({
               if (!liked) void react("like");
             }}
             onExpand={() => open(item)}
-            className="max-h-[85vh] w-full"
+            // 80vh, matching FeedImage's own cap on the <img>. At 85vh the
+            // container was 5vh taller than the tallest image it could ever
+            // hold, so every tall photo sat in a band of blurred backdrop it did
+            // not need — the image version of the same "exact height" ask.
+            className="max-h-[80vh] w-full"
           />
           {item.viewsCount > 0 ? (
             <span className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
@@ -621,8 +631,12 @@ function FeedPostCardImpl({
         <button type="button" onClick={() => open(item)} className="block w-full text-left" aria-label="Open">
           <div className="relative mb-3 aspect-video overflow-hidden bg-neutral-900">
             {item.thumbnailUrl ? (
+              // No hover zoom (owner, 2026-08-11): the same "media stays still"
+              // rule as FeedVideo. A poster that grows under the pointer is the
+              // still-frame version of the movement being complained about, and
+              // this is the tile a video post falls back to.
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-300 hover:scale-105" />
+              <img src={item.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600/30 to-violet-600/30 text-white/40">
                 <Play className="h-10 w-10" />

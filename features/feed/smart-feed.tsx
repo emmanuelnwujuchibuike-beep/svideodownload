@@ -18,6 +18,7 @@ import { ImageOpenFallback } from "@/features/feed/image-open-fallback";
 import { FeedTopbarTabs } from "@/features/feed/feed-topbar-tabs";
 import { SparkCard } from "@/features/feed/spark-card";
 import { haptic } from "@/lib/motion/haptics";
+import { acceptFeedItems, dedupeFeedItems, mediaIdentity, seenFromItems } from "@/lib/social/feed-dedupe";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
 
 // The full-screen overlays are interaction-only — code-split so the entire reels
@@ -155,7 +156,19 @@ export function SmartFeed({
   const cacheRef = useRef<Partial<Record<HomeFeedSort, { items: FeedItem[]; nextOffset: number | null; seen: Set<string> }>> | null>(null);
   if (!cacheRef.current) {
     cacheRef.current = {
-      for_you: { items: balanceByKind(initialItems), nextOffset: initialNextOffset, seen: new Set(initialItems.map((i) => i.id)) },
+      /*
+        🔴 The SSR page is de-duplicated too, not just later pages.
+
+        Page 0 is assembled server-side from organic posts PLUS injected
+        reposts, so it can already contain the same video twice before any
+        merging happens — and this is a downloader, where "the same video" means
+        two different post ids far more often than it does anywhere else. See
+        lib/social/feed-dedupe.ts.
+      */
+      for_you: (() => {
+        const deduped = dedupeFeedItems(initialItems);
+        return { items: balanceByKind(deduped), nextOffset: initialNextOffset, seen: seenFromItems(deduped) };
+      })(),
     };
   }
   // Scroll position per tab, so switching back "continues from where it
@@ -192,7 +205,9 @@ export function SmartFeed({
     if (!snap) return;
     const restoredTabs: NonNullable<typeof cacheRef.current> = {};
     for (const [k, v] of Object.entries(snap.tabs) as [HomeFeedSort, { items: FeedItem[]; nextOffset: number | null }][]) {
-      restoredTabs[k] = { items: v.items, nextOffset: v.nextOffset, seen: new Set(v.items.map((i) => i.id)) };
+      // A restored snapshot was written by an older build that only tracked
+      // ids, so it is re-keyed on the media identity here rather than trusted.
+      restoredTabs[k] = { items: v.items, nextOffset: v.nextOffset, seen: seenFromItems(v.items) };
     }
     // Merge (not replace): keep the props-seeded fallback for any tab the
     // snapshot didn't happen to include.
@@ -331,11 +346,14 @@ export function SmartFeed({
         });
         const entry = cacheRef.current![s] ?? { items: [], nextOffset: null, seen: new Set<string>() };
         if (replace) {
-          entry.seen = new Set(data.items.map((i) => i.id));
-          entry.items = balanceByKind(data.items);
+          const deduped = dedupeFeedItems(data.items);
+          entry.seen = seenFromItems(deduped);
+          entry.items = balanceByKind(deduped);
         } else {
-          const fresh = data.items.filter((i) => !entry.seen.has(i.id));
-          fresh.forEach((i) => entry.seen.add(i.id));
+          // Filters on post id AND on media identity, so a repost of something
+          // already in the stream — or somebody else's upload of the same clip —
+          // no longer arrives as a second entry (owner, 2026-08-11).
+          const fresh = acceptFeedItems(data.items, entry.seen);
           // Balance only the new page, seeded with the last couple of already-
           // rendered items so the run-cap carries across the page boundary —
           // balancing the WHOLE accumulated list on every page load would
@@ -537,7 +555,10 @@ export function SmartFeed({
           query: { sort: sortRef.current, offset: 0, limit: PAGE },
         });
         const seen = cacheRef.current?.[sortRef.current]?.seen;
-        const fresh = data.items.filter((i) => !seen?.has(i.id)).length;
+        // Counted on the same identity the merge will use, or the "N new posts"
+        // pill promises items that then get de-duplicated away on tap — a pill
+        // that refreshes into nothing is worse than no pill.
+        const fresh = data.items.filter((i) => !seen?.has(i.id) && !seen?.has(mediaIdentity(i))).length;
         if (fresh > 0) setFreshCount((n) => Math.max(n, fresh));
       } catch {
         /* offline blip — the next return will retry */

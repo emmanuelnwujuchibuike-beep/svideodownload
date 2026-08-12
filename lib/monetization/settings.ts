@@ -317,6 +317,26 @@ const TTL_MS = 10_000;
  * A caller that must not confuse "nothing configured" with "could not read"
  * uses this; everything else keeps the simpler function below.
  */
+/*
+  The last AdSense publisher id this instance actually READ successfully.
+
+  Purely a degraded-path aid for `/ads.txt`. The settings cache has a TTL and is
+  dropped on write, so once it lapses a failed read leaves the route with nothing
+  to serve but a 503 — and a 503 is not a record. The publisher id, unlike the
+  rest of settings, is an identity that changes roughly never, so remembering the
+  last one seen costs nothing and means an outage that begins AFTER this instance
+  has served one request cannot take the file away.
+
+  Deliberately not part of `cache`: it must outlive the TTL and outlive
+  invalidation, and it is never used while a fresh read is available.
+*/
+let lastKnownPublisherId = "";
+
+/** The last successfully-read publisher id, or "" if this instance never read one. */
+export function lastKnownAdsensePublisherId(): string {
+  return lastKnownPublisherId;
+}
+
 export interface MonetizationRead {
   settings: MonetizationSettings;
   /** True when the stored settings could not be read and these are defaults. */
@@ -358,6 +378,7 @@ export async function readMonetizationSettings(): Promise<MonetizationRead> {
       : [];
     merged.monetagPlacements = normalizeMonetagPlacements(merged.monetagPlacements);
     cache = { at: Date.now(), value: merged };
+    if (merged.adsensePublisherId.trim()) lastKnownPublisherId = merged.adsensePublisherId.trim();
     return { settings: merged, degraded: false };
   } catch {
     return { settings: DEFAULT_MONETIZATION, degraded: true };

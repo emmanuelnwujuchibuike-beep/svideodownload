@@ -1,5 +1,8 @@
 import { buildAdsTxt } from "@/lib/monetization/ads-txt";
-import { readMonetizationSettings } from "@/lib/monetization/settings";
+import {
+  lastKnownAdsensePublisherId,
+  readMonetizationSettings,
+} from "@/lib/monetization/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,7 +103,15 @@ export async function GET() {
       may still know who the publisher is, and a correct file beats a correct
       error every time — the crawler is here to find a record, and we have one.
     */
-    const fallback = buildAdsTxt({ adsensePublisherId: FALLBACK_PUBLISHER_ID }).trim();
+    /*
+      Two sources, explicit first. The env var is a deliberate operator act and
+      is available on a cold instance; the remembered id is whatever this
+      instance last read successfully, which covers the far more common case of
+      a deployment that never set the env var but has served traffic today.
+    */
+    const fallback = buildAdsTxt({
+      adsensePublisherId: FALLBACK_PUBLISHER_ID || lastKnownAdsensePublisherId(),
+    }).trim();
     if (fallback) {
       return new Response(`${fallback}\n`, {
         status: 200,

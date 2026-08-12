@@ -9,19 +9,19 @@ import {
   type MotionValue } from "framer-motion";
 import {
   BadgeCheck,
-  Ban,
   BellOff,
   Bookmark,
   Calendar,
   Check,
   ChevronDown,
+  Compass,
   Download,
-  ExternalLink,
   EyeOff,
+  Layers,
   Maximize2,
   Minimize2,
+  OctagonAlert,
   PictureInPicture2,
-  Timer,
   Flag,
   FolderPlus,
   Gauge,
@@ -37,7 +37,8 @@ import {
   Play,
   Repeat2,
   Send as SendIcon,
-  Share2,
+  Share,
+  User,
   UserPlus,
   Users,
   UserX,
@@ -64,7 +65,16 @@ import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
 import { shouldFullBleed, viewportAspect } from "@/features/reels/viewer/fit";
 import { LivingPlayback } from "@/features/reels/viewer/living-playback";
-import { applyRate, DEFAULT_RATE, formatRate, getPlaybackRate, nextRate, setPlaybackRate } from "@/lib/media/engine/playback-rate";
+import {
+  applyRate,
+  DEFAULT_RATE,
+  formatRate,
+  getPlaybackRate,
+  nearestRate,
+  nextRate,
+  setPlaybackRate,
+  type PlaybackRate,
+} from "@/lib/media/engine/playback-rate";
 import { currentPolicySync, recordClipCompleted } from "@/lib/media/engine/signals";
 import { usePictureInPicture } from "@/features/reels/viewer/use-pip";
 import { usePinchZoom } from "@/features/reels/viewer/use-pinch-zoom";
@@ -79,6 +89,23 @@ import { Comments } from "@/features/social/comments";
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
+/*
+  🔴 The two sheets are DYNAMIC, and the reason is measured rather than stylistic.
+
+  /home reaches this deck through its own `dynamic()` import, so the deck is
+  already async — but a STATIC import of the sheet module got it hoisted into a
+  chunk /home loads eagerly, taking `/(app)/home/page` from 337.2 kB to 341 kB
+  and over `budget.test.ts`'s 340 kB ratchet. Nothing in the source looks wrong;
+  only a build and a measurement show it.
+
+  No `ssr: false` — `next/dynamic` with `ssr: false` has a standing history in
+  this project of never resolving (see the ⌘K navigation-engine note in memory).
+  Neither sheet renders anything until its `open` prop is true, so server-side
+  rendering costs nothing and the default is the safe one.
+*/
+const ReelMoreSheet = dynamic(() => import("@/features/feed/reel-sheets").then((m) => m.ReelMoreSheet));
+const ReelSendSheet = dynamic(() => import("@/features/feed/reel-sheets").then((m) => m.ReelSendSheet));
+
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { RepostComposer } from "@/features/social/repost-composer";
 import { RepostSheet } from "@/features/social/repost/repost-sheet";
@@ -98,6 +125,7 @@ import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { downloadPost } from "@/lib/media/download-post";
 import { getQualityPreference, setQualityPreference, type QualityPreference } from "@/lib/media/network-conditions";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
+import { suppressReel } from "@/lib/social/reels-session";
 import { streamHlsUrl, streamThumbnailUrl } from "@/lib/media/stream";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
@@ -218,6 +246,17 @@ const QUALITY_LABELS: Record<QualityPreference, string> = {
   high: "Highest quality",
 };
 const QUALITY_CYCLE: QualityPreference[] = ["auto", "data-saver", "balanced", "high"];
+
+/*
+  The four rungs the overflow sheet offers as one-tap segments.
+
+  The full ladder is six (`PLAYBACK_RATES`), and it stays six — the row's label
+  still cycles all of them. But six segments do not fit beside a label on a
+  360px phone without shrinking to a tap target nobody can hit, and 0.75× and
+  1.25× are the two nobody reaches for: the reason to change speed is "this is
+  slow" or "I want to hear this properly", and those are 1.5×/2× and 0.5×.
+*/
+const QUICK_RATES = [0.5, 1, 1.5, 2] as const;
 
 /**
  * The badge on the smart comment preview.
@@ -1166,11 +1205,33 @@ function ReelCard({
       toast("Couldn't mute.", "error");
     }
   };
-  const hidePost = () => {
+  /*
+    ── Hide / Not interested, which used to be the same button twice ──────────
+
+    Both rows called this one handler, and this one handler showed a toast and
+    closed the deck. Nothing was recorded anywhere, so "we'll show less like
+    this" was not true in any sense — the identical reel was back in the deck on
+    the next open, which is precisely the repetition the reshuffle work above is
+    about.
+
+    They now write to the reels suppression ledger, which every fetch path
+    filters against (`acceptPage` in reels-feed). Client-side and per-device on
+    purpose: it has to be readable synchronously while building a deck, and a
+    round trip to say "not this one" would either block the deck or be
+    unreliable exactly when the network is bad.
+
+    The two rows stay distinct because they mean different things to the person
+    tapping them, and the reference sheet gives them different weight — one is
+    neutral, one is red.
+  */
+  const suppress = (message: string) => {
     setMoreOpen(false);
-    toast("We'll show less like this.", "info");
+    suppressReel(item.id);
+    toast(message, "info");
     onClose();
   };
+  const hidePost = () => suppress("Hidden. You won't see this again.");
+  const notInterested = () => suppress("Got it — we'll show you less like this.");
 
   // Manual quality override (spec: automatic selection is the default, but let
   // the viewer force it). A cycle rather than a per-rendition picker — the
@@ -1193,14 +1254,28 @@ function ReelCard({
     applyRate(videoEl, rate);
   }, [videoEl, rate, srcReady, slide]);
 
-  const cycleSpeed = () => {
-    const next = nextRate(rate);
+  /*
+    Applying a rate, without the sheet vanishing.
+
+    The old row cycled AND closed AND toasted, which made "try 1.5×, decide it
+    is too fast, go back" a six-tap round trip through a sheet that kept
+    dismissing itself. Picking a speed is a setting, and the native pattern for
+    a setting is that the control updates in place and stays where you can reach
+    it — the segmented thumb sliding to the new rung IS the confirmation, so the
+    toast would be telling you what you can already see.
+  */
+  const applySpeed = (next: PlaybackRate) => {
     setRate(next);
     setPlaybackRate(next);
     applyRate(video.current, next);
-    setMoreOpen(false);
-    toast(`Playback speed: ${formatRate(next)}`, "info");
   };
+  /** A segment tap — direct selection, sheet stays open, no toast. */
+  const pickSpeed = (next: number) => applySpeed(nearestRate(next));
+  /** Is the current rate one of the four the sheet shows as segments? */
+  const onQuickLadder = (QUICK_RATES as readonly number[]).includes(rate);
+  /** The label — still walks the FULL six-rung ladder, including the two rungs
+   *  that have no segment of their own. */
+  const cycleSpeed = () => applySpeed(nextRate(rate));
 
   const cycleQuality = () => {
     const order = QUALITY_CYCLE;
@@ -2481,163 +2556,71 @@ function ReelCard({
           )
         : null}
 
-      {/* "More" menu — the decluttered overflow: download, edit, follow, mute.
-          Portaled to <body> so it sits above the bottom nav. */}
-      {mounted && moreOpen
-        ? createPortal(
-            <div className="fixed inset-0 z-[95] flex items-end justify-center">
-              <motion.button
-                type="button"
-                aria-label="Close"
-                onClick={() => setMoreOpen(false)}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/60 backdrop-blur-md"
-              />
-              <motion.div
-                role="menu"
-                initial={{ y: 24, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={springs.sheet}
-                className="relative m-2 w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur-2xl"
-              >
-                <div className="mx-auto mt-2.5 mb-1 h-1 w-9 rounded-full bg-border" />
-                <div className="max-h-[70vh] overflow-y-auto p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {/* Share & link */}
-                  <MoreGroup>
-                    <MoreItem icon={Share2} label="Share" onClick={share} />
-                    <MoreItem icon={Link2} label="Copy link" onClick={copyLink} />
-                    <MoreItem icon={ExternalLink} label="Open in browser" onClick={openInBrowser} />
-                    <MoreItem icon={Info} label="View post details" onClick={viewDetails} />
-                  </MoreGroup>
+      {/* Both sheets are DYNAMIC — see reel-sheets.tsx for the measured
+          reason (they took /home 3.8 kB over its first-load budget while only
+          ever appearing on a tap). */}
+      <ReelMoreSheet
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        isOwner={!!item.isOwner}
+        publisherHandle={item.publisher.handle}
+        onShare={share}
+        onCopyLink={copyLink}
+        onOpenInBrowser={openInBrowser}
+        onViewDetails={viewDetails}
+        onAddToCollection={() => {
+          setMoreOpen(false);
+          setPickerOpen(true);
+        }}
+        onDownload={() => {
+          setMoreOpen(false);
+          void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined });
+        }}
+        onEditPost={() => {
+          setMoreOpen(false);
+          setEditOpen(true);
+        }}
+        following={following}
+        onToggleFollow={() => void toggleFollow()}
+        onMuteCreator={muteCreator}
+        native={native}
+        muted={mutedAuto}
+        onToggleMute={() => {
+          toggleMute();
+          setMoreOpen(false);
+        }}
+        rate={rate}
+        quickRates={QUICK_RATES}
+        formatRate={formatRate}
+        onPickRate={pickSpeed}
+        onCycleRate={cycleSpeed}
+        pipSupported={pip.supported}
+        pipActive={pip.active}
+        onTogglePip={() => {
+          setMoreOpen(false);
+          pip.toggle();
+        }}
+        qualityLabel={hlsUrl ? QUALITY_LABELS[qualityPref] : null}
+        onCycleQuality={cycleQuality}
+        onHidePost={hidePost}
+        onNotInterested={notInterested}
+        onReport={openReport}
+        onBlock={blockUser}
+      />
 
-                  {/* Organize & creator */}
-                  <MoreGroup>
-                    <MoreItem icon={FolderPlus} label="Add to collection" onClick={() => { setMoreOpen(false); setPickerOpen(true); }} />
-                    <MoreItem icon={Download} label="Download" onClick={() => { setMoreOpen(false); void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined }); }} />
-                    {item.isOwner ? (
-                      <MoreItem icon={Pencil} label="Edit post" onClick={() => { setMoreOpen(false); setEditOpen(true); }} />
-                    ) : (
-                      <>
-                        <MoreItem icon={following ? Check : UserPlus} label={following ? "Following creator" : "Follow creator"} onClick={() => void toggleFollow()} />
-                        <MoreItem icon={BellOff} label="Mute creator" onClick={muteCreator} />
-                      </>
-                    )}
-                    {native ? <MoreItem icon={mutedAuto ? VolumeX : Volume2} label={mutedAuto ? "Unmute audio" : "Mute audio"} onClick={() => { toggleMute(); setMoreOpen(false); }} /> : null}
-                    {/* Speed sits beside quality: both are "how this plays",
-                        both cycle a fixed ladder, and pairing them keeps the
-                        sheet from growing a third playback group. */}
-                    {native ? <MoreItem icon={Timer} label={`Playback speed: ${formatRate(rate)}`} onClick={cycleSpeed} /> : null}
-                    {/* Rendered only where PiP genuinely works — see use-pip.ts
-                        for why the ELEMENT is asked, not just the browser. */}
-                    {native && pip.supported ? (
-                      <MoreItem
-                        icon={PictureInPicture2}
-                        label={pip.active ? "Exit picture-in-picture" : "Picture-in-picture"}
-                        onClick={() => {
-                          setMoreOpen(false);
-                          pip.toggle();
-                        }}
-                      />
-                    ) : null}
-                    {hlsUrl ? <MoreItem icon={Gauge} label={`Video quality: ${QUALITY_LABELS[qualityPref]}`} onClick={cycleQuality} /> : null}
-                  </MoreGroup>
-
-                  {/* Feedback */}
-                  {!item.isOwner ? (
-                    <MoreGroup>
-                      <MoreItem icon={EyeOff} label="Hide this post" onClick={hidePost} />
-                      <MoreItem icon={Ban} label="Not interested" onClick={hidePost} />
-                    </MoreGroup>
-                  ) : null}
-
-                  {/* Danger */}
-                  {!item.isOwner ? (
-                    <MoreGroup>
-                      <MoreItem icon={Flag} label="Report post" onClick={openReport} danger />
-                      <MoreItem icon={UserX} label={`Block @${item.publisher.handle}`} onClick={blockUser} danger />
-                    </MoreGroup>
-                  ) : null}
-                </div>
-
-                <div className="p-1.5 pt-0">
-                  <button type="button" onClick={() => setMoreOpen(false)} className="w-full rounded-2xl bg-secondary/70 py-3 text-sm font-semibold text-foreground transition hover:bg-secondary active:scale-[0.99]">
-                    Cancel
-                  </button>
-                </div>
-              </motion.div>
-            </div>,
-            document.body,
-          )
-        : null}
-
-      {/*
-        ── Send's two-option chooser (owner, 2026-08-11) ─────────────────────
-        "when a user click the send button two options show."
-
-        Two rows and nothing else. It is a fork, not a menu: adding a third thing
-        here would rebuild the clutter that merging Repost into Send removed.
-
-        Each row states its AUDIENCE, because that is the only difference between
-        them and it is the thing a viewer is deciding. "Repost" alone does not
-        say "your followers will see this", and that is exactly the surprise
-        worth avoiding on a public action.
-
-        It reuses `MoreSheet`'s shell so it inherits the sheet's existing focus
-        trap, backdrop dismissal, safe-area padding and reduced-motion handling
-        rather than growing a second, subtly different sheet.
-      */}
-      {mounted && sendChooserOpen
-        ? createPortal(
-            <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center">
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={() => setSendChooserOpen(false)}
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              />
-              <motion.div
-                initial={{ y: 24, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={springs.bounce}
-                role="dialog"
-                aria-modal="true"
-                aria-label="Send or repost"
-                className="relative m-2 w-full max-w-md overflow-hidden rounded-3xl border border-border/60 bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur-2xl"
-              >
-                <div className="p-2">
-                  <MoreGroup>
-                    <MoreItem
-                      icon={SendIcon}
-                      label="Send to friends"
-                      onClick={() => {
-                        setSendChooserOpen(false);
-                        setShareOpen(true);
-                      }}
-                    />
-                    <MoreItem
-                      icon={Repeat2}
-                      label={repostState.reposted ? "Manage your repost" : "Repost"}
-                      onClick={() => {
-                        setSendChooserOpen(false);
-                        repost();
-                      }}
-                    />
-                  </MoreGroup>
-                  <button
-                    type="button"
-                    onClick={() => setSendChooserOpen(false)}
-                    className="mt-1.5 w-full rounded-2xl bg-secondary/40 px-4 py-3 text-[15px] font-semibold transition hover:bg-secondary/70"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </motion.div>
-            </div>,
-            document.body,
-          )
-        : null}
+      <ReelSendSheet
+        open={sendChooserOpen}
+        onClose={() => setSendChooserOpen(false)}
+        reposted={repostState.reposted}
+        onSendToFriends={() => {
+          setSendChooserOpen(false);
+          setShareOpen(true);
+        }}
+        onRepost={() => {
+          setSendChooserOpen(false);
+          repost();
+        }}
+      />
 
       {/* Save-to-collection picker */}
       <CollectionPicker postId={item.id} open={pickerOpen} onClose={() => setPickerOpen(false)} />
@@ -2753,28 +2736,6 @@ function AlbumNeighborPreview({
         className={cn("absolute inset-0 h-full w-full", bleed ? "object-cover" : "object-contain")}
       />
     </motion.div>
-  );
-}
-
-/** A visually grouped block of overflow rows, separated by a subtle divider. */
-function MoreGroup({ children }: { children: React.ReactNode }) {
-  return <div className="mb-1.5 overflow-hidden rounded-2xl bg-secondary/30 last:mb-0">{children}</div>;
-}
-
-function MoreItem({ icon: Icon, label, onClick, danger }: { icon: typeof Heart; label: string; onClick: () => void; danger?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      role="menuitem"
-      className={cn(
-        "flex w-full items-center gap-3.5 px-4 py-3 text-left text-[15px] font-medium transition first:rounded-t-2xl last:rounded-b-2xl active:scale-[0.99]",
-        danger ? "text-red-500 hover:bg-red-500/10" : "text-foreground hover:bg-secondary/70",
-      )}
-    >
-      <Icon className="h-5 w-5 shrink-0 opacity-90" strokeWidth={1.9} />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-    </button>
   );
 }
 

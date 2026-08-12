@@ -396,11 +396,33 @@ export function StoryViewer({
       <button type="button" aria-label="Previous" onClick={prev} className="absolute inset-y-0 left-0 z-10 w-1/3" />
       <button type="button" aria-label="Next" onClick={next} className="absolute inset-y-0 left-1/3 right-0 z-10" />
 
-      {/* Full-screen media — edge-to-edge (Instagram/Snapchat style), behind the
-          tap zones and chrome. object-cover fills the whole screen so a story
-          reaches every edge (owner, 2026-07-21) instead of sitting in a centered
-          rounded card with black margins. */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+      {/*
+        ── The stage (owner, 2026-08-11) ─────────────────────────────────────
+        "make the story viewer to show like history viewer and not go to the
+         safe area, just clean, high quality video that is full screen and
+         doesnt crop out any part of video or image."
+
+        Two changes, and the first is the whole complaint:
+
+        🔴 `object-cover` CROPS. It scales the media until it fills the box and
+        throws away whatever hangs over the edge — so a 4:5 photo or a 16:9 clip
+        opened in a 19.5:9 phone lost its top and bottom, permanently and
+        silently. It was chosen (2026-07-21) to make stories reach every edge,
+        which it does, but "reaches every edge" and "shows the whole frame" are
+        different things and only one of them was asked for. `object-contain`
+        scales to FIT: the whole frame is always visible, letterboxed on black,
+        which is exactly what the history viewer (`download-player`) does and
+        why it was named as the reference.
+
+        🔴 The stage is inset by the safe area, which is where this DIFFERS from
+        the history viewer. That one deliberately extends under the notch; this
+        one must not, so a face at the top of a portrait story is not sitting
+        behind the status bar and the home indicator is not resting on the
+        image. The chrome above already positions itself with the same variable,
+        so the two now agree instead of the media running underneath its own
+        progress bar.
+      */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center pb-[env(safe-area-inset-bottom)] pt-[var(--frenz-safe-top)]">
         {story.mediaKind === "video" ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video
@@ -418,11 +440,11 @@ export function StoryViewer({
               if (v.duration) setPct((v.currentTime / v.duration) * 100);
             }}
             onEnded={next}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
           />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={`${gi}-${si}`} src={story.mediaUrl} alt="" className="h-full w-full object-cover" />
+          <img key={`${gi}-${si}`} src={story.mediaUrl} alt="" className="h-full w-full object-contain" />
         )}
       </div>
       {story.caption ? (

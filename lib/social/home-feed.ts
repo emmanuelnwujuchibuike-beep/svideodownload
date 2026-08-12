@@ -427,8 +427,21 @@ export async function getFeedItemById(id: string, viewerId: string | null): Prom
   }
 }
 
-/** Natural pixel sizes for image posts (best-effort — empty before migration 0028). */
-async function imageDimensions(
+/**
+ * Natural pixel sizes for a post's media (best-effort — empty before 0028).
+ *
+ * 🔴 This used to be called only for IMAGES, and that omission is what made the
+ * home feed "stretch too much length" (owner, 2026-08-11). A video card cannot
+ * know its own shape until the browser has parsed the file's metadata, which
+ * happens late — the source is attached only as the card nears the viewport —
+ * so until then `FeedVideo` reserved a 3:4 box. A 16:9 clip in a 3:4 box is
+ * `object-contain`ed with a thick black bar above AND below it, and the card is
+ * a third taller than the video it contains. Every landscape download in the
+ * feed looked like that.
+ *
+ * The column has always held the answer for videos too; nothing asked for it.
+ */
+async function mediaDimensions(
   db: ReturnType<typeof createAdminClient>,
   ids: string[],
 ): Promise<Map<string, { w: number; h: number }>> {
@@ -502,22 +515,73 @@ export async function getHomeFeed(opts: {
    *  mints it and passes it back with each page. Omit for a stable order
    *  (SSR of a non-feed surface, tests, the reels rail). */
   seed?: string;
+  /**
+   * Posts this viewer has already watched on this device, to be skipped.
+   *
+   * A PREFERENCE, not a filter: if honouring it would leave the page nearly
+   * empty it is dropped for that request (see `EXCLUDE_MIN_KEPT`). Reels is the
+   * caller — "never show one video twice every open" — and it must not be able
+   * to empty its own deck on a small catalogue.
+   */
+  excludeIds?: string[];
 }): Promise<FeedPage> {
   const limit = opts.limit ?? 8;
   const offset = opts.offset ?? 0;
   const sort = opts.sort ?? "for_you";
   const format = opts.format ?? "feed";
-  // Only "for_you" is reshuffled. "recent"/"trending" mean a specific,
-  // promised order — quietly jittering those would just make them wrong.
-  const seed = sort === "for_you" ? opts.seed : undefined;
+  /*
+    Which sorts reshuffle.
+
+    "for_you" always has. Reels' "following" now does too, and the distinction
+    is the SURFACE rather than the sort name: a following FEED is a timeline,
+    where chronological order is the promise being made, while a following
+    REELS deck is a full-screen player you swipe — nobody reads a reels deck as
+    "these are in the order they were posted", and freezing its order is what
+    made reopening it feel like the app had not noticed you left.
+
+    "recent" and "trending" never reshuffle on any surface: those names describe
+    a specific order, and jittering them would simply make the label a lie.
+  */
+  const reshuffles = sort === "for_you" || (sort === "following" && format === "reel");
+  const seed = reshuffles ? opts.seed : undefined;
+  const exclude = opts.excludeIds?.length ? [...new Set(opts.excludeIds)] : undefined;
   if (!hasSupabase) return { items: [], nextOffset: null };
   // Cached briefly per (viewer, sort, format, page) so SSR seeding + client
   // revalidation stay cheap. Feed freshness within 20s is fine.
   // `seed` MUST be part of the key: it changes the returned ORDER, so sharing
   // one cache entry across seeds would hand a refresh the previous refresh's
   // arrangement (and, worse, mix orders across pages mid-scroll).
-  const key = `homefeed:${opts.viewerId ?? "anon"}:${sort}:${format}:${offset}:${limit}:${seed ?? "-"}`;
-  return getCached(key, 20, () => loadHomeFeed(opts.viewerId, sort, offset, limit, format, seed));
+  //
+  // The exclusion list is part of the key for the same reason — it changes WHICH
+  // items come back. It is hashed rather than inlined because it is up to 80
+  // UUIDs and a 3KB cache key is a cache key nobody can read in a log; the ids
+  // are already sorted before hashing so two requests differing only in the
+  // order they listed the same ids still share one entry.
+  const excludeKey = exclude ? fnv1a([...exclude].sort().join(",")) : "-";
+  const key = `homefeed:${opts.viewerId ?? "anon"}:${sort}:${format}:${offset}:${limit}:${seed ?? "-"}:${excludeKey}`;
+  return getCached(key, 20, () => loadHomeFeed(opts.viewerId, sort, offset, limit, format, seed, exclude));
+}
+
+/**
+ * Below this many surviving posts, an exclusion list is ignored for that
+ * request.
+ *
+ * 🔴 The failure this prevents: a viewer who has watched most of a young
+ * catalogue asks for reels, every candidate is on their watched list, and the
+ * deck comes back empty — which reads as "there are no reels", not as "you have
+ * seen these". A repeat is a mild disappointment; an empty full-screen player
+ * is a broken feature.
+ */
+const EXCLUDE_MIN_KEPT = 4;
+
+/** FNV-1a over a string, hex. Used only to keep cache keys short. */
+function fnv1a(s: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
 }
 
 async function loadHomeFeed(
@@ -527,6 +591,7 @@ async function loadHomeFeed(
   limit: number,
   format: ContentFormat,
   seed?: string,
+  excludeIds?: string[],
 ): Promise<FeedPage> {
   try {
     const db = createAdminClient();
@@ -559,7 +624,17 @@ async function loadHomeFeed(
     // plain-order sorts (following/recent/trending) never reshuffle, so their
     // cheaper grows-with-offset over-fetch stays correct.
     const RANKED_WINDOW = 400;
-    const want = sort === "for_you" ? RANKED_WINDOW : (offset + limit) * 3 + limit;
+    /*
+      A RESHUFFLED sort needs the fixed window for exactly the reason spelled out
+      above, so this tracks "does the order depend on a seed", not "is this
+      for_you". Reels' seeded "following" deck was the case that made the
+      difference matter: with the grows-with-offset window it would have re-ranked
+      a larger candidate set on every page and started skipping and repeating
+      clips mid-scroll — the precise bug the fixed window exists to prevent, in a
+      new sort that had never needed it before.
+    */
+    const fixedWindow = sort === "for_you" || seed !== undefined;
+    const want = fixedWindow ? RANKED_WINDOW : (offset + limit) * 3 + limit;
     let q = db
       .from("posts")
       .select(SELECT)
@@ -605,6 +680,19 @@ async function loadHomeFeed(
         rows = rows.filter((r) => !r.category || !muted.has(r.category as Category));
       }
       rows = rankForYou(rows, new Set(followingIds), prefs ?? undefined, seed);
+    } else if (seed) {
+      /*
+        A seeded sort that is not "for_you" — today that is only the reels
+        Following deck.
+
+        A pure ORDER shuffle, not `rankForYou`. Following has no ranking model
+        and should not grow one here: everyone in this list was chosen by the
+        viewer, so scoring them against each other would quietly decide which of
+        the people you follow you see, which is not a decision this function is
+        entitled to make. Reordering is the whole ask; ranking would be a
+        different feature wearing its clothes.
+      */
+      rows = [...rows].sort((a, b) => seededUnit(seed, a.id) - seededUnit(seed, b.id));
     }
 
     const publisherIds = [...new Set(rows.map((r) => r.publisher_id))];
@@ -719,8 +807,30 @@ async function loadHomeFeed(
       });
     }
 
-    const items = kept.slice(offset, offset + limit);
-    const nextOffset = kept.length > offset + limit ? offset + limit : null;
+    /*
+      "Already watched" is applied HERE — after ranking, before pagination.
+
+      Not in the SQL `WHERE`: the exclusion is conditional (see
+      EXCLUDE_MIN_KEPT), and a query cannot decide to un-apply its own filter
+      after seeing how little it left. Doing it in memory means the fallback is
+      a two-line branch on a list already in hand rather than a second round
+      trip. The candidate window is bounded at 400 rows, so the cost is a set
+      lookup per row.
+
+      It also has to run against `kept` rather than against `rows`, so that
+      offsets stay meaningful: the client pages by offset into whatever this
+      returns, and filtering after the slice would hand back short pages and
+      leave `nextOffset` pointing at positions that no longer exist.
+    */
+    let visible = kept;
+    if (excludeIds?.length) {
+      const skip = new Set(excludeIds);
+      const unseen = kept.filter((i) => !skip.has(i.id));
+      if (unseen.length >= EXCLUDE_MIN_KEPT || unseen.length === kept.length) visible = unseen;
+    }
+
+    const items = visible.slice(offset, offset + limit);
+    const nextOffset = visible.length > offset + limit ? offset + limit : null;
 
     // Flag which of the shown posts carry a poll, so only those cards fetch +
     // render it (best-effort — the polls table may not be migrated yet).
@@ -771,11 +881,20 @@ async function loadHomeFeed(
         it.publisherHasStory = storyAuthors.has(it.publisher.id);
       }
 
-      // Image dimensions for the feed photo's next/image (best-effort — before
-      // migration 0028 this no-ops and the photo falls back to a plain <img>).
-      const imageIds = items.filter((i) => i.mediaKind === "image").map((i) => i.id);
-      if (imageIds.length) {
-        const dims = await imageDimensions(db, imageIds);
+      /*
+        Media dimensions — for VIDEOS as well as images (owner, 2026-08-11:
+        "it just only show the exact height of the video or image").
+
+        For an image this feeds next/image. For a video it is what lets the card
+        reserve the clip's TRUE shape on the very first paint instead of guessing
+        3:4 and correcting after `loadedmetadata` — which both left landscape
+        clips boxed in black and moved the page under the reader when the
+        correction landed. Best-effort throughout: a post with no stored
+        dimensions behaves exactly as before.
+      */
+      const sizedIds = items.filter((i) => i.mediaKind === "image" || i.mediaKind === "video").map((i) => i.id);
+      if (sizedIds.length) {
+        const dims = await mediaDimensions(db, sizedIds);
         for (const it of items) {
           const d = dims.get(it.id);
           if (d) {
@@ -1096,7 +1215,9 @@ async function surfaceFollowedReposts(
   const followingSet = new Set(followingIds);
 
   const ids = rows.map((r) => r.id);
-  const imageIds = rows.filter((r) => r.media_kind === "image").map((r) => r.id);
+  // Videos as well as images — a surfaced repost renders through the same feed
+  // card, so it needs the same exact-height treatment (see `mediaDimensions`).
+  const sizedIds = rows.filter((r) => r.media_kind === "image" || r.media_kind === "video").map((r) => r.id);
   const streamIds = rows.filter((r) => r.media_kind === "video" && r.stream_uid).map((r) => r.id);
   const [badges, counts, reposted, pollSet, dims, streamStat, pulses] = await Promise.all([
     followedReposters(ids, followingIds, viewer),
@@ -1110,7 +1231,7 @@ async function surfaceFollowedReposts(
         return new Set<string>();
       }
     })(),
-    imageDimensions(db, imageIds),
+    mediaDimensions(db, sizedIds),
     streamStatus(db, streamIds),
     // Feature 15 Part 3 — see the note at the other attach site above.
     pulseActivityForPosts(ids, followingIds, viewerId),

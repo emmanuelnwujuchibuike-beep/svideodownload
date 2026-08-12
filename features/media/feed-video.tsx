@@ -25,6 +25,21 @@ const TAP_MOVE_TOLERANCE = 18;
  * Press-and-hold pauses while held (and never opens). A mute toggle is always
  * reachable. Cloudflare Stream items fall back to the Stream player.
  */
+/**
+ * A width/height pair as a usable aspect ratio, or null if it is not one.
+ *
+ * Clamped rather than trusted: the tallest a feed card goes is a full 9:16 and
+ * the widest is 16:9. Beyond those an ultra-tall or ultra-wide source would
+ * either take over the entire scroll or become a letterboxed sliver, and the
+ * stored numbers come from an upload pipeline and a backfill — a 0, a NaN or a
+ * transposed pair must degrade to "measure it yourself", never to a card of
+ * absurd height.
+ */
+function clampRatio(w?: number | null, h?: number | null): number | null {
+  if (!w || !h || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  return Math.min(16 / 9, Math.max(9 / 16, w / h));
+}
+
 export function FeedVideo({
   src,
   streamUid,
@@ -35,7 +50,22 @@ export function FeedVideo({
   postId,
   onExpand,
   onDoubleTapLike,
+  width,
+  height,
 }: {
+  /**
+   * The clip's natural pixel size, when the server knows it (`posts.media_width`
+   * / `media_height`).
+   *
+   * 🔴 Supplying this is what makes the card the EXACT height of the video from
+   * the first paint. Without it the box has to guess until `loadedmetadata`
+   * fires — and that only happens once the card is near the viewport, so a
+   * landscape clip spent its whole time off-screen, and a moment on-screen, in a
+   * 3:4 box with black bars top and bottom. Optional, because older posts have
+   * no stored dimensions; those still measure themselves as before.
+   */
+  width?: number | null;
+  height?: number | null;
   src?: string | null;
   streamUid?: string | null;
   /** Stream encode confirmed COMPLETE — before that, prefer the MP4 (plays instantly). */
@@ -72,9 +102,13 @@ export function FeedVideo({
   const [shouldLoad, setShouldLoad] = useState(false);
   // The card shows the video at its TRUE aspect ratio — nothing is ever
   // cropped. Tall clips expand toward full 9:16; short/wide clips render as
-  // they are (letterboxed only past the clamps). Measured from the video
-  // itself on loadedmetadata; 3:4 reserves space until then.
-  const [ratio, setRatio] = useState<number | null>(null);
+  // they are (letterboxed only past the clamps).
+  //
+  // Seeded from the SERVER's stored dimensions when they exist, so the box is
+  // the right shape before a single byte of video is fetched; measured from the
+  // element on `loadedmetadata` otherwise. Same clamp on both paths, so the two
+  // cannot disagree and resize the card for no reason.
+  const [ratio, setRatio] = useState<number | null>(() => clampRatio(width, height));
   const inViewRef = useRef(false);
   const readyRef = useRef(false);
 
@@ -274,19 +308,28 @@ export function FeedVideo({
         muted
         playsInline
         preload="metadata"
-        // Subtle press feedback on the clip itself (Part 10's "lift on
-        // touch" ask) — safe here because the mute/expand buttons below are
-        // DOM siblings, not descendants, so their own taps never trigger
-        // this :active state; a plain <video> has no framer-motion inline
-        // transform to conflict with either (unlike the card's outer
-        // motion.article, where whileTap would double up with every nested
-        // button's own press animation — see [[frenz-motion-icon-system]]).
-        className="h-full w-full touch-pan-y object-contain transition-transform duration-150 active:scale-[0.985] lg:h-auto lg:max-h-[82vh] lg:w-auto"
+        /*
+          🔴 NO press or hover transform on the clip (owner, 2026-08-11: "like
+          videos be fixed in position even if they were press and hold, to avoid
+          movement of the video during press and hold or hover").
+
+          It used to carry `active:scale-[0.985]`, added as generic "lift on
+          touch" press feedback. That is the right instinct for a BUTTON and the
+          wrong one here, because on this element press-and-hold is a real,
+          sustained gesture — it pauses playback — so the scale was not a
+          momentary tap flash: the video shrank and SAT there, visibly smaller,
+          for as long as a finger rested on it. Playing video is the one thing on
+          the page whose stillness is load-bearing, and the pause indicator
+          already gives the gesture unambiguous feedback.
+        */
+        className="h-full w-full touch-pan-y object-contain lg:h-auto lg:max-h-[82vh] lg:w-auto"
         onLoadedMetadata={() => {
           const v = video.current;
           if (!v || !v.videoWidth || !v.videoHeight) return;
           // Exact ratio, clamped: tallest a card goes is full 9:16, widest 16:9.
-          setRatio(Math.min(16 / 9, Math.max(9 / 16, v.videoWidth / v.videoHeight)));
+          // The element is the authority — a stored dimension can be stale or
+          // wrong, and by now we have the real thing.
+          setRatio(clampRatio(v.videoWidth, v.videoHeight));
           // Resume where this post's video last stopped (tab switch, viewer
           // close, remount) — the feed never "restarts from the top".
           const resumeAt = getPlaybackPosition(postId);

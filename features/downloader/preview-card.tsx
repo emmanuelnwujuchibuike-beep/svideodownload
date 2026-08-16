@@ -19,17 +19,18 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 
 import { BatchAdGate, type BatchAuthorization } from "@/features/downloader/batch-ad-gate";
 import { startDownload as enqueueDownload } from "@/features/downloads/manager";
 import { ResultAd } from "@/features/monetization/result-ad";
+import { RewardConsentSheet } from "@/features/monetization/reward-consent-sheet";
 import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
-import { RewardSessionClientError, useRewardSession, type RewardSessionItem } from "@/features/monetization/use-reward-session";
+import { useRewardFlow } from "@/features/monetization/use-reward-flow";
+import type { RewardSessionItem } from "@/features/monetization/use-reward-session";
 import { rewardAdsFor, type RewardAd } from "@/lib/monetization/reward-policy";
 import { useInterstitialConfig } from "@/features/monetization/use-interstitial-skip";
 import { useShowAds } from "@/features/monetization/use-show-ads";
-import { toast } from "@/features/ui/toast";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes, formatCompactNumber, formatDuration } from "@/lib/utils";
@@ -287,16 +288,25 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const [gate, setGate] = useState<{ formatId: string; kind: MediaKind } | null>(null);
   const [queue, setQueue] = useState<RewardAd[]>([]);
   const [totalAds, setTotalAds] = useState(0);
-  const { start: startReward, complete: completeReward } = useRewardSession();
   /*
-    A server-side reward session (Part 9), opened in parallel with the ad UI —
-    by the time a real ad has played to its unlock point (seconds), this has
-    long since resolved. Scoped to VIDEO only: this spec's "HD Download" is
-    the video top-tier/size-gated ad, which is what gets the hardened session
-    + single-use redemption URL. The pre-existing image/audio top-tier ad (a
-    separate, shorter feature from an earlier request) is untouched.
+    Real GPT rewarded ad for VIDEO downloads (owner, 2026-08-16 GPT spec) —
+    replaces the old admin-video/timer `RewardedAdGate` path for video only.
+    `onGranted`'s `items[0]` is the server-REDEEMED item (Parts 11-12): its
+    `formatId`/`kind` are what the session actually stored, not necessarily
+    identical in value to what was requested, but always THE authority —
+    using it here (rather than the locally-captured `formatId`/`kind`) is
+    what keeps this consistent with what `/api/download` will itself enforce.
   */
-  const rewardHdStartRef = useRef<ReturnType<typeof startReward> | null>(null);
+  const onDownloadUnlockGranted = useCallback(
+    (items: RewardSessionItem[], rewardSessionId: string) => {
+      const item = items[0];
+      if (!item) return;
+      const directUrl = `/api/download?rewardToken=${encodeURIComponent(rewardSessionId)}&itemIndex=0&t=${crypto.randomUUID()}`;
+      onDownload(item.formatId, item.kind, { directUrl });
+    },
+    [onDownload],
+  );
+  const downloadUnlock = useRewardFlow("DOWNLOAD_UNLOCK", onDownloadUnlockGranted);
   const startDownload = (formatId: string, kind: MediaKind) => {
     const fmt = formats.find((f) => f.formatId === formatId && f.kind === kind);
     const ads = rewardAdsFor({
@@ -307,10 +317,10 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       tierConfig,
     });
     if (ads.length > 0) {
-      rewardHdStartRef.current =
-        kind === "video"
-          ? startReward("hd", [{ url: metadata.sourceUrl, formatId, kind, title: metadata.title }])
-          : null;
+      if (kind === "video") {
+        downloadUnlock.open([{ url: metadata.sourceUrl, formatId, kind, title: metadata.title }]);
+        return;
+      }
       setQueue(ads);
       setTotalAds(ads.length);
       setGate({ formatId, kind });
@@ -802,6 +812,10 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       step={totalAds - queue.length + 1}
       totalSteps={totalAds}
       onReward={() => {
+        // VIDEO no longer reaches this gate at all — see `downloadUnlock`
+        // (a real GPT reward flow) above. Only image/audio top-tier ads
+        // still use this admin-video/timer mechanism (a separate, earlier,
+        // out-of-scope feature).
         const rest = queue.slice(1);
         setQueue(rest);
         // Only the LAST ad releases the download. Anything else would hand over
@@ -809,32 +823,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         if (rest.length === 0) {
           const g = gate;
           setGate(null);
-          if (!g) return;
-          const startPromise = rewardHdStartRef.current;
-          rewardHdStartRef.current = null;
-          if (g.kind === "video" && startPromise) {
-            // Confirm the reward server-side BEFORE handing over a download
-            // URL (Part 10-11) — the plain formatId is never trusted for a
-            // gated video download once this session exists.
-            void (async () => {
-              try {
-                const session = await startPromise;
-                await completeReward("hd", session.rewardSessionId);
-                const directUrl = `/api/download?rewardToken=${encodeURIComponent(session.rewardSessionId)}&itemIndex=0&t=${crypto.randomUUID()}`;
-                onDownload(g.formatId, g.kind, { directUrl });
-              } catch (e) {
-                const code = e instanceof RewardSessionClientError ? e.code : "INTERNAL";
-                toast(
-                  code === "DAILY_LIMIT_REACHED"
-                    ? "You've reached today's free HD download limit."
-                    : "Couldn't unlock this download. Please try again.",
-                  "error",
-                );
-              }
-            })();
-          } else {
-            onDownload(g.formatId, g.kind);
-          }
+          if (g) onDownload(g.formatId, g.kind);
         }
       }}
       onCancel={() => {
@@ -845,6 +834,13 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         setGate(null);
       }}
     />
+
+    {/*
+      The real GPT rewarded-ad consent flow for video HD downloads (owner,
+      2026-08-16 GPT spec). Hidden entirely while Google's own ad UI is
+      showing — `downloadUnlock.sheetProps.open` already accounts for that.
+    */}
+    <RewardConsentSheet {...downloadUnlock.sheetProps} />
 
     <BatchAdGate
       batch={pendingRewardItems}

@@ -89,10 +89,38 @@ describe("Pro bypass (Part 6)", () => {
 });
 
 describe("feature switches (Part 28)", () => {
-  it("both HD and batch can be turned off independently from settings", () => {
+  it("HD, batch and preview can each be turned off independently from settings", () => {
     expect(src).toMatch(/rewardDownloadHdEnabled/);
     expect(src).toMatch(/rewardDownloadBatchEnabled/);
+    expect(src).toMatch(/rewardDownloadPreviewEnabled/);
     expect(src).toMatch(/throw new RewardError\("FEATURE_DISABLED"/);
+  });
+});
+
+describe("reward type is a lookup, not a binary ternary (2026-08-16, adding VIDEO_PREVIEW)", () => {
+  /*
+    Before the GPT/preview spec, the feature-flag and daily-limit checks were
+    `type === "hd" ? … : …` — anything that wasn't literally "hd" silently
+    fell into the "batch" branch. Adding a third type ("preview") without
+    fixing this would have billed preview rewards against the batch daily
+    limit. These assertions pin the lookup-table shape so a future type can't
+    reintroduce the same bug.
+  */
+  it("supports three reward types", () => {
+    expect(src).toMatch(/RewardType = "hd" \| "batch" \| "preview"/);
+    expect(src).toMatch(/hd: 1, batch: 50, preview: 1/);
+  });
+
+  it("resolves the feature flag and daily-limit field through a per-type map", () => {
+    expect(src).toMatch(/FEATURE_FLAG: Record<RewardType, keyof MonetizationSettings>/);
+    expect(src).toMatch(/DAILY_LIMIT_FIELD: Record<RewardType, keyof MonetizationSettings>/);
+    expect(src).toMatch(/settings\[FEATURE_FLAG\[input\.type\]\]/);
+    expect(src).toMatch(/settings\[DAILY_LIMIT_FIELD\[row\.type\]\]/);
+  });
+
+  it("no longer contains a binary hd/batch ternary for these checks", () => {
+    expect(src).not.toMatch(/row\.type === "hd" \? settings\.rewardHdDailyLimit/);
+    expect(src).not.toMatch(/input\.type === "hd" && !settings\.rewardDownloadHdEnabled/);
   });
 });
 

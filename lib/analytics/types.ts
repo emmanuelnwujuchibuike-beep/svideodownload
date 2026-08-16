@@ -57,6 +57,20 @@ export type AnalyticsEventType =
   | "download_batch_started"
   | "download_batch_completed"
   | "download_batch_limit_reached"
+  /**
+   * The "Review video" preview reward (owner, 2026-08-16 GPT spec) — a
+   * second, independent reward context from the HD/batch download unlock,
+   * gating the existing post-download review player.
+   */
+  | "download_preview_clicked"
+  | "download_preview_reward_started"
+  | "download_preview_reward_ready"
+  | "download_preview_reward_granted"
+  | "download_preview_reward_cancelled"
+  | "download_preview_reward_failed"
+  | "download_preview_authorized"
+  | "download_preview_opened"
+  | "download_preview_limit_reached"
   | "custom";
 
 /** A download's lifecycle status, mirrored into `analytics_downloads.status`. */

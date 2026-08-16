@@ -8,7 +8,7 @@ import { getCachedMetadata, getMetadata } from "@/server/extractors";
 import type { MediaKind } from "@/types";
 
 import { getUserPlan } from "./plan";
-import { getMonetizationSettings } from "./settings";
+import { getMonetizationSettings, type MonetizationSettings } from "./settings";
 
 /**
  * Server-side reward sessions for HD/batch download unlocks (owner, 2026-08-16
@@ -40,7 +40,7 @@ import { getMonetizationSettings } from "./settings";
  * not a way to prove the ad was genuinely watched.
  */
 
-export type RewardType = "hd" | "batch";
+export type RewardType = "hd" | "batch" | "preview";
 
 export interface RewardItemInput {
   url: string;
@@ -80,7 +80,26 @@ export function hashIp(ip: string): string {
   return createHash("sha256").update(ip).digest("hex");
 }
 
-const MAX_ITEMS: Record<RewardType, number> = { hd: 1, batch: 50 };
+const MAX_ITEMS: Record<RewardType, number> = { hd: 1, batch: 50, preview: 1 };
+
+/**
+ * Per-type lookup tables, not a chain of `if`/ternaries (fixed 2026-08-16,
+ * adding the `preview` reward context for the GPT video-preview flow) — the
+ * previous binary `type === "hd" ? … : …` shape meant any type that wasn't
+ * literally `"hd"` silently fell into the `"batch"` branch, which would have
+ * billed a preview reward against the batch daily limit.
+ */
+const FEATURE_FLAG: Record<RewardType, keyof MonetizationSettings> = {
+  hd: "rewardDownloadHdEnabled",
+  batch: "rewardDownloadBatchEnabled",
+  preview: "rewardDownloadPreviewEnabled",
+};
+const DAILY_LIMIT_FIELD: Record<RewardType, keyof MonetizationSettings> = {
+  hd: "rewardHdDailyLimit",
+  batch: "rewardBatchDailyLimit",
+  preview: "rewardPreviewDailyLimit",
+};
+const TYPE_LABEL: Record<RewardType, string> = { hd: "HD download", batch: "batch download", preview: "video preview" };
 
 interface SessionRow {
   id: string;
@@ -124,11 +143,8 @@ export async function startRewardSession(input: {
   ip: string;
 }): Promise<{ id: string; expiresAt: string }> {
   const settings = await getMonetizationSettings();
-  if (input.type === "hd" && !settings.rewardDownloadHdEnabled) {
-    throw new RewardError("FEATURE_DISABLED", "HD reward downloads are currently unavailable.");
-  }
-  if (input.type === "batch" && !settings.rewardDownloadBatchEnabled) {
-    throw new RewardError("FEATURE_DISABLED", "Batch reward downloads are currently unavailable.");
+  if (!settings[FEATURE_FLAG[input.type]]) {
+    throw new RewardError("FEATURE_DISABLED", `Reward-gated ${TYPE_LABEL[input.type]}s are currently unavailable.`);
   }
 
   if (!Array.isArray(input.items) || input.items.length === 0) {
@@ -205,17 +221,14 @@ export async function completeRewardSession(input: {
   const plan = await getUserPlan(input.userId);
   if (plan === "free") {
     const settings = await getMonetizationSettings();
-    const limit = row.type === "hd" ? settings.rewardHdDailyLimit : settings.rewardBatchDailyLimit;
+    const limit = Number(settings[DAILY_LIMIT_FIELD[row.type]]);
     const identityKey = input.userId ? `u:${input.userId}` : `ip:${hashIp(input.ip)}`;
     const dailyKey = `reward:${row.type}:${identityKey}`;
     const receiptKey = `reward:${row.type}:${input.rewardSessionId}`;
     if (!(await alreadyCounted(receiptKey))) {
       const result = await consumeDaily(dailyKey, limit, receiptKey);
       if (!result.allowed) {
-        throw new RewardError(
-          "DAILY_LIMIT_REACHED",
-          row.type === "hd" ? "Daily HD download limit reached." : "Daily batch download limit reached.",
-        );
+        throw new RewardError("DAILY_LIMIT_REACHED", `Daily ${TYPE_LABEL[row.type]} limit reached.`);
       }
     }
   }

@@ -22,7 +22,7 @@ const itemSchema = z.object({
 });
 
 const schema = z.object({
-  type: z.enum(["hd", "batch"]),
+  type: z.enum(["hd", "batch", "preview"]),
   items: z.array(itemSchema).min(1).max(50),
 });
 

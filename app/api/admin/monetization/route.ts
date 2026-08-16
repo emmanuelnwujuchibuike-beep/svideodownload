@@ -83,6 +83,10 @@ const schema = z.object({
   // 0 = unlimited. Capped at 1000/day as a sanity ceiling, not a real limit.
   rewardHdDailyLimit: z.number().int().min(0).max(1000).default(0),
   rewardBatchDailyLimit: z.number().int().min(0).max(1000).default(0),
+  // The GPT-rewarded "Review video" preview (owner 2026-08-16 spec) — a
+  // second, independent reward context from HD/batch.
+  rewardDownloadPreviewEnabled: z.boolean().default(true),
+  rewardPreviewDailyLimit: z.number().int().min(0).max(1000).default(0),
   /*
     Validated as "empty, or a well-formed publisher id" rather than just a
     string. A malformed id produces a script URL that 404s and shows no ads at

@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -36,6 +37,8 @@ import {
   type DownloadTask,
 } from "@/features/downloads/manager";
 import { usePlayerQueue } from "@/features/downloads/player-store";
+import { RewardConsentSheet } from "@/features/monetization/reward-consent-sheet";
+import { useRewardFlow } from "@/features/monetization/use-reward-flow";
 import type { DownloadRecord } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -338,6 +341,19 @@ export function FloatingDownloadProgress({
   const completedTasks = tasks.filter((t) => t.status === "completed");
   const finished = failedTasks[0] ?? completedTasks[0];
   const task = active ?? finished;
+  /*
+    "Review video" is now reward-gated (owner, 2026-08-16 GPT spec, §13-15) —
+    a second, independent reward context from the download unlock, never
+    auto-chained to it (§16). It is entered only from this button's own tap,
+    after the download this card belongs to has already fully finished.
+  */
+  const router = useRouter();
+  const onPreviewGranted = useCallback(() => {
+    if (!task) return;
+    dismissTask(task.id);
+    router.push(`/history?review=${encodeURIComponent(task.id)}`);
+  }, [task, router]);
+  const videoPreview = useRewardFlow("VIDEO_PREVIEW", onPreviewGranted);
   // A mixed outcome ("some saved, some didn't") gets its own line under the
   // headline rather than being silently absorbed into a single file's story.
   const mixedOutcome = !active && failedTasks.length > 0 && completedTasks.length > 0;
@@ -650,15 +666,18 @@ export function FloatingDownloadProgress({
                     player seeded at that item; an id that isn't there yet just
                     shows history, so this can never dead-end.
                   */
-                  <Link
-                    href={`/history?review=${encodeURIComponent(task.id)}`}
-                    prefetch
-                    onClick={() => dismissTask(task.id)}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      videoPreview.open([
+                        { url: task.url, formatId: task.formatId, kind: task.kind, title: task.title },
+                      ])
+                    }
                     className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 px-3 py-2 text-xs font-semibold transition hover:bg-secondary"
                   >
                     <Play className="h-3.5 w-3.5" />{" "}
                     {task.kind === "audio" ? "Review audio" : task.kind === "image" ? "View image" : "Review video"}
-                  </Link>
+                  </button>
                 ) : null}
                 {task.status === "failed" ? (
                   <button
@@ -862,6 +881,7 @@ export function FloatingDownloadProgress({
             </div>
           </div>
       </div>
+      <RewardConsentSheet {...videoPreview.sheetProps} />
     </div>
   );
 }

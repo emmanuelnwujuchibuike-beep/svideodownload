@@ -73,6 +73,11 @@ const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
     label: "Batch reward downloads",
     hint: "Server-verified reward session for batch downloads, replacing the old skip-countdown gate. On by default.",
   },
+  {
+    key: "rewardDownloadPreviewEnabled",
+    label: "Video preview reward (GPT)",
+    hint: "The 'Review video' action after a download requires its own GPT rewarded ad — a second, independent reward from the download unlock. On by default.",
+  },
 ];
 
 /** Daily reward-claim limit presets — 0 is unlimited. */
@@ -371,15 +376,16 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
       </div>
 
       {/*
-        Daily reward-claim limits (owner, 2026-08-16 spec, Part 7-8): how many
-        HD/batch downloads a FREE member can unlock per day via the reward-
-        session flow (lib/monetization/reward-sessions.ts). Separate from the
+        Daily reward-claim limits (owner, 2026-08-16 spec, Part 7-8; preview
+        limit added the same day for the GPT video-preview reward): how many
+        HD/batch downloads or video previews a FREE member can unlock per day
+        via the reward-session flow (lib/monetization/reward-sessions.ts). Separate from the
         general per-plan daily download cap above — this one gates specifically
         how many REWARD CLAIMS a day, enforced server-side, Pro/Business always
         unlimited. 0 = unlimited (the starting value — owner: "unlimited while
         testing, cap later").
       */}
-      <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
+      <div className="mt-2.5 grid gap-2.5 sm:grid-cols-3">
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
           <span className="min-w-0">
             <span className="block text-sm font-semibold">Free HD downloads/day</span>
@@ -420,6 +426,31 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
               setState(next);
               const ok = await persist(next);
               if (!ok) setState((x) => ({ ...x, rewardBatchDailyLimit: prev }));
+            }}
+            className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
+          >
+            {DAILY_LIMIT_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n === 0 ? "Unlimited" : `${n}/day`}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">Free video previews/day</span>
+            <span className="block truncate text-xs text-muted-foreground">GPT reward claims. Pro/Business unlimited.</span>
+          </span>
+          <select
+            value={state.rewardPreviewDailyLimit}
+            disabled={busy}
+            onChange={async (e) => {
+              const v = Number(e.target.value);
+              const prev = state.rewardPreviewDailyLimit;
+              const next = { ...state, rewardPreviewDailyLimit: v };
+              setState(next);
+              const ok = await persist(next);
+              if (!ok) setState((x) => ({ ...x, rewardPreviewDailyLimit: prev }));
             }}
             className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
           >

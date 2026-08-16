@@ -250,6 +250,14 @@ export interface MonetizationSettings {
   rewardHdDailyLimit: number;
   /** Free-plan batch reward claims per day. `0` = unlimited. */
   rewardBatchDailyLimit: number;
+  /**
+   * Whether the post-download "Review video" preview requires its own reward
+   * session (GPT rewarded ad, owner 2026-08-16 spec) — a second, independent
+   * monetization moment from the HD download unlock, never auto-chained to it.
+   */
+  rewardDownloadPreviewEnabled: boolean;
+  /** Free-plan preview reward claims per day. `0` = unlimited. */
+  rewardPreviewDailyLimit: number;
 }
 export const DEFAULT_MONETIZATION: MonetizationSettings = {
   adsense: true,
@@ -297,6 +305,8 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   rewardDownloadBatchEnabled: true,
   rewardHdDailyLimit: 0,
   rewardBatchDailyLimit: 0,
+  rewardDownloadPreviewEnabled: true,
+  rewardPreviewDailyLimit: 0,
 };
 
 /** Keep only well-formed Monetag units (known type + string snippet), capped. */

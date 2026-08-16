@@ -10,9 +10,10 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
@@ -23,8 +24,6 @@ import {
   WALLPAPER_SORTS,
   type WallpaperSort,
 } from "@/lib/wallpapers-sort";
-import { WallpaperReels } from "@/features/wallpapers/wallpaper-reels";
-import { WallpaperLimitSheet, WallpaperRewardAd } from "@/features/wallpapers/wallpaper-reward-ad";
 import { useWallpaperDownload } from "@/features/wallpapers/use-wallpaper-download";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -80,8 +79,35 @@ import {
  * session; the viewer offers a sign-in rather than swallowing the tap.
  */
 
+/*
+  Interaction-only — the full-screen viewer and the two ad sheets never render
+  until a wallpaper is opened or a download starts, so none of them belong in
+  this page's first-load bundle. `WallpaperReels` alone is ~800 lines pulling
+  in the comments UI, engagement and share sheet; shipping it unconditionally
+  to every /wallpapers visit who never taps a card is dead weight on exactly
+  the kind of cold, mobile-Safari load this page needs to stay light for.
+*/
+const WallpaperReels = dynamic(
+  () => import("@/features/wallpapers/wallpaper-reels").then((m) => m.WallpaperReels),
+  { ssr: false },
+);
+const WallpaperRewardAd = dynamic(
+  () => import("@/features/wallpapers/wallpaper-reward-ad").then((m) => m.WallpaperRewardAd),
+  { ssr: false },
+);
+const WallpaperLimitSheet = dynamic(
+  () => import("@/features/wallpapers/wallpaper-reward-ad").then((m) => m.WallpaperLimitSheet),
+  { ssr: false },
+);
+
 /** How many the Popular section shows before "View all" opens the rest. */
 const POPULAR_PREVIEW = 12;
+/** Grid tiles rendered per batch — the initial paint, and each scroll-triggered
+ *  step after it. Keeps the DOM/image count proportional to how far someone has
+ *  actually scrolled instead of mounting the whole (up to 600-wallpaper) library
+ *  at once (owner, 2026-08-16: "wallpaper page appears to be trying to load too
+ *  much content at once"). */
+const GRID_BATCH = 24;
 
 export function WallpaperExplore({
   items,
@@ -179,7 +205,38 @@ export function WallpaperExplore({
      hiding some behind "View all" is actively unhelpful. */
   const ranked = sort === "liked" || sort === "viewed" || sort === "downloaded" || sort === "saved";
   const capped = ranked && hasEngagement && !filtering && !expanded;
-  const shown = capped ? filtered.slice(0, POPULAR_PREVIEW) : filtered;
+
+  /*
+    Progressive grid — only the uncapped path needs it, since "capped" already
+    caps itself at POPULAR_PREVIEW. Windowed rather than the whole `filtered`
+    array so a library of hundreds never mounts hundreds of tiles the instant
+    the page (or a filter) renders; `sentinelRef` below grows it as the visitor
+    actually scrolls near the bottom.
+  */
+  const [visibleCount, setVisibleCount] = useState(GRID_BATCH);
+  useEffect(() => {
+    setVisibleCount(GRID_BATCH);
+  }, [category, type, query, sort, expanded]);
+
+  const shown = capped ? filtered.slice(0, POPULAR_PREVIEW) : filtered.slice(0, visibleCount);
+  const hasMore = !capped && shown.length < filtered.length;
+
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!hasMore) return;
+    const node = sentinelRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((c) => Math.min(filtered.length, c + GRID_BATCH));
+        }
+      },
+      { rootMargin: "800px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, filtered.length]);
 
   const open = useCallback((wallpaper: Wallpaper) => {
     haptic("light");
@@ -595,6 +652,13 @@ export function WallpaperExplore({
                   ))}
                 </div>
               )}
+
+              {/* Grows `visibleCount` when it nears the viewport — the rest of
+                  the (already in-memory) library mounts in batches as the
+                  visitor actually scrolls, instead of all at once up front. */}
+              {hasMore ? (
+                <div ref={sentinelRef} aria-hidden className="h-px w-full" />
+              ) : null}
             </>
           )}
         </div>

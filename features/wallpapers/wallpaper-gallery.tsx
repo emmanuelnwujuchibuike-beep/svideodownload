@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, Download, Heart, Loader2, Share2, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -8,8 +9,6 @@ import { useEffect, useRef, useState } from "react";
 import { AdSlot } from "@/features/monetization/ad-slot";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { useInterstitialConfig } from "@/features/monetization/use-interstitial-skip";
-import { WallpaperReels } from "@/features/wallpapers/wallpaper-reels";
-import { WallpaperLimitSheet, WallpaperRewardAd } from "@/features/wallpapers/wallpaper-reward-ad";
 import { useWallpaperDownload } from "@/features/wallpapers/use-wallpaper-download";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -28,6 +27,22 @@ import type { Wallpaper } from "@/lib/wallpapers";
  * members — this IS the download page. The standalone /wallpapers page passes
  * `canEngage={false}` for signed-out visitors.
  */
+
+// Interaction-only — only mounted once a wallpaper is opened or a download
+// starts, so the download page's (budget-critical) first load never pays for
+// the ~800-line reels viewer or the ad sheets on a visit that never taps one.
+const WallpaperReels = dynamic(
+  () => import("@/features/wallpapers/wallpaper-reels").then((m) => m.WallpaperReels),
+  { ssr: false },
+);
+const WallpaperRewardAd = dynamic(
+  () => import("@/features/wallpapers/wallpaper-reward-ad").then((m) => m.WallpaperRewardAd),
+  { ssr: false },
+);
+const WallpaperLimitSheet = dynamic(
+  () => import("@/features/wallpapers/wallpaper-reward-ad").then((m) => m.WallpaperLimitSheet),
+  { ssr: false },
+);
 
 const PREVIEW_COUNT = 6;
 

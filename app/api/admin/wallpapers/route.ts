@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/admin/guard";
 import { imageSizeOf } from "@/lib/media/image-size";
+import { makeThumbnail } from "@/lib/media/thumbnail";
 import { wallpaperTitle } from "@/lib/wallpaper-title";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -98,10 +99,31 @@ export async function POST(request: Request) {
       */
       const size = await imageSizeOf(file);
 
+      /*
+        A real small copy for the grid, deck and reels-viewer thumbnail — see
+        `lib/media/thumbnail.ts`. Best-effort: a failure here (or the object
+        upload below failing) leaves `thumb_url` null, and `toWallpaper` already
+        falls back to the full image, which is exactly today's behaviour.
+      */
+      let thumbUrl: string | null = null;
+      const thumb = await makeThumbnail(new Uint8Array(await file.arrayBuffer()));
+      if (thumb) {
+        const thumbKey = `curated/thumbs/${key.slice("curated/".length).replace(/\.[^.]+$/, "")}.${thumb.ext}`;
+        const { error: thumbErr } = await db.storage.from("wallpapers").upload(thumbKey, thumb.buffer, {
+          contentType: thumb.contentType,
+          cacheControl: "31536000",
+          upsert: false,
+        });
+        if (!thumbErr) {
+          thumbUrl = db.storage.from("wallpapers").getPublicUrl(thumbKey).data.publicUrl;
+        }
+      }
+
       const { error: rowErr } = await db.from("wallpapers").insert({
         title,
         category,
         image_url: pub.publicUrl,
+        thumb_url: thumbUrl,
         bytes: file.size,
         width: size?.width ?? null,
         height: size?.height ?? null,

@@ -67,10 +67,11 @@ export function GuestLibrary() {
       {/* "Tired of ads → Upgrade to Pro" — free / signed-out only. */}
       <TiredOfAds />
 
-      {/* Download-flow interstitial: every 3rd download and every 3rd history
-          watch. Idle is left to the marketing IdleInterstitial this page already
-          carries, so the two don't double up (they share a cooldown too). */}
-      <DownloadInterstitial triggers={["download", "watch"]} />
+      {/* Download-flow interstitial: every 3rd download, every 3rd history
+          watch, and a browser-back/back-swipe navigation. Idle is left to the
+          marketing IdleInterstitial this page already carries, so the two
+          don't double up (they share a cooldown too). */}
+      <DownloadInterstitial triggers={["download", "watch", "backswipe"]} />
 
 
       {/* Signed-in visitors get the full dashboard; don't duplicate it here. */}

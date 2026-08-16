@@ -12,18 +12,31 @@ import { useInterstitialConfig } from "./use-interstitial-skip";
 import { useShowAds } from "./use-show-ads";
 
 /**
- * The download-flow interstitial — the owner's three triggers on the download and
+ * The download-flow interstitial — the owner's triggers on the download and
  * library surfaces:
  *
  *   1. 5 s of in-page idle,
  *   2. every 3rd completed download,
- *   3. every 3rd video watched from the download history.
+ *   3. every 3rd video watched from the download history,
+ *   4. a browser-back / back-swipe navigation.
  *
  * ── Who sees which ────────────────────────────────────────────────────────────
- * Idle and the download trigger are ad monetisation, so they only fire for
+ * Idle, download and backswipe are ad monetisation, so they only fire for
  * visitors who see ads at all (free + signed-out). The WATCH trigger is the one
  * exception the owner called out: a Pro user still sees it (but never Business,
  * who is fully ad-free). Business sees nothing here.
+ *
+ * 🔴 BACKSWIPE, ADDED (owner, 2026-08-16: "trigger on every page back swipe or
+ * browser back with the browser back button, you know static next 15 site is
+ * hard for Google to trigger interstitial on page swipe and navigation").
+ * This app already had exactly one `popstate`-driven ad trigger —
+ * `monetag-placements.tsx`'s `hasBackswipe` block — but it only ever loads a
+ * Monetag script; there was no AdSense-capable equivalent. `AdSlot`/`zone`
+ * (via `FullscreenInterstitial` below) already knows how to render an
+ * AdSense unit for a zone that has one configured, same as every other
+ * trigger here, so this reuses that path rather than inventing a second ad
+ * mechanism. `router.back()` (the PWA edge-swipe handler) and a literal
+ * browser-back tap both fire a real `popstate` — one listener covers both.
  *
  * ── No double interstitials ───────────────────────────────────────────────────
  * It shares the site interstitial's cooldown key, so on a page that also carries
@@ -51,10 +64,10 @@ const WATCH_EVERY = 2;
 const LAST_SHOWN_KEY = "frenz:interstitial-last-shown";
 const ACTIVITY = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"] as const;
 
-export type InterstitialTrigger = "idle" | "download" | "watch";
+export type InterstitialTrigger = "idle" | "download" | "watch" | "backswipe";
 
 export function DownloadInterstitial({
-  triggers = ["idle", "download", "watch"],
+  triggers = ["idle", "download", "watch", "backswipe"],
 }: {
   triggers?: InterstitialTrigger[];
 }) {
@@ -119,6 +132,20 @@ export function DownloadInterstitial({
         if (isPlayerOpen()) return; // never interrupt a clip mid-watch
         if (getCompletedCount() % EVERY === 0) show();
       }));
+    }
+
+    if (triggers.includes("backswipe")) {
+      // Covers BOTH a literal browser-back tap AND the PWA edge-swipe gesture
+      // (features/app-shell/edge-swipe-back.tsx calls `router.back()`, which
+      // fires a real `popstate` same as the browser control does) — one
+      // listener, two gestures. `show()` already applies its own cooldown/
+      // min-gap, so a flurry of back taps still only ever shows one ad.
+      const onPop = () => {
+        if (isPlayerOpen()) return; // never interrupt a clip mid-watch
+        show();
+      };
+      window.addEventListener("popstate", onPop);
+      offs.push(() => window.removeEventListener("popstate", onPop));
     }
 
     return () => offs.forEach((off) => off());

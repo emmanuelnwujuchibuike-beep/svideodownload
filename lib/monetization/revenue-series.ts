@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { paginatedSelect } from "@/lib/supabase/paginate";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -52,6 +53,9 @@ export interface DayPoint {
   date: string;
   impressions: number;
   clicks: number;
+  /** Completed downloads (owner, 2026-08-16: "make a download chart in
+   *  revenue just like visitors, ad clicks and impression chart"). */
+  downloads: number;
 }
 
 export interface RevenueSeries {
@@ -86,7 +90,7 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
   for (let i = 0; i < days; i++) {
     const d = new Date(start);
     d.setUTCDate(start.getUTCDate() + i);
-    grid.set(isoDay(d), { date: isoDay(d), impressions: 0, clicks: 0 });
+    grid.set(isoDay(d), { date: isoDay(d), impressions: 0, clicks: 0, downloads: 0 });
   }
 
   const empty: RevenueSeries = { days: [...grid.values()], capped: false, rangeDays: days };
@@ -95,19 +99,44 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
   try {
     const db = createAdminClient();
     const since = start.toISOString();
-    const pull = async (table: "ad_impressions" | "ad_clicks") => {
-      const { data, error } = await db
-        .from(table)
-        .select("created_at")
-        .gte("created_at", since)
-        .order("created_at", { ascending: true })
-        .limit(ROW_CAP);
-      if (error) return { rows: [] as { created_at: string }[], capped: false };
-      const rows = (data ?? []) as { created_at: string }[];
-      return { rows, capped: rows.length >= ROW_CAP };
-    };
+    // PAGED via `.range()`, not a single `.limit(ROW_CAP)` — PostgREST silently
+    // caps any one response at 1000 rows regardless of the requested `.limit()`,
+    // so a single oversized limit under-reads on any day busy enough to exceed
+    // it. See lib/supabase/paginate.ts for how this was found.
+    const pull = async (table: "ad_impressions" | "ad_clicks") =>
+      paginatedSelect<{ created_at: string }>(
+        (from, to) => db.from(table).select("created_at").gte("created_at", since).order("created_at", { ascending: true }).range(from, to),
+        ROW_CAP,
+      );
 
-    const [impr, clicks] = await Promise.all([pull("ad_impressions"), pull("ad_clicks")]);
+    /*
+      Downloads read `analytics_downloads`, NOT the legacy `downloads` table —
+      deliberately the opposite of what `lib/admin-stats.ts`'s `fetchDownloadStats`
+      does (owner, 2026-08-16: "stats in revenue and stats in traffic… shows
+      different stat and information… check carefully which shows a false
+      information"). `downloads` rows are written unconditionally as
+      `status: "completed"` the instant a download is REQUESTED — every attempt,
+      retry included, whether or not it ever finished — so a trend line built on
+      it would not be a downloads chart, it would be a REQUESTS chart wearing the
+      wrong label. `analytics_downloads` is the client-confirmed lifecycle table
+      (`app/api/analytics/collect/route.ts`); filtering `status = "completed"`
+      here is the one query in this file that answers the question the chart's
+      own title asks.
+    */
+    const pullDownloads = async () =>
+      paginatedSelect<{ created_at: string }>(
+        (from, to) =>
+          db
+            .from("analytics_downloads")
+            .select("created_at")
+            .eq("status", "completed")
+            .gte("created_at", since)
+            .order("created_at", { ascending: true })
+            .range(from, to),
+        ROW_CAP,
+      );
+
+    const [impr, clicks, dl] = await Promise.all([pull("ad_impressions"), pull("ad_clicks"), pullDownloads()]);
 
     for (const r of impr.rows) {
       const cell = grid.get(r.created_at.slice(0, 10));
@@ -117,8 +146,12 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
       const cell = grid.get(r.created_at.slice(0, 10));
       if (cell) cell.clicks += 1;
     }
+    for (const r of dl.rows) {
+      const cell = grid.get(r.created_at.slice(0, 10));
+      if (cell) cell.downloads += 1;
+    }
 
-    return { days: [...grid.values()], capped: impr.capped || clicks.capped, rangeDays: days };
+    return { days: [...grid.values()], capped: impr.capped || clicks.capped || dl.capped, rangeDays: days };
   } catch {
     // An unmigrated or unreachable table yields the ZERO grid, not an error
     // state: the dashboard still renders, and a flat zero line is honest about

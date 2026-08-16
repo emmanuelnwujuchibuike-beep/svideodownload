@@ -27,6 +27,16 @@ export function AppTopbar() {
   // other route keeps it. Thread pages already cover it with their own
   // full-screen overlay, so only the index needs this.
   const onMessagesIndex = pathname === "/messages";
+  /*
+    A faded purple wash, /downloads only (owner, 2026-08-16: "a faded purple
+    gradient at the top… don't change the top header buttons or structure").
+    Pathname-scoped for the same reason `mobile-nav.tsx`'s own `immersive` flag
+    is: this ONE topbar instance is shared by every route in the (app) shell
+    (mounted once in the persistent layout, not per-page), so a page-specific
+    look can only be reached by checking where we are, not by a prop the page
+    could pass in.
+  */
+  const onDownloads = pathname === "/downloads";
   const inputRef = useRef<HTMLInputElement | null>(null);
   // The feed lifts its For You/Following/Reels control up here (owner spec)
   // — every other page's search bar is untouched, since only the feed ever
@@ -88,6 +98,13 @@ export function AppTopbar() {
         // could retint the bar; it and the rule are gone. See globals.css.
         "border-b border-border/20 bg-background",
         onMessagesIndex && "hidden lg:flex",
+        // The wash. Same recipe as SiteHeader's own `topGradient` — a
+        // background-IMAGE layered over the unchanged `bg-background`, purple
+        // at the safe-area line and gone by the bar's bottom edge, light mode
+        // only. The bar stays exactly as opaque as the 2026-08-11 "let the
+        // download page top header and safe area be white" decision required;
+        // this only adds a wash on top of that white, it does not retint it.
+        onDownloads && "bg-[image:linear-gradient(to_bottom,hsl(var(--brand-purple)/0.16),hsl(var(--brand-purple)/0.05)_60%,transparent)] dark:bg-[image:none]",
       )}
     >
       {/* Far-left: search + add friends — kept apart from the action cluster so

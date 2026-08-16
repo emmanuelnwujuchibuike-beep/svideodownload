@@ -486,8 +486,32 @@ export function ConversationList({
         </button>
       </label>
 
-      {/* Filter tabs — All / Unread / Groups / Requests with live counts */}
-      <div className={cn("mb-2 flex items-center gap-5 border-b border-border/40 px-1", pane && "mx-3")} role="tablist" aria-label="Filter conversations">
+      {/*
+        Filter tabs — All / Unread / Groups / Requests with live counts.
+
+        Sticky, not static (owner, 2026-08-16: "let this section in the
+        message stick to the top header when scrolled to below the
+        section"). `top-0` here means the top of the SCROLL CONTAINER
+        (`InboxShell`'s `.frenz-nav-pad`), not the viewport — that container's
+        own `paddingTop: var(--inbox-chrome-h)` already reserves exactly the
+        fixed header's height, so a sticky child pinned at its `top: 0` lands
+        immediately under that header for free, with no offset math to
+        duplicate or keep in sync with the chrome's own (dynamically
+        measured) height. The search bar above stays in normal flow and
+        scrolls away first — only the tabs catch and hold.
+
+        `bg-background` is load-bearing once it's sticky: without an opaque
+        background the conversation rows scrolling underneath would show
+        through the row and its live count badges.
+      */}
+      <div
+        className={cn(
+          "sticky top-0 z-10 mb-2 flex items-center gap-5 border-b border-border/40 bg-background px-1",
+          pane && "mx-3",
+        )}
+        role="tablist"
+        aria-label="Filter conversations"
+      >
         {tabs.map((t) => {
           const active = tab === t.id && !showArchived;
           return (

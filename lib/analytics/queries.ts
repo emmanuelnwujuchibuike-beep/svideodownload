@@ -1,5 +1,6 @@
 import { matchPage, PAGES } from "@/lib/analytics/pages";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { paginatedSelect } from "@/lib/supabase/paginate";
 
 /** The bucket for a path no catalogue entry claims. */
 const OTHER_PAGE_ID = "__other";
@@ -283,18 +284,26 @@ async function getAdAnalytics(
       countOf(db.from("ad_clicks").select("id", { head: true, count: "exact" }).gte("created_at", since)),
     ]);
 
-    // Per-zone split from a capped recent sample of each.
-    const [{ data: impSample }, { data: clkSample }] = await Promise.all([
-      db.from("ad_impressions").select("zone").gte("created_at", since).limit(SAMPLE_CAP),
-      db.from("ad_clicks").select("zone").gte("created_at", since).limit(SAMPLE_CAP),
+    // Per-zone split from a capped recent sample of each — PAGED, not a single
+    // oversized `.limit()`; see lib/supabase/paginate.ts for why a plain
+    // `.limit(SAMPLE_CAP)` silently returns only the first 1000 rows.
+    const [{ rows: impSample }, { rows: clkSample }] = await Promise.all([
+      paginatedSelect<{ zone: string | null }>(
+        (from, to) => db.from("ad_impressions").select("zone").gte("created_at", since).range(from, to),
+        SAMPLE_CAP,
+      ),
+      paginatedSelect<{ zone: string | null }>(
+        (from, to) => db.from("ad_clicks").select("zone").gte("created_at", since).range(from, to),
+        SAMPLE_CAP,
+      ),
     ]);
     const impByZone = new Map<string, number>();
-    for (const r of (impSample ?? []) as { zone: string | null }[]) {
+    for (const r of impSample) {
       const z = r.zone || "unknown";
       impByZone.set(z, (impByZone.get(z) ?? 0) + 1);
     }
     const clkByZone = new Map<string, number>();
-    for (const r of (clkSample ?? []) as { zone: string | null }[]) {
+    for (const r of clkSample) {
       const z = r.zone || "unknown";
       clkByZone.set(z, (clkByZone.get(z) ?? 0) + 1);
     }
@@ -769,4 +778,127 @@ const SEARCH_ENGINES: { name: string; test: RegExp }[] = [
 
 export function searchEngineFor(host: string): string | null {
   return SEARCH_ENGINES.find((e) => e.test.test(host))?.name ?? null;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  DAILY NEW vs. RETURNING VISITORS
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-08-16: "make a chart for returning visitors and new visitors in
+ * admin dashboard."
+ *
+ * ── Why this isn't just N calls to `analytics_visitor_split` ───────────────
+ * That RPC (migration 0115) answers "since timestamp X, how many active
+ * visitors are first-timers vs. returning" — a CUMULATIVE count from X through
+ * now, not a single day's isolated activity. Calling it once per day in the
+ * window and treating each result as "that day's" figure would be wrong: a
+ * visitor active on day 5 and day 12 but quiet on day 8 is still counted as
+ * "active since day 8" by that call, which is not the same claim as "active
+ * ON day 8".
+ *
+ * ── NEW visitors decompose correctly by subtraction ─────────────────────────
+ * `new_visitors(p_since = X)` counts distinct visitors whose very first-ever
+ * event is `>= X` — a fact fixed in time per visitor, not a moving "since"
+ * window. That makes it strictly nested as X moves later, so the RPC called
+ * once per day BOUNDARY (not per day) and subtracted consecutively gives the
+ * EXACT count of visitors born on exactly that day:
+ *   newOnDay(N) = new_visitors(day N) − new_visitors(day N+1)
+ * This is exact, not an estimate.
+ *
+ * ── RETURNING visitors, one bounded query instead of a second RPC ──────────
+ * "Active on day N" doesn't decompose the same way (activity isn't a fixed
+ * point per visitor), so it's read directly: one bounded, indexed scan of
+ * `analytics_events(visitor_id, received_at)` across the whole window —
+ * exactly the shape `revenue-series.ts` already uses for its own daily
+ * buckets — grouped into a distinct-visitor Set per day. Returning is then
+ * `active(day N) − new(day N)`, which is exact given both terms are.
+ *
+ * ── The cost, and why the window is capped at 30 days ──────────────────────
+ * This trades N+1 small RPC calls (in parallel) for a per-day chart the RPC
+ * was never shaped to answer directly, rather than adding a new SQL function
+ * for it — a new migration is a bigger, slower-to-land change than a capped
+ * client-side loop, and unapplied migrations are this project's own
+ * documented recurring failure mode. 30 days keeps the call count bounded
+ * (31 parallel RPC calls, each `stable` and indexed) rather than matching the
+ * other charts' 90-day fetch-once-slice-client-side pattern.
+ */
+export interface VisitorSplitDay {
+  /** ISO date, `YYYY-MM-DD`, UTC. */
+  date: string;
+  newVisitors: number;
+  returningVisitors: number;
+}
+
+export interface VisitorSplitSeries {
+  days: VisitorSplitDay[];
+  /** True if the bounded active-visitor scan hit its row cap — returning counts may be a floor. */
+  capped: boolean;
+}
+
+const VISITOR_SPLIT_ROW_CAP = 50_000;
+const VISITOR_SPLIT_MAX_DAYS = 30;
+
+function isoDayUtc(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+export async function getVisitorSplitSeries(days = 30): Promise<VisitorSplitSeries> {
+  const n = Math.min(VISITOR_SPLIT_MAX_DAYS, Math.max(7, Math.floor(days)));
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  // n+1 boundaries: boundaries[i] is the start of the i-th day in the window;
+  // boundaries[n] is the start of TODAY, needed only as the upper subtraction term.
+  const boundaries: Date[] = [];
+  for (let i = n; i >= 0; i--) boundaries.push(new Date(today.getTime() - i * 86_400_000));
+  const empty = () => ({
+    days: boundaries.slice(0, n).map((d) => ({ date: isoDayUtc(d), newVisitors: 0, returningVisitors: 0 })),
+    capped: false,
+  });
+
+  try {
+    const db = createAdminClient();
+    const cumulativeNew = await Promise.all(
+      boundaries.map(async (d) => {
+        const { data, error } = await db.rpc("analytics_visitor_split", { p_since: d.toISOString() });
+        if (error) return null;
+        const row = (data ?? [])[0] as { new_visitors: number } | undefined;
+        return row ? Number(row.new_visitors) || 0 : 0;
+      }),
+    );
+
+    const { rows, capped } = await paginatedSelect<{ visitor_id: string; received_at: string }>(
+      (from, to) =>
+        db
+          .from("analytics_events")
+          .select("visitor_id, received_at")
+          .eq("is_bot", false)
+          .gte("received_at", boundaries[0]!.toISOString())
+          .order("received_at", { ascending: true })
+          .range(from, to),
+      VISITOR_SPLIT_ROW_CAP,
+    );
+
+    const activeByDay = new Map<string, Set<string>>();
+    for (const r of rows) {
+      const day = r.received_at.slice(0, 10);
+      const set = activeByDay.get(day);
+      if (set) set.add(r.visitor_id);
+      else activeByDay.set(day, new Set([r.visitor_id]));
+    }
+
+    const out: VisitorSplitDay[] = [];
+    for (let i = 0; i < n; i++) {
+      const date = isoDayUtc(boundaries[i]!);
+      const hi = cumulativeNew[i];
+      const lo = cumulativeNew[i + 1];
+      const newVisitors = hi == null || lo == null ? 0 : Math.max(0, hi - lo);
+      const active = activeByDay.get(date)?.size ?? 0;
+      const returningVisitors = Math.max(0, active - newVisitors);
+      out.push({ date, newVisitors, returningVisitors });
+    }
+    return { days: out, capped };
+  } catch {
+    return empty();
+  }
 }

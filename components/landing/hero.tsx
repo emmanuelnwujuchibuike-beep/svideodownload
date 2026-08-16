@@ -11,18 +11,16 @@ import {
 import Link from "next/link";
 import { Suspense } from "react";
 
-import { HeroEffects } from "@/components/landing/hero-effects";
 import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
 import { SupportedPlatformsLive } from "@/components/landing/supported-platforms";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
-import { Downloader } from "@/features/downloader/downloader";
 import { HeroCtaForm } from "@/features/downloader/hero-cta-form";
 import { HeroLinkDownloader } from "@/features/downloader/hero-link-downloader";
-import { SharedLinkDownloader } from "@/features/downloader/shared-link-downloader";
 import { cn } from "@/lib/utils";
 import { getLandingSettings } from "@/lib/landing/settings";
+import { listWallpapers } from "@/lib/wallpapers-server";
 /* The platform list and its badge markup now live in
    `components/landing/supported-platforms.tsx` — one definition, two surfaces. */
 
@@ -87,6 +85,19 @@ export async function Hero() {
     request data in here or the front door loses its CDN caching.
   */
   const landing = await getLandingSettings();
+  /*
+    The last 10 published wallpapers, newest first — for the CTA tile's
+    rotation (owner, 2026-08-16: "wallpapers that will be changed will be the
+    last 10 wallpapers uploaded in wallpaper pages"). `listWallpapers` already
+    orders newest-first; slicing 10 here rather than adding a new narrower
+    query reuses the one, already-tested source of truth for "what's in the
+    library" instead of a second copy of that ordering logic. Best-effort: an
+    empty library (or a read failure) just means the tile falls back to the
+    admin's own static pick, exactly like before this existed.
+  */
+  const recentWallpaperUrls = await listWallpapers(null, 10)
+    .then((ws) => ws.map((w) => w.url).filter(Boolean))
+    .catch(() => [] as string[]);
   return (
     /*
      * Theme-aware, not pinned. `public/main landing page.jpg` is the DARK design;
@@ -118,9 +129,29 @@ export async function Hero() {
       ground continuous from the header to the footer — which is what a native
       app screen looks like, and is also one less full-width gradient to paint.
     */
-    <section className="relative overflow-hidden pb-5 pt-[calc(var(--frenz-safe-top)+4.5rem)] text-foreground dark:text-white sm:pb-7 sm:pt-[calc(var(--frenz-safe-top)+5.5rem)]">
-      <HeroEffects />
+    /*
+      🔴🔴 THE DECORATIVE EFFECTS LAYER IS GONE (owner, 2026-08-16: "cut out the
+      body gradient weight and help the landing page loads and open faster…
+      make the whole landing page the same plain white theme… to be exactly
+      like the Download page").
 
+      `<HeroEffects />` painted an ambient radial wash, three static conic-
+      gradient rings, a neon bloom, a dark-mode starfield and four backdrop-
+      blurred floating tiles — all bounded to the hero, all previously kept for
+      their own sake (see the removed file's own history: the ROTATION was
+      already stripped once, 2026-08-11, for the same "less heat" instruction,
+      and the artwork survived that pass). This time the artwork goes too,
+      because the actual reference is the Download page's hero, which paints
+      NONE of this — flat canvas, a white card, done. Keeping a decorative
+      layer the reference doesn't have is not "matching it, minus the
+      rotation", it's a different design that happens to sit on the same page.
+
+      This is also a genuine byte-weight cut, not just a visual one: four
+      radial/conic gradients, a repeating-gradient starfield and a
+      `backdrop-blur` layer are gone from every load, on the one page held to
+      the tightest cold-entry budget in the app.
+    */
+    <section className="relative overflow-hidden pb-5 pt-[calc(var(--frenz-safe-top)+4.5rem)] text-foreground dark:text-white sm:pb-7 sm:pt-[calc(var(--frenz-safe-top)+5.5rem)]">
       {/* `items-start`, not `items-center`: centring the two columns against
           each other pushed the text column down by half the phone mockup's
           overflow on tall screens. `gap-6` on mobile keeps the mockup close
@@ -340,8 +371,13 @@ export async function Hero() {
             CSS but not a single byte of client JavaScript — the arrows and the
             sheen are CSS, and nothing here hydrates.
           */}
-          {/* Tighter stack — iOS groups related controls at ~16-20px, not 32. */}
-          <div className="mt-5 flex flex-col gap-2.5">
+          {/* Tighter stack — iOS groups related controls at ~16-20px, not 32.
+              `id="download"` lives HERE now, not on the removed duplicate CTA
+              below: every `/#download` link site-wide (nav, PWA manifest
+              shortcut, command palette, quick actions) needs one real anchor,
+              and this is the paste card that survives. `scroll-mt-24` keeps
+              the fixed header from covering it on arrival, same as before. */}
+          <div id="download" className="mt-5 flex scroll-mt-24 flex-col gap-2.5">
             {/* Primary — goes straight to the paste-link tool (owner, 2026-07-18):
                 the downloader needs no account, so a signup wall in front of the
                 one thing the page asks for was the wrong door. */}
@@ -371,38 +407,23 @@ export async function Hero() {
             <SupportedPlatformsLive className="mb-1" />
 
             {/*
-              ── The paste card, rebuilt to `public/newnativeapplandingpage.jpg`
-                 (owner, 2026-08-11: "the download placeholder and button is
-                 supposed to be like this one … cause that's how it is on the
-                 image i saved in public") ──────────────────────────────────────
+              ── The paste card, rebuilt to the Download page's own recipe
+                 (owner, 2026-08-16: "the place holder and button should be same
+                 structure with the Download page… use the white and theme with
+                 the download page, so they both feel native all over the
+                 body") ──────────────────────────────────────────────────────
 
-              One card holding two bands: the purple action bar, then the proof
-              strip on white. Three things changed from the previous version, and
-              each was a visible difference from the reference:
-
-              • THE BAR IS FULL-BLEED. It used to be inset inside a `p-2` white
-                frame, so a band of white ran all the way around the purple —
-                which is what made it read as "a button placed on a card" rather
-                than as the card's own header. In the reference the purple meets
-                the card's left, right and top edges and the radius is the
-                CARD's. `overflow-hidden` on the card does that clipping, so the
-                form itself needs no corner radius at all.
-
-              • NO GRADIENT RING. The card was wrapped in a `p-px`
-                blue→violet→fuchsia hairline. There is no ring in the reference,
-                and on a lavender canvas it read as a stray outline. A plain
-                surface with a soft neutral shadow is what the image shows.
-
-              • THE GRADIENT STOPS AT VIOLET. It ran to `fuchsia-600`, so the
-                right third of the bar went magenta/pink. The reference travels
-                indigo → violet → purple and never reaches pink. That ramp lives
-                on the form itself — see hero-cta-form.tsx.
-
-              The proof strip sits INSIDE the card but OUTSIDE the form, so the
-              form's `absolute inset-0` face (the button-becomes-a-field
-              transform) covers only the action bar — never the strip.
+              This is now `rounded-[1.5rem] bg-white p-4 … sm:p-5` — the EXACT
+              class string `downloads-page.tsx` wraps its own `DownloadBox` in,
+              not a landing-flavoured lookalike. It used to be a zero-padding,
+              `overflow-hidden` shell built specifically to let a full-bleed
+              purple action bar meet the card's own edges (see the git history
+              for that design); `HeroCtaForm` no longer renders a full-bleed bar
+              — it renders Download's own always-visible input + button, side by
+              side, inside ordinary card padding — so the shell that framed the
+              old bar is gone with it.
             */}
-            <div className="overflow-hidden rounded-[1.35rem] bg-white shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-[#0b1020] dark:ring-white/10">
+            <div className="rounded-[1.5rem] bg-white p-4 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-[#0b1020] dark:ring-white/10 sm:p-5">
               <HeroCtaForm />
               {/*
                 The strip's type is a clamp, not a fixed size. The reference is a
@@ -411,7 +432,7 @@ export async function Hero() {
                 the width this row has broken at before. It tracks the viewport
                 between a 10px floor and the reference's 13px instead.
               */}
-              <ul className="flex flex-wrap items-center justify-between gap-y-2 px-1.5 py-3">
+              <ul className="mt-3 flex flex-wrap items-center justify-between gap-y-2 border-t border-slate-100 px-1.5 pt-3 dark:border-white/10">
                 {HERO_PROOF.map((p, i) => (
                   <li
                     key={p.label}
@@ -539,7 +560,11 @@ export async function Hero() {
                 Keeping this tag as well would preload the unoptimized source a
                 second time. See the notes in wallpaper-cta.tsx.
               */}
-              <WallpaperCta variant="card" backgroundUrl={landing.wallpaperCtaImageUrl || null} />
+              <WallpaperCta
+                variant="card"
+                backgroundUrl={landing.wallpaperCtaImageUrl || null}
+                rotateUrls={recentWallpaperUrls}
+              />
             </div>
 
             {/*
@@ -642,43 +667,22 @@ export async function Hero() {
         </div>
       </div>
 
-      {/* "Download anything" card — the purple paste-and-download panel from
-          public/newlanding.jpg, sitting between the hero phone and the download
-          mockup below.
-          Uses its own (narrower) side padding instead of `container`'s 24px —
-          the default made the card read as "tightly pressed" on phones; a
-          smaller margin lets it spread closer to both edges, SnapTik-style,
-          while keeping the same max-w-3xl cap everything else on the page uses. */}
-      <div id="download" className="relative z-10 mx-auto mt-12 max-w-3xl scroll-mt-24 px-3 sm:mt-14 sm:px-6">
-        <div className="relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-blue-600 via-violet-600 to-fuchsia-600 p-5 shadow-elevated sm:p-7">
-          <div aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
-          <div className="relative text-center text-white">
-            <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">Download anything</h2>
-            <p className="mt-1.5 text-sm text-white/80">Paste a link from any platform and download instantly.</p>
-          </div>
-          {/* The tool is prerendered into the static HTML by the fallback, then
-              swapped for the identical tool pre-filled from a Share Target
-              hand-off. Same markup either way, so nothing shifts — and the
-              boundary is what lets `/` prerender at all (useSearchParams()
-              suspends). See features/downloader/shared-link-downloader.tsx. */}
-          <div className="relative mt-5">
-            <Suspense fallback={<Downloader hideDisclaimer />}>
-              <SharedLinkDownloader />
-            </Suspense>
-          </div>
-          {/* Supported platforms, per the reference card. Same component as the
-              hero's row, on the gradient surface. */}
-          <SupportedPlatformsLive surface="onGradient" className="relative mt-4" />
-          {/*
-            The disclaimer that used to live here has MOVED to directly under
-            the hero CTA (owner, 2026-08-10). It is not repeated here on
-            purpose: one page needs one copy of a legal sentence, and a second
-            one three screens down is the kind of accumulation the same
-            instruction ("less cluster") asked to stop. The `Downloader` in this
-            card still runs with `hideDisclaimer`, so nothing re-adds it.
-          */}
-        </div>
-      </div>
+      {/*
+        ── The duplicate "Download anything" card is REMOVED (owner, 2026-08-16:
+        "remove the below download section") ──────────────────────────────────
+
+        This was a second full paste-and-download tool — its own gradient card,
+        its own `SharedLinkDownloader`, its own supported-platforms row —
+        sitting directly below the hero's already-complete one. The Download
+        page this hero now mirrors has exactly ONE paste entry point; keeping a
+        second one here after the hero was rebuilt to Download's own structure
+        would leave the page asking twice for the same link, which is not what
+        "same structure as the Download page" describes.
+
+        `id="download"` — the thing every `/#download` link site-wide actually
+        needs — moved up onto the CTA stack that holds the surviving paste card;
+        see the comment there.
+      */}
     </section>
   );
 }

@@ -4,6 +4,7 @@ import { PORTABILITY, restrictedDomains } from "@/lib/portability/registry";
 import { exportPlan, FOLLOW_MIRROR } from "@/lib/portability/tables";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { paginatedSelect } from "@/lib/supabase/paginate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,9 +63,16 @@ async function readTable(
   key = table,
 ): Promise<TableResult> {
   try {
-    const { data, error } = await db.from(table).select("*").eq(column, userId).limit(5000);
+    // Paged via `.range()` — a plain `.limit(5000)` is silently capped at 1000
+    // rows by PostgREST regardless of the requested limit (see
+    // lib/supabase/paginate.ts), which for a data-export route means a power
+    // user's copy of their own data would be quietly incomplete.
+    const { rows, error } = await paginatedSelect<unknown>(
+      (from, to) => db.from(table).select("*").eq(column, userId).range(from, to),
+      5000,
+    );
     if (error) return { table: key, rows: null, error: error.message };
-    return { table: key, rows: data ?? [] };
+    return { table: key, rows };
   } catch (e) {
     return { table: key, rows: null, error: e instanceof Error ? e.message : "unknown error" };
   }

@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { geoFromHeaders, isBotUA, parseUA } from "@/lib/analytics/enrich";
 import type { DownloadStatus } from "@/lib/analytics/types";
+import { notifyAdminsOfDownloadOutcome } from "@/lib/analytics/download-failure-alert";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -186,6 +187,47 @@ export async function POST(request: Request) {
     }
   } catch {
     /* the table may not be migrated yet, or a transient DB error — never error the client */
+  }
+
+  /*
+    Admin alert on a bad outcome (owner, 2026-08-16: "Let admin receive push
+    and email alert on failed, cancelled and abandoned Downloads").
+
+    `after()`, not awaited inline — this fans out to push + email for every
+    admin, and the visitor's own analytics beacon must not wait on any of that.
+    A serverless function CAN freeze the instant its response is sent, so this
+    has to be `after()` rather than a bare fire-and-forget call — the same
+    reasoning `bumpDownloadsCount` in the post-download route documents (see
+    the [[sw-swx-duplicate-const-bug]] project note: a bare `void` on its own
+    never actually sent that one).
+
+    Runs on the RAW `parsed.events`, not `downloadRows` — a batch can contain
+    an EARLIER failed/cancelled event that a LATER event in the same batch
+    superseded (e.g. a failure immediately followed by a successful retry
+    using `retryOf`), and only `downloadRows`'s "latest wins" value would be
+    checked if this read from there. The admin alert is about "did a failure
+    happen", not "what is this download's current status" — those are
+    different questions, and conflating them would silently swallow the
+    interim failure a successful retry now covers up.
+  */
+  for (const e of parsed.events) {
+    const status = STATUS_FROM_TYPE[e.type];
+    if (status !== "failed" && status !== "cancelled") continue;
+    if (!e.downloadId) continue;
+    const p = e.properties ?? {};
+    after(() =>
+      notifyAdminsOfDownloadOutcome({
+        downloadId: e.downloadId!,
+        status,
+        platform: str(p.platform),
+        mediaKind: str(p.mediaKind),
+        errorReason: str(p.errorReason),
+        userId,
+        visitorId: e.visitorId,
+        device: ua.device,
+        country: geo.country,
+      }),
+    );
   }
 
   return new NextResponse(null, { status: 204 });

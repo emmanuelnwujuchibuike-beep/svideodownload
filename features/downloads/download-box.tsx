@@ -295,6 +295,14 @@ export function DownloadBox({
           Detected {detectPlatform(url).name}
         </p>
       ) : null}
+      {/* Telegram is genuinely slower (authenticated MTProto, not a plain CDN
+          pull) — see the identical note in features/downloader/downloader.tsx,
+          the other surface this same warning lives on. */}
+      {url && detectPlatform(url).id === "telegram" ? (
+        <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+          Telegram downloads can take up to a minute to prepare — that&apos;s normal.
+        </p>
+      ) : null}
 
       {metadata ? (
         <div className="text-foreground">

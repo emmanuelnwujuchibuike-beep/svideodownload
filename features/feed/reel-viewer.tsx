@@ -178,14 +178,26 @@ const LETTERBOX = "bg-black";
  * "the progress bar is too close to the sound … push them upper so they can
  * give more space for the progress bar").
  *
- * Measured from the true bottom edge, they now stack with real gaps:
+ * 🔴 Corrected the other direction six days later (owner, 2026-08-16: "bring
+ * down this area… close to the bottom NAV just like tiktok"). The 2026-08-10
+ * fix solved the RIGHT problem — the scrubber and the caption were crowding
+ * each other — but it over-corrected the distance to the nav bar as a side
+ * effect, leaving a dead black band between the content and the tab bar that
+ * neither TikTok nor Instagram has. The gap the caption and scrubber keep
+ * BETWEEN THEMSELVES (1.75rem, the exact fix from the 10th) is preserved
+ * untouched here; only their shared distance FROM THE NAV shrinks.
+ *
+ * Measured from the true bottom edge, on mobile:
  *
  *   0            the nav's own floor (it owns `env(safe-area-inset-bottom)`)
  *   4.75rem      the top of the mobile tab bar
  *   +2rem        the tab bar's feathered scrim above itself (mobile-nav.tsx)
- *   PROGRESS     6.5rem  — the scrubber, clear of both
- *   CONTENT      8.25rem — caption, sound row and action rail, clear of the
- *                          scrubber's 20px touch row
+ *   PROGRESS     5.25rem — the scrubber, 0.5rem clear of the bar itself but
+ *                          well inside the feather — which is the point: that
+ *                          feather exists so bottom content stays legible
+ *                          OVER it, not so content stays entirely above it.
+ *   CONTENT      7rem    — caption, sound row and action rail, the same
+ *                          1.75rem above the scrubber as before.
  *
  * Every one of them adds `env(safe-area-inset-bottom)` so nothing lands in the
  * home-indicator strip. The modal variant (no tab bar under it) keeps its own
@@ -195,9 +207,9 @@ const LETTERBOX = "bg-black";
  * mobile-nav.tsx`: that scrim is painted at z-40 and this deck is z-30, so it
  * paints OVER anything here that shares its band. Move one, check the other.
  */
-const REEL_PROGRESS_BOTTOM = "!bottom-[calc(6.5rem+env(safe-area-inset-bottom))] lg:!bottom-4";
-const REEL_CONTENT_BOTTOM = "bottom-[calc(8.25rem+env(safe-area-inset-bottom))] lg:bottom-6";
-const REEL_CONTENT_PAD = "pb-[calc(8.25rem+env(safe-area-inset-bottom))] lg:pb-8";
+const REEL_PROGRESS_BOTTOM = "!bottom-[calc(5.25rem+env(safe-area-inset-bottom))] lg:!bottom-4";
+const REEL_CONTENT_BOTTOM = "bottom-[calc(7rem+env(safe-area-inset-bottom))] lg:bottom-6";
+const REEL_CONTENT_PAD = "pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8";
 
 function fmt(s: number): string {
   if (!Number.isFinite(s) || s < 0) s = 0;
@@ -1952,17 +1964,43 @@ function ReelCard({
           ) : null}
         </AnimatePresence>
 
-        {/* Double-tap-to-like heart bursts */}
+        {/*
+          ── Double-tap-to-like, corrected to actually read as Instagram's
+          (owner, 2026-08-16: "like should animate boldly above and disappears
+          just like Instagram in a premium way") ──────────────────────────────
+
+          This used to grow continuously (0.4→1.5 scale) while drifting 46px
+          upward for its whole 0.9s — that's the OTHER burst on this screen
+          (`floatReaction`, the rail's own "reaction rising into the air"
+          effect) wearing the double-tap's clothes. They read as the same
+          animation because they nearly were.
+
+          Instagram's heart does the opposite of floating: it POPS — overshoots
+          past full size with a spring-like bounce, settles, HOLDS in place with
+          no drift at all, then fades where it appeared. `feed-image.tsx` and
+          `media-carousel.tsx` already have this right (their bursts don't
+          drift); this bump matches their size and pop, and fixes the motion
+          curve to match their held-then-fade shape instead of the rail's
+          float-away one.
+
+          `top: b.y - 18` is a fixed offset, not an animated one — just enough
+          that the heart isn't centered directly under the thumb that caused it.
+        */}
         {bursts.map((b) => (
-          <span key={b.id} aria-hidden style={{ position: "fixed", left: b.x, top: b.y, zIndex: 45 }} className="pointer-events-none -translate-x-1/2 -translate-y-1/2">
+          <span
+            key={b.id}
+            aria-hidden
+            style={{ position: "fixed", left: b.x, top: b.y - 18, zIndex: 45 }}
+            className="pointer-events-none -translate-x-1/2 -translate-y-1/2"
+          >
             <motion.span
-              initial={{ opacity: 0, scale: 0.4, y: 0 }}
-              animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.3, 1.1, 1.5], y: [0, -10, -18, -46] }}
-              transition={{ duration: 0.9, ease: "easeOut", times: [0, 0.2, 0.6, 1] }}
+              initial={{ opacity: 0, scale: 0.3 }}
+              animate={{ opacity: [0, 1, 1, 1, 0], scale: [0.3, 1.3, 0.92, 1.06, 1] }}
+              transition={{ duration: 0.95, ease: "easeOut", times: [0, 0.28, 0.45, 0.6, 1] }}
               onAnimationComplete={() => setBursts((x) => x.filter((i) => i.id !== b.id))}
-              className="block"
+              className="block drop-shadow-[0_4px_18px_rgba(0,0,0,0.45)]"
             >
-              <WowSolid className="h-16 w-16" />
+              <WowSolid className="h-24 w-24 lg:h-28 lg:w-28" />
             </motion.span>
           </span>
         ))}

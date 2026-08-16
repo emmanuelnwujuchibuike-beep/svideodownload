@@ -892,6 +892,35 @@ async function ProfileData({
                     </div>
                   ) : null}
 
+                {/*
+                  ── Utility row — Share, QR and ••• moved to the TOP (owner,
+                  2026-08-16: "put the share, QR code and dotted menu at the
+                  top so the add friend, follow and message button will have
+                  enough breathing space and not feel compressed") ──────────
+
+                  These three were flex siblings of Add Friend / Follow /
+                  Message in ONE row — three `shrink-0` icon circles claiming
+                  their width first, so the `flex-1` text buttons fought over
+                  whatever was left and "Add Friend" clipped on a phone (the
+                  reported screenshot). Same components, same conditional
+                  logic (Share + QR always when `me`'s target isn't self;
+                  ProfileActions only for a signed-in viewer) — only the ROW
+                  they render in has changed. Right-aligned to match where
+                  they sat before, so nothing about their own position moves,
+                  only what they compete with for width.
+                */}
+                <div className="flex items-center justify-end gap-2">
+                  <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                  <ProfileCardLink handle={profile.handle} />
+                  {me ? (
+                    <ProfileActions
+                      targetId={profile.id}
+                      handle={profile.handle}
+                      initialBlocked={profile.viewerHasBlocked}
+                    />
+                  ) : null}
+                </div>
+
                 {/* Identity Presence™ — independent relationship signals, real data only.
                     Rendered only for signed-in visitors when a genuine relationship exists. */}
                 {isViewer &&
@@ -1002,34 +1031,17 @@ async function ProfileData({
                       className="min-w-0 flex-1 justify-center sm:flex-none"
                     />
                     {me ? (
-                      <>
-                        {/* Adaptive Relationship Engine (Part 7): messaging a friend is
-                            the natural primary action, so Message leads (filled) between
-                            friends and stays a calm secondary otherwise. */}
-                        <Link
-                          href={`/messages/new/${profile.id}`}
-                          className={`btn-lux min-w-0 flex-1 justify-center sm:flex-none ${friendState === "friends" ? "btn-lux-primary" : "btn-lux-secondary"}`}
-                        >
-                          <MessageCircle className="h-4 w-4" /> Message
-                        </Link>
-                        <span className="shrink-0">
-                          <ShareProfileButton handle={profile.handle} name={profile.displayName} />
-                        <ProfileCardLink handle={profile.handle} />
-                        </span>
-                        <span className="shrink-0">
-                          <ProfileActions
-                            targetId={profile.id}
-                            handle={profile.handle}
-                            initialBlocked={profile.viewerHasBlocked}
-                          />
-                        </span>
-                      </>
-                    ) : (
-                      <span className="shrink-0">
-                        <ShareProfileButton handle={profile.handle} name={profile.displayName} />
-                        <ProfileCardLink handle={profile.handle} />
-                      </span>
-                    )}
+                      /* Adaptive Relationship Engine (Part 7): messaging a friend is
+                         the natural primary action, so Message leads (filled) between
+                         friends and stays a calm secondary otherwise. Share/QR/•••
+                         moved to the utility row above — see the comment there. */
+                      <Link
+                        href={`/messages/new/${profile.id}`}
+                        className={`btn-lux min-w-0 flex-1 justify-center sm:flex-none ${friendState === "friends" ? "btn-lux-primary" : "btn-lux-secondary"}`}
+                      >
+                        <MessageCircle className="h-4 w-4" /> Message
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
 

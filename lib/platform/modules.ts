@@ -8,7 +8,7 @@
  *
  * See `docs/ARCHITECTURE.md` → "Adding a new product".
  */
-import { Cloud, Compass, Download, Home, Shield, Sparkles, Users, Wand2 } from "lucide-react";
+import { Cloud, Compass, Download, Home, Image as ImageIcon, Shield, Sparkles, Users, Wand2 } from "lucide-react";
 
 import {
   adminOnly,
@@ -68,6 +68,29 @@ export const MODULES: PlatformModule[] = [
       { label: "Home", href: "/home", icon: Home },
       { label: "Explore", href: "/explore", icon: Compass },
     ],
+  },
+  {
+    // Product #3 (owner, 2026-08-16: "Add wallpaper features in the features
+    // page as number 3 products"). Placed here, between community and studio,
+    // so it lands third in every list this array drives (the Features page's
+    // own ordering just reads MODULES in declaration order — see page.tsx).
+    id: "wallpapers",
+    name: "Frenz Wallpapers",
+    shortName: "Wallpapers",
+    tagline: "Free HD & 4K wallpapers, browse or swipe full-screen.",
+    basePath: "/wallpapers",
+    icon: ImageIcon,
+    accent: "from-violet-500 to-fuchsia-600",
+    status: "live",
+    veracity: {
+      stage: "live",
+      claimable: true,
+      provingRoute: "/wallpapers",
+      evidence: "app/wallpapers — categorised gallery + swipe view live via /api/wallpapers/*",
+      verifiedAt: "2026-08-16",
+    },
+    canAccess: everyone,
+    nav: [{ label: "Wallpapers", href: "/wallpapers", icon: ImageIcon }],
   },
   {
     id: "studio",

@@ -2,6 +2,7 @@ import { ArrowRight, Image as ImageIcon, Microscope } from "lucide-react";
 import NextImage from "next/image";
 import Link from "next/link";
 
+import { RotatingWallpaperLayers } from "@/components/wallpapers/wallpaper-cta-rotator";
 import { cn } from "@/lib/utils";
 
 /**
@@ -210,12 +211,24 @@ export function WallpaperCta({
    * happened when this markup existed twice.
    */
   variant = "row",
+  /**
+   * The last 10 published wallpapers (newest first), to rotate the backdrop
+   * through every 2s (owner, 2026-08-16). Optional and additive: omitted (or
+   * fewer than 2 urls), the tile behaves exactly as it always did — a single
+   * static `backgroundUrl`. Only `Hero` passes this today; `/downloads`'s own
+   * usage is deliberately untouched — see wallpaper-cta-rotator.tsx for why
+   * this can never cost either surface an LCP regression.
+   */
+  rotateUrls,
 }: {
   className?: string;
   backgroundUrl?: string | null;
   variant?: "row" | "card";
+  rotateUrls?: string[];
 }) {
-  if (variant === "card") return <WallpaperCard className={className} backgroundUrl={backgroundUrl} />;
+  if (variant === "card") {
+    return <WallpaperCard className={className} backgroundUrl={backgroundUrl} rotateUrls={rotateUrls} />;
+  }
   return (
     <Link
       href="/wallpapers"
@@ -310,7 +323,17 @@ export function WallpaperCta({
  * on the row above: a positioned colour layer paints over its own text, and a
  * background is clipped by `border-radius` for free.
  */
-function WallpaperCard({ className, backgroundUrl }: { className?: string; backgroundUrl?: string | null }) {
+function WallpaperCard({
+  className,
+  backgroundUrl,
+  rotateUrls,
+}: {
+  className?: string;
+  backgroundUrl?: string | null;
+  rotateUrls?: string[];
+}) {
+  const CARD_SIZES = "(min-width: 1024px) 300px, 50vw";
+  const rotating = (rotateUrls?.length ?? 0) > 1;
   return (
     <Link
       href="/wallpapers"
@@ -324,11 +347,16 @@ function WallpaperCard({ className, backgroundUrl }: { className?: string; backg
       )}
     >
       {/* 🔴 The landing page's LCP element — see WallpaperBackdrop for the
-          measurement and for why this stopped being a CSS background. */}
-      {backgroundUrl ? (
-        <WallpaperBackdrop url={backgroundUrl} sizes="(min-width: 1024px) 300px, 50vw" />
+          measurement and for why this stopped being a CSS background.
+          `rotateUrls` (2+ entries) swaps this for the client-side rotator —
+          see wallpaper-cta-rotator.tsx for why its FIRST frame is identical
+          to this same `<WallpaperBackdrop priority>` and costs LCP nothing. */}
+      {rotating ? (
+        <RotatingWallpaperLayers urls={rotateUrls!} sizes={CARD_SIZES} />
+      ) : backgroundUrl ? (
+        <WallpaperBackdrop url={backgroundUrl} sizes={CARD_SIZES} />
       ) : null}
-      {backgroundUrl ? <span aria-hidden className={cn(SCRIM_CARD, "pointer-events-none")} /> : null}
+      {rotating || backgroundUrl ? <span aria-hidden className={cn(SCRIM_CARD, "pointer-events-none")} /> : null}
       {/*
         ── ONE badge, not two (owner, 2026-08-10) ──────────────────────────────
         "make the wallpaper button less cluster like in the design."

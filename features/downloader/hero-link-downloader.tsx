@@ -11,24 +11,31 @@ import {
   setHeroLink,
   subscribeHeroLink,
 } from "@/features/downloader/hero-link-store";
+import { extractSharedUrl } from "@/lib/share-target";
 import { sourceUrlSchema } from "@/lib/validation";
 
 /**
  * The result of a link submitted from the hero CTA — shown right where the
  * visitor was looking.
  *
- * ── Two entry points, two results (owner, 2026-08-09) ─────────────────────────
- * "Users who use below download section should get review from the below
- * section but users who use the button should get a different review that
- * appears at below the wallpaper button."
+ * ── THREE entry points, ONE result (owner, 2026-08-09 origin; folded back
+ *    together 2026-08-16 when the second paste tool was removed) ──────────────
  *
- * Both used to land in the same place, because the hero CTA submitted `?url=` —
- * the PWA Share Target's parameter — so its result appeared inside the purple
- * download card under the phone mockup, a scroll away past the whole mockup.
- * The two paths are now separate:
+ * This used to split two ways on purpose — a typed hero submit rendered here,
+ * under Wallpaper Gallery, while a PWA Share Target hand-off (`?url=`/`?text=`,
+ * the parameters Android/iOS hand a web app when something is shared INTO it
+ * from TikTok/Instagram/etc) rendered inside a second, separate "Download
+ * anything" card further down the page. That second card is gone (owner,
+ * 2026-08-16: "remove the below download section" — the page now has exactly
+ * one paste tool, matching the Download page it mirrors), so there is no
+ * longer a second place for a share-target hand-off to render INTO. It renders
+ * here now, same as every other way a link reaches this page:
  *
- *   hero CTA          → the store below → renders here, under Wallpaper Gallery
- *   ?url= / ?text=    → PWA share target → renders in the download section
+ *   the hero CTA's own submit  → the store below
+ *   a PWA share-target hand-off → `?url=` / `?text=`, via `extractSharedUrl`
+ *   a pre-hydration/no-JS submit → `?paste=`, the form's own GET fallback
+ *
+ * All three resolve to the same `raw` link below and render in this one panel.
  *
  * ── Instant, with no navigation ───────────────────────────────────────────────
  * The link arrives through a module-level store, so submitting the CTA is a
@@ -58,7 +65,12 @@ import { sourceUrlSchema } from "@/lib/validation";
  */
 export function HeroLinkDownloader() {
   const submitted = useSyncExternalStore(subscribeHeroLink, getHeroLink, getServerHeroLink);
-  const fromUrl = useSearchParams().get("paste")?.trim() ?? "";
+  const params = useSearchParams();
+  const fromUrl = params.get("paste")?.trim() ?? "";
+  // The PWA Share Target hand-off — validated the same way `extractSharedUrl`
+  // always has, so a malformed or unsafe value is dropped rather than reaching
+  // `Downloader` unchecked (see lib/share-target.ts).
+  const fromShare = extractSharedUrl({ url: params.get("url"), text: params.get("text") }) ?? "";
 
   /*
     🔴 A submission is CONSUMED, not remembered (owner, 2026-08-09: "the hero
@@ -87,7 +99,7 @@ export function HeroLinkDownloader() {
     setHeroLink("");
   }, [submitted]);
 
-  const raw = shown || fromUrl;
+  const raw = shown || fromShare || fromUrl;
   if (!raw) return null;
 
   /*

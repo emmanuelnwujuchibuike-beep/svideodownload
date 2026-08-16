@@ -55,12 +55,23 @@ import { cn } from "@/lib/utils";
  * home-indicator on notched/installed devices) pads it, never an artificial
  * gap on a plain browser tab.
  */
-// Subtle "3D" depth on the glyph so it sits raised off the flat bar — the active
-// tab glows in the brand hue, the inactive ones carry a barely-there emboss. Shared
-// verbatim with the marketing nav (components/landing/mobile-app-nav.tsx) so both
-// bars read as the same material.
-const GLYPH_ACTIVE = "text-primary [filter:drop-shadow(0_2px_6px_rgba(79,70,229,0.5))]";
-const GLYPH_INACTIVE = "text-muted-foreground [filter:drop-shadow(0_1px_1.5px_rgba(2,6,23,0.14))]";
+/*
+  ── Bolder 3D (owner, 2026-08-16: "more 3D… more contrast… more darker…
+  more lively") — the SHADOWS deepen here to match the marketing nav's,
+  static and free exactly as before. The base COLOUR stays
+  `text-muted-foreground`, unlike the marketing nav's darker slate: this
+  file's immersive (Reels) variant below re-tints every inactive glyph white
+  via a selector keyed on the literal class name
+  `[&_.text-muted-foreground]:!text-white/75` (line ~213) — swapping the
+  class here would silently stop that selector matching and un-white the
+  Reels nav over video, which is a distinct, already-hard-won piece of UI
+  (see its own extensive comment below) this pass has no reason to touch.
+  The non-immersive bar below gets the darker lining/elevation instead,
+  which reaches the same "more contrast, more premium" ask without moving
+  a class every other selector in this file depends on.
+*/
+const GLYPH_ACTIVE = "text-primary [filter:drop-shadow(0_3px_8px_rgba(79,70,229,0.65))]";
+const GLYPH_INACTIVE = "text-muted-foreground [filter:drop-shadow(0_2px_3px_rgba(2,6,23,0.24))]";
 
 export function MobileNav() {
   const pathname = usePathname();
@@ -173,11 +184,13 @@ export function MobileNav() {
 
                   🔴 2rem and not more, deliberately. This wrapper is `z-40` and
                   the reel deck is `z-30`, so anything painted here is painted
-                  OVER the reel's own chrome — a taller feather would quietly
-                  wash out the scrubber sitting just above it. The reel's bottom
-                  stack (REEL_PROGRESS_BOTTOM in reel-viewer.tsx) puts the
-                  scrubber at 6.5rem, clear of the 4.75rem bar plus this 2rem.
-                  The two numbers are a pair; move one and check the other.
+                  OVER the reel's own chrome. The reel's bottom stack
+                  (REEL_PROGRESS_BOTTOM in reel-viewer.tsx) puts the scrubber at
+                  5.25rem — INSIDE this feather, not above it (owner, 2026-08-16:
+                  "close to the bottom NAV just like tiktok"). That's the
+                  feather's actual job: it exists so content sitting over it
+                  stays legible, not so content stays clear of it entirely. The
+                  two numbers are still a pair; move one and check the other.
 
                   `before:pointer-events-none` is load-bearing for the same
                   z-order reason: a pseudo-element is part of its originating
@@ -210,7 +223,12 @@ export function MobileNav() {
                 */
                 "[&_.text-muted-foreground]:!text-white/75",
               ].join(" ")
-            : "border-t border-border/60 bg-background",
+            : // Darker lining + a static elevation shadow, matching the
+              // marketing nav's own strengthening — see its comment. Left
+              // OUT of the immersive branch above on purpose: that bar is
+              // already a deliberately near-black gradient over video, where
+              // a border and an upward shadow would have nothing to add.
+              "border-t border-border bg-background shadow-[0_-4px_16px_-4px_rgba(2,6,23,0.12)] dark:shadow-[0_-4px_16px_-4px_rgba(0,0,0,0.4)]",
         )}
       >
         {mode === "downloader" || immersive ? (

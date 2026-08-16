@@ -34,15 +34,42 @@ import { useShowAds } from "@/features/monetization/use-show-ads";
  * a fixed, visible price, after which they are in control again.
  */
 export function BatchAdGate({
-  /** Set to run the PRE-batch ad. Resolves through `onProceed`. */
-  pending,
+  /*
+    🔴 The ARRAY, not a derived boolean (owner, 2026-08-16: "the glitch that
+    suddenly stops free users who multi download… the download button does
+    nothing… before it was working and it stopped").
+
+    This used to be `pending: boolean`, and the caller passed
+    `pendingBatch !== null`. That is the whole bug: React re-runs an effect
+    when a DEPENDENCY changes, and a boolean that is already `true` does not
+    change just because the thing behind it did. If the ad slot for one batch
+    ever got stuck reporting neither "has a creative" nor "definitely doesn't"
+    (`hasAd` staying `null` — a slow/stalled `/api/ads` fetch, no timeout on
+    it), the gate never resolved, `pendingBatch` never got cleared back to
+    `null`, and `pending` sat at `true` forever. Every batch attempt after
+    that sets `pendingBatch` to a NEW array — but `pendingBatch !== null` is
+    STILL `true`, unchanged, so the "open the gate" effect below never fires
+    again for the rest of the session: exactly "does nothing", and exactly
+    "before it was working and it stopped" once one request happened to hang.
+
+    Free-only because Pro/Business never depend on the async ad fetch at
+    all — `!showAds` short-circuits to `runNow()` synchronously in the same
+    effect run, so there is nothing there that CAN get stuck.
+
+    Passing the array itself (a fresh object on every `setPendingBatch` call,
+    even for a re-selection of the same items) and keying the effect on THAT
+    reference — not a boolean summary of it — means every distinct batch
+    request is a genuinely distinct dependency, so it can never be silently
+    absorbed into an already-`true` flag again.
+  */
+  batch,
   onProceed,
   onCancel,
   /** Set once a batch has finished, to run the short closing ad. */
   showComplete,
   onCompleteClosed,
 }: {
-  pending: boolean;
+  batch: readonly unknown[] | null;
   onProceed: () => void;
   onCancel: () => void;
   showComplete: boolean;
@@ -66,7 +93,7 @@ export function BatchAdGate({
 
   // ── Open the gate ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!pending) return;
+    if (!batch) return;
     proceeded.current = false;
 
     // Premium members, or the feature switched off: straight through.
@@ -77,7 +104,27 @@ export function BatchAdGate({
     setHasAd(null);
     setRemaining(Math.max(0, batchGateSeconds));
     setPhase("gate");
-  }, [pending, showAds, enabled, batchGateSeconds, runNow]);
+    // `batch` (the array reference), not a derived boolean — see the prop
+    // comment above for why that distinction is the entire fix.
+  }, [batch, showAds, enabled, batchGateSeconds, runNow]);
+
+  /*
+    🔴 THE CEILING (belt, to the reference-dependency fix's braces). Even with
+    the dependency bug fixed, nothing before this stopped `hasAd` itself from
+    hanging at `null` indefinitely if `/api/ads` never resolves at all — the
+    existing 1200ms grace check only acts when `hasAd === false`, never when
+    it's still `null`. 6 seconds is generously past any real ad-fill latency;
+    past it, treat the slot exactly like a confirmed no-fill and let the
+    batch through — the standing rule this whole component is built on is
+    that a placement failing to load must never hold a download hostage.
+  */
+  useEffect(() => {
+    if (phase !== "gate" || hasAd !== null) return;
+    const id = setTimeout(() => {
+      if (phase === "gate" && hasAd === null) runNow();
+    }, 6000);
+    return () => clearTimeout(id);
+  }, [phase, hasAd, runNow]);
 
   // ── The closing ad ─────────────────────────────────────────────────────
   useEffect(() => {

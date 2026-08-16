@@ -82,11 +82,29 @@ function navItems(fullBleed: boolean, homeHref: string, profileHref: string, ava
   ];
 }
 
-// Subtle "3D" depth on the glyph so it sits raised off the flat bar — the active
-// tab glows in the brand hue, the inactive ones carry a barely-there emboss. Shared
-// verbatim with the signed-in nav so both bars read as the same material.
-const GLYPH_ACTIVE = "text-primary [filter:drop-shadow(0_2px_6px_rgba(79,70,229,0.5))]";
-const GLYPH_INACTIVE = "text-muted-foreground [filter:drop-shadow(0_1px_1.5px_rgba(2,6,23,0.14))]";
+/*
+  ── Bolder 3D, darker lining (owner, 2026-08-16: "more 3D… make the lining
+  and icon color more contrast to be more darker and no be more lively, and
+  in a professional premium shape and style, without breaking the performance
+  at all") ────────────────────────────────────────────────────────────────
+
+  Every value below is STATIC — a `filter`/`box-shadow` painted once per
+  active/inactive state change, never animated on a timer or a scroll
+  listener, so this costs nothing beyond the one-time paint the bar already
+  had. No new element, no new class of work, only stronger values on the
+  exact same properties that were already there.
+
+  The inactive glyph moves off `text-muted-foreground` (a light-to-mid grey
+  that reads as "faded" at a glance on a bright bar) onto an explicit darker
+  slate, so the un-selected tabs read as present controls rather than as
+  ghosted ones — "more contrast… more darker" specifically named the icons,
+  not just the active state. The drop-shadows on both states deepen (more
+  blur, more spread, higher opacity) for a more pronounced raised-off-the-bar
+  read, matching "more 3D… more lively" without changing the flat-colour
+  active/inactive language the owner explicitly kept from the last pass.
+*/
+const GLYPH_ACTIVE = "text-primary [filter:drop-shadow(0_3px_8px_rgba(79,70,229,0.65))]";
+const GLYPH_INACTIVE = "text-slate-600 dark:text-slate-300 [filter:drop-shadow(0_2px_3px_rgba(2,6,23,0.24))]";
 
 /** Is `href` the active route for the current path? Home matches only exactly;
  *  the others match their section (so /reels/123 still lights up Reels). */
@@ -132,7 +150,14 @@ export function MobileAppNav() {
       aria-label="App"
       // Edge-to-edge, flush with the true bottom of the viewport — the bar itself
       // owns the safe-area inset. A touch taller than before (owner ask).
-      className="fixed inset-x-0 bottom-0 z-30 flex items-end justify-around border-t border-border/60 bg-background px-1 pb-[max(env(safe-area-inset-bottom),0.6rem)] pt-2.5 lg:hidden"
+      /*
+        `border-border` (full strength, was `/60`) is the darker "lining" —
+        a crisper edge instead of a faint one. `shadow-[0_-4px_16px_...]` is
+        a single, STATIC elevation shadow ABOVE the bar (painted once, same
+        cost as the border it sits beside) — the "more 3D" read of the whole
+        surface lifting off the page, not just its icons.
+      */
+      className="fixed inset-x-0 bottom-0 z-30 flex items-end justify-around border-t border-border bg-background px-1 pb-[max(env(safe-area-inset-bottom),0.6rem)] pt-2.5 shadow-[0_-4px_16px_-4px_rgba(2,6,23,0.12)] dark:shadow-[0_-4px_16px_-4px_rgba(0,0,0,0.4)] lg:hidden"
     >
       {items.map((item) => (
         <NavTab key={item.label} {...item} active={isActive(pathname, item.href)} />

@@ -116,8 +116,27 @@ async function selectWallpapers(
  * The published library, newest-curated first. Falls back to the built-in set
  * while the real one is empty. When `viewerId` is given, each wallpaper also
  * carries whether THAT viewer has liked or saved it.
+ *
+ * 🔴 The default was 120 (owner, 2026-08-16: "the wallpaper design is stuck
+ * at 120 while I have uploaded more than 120… older wallpaper doesn't show").
+ * Not a pagination bug — there IS no pagination anywhere downstream of this
+ * call (`/wallpapers`, the downloads-page preview, and the wallpaper CTA all
+ * take this array once and hold it; nothing ever asks for a next page). So a
+ * limit here is a hard, silent ceiling on the entire library, and since the
+ * ordering is newest-first, everything past it — the OLDEST uploads — simply
+ * never left the database.
+ *
+ * Raised to 600, not removed: this still protects the one real cost of a
+ * limit-less query, which is shipping the WHOLE table to the client as page
+ * props on every visit. 600 rows of metadata (no image bytes — `url`,
+ * dimensions, counts) is a few hundred KB of JSON at most, comfortably inside
+ * what a server-rendered prop should carry, and is headroom well past
+ * "more than 120" for a library one admin curates. A library that
+ * outgrows this needs real cursor pagination in `wallpaper-explore.tsx`
+ * (which currently assumes the full set is in memory for its client-side
+ * filter/sort/search) — a larger, separate change from closing this ceiling.
  */
-export async function listWallpapers(viewerId?: string | null, limit = 120): Promise<Wallpaper[]> {
+export async function listWallpapers(viewerId?: string | null, limit = 600): Promise<Wallpaper[]> {
   const rows = await selectWallpapers((columns) =>
     createAdminClient()
       .from("wallpapers")

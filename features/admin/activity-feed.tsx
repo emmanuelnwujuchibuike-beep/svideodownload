@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Repeat, UserPlus } from "lucide-react";
+
 import type { ActivityItem, ActivityTotals, MetricTotals } from "@/lib/admin/activity";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
@@ -173,6 +175,7 @@ export function ActivityFeed({ initial, totals }: { initial: ActivityItem[]; tot
 
       {/* Real period totals — a Postgres count per cell, never an estimate. */}
       {totals ? <TotalsCards totals={totals} /> : null}
+      {totals?.visitorsToday ? <TodaySplitCard split={totals.visitorsToday} /> : null}
 
       {/* What's on screen right now, by kind. */}
       {breakdown.length > 0 ? (
@@ -225,6 +228,40 @@ export function ActivityFeed({ initial, totals }: { initial: ActivityItem[]; tot
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * "Which guest came back today, and which is brand new" (owner, 2026-08-16).
+ * Sourced from the `analytics_visitor_split` RPC (migration 0115) — a visitor
+ * counts as RETURNING today if their first-ever recorded event predates today,
+ * NEW if today IS their first event. Both figures count today's active
+ * visitors only, signed-in and anonymous alike; they are not the same count
+ * as "new signed-up users" elsewhere on the dashboard.
+ */
+function TodaySplitCard({ split }: { split: { newToday: number; returningToday: number } }) {
+  const total = split.newToday + split.returningToday;
+  const returningPct = total > 0 ? Math.round((split.returningToday / total) * 100) : 0;
+  return (
+    <div className="mb-4 rounded-2xl border border-border/60 bg-secondary/25 p-3">
+      <p className="mb-2 text-xs font-bold uppercase tracking-wide text-violet-500">Today — new vs. returning</p>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex items-center gap-2 rounded-xl bg-background/60 px-3 py-2">
+          <UserPlus className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-lg font-extrabold leading-tight tabular-nums">{formatCompactNumber(split.newToday)}</p>
+            <p className="text-[10px] text-muted-foreground">New visitors</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 rounded-xl bg-background/60 px-3 py-2">
+          <Repeat className="h-4 w-4 shrink-0 text-blue-500" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-lg font-extrabold leading-tight tabular-nums">{formatCompactNumber(split.returningToday)}</p>
+            <p className="text-[10px] text-muted-foreground">Returning · {returningPct}%</p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

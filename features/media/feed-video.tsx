@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { WowSolid } from "@/components/brand/wow-icon";
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
+import { clampFeedRatio } from "@/lib/media/aspect";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
@@ -26,19 +27,13 @@ const TAP_MOVE_TOLERANCE = 18;
  * reachable. Cloudflare Stream items fall back to the Stream player.
  */
 /**
- * A width/height pair as a usable aspect ratio, or null if it is not one.
- *
- * Clamped rather than trusted: the tallest a feed card goes is a full 9:16 and
- * the widest is 16:9. Beyond those an ultra-tall or ultra-wide source would
- * either take over the entire scroll or become a letterboxed sliver, and the
- * stored numbers come from an upload pipeline and a backfill — a 0, a NaN or a
- * transposed pair must degrade to "measure it yourself", never to a card of
- * absurd height.
+ * The feed's shared tallness ceiling — see `lib/media/aspect.ts`. Kept as a
+ * local alias (rather than calling the import everywhere below) because this
+ * file already had a `clampRatio` name at every call site and the owner's
+ * 2026-08-16 "shrink like Twitter" change is a one-line delegation, not a
+ * rename that needs to ripple through the file.
  */
-function clampRatio(w?: number | null, h?: number | null): number | null {
-  if (!w || !h || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
-  return Math.min(16 / 9, Math.max(9 / 16, w / h));
-}
+const clampRatio = clampFeedRatio;
 
 export function FeedVideo({
   src,
@@ -289,7 +284,11 @@ export function FeedVideo({
   return (
     <div
       ref={wrap}
-      style={{ aspectRatio: ratio ?? 3 / 4 }}
+      // The "we don't know yet" placeholder must not reserve MORE height than
+      // the cap itself allows once the real ratio arrives — 4/5 matches
+      // `clampRatio`'s own floor, so the box never has to visibly shrink the
+      // instant metadata (or a server-known width/height) lands.
+      style={{ aspectRatio: ratio ?? 4 / 5 }}
       className={cn(
         "group relative overflow-hidden bg-black",
         // On laptops/desktops the whole video fits the screen height (never taller

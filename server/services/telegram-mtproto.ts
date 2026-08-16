@@ -296,7 +296,34 @@ export async function downloadTelegramStream(
   if (firstResult.done || !firstResult.value || (firstResult.value.length ?? 0) === 0) {
     throw new Error("Telegram stream produced no data");
   }
+
+  /*
+    🔴 ONE CHUNK AHEAD, ALWAYS (owner: large Telegram files "take up to 90sec to
+    prepare download" — 10MB+ specifically).
+
+    `iterDownload` has no concurrency knob — GramJS's `workers` option (parallel
+    connections to the DC) belongs to the different, non-streaming `downloadFile`
+    API, and switching to it here would mean giving up the backpressured
+    ReadableStream this function exists for. What IS available on this API: not
+    leaving the connection idle between chunks.
+
+    Before this, chunk N+1's `upload.getFile` request was only ever issued
+    inside `pull()`, i.e. after the STREAM CONSUMER asked for more data. For a
+    10MB file at the protocol's 512KB max part size that's ~20 sequential round
+    trips to the DC, and every one of them started only once whatever is reading
+    this stream (the HTTP response, ultimately the browser) came back asking —
+    dead time between chunks, not inside them, on every single part.
+
+    The fix keeps the SAME number of requests (MTProto still needs one
+    `upload.getFile` per part; that part of the cost is real and not ours to
+    remove) but overlaps them with consumption: the moment a chunk is in hand,
+    the NEXT one's request is fired immediately, before this one has even been
+    enqueued. By the time `pull()` is next called, that request has already
+    been in flight for as long as writing/flushing the previous chunk took —
+    latency paid ONCE per chunk instead of twice.
+  */
   let pending: Uint8Array | null = new Uint8Array(firstResult.value as Buffer);
+  let next: Promise<{ value?: Buffer; done?: boolean }> | null = iter.next();
 
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
@@ -306,17 +333,24 @@ export async function downloadTelegramStream(
         return;
       }
       try {
-        const { value, done } = await iter.next();
+        const inFlight = next ?? iter.next();
+        const { value, done } = await inFlight;
+        // Fire the FOLLOWING chunk's request now, ahead of enqueueing this
+        // one — that's the whole optimization: N+2 starts while N+1 is still
+        // being written out, not after.
+        next = done ? null : iter.next();
         if (done || !value) {
           controller.close();
           return;
         }
         controller.enqueue(new Uint8Array(value as Buffer));
       } catch (e) {
+        next = null;
         controller.error(e);
       }
     },
     async cancel() {
+      next = null;
       try {
         await iter.close?.();
       } catch {

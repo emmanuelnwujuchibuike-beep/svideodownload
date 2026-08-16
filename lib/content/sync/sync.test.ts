@@ -36,6 +36,8 @@ function healthySnapshot(overrides: Partial<RepoSnapshot> = {}): RepoSnapshot {
     routes: [
       "/", "/downloads", "/home", "/explore", "/reels", "/messages", "/admin",
       "/api/download", "/api/assistant",
+      // "wallpapers" joined the genome 2026-08-16 — see lib/content/genome/registry.ts.
+      "/wallpapers", "/api/wallpapers/allowance", "/api/wallpapers/engage",
     ],
     migrations: ["0084_guest_likes.sql", "0085_content_authoring.sql", "0086_editorial_workflow.sql"],
     files: {},

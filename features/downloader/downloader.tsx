@@ -386,6 +386,22 @@ export function Downloader({
             <span className="font-medium text-foreground">{detected.name}</span>
           </p>
         ) : null}
+        {/*
+          Telegram sets real expectations up front (owner, 2026-08-16: "Inform
+          users that pasted telegram link that telegram takes up to 1minute
+          Download time"). Telegram is genuinely slower than every other
+          source here — it is fetched over the authenticated MTProto protocol
+          (see server/services/telegram-mtproto.ts), not a plain HTTPS CDN
+          pull, so there is a real, structural reason for it and a silent
+          progress bar reads as broken rather than as normal. Said ONCE, at
+          the moment the link is recognised, not repeated on every screen the
+          download touches afterward.
+        */}
+        {detected?.id === "telegram" ? (
+          <p className="px-4 pb-2 text-xs text-amber-600 dark:text-amber-400">
+            Telegram downloads can take up to a minute to prepare — that's normal.
+          </p>
+        ) : null}
       </form>
       )}
 

@@ -29,7 +29,9 @@ import { AdSurface } from "@/features/monetization/ad-surface";
  *
  * Two things used to force that, and both moved rather than disappeared:
  *  - the signed-in → /home redirect now runs in middleware.ts, at the edge;
- *  - the Share Target hand-off is read on the client by SharedLinkDownloader.
+ *  - the Share Target hand-off is read on the client by HeroLinkDownloader
+ *    (folded in 2026-08-16 when the second, duplicate paste tool that used to
+ *    own this was removed — see the comment there).
  *
  * The auth-dependent chrome never needed the server: SiteHeader is a client
  * component resolving the user via useUser(). Keep it that way — adding a
@@ -114,7 +116,7 @@ export default function HomePage() {
         must read the same variable rather than carry its own copy.
       */}
       <div className="bg-[hsl(var(--frenz-canvas))] text-foreground">
-        <SiteHeader canvas />
+        <SiteHeader canvas topGradient />
         <main>
         <Hero />
         {/*

@@ -511,7 +511,37 @@ async function run(id: string) {
 
     patch(id, { status: "failed", error: reason });
     trackDownload("failed", { downloadId: task.id, platform: task.platform, mediaKind: task.kind, quality: task.qualityLabel, errorReason: reason });
-    toast("Download failed — tap retry", "error");
+
+    /*
+      🔴 The daily cap gets its OWN toast, not the generic one (owner,
+      2026-08-16: "notify users when they reach their daily batch downloads
+      limit and give options to upgrade to pro for more batch downloads or
+      continue single downloads").
+
+      `reason` here is the SERVER's own sentence (`failureMessage` above reads
+      `body.error` verbatim from `/api/download`'s 429 — see that route for
+      the exact two variants). "Download failed — tap retry" is actively
+      wrong for this case: retrying does nothing until the UTC-day reset, and
+      a member reading it as a transient glitch has no idea WHY the button
+      stopped working — which is indistinguishable, from the outside, from
+      the batch-gate bug this same report described. Naming the real reason
+      and offering the one action that helps (upgrade) is the fix for both
+      readings of the complaint.
+
+      The "Sign up or upgrade for more." phrasing is specifically the FREE-plan
+      branch of that route — Pro/Business have a cap too (far higher), and
+      offering them an upgrade they already bought would be wrong, so they get
+      the same honest message with no action button.
+    */
+    if (reason.startsWith("Daily download limit reached")) {
+      const isFree = reason.includes("Sign up or upgrade for more.");
+      toast(reason, "error", {
+        duration: 8000,
+        action: isFree ? { label: "Go Pro", onClick: () => window.location.assign("/pricing") } : undefined,
+      });
+    } else {
+      toast("Download failed — tap retry", "error");
+    }
   } finally {
     clearTimeout(slowTimer);
     controllers.delete(id);

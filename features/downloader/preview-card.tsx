@@ -732,7 +732,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     />
 
     <BatchAdGate
-      pending={pendingBatch !== null}
+      batch={pendingBatch}
       onProceed={() => {
         const items = pendingBatch;
         setPendingBatch(null);

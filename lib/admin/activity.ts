@@ -49,6 +49,86 @@ interface DownloadRow {
   title: string | null;
   format: string | null;
   created_at: string;
+  source_url: string | null;
+}
+
+/**
+ * Collapse the SAME download's two `downloads` rows into one (owner,
+ * 2026-08-16: "signed users who make download should show the user's name
+ * and download details alone and not include a duplicate anonymous download
+ * … it currently shows Frenz Download and also anonymous download with same
+ * details").
+ *
+ * ── Why there are two rows for one download at all ──────────────────────────
+ * `server/services/analytics.ts`'s `recordDownloadEvent` inserts an ANONYMOUS
+ * row the instant `/api/download` is called — before the transfer has even
+ * started, let alone finished, and with no `user_id` because that route
+ * never resolves one (adding an auth round-trip to the hottest path in the
+ * app to fix an admin-dashboard display bug would be the wrong trade). If the
+ * visitor is signed in, `features/history/sync.ts`'s `pushAdd` inserts a
+ * SECOND, fully-attributed row once the file actually finishes downloading
+ * client-side — real completion, real `user_id`, real format/quality. Both
+ * rows are honest individually; shown together they are the same event twice,
+ * once unnamed.
+ *
+ * ── Why the fix is here and not upstream ────────────────────────────────────
+ * Preventing the write is the alternative, and it's worse here: it would mean
+ * either adding that auth lookup to `/api/download` (latency on every
+ * download, including the guest ones this product exists to serve) or
+ * skipping the platform-stats rollup for signed-in users until their download
+ * finishes minutes later. Collapsing at READ time costs nothing on the
+ * download path and only runs when an admin is actually looking at this feed.
+ *
+ * ── The matching rule ────────────────────────────────────────────────────────
+ * Same `source_url`, one row with `user_id === null` and one with
+ * `user_id !== null`, within a generous 20-minute window (large files —
+ * Telegram in particular, see the note in server/services/telegram-mtproto.ts
+ * — can take a while to actually finish). Paired 1:1 by nearest timestamp
+ * within each `source_url` group, not "any anonymous row near any attributed
+ * one", so two genuinely different people downloading the same viral link
+ * around the same time are never merged into one. The ANONYMOUS row of each
+ * matched pair is dropped; the attributed one — which also carries the real
+ * format/quality, not just a media-kind guess — is kept.
+ */
+const DEDUPE_WINDOW_MS = 20 * 60_000;
+
+function dedupeAttributedDownloads(rows: DownloadRow[]): DownloadRow[] {
+  const bySource = new Map<string, DownloadRow[]>();
+  for (const r of rows) {
+    const key = r.source_url ?? `id:${r.id}`; // no source_url on file → never merge it
+    const list = bySource.get(key);
+    if (list) list.push(r);
+    else bySource.set(key, [r]);
+  }
+
+  const drop = new Set<string>();
+  for (const group of bySource.values()) {
+    if (group.length < 2) continue;
+    const anon = group.filter((r) => !r.user_id).sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const attributed = group.filter((r) => r.user_id).sort((a, b) => a.created_at.localeCompare(b.created_at));
+    if (anon.length === 0 || attributed.length === 0) continue;
+
+    const usedAttributed = new Set<string>();
+    for (const a of anon) {
+      const aTime = Date.parse(a.created_at);
+      let best: DownloadRow | null = null;
+      let bestDelta = Infinity;
+      for (const u of attributed) {
+        if (usedAttributed.has(u.id)) continue;
+        const delta = Math.abs(Date.parse(u.created_at) - aTime);
+        if (delta <= DEDUPE_WINDOW_MS && delta < bestDelta) {
+          best = u;
+          bestDelta = delta;
+        }
+      }
+      if (best) {
+        usedAttributed.add(best.id);
+        drop.add(a.id);
+      }
+    }
+  }
+
+  return rows.filter((r) => !drop.has(r.id));
 }
 
 /**
@@ -94,7 +174,7 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
       .limit(take);
     let dlQ = db
       .from("downloads")
-      .select("id, user_id, platform, title, format, created_at")
+      .select("id, user_id, platform, title, format, created_at, source_url")
       .order("created_at", { ascending: false })
       .limit(take);
     if (since) {
@@ -122,7 +202,9 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
         at: e.created_at,
       }));
 
-    const downloadItems: (ActivityItem & { userId: string | null })[] = ((downloads ?? []) as DownloadRow[]).map(
+    const downloadItems: (ActivityItem & { userId: string | null })[] = dedupeAttributedDownloads(
+      (downloads ?? []) as DownloadRow[],
+    ).map(
       (d) => ({
         id: `d:${d.id}`,
         kind: "download",
@@ -181,6 +263,15 @@ export interface ActivityTotals {
   downloads: MetricTotals;
   impressions: MetricTotals;
   adClicks: MetricTotals;
+  /**
+   * Visitors active TODAY (UTC calendar day so far), split by whether their
+   * very first event ever was before or after today started (owner,
+   * 2026-08-16: "give a space that shows total number of retention users and
+   * new users that day in live activity"). Null when the RPC from migration
+   * 0115 isn't available — never rendered as zero, which would read as "no
+   * visitors today" instead of "not measured".
+   */
+  visitorsToday: { newToday: number; returningToday: number } | null;
 }
 
 const DAY_MS = 86_400_000;
@@ -209,13 +300,28 @@ export async function fetchActivityTotals(): Promise<ActivityTotals | null> {
       return { day: d?.count ?? 0, week: w?.count ?? 0, month: m?.count ?? 0, year: y?.count ?? 0 };
     };
 
-    const [downloads, impressions, adClicks] = await Promise.all([
+    const startOfToday = new Date();
+    startOfToday.setUTCHours(0, 0, 0, 0);
+    const visitorSplit = async (): Promise<ActivityTotals["visitorsToday"]> => {
+      try {
+        const { data, error } = await db.rpc("analytics_visitor_split", { p_since: startOfToday.toISOString() });
+        if (error) return null;
+        const row = (data ?? [])[0] as { new_visitors: number; returning_visitors: number } | undefined;
+        if (!row) return { newToday: 0, returningToday: 0 };
+        return { newToday: Number(row.new_visitors) || 0, returningToday: Number(row.returning_visitors) || 0 };
+      } catch {
+        return null;
+      }
+    };
+
+    const [downloads, impressions, adClicks, visitorsToday] = await Promise.all([
       metric("downloads"),
       metric("ad_impressions"),
       metric("ad_clicks"),
+      visitorSplit(),
     ]);
 
-    return { downloads, impressions, adClicks };
+    return { downloads, impressions, adClicks, visitorsToday };
   } catch {
     return null;
   }

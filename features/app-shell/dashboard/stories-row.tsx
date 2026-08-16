@@ -1,5 +1,6 @@
 "use client";
 
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
 import { Loader2, Plus, Repeat2, Send, Smile, X } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -328,10 +329,68 @@ export function StoryViewer({
     };
   }, [next, prev, onClose]);
 
+  /*
+    ── Drag down to close (owner, 2026-08-11) ────────────────────────────────
+    Same distance/velocity numbers and drag recipe as `media-action-sheet.tsx`
+    — one shared "feel" for every drag-to-dismiss gesture in the app, not a
+    second slightly-different one invented here.
+
+    The WHOLE viewer (progress bar, header, media, reply bar) is one draggable
+    unit: it is a full-screen takeover with nothing else to leave in place, so
+    unlike a sheet there is no content underneath it to hold still. Locked
+    upward (`dragElastic.top: 0`) so it can't be dragged off the top; elastic
+    downward so a real finger gets resistance, not a 1:1 free-fall.
+
+    A tap on the prev/next zones, the close button, or the reply composer all
+    still work normally — framer distinguishes a drag from a tap by movement
+    distance, the same guarantee the sheet's own rows rely on.
+  */
+  const reduceMotion = useReducedMotion();
+  const y = useMotionValue(0);
+  // Fades the WHOLE takeover (backdrop included) as it's dragged, so the app
+  // underneath becomes visible through it — the visual promise a drag-to-close
+  // gesture makes before the finger ever lifts.
+  const dragOpacity = useTransform(y, [0, 500], [1, 0.35]);
+  const [closingStory, setClosingStory] = useState(false);
+  const handleDragEnd = (_: unknown, info: { offset: { y: number }; velocity: { y: number } }) => {
+    const DISMISS_DISTANCE = 130;
+    const DISMISS_VELOCITY = 650;
+    if (info.offset.y <= DISMISS_DISTANCE && info.velocity.y <= DISMISS_VELOCITY) return; // snaps back to 0 on its own (dragConstraints)
+    haptic("light");
+    setClosingStory(true);
+    if (reduceMotion) {
+      onClose();
+      return;
+    }
+    // Finishes the gesture rather than teleporting: a quick tween off the
+    // bottom edge from wherever the finger let go, same `animate(value, target,
+    // transition).then(...)` idiom `reel-viewer.tsx` already uses for its own
+    // release animations.
+    void animate(y, typeof window === "undefined" ? 1200 : window.innerHeight, {
+      type: "tween",
+      duration: 0.22,
+      ease: "easeIn",
+    }).then(() => onClose());
+  };
+
   if (!story) return null;
 
   return (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/95" role="dialog" aria-modal="true">
+    <motion.div
+      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/95"
+      role="dialog"
+      aria-modal="true"
+      style={{ y, opacity: reduceMotion ? 1 : dragOpacity }}
+      // Off while replying, not just the close callback — otherwise the panel
+      // still visually drags under a thumb that's trying to select/caret text
+      // in the composer, it just silently fails to close at the end of it.
+      // Same window that already pauses the story's own video.
+      drag={closingStory || replying || reduceMotion ? false : "y"}
+      dragConstraints={{ top: 0, bottom: 0 }}
+      dragElastic={{ top: 0, bottom: 0.9 }}
+      dragMomentum={false}
+      onDragEnd={handleDragEnd}
+    >
       <div className="absolute right-4 top-[calc(1.25rem+var(--frenz-safe-top))] z-20 flex items-center gap-2">
         {/* Author: turn resharing on/off for THIS story. Viewer: reshare it —
             but only when the author allows it (owner, 2026-07-16). The row is
@@ -372,8 +431,13 @@ export function StoryViewer({
         />
       ) : null}
 
-      {/* progress segments (current user's stories) */}
-      <div className="absolute inset-x-3 top-[calc(0.75rem+var(--frenz-safe-top))] z-20 flex gap-1">
+      {/*
+        Progress segments — right on the safe-area line (owner, 2026-08-11:
+        "the progress bar should be in the line of the safe area"), a small
+        0.625rem breathing gap rather than the 0.75rem it had, which is what
+        the media stage's own top offset below is now measured FROM.
+      */}
+      <div className="absolute inset-x-3 top-[calc(0.625rem+var(--frenz-safe-top))] z-20 flex gap-1">
         {group.stories.map((_, idx) => (
           <span key={idx} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
             <span className="block h-full rounded-full bg-white" style={{ width: `${idx < si ? 100 : idx === si ? pct : 0}%` }} />
@@ -397,32 +461,39 @@ export function StoryViewer({
       <button type="button" aria-label="Next" onClick={next} className="absolute inset-y-0 left-1/3 right-0 z-10" />
 
       {/*
-        ── The stage (owner, 2026-08-11) ─────────────────────────────────────
-        "make the story viewer to show like history viewer and not go to the
-         safe area, just clean, high quality video that is full screen and
-         doesnt crop out any part of video or image."
+        ── The stage, corrected (owner, 2026-08-11) ──────────────────────────
+        "i want it to reach the line of the safe area, and the progress bar
+         should be above, none should overlap each other, the story should
+         cover down below entirely, the bottom should be covered with the
+         video, just like whatsapp... only the safe area will be avoided but
+         it should be on the line of the safe area... video just little
+         beneath [the progress bar]."
 
-        Two changes, and the first is the whole complaint:
+        Two corrections to the previous pass, both from the same principle: the
+        TOP safe area is the only thing this viewer avoids, and it avoids as
+        little of it as possible.
 
-        🔴 `object-cover` CROPS. It scales the media until it fills the box and
-        throws away whatever hangs over the edge — so a 4:5 photo or a 16:9 clip
-        opened in a 19.5:9 phone lost its top and bottom, permanently and
-        silently. It was chosen (2026-07-21) to make stories reach every edge,
-        which it does, but "reaches every edge" and "shows the whole frame" are
-        different things and only one of them was asked for. `object-contain`
-        scales to FIT: the whole frame is always visible, letterboxed on black,
-        which is exactly what the history viewer (`download-player`) does and
-        why it was named as the reference.
+        🔴 The bottom padding is GONE. The prior pass added
+        `pb-[env(safe-area-inset-bottom)]`, reading "don't go to the safe area"
+        as applying to both edges — it doesn't. WhatsApp's own story viewer runs
+        the video under the home indicor, and only the reply composer (which
+        keeps its own `pb-[max(...,env(safe-area-inset-bottom))]` below,
+        untouched) needs to sit clear of it. The video reaches the true bottom
+        edge now, exactly like the reference named for this.
 
-        🔴 The stage is inset by the safe area, which is where this DIFFERS from
-        the history viewer. That one deliberately extends under the notch; this
-        one must not, so a face at the top of a portrait story is not sitting
-        behind the status bar and the home indicator is not resting on the
-        image. The chrome above already positions itself with the same variable,
-        so the two now agree instead of the media running underneath its own
-        progress bar.
+        🔴 The top padding is no longer just `var(--frenz-safe-top)` — it clears
+        the PROGRESS BAR, not merely the notch. The bar sits at
+        `safe-top + 0.625rem` and is `0.25rem` tall, so a stage inset by only
+        `safe-top` put its own pixels one row underneath the bar — both visible
+        in the same strip, the literal overlap complained about. `safe-top +
+        1.25rem` clears the bar plus a small gap, so the video begins "just a
+        little beneath it" and nothing paints twice in the same few rows. The
+        avatar/name row and the close/reshare buttons are unaffected — they were
+        already positioned below the bar, and (like WhatsApp) they OVERLAY the
+        video rather than pushing it down further; only the progress bar carves
+        out space the video may not use.
       */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center pb-[env(safe-area-inset-bottom)] pt-[var(--frenz-safe-top)]">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center pt-[calc(1.25rem+var(--frenz-safe-top))]">
         {story.mediaKind === "video" ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video
@@ -457,7 +528,7 @@ export function StoryViewer({
       {isOwn ? null : (
         <StoryReplyBar toUserId={group.userId} name={group.displayName.split(" ")[0] || group.displayName} onFocusChange={setReplying} />
       )}
-    </div>
+    </motion.div>
   );
 }
 

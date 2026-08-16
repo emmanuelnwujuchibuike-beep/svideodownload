@@ -147,6 +147,7 @@ export function SiteHeader({
   social = false,
   desktopHidden = false,
   canvas = false,
+  topGradient = false,
 }: {
   social?: boolean;
   desktopHidden?: boolean;
@@ -166,6 +167,25 @@ export function SiteHeader({
    * keep cheap phones cool.
    */
   canvas?: boolean;
+  /**
+   * A faded purple wash across the header + safe-area strip only (owner,
+   * 2026-08-16: "a faded purple gradient at the top… don't change the top
+   * header buttons or structure, just implement the design").
+   *
+   * A SEPARATE prop from `canvas`, not a reuse of it, even though both are
+   * true only on `/` today. `canvas` is also true on `/features` — keying the
+   * gradient off it would paint /features with a wash nobody asked for there.
+   * "Landing and Download page… they both have different purposes" (the
+   * owner's own words) is the reason this stays independently addressable per
+   * surface rather than bundled into the flag that happens to overlap today.
+   *
+   * `background-image` layered OVER the existing `background-color` (never
+   * replacing it) — the header stays fully opaque either way, satisfying the
+   * standing "no glass/blur" rule while still reading as a wash. Static, not
+   * animated: one paint, composited on the header's own fixed/sticky layer,
+   * never recomputed on scroll.
+   */
+  topGradient?: boolean;
 }) {
   // The member's chosen language, clamped to catalogues that exist. Re-reads
   // on the switcher's event, so changing language updates the chrome with no
@@ -286,6 +306,13 @@ export function SiteHeader({
         canvas && "border-transparent bg-[hsl(var(--frenz-canvas))]",
         desktopHidden && "lg:hidden",
         social && "border-b-border/20",
+        // The faded purple wash — light mode only (the reference is a light
+        // screen; dark mode keeps its existing flat bar). Purple at the very
+        // top, gone by the bar's own bottom edge, so it never bleeds into the
+        // page below and never fights the canvas/background colour it sits
+        // over — it only adds a background-IMAGE, the colour underneath is
+        // untouched.
+        topGradient && "bg-[image:linear-gradient(to_bottom,hsl(var(--brand-purple)/0.16),hsl(var(--brand-purple)/0.05)_60%,transparent)] dark:bg-[image:none]",
       )}
     >
       {/* On mobile SOCIAL surfaces (posts/profiles) the bar has no content — the

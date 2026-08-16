@@ -40,6 +40,7 @@ export function RevenueCharts({
   currency,
   mrrComplete,
   visitors,
+  visitorSplit,
 }: {
   series: RevenueSeries;
   mrr: number;
@@ -47,6 +48,8 @@ export function RevenueCharts({
   mrrComplete: boolean;
   /** Daily visitors from the analytics RPC — real buckets, may be absent. */
   visitors?: { date: string; visitors: number }[];
+  /** Daily new-vs-returning split — see getVisitorSplitSeries, capped at 30 days. */
+  visitorSplit?: { date: string; newVisitors: number; returningVisitors: number }[];
 }) {
   const [range, setRange] = useState<7 | 30 | 90>(30);
 
@@ -61,9 +64,15 @@ export function RevenueCharts({
   const impressions: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.impressions }));
   const clicks: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.clicks }));
   const visits: AreaPoint[] = slice(visitors ?? []).map((d) => ({ label: fmtDay(d.date), value: d.visitors }));
+  const downloads: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.downloads }));
+  const newVisitors: AreaPoint[] = slice(visitorSplit ?? []).map((d) => ({ label: fmtDay(d.date), value: d.newVisitors }));
+  const returningVisitors: AreaPoint[] = slice(visitorSplit ?? []).map((d) => ({ label: fmtDay(d.date), value: d.returningVisitors }));
 
   const totalImpr = impressions.reduce((n, p) => n + p.value, 0);
   const totalClicks = clicks.reduce((n, p) => n + p.value, 0);
+  const totalDownloads = downloads.reduce((n, p) => n + p.value, 0);
+  const totalNewVisitors = newVisitors.reduce((n, p) => n + p.value, 0);
+  const totalReturningVisitors = returningVisitors.reduce((n, p) => n + p.value, 0);
   const ctr = totalImpr > 0 ? (totalClicks / totalImpr) * 100 : null;
 
   return (
@@ -165,9 +174,48 @@ export function RevenueCharts({
             subtitle={`${visits.reduce((n, p) => n + p.value, 0).toLocaleString()} in the last ${range} days`}
             points={visits}
             slot={3}
-            className="lg:col-span-2"
           />
         ) : null}
+        {/*
+          New vs. returning, as two same-scale panels rather than one chart —
+          this file's own rule is ONE axis, never two, and these two counts sum
+          to a single day's active visitors, so they belong at the same scale
+          slot ties them visually to "Visitors" above, since they're its split,
+          not a new measure (owner, 2026-08-16: "make a chart for returning
+          visitors and new visitors"). Capped at 30 days server-side — see
+          getVisitorSplitSeries — so this stays flat/empty past that window.
+        */}
+        {newVisitors.length > 0 ? (
+          <AdminAreaChart
+            title="New visitors"
+            subtitle={`${totalNewVisitors.toLocaleString()} first-time visitors, last ${newVisitors.length} days`}
+            points={newVisitors}
+            slot={3}
+          />
+        ) : null}
+        {returningVisitors.length > 0 ? (
+          <AdminAreaChart
+            title="Returning visitors"
+            subtitle={`${totalReturningVisitors.toLocaleString()} came back, last ${returningVisitors.length} days`}
+            points={returningVisitors}
+            slot={3}
+          />
+        ) : null}
+        {/*
+          Downloads, counted from `analytics_downloads` where status = "completed"
+          — the client-confirmed lifecycle table, not the legacy `downloads` table
+          that logs every attempt as "completed" the instant it's requested (see
+          the sourcing note in lib/monetization/revenue-series.ts). Owner,
+          2026-08-16: "make a download chart in revenue just like visitors, ad
+          clicks and impression chart in revenue."
+        */}
+        <AdminAreaChart
+          title="Downloads"
+          subtitle={`${totalDownloads.toLocaleString()} completed in the last ${range} days`}
+          points={downloads}
+          slot={4}
+          className={visits.length > 0 ? undefined : "lg:col-span-2"}
+        />
       </div>
     </section>
   );

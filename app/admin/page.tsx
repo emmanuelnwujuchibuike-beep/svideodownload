@@ -128,10 +128,11 @@ import {
   getRegisteredWorkspaces,
   getShellCapabilities,
 } from "@/lib/platform/workspace-platform";
+import { DigestPanel } from "@/features/admin/digest-panel";
 import { RevenueCharts } from "@/features/admin/revenue-charts";
 import { RevenueOverview } from "@/features/admin/revenue-overview";
 import { getRevenueSeries } from "@/lib/monetization/revenue-series";
-import { getAnalyticsSummary } from "@/lib/analytics/queries";
+import { getAnalyticsSummary, getVisitorSplitSeries } from "@/lib/analytics/queries";
 import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
 import { BroadcastComposer } from "@/features/admin/broadcast-composer";
@@ -170,6 +171,7 @@ import {
   fetchMonetizationAnalytics,
   fetchRevenueStats,
   fetchSubscribers,
+  type MonetizationAnalytics,
 } from "@/lib/monetization/stats";
 import { alertsEnabled } from "@/lib/notify";
 import { PLATFORMS } from "@/lib/platforms";
@@ -216,7 +218,7 @@ export default async function AdminPage() {
     bottom of this file, streaming in while the operator is already reading and
     able to navigate.
   */
-  const [revenue, subscribers, pricing, planLimits, monetization, affiliates, adRecords, analytics, revenueSeries, visitorSummary] =
+  const [revenue, subscribers, pricing, planLimits, monetization, affiliates, adRecords, analytics, revenueSeries, visitorSummary, visitorSplit] =
     await Promise.all([
       fetchRevenueStats(),
       fetchSubscribers(),
@@ -232,6 +234,9 @@ export default async function AdminPage() {
       // Visitors come from the ANALYTICS summary, not the monetization one —
       // different object, and only this one carries a timeseries.
       getAnalyticsSummary("30d").catch(() => null),
+      // New vs. returning, one series — capped at 30 days, see the doc comment
+      // on getVisitorSplitSeries for why this can't share the 90-day window.
+      getVisitorSplitSeries(30).catch(() => null),
     ]);
 
   return (
@@ -303,7 +308,9 @@ export default async function AdminPage() {
                 date: b.t.slice(0, 10),
                 visitors: b.visitors,
               }))}
+              visitorSplit={visitorSplit?.days}
             />
+            <DigestPanel />
           </AdminPanel>
 
           <AdminPanel id="ads">
@@ -545,7 +552,20 @@ export default async function AdminPage() {
             {/* Live analytics dashboard (Phase 2/3) — reads the event pipeline. */}
             <AnalyticsDashboard />
             <Suspense fallback={<PanelSkeleton />}>
-              <TrafficSection />
+              {/*
+                `analytics` is the SAME object Revenue's placement table reads
+                (owner, 2026-08-16: "stats in revenue and stats in traffic…
+                shows different stat and information"). This used to call
+                `fetchMonetizationAnalytics()` a second time here — a genuinely
+                separate round trip, fired at a different wall-clock moment
+                than Revenue's (this panel streams in behind its own
+                `&lt;Suspense&gt;`), so an ad impression or click logged in
+                between the two reads could appear in one tab and not the
+                other for no reason a visitor to either tab could see. Passing
+                the already-awaited value down means both tabs are reading the
+                literal same numbers, not two snapshots of the same query.
+              */}
+              <TrafficSection analytics={analytics} />
             </Suspense>
           </AdminPanel>
 
@@ -678,11 +698,8 @@ async function ExperimentsSection() {
   return <ExperimentsManager experiments={experiments} />;
 }
 
-async function TrafficSection() {
-  const [downloads, analytics] = await Promise.all([
-    fetchDownloadStats(),
-    fetchMonetizationAnalytics(),
-  ]);
+async function TrafficSection({ analytics }: { analytics: MonetizationAnalytics | null }) {
+  const downloads = await fetchDownloadStats();
 
   const total = downloads?.total ?? 0;
   const nextMilestone = (Math.floor(total / MILESTONE_EVERY) + 1) * MILESTONE_EVERY;

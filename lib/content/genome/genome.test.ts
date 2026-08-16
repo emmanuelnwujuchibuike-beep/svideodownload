@@ -63,8 +63,10 @@ describe("Product Genome — the honesty invariants", () => {
   });
 
   it("exposes only claimable products to marketing surfaces", () => {
+    // "wallpapers" joined 2026-08-16 — a real, live route (app/wallpapers) with
+    // a genome backing every claimed capability, same bar as download/community.
     const ids = getClaimableProfiles().map((p) => p.platform.id).sort();
-    expect(ids).toEqual(["community", "download"]);
+    expect(ids).toEqual(["community", "download", "wallpapers"]);
   });
 
   it("never emits JSON-LD for an unbuilt product", () => {

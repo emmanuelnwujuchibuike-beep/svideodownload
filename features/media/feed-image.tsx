@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { WowSolid } from "@/components/brand/wow-icon";
 import { FadeImage } from "@/features/ui/fade-image";
+import { clampFeedRatio } from "@/lib/media/aspect";
 import { prefetchImage } from "@/lib/media/prefetch-image";
 import { cn } from "@/lib/utils";
 
@@ -114,6 +115,24 @@ export function FeedImage({
     onExpand();
   };
 
+  /*
+    ── The feed's Twitter/Threads density cap (owner, 2026-08-16) ────────────
+    "every long video or image should shrink on the feed like Twitter… two
+    posts that will be able to show complete."
+
+    `clampFeedRatio` is the same 4:5-tallest ceiling `FeedVideo` uses — see
+    `lib/media/aspect.ts`. Applied to the CONTAINER as an explicit aspect
+    ratio (not left to next/image's own intrinsic width/height sizing), which
+    is what lets a portrait photo taller than 4:5 be shown SMALLER —
+    letterboxed within this box via `object-contain` below — rather than
+    stretching the card to the photo's true height.
+
+    This is why the foreground switches to `fill` mode a few lines down: a
+    `fill` image has no size of its own, so the container's aspect-ratio is
+    what actually determines the rendered height, instead of racing it.
+  */
+  const ratio = hasDims ? clampFeedRatio(width, height) : null;
+
   return (
     <div
       ref={containerRef}
@@ -124,6 +143,7 @@ export function FeedImage({
       // as the image itself shifting/wobbling under a finger, not a subtle
       // press cue. The image now stays perfectly still through any touch,
       // press, or press-and-hold.
+      style={ratio ? { aspectRatio: ratio } : undefined}
       className={cn("relative flex items-center justify-center overflow-hidden bg-neutral-950", className)}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -152,12 +172,21 @@ export function FeedImage({
           <ImageOff className="h-8 w-8" aria-hidden />
           <span className="text-xs font-medium">Image unavailable</span>
         </div>
-      ) : hasDims ? (
+      ) : ratio ? (
+        // `ratio` (not `hasDims`) gates this branch: `fill` mode needs the
+        // container to actually HAVE an aspect-ratio to size against, and
+        // `ratio` is exactly the signal for that (it's null whenever
+        // `clampFeedRatio` couldn't make sense of the stored dimensions, even
+        // if `hasDims` itself looked true).
         <FadeImage
           src={src}
           alt={alt}
-          width={width}
-          height={height}
+          // `fill`, not `width`/`height`: the CONTAINER's aspect-ratio (set
+          // above, clamped to the 4:5 density cap) is what sizes this image
+          // now — the image itself has no intrinsic size to contribute or to
+          // fight the clamp with. `object-contain` still means a source
+          // taller than the clamp is shrunk to fit, never cropped.
+          fill
           sizes="(max-width: 768px) 100vw, 640px"
           // EAGER, not next/image's default lazy. The feed only mounts a card
           // once its page data has been prefetched ~3 screens ahead (SmartFeed's
@@ -172,10 +201,14 @@ export function FeedImage({
           // screen first.
           loading="eager"
           fetchPriority="low"
-          className="relative h-auto max-h-[80vh] w-auto max-w-full object-contain"
+          className="object-contain"
           onError={() => setBroken(true)}
         />
       ) : (
+        // No known dimensions (older post, pre-backfill) — the container has
+        // no aspect-ratio to size itself by, so this keeps the ORIGINAL
+        // intrinsic-sizing `<img>` (natural aspect, capped only by the 80vh
+        // safety ceiling) rather than a `fill` image with nothing to fill.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}

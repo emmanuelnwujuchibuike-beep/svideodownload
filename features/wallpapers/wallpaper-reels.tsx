@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { Bookmark, Crown, Download, Heart, Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -152,6 +153,30 @@ export function WallpaperReels({
 
   const current = items[index];
 
+  /*
+    ── Double-tap to like, the pop-heart, and a liking action that feels alive
+       (owner, 2026-08-16: "Let wallpaper liking feel more alive with haptic
+       sound and pop animated heart that grows big like Instagram and make
+       lively haptic sound. And double tap should like a wallpaper.") ────────
+
+    Same burst recipe `reel-viewer.tsx` uses for its own double-tap-to-like,
+    corrected this same session to actually read as Instagram's: a bounce past
+    full size, a hold, then a fade — never a drift, because Instagram's heart
+    does not float away, it appears where you tapped and stays there while it
+    fades. Reused rather than reinvented so every "double-tap to like" gesture
+    in the app moves the same way — see the note there for why the OLD,
+    still-drifting version was wrong.
+
+    `lastTapRef` is a single ref, not one per wallpaper: only the CENTRED
+    wallpaper (`current`) responds to a tap at all (matching the rail buttons,
+    which only ever act on `current`), so two taps close together can only be
+    a double-tap on the one wallpaper already on screen — nothing between
+    items to disambiguate.
+  */
+  const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([]);
+  const lastTapRef = useRef(0);
+  const DOUBLE_TAP_WINDOW_MS = 280;
+
   // Jump to the tapped wallpaper without animating past everything before it.
   useEffect(() => {
     const el = scroller.current?.children[startIndex] as HTMLElement | undefined;
@@ -204,7 +229,18 @@ export function WallpaperReels({
         setSignInPrompt(true);
         return;
       }
-      haptic("selection");
+      /*
+        The celebratory direction gets the lively feedback; unliking, saving
+        and unsaving stay the same quiet "selection" tick they always were —
+        a "more alive" LIKE should not make every tap on this screen buzz
+        harder, only the one that means "I like this".
+      */
+      if (action === "like") {
+        haptic("medium");
+        playSound("reaction");
+      } else {
+        haptic("selection");
+      }
       const liking = action === "like" || action === "unlike";
       // Optimistic: the tap must feel instant; a failure rolls the row back.
       setState((s) => {
@@ -322,8 +358,26 @@ export function WallpaperReels({
               a tap and NOT a scroll, which is precisely the distinction that
               matters inside a scroll-snap viewer. Rolling our own from
               touchstart/touchend would have to re-derive that, badly.
+
+              Double-tap-to-like rides the SAME click stream: two clicks inside
+              the window are a double-tap, restricted to the centred wallpaper
+              (see the state comment above). Never un-likes — a second
+              double-tap on an already-liked wallpaper is a no-op here exactly
+              like Instagram's own, so an enthusiastic visitor tapping several
+              times in a row can't toggle the like off by accident.
             */
-            onClick={() => setUpgradeOpen(false)}
+            onClick={(e) => {
+              setUpgradeOpen(false);
+              if (w.id !== current?.id) return;
+              const now = Date.now();
+              if (now - lastTapRef.current < DOUBLE_TAP_WINDOW_MS) {
+                lastTapRef.current = 0;
+                setBursts((b) => [...b.slice(-4), { id: now + Math.random(), x: e.clientX, y: e.clientY }]);
+                if (!state[w.id]?.liked) void engage(w, "like");
+              } else {
+                lastTapRef.current = now;
+              }
+            }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -351,6 +405,27 @@ export function WallpaperReels({
           </div>
         ))}
       </div>
+
+      {/* Double-tap-to-like heart bursts — see the state comment above for why
+          this is the same pop-then-hold-then-fade curve reel-viewer.tsx uses. */}
+      {bursts.map((b) => (
+        <span
+          key={b.id}
+          aria-hidden
+          style={{ position: "fixed", left: b.x, top: b.y - 18, zIndex: 45 }}
+          className="pointer-events-none -translate-x-1/2 -translate-y-1/2"
+        >
+          <motion.span
+            initial={{ opacity: 0, scale: 0.3 }}
+            animate={{ opacity: [0, 1, 1, 1, 0], scale: [0.3, 1.3, 0.92, 1.06, 1] }}
+            transition={{ duration: 0.95, ease: "easeOut", times: [0, 0.28, 0.45, 0.6, 1] }}
+            onAnimationComplete={() => setBursts((x) => x.filter((i) => i.id !== b.id))}
+            className="block drop-shadow-[0_4px_18px_rgba(0,0,0,0.45)]"
+          >
+            <Heart className="h-24 w-24 fill-rose-500 text-rose-500" />
+          </motion.span>
+        </span>
+      ))}
 
       {/*
         One wrapper for ALL the chrome, so immersive mode is a single opacity

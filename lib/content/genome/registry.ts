@@ -293,6 +293,80 @@ const community: ProductGenome = {
   roadmap: [{ id: "moments", title: "Moments stream", horizon: "later" }],
 };
 
+/* ------------------------------ Wallpapers (live) ------------------------------ */
+
+/**
+ * Added 2026-08-16 (owner: "Add wallpaper features in the features page as
+ * number 3 products"). Every field below is verified against the running
+ * `/wallpapers` route (`features/wallpapers/wallpaper-explore.tsx`) and its
+ * API surface (`app/api/wallpapers/{allowance,comments,engage,share,view}`),
+ * not recalled or estimated — see the file's own population rule above.
+ */
+const wallpapers: ProductGenome = {
+  id: "wallpapers",
+  purpose: "A browsable, categorised wallpaper library with a full-screen swipe mode, free to download.",
+
+  capabilities: [
+    { id: "browse", name: "Category browsing", description: "Filter by category and by measured resolution (HD/4K).", stage: "live", provingRoute: "/wallpapers" },
+    { id: "swipe-view", name: "Full-screen swipe view", description: "A reels-style, one-per-screen swipe mode for wallpapers.", stage: "live", provingRoute: "/wallpapers" },
+    { id: "download", name: "Save to device", description: "Download the original file; a daily allowance applies like the rest of the app's free tier.", stage: "live", provingRoute: "/api/wallpapers/allowance" },
+    { id: "engage", name: "Like, comment and share", description: "React to and discuss a wallpaper, and share it out.", stage: "live", provingRoute: "/api/wallpapers/engage" },
+  ],
+
+  features: {
+    core: [
+      { id: "browse-grid", name: "Browse the grid", stage: "live", essential: true },
+      { id: "download-original", name: "Download the original file", stage: "live", essential: true },
+    ],
+    optional: [
+      { id: "categories", name: "Category filters", stage: "live", essential: false },
+      { id: "resolution-badge", name: "Measured resolution badge (HD/4K)", stage: "live", essential: false },
+      { id: "comments-share", name: "Comment and share", stage: "live", essential: false },
+    ],
+  },
+
+  dependencies: [],
+  integrations: [{ name: "Cloudflare R2", kind: "storage", active: true, notes: "Wallpaper file storage." }],
+
+  surfaces: [
+    { kind: "web", stage: "live" },
+    { kind: "pwa", stage: "live" },
+  ],
+
+  permissions: [],
+
+  learning: { tutorials: [], academy: [], faqs: [] },
+  developer: { apiRefs: [], guides: [] },
+
+  releases: [],
+  compatibility: [],
+
+  accessibility: { wcagLevel: "AA", notes: ["Shares the app's canvas/safe-area treatment (`.frenz-canvas-page`)."] },
+  privacy: {
+    dataCollected: ["Views", "Downloads", "Comments"],
+    retention: "Standard account data lifecycle.",
+    policyAnchor: "/privacy",
+  },
+  security: { authRequired: false, rlsPolicies: [], threatNotes: [] },
+  performance: { budgetMs: 2000, lcpTargetMs: 2000 },
+
+  analytics: [
+    { id: "wallpaper_view", name: "Wallpaper viewed", description: "A wallpaper entered the viewport or was opened.", collected: true },
+    { id: "wallpaper_download", name: "Wallpaper downloaded", description: "A save completed.", collected: true },
+  ],
+  seo: {
+    title: "Frenzsave Wallpapers — Free HD & 4K Wallpapers",
+    description: "Browse and download free HD and 4K wallpapers, or swipe through them full-screen.",
+    keywords: ["wallpapers", "4K wallpapers", "HD wallpapers"],
+    canonical: "/wallpapers",
+  },
+  structuredData: [],
+
+  related: ["download", "community"],
+  workflows: [],
+  roadmap: [],
+};
+
 /* ------------------------------ Studio (concept) ------------------------------ */
 
 /**
@@ -447,6 +521,7 @@ const admin: ProductGenome = {
 export const GENOMES: Record<string, ProductGenome> = {
   download,
   community,
+  wallpapers,
   studio,
   cloud,
   smart,

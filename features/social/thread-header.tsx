@@ -160,7 +160,27 @@ export function ThreadHeader({
         // opened"). The container's re-anchoring to the visual viewport is
         // handled in ThreadAppearanceProvider — see useKeyboardViewportPin.
         "frenz-thread-header relative z-10 flex shrink-0 items-center gap-3 px-4 py-3 pt-[calc(0.75rem+var(--frenz-safe-top))] lg:pt-3",
-        wallpaperActive ? "bg-white/55 backdrop-blur-md" : forceLight ? "bg-white" : cn("bg-background", themeHeaderClass),
+        /*
+          🔴 BLUR IS NOW THE DEFAULT, NOT JUST THE WALLPAPER CASE (owner,
+          2026-08-16, with a reference screenshot: "make the top nav be like
+          in the screenshot, exactly, the blur, full edge to safe area blur
+          and everything").
+
+          Blur was already an accepted pattern here (the wallpaper-active
+          case has used `backdrop-blur-md` for a while) — only `forceLight`
+          and the color-theme case were still a flat, opaque fill. All three
+          now go translucent + blurred, so the header reads the same
+          frosted-glass way regardless of which background state a thread is
+          in. The safe-area strip gets it for free: the padding that reserves
+          that space is INSIDE this element, so its background — now a blur —
+          already extends under the status bar with it, no separate layer
+          needed.
+        */
+        wallpaperActive
+          ? "bg-white/55 backdrop-blur-xl"
+          : forceLight
+            ? "bg-white/70 backdrop-blur-xl"
+            : cn("bg-background/70 backdrop-blur-xl", themeHeaderClass),
       )}
     >
       <div
@@ -224,12 +244,23 @@ export function ThreadHeader({
           and the buttons keep the mockup's layout ready for the real
           feature. Direct threads only, like the mockup. */}
       {type === "direct" && other ? (
-        // Owner mockup: plain icons with no glass/circle chrome, matching the
-        // back arrow above — was every icon in its own bordered translucent
-        // chip, reported "old low class chat top menu, use exactly the image
-        // style." Vertical-dots glyph (MoreVertical), not horizontal, to
-        // match the reference image exactly.
-        <span className="relative ml-auto flex shrink-0 items-center gap-3.5">
+        /*
+          🔴 3D WHITE PILL BUTTONS (owner, 2026-08-16, with a reference
+          screenshot: "make the buttons to be 3d and design exactly like in
+          the screenshot but the structure and arrangements shouldn't be
+          exactly, it should be arranged and style as it is already").
+
+          Only the BUTTON TREATMENT comes from the reference — a filled
+          white circle with a soft shadow per icon, reading as raised off
+          the blurred header — not its layout (the reference's own back-
+          arrow-plus-count pill and icon order are NOT copied; this keeps
+          this app's existing arrangement: bare back arrow, avatar+name,
+          then this icon cluster). White/dark-icon unconditionally, like the
+          rest of this header's WhatsApp-style light default, rather than
+          theme-reactive — the reference is one deliberate light look, not a
+          state that should invert in dark mode.
+        */
+        <span className="relative ml-auto flex shrink-0 items-center gap-2">
           {!callsUnavailable ? (
             <>
               <button
@@ -239,12 +270,9 @@ export function ThreadHeader({
                   haptic("light");
                   toast("Voice calls are coming soon.", "info");
                 }}
-                className={cn(
-                  "flex h-9 w-9 items-center justify-center transition",
-                  forceDarkText ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
-                )}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-neutral-900 shadow-[0_2px_6px_rgba(15,23,42,0.18)] ring-1 ring-inset ring-black/5 transition active:scale-90"
               >
-                <Phone className="h-[19px] w-[19px]" />
+                <Phone className="h-[17px] w-[17px]" />
               </button>
               <button
                 type="button"
@@ -253,12 +281,9 @@ export function ThreadHeader({
                   haptic("light");
                   toast("Video calls are coming soon.", "info");
                 }}
-                className={cn(
-                  "flex h-9 w-9 items-center justify-center transition",
-                  forceDarkText ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
-                )}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-neutral-900 shadow-[0_2px_6px_rgba(15,23,42,0.18)] ring-1 ring-inset ring-black/5 transition active:scale-90"
               >
-                <Video className="h-5 w-5" />
+                <Video className="h-[18px] w-[18px]" />
               </button>
             </>
           ) : null}
@@ -269,12 +294,9 @@ export function ThreadHeader({
               haptic("light");
               setOptionsOpen(true);
             }}
-            className={cn(
-              "flex h-9 w-9 items-center justify-center transition",
-              forceDarkText ? "text-neutral-900 hover:text-neutral-600" : "text-foreground hover:text-foreground/70",
-            )}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-neutral-900 shadow-[0_2px_6px_rgba(15,23,42,0.18)] ring-1 ring-inset ring-black/5 transition active:scale-90"
           >
-            <MoreVertical className="h-5 w-5" />
+            <MoreVertical className="h-[18px] w-[18px]" />
           </button>
           <ThreadOptionsSheet
             conversationId={conversationId}

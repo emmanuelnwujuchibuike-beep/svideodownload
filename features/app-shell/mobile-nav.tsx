@@ -313,8 +313,25 @@ export function MobileNav() {
             {/* `/home` is an ALIAS for this page in Downloader mode — middleware
                 rewrites it rather than redirecting, so the PWA's start_url costs
                 no extra round-trip. Without this the Home tab sat dark on the
-                one screen every cold launch lands on. */}
-            <NavTab label="Home" href="/downloads" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/downloads" || pathname === "/home"} onWarm={router.prefetch} />
+                one screen every cold launch lands on.
+
+                🔴 `/downloads` ONLY when signed in (owner, 2026-08-16: "the
+                landing page home button still tries to open the downloader
+                page instead of the landing page"). The old marketing-only
+                nav got this right (`homeHref = signedIn ? "/downloads" :
+                "/"`) and it was lost in the merge — `/downloads` has no auth
+                guard, so it isn't WRONG for a guest, it's just a different
+                page than the marketing landing, and Home on the marketing
+                site has to mean the landing page for a visitor who never
+                signed in. */}
+            <NavTab
+              label="Home"
+              href={handle ? "/downloads" : "/"}
+              icon={FrenzHomeOutline}
+              activeIcon={FrenzHomeSolid}
+              active={pathname === "/downloads" || pathname === "/home" || (!handle && pathname === "/")}
+              onWarm={router.prefetch}
+            />
             <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={router.prefetch} />
             <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
             <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />

@@ -32,6 +32,7 @@
     "tokens:check": "node scripts/design-tokens.mjs check",
     "design:adoption": "node scripts/design-adoption.mjs",
     "metrics:engineering": "node scripts/engineering-metrics.mjs",
+    "seo:audit": "node scripts/seo-audit.mjs",
     "deps:audit": "npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {

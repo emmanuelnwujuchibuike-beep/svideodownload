@@ -112,6 +112,18 @@ export default async function LessonPage({
     });
   }
 
+  // 🔴 Added 2026-08-16 SEO audit — this template had neither visible
+  // breadcrumbs nor BreadcrumbList JSON-LD at all.
+  graph.push({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: siteUrl },
+      { "@type": "ListItem", position: 2, name: "Learning Academy", item: `${siteUrl}/learn` },
+      { "@type": "ListItem", position: 3, name: lesson.title, item: `${siteUrl}/learn/${lesson.slug}` },
+    ],
+  });
+
   return (
     <>
       {graph.map((node, i) => (
@@ -123,12 +135,25 @@ export default async function LessonPage({
       ))}
       <SiteHeader />
       <main className="container max-w-3xl pb-24 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
-        <Link
-          href="/learn"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Learning Academy
-        </Link>
+        <nav aria-label="Breadcrumb">
+          <ol className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <li>
+              <Link href="/" className="transition hover:text-foreground">
+                Home
+              </Link>
+            </li>
+            <li aria-hidden>/</li>
+            <li>
+              <Link href="/learn" className="inline-flex items-center gap-1.5 transition hover:text-foreground">
+                <ArrowLeft className="h-3.5 w-3.5" /> Learning Academy
+              </Link>
+            </li>
+            <li aria-hidden>/</li>
+            <li aria-current="page" className="min-w-0 truncate text-foreground">
+              {lesson.title}
+            </li>
+          </ol>
+        </nav>
 
         <header className="mt-6">
           <span className="text-xs font-medium text-muted-foreground">

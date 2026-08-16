@@ -13,6 +13,7 @@ import { AdSenseSiteScript, VerificationTags } from "@/features/monetization/ads
 import { GoogleTag } from "@/features/monetization/google-tag";
 import { MonetagScript } from "@/features/monetization/monetag-script";
 import { DEFAULT_LOCALE, getLocale, isRtl } from "@/lib/i18n/locales";
+import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL as siteUrl } from "@/lib/site";
 
 import "./globals.css";
@@ -180,7 +181,55 @@ const SPLASH_SCREENS: { file: string; width: number; height: number; ratio: numb
   { file: "750x1334", width: 375, height: 667, ratio: 2 }, // SE
 ];
 
-const jsonLd = {
+/*
+  🔴 Sitewide Organization + WebSite added, and this whole block routed through
+  the shared `jsonLd()` XSS-safe serializer (2026-08-16 SEO audit).
+
+  Before this, `Organization`/`WebSite` only ever appeared NESTED as a
+  `publisher`/`provider`/`isPartOf` fragment on individual content types
+  (blog posts, help articles, topic pages) — there was no single top-level
+  entity search engines could resolve the brand itself to, and no
+  `SearchAction`, which is what makes a sitelinks search box eligible.
+
+  Every field below is real and checkable: `logo` points at an actual file in
+  `public/`, `url` is the real canonical origin. No `sameAs` — this project
+  does not fabricate data it cannot verify (see lib/seo/wallpapers.ts's "no
+  invented star rating" note, same principle), and no live, confirmed social
+  profile URLs were found in this codebase to link. Add it only once one
+  genuinely exists.
+
+  This was also previously serialized with a raw `JSON.stringify`, not the
+  `jsonLd()` helper every other structured-data block in the app uses
+  (`docs/SECURITY.md`'s documented sitewide rule) — harmless while every field
+  here is a static literal, but the kind of inconsistency that becomes a real
+  gap the next time this block is extended with anything dynamic.
+*/
+const organizationLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": `${siteUrl}/#organization`,
+  name: "FrenzSave",
+  url: siteUrl,
+  logo: `${siteUrl}/icon-512.png`,
+};
+
+const websiteLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "@id": `${siteUrl}/#website`,
+  name: "FrenzSave",
+  url: siteUrl,
+  publisher: { "@id": `${siteUrl}/#organization` },
+  /*
+    No `potentialAction`/`SearchAction`. The wallpaper search box (the only
+    search on the site) is client-state, not a `?q=` URL a bot could actually
+    drive — declaring a SearchAction against a URL that doesn't honor it
+    would be exactly the misleading-schema problem this audit is fixing
+    elsewhere. Add this back if/when a query param genuinely drives a search.
+  */
+};
+
+const webApplicationLd = {
   "@context": "https://schema.org",
   "@type": "WebApplication",
   name: "FrenzSave",
@@ -316,7 +365,9 @@ export default function RootLayout({
         />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{
+            __html: jsonLd([organizationLd, websiteLd, webApplicationLd]),
+          }}
         />
         {/* Owner decision, REVERTED 2026-08-16: SYSTEM is the default for a
             brand-new visitor again (was "light" since 2026-07-16 — see the

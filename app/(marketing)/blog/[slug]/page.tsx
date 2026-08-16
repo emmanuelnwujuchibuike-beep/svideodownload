@@ -71,21 +71,45 @@ export default async function BlogPostPage({
     publisher: { "@type": "Organization", name: "FrenzSave" },
     mainEntityOfPage: `${siteUrl}/blog/${post.slug}`,
   };
+  // 🔴 Added 2026-08-16 SEO audit — this template had neither visible
+  // breadcrumbs nor BreadcrumbList JSON-LD at all.
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: siteUrl },
+      { "@type": "ListItem", position: 2, name: "Blog", item: `${siteUrl}/blog` },
+      { "@type": "ListItem", position: 3, name: post.title, item: `${siteUrl}/blog/${post.slug}` },
+    ],
+  };
 
   return (
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: jsonLd(articleLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd([articleLd, breadcrumbLd]) }}
       />
       <SiteHeader />
       <main className="container max-w-3xl pb-24 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
-        <Link
-          href="/blog"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> All guides
-        </Link>
+        <nav aria-label="Breadcrumb">
+          <ol className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <li>
+              <Link href="/" className="transition hover:text-foreground">
+                Home
+              </Link>
+            </li>
+            <li aria-hidden>/</li>
+            <li>
+              <Link href="/blog" className="inline-flex items-center gap-1.5 transition hover:text-foreground">
+                <ArrowLeft className="h-3.5 w-3.5" /> All guides
+              </Link>
+            </li>
+            <li aria-hidden>/</li>
+            <li aria-current="page" className="min-w-0 truncate text-foreground">
+              {post.title}
+            </li>
+          </ol>
+        </nav>
 
         {/* Gradient cover hero */}
         <div className="relative mt-5 overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-violet-600 to-purple-700 p-8 shadow-elevated sm:p-12">

@@ -6,9 +6,19 @@ import { SiteHeader } from "@/components/layout/site-header";
 
 export const dynamic = "force-static";
 
+/*
+  🔴 noindex (2026-08-16 SEO audit) — this is a sign-in doorway with no real
+  personal content, the same shape as /library, /history and /welcome, which
+  are already correctly noindexed. This one had no `robots` override at all,
+  so it inherited the root layout's `index:true` by accident rather than by
+  decision — a thin page Google had no reason to rank was indexable purely
+  because nobody had set the same flag its siblings already carry.
+*/
 export const metadata: Metadata = {
   title: "Profile",
   description: "Sign in to Frenz to personalize your experience — save downloads, track history and more.",
+  alternates: { canonical: "/profile" },
+  robots: { index: false, follow: false },
 };
 
 /**

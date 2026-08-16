@@ -1,4 +1,4 @@
-import { ArrowUpRight, Home } from "lucide-react";
+import { ArrowUpRight, Compass, Home, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
 
 import { seoPageId } from "@/lib/content/graph/build";
@@ -142,6 +142,48 @@ export function RelatedLinks({ slug, brand }: { slug: string; brand: string }) {
         ) : null}
 
         <ProductLinks slug={slug} />
+
+        {/*
+          🔴 Cross-links to the site's other two real content pillars (owner,
+          2026-08-16 SEO audit) — this component previously only ever linked
+          downloader pages to each other and to graph-derived product/
+          capability nodes, never to Wallpapers or Community/Discovery, despite
+          both being real, public, indexed Frenzsave surfaces. Varied anchor
+          text per link, not the same string repeated across ~148 pages.
+        */}
+        <h3 className="mb-4 mt-10 text-lg font-semibold">Also on Frenzsave</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Link
+            href="/wallpapers"
+            className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft transition hover:border-foreground/20 hover:shadow-card"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white">
+              <ImageIcon className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">Free HD wallpapers</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                Browse and save the gallery
+              </span>
+            </span>
+            <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />
+          </Link>
+          <Link
+            href="/explore"
+            className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft transition hover:border-foreground/20 hover:shadow-card"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-cyan-400 text-white">
+              <Compass className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">Trending downloads</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                See what the community is saving
+              </span>
+            </span>
+            <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />
+          </Link>
+        </div>
       </div>
     </section>
   );

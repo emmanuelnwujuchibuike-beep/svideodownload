@@ -10,10 +10,22 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+/*
+  🔴 `robots: index:true` made explicit (2026-08-16 SEO audit). This was the
+  only page in the (app) group with no `robots` field at all — every sibling
+  route explicitly declares `index:false`, so this one's indexability was an
+  accident of omission rather than a decision. It's real: genuinely public,
+  signed-out-accessible community content (no login redirect — see the page
+  body below), so the deliberate call is to index it and add it to the
+  sitemap (app/sitemap.ts), not to noindex it to match its siblings by
+  default. `sort`/`category` vary the results but canonical stays this one
+  static path, so parameter variants consolidate rather than fragment.
+*/
 export const metadata: Metadata = {
   title: "Explore — trending downloads",
   description: "Discover trending and recent downloads shared by the FrenzSave community.",
   alternates: { canonical: "/explore" },
+  robots: { index: true, follow: true },
 };
 
 /*

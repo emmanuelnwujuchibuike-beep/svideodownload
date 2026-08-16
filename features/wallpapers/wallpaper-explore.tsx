@@ -365,6 +365,29 @@ export function WallpaperExplore({
           </div>
         </div>
 
+        {/*
+          Visible breadcrumb, matching the BreadcrumbList JSON-LD already
+          emitted by lib/seo/wallpapers.ts (owner, 2026-08-16 SEO audit) — the
+          page had structured data for a trail nothing on screen showed. Kept
+          to its own thin row rather than folded into the sticky back/search
+          bar above: that bar is deliberately two loose buttons, not a second
+          header (owner, 2026-08-16: "shouldn't be positioned like a second
+          header"), and this doesn't touch it.
+        */}
+        <nav aria-label="Breadcrumb" className="mx-auto mt-2 w-full max-w-3xl px-4">
+          <ol className="flex items-center gap-2 text-xs text-muted-foreground">
+            <li>
+              <Link href="/" className="transition hover:text-foreground">
+                Home
+              </Link>
+            </li>
+            <li aria-hidden>/</li>
+            <li aria-current="page" className="text-foreground">
+              Wallpapers
+            </li>
+          </ol>
+        </nav>
+
         {/* The headline + card deck — NOT sticky, scrolls away normally. */}
         <div className="mx-auto w-full max-w-3xl px-4">
           <div className="relative mt-3 flex items-start justify-between gap-3">

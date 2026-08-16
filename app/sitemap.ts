@@ -148,5 +148,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${siteUrl}/terms`, lastModified: now, priority: 0.3 },
     { url: `${siteUrl}/privacy`, lastModified: now, priority: 0.3 },
     { url: `${siteUrl}/dmca`, lastModified: now, priority: 0.3 },
+    /*
+      🔴 Five real, static, canonical, internally-linked pages that were simply
+      never added here (2026-08-16 SEO audit) — each has its own unique
+      metadata and canonical already; this file just never listed them.
+      /explore is the one judgment call: it's the sole (app)-group page with
+      real public, signed-out-accessible content, so it's declared here
+      deliberately rather than left to accidental discovery — see its own
+      `robots` fix in app/(app)/explore/page.tsx for the matching half of this.
+    */
+    { url: `${siteUrl}/pricing`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
+    { url: `${siteUrl}/features`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
+    { url: `${siteUrl}/developers`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${siteUrl}/support`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${siteUrl}/explore`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
   ];
 }

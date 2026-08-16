@@ -10,6 +10,8 @@ import {
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import Link from "next/link";
+
 import { SiteFooter } from "@/components/layout/site-footer";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -96,11 +98,16 @@ export default async function DownloaderPage({
     operatingSystem: "iOS, Android, Windows, macOS, Linux",
     url,
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: "4.9",
-      ratingCount: "18420",
-    },
+    /*
+      🔴 No `aggregateRating` (removed 2026-08-16 SEO audit). This was a
+      hardcoded `4.9 / 18420` literal, identical across all ~148 pages, with
+      no review system anywhere in the codebase backing it — a fabricated
+      rating is a real Google structured-data policy violation (fake review
+      markup), not just a style nit, and directly contradicts this project's
+      own standard against invented numbers (see lib/seo/wallpapers.ts's "no
+      invented star rating" note). Add it back only if/when a real per-page
+      rating source exists.
+    */
     description: page.description,
   };
   const faqLd = {
@@ -143,6 +150,30 @@ export default async function DownloaderPage({
       <SiteHeader />
       <main>
         {/*
+          Visible breadcrumb, matching `breadcrumbLd` above (owner, 2026-08-16
+          SEO audit) — this page emitted BreadcrumbList JSON-LD with nothing
+          on screen for it to describe, which is a structured-data/visible-
+          content mismatch (see lib/discovery/schema.ts's own warning on this
+          exact failure mode). One trail, same two stops, both places.
+        */}
+        <nav
+          aria-label="Breadcrumb"
+          className="container max-w-5xl pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]"
+        >
+          <ol className="flex items-center gap-2 text-sm text-muted-foreground">
+            <li>
+              <Link href="/" className="transition hover:text-foreground">
+                Home
+              </Link>
+            </li>
+            <li aria-hidden>/</li>
+            <li aria-current="page" className="text-foreground">
+              {page.brand}
+            </li>
+          </ol>
+        </nav>
+
+        {/*
           Hero — painted in the PLATFORM'S OWN brand colours.
 
           Every one of these ~148 pages used to render the same blue→violet→purple
@@ -166,7 +197,7 @@ export default async function DownloaderPage({
           hue stays unmistakably branded. Snapchat is the one brand no scrim can
           rescue — see the note on its `accentForeground` in lib/platforms.ts.
         */}
-        <section className="relative overflow-hidden pb-12 pt-[calc(var(--frenz-safe-top)+7rem)] sm:pt-[calc(var(--frenz-safe-top)+8rem)]">
+        <section className="relative overflow-hidden pb-12 pt-6 sm:pt-8">
           <div className="container max-w-5xl">
             <div
               className={`relative overflow-hidden rounded-[2rem] bg-gradient-to-br ${platform.accent} px-6 py-12 shadow-elevated sm:px-10 sm:py-14`}

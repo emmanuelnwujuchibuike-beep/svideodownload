@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { getOrCreateConversation } from "@/lib/social/messages";
@@ -5,6 +6,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+
+// 🔴 Explicit noindex (2026-08-16 SEO audit) — the only page under messages/
+// with no robots override; harmless in practice since it only ever
+// redirects, but every sibling route declares this explicitly rather than
+// relying on it never mattering.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

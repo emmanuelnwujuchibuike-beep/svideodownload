@@ -176,7 +176,18 @@ export function FeedGridGallery({ images }: { images: string[] }) {
                 */
                 <Image
                   src={url}
-                  alt=""
+                  /*
+                    🔴 Real alt text, not empty (2026-08-16 SEO audit). These
+                    are real, individually-openable content tiles (the button
+                    wrapping each one already says "View image N full
+                    screen"), not decoration — `alt=""` was the same defect
+                    already fixed on /wallpapers. No per-image caption exists
+                    for admin-uploaded landing images (unlike wallpapers,
+                    which have a real name/category to build from), so this
+                    stays honestly generic rather than inventing one: what the
+                    tile factually is, not a keyword-stuffed description.
+                  */
+                  alt={`Content shared on Frenzsave, example ${i + 1}`}
                   fill
                   // Two columns on a phone, a fixed-width tile once the grid
                   // stops growing.
@@ -296,7 +307,7 @@ export function FeedGridGallery({ images }: { images: string[] }) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={current}
-            alt=""
+            alt={open !== null ? `Content shared on Frenzsave, example ${open + 1}` : ""}
             onClick={(e) => e.stopPropagation()}
             className="max-h-[82vh] max-w-full rounded-2xl object-contain shadow-2xl"
           />

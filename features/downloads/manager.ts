@@ -179,13 +179,69 @@ function enqueueSave(fn: () => void) {
 // set — the interstitial fires on "3 consecutive downloads" and only needs the
 // completion beat, not every progress tick the main `listeners` set emits.
 let completedCount = 0;
-const completionListeners = new Set<() => void>();
+export interface DownloadCompletion {
+  id: string;
+  /** Set when this completion was one item of a batch (see `batchId` on
+   *  `DownloadTask`) — the rating prompt treats a batch completion as a
+   *  bigger vote of confidence than a single file finishing. */
+  batchId?: string;
+  /** Today's persisted single (non-batch) download count AFTER this
+   *  completion, or null for a batch item. See `getDailySingleDownloadCount`. */
+  dailySingleCount: number | null;
+}
+const completionListeners = new Set<(info: DownloadCompletion) => void>();
+
+/**
+ * How many single (non-batch) downloads THIS DEVICE has completed today —
+ * the rating prompt's "twice today" trigger (owner, 2026-08-16: "Download
+ * should be recorded on the device so when same device make a single
+ * Download twice that day the rating promt should show up it doesn't have
+ * to be consecutive").
+ *
+ * Recorded HERE, at the moment a download actually finishes, rather than by
+ * the rating-prompt component reacting to a completion event — that
+ * component's chunk is dynamically imported and only mounts after the
+ * FIRST completion `floating-progress.tsx` has already seen this session,
+ * so it cannot be the thing persisting a count that has to include
+ * completions from BEFORE it mounted (including ones from an earlier
+ * session, hours or days apart — "it doesn't have to be consecutive").
+ * Owning the write here means the count is correct regardless of what UI
+ * happens to be mounted when a transfer finishes.
+ */
+const RATING_DAILY_KEY = "frenz:rating-prompt-daily";
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function bumpDailySingleCount(): number {
+  try {
+    const raw = localStorage.getItem(RATING_DAILY_KEY);
+    const parsed = raw ? (JSON.parse(raw) as { date?: string; count?: number }) : null;
+    const count = parsed?.date === todayUtc() && typeof parsed.count === "number" ? parsed.count + 1 : 1;
+    localStorage.setItem(RATING_DAILY_KEY, JSON.stringify({ date: todayUtc(), count }));
+    return count;
+  } catch {
+    return 0;
+  }
+}
+/** Peeks today's persisted single-download count WITHOUT incrementing it —
+ *  for a fresh mount to catch up on completions it wasn't there to observe. */
+export function getDailySingleDownloadCount(): number {
+  try {
+    const raw = localStorage.getItem(RATING_DAILY_KEY);
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw) as { date?: string; count?: number };
+    return parsed.date === todayUtc() && typeof parsed.count === "number" ? parsed.count : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** Total downloads completed this session (never decremented). */
 export function getCompletedCount(): number {
   return completedCount;
 }
 /** Subscribe to download completions (fires once per finished transfer). */
-export function onDownloadCompleted(cb: () => void): () => void {
+export function onDownloadCompleted(cb: (info: DownloadCompletion) => void): () => void {
   completionListeners.add(cb);
   return () => completionListeners.delete(cb);
 }
@@ -462,7 +518,8 @@ async function run(id: string) {
 
     patch(id, { status: "completed", receivedBytes: received, totalBytes: total || received, speed: 0, awaitingSave: ios });
     completedCount += 1;
-    for (const l of completionListeners) l();
+    const dailySingleCount = task.batchId ? null : bumpDailySingleCount();
+    for (const l of completionListeners) l({ id, batchId: task.batchId, dailySingleCount });
     trackDownload("completed", {
       downloadId: task.id,
       platform: task.platform,

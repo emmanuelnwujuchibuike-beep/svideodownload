@@ -3,35 +3,52 @@
 import { Star, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { getCompletedCount, onDownloadCompleted } from "@/features/downloads/manager";
+import { getCompletedCount, getDailySingleDownloadCount, onDownloadCompleted } from "@/features/downloads/manager";
 import { cn } from "@/lib/utils";
 
 /**
- * "How's Frenz?" — after two successful downloads, then not again for a fortnight.
+ * "How's Frenz?" — device-persisted triggers, then not again for a fortnight.
  *
  * ── The brief was "not intrusive", so the rules are strict ────────────────
- *  · It never appears before the SECOND completed download. One download is
- *    not enough experience to have an opinion worth collecting.
+ *  · A BATCH download (a story's snaps, a slideshow, a multi-select) asks
+ *    right away — it's a bigger vote of confidence than one file, so it
+ *    doesn't wait for a second one (owner, 2026-08-16: "show on first batch
+ *    Downloads").
+ *  · A SINGLE download asks once the device has completed its SECOND one
+ *    TODAY — not necessarily back-to-back (owner: "it doesn't have to be
+ *    consecutive"). The count is a calendar-day tally the download manager
+ *    persists to localStorage AT THE MOMENT a transfer finishes (see
+ *    `getDailySingleDownloadCount` in features/downloads/manager.ts) — not
+ *    here, and not an in-memory session counter, because this component's
+ *    chunk is dynamically imported and only mounts after the first
+ *    completion the floating progress card has already seen THIS session,
+ *    so it cannot be the thing recording completions from before it
+ *    mounted, including ones from an earlier session hours or days apart.
  *  · It is a bottom card, not a modal. Nothing is blocked, nothing is
  *    dimmed, and the page underneath stays usable — a rating request that
  *    interrupts a task is how you get a 1-star rating about the request.
- *  · Answering OR dismissing buys two weeks of silence, and after that it
- *    takes two more downloads to ask again. Dismissal is treated exactly like
- *    a rating, so "no thanks" is never punished with a sooner re-ask.
+ *  · Answering OR dismissing buys two weeks of silence (owner: "when a user
+ *    rate it doesn't show up for 2 weeks"). Dismissal is treated exactly
+ *    like a rating, so "no thanks" is never punished with a sooner re-ask.
  *  · It waits for the download card to clear, so the two never stack.
  *
  * ── Why the state is local-only ──────────────────────────────────────────
- * Whether someone has been ASKED is a device concern, not an account one, and
- * storing it server-side would mean a write for every visitor who was merely
- * shown a card. localStorage answers it for free, works for the signed-out
- * majority, and fails safe: with storage unavailable the prompt never shows,
- * which is the quiet failure rather than the nagging one.
+ * Whether someone has been ASKED (or how many times they've downloaded
+ * today) is a device concern, not an account one, and storing it
+ * server-side would mean a write for every visitor who was merely shown a
+ * card. localStorage answers it for free, works for the signed-out
+ * majority, and fails safe: with storage unavailable the prompt never
+ * shows, which is the quiet failure rather than the nagging one.
  */
 
 const SEEN_KEY = "frenz:rating-prompt";
-const AFTER_DOWNLOADS = 2;
 /** Long enough for the download card to auto-dismiss (6s) and be gone. */
 const DELAY_MS = 7_000;
+/** How many single downloads THIS DEVICE has recorded today before asking —
+ *  see `getDailySingleDownloadCount` in the download manager, which is what
+ *  actually persists the count (this component may mount after some of
+ *  today's completions already happened). */
+const DAILY_THRESHOLD = 2;
 /**
  * How long an answer (or a dismissal) is remembered before we may ask again
  * (owner: two weeks, then re-prompt after two more downloads).
@@ -122,15 +139,26 @@ export function RatingPrompt({ surface = "downloads" }: { surface?: "landing" | 
     if (inCooldown()) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const maybeAsk = () => {
-      if (getCompletedCount() < AFTER_DOWNLOADS || inCooldown()) return;
+    const ask = () => {
+      if (inCooldown()) return;
       // Let the download card finish its own business first.
       timer = setTimeout(() => setState((s) => (s === "hidden" ? "asking" : s)), DELAY_MS);
     };
 
-    // Someone arriving with downloads already behind them this session counts.
-    maybeAsk();
-    const off = onDownloadCompleted(maybeAsk);
+    // Someone arriving with today's second single download already behind
+    // them counts too — the count is persisted by the manager, not tied to
+    // whether THIS mount witnessed both completions.
+    if (getDailySingleDownloadCount() >= DAILY_THRESHOLD) ask();
+
+    const off = onDownloadCompleted((info) => {
+      if (info.batchId) {
+        // A batch is a bigger vote of confidence than one file — ask
+        // straight away rather than waiting for a second one.
+        ask();
+        return;
+      }
+      if (info.dailySingleCount != null && info.dailySingleCount >= DAILY_THRESHOLD) ask();
+    });
     return () => {
       off();
       if (timer) clearTimeout(timer);

@@ -59,23 +59,33 @@ function eta(t: DownloadTask): string | null {
 }
 
 /**
- * The rating prompt (owner: ask after two successful downloads).
+ * The rating prompt — see features/feedback/rating-prompt.tsx for the actual
+ * trigger rules (a batch asks on its first completion, a single download on
+ * its second TODAY, both device-persisted).
  *
  * Mounted from HERE rather than from each page, for two reasons: this component
  * is already on every surface a download can finish on, and it already
  * subscribes to completions — so the prompt costs one dynamic import instead of
  * a new client boundary on each page.
  *
- * `ssr: false` and gated on the count, so the chunk is fetched only once someone
- * has actually completed their second download. The landing sits at its
- * cold-entry ceiling with no headroom, and a rating card is the last thing that
- * should be in a first-time visitor's critical path.
+ * `ssr: false` and gated on `completed >= 1`, so the chunk is fetched only once
+ * someone has actually completed a download this session — never on the
+ * landing's cold-entry critical path for a visitor who hasn't downloaded
+ * anything yet.
+ *
+ * 🔴 NOT gated on 2 (owner, 2026-08-16: a batch's first completion, or a
+ * single download that happens to be today's SECOND because the first one
+ * ran in an earlier session, both have to be able to ask on THIS session's
+ * very first completion). Gating on 2 here would mean the component — and
+ * the `onDownloadCompleted` subscription that has to observe every
+ * completion to evaluate those rules — never mounts in time to see the one
+ * that qualifies.
  */
 const RatingPrompt = dynamic(() => import("@/features/feedback/rating-prompt").then((m) => m.RatingPrompt), {
   ssr: false,
 });
 
-const RATING_AFTER = 2;
+const RATING_AFTER = 1;
 
 /**
  * The one sentence shown whenever a download is taking a while — as the reason
@@ -161,7 +171,23 @@ function WaitTile({
       prefetch
       onClick={onNavigate}
       className={[
-        "frenz-alive group relative flex items-center gap-3 overflow-hidden rounded-[1.15rem] p-3 text-left",
+        /*
+          🔴 RESPONSIVE CHROME (owner, 2026-08-16: "this watch reels or view
+          wallpaper button that shows on delayed download always compressed
+          on small device, fix it to be responsive on all devices").
+
+          Every size below was a single fixed value — a 44px icon disc, a
+          28px chevron disc, a 12px gap and 12px padding, all the same from a
+          320px phone up through desktop. On the card's narrowest real width
+          (`inset-x-3` on a ~320-360px viewport puts this tile around
+          150-190px of content column after its own padding), that fixed
+          120px of chrome (padding + icon + gaps + chevron) left barely any
+          room for the title/subtitle, reading as cramped rather than the
+          premium tile the reference asked for. The base (mobile) classes
+          are now smaller; `sm:` restores the original larger sizing once
+          there is room for it.
+        */
+        "frenz-alive group relative flex items-center gap-2 overflow-hidden rounded-[1.15rem] p-2.5 text-left sm:gap-3 sm:p-3",
         "ring-1 ring-inset ring-white/25 transition duration-200 hover:-translate-y-px active:scale-[0.985]",
         violet
           ? "bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-500 shadow-[0_10px_26px_-12px_rgba(139,92,246,0.85)]"
@@ -187,17 +213,17 @@ function WaitTile({
       />
 
       {/* (4) Circular glass disc. */}
-      <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/25 ring-1 ring-inset ring-white/40 backdrop-blur-sm">
+      <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/25 ring-1 ring-inset ring-white/40 backdrop-blur-sm sm:h-11 sm:w-11">
         {children}
       </span>
 
       <span className="relative min-w-0 flex-1">
-        <span className="block text-[14px] font-bold leading-tight text-white">{title}</span>
-        <span className="mt-0.5 block text-[11px] leading-snug text-white/85">{sub}</span>
+        <span className="block truncate text-[13px] font-bold leading-tight text-white sm:text-[14px]">{title}</span>
+        <span className="mt-0.5 block text-[10.5px] leading-snug text-white/85 sm:text-[11px]">{sub}</span>
       </span>
 
-      <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/30 transition group-hover:bg-white/30">
-        <ChevronRight className="h-4 w-4 text-white transition-transform group-hover:translate-x-0.5" />
+      <span className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/30 transition group-hover:bg-white/30 sm:h-7 sm:w-7">
+        <ChevronRight className="h-3.5 w-3.5 text-white transition-transform group-hover:translate-x-0.5 sm:h-4 sm:w-4" />
       </span>
     </Link>
   );

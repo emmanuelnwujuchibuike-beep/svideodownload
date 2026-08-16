@@ -50,6 +50,19 @@ let lastReelsFetchAt = 0;
 let lastRenderedSeed: string | null = null;
 
 /**
+ * The For You deck's resume snapshot — persists across a close/reopen within
+ * this browsing session (owner, 2026-08-16: "the random video display is
+ * supposed to be on first entry not everytime the reels button is click…
+ * the reels page use same memory caching and instant open as other pages,
+ * like the history page"). A GENERIC reopen — the Reels tab tapped directly,
+ * no `startId` — resumes from here instead of reshuffling; a deep link on a
+ * specific video (a feed tap) still seeds fresh on that video regardless,
+ * since that's an explicit new request, not "take me back to where I was."
+ * Resets only on a real page reload, same lifetime as `lastRenderedSeed`.
+ */
+let resumeDeck: { items: FeedItem[]; offset: number | null; activeIndex: number; seen: Set<string> } | null = null;
+
+/**
  * Full-screen /reels with a For You / Following toggle. "For You" is the
  * personalized deck (seeded from the server); "Following" refetches to reels only
  * from people you follow. Each tab keeps its own infinite scroll.
@@ -92,17 +105,51 @@ export function ReelsFeed({
   }, [router, onClose]);
   const [tab, setTab] = useState<Tab>("for_you");
   /*
-    🔴 Initial state is `initialItems` VERBATIM — no shuffling, no filtering.
+    🔴 A GENERIC REOPEN RESUMES; ONLY A DEEP LINK PINS (owner, 2026-08-16,
+    two asks together: "when i click on a video on feed, it opens a random
+    reels video, while it suppose to open that same video in reels" AND
+    "the random video display is supposed to be on first entry not everytime
+    the reels button is click… the reels page use same memory caching and
+    instant open as other pages, like the history page").
 
-    Everything this component does to the deck depends on localStorage, which
-    does not exist during SSR. Doing any of it in the state initialiser would
-    make the server's first render and the client's first render disagree, which
-    React reports as a hydration error and repairs by throwing away the server
-    HTML — on a full-screen video deck, the most expensive possible way to save a
-    reshuffle. The per-open work happens in an effect below, after hydration.
+    Three cases, decided once, synchronously, before the first paint (a pure
+    function of props + the module-level `resumeDeck` snapshot — no
+    localStorage read, so no SSR/hydration mismatch risk):
+
+      1. `startId` set (a feed video was tapped) → pin it to index 0 of
+         `initialItems`. Always wins, even over a resumable snapshot: this
+         is an explicit "open THIS one" request.
+      2. No `startId`, but a PRIOR open this session left a snapshot →
+         resume it verbatim (same items, same scroll position) instead of
+         starting over from `initialItems` — this is the "memory caching,
+         instant open" half of the ask.
+      3. No `startId`, no snapshot yet (the true first entry) → plain
+         `initialItems`, server-ranked, untouched — this is "the random
+         video display… on first entry."
+
+    Why the pin has to happen HERE and not only in the effect below:
+    `ReelDeck` (features/feed/reel-viewer.tsx) reads `startIndex` into a
+    plain `useState` on its own first render and never resyncs it if the
+    prop changes later. The effect below still reorders `items` post-mount
+    (for the freshDeck watched/suppressed pass), and moving the tapped video
+    to the front AFTER `ReelDeck` already locked onto its ORIGINAL numeric
+    position meant that position, read again against the NOW-reordered
+    array, pointed at a different (effectively random) item — the reported
+    bug. Pinning here means the tapped video's position is 0 on the true
+    first render, the effect's later pin-to-front is a no-op for its
+    identity (only what comes AFTER it gets reshuffled/filtered), and the
+    index `ReelDeck` locks onto is the right one from the start.
   */
-  const [items, setItems] = useState<FeedItem[]>(initialItems);
-  const [offset, setOffset] = useState<number | null>(initialOffset);
+  const resumingFromCache = !startId && !!resumeDeck;
+  const [items, setItems] = useState<FeedItem[]>(() => {
+    if (resumingFromCache) return resumeDeck!.items;
+    if (!startId) return initialItems;
+    const idx = initialItems.findIndex((i) => i.id === startId);
+    if (idx <= 0) return initialItems; // already first, or not present — nothing to move
+    const pinned = initialItems[idx]!;
+    return [pinned, ...initialItems.slice(0, idx), ...initialItems.slice(idx + 1)];
+  });
+  const [offset, setOffset] = useState<number | null>(resumingFromCache ? resumeDeck!.offset : initialOffset);
   const [switching, setSwitching] = useState(false);
   /*
     This open's reshuffle token. A ref, not state: changing it must never
@@ -111,7 +158,7 @@ export function ReelsFeed({
   const seedRef = useRef<string>(initialSeed ?? newReelsSeed());
   // Slide direction for the tab transition (For You ↔ Following).
   const [direction, setDirection] = useState(1);
-  const seen = useRef<Set<string>>(new Set(initialItems.map((i) => i.id)));
+  const seen = useRef<Set<string>>(resumingFromCache ? new Set(resumeDeck!.seen) : new Set(initialItems.map((i) => i.id)));
   const loading = useRef(false);
 
   // Per-tab cache so switching is instant and never reloads/flashes a loader
@@ -119,11 +166,11 @@ export function ReelsFeed({
   // restored verbatim (items, pagination cursor, dedup set) on return.
   const cacheRef = useRef<Record<Tab, { items: FeedItem[]; offset: number | null; seen: Set<string> } | null> | null>(null);
   if (!cacheRef.current) {
-    cacheRef.current = { for_you: { items: initialItems, offset: initialOffset, seen: seen.current }, following: null };
+    cacheRef.current = { for_you: { items, offset, seen: seen.current }, following: null };
   }
   // Remembers the last reel index viewed per tab, so returning to a tab lands
   // on the same reel instead of jumping back to the first one ("the top").
-  const lastIndexRef = useRef<Record<Tab, number>>({ for_you: 0, following: 0 });
+  const lastIndexRef = useRef<Record<Tab, number>>({ for_you: resumingFromCache ? resumeDeck!.activeIndex : 0, following: 0 });
   // True once For You has reported an active index at least once — after that,
   // a return visit resumes from `lastIndexRef` instead of re-seeking `startId`.
   const forYouSeeded = useRef(false);
@@ -222,15 +269,27 @@ export function ReelsFeed({
 
   /*
     ═══════════════════════════════════════════════════════════════════════════
-     EVERY OPEN IS A NEW DECK (owner, 2026-08-11)
+     REVERSED (owner, 2026-08-16) — A RESUMED OPEN IS SKIPPED ENTIRELY
     ═══════════════════════════════════════════════════════════════════════════
 
-    "make reels always refresh each opens and never show one video twice every
-     open, it should reshuffle every open."
+    This effect used to run unconditionally on every mount, per an EARLIER,
+    now-superseded ask (2026-08-11): "make reels always refresh each opens…
+    it should reshuffle every open." The owner has reversed that: "the random
+    video display is supposed to be on first entry not everytime the reels
+    button is click… the reels page use same memory caching and instant open
+    as other pages, like the history page."
 
-    Runs once, after hydration, and takes one of two paths depending on how this
-    open actually reached us — which is the distinction the whole feature turns
-    on:
+    `resumingFromCache` (computed above, alongside the `items`/`offset`/`seen`
+    state it already seeded) means this exact open is a resume, not a fresh
+    or replayed one — the state initializers already restored the snapshot
+    verbatim, so there is nothing left for this effect to compute. Running it
+    anyway would immediately reshuffle/re-filter what was just resumed,
+    which is precisely the "everytime" behavior being undone. It still runs
+    normally for a deep-linked video (a real new request) and for the true
+    first-ever entry (no snapshot exists yet).
+
+    Runs once, after hydration, and — when it does run — takes one of two
+    paths depending on how this open actually reached us:
 
     ── FRESH SERVER RENDER (a reload, a cold entry, a deep link) ──────────────
     `initialSeed` is a token this module has never seen, so the server already
@@ -256,6 +315,15 @@ export function ReelsFeed({
     before anyone reaches it.
   */
   useEffect(() => {
+    // Resumed verbatim by the state initializers above — nothing to compute.
+    // (Still updates `lastRenderedSeed` so the NEXT mount's replay detection,
+    // if this session goes on to open a deep-linked video instead, stays
+    // accurate rather than comparing against a stale token from before.)
+    if (resumingFromCache) {
+      lastRenderedSeed = initialSeed ?? null;
+      return;
+    }
+
     const replayed = initialSeed != null && initialSeed === lastRenderedSeed;
     lastRenderedSeed = initialSeed ?? null;
 
@@ -489,7 +557,13 @@ export function ReelsFeed({
               onSwipeTab={(dir) => void switchTab(dir === "left" ? "following" : "for_you")}
               onActiveIndexChange={(i) => {
                 lastIndexRef.current[tab] = i;
-                if (tab === "for_you") forYouSeeded.current = true;
+                if (tab === "for_you") {
+                  forYouSeeded.current = true;
+                  // Keep the resume snapshot current so the NEXT open (a
+                  // plain Reels-tab tap, no startId) picks up right here
+                  // instead of the position this open itself started at.
+                  resumeDeck = { items, offset, activeIndex: i, seen: seen.current };
+                }
                 /*
                   The ledger that makes "never show one video twice" true across
                   opens. Recorded on BECOMING ACTIVE rather than on completion:

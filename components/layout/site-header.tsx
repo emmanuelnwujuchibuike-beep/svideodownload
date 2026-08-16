@@ -119,24 +119,32 @@ const DOWNLOADERS = getPrimaryPages();
  * and the tap read as unresponsive.
  */
 function MenuMark({ shown }: { shown: boolean }) {
+  /*
+    🔴 BIGGER, BOLDER (owner, 2026-08-16: "the top nav looks so thin and
+    light, make it to be exactly how the bottom nav are" — the bottom nav's
+    redesign moved every glyph to a heavier stroke and a noticeably bigger
+    size). Scaled up proportionally from the 20px/2px mark: 24px container,
+    2.5px bars, translate/width values scaled the same ~1.2x so the fold-
+    into-an-X animation still lines up.
+  */
   return (
-    <span className="relative flex h-5 w-5 flex-col items-end justify-center gap-[3.5px]">
+    <span className="relative flex h-6 w-6 flex-col items-end justify-center gap-[4px]">
       <span
         className={cn(
-          "h-[2px] rounded-full bg-current transition-all duration-300",
-          shown ? "w-5 translate-y-[5.5px] rotate-45" : "w-5",
+          "h-[2.5px] rounded-full bg-current transition-all duration-300",
+          shown ? "w-6 translate-y-[6.5px] rotate-45" : "w-6",
         )}
       />
       <span
         className={cn(
-          "h-[2px] rounded-full bg-current transition-all duration-300",
-          shown ? "w-0 opacity-0" : "w-2.5 opacity-100",
+          "h-[2.5px] rounded-full bg-current transition-all duration-300",
+          shown ? "w-0 opacity-0" : "w-3 opacity-100",
         )}
       />
       <span
         className={cn(
-          "h-[2px] rounded-full bg-current transition-all duration-300",
-          shown ? "w-5 -translate-y-[5.5px] -rotate-45" : "w-3.5",
+          "h-[2.5px] rounded-full bg-current transition-all duration-300",
+          shown ? "w-6 -translate-y-[6.5px] -rotate-45" : "w-4",
         )}
       />
     </span>

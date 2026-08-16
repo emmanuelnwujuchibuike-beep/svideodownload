@@ -83,6 +83,23 @@ import { cn } from "@/lib/utils";
 const GLYPH_ACTIVE = "text-primary [filter:drop-shadow(0_4px_10px_rgba(79,70,229,0.7))]";
 const GLYPH_INACTIVE = "text-muted-foreground [filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.3))]";
 
+/**
+ * Warms the reels viewer's chunk ahead of the actual tap (owner, 2026-08-16:
+ * "reels loads on click, it suppose to warm up and prefetch before it being
+ * clicked"). The SAME dynamic import `next/dynamic` uses in
+ * features/feed/smart-feed.tsx's `preloadReelsFeed` — dynamic imports are
+ * memoized by the runtime, so calling it here too costs nothing extra once
+ * it's already resolved. This used to fire from the Reels segmented-control
+ * tab in the top feed bar (`onReelsPreload`); when Reels moved to the
+ * bottom nav (see the module doc above) that specific warm-up trigger was
+ * left behind — mount-idle preloading still ran, but the LAST-MOMENT one
+ * right before a tap didn't. `router.prefetch` alone doesn't cover it: that
+ * warms the `/reels` ROUTE, not this dynamically-imported chunk.
+ */
+function warmReels() {
+  void import("@/features/reels/reels-feed");
+}
+
 export function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
@@ -332,7 +349,7 @@ export function MobileNav() {
               active={pathname === "/downloads" || pathname === "/home" || (!handle && pathname === "/")}
               onWarm={router.prefetch}
             />
-            <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={router.prefetch} />
+            <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={(href) => { router.prefetch(href); warmReels(); }} />
             <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
             <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />
           </>
@@ -345,7 +362,7 @@ export function MobileNav() {
                 bleed"). It used to be reachable only from the top feed's
                 segmented control (FeedTopbarTabs); that entry is removed in
                 favor of this one, so there is exactly one Reels affordance. */}
-            <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={router.prefetch} />
+            <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={(href) => { router.prefetch(href); warmReels(); }} />
             <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={unread} onWarm={router.prefetch} />
           </>
         )}

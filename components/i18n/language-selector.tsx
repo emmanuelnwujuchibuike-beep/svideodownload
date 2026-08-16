@@ -68,11 +68,11 @@ export function LanguageSelector() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={toggle}
-        className="inline-flex h-10 items-center justify-center"
+        className="inline-flex h-11 items-center justify-center"
       >
         <IconTile>
           <span className="relative flex items-center">
-            <Globe className="h-[20px] w-[20px]" />
+            <Globe className="h-[26px] w-[26px]" />
             <span className="ml-1 hidden text-[11px] font-bold uppercase text-muted-foreground sm:inline">{current}</span>
           </span>
         </IconTile>

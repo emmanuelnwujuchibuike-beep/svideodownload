@@ -61,9 +61,9 @@ export function SearchTriggerIcon({ className = "" }: { className?: string }) {
       type="button"
       onClick={openCommandCenter}
       aria-label="Search Frenz"
-      className={`inline-flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-foreground [filter:drop-shadow(0_2px_4px_rgba(2,6,23,0.22))] ${className}`}
+      className={`inline-flex h-11 w-11 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-foreground [filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.3))] ${className}`}
     >
-      <Search className="h-5 w-5" />
+      <Search className="h-[26px] w-[26px]" />
     </button>
   );
 }

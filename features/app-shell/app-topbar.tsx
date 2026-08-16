@@ -112,10 +112,10 @@ export function AppTopbar() {
               haptic("light");
               playSound("tap");
             }}
-            className="flex h-10 w-10 items-center justify-center"
+            className="flex h-11 w-11 items-center justify-center"
           >
             <IconTile>
-              <IoSearchOutline className="h-[20px] w-[20px]" />
+              <IoSearchOutline className="h-[26px] w-[26px]" />
             </IconTile>
           </Link>
         </PressIcon>
@@ -158,9 +158,9 @@ export function AppTopbar() {
                 the plus button round" — in the brand color gives it its own
                 visual weight against the other plain icons beside it.
               */
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-inset ring-primary/25"
+              className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-inset ring-primary/25"
             >
-              <IoAddOutline className="h-[22px] w-[22px] text-primary" />
+              <IoAddOutline className="h-[26px] w-[26px] text-primary" />
             </button>
           </PressIcon>
         ) : null}
@@ -182,10 +182,10 @@ export function AppTopbar() {
               haptic("light");
               playSound("tap");
             }}
-            className="flex h-10 w-10 items-center justify-center"
+            className="flex h-11 w-11 items-center justify-center"
           >
               <IconTile>
-                <IoSearchOutline className="h-[20px] w-[20px]" />
+                <IoSearchOutline className="h-[26px] w-[26px]" />
               </IconTile>
             </Link>
           </PressIcon>
@@ -233,7 +233,7 @@ export function AppTopbar() {
               className="inline-flex h-11 w-11 items-center justify-center"
             >
               <IconTile>
-                <IoCloudUploadOutline className="h-[21px] w-[21px]" />
+                <IoCloudUploadOutline className="h-[26px] w-[26px]" />
               </IconTile>
             </Link>
           </PressIcon>

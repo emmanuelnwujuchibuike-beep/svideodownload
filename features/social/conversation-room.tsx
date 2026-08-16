@@ -562,12 +562,6 @@ export function ConversationRoom({
 
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
 
-  // Mockup's personalized composer placeholder ("Message Maya…") — first
-  // name of the other party, direct threads only. (`members` is empty for
-  // direct threads — getConversation only fills it for groups — so this
-  // comes from the dedicated otherName prop.)
-  const otherFirstName = type === "direct" && otherName ? (otherName.split(" ")[0] ?? null) : null;
-
   const mentionMatches = useMemo(() => {
     if (mentionQuery === null) return [];
     const q = mentionQuery.toLowerCase();
@@ -2488,15 +2482,13 @@ export function ConversationRoom({
                 else clearTyping();
               }}
               onKeyDown={onComposerKeyDown}
-              placeholder={
-                editingId
-                  ? "Edit your message…"
-                  : replyingTo
-                    ? "Write a reply…"
-                    : type === "direct" && otherFirstName
-                      ? `Message ${otherFirstName}…`
-                      : "Message…"
-              }
+              // 🔴 No personalization (owner, 2026-08-16: "the placeholder
+              // shouldn't be [showing] anything but only [a generic] send
+              // chat [prompt]") — was `Message ${otherFirstName}…` for a
+              // direct thread. Edit/reply keep their own text: those aren't
+              // decoration, they tell the sender which mode the composer is
+              // actually in.
+              placeholder={editingId ? "Edit your message…" : replyingTo ? "Write a reply…" : "Message"}
               aria-label="Message"
               maxLength={2000}
               rows={1}

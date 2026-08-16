@@ -36,7 +36,7 @@ export function IconTile({ children, className }: { children: ReactNode; classNa
           notification bell — so the SAME filter here reaches all of them
           from one place instead of matching each header by hand.
         */
-        "[filter:drop-shadow(0_2px_4px_rgba(2,6,23,0.22))]",
+        "[filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.3))]",
         className,
       )}
     >

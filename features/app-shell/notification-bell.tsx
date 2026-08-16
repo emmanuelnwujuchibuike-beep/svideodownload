@@ -111,13 +111,13 @@ export function NotificationBell() {
         onClick={toggle}
         aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
         aria-expanded={open}
-        className="relative inline-flex h-10 w-10 items-center justify-center"
+        className="relative inline-flex h-11 w-11 items-center justify-center"
       >
         {/* Owner correction (2026-07-13): unread used to also swap this tile
             to the dark brand tint — the mockup's own unread state is just the
             red count badge below, the bell icon itself never changes color. */}
         <IconTile>
-          {unread > 0 ? <IoNotifications className="h-[21px] w-[21px]" /> : <IoNotificationsOutline className="h-[21px] w-[21px]" />}
+          {unread > 0 ? <IoNotifications className="h-[26px] w-[26px]" /> : <IoNotificationsOutline className="h-[26px] w-[26px]" />}
         </IconTile>
         {unread > 0 ? (
           <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-pink-600 px-1 text-[10px] font-bold text-white shadow-sm shadow-rose-500/40 ring-2 ring-background">

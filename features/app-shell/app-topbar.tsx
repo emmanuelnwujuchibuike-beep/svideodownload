@@ -132,11 +132,19 @@ export function AppTopbar() {
               aria-label="Create"
               aria-haspopup="dialog"
               aria-expanded={createOpen}
-              className="flex h-10 w-10 items-center justify-center"
+              /*
+                🔴 MORE CONTRAST (owner, 2026-08-16: "make the plus button in
+                the feed page to have more contrast and be more visible").
+                The bare IconTile glyph every other topbar icon uses (no
+                background, by an earlier owner instruction) read as too
+                quiet for the one icon that opens the whole Create flow. A
+                filled ROUNDED-SQUARE tile — never a circle, per "don't make
+                the plus button round" — in the brand color gives it its own
+                visual weight against the other plain icons beside it.
+              */
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-inset ring-primary/25"
             >
-              <IconTile>
-                <IoAddOutline className="h-[22px] w-[22px]" />
-              </IconTile>
+              <IoAddOutline className="h-[22px] w-[22px] text-primary" />
             </button>
           </PressIcon>
         ) : null}

@@ -525,12 +525,19 @@ async function ProfileData({
       postsCount: postsTotal,
       friendsCount: friendTotal,
     });
+    /*
+      🔴 VIEWS DROPPED FROM THE HERO ROW (owner, 2026-08-16: "let the profile
+      post view be showed only in profile analysis, and not in profile
+      Hero"). It stayed doubled up: this row AND `CreatorRail`'s Analytics
+      panel below both showed the same `totals.views` number. Analytics is
+      the one place it lives now — `analytics={{ views: totals.views, … }}`
+      a few lines down still passes it there unchanged.
+    */
     const stats: { label: string; value: number }[] = [
       { label: "Posts", value: postsTotal },
       { label: "Followers", value: profile.followersCount },
       { label: "Following", value: profile.followingCount },
       { label: "Likes", value: totals.likes },
-      { label: "Views", value: totals.views },
     ];
     return (
       <>

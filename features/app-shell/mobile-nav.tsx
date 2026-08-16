@@ -5,7 +5,7 @@ import { Headset, History } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import {
@@ -98,8 +98,17 @@ export function MobileNav() {
   const { data: inbox } = useQuery<Inbox>(INBOX_KEY, loadInbox, { revalidateOnFocus: false });
   const unread = inbox?.unread ?? 0;
 
-  const profileHref = handle ? `/u/${handle}` : "/account";
-  const profileActive = pathname.startsWith("/u/") || pathname.startsWith("/account");
+  /*
+    🔴 `/profile` for a guest, not `/account` (owner, 2026-08-16: "i want it
+    shared across all just like the previous bottom nav" — merging this nav
+    with the marketing-only copy surfaced the discrepancy). `/account` is an
+    (app)-group settings page with its own auth guard, so a signed-out
+    visitor tapping Profile landed on a login redirect instead of the
+    marketing doorway the OTHER nav correctly used. `/profile` is that
+    doorway (app/(marketing)/profile).
+  */
+  const profileHref = handle ? `/u/${handle}` : "/profile";
+  const profileActive = pathname.startsWith("/u/") || pathname.startsWith("/account") || pathname.startsWith("/profile");
   /*
     Surfaces where the CONTENT is full-bleed video and the nav should float over
     it rather than slab across it — see the note on the <nav> below. Only /reels
@@ -123,12 +132,33 @@ export function MobileNav() {
     return () => clearTimeout(id);
   }, [router, profileHref]);
 
+  // Publish the nav's real height (already includes the home-indicator
+  // safe-area pad) as `--frenz-bottomnav-h`, so a fixed bar elsewhere (the
+  // marketing pages' bottom ad, features/monetization/top-banner-ad.tsx) can
+  // dock directly above it without hardcoding a height. Ported from the
+  // marketing-only nav this component now replaces — see the module doc.
+  const navRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const el = navRef.current;
+    const root = document.documentElement;
+    if (!el) return;
+    const setH = () => root.style.setProperty("--frenz-bottomnav-h", `${el.offsetHeight}px`);
+    setH();
+    const ro = new ResizeObserver(setH);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.setProperty("--frenz-bottomnav-h", "0px");
+    };
+  }, []);
+
   return (
     // Edge-to-edge, no floating margins — the bar itself owns the safe-area
     // padding (home-indicator inset on notched/installed devices; zero extra
     // gap on a plain browser tab) rather than sitting inset inside a wrapper.
     <div className="fixed inset-x-0 bottom-0 z-40 lg:hidden">
       <nav
+        ref={navRef}
         aria-label="Primary"
         /*
           🔴 IMMERSIVE SURFACES GET A FLOATING BAR (owner, 2026-08-10: "i want

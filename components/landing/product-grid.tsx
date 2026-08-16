@@ -35,7 +35,7 @@ export function ProductGrid() {
   const profiles = getClaimableProfiles().filter(({ platform }) => platform.id !== "admin");
 
   return (
-    <section id="products" className="frenz-reveal container max-w-6xl scroll-mt-24 py-10 sm:py-14">
+    <section id="products" className="frenz-reveal container max-w-6xl scroll-mt-24 px-2 py-10 sm:py-14">
       <div className="text-center">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-violet-500 dark:text-violet-300">
           All-in-One Platform

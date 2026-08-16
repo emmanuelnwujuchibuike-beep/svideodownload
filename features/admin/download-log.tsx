@@ -212,7 +212,27 @@ function Row({ r }: { r: DownloadLogRow }) {
         ) : (
           // Guests are the majority here — shown, not hidden, with the anonymous
           // device id truncated so one visitor's downloads can still be grouped.
-          <span className="text-muted-foreground">Guest · {r.visitorId.slice(0, 8)}</span>
+          // The ×N badges sit ON TOP of that same id (owner, 2026-08-16: the
+          // repeat-download count belongs on the guest id it's counting, not in
+          // a separate list computed against a different query) — `guestToday`/
+          // `guestWeek` come from the same visitor_id this row already shows.
+          <div className="flex flex-col gap-0.5">
+            {(r.guestToday && r.guestToday > 1) || (r.guestWeek && r.guestWeek > 1) ? (
+              <span className="flex flex-wrap items-center gap-1">
+                {r.guestToday && r.guestToday > 1 ? (
+                  <span className="rounded-full bg-fuchsia-500/12 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-fuchsia-600 dark:text-fuchsia-400">
+                    ×{r.guestToday} today
+                  </span>
+                ) : null}
+                {r.guestWeek && r.guestWeek > 1 ? (
+                  <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
+                    ×{r.guestWeek} this week
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
+            <span className="text-muted-foreground">Guest · {r.visitorId.slice(0, 8)}</span>
+          </div>
         )}
       </td>
       <td className="max-w-[18rem] px-3 py-2">

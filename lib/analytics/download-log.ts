@@ -1,3 +1,4 @@
+import { fetchAnonymousDownloadCounts } from "@/lib/admin/activity";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -52,6 +53,14 @@ export interface DownloadLogRow {
   title: string | null;
   /** Display handle/email for a signed-in downloader; null for guests. */
   userLabel: string | null;
+  /**
+   * How many completed downloads THIS guest (same `visitorId`) has today /
+   * this week, from the same map `fetchRepeatAnonymousVisitors` reads — so
+   * the count next to a "Guest · <id>" row can never point at a different
+   * guest than the id it's attached to. Null for signed-in rows.
+   */
+  guestToday: number | null;
+  guestWeek: number | null;
 }
 
 export interface DownloadLog {
@@ -100,12 +109,15 @@ export async function getDownloadLog(opts: {
     const db = createAdminClient();
     // One extra row is the cheapest reliable "is there a next page" — a COUNT
     // over a filtered join costs far more than the single row it replaces.
-    const { data, error } = await db.rpc("analytics_download_log", {
-      p_since: sinceIso(opts.range),
-      p_status: opts.status,
-      p_limit: PAGE_SIZE + 1,
-      p_offset: opts.page * PAGE_SIZE,
-    });
+    const [{ data, error }, guestCounts] = await Promise.all([
+      db.rpc("analytics_download_log", {
+        p_since: sinceIso(opts.range),
+        p_status: opts.status,
+        p_limit: PAGE_SIZE + 1,
+        p_offset: opts.page * PAGE_SIZE,
+      }),
+      fetchAnonymousDownloadCounts(),
+    ]);
     if (error) return empty;
 
     const raw = (data ?? []) as RpcRow[];
@@ -137,25 +149,30 @@ export async function getDownloadLog(opts: {
     }
 
     return {
-      rows: page.map((r) => ({
-        downloadId: r.download_id,
-        status: r.status,
-        platform: r.platform,
-        mediaKind: r.media_kind,
-        quality: r.quality,
-        fileSize: r.file_size,
-        durationMs: r.duration_ms,
-        errorReason: r.error_reason,
-        country: r.country,
-        device: r.device,
-        userId: r.user_id,
-        visitorId: r.visitor_id,
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-        sourceUrl: r.source_url,
-        title: r.title,
-        userLabel: r.user_id ? (labels.get(r.user_id) ?? null) : null,
-      })),
+      rows: page.map((r) => {
+        const guestCount = r.user_id ? null : (guestCounts.get(r.visitor_id) ?? null);
+        return {
+          downloadId: r.download_id,
+          status: r.status,
+          platform: r.platform,
+          mediaKind: r.media_kind,
+          quality: r.quality,
+          fileSize: r.file_size,
+          durationMs: r.duration_ms,
+          errorReason: r.error_reason,
+          country: r.country,
+          device: r.device,
+          userId: r.user_id,
+          visitorId: r.visitor_id,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+          sourceUrl: r.source_url,
+          title: r.title,
+          userLabel: r.user_id ? (labels.get(r.user_id) ?? null) : null,
+          guestToday: guestCount?.today ?? null,
+          guestWeek: guestCount?.week ?? null,
+        };
+      }),
       page: opts.page,
       pageSize: PAGE_SIZE,
       hasMore,

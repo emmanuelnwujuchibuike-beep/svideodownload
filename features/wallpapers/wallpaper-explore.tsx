@@ -237,26 +237,25 @@ export function WallpaperExplore({
           instead of rendering hidden behind the header for the first frame. */}
       <main className="frenz-canvas-page min-h-dvh pb-24 pt-[calc(var(--frenz-safe-top,0px)+4rem)]">
         {/*
-          🔴 ONLY the back/search row is sticky (owner, 2026-08-16: "i never
-          said the top section to be fixed, i said only the search and back
-          button should be sticky and the top header fixed, no the entirely
-          wallpaper hero… the wallpaper download button and other things go
-          over the top section when scrolled").
+          🔴 Two loose buttons, not a bar (owner, 2026-08-16: "search and back
+          button shouldn't be on separate nav or section, they should be
+          alone… on top of the wallpaper page without obstructing any text,
+          they should blend in not to be positioned like a second header").
 
-          The previous version wrapped BOTH the back/search row AND the
-          "Wallpapers" headline/description/card-deck in one `sticky`
-          `<header>` — the comment above it literally said "1 + 2 + 3" and
-          meant it, which is exactly the bug: the whole three-part block
-          stuck to the top and sat on top of the grid as it scrolled beneath
-          it, instead of just the two controls. Split into two elements now:
-          this bar is the sticky one; the headline block right after it is
-          back in NORMAL FLOW and scrolls away like any other content.
+          This used to be a full-width `sticky` strip painted in the canvas
+          color — a second opaque header sitting right under the real one,
+          and because it's sticky it slides up over whatever has scrolled
+          beneath it (the hero deck), cutting across the image. There is no
+          bar now: no shared background, no row spanning the width. Each
+          button keeps its own small `bg-card` chip (so it still reads against
+          any photo) and its own sticky position, floating independently over
+          the page content instead of announcing itself as a nav section.
         */}
         <div
-          className="sticky z-30 bg-[hsl(var(--frenz-canvas))] px-4 pb-2 pt-3"
+          className="pointer-events-none sticky z-30 px-4 pt-3"
           style={{ top: "calc(var(--frenz-safe-top, 0px) + 4rem)" }}
         >
-          <div className="mx-auto flex w-full max-w-3xl items-start justify-between">
+          <div className="pointer-events-none mx-auto flex w-full max-w-3xl items-start justify-between">
             {/*
               The reference draws a hamburger here. This is a back control
               instead, deliberately: a drawer here would be a menu glyph with
@@ -275,7 +274,7 @@ export function WallpaperExplore({
             <Link
               href="/"
               aria-label="Back to home"
-              className="flex h-11 w-11 items-center justify-center rounded-2xl bg-card text-foreground shadow-soft ring-1 ring-inset ring-border/50 transition active:scale-95"
+              className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-card text-foreground shadow-soft ring-1 ring-inset ring-border/50 transition active:scale-95"
             >
               <ChevronLeft className="h-5 w-5" />
             </Link>
@@ -285,7 +284,7 @@ export function WallpaperExplore({
               aria-label={searchOpen ? "Close search" : "Search wallpapers"}
               aria-expanded={searchOpen}
               className={cn(
-                "flex h-11 w-11 items-center justify-center rounded-2xl shadow-soft ring-1 ring-inset transition active:scale-95",
+                "pointer-events-auto flex h-11 w-11 items-center justify-center rounded-2xl shadow-soft ring-1 ring-inset transition active:scale-95",
                 searchOpen
                   ? "bg-primary text-primary-foreground ring-primary/40"
                   : "bg-card text-foreground ring-border/50",

@@ -53,7 +53,7 @@ export async function Hero() {
   ]);
 
   return (
-    <section className="container pb-5 pt-[calc(var(--frenz-safe-top)+4.5rem)] text-foreground dark:text-white sm:pb-7 sm:pt-[calc(var(--frenz-safe-top)+5.5rem)]">
+    <section className="container px-2 pb-5 pt-[calc(var(--frenz-safe-top)+4.5rem)] text-foreground dark:text-white sm:pb-7 sm:pt-[calc(var(--frenz-safe-top)+5.5rem)]">
       <DownloadPageCore
         platformStatus={platformStatus}
         ctaWallpaperUrl={landing.wallpaperCtaImageUrl || null}

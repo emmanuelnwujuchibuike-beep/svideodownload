@@ -355,10 +355,26 @@ export interface RepeatAnonymousVisitor {
   week: number;
 }
 
+export interface AnonymousDownloadCount {
+  today: number;
+  week: number;
+}
+
 const REPEAT_VISITOR_ROW_CAP = 20_000;
 
-export async function fetchRepeatAnonymousVisitors(limit = 20): Promise<RepeatAnonymousVisitor[]> {
-  if (!hasSupabase) return [];
+/**
+ * Per-guest completed-download counts, keyed by the FULL `visitor_id` (owner,
+ * 2026-08-16: the download log's "Guest · <id>" and this feed's repeat-visitor
+ * badge were computed by two separate queries, so the id one panel showed for
+ * a guest was never guaranteed to be the same guest the other panel meant).
+ *
+ * Kept as one shared source so any surface that needs "how many times has
+ * THIS guest downloaded" looks it up against the exact same map — never a
+ * second, independently-fetched approximation of it.
+ */
+export async function fetchAnonymousDownloadCounts(): Promise<Map<string, AnonymousDownloadCount>> {
+  const counts = new Map<string, AnonymousDownloadCount>();
+  if (!hasSupabase) return counts;
   try {
     const db = createAdminClient();
     const now = new Date();
@@ -381,7 +397,6 @@ export async function fetchRepeatAnonymousVisitors(limit = 20): Promise<RepeatAn
       REPEAT_VISITOR_ROW_CAP,
     );
 
-    const counts = new Map<string, { today: number; week: number }>();
     for (const r of rows) {
       if (!r.visitor_id) continue;
       const entry = counts.get(r.visitor_id) ?? { today: 0, week: 0 };
@@ -389,13 +404,18 @@ export async function fetchRepeatAnonymousVisitors(limit = 20): Promise<RepeatAn
       if (r.created_at >= startOfToday.toISOString()) entry.today += 1;
       counts.set(r.visitor_id, entry);
     }
-
-    return [...counts.entries()]
-      .filter(([, c]) => c.today > 1 || c.week > 1)
-      .map(([visitorId, c]) => ({ visitorShort: visitorId.slice(0, 8), today: c.today, week: c.week }))
-      .sort((a, b) => b.week - a.week || b.today - a.today)
-      .slice(0, limit);
+    return counts;
   } catch {
-    return [];
+    return counts;
   }
+}
+
+export async function fetchRepeatAnonymousVisitors(limit = 20): Promise<RepeatAnonymousVisitor[]> {
+  if (!hasSupabase) return [];
+  const counts = await fetchAnonymousDownloadCounts();
+  return [...counts.entries()]
+    .filter(([, c]) => c.today > 1 || c.week > 1)
+    .map(([visitorId, c]) => ({ visitorShort: visitorId.slice(0, 8), today: c.today, week: c.week }))
+    .sort((a, b) => b.week - a.week || b.today - a.today)
+    .slice(0, limit);
 }

@@ -56,7 +56,7 @@ export function Faq() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLd(faqJsonLd) }}
       />
-      <div className="container max-w-3xl">
+      <div className="container max-w-3xl px-2">
         <Reveal className="mb-14 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:border-violet-400/30 dark:text-violet-200">
             <HelpCircle className="h-3.5 w-3.5" /> FAQ

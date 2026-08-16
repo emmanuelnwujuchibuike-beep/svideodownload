@@ -1,13 +1,28 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { isPromoActiveNow } from "./promo";
 import type { BillingPlan } from "./types";
 
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
   !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-/** A user's effective plan. Anonymous or unknown users are always "free". */
+/**
+ * A user's effective plan. Anonymous or unknown users are always "free" —
+ * EXCEPT while a site-wide promo is active (lib/monetization/promo.ts),
+ * which bumps a real "free" resolution up to "pro" for everyone. It never
+ * touches an already-paying subscriber: a genuine "pro" or "business" plan
+ * is returned as-is, so the promo can only ever hand out Pro, never take
+ * away or downgrade a plan someone is actually paying for.
+ */
 export async function getUserPlan(userId: string | null | undefined): Promise<BillingPlan> {
+  const resolved = await resolveSubscriptionPlan(userId);
+  if (resolved === "free" && (await isPromoActiveNow())) return "pro";
+  return resolved;
+}
+
+/** The REAL plan from the `subscriptions` table, ignoring any promo. */
+async function resolveSubscriptionPlan(userId: string | null | undefined): Promise<BillingPlan> {
   if (!userId || !hasSupabase) return "free";
   try {
     const supabase = createAdminClient();

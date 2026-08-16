@@ -165,6 +165,8 @@ import { getPlatformStatus } from "@/lib/platform-status-store";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { getPlanLimits } from "@/lib/monetization/plan";
 import { getPricing } from "@/lib/monetization/pricing";
+import { getPromoSettings } from "@/lib/monetization/promo";
+import { PromoEditor } from "@/features/admin/promo-editor";
 import { getMonetizationSettings } from "@/lib/monetization/settings";
 import { listAffiliates } from "@/lib/monetization/tools";
 import {
@@ -218,12 +220,13 @@ export default async function AdminPage() {
     bottom of this file, streaming in while the operator is already reading and
     able to navigate.
   */
-  const [revenue, subscribers, pricing, planLimits, monetization, affiliates, adRecords, analytics, revenueSeries, visitorSummary, visitorSplit] =
+  const [revenue, subscribers, pricing, planLimits, promo, monetization, affiliates, adRecords, analytics, revenueSeries, visitorSummary, visitorSplit] =
     await Promise.all([
       fetchRevenueStats(),
       fetchSubscribers(),
       getPricing(),
       getPlanLimits(),
+      getPromoSettings(),
       getMonetizationSettings(),
       listAffiliates(),
       listAds(),
@@ -342,6 +345,7 @@ export default async function AdminPage() {
                 },
               }}
             />
+            <PromoEditor initial={promo} />
           </AdminPanel>
 
           <AdminPanel id="commerce">

@@ -44,12 +44,32 @@ export function withQualityLadder(formats: MediaFormat[]): MediaFormat[] {
   if (!source) return formats;
 
   const sourceHeight = heightOf(source);
+  /*
+    🔴 UNKNOWN HEIGHT MEANS "DON'T SYNTHESIZE", NOT "SYNTHESIZE ANYTHING"
+    (owner, 2026-08-16: "Facebook, reels, story and post don't Download in
+    high quality").
+
+    The loop below only excludes a tier when `sourceHeight != null && tier >=
+    sourceHeight` — when `sourceHeight` IS null (true of every Facebook
+    format; `server/extractors/facebook.ts`'s `fmt()` always sets
+    `resolution: null` because the regex-extracted direct URL never carries
+    real dimensions), that guard is a no-op and every tier up to
+    `MAX_VIDEO_TIERS` gets synthesized regardless of what the source
+    actually is. Since `transcodeMaxHeight` never scales UP
+    (server/services/download-service.ts), picking a synthesized "1080p" off
+    a source that's really 480p silently delivers 480p pixels under a
+    1080p label — the exact "not high quality" symptom, just relabeled. A
+    source we cannot measure is a source we cannot safely claim is ABOVE any
+    tier, so none get synthesized for it; the real, unlabeled format(s) ship
+    as-is instead of an invented ladder.
+  */
+  if (sourceHeight == null) return formats;
   const existingHeights = new Set(videos.map(heightOf).filter((h): h is number => h != null));
 
   const synthesized: MediaFormat[] = [];
   for (const tier of LADDER_TIERS) {
     if (videos.length + synthesized.length >= MAX_VIDEO_TIERS) break;
-    if (sourceHeight != null && tier >= sourceHeight) continue; // only strictly lower
+    if (tier >= sourceHeight) continue; // only strictly lower — sourceHeight is non-null past the early return above
     if (existingHeights.has(tier)) continue;
     synthesized.push({
       formatId: `${source.formatId}-h${tier}`,

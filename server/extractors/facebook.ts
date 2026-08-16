@@ -1,4 +1,5 @@
 import { detectPlatform } from "@/lib/platforms";
+import { extractMetadata as ytdlpExtract } from "@/server/services/ytdlp-service";
 import type { MediaFormat, PlatformId, VideoMetadata } from "@/types";
 
 import { extractorFetch } from "./http";
@@ -316,6 +317,31 @@ export const facebookExtractor: Extractor = {
     if (formats.length === 0) {
       formats = mergePhotos(htmls.map((html) => ({ html })));
       if (formats.length === 0) throw new ExtractionError("No Facebook media (likely login-walled)");
+    }
+
+    /*
+      🔴 SD-ONLY ISN'T THE FINAL ANSWER (owner, 2026-08-16: "Facebook, reels,
+      story and post don't Download in high quality").
+
+      `buildFormats` only found `playable_url`/`browser_native_sd_url`, not
+      the HD field (`playable_url_quality_hd`/`browser_native_hd_url`) — that
+      field simply isn't always present in Facebook's page JSON, especially
+      for reels/stories. `runChain` (server/extractors/index.ts) returns the
+      FIRST extractor that produces any formats at all, so this SD stream
+      would otherwise ship as the final answer without yt-dlp ever getting a
+      turn — even though yt-dlp has been independently observed getting
+      genuine 2160p/1440p/1080p/720p for Facebook where this direct-URL path
+      cannot. Try it here, before returning, and only keep the SD fallback if
+      yt-dlp comes back empty or throws — a working low-quality download must
+      never regress to no download at all.
+    */
+    if (formats[0]?.kind === "video" && !formats.some((f) => f.formatId === "fb-hd")) {
+      try {
+        const yt = await ytdlpExtract(url);
+        if (yt.formats.length > 0) return yt;
+      } catch {
+        /* yt-dlp failed too — the SD direct URL below is still a real download */
+      }
     }
 
     // Metadata from the richest render that has each field — the crawler page is

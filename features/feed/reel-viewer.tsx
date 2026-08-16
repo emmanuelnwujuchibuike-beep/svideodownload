@@ -412,6 +412,13 @@ export function ReelDeck({
   const next1 = items[active + 1];
   const ceiling = Math.min(items.length - 1, active + (next1 && readyIds.has(next1.id) ? 3 : 2));
   const visible = items.slice(0, ceiling + 1);
+  // Read by `onScroll` below, which can't put `ceiling` in its own deps
+  // without being torn down/rebuilt on every index change — a ref lets the
+  // stable callback always see the latest value instead.
+  const ceilingRef = useRef(ceiling);
+  useEffect(() => {
+    ceilingRef.current = ceiling;
+  }, [ceiling]);
 
   // Lock the page, jump to the opening reel, wire Escape. overflowY only — the
   // `overflow` shorthand also resets overflow-x, undoing the `overflow-x: clip`
@@ -438,8 +445,32 @@ export function ReelDeck({
       raf.current = null;
       const el = scroller.current;
       if (!el || !el.clientHeight) return;
-      const i = Math.round(el.scrollTop / el.clientHeight);
-      setActive((prev) => (i !== prev && i >= 0 && i < items.length ? i : prev));
+      /*
+        🔴 CLAMP TO WHAT'S ACTUALLY RENDERED, not the full fetched list
+        (owner, 2026-08-16: "the reels get stuck after scrolling on 3 videos
+        or 4").
+
+        Only `ceiling + 1` clips ever exist as `<section>`s at once (the
+        buffer-gate above — "3 or 4" is that literal window). `scrollTop` is
+        read off a live `scroll-snap-type: y` element with `overscroll-
+        contain`, which stops scroll CHAINING to the page behind it but does
+        not disable WebKit's own elastic/rubber-band overscroll on the
+        element itself — a fling that hits the last rendered section's
+        boundary can report a transient `scrollTop` past it. The only bound
+        this used to apply was `i < items.length`, the whole unpaginated
+        deck (often 24+), so a bounce there could set `active` to an index
+        with no `<section>`/`<video>` ever mounted for it: the visibly
+        on-screen clip gets paused (its `isActive` just flipped false) and
+        nothing takes its place until the buffer-gate above eventually
+        catches up — exactly the "stuck" symptom, and exactly at the edge of
+        the render window every few clips.
+
+        Clamping `i` to `ceilingRef.current` means `active` can never point
+        past what is actually in the DOM, so this desync can't happen.
+      */
+      const maxIndex = Math.min(items.length - 1, ceilingRef.current);
+      const i = Math.min(Math.max(0, Math.round(el.scrollTop / el.clientHeight)), maxIndex);
+      setActive((prev) => (i !== prev ? i : prev));
       if (i >= items.length - 3) onEndReached?.();
     });
   }, [items.length, onEndReached]);

@@ -66,6 +66,7 @@ export const NOT_EXPORTED: Record<string, string> = {
   gateway_config: "Payment gateway configuration. Operational, not personal.",
   notification_broadcasts: "Announcements sent to everyone. Not about you.",
   product_waitlist: "Interest in unreleased products; exported with your profile instead.",
+  reward_sessions: "Short-lived reward-download authorizations. They expire in minutes and mean nothing once redeemed; the download itself is exported through your download history.",
 
   /*
     Rows ABOUT you that were written BY someone else. Real personal data, and

@@ -185,7 +185,22 @@ export interface ApiError {
     | "EXTRACTION_FAILED"
     | "DOWNLOAD_FAILED"
     | "TIMEOUT"
-    | "INTERNAL";
+    | "INTERNAL"
+    // Reward-session / download-authorization errors — see
+    // lib/monetization/reward-sessions.ts's RewardErrorCode (same set).
+    | "REWARD_SESSION_EXPIRED"
+    | "REWARD_ALREADY_CONSUMED"
+    | "REWARD_NOT_GRANTED"
+    | "DAILY_LIMIT_REACHED"
+    | "USER_NOT_ELIGIBLE"
+    | "DOWNLOAD_NOT_FOUND"
+    | "DOWNLOAD_TOKEN_EXPIRED"
+    | "DOWNLOAD_TOKEN_USED"
+    | "BATCH_NOT_FOUND"
+    | "QUALITY_NOT_AVAILABLE"
+    | "AD_UNAVAILABLE"
+    | "FEATURE_DISABLED"
+    | "INVALID_REQUEST";
 }
 
 export type ApiResult<T> = { ok: true; data: T } | ({ ok: false } & ApiError);

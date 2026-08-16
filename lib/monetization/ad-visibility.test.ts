@@ -124,11 +124,21 @@ describe("no consumer reveals an interstitial on the UNANSWERED state", () => {
     expect(src).toMatch(/shown=\{hasAd === true\}/);
   });
 
-  it("the batch still runs when there is no creative", () => {
-    // The overlay must never hold a download hostage to an unfilled placement.
+  it("no creative → unavailable, not a silent grant (2026-08-16 spec)", () => {
+    /*
+      🔴 Intentional behaviour change, not a regression. This used to let the
+      batch through unconditionally when the ad slot never filled — correct
+      for a passive skip-countdown, wrong once the batch gate started issuing
+      a real server-side reward session (lib/monetization/reward-sessions.ts):
+      the spec's Part 16 explicitly requires "ad unavailable → do NOT count
+      the reward, do NOT consume the daily allowance", which a silent
+      let-it-through would violate. The overlay still never traps anyone —
+      "Advertisement unavailable" offers an explicit Try Again — it just no
+      longer pretends a reward was earned when no ad ever ran.
+    */
     const src = readFileSync(join(process.cwd(), "features/downloader/batch-ad-gate.tsx"), "utf8");
     expect(src).toMatch(/if \(hasAd === false\)/);
-    expect(src).toMatch(/runNow\(\)/);
+    expect(src).toMatch(/if \(phase === "gate"\) markUnavailable\(\);/);
   });
 });
 

@@ -32,6 +32,10 @@ export interface InterstitialConfig {
   rewardImageAudioTopTierSeconds: number;
   /** Seconds before the top-tier IMAGE/AUDIO ad's Skip control appears. */
   rewardImageAudioSkipAfterSeconds: number;
+  /** Server-verified reward-session gate for HD/batch downloads — see
+   *  lib/monetization/reward-sessions.ts. Both default ON. */
+  rewardDownloadHdEnabled: boolean;
+  rewardDownloadBatchEnabled: boolean;
 }
 
 const DEFAULTS: InterstitialConfig = {
@@ -49,6 +53,8 @@ const DEFAULTS: InterstitialConfig = {
   rewardVideoTopTierSeconds: 30,
   rewardImageAudioTopTierSeconds: 5,
   rewardImageAudioSkipAfterSeconds: 5,
+  rewardDownloadHdEnabled: true,
+  rewardDownloadBatchEnabled: true,
 };
 
 let cached: InterstitialConfig | null = null;
@@ -88,6 +94,14 @@ export function useInterstitialConfig(): InterstitialConfig {
             typeof d?.rewardImageAudioSkipAfterSeconds === "number"
               ? d.rewardImageAudioSkipAfterSeconds
               : DEFAULTS.rewardImageAudioSkipAfterSeconds,
+          rewardDownloadHdEnabled:
+            typeof d?.rewardDownloadHdEnabled === "boolean"
+              ? d.rewardDownloadHdEnabled
+              : DEFAULTS.rewardDownloadHdEnabled,
+          rewardDownloadBatchEnabled:
+            typeof d?.rewardDownloadBatchEnabled === "boolean"
+              ? d.rewardDownloadBatchEnabled
+              : DEFAULTS.rewardDownloadBatchEnabled,
         };
       })
       .catch(() => {

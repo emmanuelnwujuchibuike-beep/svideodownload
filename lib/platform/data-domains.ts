@@ -188,6 +188,7 @@ export const DATA_DOMAINS: DataDomain[] = [
       "product_waitlist",
       "gateway_config",
       "gateway_impressions",
+      "reward_sessions",
     ],
     storage: ["relational"],
   },

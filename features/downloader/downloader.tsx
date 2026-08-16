@@ -36,6 +36,7 @@ import { PLATFORMS, detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
 import type { MediaKind, PlatformId } from "@/types";
 
+import type { DownloadOptions } from "./preview-card";
 import { useDownloader } from "./use-downloader";
 
 // Result card (+ its framer-motion dependency) only ever appears after a
@@ -169,7 +170,7 @@ export function Downloader({
   }, [tasks]);
 
   /** Actually start the transfer — reached once any gate has passed. */
-  const startDownload = (formatId: string, kind: MediaKind) => {
+  const startDownload = (formatId: string, kind: MediaKind, options?: DownloadOptions) => {
     if (!metadata) return;
     const fmt = metadata.formats.find((f) => f.formatId === formatId);
     // In-app background download: streamed with live progress in the floating
@@ -191,6 +192,10 @@ export function Downloader({
       // does — for the links whose metadata actually reported a length. Absent
       // is left absent rather than shown as 0:00.
       durationSeconds: metadata.durationSeconds,
+      // A reward-authorized URL (lib/monetization/reward-sessions.ts), when
+      // this download went through the HD reward gate — the manager fetches
+      // this exact URL instead of building one from `formatId`.
+      directUrl: options?.directUrl,
     });
     setJustDownloaded(true);
     countDownload();
@@ -205,7 +210,7 @@ export function Downloader({
     );
   };
 
-  const handleDownload = (formatId: string, kind: MediaKind) => {
+  const handleDownload = (formatId: string, kind: MediaKind, options?: DownloadOptions) => {
     if (!metadata) return;
     // Lazily load the usage code and check the plan ceiling on tap; over it, open
     // the gate instead of downloading. Nothing here ships on the landing's initial
@@ -224,7 +229,7 @@ export function Downloader({
         setQuotaGateMounted(true);
         setQuotaGateOpen(true);
       } else {
-        startDownload(formatId, kind);
+        startDownload(formatId, kind, options);
       }
     })();
   };

@@ -19,15 +19,17 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
-import { BatchAdGate } from "@/features/downloader/batch-ad-gate";
+import { BatchAdGate, type BatchAuthorization } from "@/features/downloader/batch-ad-gate";
 import { startDownload as enqueueDownload } from "@/features/downloads/manager";
 import { ResultAd } from "@/features/monetization/result-ad";
 import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
+import { RewardSessionClientError, useRewardSession, type RewardSessionItem } from "@/features/monetization/use-reward-session";
 import { rewardAdsFor, type RewardAd } from "@/lib/monetization/reward-policy";
 import { useInterstitialConfig } from "@/features/monetization/use-interstitial-skip";
 import { useShowAds } from "@/features/monetization/use-show-ads";
+import { toast } from "@/features/ui/toast";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes, formatCompactNumber, formatDuration } from "@/lib/utils";
@@ -35,10 +37,16 @@ import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
 type DownloadPhase = "idle" | "working" | "done";
 
+/** A server-authorized redemption to attach to an `/api/download` request —
+ *  see `lib/monetization/reward-sessions.ts`. */
+export interface DownloadOptions {
+  directUrl?: string;
+}
+
 interface PreviewCardProps {
   metadata: VideoMetadata;
   phase: DownloadPhase;
-  onDownload: (formatId: string, kind: MediaKind) => void;
+  onDownload: (formatId: string, kind: MediaKind, options?: DownloadOptions) => void;
 }
 
 export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
@@ -126,13 +134,37 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const [pendingBatch, setPendingBatch] = useState<typeof batchItems | null>(null);
   const [batchFinished, setBatchFinished] = useState(false);
 
+  /*
+    The same items, shaped for the reward session (`url`/`formatId`/`kind`
+    only — see `lib/monetization/reward-sessions.ts`). Memoised so its
+    reference only changes when `pendingBatch` itself does: `BatchAdGate`'s
+    "open the gate" effect keys on THIS reference, and a fresh array on every
+    render would either never fire (stale closure) or fire on every render —
+    see the reference-stability note on `pendingBatch` above; this is the same
+    class of bug, on the derived value instead of the source.
+  */
+  const pendingRewardItems = useMemo<RewardSessionItem[] | null>(
+    () =>
+      pendingBatch
+        ? pendingBatch.map((f) => ({ url: metadata.sourceUrl, formatId: f.formatId, kind: f.kind, title: f.label }))
+        : null,
+    [pendingBatch, metadata.sourceUrl],
+  );
+
   /** Queue the items and let the gate decide whether an ad runs first. */
   const batchDownload = (explicit?: typeof batchItems) => {
     setPendingBatch(explicit ?? batchItems.filter((f) => selected.has(f.formatId)));
   };
 
-  /** Actually enqueue — called by the gate once the ad (if any) is done. */
-  const runBatch = (items: typeof batchItems) => {
+  /**
+   * Actually enqueue — called by the gate once the reward (if any) is
+   * confirmed. `auth` is null only for a bypass (Pro/Business, or the feature
+   * switched off in the admin); otherwise it's the server-authorized session
+   * whose items are redeemed via `/api/download?rewardToken=...&itemIndex=...`
+   * — never the plain formatId, which the server would now trust exactly as
+   * little as a forged one (see app/api/download/route.ts).
+   */
+  const runBatch = (items: typeof batchItems, auth: BatchAuthorization | null) => {
     /*
       ONE id for the whole batch (owner, 2026-08-09: "multiple download should
       be recorded as one in the free user daily limit for download but not the
@@ -153,6 +185,9 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       // Each item carries its OWN kind — a story can mix video snaps and photo
       // snaps, and sending them all as "image" would have saved the videos with
       // the wrong extension.
+      const directUrl = auth
+        ? `/api/download?rewardToken=${encodeURIComponent(auth.rewardSessionId)}&itemIndex=${i}&t=${crypto.randomUUID()}&b=${batchId}`
+        : undefined;
       enqueueDownload({
         url: metadata.sourceUrl,
         formatId: f.formatId,
@@ -164,6 +199,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         qualityLabel: f.label,
         durationSeconds: metadata.durationSeconds,
         batchId,
+        directUrl,
       });
     });
     // No "started" toast — the floating card shows "Downloading N items…".
@@ -251,6 +287,16 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const [gate, setGate] = useState<{ formatId: string; kind: MediaKind } | null>(null);
   const [queue, setQueue] = useState<RewardAd[]>([]);
   const [totalAds, setTotalAds] = useState(0);
+  const { start: startReward, complete: completeReward } = useRewardSession();
+  /*
+    A server-side reward session (Part 9), opened in parallel with the ad UI —
+    by the time a real ad has played to its unlock point (seconds), this has
+    long since resolved. Scoped to VIDEO only: this spec's "HD Download" is
+    the video top-tier/size-gated ad, which is what gets the hardened session
+    + single-use redemption URL. The pre-existing image/audio top-tier ad (a
+    separate, shorter feature from an earlier request) is untouched.
+  */
+  const rewardHdStartRef = useRef<ReturnType<typeof startReward> | null>(null);
   const startDownload = (formatId: string, kind: MediaKind) => {
     const fmt = formats.find((f) => f.formatId === formatId && f.kind === kind);
     const ads = rewardAdsFor({
@@ -261,6 +307,10 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       tierConfig,
     });
     if (ads.length > 0) {
+      rewardHdStartRef.current =
+        kind === "video"
+          ? startReward("hd", [{ url: metadata.sourceUrl, formatId, kind, title: metadata.title }])
+          : null;
       setQueue(ads);
       setTotalAds(ads.length);
       setGate({ formatId, kind });
@@ -757,8 +807,34 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         // Only the LAST ad releases the download. Anything else would hand over
         // the file after ad one and leave ad two playing to nobody.
         if (rest.length === 0) {
-          if (gate) onDownload(gate.formatId, gate.kind);
+          const g = gate;
           setGate(null);
+          if (!g) return;
+          const startPromise = rewardHdStartRef.current;
+          rewardHdStartRef.current = null;
+          if (g.kind === "video" && startPromise) {
+            // Confirm the reward server-side BEFORE handing over a download
+            // URL (Part 10-11) — the plain formatId is never trusted for a
+            // gated video download once this session exists.
+            void (async () => {
+              try {
+                const session = await startPromise;
+                await completeReward("hd", session.rewardSessionId);
+                const directUrl = `/api/download?rewardToken=${encodeURIComponent(session.rewardSessionId)}&itemIndex=0&t=${crypto.randomUUID()}`;
+                onDownload(g.formatId, g.kind, { directUrl });
+              } catch (e) {
+                const code = e instanceof RewardSessionClientError ? e.code : "INTERNAL";
+                toast(
+                  code === "DAILY_LIMIT_REACHED"
+                    ? "You've reached today's free HD download limit."
+                    : "Couldn't unlock this download. Please try again.",
+                  "error",
+                );
+              }
+            })();
+          } else {
+            onDownload(g.formatId, g.kind);
+          }
         }
       }}
       onCancel={() => {
@@ -771,11 +847,11 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     />
 
     <BatchAdGate
-      batch={pendingBatch}
-      onProceed={() => {
+      batch={pendingRewardItems}
+      onProceed={(auth) => {
         const items = pendingBatch;
         setPendingBatch(null);
-        if (items) runBatch(items);
+        if (items) runBatch(items, auth);
       }}
       onCancel={() => setPendingBatch(null)}
       showComplete={batchFinished}

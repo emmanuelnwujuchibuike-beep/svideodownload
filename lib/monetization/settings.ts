@@ -233,6 +233,23 @@ export interface MonetizationSettings {
    * the AdSense account.
    */
   popunder: boolean;
+  /**
+   * Whether HD/top-tier downloads require a server-verified reward session at
+   * all. Off skips the reward-session flow entirely — `preview-card.tsx` falls
+   * back to the plain (still ad-gated-by-tier-and-duration) download.
+   */
+  rewardDownloadHdEnabled: boolean;
+  /** Same switch for batch downloads. See `features/downloader/batch-ad-gate.tsx`. */
+  rewardDownloadBatchEnabled: boolean;
+  /**
+   * Free-plan HD reward claims per day. `0` = unlimited (the starting value —
+   * owner, 2026-08-16: "unlimited while testing, cap later"). Enforced
+   * server-side via `lib/rate-limit.ts`'s `consumeDaily`, identical convention
+   * to every other daily cap in this codebase (wallpapers, general downloads).
+   */
+  rewardHdDailyLimit: number;
+  /** Free-plan batch reward claims per day. `0` = unlimited. */
+  rewardBatchDailyLimit: number;
 }
 export const DEFAULT_MONETIZATION: MonetizationSettings = {
   adsense: true,
@@ -276,6 +293,10 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   rewardImageAudioTopTierSeconds: 5,
   rewardImageAudioSkipAfterSeconds: 5,
   popunder: false,
+  rewardDownloadHdEnabled: true,
+  rewardDownloadBatchEnabled: true,
+  rewardHdDailyLimit: 0,
+  rewardBatchDailyLimit: 0,
 };
 
 /** Keep only well-formed Monetag units (known type + string snippet), capped. */

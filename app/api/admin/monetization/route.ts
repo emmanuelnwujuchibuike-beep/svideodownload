@@ -75,6 +75,14 @@ const schema = z.object({
   rewardImageAudioTopTierSeconds: z.number().int().min(0).max(30).default(5),
   rewardImageAudioSkipAfterSeconds: z.number().int().min(0).max(30).default(5),
   popunder: z.boolean().default(false),
+  // Server-verified reward-session gate for HD/batch downloads (see
+  // lib/monetization/reward-sessions.ts). Independent of the reward-AD tier/
+  // duration settings above, which decide whether a request is gated at all.
+  rewardDownloadHdEnabled: z.boolean().default(true),
+  rewardDownloadBatchEnabled: z.boolean().default(true),
+  // 0 = unlimited. Capped at 1000/day as a sanity ceiling, not a real limit.
+  rewardHdDailyLimit: z.number().int().min(0).max(1000).default(0),
+  rewardBatchDailyLimit: z.number().int().min(0).max(1000).default(0),
   /*
     Validated as "empty, or a well-formed publisher id" rather than just a
     string. A malformed id produces a script URL that 404s and shows no ads at

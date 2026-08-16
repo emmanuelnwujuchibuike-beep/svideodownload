@@ -30,6 +30,33 @@ export type AnalyticsEventType =
    * source at all.
    */
   | "reward_completed"
+  /**
+   * HD/batch reward-download lifecycle (owner, 2026-08-16 spec, Part 20) — the
+   * production reward-session flow in lib/monetization/reward-sessions.ts.
+   * Distinct from `reward_completed` above (the older, single wallpaper/
+   * top-tier-ad "watched" signal): these track the whole funnel, including the
+   * cases nothing tracked before — ad unavailable, cancelled, limit reached.
+   */
+  | "download_hd_clicked"
+  | "download_hd_reward_started"
+  | "download_hd_reward_ready"
+  | "download_hd_reward_granted"
+  | "download_hd_reward_cancelled"
+  | "download_hd_reward_failed"
+  | "download_hd_authorized"
+  | "download_hd_started"
+  | "download_hd_completed"
+  | "download_hd_limit_reached"
+  | "download_batch_clicked"
+  | "download_batch_reward_started"
+  | "download_batch_reward_ready"
+  | "download_batch_reward_granted"
+  | "download_batch_reward_cancelled"
+  | "download_batch_reward_failed"
+  | "download_batch_authorized"
+  | "download_batch_started"
+  | "download_batch_completed"
+  | "download_batch_limit_reached"
   | "custom";
 
 /** A download's lifecycle status, mirrored into `analytics_downloads.status`. */

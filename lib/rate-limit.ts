@@ -110,6 +110,16 @@ export const deviceLimiter: Limiter = buildLimiter(
   Number(process.env.RATE_LIMIT_DEVICE_PER_MIN || 20),
 );
 
+// Reward-gated downloads (HD/batch unlock). Starting a session is cheap to spam
+// (no ad shown yet), so it gets the tighter bound; completing one is rarer and
+// already gated behind actually watching something.
+export const rewardStartLimiter: Limiter = buildLimiter(
+  Number(process.env.RATE_LIMIT_REWARD_START_PER_MIN || 20),
+);
+export const rewardCompleteLimiter: Limiter = buildLimiter(
+  Number(process.env.RATE_LIMIT_REWARD_COMPLETE_PER_MIN || 20),
+);
+
 /**
  * Per-day counter for enforcing daily caps (downloads per plan). Uses a single
  * Redis INCR keyed by UTC day so the cap is shared across serverless instances.

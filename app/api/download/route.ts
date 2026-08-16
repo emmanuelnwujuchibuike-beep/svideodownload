@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 
 import { checkDownloadQuota, isInternalWorkerCall } from "@/lib/api/download-quota";
 import { BusyError } from "@/lib/concurrency";
+import { RewardError, redeemRewardItem } from "@/lib/monetization/reward-sessions";
 import { downloadLimiter, clientId } from "@/lib/rate-limit";
+import { createClient } from "@/lib/supabase/server";
 import { slugifyFilename } from "@/lib/utils";
 import { downloadRequestSchema, type DownloadRequest } from "@/lib/validation";
 import {
@@ -150,17 +152,61 @@ export async function GET(request: Request) {
   if (unauthorized) return unauthorized;
 
   const sp = new URL(request.url).searchParams;
-  const parsed = downloadRequestSchema.safeParse({
-    url: sp.get("url") ?? undefined,
-    formatId: sp.get("formatId") ?? undefined,
-    kind: sp.get("kind") ?? "video",
-    title: sp.get("title") ?? undefined,
-  });
-  if (!parsed.success) {
-    return fail(parsed.error.issues[0]?.message ?? "Invalid request.", "INVALID_URL", 400);
+  const clientIp = clientId(request.headers);
+
+  /*
+    Reward-gated HD/batch downloads carry a `rewardToken` (the reward session
+    id) instead of a trusted `url`/`formatId`/`kind` — see
+    lib/monetization/reward-sessions.ts. When present, `url`/`formatId`/`kind`/
+    `title` are taken ENTIRELY from the server-stored session, never from the
+    query string: that substitution is what makes it impossible to earn a
+    reward for one quality/batch and redeem it against another.
+  */
+  const rewardToken = sp.get("rewardToken");
+  let data: DownloadRequest;
+
+  if (rewardToken) {
+    const itemIndex = Number.parseInt(sp.get("itemIndex") ?? "0", 10);
+    let userId: string | null = null;
+    try {
+      if (request.headers.get("cookie")?.includes("-auth-token")) {
+        const supabase = await createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        userId = user?.id ?? null;
+      }
+    } catch {
+      /* signed out */
+    }
+
+    try {
+      const item = await redeemRewardItem({
+        rewardSessionId: rewardToken,
+        itemIndex: Number.isFinite(itemIndex) ? itemIndex : 0,
+        userId,
+        ip: clientIp,
+      });
+      data = { url: item.url, formatId: item.formatId, kind: item.kind, title: item.title };
+    } catch (e) {
+      if (e instanceof RewardError) {
+        return fail(e.message, e.code, e.code === "DAILY_LIMIT_REACHED" ? 429 : 400);
+      }
+      return fail("Couldn't authorize this download.", "DOWNLOAD_TOKEN_EXPIRED", 400);
+    }
+  } else {
+    const parsed = downloadRequestSchema.safeParse({
+      url: sp.get("url") ?? undefined,
+      formatId: sp.get("formatId") ?? undefined,
+      kind: sp.get("kind") ?? "video",
+      title: sp.get("title") ?? undefined,
+    });
+    if (!parsed.success) {
+      return fail(parsed.error.issues[0]?.message ?? "Invalid request.", "INVALID_URL", 400);
+    }
+    data = parsed.data;
   }
 
-  const clientIp = clientId(request.headers);
   /*
     `t` is the download manager's task id: stable across automatic retries of
     the SAME download, different for every new one, so a download costs one unit
@@ -181,5 +227,5 @@ export async function GET(request: Request) {
   const capped = await enforceDailyCap(request, clientIp, downloadId, batchId);
   if (capped) return capped;
 
-  return processDownload(parsed.data, clientIp);
+  return processDownload(data, clientIp);
 }

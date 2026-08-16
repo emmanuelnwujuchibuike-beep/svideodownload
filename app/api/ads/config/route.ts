@@ -44,6 +44,11 @@ export async function GET() {
       rewardVideoTopTierSeconds: clampSeconds(settings.rewardVideoTopTierSeconds, 30, 60),
       rewardImageAudioTopTierSeconds: clampSeconds(settings.rewardImageAudioTopTierSeconds, 5, 30),
       rewardImageAudioSkipAfterSeconds: clampSeconds(settings.rewardImageAudioSkipAfterSeconds, 5, 30),
+      // Server-verified reward-session gate (lib/monetization/reward-sessions.ts).
+      // Daily limits stay server-only; the client only needs to know whether to
+      // arm the flow at all.
+      rewardDownloadHdEnabled: settings.rewardDownloadHdEnabled !== false,
+      rewardDownloadBatchEnabled: settings.rewardDownloadBatchEnabled !== false,
     },
     { headers: { "Cache-Control": "public, max-age=60" } },
   );

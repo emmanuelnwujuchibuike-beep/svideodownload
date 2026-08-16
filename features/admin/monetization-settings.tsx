@@ -63,7 +63,20 @@ const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
     label: "History video interstitial",
     hint: "A skippable full-screen ad when the 2nd video watched from download history finishes. Never interrupts a clip mid-watch. Off by default.",
   },
+  {
+    key: "rewardDownloadHdEnabled",
+    label: "HD reward downloads",
+    hint: "Server-verified reward session for HD/top-quality video downloads — see the daily limits below. On by default.",
+  },
+  {
+    key: "rewardDownloadBatchEnabled",
+    label: "Batch reward downloads",
+    hint: "Server-verified reward session for batch downloads, replacing the old skip-countdown gate. On by default.",
+  },
 ];
+
+/** Daily reward-claim limit presets — 0 is unlimited. */
+const DAILY_LIMIT_OPTIONS = [0, 3, 5, 10, 20, 50] as const;
 
 export function MonetizationSettings({ settings }: { settings: MonetizationSettings }) {
   const router = useRouter();
@@ -355,6 +368,68 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
             </div>
           </div>
         ) : null}
+      </div>
+
+      {/*
+        Daily reward-claim limits (owner, 2026-08-16 spec, Part 7-8): how many
+        HD/batch downloads a FREE member can unlock per day via the reward-
+        session flow (lib/monetization/reward-sessions.ts). Separate from the
+        general per-plan daily download cap above — this one gates specifically
+        how many REWARD CLAIMS a day, enforced server-side, Pro/Business always
+        unlimited. 0 = unlimited (the starting value — owner: "unlimited while
+        testing, cap later").
+      */}
+      <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">Free HD downloads/day</span>
+            <span className="block truncate text-xs text-muted-foreground">Reward-session claims. Pro/Business unlimited.</span>
+          </span>
+          <select
+            value={state.rewardHdDailyLimit}
+            disabled={busy}
+            onChange={async (e) => {
+              const v = Number(e.target.value);
+              const prev = state.rewardHdDailyLimit;
+              const next = { ...state, rewardHdDailyLimit: v };
+              setState(next);
+              const ok = await persist(next);
+              if (!ok) setState((x) => ({ ...x, rewardHdDailyLimit: prev }));
+            }}
+            className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
+          >
+            {DAILY_LIMIT_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n === 0 ? "Unlimited" : `${n}/day`}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">Free batch downloads/day</span>
+            <span className="block truncate text-xs text-muted-foreground">Reward-session claims. Pro/Business unlimited.</span>
+          </span>
+          <select
+            value={state.rewardBatchDailyLimit}
+            disabled={busy}
+            onChange={async (e) => {
+              const v = Number(e.target.value);
+              const prev = state.rewardBatchDailyLimit;
+              const next = { ...state, rewardBatchDailyLimit: v };
+              setState(next);
+              const ok = await persist(next);
+              if (!ok) setState((x) => ({ ...x, rewardBatchDailyLimit: prev }));
+            }}
+            className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
+          >
+            {DAILY_LIMIT_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n === 0 ? "Unlimited" : `${n}/day`}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/*

@@ -124,7 +124,7 @@ export async function CreatorsSection() {
       scroll straight past and still feel that something is off.
     */
     <section className="relative overflow-hidden py-16 text-foreground dark:text-white sm:py-20">
-      <div className="container max-w-6xl px-2">
+      <div className="container max-w-6xl px-3">
         <div className="grid items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
           <ArtPanel images={feedGridImages} />
 

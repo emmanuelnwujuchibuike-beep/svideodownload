@@ -20,7 +20,7 @@ const TILES: { id: PlatformId; label: string }[] = [
 
 export function PlatformShowcase() {
   return (
-    <section id="platforms" className="frenz-reveal container max-w-6xl px-2 py-10 sm:py-14">
+    <section id="platforms" className="frenz-reveal container max-w-6xl px-3 py-10 sm:py-14">
       <div className="text-center">
         {/*
           Count is DERIVED from the platform registry, never written by hand — the

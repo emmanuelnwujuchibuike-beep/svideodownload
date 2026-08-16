@@ -65,7 +65,7 @@ import { DownloadInterstitial } from "@/features/monetization/download-interstit
 import { ExitIntent } from "@/features/monetization/exit-intent";
 import { TiredOfAds } from "@/features/monetization/tired-of-ads";
 import { UsageDashboard } from "@/features/downloads/usage-dashboard";
-import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
+import { ExploreWallpapersCta } from "@/components/wallpapers/explore-wallpapers-cta";
 
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { Wallpaper } from "@/lib/wallpapers";
@@ -271,6 +271,12 @@ export function DownloadsPage({
               <HistoryPanel embedded />
             </section>
           ) : null}
+
+          {/* Same "Explore wallpapers" pill as the landing page (owner,
+              2026-08-16: "let the download page share same wallpaper button
+              with the landing page") — a promotional entry point into the
+              full-screen gallery, right above the embedded grid it opens. */}
+          <ExploreWallpapersCta className="flex justify-center" />
 
           {/* Wallpapers — the real library; every tile opens the reels viewer. */}
           {/* /downloads is behind a sign-in redirect, so the viewer is always a

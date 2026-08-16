@@ -26,7 +26,7 @@ export function DownloaderLinks({
       section on BOTH surfaces without either knowing which page it is on.
     */
     <section id="platforms" className="scroll-mt-24 border-t border-border/60 py-16 sm:py-20">
-      <div className="container max-w-5xl px-2">
+      <div className="container max-w-5xl px-3">
         {/*
           An ad above the platform grid, on the same shared surface as every
           other placement. This is the section the under-download button scrolls

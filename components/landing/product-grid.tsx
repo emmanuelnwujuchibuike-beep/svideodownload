@@ -1,6 +1,7 @@
-import { ArrowRight, Image as ImageIcon, LayoutGrid } from "lucide-react";
+import { ArrowRight, LayoutGrid } from "lucide-react";
 import Link from "next/link";
 
+import { ExploreWallpapersCta } from "@/components/wallpapers/explore-wallpapers-cta";
 import { getClaimableProfiles } from "@/lib/content/genome/queries";
 
 /**
@@ -35,7 +36,7 @@ export function ProductGrid() {
   const profiles = getClaimableProfiles().filter(({ platform }) => platform.id !== "admin");
 
   return (
-    <section id="products" className="frenz-reveal container max-w-6xl scroll-mt-24 px-2 py-10 sm:py-14">
+    <section id="products" className="frenz-reveal container max-w-6xl scroll-mt-24 px-3 py-10 sm:py-14">
       <div className="text-center">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-violet-500 dark:text-violet-300">
           All-in-One Platform
@@ -88,23 +89,12 @@ export function ProductGrid() {
       </div>
 
       {/* Explore wallpapers (owner) — a premium gradient CTA below the feature
-          grid, opening the standalone full-screen gallery. `prefetch` warms the
-          route so the transition is instant rather than a spinner, and the page
-          is public: a signed-out visitor gets the whole library and can download
-          from it. */}
-      <div className="mt-3 flex justify-center">
-        <Link
-          href="/wallpapers"
-          prefetch
-          className="group relative inline-flex items-center gap-2.5 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-500/30 transition-all duration-300 hover:shadow-violet-500/50 active:scale-[0.98]"
-        >
-          <span aria-hidden className="pointer-events-none absolute -inset-1 -z-10 rounded-3xl bg-gradient-to-r from-blue-500 to-fuchsia-500 opacity-40 blur-md" />
-          <span aria-hidden className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full" />
-          <ImageIcon className="relative h-4 w-4" />
-          <span className="relative">Explore wallpapers</span>
-          <ArrowRight className="relative h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
-        </Link>
-      </div>
+          grid, opening the standalone full-screen gallery. Shared with
+          /downloads (owner, 2026-08-16: "let the download page share same
+          wallpaper button with the landing page") — see
+          components/wallpapers/explore-wallpapers-cta.tsx for the markup and
+          for why the glow sits outside the clipped button. */}
+      <ExploreWallpapersCta className="mt-3 flex justify-center" />
     </section>
   );
 }

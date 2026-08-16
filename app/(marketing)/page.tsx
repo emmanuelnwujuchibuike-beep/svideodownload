@@ -196,7 +196,7 @@ export default function HomePage() {
           Ad slot — same zone, on the shared premium surface. Renders nothing until
           the slot confirms an ad.
         */}
-        <div className="container max-w-5xl px-2 py-2">
+        <div className="container max-w-5xl px-3 py-2">
           <AdSurface zone="homepage_top" maxWidth="max-w-3xl" />
         </div>
 
@@ -207,7 +207,7 @@ export default function HomePage() {
           <RecommendedTools
             placement="homepage"
             title="Recommended tools"
-            className="container max-w-5xl px-2 py-8"
+            className="container max-w-5xl px-3 py-8"
           />
         </Suspense>
 

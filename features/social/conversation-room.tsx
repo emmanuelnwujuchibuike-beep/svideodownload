@@ -17,10 +17,10 @@ import {
   Lock,
   MapPin,
   Mic,
-  Paperclip,
   Pencil,
   Pin,
   PinOff,
+  Plus,
   Reply as ReplyIcon,
   Send,
   SmilePlus,
@@ -2431,11 +2431,24 @@ export function ConversationRoom({
           />
         </div>
       ) : (
-        // Composer, rebuilt to the owner's mockup: a glass attach circle, ONE
-        // pill input that carries the gallery + mic buttons inside its right
-        // edge, and an always-present circular gradient send button. The
-        // placeholder is personalized ("Message Maya…") for direct threads,
-        // exactly like the mockup.
+        /*
+          🔴 WHATSAPP-STYLE, EXACTLY (owner, 2026-08-16, with a reference
+          screenshot: "make the chat bottom and placeholder to be like this
+          WhatsApp style exactly, including the blur and everything").
+
+          Three changes from the previous "owner mockup" build, each pulled
+          straight from the reference: (1) the attach control is a bare "+"
+          with no filled circle behind it, not a paperclip in a glass/grey
+          disc; (2) the mic is no longer a permanent icon living inside the
+          pill next to the gallery button; (3) the single circular button
+          outside the pill's right edge now SWAPS between mic and send based
+          on whether there's anything to send — mic when the composer is
+          empty, send the moment there's text or an attachment — which is
+          the actual WhatsApp behavior (one control, two jobs), not two
+          separate always-visible buttons. `hasContent` is the one flag both
+          the button's icon/label and its handlers switch on. Blur was
+          already here (`backdrop-blur-xl`) — untouched.
+        */
         <form
           onSubmit={submit}
           className={cn(
@@ -2454,11 +2467,11 @@ export function ConversationRoom({
             whileTap={{ scale: 0.85 }}
             transition={springs.press}
             className={cn(
-              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition",
-              useLightDefault || liveWallpaperUrl ? "bg-neutral-100 text-neutral-500 hover:text-neutral-900" : "glass text-muted-foreground hover:text-foreground",
+              "flex h-11 w-9 shrink-0 items-center justify-center transition",
+              useLightDefault || liveWallpaperUrl ? "text-neutral-500 hover:text-neutral-900" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <Paperclip className="h-5 w-5" />
+            <Plus className="h-6 w-6" />
           </motion.button>
           <div
             className={cn(
@@ -2516,6 +2529,19 @@ export function ConversationRoom({
             >
               <ImageIcon className="h-5 w-5" />
             </motion.button>
+          </div>
+          {body.trim() || pendingAttachments.length > 0 ? (
+            <motion.button
+              type="submit"
+              disabled={busy || uploadingCount > 0}
+              aria-label="Send"
+              whileTap={{ scale: 0.88 }}
+              transition={springs.press}
+              className={cn(liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-brand", "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-violet-500/30 transition hover:opacity-95 disabled:opacity-40")}
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 -translate-x-px" />}
+            </motion.button>
+          ) : (
             <motion.button
               type="button"
               onPointerDown={onMicPointerDown}
@@ -2527,23 +2553,13 @@ export function ConversationRoom({
                 setRecordingVoice(true);
               }}
               aria-label="Record voice message — tap to open, hold to record"
-              whileTap={{ scale: 0.85 }}
+              whileTap={{ scale: 0.88 }}
               transition={springs.press}
-              className="flex h-11 w-9 shrink-0 items-center justify-center text-muted-foreground transition hover:text-foreground"
+              className={cn(liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-brand", "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-violet-500/30 transition hover:opacity-95")}
             >
-              <Mic className="h-5 w-5" />
+              <Mic className="h-[18px] w-[18px]" />
             </motion.button>
-          </div>
-          <motion.button
-            type="submit"
-            disabled={busy || uploadingCount > 0 || (!body.trim() && pendingAttachments.length === 0)}
-            aria-label="Send"
-            whileTap={{ scale: 0.88 }}
-            transition={springs.press}
-            className={cn(liveTheme ? THEME_BUBBLE_CLASS[liveTheme] : "bg-brand", "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-violet-500/30 transition hover:opacity-95 disabled:opacity-40")}
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 -translate-x-px" />}
-          </motion.button>
+          )}
         </form>
       )}
 

@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Repeat, UserRound, UserPlus } from "lucide-react";
+import { Repeat, UserPlus } from "lucide-react";
 
-import type { ActivityItem, ActivityTotals, MetricTotals, RepeatAnonymousVisitor } from "@/lib/admin/activity";
+import type { ActivityItem, ActivityTotals, MetricTotals } from "@/lib/admin/activity";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
@@ -87,11 +87,9 @@ function dedupe(items: ActivityItem[]): ActivityItem[] {
 export function ActivityFeed({
   initial,
   totals,
-  repeatVisitors,
 }: {
   initial: ActivityItem[];
   totals?: ActivityTotals | null;
-  repeatVisitors?: RepeatAnonymousVisitor[];
 }) {
   const [items, setItems] = useState<ActivityItem[]>(() => dedupe(initial));
   const [live, setLive] = useState(true);
@@ -184,7 +182,6 @@ export function ActivityFeed({
       {/* Real period totals — a Postgres count per cell, never an estimate. */}
       {totals ? <TotalsCards totals={totals} /> : null}
       {totals?.visitorsToday ? <TodaySplitCard split={totals.visitorsToday} /> : null}
-      {repeatVisitors && repeatVisitors.length > 0 ? <RepeatVisitorsList visitors={repeatVisitors} /> : null}
 
       {/* What's on screen right now, by kind. */}
       {breakdown.length > 0 ? (
@@ -274,45 +271,6 @@ function TodaySplitCard({ split }: { split: { newToday: number; returningToday: 
   );
 }
 
-/**
- * "Show on the who as ×2, ×3…" (owner, 2026-08-16) — anonymous visitors who
- * downloaded more than once today or this week, collapsed to one row each
- * instead of the feed above repeating "Anonymous · Downloaded" per file. See
- * `fetchRepeatAnonymousVisitors` for why this reads `analytics_downloads`
- * rather than the legacy feed: that table has no visitor identity for a
- * guest row, so there is nothing to group repeats by there.
- */
-function RepeatVisitorsList({ visitors }: { visitors: RepeatAnonymousVisitor[] }) {
-  return (
-    <div className="mb-4 rounded-2xl border border-border/60 bg-secondary/25 p-3">
-      <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fuchsia-500">
-        <UserRound className="h-3.5 w-3.5" aria-hidden /> Repeat anonymous downloaders
-      </p>
-      <ul className="space-y-1.5">
-        {visitors.map((v) => (
-          <li
-            key={v.visitorShort}
-            className="flex items-center justify-between gap-2 rounded-xl bg-background/60 px-3 py-2 text-sm"
-          >
-            <span className="truncate font-mono text-xs text-muted-foreground">Guest·{v.visitorShort}</span>
-            <span className="flex shrink-0 items-center gap-1.5">
-              {v.today > 1 ? (
-                <span className="rounded-full bg-fuchsia-500/12 px-2 py-0.5 text-[11px] font-bold tabular-nums text-fuchsia-600 dark:text-fuchsia-400">
-                  ×{v.today} today
-                </span>
-              ) : null}
-              {v.week > 1 ? (
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground">
-                  ×{v.week} this week
-                </span>
-              ) : null}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 const PERIODS: { key: keyof MetricTotals; label: string }[] = [
   { key: "day", label: "24h" },

@@ -328,33 +328,6 @@ export async function fetchActivityTotals(): Promise<ActivityTotals | null> {
   }
 }
 
-/**
- * Anonymous visitors with more than one COMPLETED download today or this
- * week — the "×2 / ×3" the Live Activity feed can't show per-row (owner,
- * 2026-08-16: "when an anonymous user download more than once… show on the
- * who as x2 or 3 or 4 or 5… that anonymous user have downloaded that day, or
- * week").
- *
- * ── Why this is a separate list, not a badge on the existing feed rows ────
- * The feed above reads `downloads` (legacy table), and that table has no
- * visitor identity for an anonymous row — only `user_id`, always null for a
- * guest. There is nothing to group repeat anonymous rows BY there; two
- * "Anonymous · Downloaded" rows could be the same person or two different
- * ones and the table cannot say which. `analytics_downloads.visitor_id` is
- * the one place a stable per-browser id for anonymous traffic actually
- * exists (the same column `lib/analytics/digest.ts`'s repeat-downloader
- * count reads), so this list is sourced from there instead of retrofitted
- * onto the legacy feed.
- */
-export interface RepeatAnonymousVisitor {
-  /** First 8 chars of the visitor id — enough to distinguish rows in an admin
-   *  list without displaying the full token, which is otherwise meaningless
-   *  to a human anyway. */
-  visitorShort: string;
-  today: number;
-  week: number;
-}
-
 export interface AnonymousDownloadCount {
   today: number;
   week: number;
@@ -363,14 +336,21 @@ export interface AnonymousDownloadCount {
 const REPEAT_VISITOR_ROW_CAP = 20_000;
 
 /**
- * Per-guest completed-download counts, keyed by the FULL `visitor_id` (owner,
- * 2026-08-16: the download log's "Guest · <id>" and this feed's repeat-visitor
- * badge were computed by two separate queries, so the id one panel showed for
- * a guest was never guaranteed to be the same guest the other panel meant).
+ * Per-guest completed-download counts today/this rolling-7-days, keyed by the
+ * FULL `visitor_id` (owner, 2026-08-16: "when an anonymous user download more
+ * than once… show on the who as x2 or 3 or 4 or 5").
  *
- * Kept as one shared source so any surface that needs "how many times has
- * THIS guest downloaded" looks it up against the exact same map — never a
- * second, independently-fetched approximation of it.
+ * 🔴 LIVE ACTIVITY DOES NOT READ THIS (owner, 2026-08-16: "remove the
+ * anonymous amount of download in live activity and it should only be in
+ * traffic section"). A "Repeat anonymous downloaders" list used to live on
+ * the Activity tab, built from an earlier, independently-fetched version of
+ * this same query — which meant the guest id it showed was never guaranteed
+ * to be the same guest the Traffic tab's download-history table meant by the
+ * same short id. That list is gone; the ONLY consumer now is
+ * `lib/analytics/download-log.ts`, which looks up each download-history
+ * row's count against this exact map by its own `visitor_id` — so the count
+ * and the id next to it always describe the same guest, and there is exactly
+ * one place in the admin dashboard this number is shown.
  */
 export async function fetchAnonymousDownloadCounts(): Promise<Map<string, AnonymousDownloadCount>> {
   const counts = new Map<string, AnonymousDownloadCount>();
@@ -408,14 +388,4 @@ export async function fetchAnonymousDownloadCounts(): Promise<Map<string, Anonym
   } catch {
     return counts;
   }
-}
-
-export async function fetchRepeatAnonymousVisitors(limit = 20): Promise<RepeatAnonymousVisitor[]> {
-  if (!hasSupabase) return [];
-  const counts = await fetchAnonymousDownloadCounts();
-  return [...counts.entries()]
-    .filter(([, c]) => c.today > 1 || c.week > 1)
-    .map(([visitorId, c]) => ({ visitorShort: visitorId.slice(0, 8), today: c.today, week: c.week }))
-    .sort((a, b) => b.week - a.week || b.today - a.today)
-    .slice(0, limit);
 }

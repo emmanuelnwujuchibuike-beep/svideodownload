@@ -55,9 +55,9 @@ export interface DownloadLogRow {
   userLabel: string | null;
   /**
    * How many completed downloads THIS guest (same `visitorId`) has today /
-   * this week, from the same map `fetchRepeatAnonymousVisitors` reads — so
-   * the count next to a "Guest · <id>" row can never point at a different
-   * guest than the id it's attached to. Null for signed-in rows.
+   * this week, from `fetchAnonymousDownloadCounts` — so the count next to a
+   * "Guest · <id>" row can never point at a different guest than the id it's
+   * attached to. Null for signed-in rows.
    */
   guestToday: number | null;
   guestWeek: number | null;

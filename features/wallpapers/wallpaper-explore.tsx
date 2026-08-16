@@ -253,20 +253,19 @@ export function WallpaperExplore({
         */}
         <div
           /*
-            🔴 z-40, not z-30 (owner, 2026-08-16, with a screenshot: "this
-            search button in wallpaper page still goes under the somethings
-            when scrolling").
+            🔴 z-50, not z-40 (owner, 2026-08-16, twice — first "goes under
+            the somethings when scrolling", then "add more z index to the
+            search button").
 
-            Every grid tile's own download button (ExploreTile, below) is
-            ALSO `z-30` — and since neither this bar nor a tile establishes
-            its own stacking context, both compete within the same one. At a
-            tie, CSS paints whichever is LATER in the document on top, and
-            the grid comes after this bar — so once a tile's button scrolled
-            up to the same screen position as the search button, the tile
-            won and the search button visually sank behind it. z-40 removes
-            the tie outright rather than depending on document order.
+            z-40 fixed the tie against the grid tiles' own `z-30` download
+            buttons, but the fanned card-deck's "HD/FULL HD" badge just above
+            (line ~372 below) is ALSO `z-40` — and it renders LATER in the
+            document (it's part of the headline+deck block right after this
+            bar), so at that tie it painted on top instead. z-50 clears both
+            the tiles (z-30) and the deck badge (z-40) outright rather than
+            chasing each new element that happens to share this bar's value.
           */
-          className="pointer-events-none sticky z-40 px-4 pt-3"
+          className="pointer-events-none sticky z-50 px-4 pt-3"
           style={{ top: "calc(var(--frenz-safe-top, 0px) + 4rem)" }}
         >
           <div className="pointer-events-none mx-auto flex w-full max-w-3xl items-start justify-between">

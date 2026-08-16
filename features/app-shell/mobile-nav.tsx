@@ -116,6 +116,22 @@ export function MobileNav() {
     which is the whole reason this is a named condition and not an inline test.
   */
   const immersive = pathname.startsWith("/reels");
+  /*
+    🔴 Full Bleed requires being SIGNED IN, not just the mode cookie (owner,
+    2026-08-16: "the home button in the landing page is leading to the feed
+    home and requiring a sign in").
+
+    This component used to be mounted only inside the signed-in (app) shell,
+    where reaching a Full-Bleed-mode page already implied a session existed.
+    Now that it's also the marketing nav (see the merge note on `MobileAppNav`
+    above), that assumption breaks: a signed-OUT visitor can still carry
+    `mode=full` in their cookie (set on an earlier visit, or never cleared on
+    sign-out), and `mode === "full"` alone would then render the Full Bleed
+    tab set — Home pointing at `/home`, which requires a session and bounced
+    them to login. Gating on `handle` too means a guest always sees the
+    Downloader set regardless of what the mode cookie says.
+  */
+  const fullBleedActive = mode === "full" && !!handle;
 
   // Warm the primary destinations once so the FIRST tap opens instantly — dynamic
   // routes (Messages/Friends) otherwise fetch on first navigation, which felt like
@@ -275,28 +291,24 @@ export function MobileNav() {
               "border-t border-border bg-background shadow-[0_-4px_16px_-4px_rgba(2,6,23,0.12)] dark:shadow-[0_-4px_16px_-4px_rgba(0,0,0,0.4)]",
         )}
       >
-        {mode === "downloader" || immersive ? (
+        {!fullBleedActive ? (
           <>
             {/*
-              🔴 THE SAME BAR ON /reels IN BOTH MODES (owner, 2026-08-11: "the
-              reels from the landing page and signed page suppose to be the
-              same").
+              🔴 REVERSED (owner, 2026-08-16: "when i click on reels on the
+              feed page it switches the bottom nav to the landing/downloader
+              mode bottom nav, it shouldnt change bottom nav wherever the
+              reels button was clicked").
 
-              Reels is one surface, and it was showing two different navigations
-              depending on a cookie the viewer never set deliberately. A
-              Downloader (and every signed-out visitor arriving from the landing,
-              since that is the default mode) got Home · Reels · History ·
-              Support · Profile with Reels lit. A Full Bleed member's own bar
-              (now Home · Friends · Reels · Chats · Profile — see the `else`
-              branch below) would light its OWN Reels tab instead, a different
-              set of four siblings around it.
-
-              `immersive` forces the Downloader set for everyone standing on
-              /reels. Home still points at `/downloads` here, which is the
-              correct destination in the mode this set belongs to; a Full Bleed
-              member reaching it lands on the download page and their own nav
-              returns on the next screen. That is the trade for one consistent
-              bar, and it is the one the owner asked for.
+              This used to be `mode === "downloader" || immersive` —
+              `immersive` (on /reels) forced the Downloader set on EVERY
+              visitor there, including a genuine Full Bleed member, per an
+              earlier, opposite instruction ("the reels from the landing page
+              and signed page suppose to be the same"). That owner has now
+              reversed it: which SET of tabs shows should depend only on the
+              viewer's actual mode, never on which route they're standing on.
+              `immersive` still exists below — it now only changes how the
+              bar LOOKS (floating, dark, white glyphs) while on /reels, not
+              which destinations it offers.
             */}
             {/* `/home` is an ALIAS for this page in Downloader mode — middleware
                 rewrites it rather than redirecting, so the PWA's start_url costs

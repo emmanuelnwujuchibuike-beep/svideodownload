@@ -1,0 +1,37 @@
+name: Cron - Wallpaper upload reminder
+
+# Same situation as cron-digest.yml: no Vercel cron slot left, so GitHub
+# Actions supplies the clock for app/api/cron/wallpaper-reminder/route.ts.
+on:
+  schedule:
+    - cron: "0 10 * * *" # 10am UTC daily
+  workflow_dispatch: {}
+
+concurrency:
+  group: cron-wallpaper-reminder
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/wallpaper-reminder
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          set -euo pipefail
+          url="${SITE_URL:-https://frenzsave.com}/api/cron/wallpaper-reminder"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set — see the digest memory for setup steps."
+            exit 1
+          fi
+          status=$(curl -sS -o /tmp/response.json -w "%{http_code}" -X POST "$url" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          echo "HTTP $status"
+          cat /tmp/response.json
+          echo
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Wallpaper-reminder cron returned HTTP $status"
+            exit 1
+          fi

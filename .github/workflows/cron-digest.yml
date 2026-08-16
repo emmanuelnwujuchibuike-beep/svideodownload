@@ -1,0 +1,45 @@
+name: Cron - Admin digest
+
+# Vercel's own cron is out: this project's plan allows 2 scheduled jobs and
+# both are already spent by trending + profile-snapshots (see vercel.json).
+# This workflow is the free, code-only substitute — it just hits the same
+# authenticated route Vercel cron would have hit. See
+# app/api/cron/digest/route.ts for what actually runs; this file only
+# supplies the clock.
+#
+# GitHub Actions schedules run in UTC and are best-effort (a few minutes of
+# slip under load is normal and fine here — the route decides which
+# digest(s) are due for TODAY, not for this exact minute).
+on:
+  schedule:
+    - cron: "0 1 * * *" # 1am UTC daily
+  workflow_dispatch: {} # manual "Run workflow" button, for testing
+
+concurrency:
+  group: cron-digest
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/digest
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          set -euo pipefail
+          url="${SITE_URL:-https://frenzsave.com}/api/cron/digest"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set — see the digest memory for setup steps."
+            exit 1
+          fi
+          status=$(curl -sS -o /tmp/response.json -w "%{http_code}" -X POST "$url" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          echo "HTTP $status"
+          cat /tmp/response.json
+          echo
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Digest cron returned HTTP $status"
+            exit 1
+          fi

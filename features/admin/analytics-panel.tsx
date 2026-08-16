@@ -14,7 +14,7 @@ export function AnalyticsPanel({ data }: { data: MonetizationAnalytics | null })
   const maxAff = Math.max(1, ...topAffiliates.map((a) => a.clicks));
 
   return (
-    <section className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card">
+    <section className="mt-6 rounded-3xl border border-border bg-card px-3 py-6 sm:px-6 shadow-card">
       <h2 className="mb-5 flex items-center gap-2 font-semibold">
         <BarChart3 className="h-5 w-5 text-primary" /> Monetization analytics
       </h2>

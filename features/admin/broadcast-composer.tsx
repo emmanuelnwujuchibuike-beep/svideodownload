@@ -54,7 +54,7 @@ export function BroadcastComposer({ initialBroadcasts }: { initialBroadcasts: Br
   const label = "mb-1 block text-xs font-medium text-muted-foreground";
 
   return (
-    <section className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card">
+    <section className="mt-6 rounded-3xl border border-border bg-card px-3 py-6 sm:px-6 shadow-card">
       <h2 className="mb-1 flex items-center gap-2 font-semibold">
         <Megaphone className="h-5 w-5 text-primary" /> Broadcast alert
       </h2>

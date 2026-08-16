@@ -64,7 +64,7 @@ export function TrendingEditor({ settings }: { settings: TrendingSettings }) {
   const label = "mb-1 block text-xs font-medium text-muted-foreground";
 
   return (
-    <section className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card">
+    <section className="mt-6 rounded-3xl border border-border bg-card px-3 py-6 sm:px-6 shadow-card">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 font-semibold">
           <Flame className="h-5 w-5 text-primary" /> Trending

@@ -74,19 +74,37 @@ interface TikTokItem {
   };
 }
 
+// Short-link resolution is a single redirect hop, not a full page fetch — this
+// used to have NO timeout at all (the only leg in this file without one,
+// confirmed 2026-08-16), so a slow/wedged vm./vt.tiktok.com left the whole
+// extraction stalled before TikWM or the native path even got a turn.
+const TIKTOK_RESOLVE_TIMEOUT_MS = Number(process.env.TIKTOK_RESOLVE_TIMEOUT_MS || 6000);
+
 async function resolveUrl(url: string): Promise<string> {
   // Short links (vm./vt.tiktok.com) redirect to the canonical watch URL.
   if (/\b(vm|vt)\.tiktok\.com\b/i.test(url)) {
-    const res = await extractorFetch(
-      url,
-      {
-        method: "HEAD",
-        redirect: "follow",
-        headers: { "User-Agent": DESKTOP_UA },
-      },
-      "tiktok",
-    );
-    return res.url || url;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIKTOK_RESOLVE_TIMEOUT_MS);
+    try {
+      const res = await extractorFetch(
+        url,
+        {
+          method: "HEAD",
+          redirect: "follow",
+          headers: { "User-Agent": DESKTOP_UA },
+          signal: controller.signal,
+        },
+        "tiktok",
+      );
+      return res.url || url;
+    } catch {
+      // A stalled/failed redirect resolves to the short link itself — TikWM
+      // accepts short links directly, so this degrades to "skip the shortcut,
+      // let the next leg handle it" rather than stalling the whole chain.
+      return url;
+    } finally {
+      clearTimeout(timer);
+    }
   }
   return url;
 }

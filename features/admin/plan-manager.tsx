@@ -58,7 +58,7 @@ export function PlanManager({ subscribers }: { subscribers: Subscriber[] }) {
   };
 
   return (
-    <section className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card">
+    <section className="mt-6 rounded-3xl border border-border bg-card px-3 py-6 sm:px-6 shadow-card">
       <h2 className="mb-1 flex items-center gap-2 font-semibold">
         <UserPlus className="h-5 w-5 text-primary" /> Members &amp; plans
       </h2>

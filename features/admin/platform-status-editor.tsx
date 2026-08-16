@@ -91,7 +91,7 @@ export function PlatformStatusEditor({ initial }: { initial: PlatformStatusMap }
   const degraded = EDITABLE.filter((id) => statusFor(id) !== "operational");
 
   return (
-    <section className="rounded-3xl border border-border bg-card p-6 shadow-card">
+    <section className="rounded-3xl border border-border bg-card px-3 py-6 sm:px-6 shadow-card">
       <h2 className="mb-1 flex items-center gap-2 font-semibold">
         <Activity className="h-5 w-5 text-primary" /> Platform status
       </h2>

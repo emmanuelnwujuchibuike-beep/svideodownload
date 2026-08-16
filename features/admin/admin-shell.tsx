@@ -2,6 +2,8 @@
 
 import {
   Activity,
+  ArrowDown,
+  ArrowUp,
   BadgeCheck,
   Bell,
   Boxes,
@@ -140,7 +142,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <SectionContext.Provider value={active}>
       <div className="lg:grid lg:grid-cols-[210px_1fr] lg:gap-10">
-        <nav aria-label="Dashboard sections" className="mb-8 lg:mb-0">
+        <nav aria-label="Dashboard sections" className="mb-8 px-3 sm:px-0 lg:mb-0">
           <div className="lg:sticky lg:top-28 space-y-6">
             {ADMIN_CATEGORIES.map((category) => {
               const sections = sectionsInCategory(category.id);
@@ -194,16 +196,34 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Scrolls an anchor into view, respecting reduced-motion. */
+function jumpTo(id: string) {
+  document
+    .getElementById(id)
+    ?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+
 /**
  * One section's panel. Visible only when selected.
  *
  * The heading and blurb come from the registry rather than being written at
  * each call site, so the nav label and the panel title can never disagree.
+ *
+ * ── Jump to bottom / back to top (owner, 2026-08-16: "sections... not too
+ *    long down that requires excess scrolling") ─────────────────────────────
+ * Several panels (moderation, platform catalogues) run several screens tall.
+ * Rather than shortening what they show, a plain anchor jump at each end lets
+ * an operator skip the scroll entirely — down to check whether anything is
+ * queued, or straight back up to the panel's own controls, without a single
+ * frame of hand-scrolling either way. `scroll-mt-28` on the top anchor keeps
+ * the fixed SiteHeader from covering the heading after the jump back up.
  */
 export function AdminPanel({ id, children }: { id: string; children: React.ReactNode }) {
   const active = useContext(SectionContext);
   const section = getAdminSection(id);
   const shown = active === id;
+  const topId = `admin-${id}-top`;
+  const bottomId = `admin-${id}-bottom`;
 
   return (
     <section
@@ -218,18 +238,38 @@ export function AdminPanel({ id, children }: { id: string; children: React.React
       */
       className={cn(!shown && "hidden", shown && "motion-safe:animate-fade-up")}
     >
+      <div id={topId} className="scroll-mt-28" />
       {section ? (
-        <header className="mb-6">
-          <h2
-            id={`admin-${id}-heading`}
-            className="text-2xl font-bold tracking-[-0.02em] sm:text-3xl"
+        <header className="mb-6 flex flex-wrap items-start justify-between gap-3 px-3 sm:px-0">
+          <div>
+            <h2
+              id={`admin-${id}-heading`}
+              className="text-2xl font-bold tracking-[-0.02em] sm:text-3xl"
+            >
+              {section.label}
+            </h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">{section.blurb}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => jumpTo(bottomId)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-foreground/30 hover:text-foreground"
           >
-            {section.label}
-          </h2>
-          <p className="mt-1.5 text-sm text-muted-foreground">{section.blurb}</p>
+            <ArrowDown aria-hidden className="h-3.5 w-3.5" /> Jump to bottom
+          </button>
         </header>
       ) : null}
       {children}
+      <div className="mt-8 flex justify-center border-t border-border/60 px-3 pt-5 sm:px-0">
+        <button
+          type="button"
+          onClick={() => jumpTo(topId)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3.5 py-2 text-xs font-medium text-muted-foreground transition hover:border-foreground/30 hover:text-foreground"
+        >
+          <ArrowUp aria-hidden className="h-3.5 w-3.5" /> Back to top
+        </button>
+      </div>
+      <div id={bottomId} aria-hidden className="scroll-mt-28" />
     </section>
   );
 }

@@ -245,8 +245,18 @@ export default async function AdminPage() {
   return (
     <>
       <SiteHeader />
-      <main className="relative container max-w-6xl pb-28 pt-32 sm:pt-40">
-        <header className="mb-10 flex flex-wrap items-end justify-between gap-4">
+      {/*
+        🔴 px-0 on mobile (owner, 2026-08-16: "the section cards... reach px 3
+        and the section to be px-0"). `container`'s own padding (1.5rem, every
+        breakpoint — tailwind.config.ts) plus every card's own p-6 was double
+        padding on a small screen: 24px of page margin, THEN another 24px of
+        card margin, before a single pixel of an admin control appeared. Cards
+        now carry their own (smaller, `px-3`) inset, so the page itself gives
+        that width back below `sm` and only restores its own padding once the
+        cards have room to spare.
+      */}
+      <main className="relative container max-w-6xl px-0 pb-28 pt-32 sm:px-6 sm:pt-40">
+        <header className="mb-10 flex flex-wrap items-end justify-between gap-4 px-3 sm:px-0">
           <div>
             <h1 className="text-3xl font-bold tracking-[-0.03em] sm:text-4xl">
               Admin dashboard
@@ -276,7 +286,7 @@ export default async function AdminPage() {
           unreachable on the public site, and it is easier to miss here because
           an operator page has no organic traffic to notice its absence.
         */}
-        <nav aria-label="Operations" className="mb-10 flex flex-wrap gap-2">
+        <nav aria-label="Operations" className="mb-10 flex flex-wrap gap-2 px-3 sm:px-0">
           {[
             { href: "/admin/corpora", label: "Corpus operations" },
             { href: "/admin/content", label: "Content operations" },

@@ -1,4 +1,4 @@
-import { cacheGet, cacheSet } from "@/lib/cache";
+import { cacheGet, getCached } from "@/lib/cache";
 import { detectPlatform } from "@/lib/platforms";
 import {
   isProxyForced,
@@ -126,19 +126,24 @@ async function extractFresh(url: string): Promise<VideoMetadata> {
 /**
  * Cache-first metadata extraction. Repeated URLs are served from Redis/memory
  * (sub-millisecond) instead of re-hitting the source or yt-dlp.
+ *
+ * ── Single-flight (2026-08-16) ─────────────────────────────────────────────
+ * A cold TikTok URL's chain can legitimately run 20s+ (short-link resolve →
+ * TikWM → native scrape, see tiktok.ts). Before this, N concurrent requests
+ * for that SAME brand-new URL — a link shared to a few people at once, or a
+ * flaky client retrying while the first attempt was still in flight — each
+ * ran the full chain independently. `getCached` (lib/cache.ts) is the
+ * existing dedup primitive for exactly this: on a miss, exactly one loader
+ * runs and everyone else awaits the same promise.
  */
 export async function getMetadata(url: string): Promise<VideoMetadata> {
-  const key = metadataKey(url);
-  const cached = await cacheGet<VideoMetadata>(key);
-  if (cached) return cached;
-
-  const meta = await extractFresh(url);
-  // When the source exposes too few (often just one) video quality options,
-  // offer extra lower tiers so there's always a real, working choice — see
-  // quality-ladder.ts.
-  const withLadder: VideoMetadata = { ...meta, formats: withQualityLadder(meta.formats) };
-  await cacheSet(key, withLadder, METADATA_TTL_SECONDS);
-  return withLadder;
+  return getCached(metadataKey(url), METADATA_TTL_SECONDS, async () => {
+    const meta = await extractFresh(url);
+    // When the source exposes too few (often just one) video quality options,
+    // offer extra lower tiers so there's always a real, working choice — see
+    // quality-ladder.ts.
+    return { ...meta, formats: withQualityLadder(meta.formats) };
+  });
 }
 
 /** Reads cached metadata without triggering extraction (used at download time). */

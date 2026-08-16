@@ -139,7 +139,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
   const saveText = () => persist(state);
 
   return (
-    <section className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card">
+    <section className="mt-6 rounded-3xl border border-border bg-card px-3 py-6 sm:px-6 shadow-card">
       <h2 className="mb-1 flex items-center gap-2 font-semibold">
         <ToggleRight className="h-5 w-5 text-primary" /> Monetization controls
       </h2>
@@ -155,7 +155,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
             type="button"
             disabled={busy}
             onClick={() => toggle(r.key)}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5 text-left transition hover:border-foreground/20 disabled:opacity-70"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5 text-left transition hover:border-foreground/20 disabled:opacity-70"
           >
             <span className="min-w-0">
               <span className="block text-sm font-semibold">{r.label}</span>
@@ -169,7 +169,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
       {/* Interstitial skip delay — how long before a full-screen ad can be
           skipped. Only meaningful with full-screen units on; saves on change. */}
       {state.interstitial ? (
-        <div className="mt-2.5 flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
           <span className="min-w-0">
             <span className="block text-sm font-semibold">Interstitial skip delay</span>
             <span className="block truncate text-xs text-muted-foreground">How long before a full-screen ad can be skipped.</span>
@@ -205,7 +205,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
       */}
       {state.interstitialBatchDownload ? (
         <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
             <span className="min-w-0">
               <span className="block text-sm font-semibold">Before a batch</span>
               <span className="block truncate text-xs text-muted-foreground">Skippable after…</span>
@@ -230,7 +230,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
               <option value={45}>45 seconds</option>
             </select>
           </div>
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
             <span className="min-w-0">
               <span className="block text-sm font-semibold">After a batch</span>
               <span className="block truncate text-xs text-muted-foreground">Files are already saved.</span>
@@ -269,7 +269,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
         behind — only 0 on either duration effectively disables that half.
       */}
       <div className="mt-2.5 space-y-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="min-w-0">
             <span className="block text-sm font-semibold">Top-quality reward ad</span>
             <span className="block truncate text-xs text-muted-foreground">
@@ -299,7 +299,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
 
         {state.rewardTopTierCount > 0 ? (
           <div className="grid gap-2.5 sm:grid-cols-3">
-            <div className="flex items-center justify-between gap-3 rounded-xl bg-background/60 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-background/60 p-3">
               <span className="min-w-0">
                 <span className="block text-sm font-semibold">Video</span>
                 <span className="block truncate text-xs text-muted-foreground">Never skippable.</span>
@@ -323,7 +323,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
                 <option value={45}>45 seconds</option>
               </select>
             </div>
-            <div className="flex items-center justify-between gap-3 rounded-xl bg-background/60 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-background/60 p-3">
               <span className="min-w-0">
                 <span className="block text-sm font-semibold">Image / audio</span>
                 <span className="block truncate text-xs text-muted-foreground">Ad length.</span>
@@ -347,7 +347,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
                 <option value={15}>15 seconds</option>
               </select>
             </div>
-            <div className="flex items-center justify-between gap-3 rounded-xl bg-background/60 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-background/60 p-3">
               <span className="min-w-0">
                 <span className="block text-sm font-semibold">Image / audio skip</span>
                 <span className="block truncate text-xs text-muted-foreground">Skippable after…</span>
@@ -386,7 +386,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
         testing, cap later").
       */}
       <div className="mt-2.5 grid gap-2.5 sm:grid-cols-3">
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
           <span className="min-w-0">
             <span className="block text-sm font-semibold">Free HD downloads/day</span>
             <span className="block truncate text-xs text-muted-foreground">Reward-session claims. Pro/Business unlimited.</span>
@@ -411,7 +411,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
             ))}
           </select>
         </div>
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
           <span className="min-w-0">
             <span className="block text-sm font-semibold">Free batch downloads/day</span>
             <span className="block truncate text-xs text-muted-foreground">Reward-session claims. Pro/Business unlimited.</span>
@@ -436,7 +436,7 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
             ))}
           </select>
         </div>
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
           <span className="min-w-0">
             <span className="block text-sm font-semibold">Free video previews/day</span>
             <span className="block truncate text-xs text-muted-foreground">GPT reward claims. Pro/Business unlimited.</span>

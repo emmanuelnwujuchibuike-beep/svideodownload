@@ -63,14 +63,22 @@ export interface ViewportPin {
  * thread's own layout (its header is `shrink-0` above a `flex-1 overflow-y-auto`
  * list, which is correct).
  *
- * This tracks the visual viewport CONTINUOUSLY while mounted rather than
- * switching on a "keyboard looks open" heuristic. The first version gated on
- * `innerHeight - vv.height > 120`, which left two real holes: nothing was
- * pinned during the keyboard's open/close animation (so the header visibly
- * jumped), and a SHORT keyboard — an iPad hardware-keyboard accessory bar, a
- * floating/split keyboard — never crossed 120px at all, so the header was
- * pushed off-screen with no correction. Tracking continuously removes the
- * heuristic entirely.
+ * This tracks the visual viewport CONTINUOUSLY while mounted rather than a
+ * one-shot "keyboard looks open" boolean check — a fixed 120px cutoff left
+ * a SHORT keyboard (an iPad hardware-keyboard accessory bar, a floating/
+ * split keyboard) never crossing it, pushed off-screen with no correction.
+ *
+ * 🔴 It DOES still gate on a smaller 80px `heightGap`, re-added 2026-08-16
+ * (owner, urgent: the whole thread visibly dragged down and snapped back on
+ * an ordinary touch). `offsetTop`/`resize` on the visual viewport don't only
+ * fire for the keyboard — iOS Safari's own chrome (URL bar) collapse and
+ * plain elastic overscroll move it too, with no height change to match, and
+ * pinning to THAT dragged the fixed thread by the transient offset and
+ * snapped it back the instant the transient resolved. 80px is comfortably
+ * under any real keyboard's height (even a compact one) and reached within
+ * the first few frames of a real keyboard's open animation, so this doesn't
+ * reintroduce the old cutoff's jump in practice — it only refuses to pin on
+ * a shift that was never the keyboard to begin with.
  *
  * It is a no-op in the common case: with no keyboard, `vv.height` equals the
  * layout height and `vv.offsetTop` is 0, so this resolves to exactly what
@@ -99,6 +107,32 @@ export function useVisualViewportPin(): ViewportPin | null {
 
     const update = () => {
       if (desktop.matches) {
+        setPin(null);
+        return;
+      }
+      /*
+        🔴 ONLY PIN WHEN THE KEYBOARD IS ACTUALLY THE CAUSE (owner, 2026-08-16,
+        urgent: "the chat... move the whole page when touched? it goes down
+        and bring the whole page half down like is closing it but it will
+        just bounce up back").
+
+        `visualViewport`'s `scroll`/`resize` events don't ONLY fire for the
+        keyboard — iOS Safari also moves `offsetTop` during its own chrome
+        (URL bar) collapse/expand and during ordinary elastic overscroll, both
+        of which a touch-drag on a `fixed inset-0` surface can trigger with no
+        keyboard involved at all. Applying THAT `offsetTop` straight to the
+        pin dragged the entire thread down by the transient amount, then
+        snapped it back to 0 the moment the transient value resolved — the
+        exact "moves, looks like it's closing, bounces back" symptom.
+
+        A real keyboard is the one case that reliably shrinks `vv.height`
+        well below the layout viewport for the whole time it's up; chrome
+        collapse/overscroll leave height roughly where it was. Below this gap,
+        resolve to `null` — plain CSS `inset-0` is correct there, same as with
+        no keyboard at all.
+      */
+      const heightGap = window.innerHeight - vv.height;
+      if (heightGap < 80) {
         setPin(null);
         return;
       }

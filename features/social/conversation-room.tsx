@@ -2482,13 +2482,12 @@ export function ConversationRoom({
                 else clearTyping();
               }}
               onKeyDown={onComposerKeyDown}
-              // 🔴 No personalization (owner, 2026-08-16: "the placeholder
-              // shouldn't be [showing] anything but only [a generic] send
-              // chat [prompt]") — was `Message ${otherFirstName}…` for a
-              // direct thread. Edit/reply keep their own text: those aren't
-              // decoration, they tell the sender which mode the composer is
-              // actually in.
-              placeholder={editingId ? "Edit your message…" : replyingTo ? "Write a reply…" : "Message"}
+              // 🔴 "Send a chat" (owner, 2026-08-16, literal wording) — was
+              // `Message ${otherFirstName}…` for a direct thread, then a
+              // plain "Message". Edit/reply keep their own text: those
+              // aren't decoration, they tell the sender which mode the
+              // composer is actually in.
+              placeholder={editingId ? "Edit your message…" : replyingTo ? "Write a reply…" : "Send a chat"}
               aria-label="Message"
               maxLength={2000}
               rows={1}

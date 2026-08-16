@@ -193,6 +193,33 @@ export interface MonetizationSettings {
   /** Seconds before the POST-batch ad can be skipped (owner: 5). */
   batchCompleteSeconds: number;
   /**
+   * How many of a download's highest-quality format options (per media kind)
+   * count as "top tier" for the reward-ad gate below — owner, 2026-08-16:
+   * "the top 2 highest quality". Formats are already sorted best-first per
+   * kind, so this is just how many leading entries count.
+   */
+  rewardTopTierCount: number;
+  /**
+   * Seconds a top-tier VIDEO download's reward ad must run before it unlocks
+   * — owner: "All videos must show a 30 seconds ad to download the top 2
+   * highest quality videos". Never skippable (`skipAfterSec` is always null
+   * for this one, matching the existing size-gated first ad).
+   */
+  rewardVideoTopTierSeconds: number;
+  /**
+   * Seconds a top-tier IMAGE/AUDIO download's reward ad runs — owner: "image
+   * and audio download shouldn't show 30 seconds reward ad… only a 5 sec ad
+   * that can be skipped after 5sec". Distinct from the video duration because
+   * the owner explicitly wants a shorter ad for these two kinds.
+   */
+  rewardImageAudioTopTierSeconds: number;
+  /**
+   * Seconds before the image/audio top-tier ad's Skip control appears.
+   * Kept separate from the duration above so an admin can set, say, a longer
+   * ad that's still skippable at 5s, without the two being forced equal.
+   */
+  rewardImageAudioSkipAfterSeconds: number;
+  /**
    * Allow pop-under / OnClick units (the `pop` format).
    *
    * Defaults OFF, unlike the original switch which defaulted ON. These take
@@ -244,6 +271,10 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   interstitialBatchDownload: false,
   batchGateSeconds: 30,
   batchCompleteSeconds: 5,
+  rewardTopTierCount: 2,
+  rewardVideoTopTierSeconds: 30,
+  rewardImageAudioTopTierSeconds: 5,
+  rewardImageAudioSkipAfterSeconds: 5,
   popunder: false,
 };
 

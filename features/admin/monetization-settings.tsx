@@ -239,6 +239,125 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
       ) : null}
 
       {/*
+        Reward-ad quality tier (owner, 2026-08-16): "All videos must show a 30
+        seconds ad to download the top 2 highest quality videos" and "image
+        and audio download shouldn't show 30 seconds reward ad… only a 5 sec
+        ad that can be skipped after 5sec" — both for the top N (default 2)
+        best-quality format options. Always visible, unlike the batch/
+        interstitial sections above: this isn't a separate placement someone
+        opts into, it's how the EXISTING reward-ad gate (server/extractors'
+        quality-ranked formats, gated in lib/monetization/reward-policy.ts)
+        behaves for top-tier downloads, so there is no "off" state to hide it
+        behind — only 0 on either duration effectively disables that half.
+      */}
+      <div className="mt-2.5 space-y-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">Top-quality reward ad</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              Applies to the best N format options of a download, by kind.
+            </span>
+          </span>
+          <select
+            value={state.rewardTopTierCount}
+            disabled={busy}
+            onChange={async (e) => {
+              const v = Number(e.target.value);
+              const prev = state.rewardTopTierCount;
+              const next = { ...state, rewardTopTierCount: v };
+              setState(next);
+              const ok = await persist(next);
+              if (!ok) setState((x) => ({ ...x, rewardTopTierCount: prev }));
+            }}
+            className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
+          >
+            <option value={0}>Off</option>
+            <option value={1}>Top 1</option>
+            <option value={2}>Top 2</option>
+            <option value={3}>Top 3</option>
+            <option value={4}>Top 4</option>
+          </select>
+        </div>
+
+        {state.rewardTopTierCount > 0 ? (
+          <div className="grid gap-2.5 sm:grid-cols-3">
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-background/60 p-3">
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">Video</span>
+                <span className="block truncate text-xs text-muted-foreground">Never skippable.</span>
+              </span>
+              <select
+                value={state.rewardVideoTopTierSeconds}
+                disabled={busy}
+                onChange={async (e) => {
+                  const v = Number(e.target.value);
+                  const prev = state.rewardVideoTopTierSeconds;
+                  const next = { ...state, rewardVideoTopTierSeconds: v };
+                  setState(next);
+                  const ok = await persist(next);
+                  if (!ok) setState((x) => ({ ...x, rewardVideoTopTierSeconds: prev }));
+                }}
+                className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
+              >
+                <option value={0}>Off</option>
+                <option value={15}>15 seconds</option>
+                <option value={30}>30 seconds</option>
+                <option value={45}>45 seconds</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-background/60 p-3">
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">Image / audio</span>
+                <span className="block truncate text-xs text-muted-foreground">Ad length.</span>
+              </span>
+              <select
+                value={state.rewardImageAudioTopTierSeconds}
+                disabled={busy}
+                onChange={async (e) => {
+                  const v = Number(e.target.value);
+                  const prev = state.rewardImageAudioTopTierSeconds;
+                  const next = { ...state, rewardImageAudioTopTierSeconds: v };
+                  setState(next);
+                  const ok = await persist(next);
+                  if (!ok) setState((x) => ({ ...x, rewardImageAudioTopTierSeconds: prev }));
+                }}
+                className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
+              >
+                <option value={0}>Off</option>
+                <option value={5}>5 seconds</option>
+                <option value={10}>10 seconds</option>
+                <option value={15}>15 seconds</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-background/60 p-3">
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">Image / audio skip</span>
+                <span className="block truncate text-xs text-muted-foreground">Skippable after…</span>
+              </span>
+              <select
+                value={state.rewardImageAudioSkipAfterSeconds}
+                disabled={busy}
+                onChange={async (e) => {
+                  const v = Number(e.target.value);
+                  const prev = state.rewardImageAudioSkipAfterSeconds;
+                  const next = { ...state, rewardImageAudioSkipAfterSeconds: v };
+                  setState(next);
+                  const ok = await persist(next);
+                  if (!ok) setState((x) => ({ ...x, rewardImageAudioSkipAfterSeconds: prev }));
+                }}
+                className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
+              >
+                <option value={0}>Immediately</option>
+                <option value={5}>5 seconds</option>
+                <option value={10}>10 seconds</option>
+                <option value={15}>15 seconds</option>
+              </select>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/*
         Shown only when both are on, and only then — a standing warning about a
         combination nobody has selected is noise that trains people to ignore it.
       */}

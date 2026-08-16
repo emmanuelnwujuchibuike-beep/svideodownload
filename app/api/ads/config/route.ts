@@ -39,6 +39,11 @@ export async function GET() {
       interstitialBatchDownload: settings.interstitialBatchDownload === true,
       batchGateSeconds: clampSeconds(settings.batchGateSeconds, 30, 60),
       batchCompleteSeconds: clampSeconds(settings.batchCompleteSeconds, 5, 30),
+      // Reward-ad quality tier — see lib/monetization/reward-policy.ts.
+      rewardTopTierCount: clampSeconds(settings.rewardTopTierCount, 2, 10),
+      rewardVideoTopTierSeconds: clampSeconds(settings.rewardVideoTopTierSeconds, 30, 60),
+      rewardImageAudioTopTierSeconds: clampSeconds(settings.rewardImageAudioTopTierSeconds, 5, 30),
+      rewardImageAudioSkipAfterSeconds: clampSeconds(settings.rewardImageAudioSkipAfterSeconds, 5, 30),
     },
     { headers: { "Cache-Control": "public, max-age=60" } },
   );

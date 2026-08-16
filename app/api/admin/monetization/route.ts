@@ -68,6 +68,12 @@ const schema = z.object({
   // stops being a price and becomes a reason to leave.
   batchGateSeconds: z.number().int().min(0).max(60).default(30),
   batchCompleteSeconds: z.number().int().min(0).max(30).default(5),
+  // How many of the leading (best-first) format options per kind count as
+  // "top tier" for the reward-ad gate below.
+  rewardTopTierCount: z.number().int().min(0).max(10).default(2),
+  rewardVideoTopTierSeconds: z.number().int().min(0).max(60).default(30),
+  rewardImageAudioTopTierSeconds: z.number().int().min(0).max(30).default(5),
+  rewardImageAudioSkipAfterSeconds: z.number().int().min(0).max(30).default(5),
   popunder: z.boolean().default(false),
   /*
     Validated as "empty, or a well-formed publisher id" rather than just a

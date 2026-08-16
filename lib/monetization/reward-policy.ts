@@ -36,6 +36,39 @@
  * audio file, and being wrong in that direction costs the user's goodwill for
  * nothing. The reverse — occasionally missing an ad on a large unmeasured file —
  * costs one impression.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  QUALITY-TIER GATE, ADDED (owner, 2026-08-16)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * "image and audio download shouldn't show 30 seconds reward ad to download
+ * the top 2 highest quality only a 5 sec ad that can be skipped after 5sec…
+ * All videos must show a 30 seconds ad to download the top 2 highest quality
+ * videos" — both admin-configurable (`rewardTopTierCount`,
+ * `rewardVideoTopTierSeconds`, `rewardImageAudioTopTierSeconds`,
+ * `rewardImageAudioSkipAfterSeconds` in lib/monetization/settings.ts).
+ *
+ * A format's quality RANK is its 0-based position in the already best-first
+ * sorted list for its kind (see quality-ladder.ts's own note: "Extractors
+ * already sort best-first") — `qualityRank: 0` is the single best option,
+ * `1` the second-best, and so on. The caller (the quality picker) is the one
+ * place that actually has that sorted list, so it computes and passes the
+ * rank rather than this function re-deriving it from a bare format.
+ *
+ * ── Video: ALONGSIDE the size rule, not instead of it (owner-confirmed) ────
+ * The size rule exists specifically so a large file can't download free just
+ * because it happens to rank 3rd — reverting to a pure rank-based rule would
+ * reintroduce precisely the bug the size rule was built to fix (see the note
+ * above: a 1 GB non-top format used to be free). So for video, the two rules
+ * are combined with OR: a top-tier format ALWAYS gets at least the first ad
+ * even under 100 MB, and a large file still gets the size rule's ads even
+ * outside the top tier or if it's a top-tier file that's also huge — the
+ * two never stack into extra ads beyond what the size rule already produces.
+ *
+ * ── Image/audio: REPLACES the old "always gated" rule ──────────────────────
+ * Only a top-tier image/audio option is gated now; anything past
+ * `rewardTopTierCount` downloads free. This is a deliberate narrowing from
+ * "every image, every time" to "only the options worth protecting."
  */
 
 /** Bytes above which a single 30s reward ad is required. */
@@ -58,39 +91,75 @@ export interface RewardPolicyInput {
   filesize?: number | null;
   /** False for premium/ad-free viewers — they are never gated. */
   showAds: boolean;
-  /** Images stay gated regardless of size (they are always small). */
   kind?: "video" | "audio" | "image";
+  /**
+   * 0-based position of the chosen format in its kind's best-first sorted
+   * list (0 = the single best option). Undefined/null when the caller
+   * couldn't determine rank — treated as "not top tier."
+   */
+  qualityRank?: number | null;
+  /** Admin-configured quality-tier gate — see the module doc above. Omitted
+   *  fields fall back to the settings module's own defaults. */
+  tierConfig?: {
+    topTierCount?: number;
+    videoTopTierSeconds?: number;
+    imageAudioTopTierSeconds?: number;
+    imageAudioSkipAfterSeconds?: number;
+  };
 }
+
+const DEFAULT_TOP_TIER_COUNT = 2;
+const DEFAULT_VIDEO_TOP_TIER_SECONDS = 30;
+const DEFAULT_IMAGE_AUDIO_TOP_TIER_SECONDS = 5;
+const DEFAULT_IMAGE_AUDIO_SKIP_AFTER_SECONDS = 5;
 
 /**
  * The ads a download must watch, in order. An empty array means no gate.
  */
-export function rewardAdsFor({ filesize, showAds, kind }: RewardPolicyInput): RewardAd[] {
-  // Paying viewers, always. This is checked first so no size rule can ever
-  // override it — an ad shown to someone who paid not to see ads is the single
-  // worst outcome available here.
+export function rewardAdsFor({ filesize, showAds, kind, qualityRank, tierConfig }: RewardPolicyInput): RewardAd[] {
+  // Paying viewers, always. This is checked first so no size/tier rule can
+  // ever override it — an ad shown to someone who paid not to see ads is the
+  // single worst outcome available here.
   if (!showAds) return [];
 
-  /*
-    Images keep their own gate, unchanged from the previous rule. They are the
-    one kind where size is a bad proxy for value: a wallpaper is a few hundred
-    KB and is the entire product of that download, so a byte threshold would
-    make every image free while gating videos that are worth less.
-  */
-  if (kind === "image") return [{ durationSec: REWARD_AD_SECONDS, skipAfterSec: null }];
+  const topTierCount = tierConfig?.topTierCount ?? DEFAULT_TOP_TIER_COUNT;
+  const isTopTier = topTierCount > 0 && typeof qualityRank === "number" && qualityRank >= 0 && qualityRank < topTierCount;
 
-  // Unknown size fails OPEN — see the note above.
-  if (typeof filesize !== "number" || !Number.isFinite(filesize) || filesize <= 0) return [];
-
-  if (filesize > DOUBLE_REWARD_THRESHOLD_BYTES) {
-    return [
-      { durationSec: REWARD_AD_SECONDS, skipAfterSec: null },
-      { durationSec: REWARD_AD_SECONDS, skipAfterSec: SECOND_AD_SKIP_AFTER_SECONDS },
-    ];
+  if (kind === "image" || kind === "audio") {
+    /*
+      Replaces the old "every image, every time" rule. Only a top-tier
+      option is gated now — the admin-configured duration/skip pair applies
+      to BOTH image and audio, per the owner's ask, with audio newly joining
+      a gate it never had before (it used to follow the byte-size rule
+      video does, below).
+    */
+    if (!isTopTier) return [];
+    const durationSec = tierConfig?.imageAudioTopTierSeconds ?? DEFAULT_IMAGE_AUDIO_TOP_TIER_SECONDS;
+    const skipAfterSec = tierConfig?.imageAudioSkipAfterSeconds ?? DEFAULT_IMAGE_AUDIO_SKIP_AFTER_SECONDS;
+    if (durationSec <= 0) return [];
+    return [{ durationSec, skipAfterSec: skipAfterSec > 0 ? skipAfterSec : null }];
   }
 
-  if (filesize > REWARD_THRESHOLD_BYTES) {
-    return [{ durationSec: REWARD_AD_SECONDS, skipAfterSec: null }];
+  // Video: the size rule (unchanged) OR the quality-tier rule — whichever
+  // asks for more. See the module doc for why these are combined with OR
+  // rather than one replacing the other.
+  const sizeAds: RewardAd[] =
+    typeof filesize === "number" && Number.isFinite(filesize) && filesize > 0
+      ? filesize > DOUBLE_REWARD_THRESHOLD_BYTES
+        ? [
+            { durationSec: REWARD_AD_SECONDS, skipAfterSec: null },
+            { durationSec: REWARD_AD_SECONDS, skipAfterSec: SECOND_AD_SKIP_AFTER_SECONDS },
+          ]
+        : filesize > REWARD_THRESHOLD_BYTES
+          ? [{ durationSec: REWARD_AD_SECONDS, skipAfterSec: null }]
+          : []
+      : []; // unknown size fails OPEN — see the note above
+
+  if (sizeAds.length > 0) return sizeAds;
+
+  if (isTopTier) {
+    const durationSec = tierConfig?.videoTopTierSeconds ?? DEFAULT_VIDEO_TOP_TIER_SECONDS;
+    if (durationSec > 0) return [{ durationSec, skipAfterSec: null }];
   }
 
   return [];

@@ -26,6 +26,7 @@ import { startDownload as enqueueDownload } from "@/features/downloads/manager";
 import { ResultAd } from "@/features/monetization/result-ad";
 import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
 import { rewardAdsFor, type RewardAd } from "@/lib/monetization/reward-policy";
+import { useInterstitialConfig } from "@/features/monetization/use-interstitial-skip";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
@@ -227,12 +228,38 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     come from the policy rather than from a flag threaded through the component.
   */
   const { showAds } = useShowAds();
+  const {
+    rewardTopTierCount,
+    rewardVideoTopTierSeconds,
+    rewardImageAudioTopTierSeconds,
+    rewardImageAudioSkipAfterSeconds,
+  } = useInterstitialConfig();
+  const tierConfig = {
+    topTierCount: rewardTopTierCount,
+    videoTopTierSeconds: rewardVideoTopTierSeconds,
+    imageAudioTopTierSeconds: rewardImageAudioTopTierSeconds,
+    imageAudioSkipAfterSeconds: rewardImageAudioSkipAfterSeconds,
+  };
+  // Quality rank is this format's position in ITS OWN kind's best-first list
+  // (0 = the single best option) — the only place that list exists, so the
+  // policy function (which knows nothing about the full format set) takes
+  // the rank rather than re-deriving it.
+  const qualityRankFor = (formatId: string, kind: MediaKind): number | null => {
+    const i = listFor(kind).findIndex((f) => f.formatId === formatId);
+    return i >= 0 ? i : null;
+  };
   const [gate, setGate] = useState<{ formatId: string; kind: MediaKind } | null>(null);
   const [queue, setQueue] = useState<RewardAd[]>([]);
   const [totalAds, setTotalAds] = useState(0);
   const startDownload = (formatId: string, kind: MediaKind) => {
     const fmt = formats.find((f) => f.formatId === formatId && f.kind === kind);
-    const ads = rewardAdsFor({ filesize: fmt?.filesize ?? null, showAds, kind });
+    const ads = rewardAdsFor({
+      filesize: fmt?.filesize ?? null,
+      showAds,
+      kind,
+      qualityRank: qualityRankFor(formatId, kind),
+      tierConfig,
+    });
     if (ads.length > 0) {
       setQueue(ads);
       setTotalAds(ads.length);
@@ -249,9 +276,21 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     and so lit up for the wrong formats in both directions.
   */
   const gatedAdCount = useMemo(() => {
-    const fmt = formats.find((f) => f.formatId === activeId && f.kind === tab);
-    return rewardAdsFor({ filesize: fmt?.filesize ?? null, showAds, kind: tab }).length;
-  }, [formats, activeId, tab, showAds]);
+    const rank = formats.findIndex((f) => f.formatId === activeId && f.kind === tab);
+    const fmt = rank >= 0 ? formats[rank] : undefined;
+    return rewardAdsFor({
+      filesize: fmt?.filesize ?? null,
+      showAds,
+      kind: tab,
+      qualityRank: rank >= 0 ? rank : null,
+      tierConfig: {
+        topTierCount: rewardTopTierCount,
+        videoTopTierSeconds: rewardVideoTopTierSeconds,
+        imageAudioTopTierSeconds: rewardImageAudioTopTierSeconds,
+        imageAudioSkipAfterSeconds: rewardImageAudioSkipAfterSeconds,
+      },
+    }).length;
+  }, [formats, activeId, tab, showAds, rewardTopTierCount, rewardVideoTopTierSeconds, rewardImageAudioTopTierSeconds, rewardImageAudioSkipAfterSeconds]);
 
   const platform = PLATFORMS[metadata.platform];
   const BrandIcon = BRAND_ICONS[metadata.platform];

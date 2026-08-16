@@ -23,6 +23,15 @@ export interface InterstitialConfig {
   batchGateSeconds: number;
   /** Seconds the POST-batch ad must run before it can be skipped. */
   batchCompleteSeconds: number;
+  /** How many of a download's best-quality format options (per kind) are
+   *  reward-gated — see lib/monetization/reward-policy.ts. */
+  rewardTopTierCount: number;
+  /** Seconds a top-tier VIDEO reward ad must run (never skippable). */
+  rewardVideoTopTierSeconds: number;
+  /** Seconds a top-tier IMAGE/AUDIO reward ad runs. */
+  rewardImageAudioTopTierSeconds: number;
+  /** Seconds before the top-tier IMAGE/AUDIO ad's Skip control appears. */
+  rewardImageAudioSkipAfterSeconds: number;
 }
 
 const DEFAULTS: InterstitialConfig = {
@@ -36,6 +45,10 @@ const DEFAULTS: InterstitialConfig = {
   batchDownload: false,
   batchGateSeconds: 30,
   batchCompleteSeconds: 5,
+  rewardTopTierCount: 2,
+  rewardVideoTopTierSeconds: 30,
+  rewardImageAudioTopTierSeconds: 5,
+  rewardImageAudioSkipAfterSeconds: 5,
 };
 
 let cached: InterstitialConfig | null = null;
@@ -61,6 +74,20 @@ export function useInterstitialConfig(): InterstitialConfig {
             typeof d?.batchGateSeconds === "number" ? d.batchGateSeconds : DEFAULTS.batchGateSeconds,
           batchCompleteSeconds:
             typeof d?.batchCompleteSeconds === "number" ? d.batchCompleteSeconds : DEFAULTS.batchCompleteSeconds,
+          rewardTopTierCount:
+            typeof d?.rewardTopTierCount === "number" ? d.rewardTopTierCount : DEFAULTS.rewardTopTierCount,
+          rewardVideoTopTierSeconds:
+            typeof d?.rewardVideoTopTierSeconds === "number"
+              ? d.rewardVideoTopTierSeconds
+              : DEFAULTS.rewardVideoTopTierSeconds,
+          rewardImageAudioTopTierSeconds:
+            typeof d?.rewardImageAudioTopTierSeconds === "number"
+              ? d.rewardImageAudioTopTierSeconds
+              : DEFAULTS.rewardImageAudioTopTierSeconds,
+          rewardImageAudioSkipAfterSeconds:
+            typeof d?.rewardImageAudioSkipAfterSeconds === "number"
+              ? d.rewardImageAudioSkipAfterSeconds
+              : DEFAULTS.rewardImageAudioSkipAfterSeconds,
         };
       })
       .catch(() => {

@@ -75,6 +75,21 @@ import { cn, formatBytes, formatCompactNumber } from "@/lib/utils";
 export function DownloadsHero() {
   return (
     <section className="relative px-1 pt-1">
+      {/*
+        🔴 THE TOP GLOW (owner, 2026-08-16: "circle gradient, faded" — pointing
+        to a reference screenshot of a radial glow sitting behind an app's top
+        balance card, not a flat top-to-bottom band). AppTopbar's own wash
+        (features/app-shell/app-topbar.tsx, `onDownloads`) is now the SAME
+        radial shape and stops exactly where this one starts, so the two read
+        as one continuous glow rather than a header-shaped box sitting above a
+        second, different one. `-z-10` keeps it behind the hero's own content
+        and the cloud illustration; it never affects layout since it has no
+        size of its own to give the section.
+      */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 -top-6 -z-10 h-72 bg-[image:radial-gradient(ellipse_140%_100%_at_50%_0%,hsl(var(--brand-purple)/0.20),hsl(var(--brand-purple)/0.07)_45%,transparent_75%)] dark:bg-[image:none]"
+      />
       <div className="relative flex items-center gap-4">
         <div className="min-w-0 flex-1">
           {/* The same clamp ramp as the landing H1, so the three words stay on

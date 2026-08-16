@@ -1689,16 +1689,21 @@ html[data-a11y-motion="reduce"] *::after {
    said "let smaller devices never get hot while on the landing page". A flat
    background colour is the cheapest thing a browser can paint.
 
-   Sampled from `public/newnativeapplandingpage.jpg` (#EEF0FA). Dark mode keeps
-   the ground the rest of the dark theme already uses rather than tinting it —
-   the point is a ground that is not the card colour, and on dark the cards are
-   already lighter than the page.
+   🔴 CORRECTED 2026-08-16 (owner: "native app body are gray, and every other
+   thing is white … no purple gradient body or background anywhere"). The
+   original value was sampled at #EEF0FA — 45% saturation at hue 234, which is
+   technically lavender, not gray, and reads as visibly purple-tinted on a
+   phone screen even at 96% lightness. Now a TRUE neutral gray (0% saturation,
+   so there is no hue to read as any colour at all) rather than a paler purple.
+   Dark mode keeps the ground the rest of the dark theme already uses rather
+   than tinting it — the point is a ground that is not the card colour, and on
+   dark the cards are already lighter than the page.
 
    It is a variable rather than three copies of a hex literal because the header
    has to match it EXACTLY. Two hand-copied values that drift by one step would
    put a visible seam across the top of the page. */
 :root {
-  --frenz-canvas: 234 45% 96%;
+  --frenz-canvas: 0 0% 95%;
 
   /* ── How much of the viewport bottom the mobile nav owns ───────────────────
 

@@ -341,7 +341,7 @@ const wallpapers: ProductGenome = {
   releases: [],
   compatibility: [],
 
-  accessibility: { wcagLevel: "AA", notes: ["Shares the app's canvas/safe-area treatment (`.frenz-canvas-page`)."] },
+  accessibility: { wcagLevel: "AA", notes: ["Shares the app's neutral-gray canvas/safe-area treatment (`.frenz-canvas-page`), matching the landing and features pages."] },
   privacy: {
     dataCollected: ["Views", "Downloads", "Comments"],
     retention: "Standard account data lifecycle.",

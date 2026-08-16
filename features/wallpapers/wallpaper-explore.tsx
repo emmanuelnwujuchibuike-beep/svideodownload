@@ -218,21 +218,20 @@ export function WallpaperExplore({
   return (
     <>
       {/*
-        🔴 The native-app ground (owner, 2026-08-11: "make same flutter native app
-        upgrade to the wallpaper page").
-
-        `frenz-canvas-page` is the same marker /downloads uses; the rule in
-        globals.css puts the tint on the BODY, which matters here specifically —
-        /wallpapers sits outside both layouts, `min-h-dvh` only covers this
-        element, and the SiteFooter renders as a sibling below it. Colouring just
-        this main would leave the footer on white and put a seam across the bottom
-        of a page that scrolls past it.
-
-        The controls needed no work: this page already dressed its back button,
-        filter chips and search field in `bg-card` + `shadow-soft` +
-        `ring-1 ring-inset` — the white-card-on-tinted-ground recipe. They simply
-        had no ground to sit on, so they read as white-on-white.
+        🔴 CORRECTED 2026-08-16 (owner, in two passes: first "the wallpaper page
+        safe area is purple", then the clarification — "native app body are
+        gray, and every other thing is white, header … and all"). The GROUND
+        stays gray — `frenz-canvas-page` is back, and `--frenz-canvas` itself is
+        now a true neutral gray (see the token's note in globals.css), which is
+        the actual fix for "purple". What ALSO needed fixing, separately: this
+        page never had an opaque strip covering the safe area the way
+        /downloads' AppTopbar does, so the tinted ground painted straight
+        through the status-bar region regardless of its colour. The fixed white
+        strip just below covers exactly that gap — sized to the safe-area inset
+        alone, not the whole header (which also carries the hero and card deck,
+        which stay on the gray ground).
       */}
+      <div aria-hidden className="fixed inset-x-0 top-0 z-40 bg-background" style={{ height: "var(--frenz-safe-top, 0px)" }} />
       <main className="frenz-canvas-page min-h-dvh pb-24">
         {/* ── 1 + 2 + 3: top bar, editorial hero, fanned deck ──────────────── */}
         <header

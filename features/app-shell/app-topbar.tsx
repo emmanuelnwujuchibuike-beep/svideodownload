@@ -35,6 +35,14 @@ export function AppTopbar() {
     (mounted once in the persistent layout, not per-page), so a page-specific
     look can only be reached by checking where we are, not by a prop the page
     could pass in.
+
+    🔴 RESHAPED same day (owner: "the download page top gradient isnt as i
+    said i said circle gradient, faded" — pointing to a reference screenshot
+    of a radial glow, not a flat linear band). Was `linear-gradient(to_bottom,
+    …)`; now the SAME radial shape `DownloadsHero` continues below the bar
+    (features/downloads/downloads-sections.tsx), so the glow reads as one
+    continuous shape spanning the header and the top of the page rather than
+    two different gradients meeting at a seam.
   */
   const onDownloads = pathname === "/downloads";
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -98,13 +106,13 @@ export function AppTopbar() {
         // could retint the bar; it and the rule are gone. See globals.css.
         "border-b border-border/20 bg-background",
         onMessagesIndex && "hidden lg:flex",
-        // The wash. Same recipe as SiteHeader's own `topGradient` — a
-        // background-IMAGE layered over the unchanged `bg-background`, purple
-        // at the safe-area line and gone by the bar's bottom edge, light mode
-        // only. The bar stays exactly as opaque as the 2026-08-11 "let the
-        // download page top header and safe area be white" decision required;
-        // this only adds a wash on top of that white, it does not retint it.
-        onDownloads && "bg-[image:linear-gradient(to_bottom,hsl(var(--brand-purple)/0.16),hsl(var(--brand-purple)/0.05)_60%,transparent)] dark:bg-[image:none]",
+        // The wash — a radial glow anchored above the bar's top-center, not a
+        // linear top-to-bottom band (see the note above). A background-IMAGE
+        // layered over the unchanged `bg-background`, light mode only. The bar
+        // stays exactly as opaque as the 2026-08-11 "let the download page top
+        // header and safe area be white" decision required; this only adds a
+        // wash on top of that white, it does not retint it.
+        onDownloads && "bg-[image:radial-gradient(ellipse_140%_160%_at_50%_-40%,hsl(var(--brand-purple)/0.30),hsl(var(--brand-purple)/0.10)_45%,transparent_75%)] dark:bg-[image:none]",
       )}
     >
       {/* Far-left: search + add friends — kept apart from the action cluster so

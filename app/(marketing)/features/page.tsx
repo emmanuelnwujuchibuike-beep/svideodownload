@@ -90,10 +90,11 @@ export default function FeaturesPage() {
   );
 
   return (
-    /* The native-app ground, same token as the landing (owner, 2026-08-11:
-       "make the same native app upgrade detailing and exact … to the download
-       page and features page"). White cards on a tinted canvas — see the note on
-       `--frenz-canvas` in globals.css. */
+    /* 🔴 CORRECTED 2026-08-16 (owner: "native app body are gray, and every
+       other thing is white"). The gray ground stays — `--frenz-canvas` was
+       the bug (lavender-tinted, not gray; see the token's note in
+       globals.css), now fixed at the token so it's fixed here for free. No
+       `topGradient` here either way — this page never had one. */
     <div className="bg-[hsl(var(--frenz-canvas))] text-foreground">
       <SiteHeader canvas />
       {/* Native rhythm: content starts directly under the bar, as on iOS and as

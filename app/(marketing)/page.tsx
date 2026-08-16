@@ -99,24 +99,18 @@ export default function HomePage() {
         mobile menu, and the sticky ad (the failure removed in 135ed36).
       */}
       {/*
-        🔴 The whole page sits on the NATIVE CANVAS, not on white (owner,
-        2026-08-11: "make the background of the whole of the landing page to be
-        like in my screenshot … and not just the hero should be like that but
-        all over the landing page").
-
-        One declaration covers every section below, because none of them paints
-        a page-level background of its own — they were all inheriting this
-        wrapper's `bg-background`, i.e. #FFFFFF. Their inner cards are `bg-white`
-        / `bg-card` and stay white, which is the entire point: white cards on a
-        tinted ground is the native-app relationship, and it only reads if the
-        ground is not also white.
-
-        The colour is defined once as `--frenz-canvas` in globals.css — see the
-        note there for why it is flat rather than a gradient, and why the header
-        must read the same variable rather than carry its own copy.
+        🔴 CORRECTED 2026-08-16 (owner, in two passes: first "no purple gradient
+        body or background anywhere", then the clarification — "native app body
+        are gray, and every other thing is white, header, sections, bottom nav
+        and all"). The ground stays: `--frenz-canvas` is now a TRUE neutral gray
+        (0% saturation, see the token's own note in globals.css) rather than the
+        45%-saturation lavender it was — that was the actual bug, not the
+        presence of a tinted ground at all. What DOES stay removed is the
+        header's `topGradient` wash: the owner was explicit that only /downloads
+        gets the purple glow, never the landing header.
       */}
       <div className="bg-[hsl(var(--frenz-canvas))] text-foreground">
-        <SiteHeader canvas topGradient />
+        <SiteHeader canvas />
         <main>
         <Hero />
         {/*

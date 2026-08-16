@@ -24,6 +24,19 @@ export function IconTile({ children, className }: { children: ReactNode; classNa
     <span
       className={cn(
         "relative flex h-full w-full items-center justify-center rounded-full text-foreground transition-colors",
+        /*
+          🔴 3D DEPTH (owner, 2026-08-16: "make the top nav in the landing
+          pages, signed in pages, feed page and all to use the new bottom
+          nav icon style and 3d style"). The bottom nav's redesign gave every
+          glyph a static drop-shadow so it reads as lifted off the bar
+          rather than flat-printed on it (see GLYPH_INACTIVE in
+          features/app-shell/mobile-nav.tsx). `IconTile` is the one shared
+          wrapper every top-header icon already goes through — AppTopbar's
+          search/notification/theme/create, SiteHeader's icons, the
+          notification bell — so the SAME filter here reaches all of them
+          from one place instead of matching each header by hand.
+        */
+        "[filter:drop-shadow(0_2px_4px_rgba(2,6,23,0.22))]",
         className,
       )}
     >

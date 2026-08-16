@@ -14,7 +14,6 @@ import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { UserMenu } from "@/features/auth/user-menu";
 import { CreateActionSheet } from "@/features/create/create-action-sheet";
-import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
@@ -101,17 +100,34 @@ export function AppTopbar() {
         onMessagesIndex && "hidden lg:flex",
       )}
     >
-      {/* Far-left: create + search + add friends — kept apart from the action
-          cluster so the right side never gets crowded. */}
+      {/* Far-left: search + create — kept apart from the action cluster so
+          the right side never gets crowded. */}
       <div className="flex shrink-0 items-center gap-2">
+        {/* Mobile search entry (the search box is tablet+ only) */}
+        <PressIcon className="relative sm:hidden">
+          <Link
+            href="/search"
+            aria-label="Search"
+            onClick={() => {
+              haptic("light");
+              playSound("tap");
+            }}
+            className="flex h-10 w-10 items-center justify-center"
+          >
+            <IconTile>
+              <IoSearchOutline className="h-[20px] w-[20px]" />
+            </IconTile>
+          </Link>
+        </PressIcon>
         {/*
           🔴 CREATE, MOVED HERE FROM THE BOTTOM NAV (owner, 2026-08-16: "move
           the + button to top just like [Facebook/Instagram] style, don't
-          make the plus button round, make it professional"). Reference:
-          Instagram puts a plain "+" at the far top-left, no filled circle
-          behind it — this reuses `IconTile`, the same bare-glyph treatment
-          every other icon in this bar already has, rather than the raised
-          gradient circle the bottom nav used to render.
+          make the plus button round, make it professional"), then swapped
+          into the ADD-FRIENDS slot (owner, same day: "remove the add friend
+          button from the top header in feed and move the plus button to
+          where the add friend button was"). `SuggestionsLauncher` is gone
+          from this bar entirely — this is the last icon in the cluster now,
+          exactly where it stood.
 
           `lg:hidden` matches exactly where the bottom nav (and the "+" that
           used to live in it) is shown — the desktop sidebar has no Create
@@ -148,27 +164,6 @@ export function AppTopbar() {
             </button>
           </PressIcon>
         ) : null}
-
-        {/* Mobile search entry (the search box is tablet+ only) */}
-        <PressIcon className="relative sm:hidden">
-          <Link
-            href="/search"
-            aria-label="Search"
-            onClick={() => {
-              haptic("light");
-              playSound("tap");
-            }}
-            className="flex h-10 w-10 items-center justify-center"
-          >
-            <IconTile>
-              <IoSearchOutline className="h-[20px] w-[20px]" />
-            </IconTile>
-          </Link>
-        </PressIcon>
-        {/* Add friends — single top-nav icon */}
-        <span className="relative">
-          <SuggestionsLauncher />
-        </span>
       </div>
 
       {center ? (

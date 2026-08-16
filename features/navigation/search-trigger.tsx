@@ -45,14 +45,23 @@ export function SearchTrigger({ className = "" }: { className?: string }) {
   );
 }
 
-/** Icon-only variant, for tight bars (mobile header). */
+/**
+ * Icon-only variant, for tight bars (mobile header).
+ *
+ * Same drop-shadow depth as `IconTile` (owner, 2026-08-16: "make the top
+ * nav in the landing pages, signed in pages, feed page and all to use the
+ * new bottom nav icon style and 3d style") — this is the one top-header
+ * icon that doesn't route through `IconTile` (it's its own button, not a
+ * glyph inside a shared wrapper), so it needs the filter applied directly
+ * to stay visually consistent with every icon beside it.
+ */
 export function SearchTriggerIcon({ className = "" }: { className?: string }) {
   return (
     <button
       type="button"
       onClick={openCommandCenter}
       aria-label="Search Frenz"
-      className={`inline-flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-foreground ${className}`}
+      className={`inline-flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-foreground [filter:drop-shadow(0_2px_4px_rgba(2,6,23,0.22))] ${className}`}
     >
       <Search className="h-5 w-5" />
     </button>

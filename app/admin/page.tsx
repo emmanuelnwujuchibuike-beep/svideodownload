@@ -59,7 +59,7 @@ import { certifyAll } from "@/lib/platform/certification";
 import { getTestTypes } from "@/lib/platform/test-types";
 import { ActivityFeed } from "@/features/admin/activity-feed";
 import { TopDownloaders } from "@/features/admin/top-downloaders";
-import { fetchActivityTotals, fetchRecentActivity } from "@/lib/admin/activity";
+import { fetchActivityTotals, fetchRecentActivity, fetchRepeatAnonymousVisitors } from "@/lib/admin/activity";
 import { fetchTopDownloaders } from "@/lib/admin/top-downloaders";
 import { ConfigCatalog } from "@/features/admin/config-catalog";
 import { getConfigSurfaces } from "@/lib/platform/config-registry";
@@ -642,15 +642,16 @@ async function ContentSection() {
 }
 
 async function ActivitySection() {
-  const [initial, totals, topDownloaders] = await Promise.all([
+  const [initial, totals, topDownloaders, repeatVisitors] = await Promise.all([
     fetchRecentActivity(40),
     fetchActivityTotals(),
     fetchTopDownloaders(),
+    fetchRepeatAnonymousVisitors(),
   ]);
   return (
     <div className="space-y-6">
       <TopDownloaders data={topDownloaders} />
-      <ActivityFeed initial={initial} totals={totals} />
+      <ActivityFeed initial={initial} totals={totals} repeatVisitors={repeatVisitors} />
     </div>
   );
 }

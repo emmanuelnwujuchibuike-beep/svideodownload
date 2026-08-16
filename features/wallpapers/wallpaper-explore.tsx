@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
+import { SiteHeader } from "@/components/layout/site-header";
 import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
 import { categoryIcon } from "@/features/wallpapers/wallpaper-categories";
 import {
@@ -218,25 +219,35 @@ export function WallpaperExplore({
   return (
     <>
       {/*
-        🔴 CORRECTED 2026-08-16 (owner, in two passes: first "the wallpaper page
-        safe area is purple", then the clarification — "native app body are
-        gray, and every other thing is white, header … and all"). The GROUND
-        stays gray — `frenz-canvas-page` is back, and `--frenz-canvas` itself is
-        now a true neutral gray (see the token's note in globals.css), which is
-        the actual fix for "purple". What ALSO needed fixing, separately: this
-        page never had an opaque strip covering the safe area the way
-        /downloads' AppTopbar does, so the tinted ground painted straight
-        through the status-bar region regardless of its colour. The fixed white
-        strip just below covers exactly that gap — sized to the safe-area inset
-        alone, not the whole header (which also carries the hero and card deck,
-        which stay on the gray ground).
+        🔴 THE SITE HEADER (owner, 2026-08-16: "the landing or download top
+        header should also be in the wallpaper page above the search and back
+        button, dont remove the search and back button, they should stick to
+        the top on scrolling").
+
+        Superseded the fixed white safe-area strip this replaced: that strip
+        was a stopgap for a page that had NO header at all, painting one blank
+        opaque region over the status bar. A real SiteHeader covers the exact
+        same region with real content instead, so the strip is gone. `canvas`
+        is deliberately NOT passed — the header stays plain white, matching
+        every other canvas-grounded page's header (features, landing).
       */}
-      <div aria-hidden className="fixed inset-x-0 top-0 z-40 bg-background" style={{ height: "var(--frenz-safe-top, 0px)" }} />
-      <main className="frenz-canvas-page min-h-dvh pb-24">
+      <SiteHeader />
+      {/* Top padding clears the FIXED SiteHeader (it isn't in normal flow), so
+          the sticky back/search row below starts already at its stuck offset
+          instead of rendering hidden behind the header for the first frame. */}
+      <main className="frenz-canvas-page min-h-dvh pb-24 pt-[calc(var(--frenz-safe-top,0px)+4rem)]">
         {/* ── 1 + 2 + 3: top bar, editorial hero, fanned deck ──────────────── */}
+        {/*
+          The back/search row STICKS directly under SiteHeader rather than
+          scrolling away with the hero and card deck below it — the owner was
+          explicit both controls must stay reachable while scrolling, not just
+          present on first paint. `top` matches SiteHeader's own rendered
+          height exactly (safe-top padding + the `h-16` row), so it lands
+          flush with no gap and no overlap.
+        */}
         <header
-          className="relative"
-          style={{ paddingTop: "calc(var(--frenz-safe-top, 0px) + 0.75rem)" }}
+          className="sticky z-30 bg-[hsl(var(--frenz-canvas))] pb-2 pt-3"
+          style={{ top: "calc(var(--frenz-safe-top, 0px) + 4rem)" }}
         >
           <div className="mx-auto w-full max-w-3xl px-4">
             <div className="flex items-start justify-between">

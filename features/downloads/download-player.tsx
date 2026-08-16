@@ -93,6 +93,16 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   // (owner). `dragY` follows a downward swipe so the clip dismisses like a story.
   const [controlsVisible, setControlsVisible] = useState(false);
   const [dragY, setDragY] = useState(0);
+  /*
+    ── Press-and-hold = full clear screen (owner, 2026-08-16: "the story and
+    history should show full clear screen on press and hold") ────────────────
+    Lives on the SAME gesture surface the tap/swipe classification already
+    uses (`onPointerDown`/`onPointerMove`/`endGesture` below), not a second
+    parallel handler — this surface already has to arbitrate tap vs. swipe,
+    and a hold is the third outcome of the same press, not an unrelated one.
+  */
+  const [holding, setHolding] = useState(false);
+  const holdTimer = useRef<number | null>(null);
   const blobRef = useRef<Blob | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controlsTimer = useRef<number | null>(null);
@@ -355,18 +365,47 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     gesture.current = { x: e.clientX, y: e.clientY, t: Date.now() };
     setDragY(0);
+    // A hold that survives 220ms without turning into a drag (cancelled below)
+    // clears the screen. Shorter than that and it reads as an ordinary tap —
+    // long enough that no real tap ever crosses it by accident.
+    holdTimer.current = window.setTimeout(() => {
+      holdTimer.current = null;
+      haptic("light");
+      setHolding(true);
+      videoRef.current?.pause();
+    }, 220);
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const g = gesture.current;
     if (!g) return;
     const dy = e.clientY - g.y;
     const dx = e.clientX - g.x;
+    // Real movement means this press is a drag, not a hold — the hold-timer
+    // (if it hasn't already fired) is cancelled so a swipe never also clears
+    // the screen on its way to closing.
+    if (Math.hypot(dx, dy) > 12 && holdTimer.current) {
+      window.clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
     if (dy > 0 && Math.abs(dy) > Math.abs(dx)) setDragY(dy); // follow a downward drag only
   };
   const endGesture = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (holdTimer.current) {
+      window.clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    const wasHolding = holding;
+    setHolding(false);
     const g = gesture.current;
     gesture.current = null;
     if (!g) return;
+    // Releasing a hold just restores the chrome — it is not ALSO a tap or a
+    // swipe, even though the finger lifted from roughly the same spot it
+    // pressed down on.
+    if (wasHolding) {
+      if (rec.kind === "video") void videoRef.current?.play().catch(() => {});
+      return;
+    }
     const dy = e.clientY - g.y;
     const dx = e.clientX - g.x;
     const dt = Date.now() - g.t;
@@ -420,8 +459,17 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           current one fills with real playback progress (a non-video item reads as
           complete). Always shown — a single segment for a lone clip — so even one
           video gets a status-style progress line. Cleared of the safe area
-          (Dynamic Island / status bar) via var(--frenz-safe-top). */}
-      <div className="absolute inset-x-3 top-[calc(0.5rem+var(--frenz-safe-top))] z-20 flex gap-1">
+          (Dynamic Island / status bar) via var(--frenz-safe-top).
+
+          🔴 Fades out with the rest of the chrome on a hold (owner, 2026-08-16:
+          "the story and history should show full clear screen on press and
+          hold") — same treatment as the story viewer's equivalent bar. */}
+      <div
+        className={cn(
+          "absolute inset-x-3 top-[calc(0.5rem+var(--frenz-safe-top))] z-20 flex gap-1 transition-opacity duration-150",
+          holding && "opacity-0",
+        )}
+      >
         {Array.from({ length: total }).map((_, i) => (
           <span key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
             <span
@@ -438,7 +486,10 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         type="button"
         onClick={closePlayer}
         aria-label="Close"
-        className="fixed left-4 top-[calc(1.75rem+var(--frenz-safe-top))] z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur"
+        className={cn(
+          "fixed left-4 top-[calc(1.75rem+var(--frenz-safe-top))] z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-opacity duration-150",
+          holding && "pointer-events-none opacity-0",
+        )}
       >
         <X className="h-5 w-5" />
       </button>
@@ -446,7 +497,10 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         type="button"
         onClick={() => setMoreOpen(true)}
         aria-label="More options"
-        className="fixed right-4 top-[calc(1.75rem+var(--frenz-safe-top))] z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur"
+        className={cn(
+          "fixed right-4 top-[calc(1.75rem+var(--frenz-safe-top))] z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-opacity duration-150",
+          holding && "pointer-events-none opacity-0",
+        )}
       >
         <MoreVertical className="h-5 w-5" />
       </button>
@@ -464,7 +518,12 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         overlap either, and the expanded panel gets its own scrim — white text
         over arbitrary video frames is otherwise unreadable.
       */}
-      <div className="absolute inset-x-16 top-[calc(2rem+var(--frenz-safe-top))] z-10">
+      <div
+        className={cn(
+          "absolute inset-x-16 top-[calc(2rem+var(--frenz-safe-top))] z-10 transition-opacity duration-150",
+          holding && "pointer-events-none opacity-0",
+        )}
+      >
         <button
           type="button"
           onClick={() => setCaptionOpen((v) => !v)}
@@ -490,7 +549,15 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           over-stretches beyond the source: it letterboxes on black and extends into
           the safe area (owner: "full screen … to the safe area but never crop off
           the width, never stretch more than it can"). iOS-gallery tap zones sit over
-          the media, under the chrome. */}
+          the media, under the chrome.
+
+          🔴 Owner, 2026-08-16, after the fact: "the history top is perfect
+          already, i mean the bottom so it reached the bottom 0" — the top was
+          never the problem here (that complaint was about the STORY viewer's
+          progress bar, see stories-row.tsx). Reverted the top padding this
+          briefly carried; `fixed inset-0` + `flex-1` + no padding on either
+          edge already puts the media's bottom at the true viewport edge, which
+          is what was actually being asked for. */}
       <div className="relative flex min-h-0 flex-1 items-center justify-center">
         {error ? (
           <div className="max-w-sm px-6 text-center text-white">
@@ -551,14 +618,23 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={endGesture}
-            onPointerCancel={() => { gesture.current = null; setDragY(0); }}
+            onPointerCancel={() => {
+              if (holdTimer.current) {
+                window.clearTimeout(holdTimer.current);
+                holdTimer.current = null;
+              }
+              if (holding && rec.kind === "video") void videoRef.current?.play().catch(() => {});
+              setHolding(false);
+              gesture.current = null;
+              setDragY(0);
+            }}
           />
         ) : null}
 
         {/* Center play glyph — shown ~2s after a pause, then it fades out for a
             clear full screen (owner). */}
         <AnimatePresence>
-          {paused && controlsVisible && rec.kind === "video" && url ? (
+          {paused && controlsVisible && !holding && rec.kind === "video" && url ? (
             <motion.span
               key="playglyph"
               initial={{ opacity: 0, scale: 0.8 }}
@@ -580,7 +656,12 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           for a clean full screen. The strip is pointer-events-none so taps around
           the button still reach the gesture surface; the button is pointer-events-auto. */}
       {url && !error ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div
+          className={cn(
+            "pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] transition-opacity duration-150",
+            holding && "opacity-0",
+          )}
+        >
           <button
             type="button"
             onClick={saveToDeviceNow}

@@ -12,6 +12,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { BitmojiAvatar } from "@/components/landing/bitmoji-avatar";
+import { CloudStorageTeaser } from "@/components/landing/cloud-storage-teaser";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
 import { SupportedPlatformsLive } from "@/components/landing/supported-platforms";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
@@ -612,6 +613,14 @@ export async function Hero() {
               <HeroLinkDownloader />
             </Suspense>
           </div>
+
+          {/*
+            The Download page's "Cloud storage" section, present here too
+            (owner, 2026-08-16: "...storage, disclaimer and all stat, i want
+            them in the landing page too"). Plan ceilings, not a personal
+            usage meter — see the component for why the meter can't come along.
+          */}
+          <CloudStorageTeaser />
 
           {/*
             Trust row — the reference's four columns, each an icon disc, a claim

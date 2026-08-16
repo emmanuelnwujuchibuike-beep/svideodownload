@@ -76,19 +76,36 @@ export function DownloadsHero() {
   return (
     <section className="relative px-1 pt-1">
       {/*
-        🔴 THE TOP GLOW (owner, 2026-08-16: "circle gradient, faded" — pointing
-        to a reference screenshot of a radial glow sitting behind an app's top
-        balance card, not a flat top-to-bottom band). AppTopbar's own wash
-        (features/app-shell/app-topbar.tsx, `onDownloads`) is now the SAME
-        radial shape and stops exactly where this one starts, so the two read
-        as one continuous glow rather than a header-shaped box sitting above a
-        second, different one. `-z-10` keeps it behind the hero's own content
-        and the cloud illustration; it never affects layout since it has no
-        size of its own to give the section.
+        🔴 THE TOP GLOW, RETUNED (owner, 2026-08-16, twice: first "circle
+        gradient, faded" pointing to a reference of a radial glow behind an
+        app's balance card; then "the white top header is cutting out the
+        purple gradient" and "the gradient... disappears after landing on the
+        page").
+
+        Two real bugs in the first version. (1) It started at `-top-6` — a
+        NEGATIVE offset reaching up to overlap AppTopbar's own wash. That
+        offset only reads correctly while nothing between here and the
+        viewport edge clips it, and `app/(app)/template.tsx` wraps every page
+        (this one included) in `PageTransition`, whose transform DURING the
+        navigation-in animation makes this section's positioned ancestor a new
+        containing block for that split second — long enough for the
+        overlapping sliver to clip and never repaint, which is exactly "shows
+        up, then disappears once you've landed." (2) Even where it wasn't
+        clipped, AppTopbar's own wash fades to near-nothing by ITS OWN bottom
+        edge (a short ~90px bar has little room for a radial fall-off), so the
+        two glows met at wildly different intensities — the "cut" look.
+
+        Fixed both by removing the negative offset entirely (flush at `top-0`
+        of THIS section, nothing to clip) and matching the OPACITY at the
+        seam: AppTopbar's wash now holds a near-constant 0.30→0.16 across its
+        whole height instead of fading toward zero, and this glow picks up at
+        that same 0.16 and fades out from there — so the two read as one
+        continuous shape by intensity, not by requiring pixel-perfect
+        geometric overlap between two differently-sized elements.
       */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 -top-6 -z-10 h-72 bg-[image:radial-gradient(ellipse_140%_100%_at_50%_0%,hsl(var(--brand-purple)/0.20),hsl(var(--brand-purple)/0.07)_45%,transparent_75%)] dark:bg-[image:none]"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-64 bg-[image:radial-gradient(ellipse_140%_90%_at_50%_0%,hsl(var(--brand-purple)/0.16),hsl(var(--brand-purple)/0.08)_40%,transparent_75%)] dark:bg-[image:none]"
       />
       <div className="relative flex items-center gap-4">
         <div className="min-w-0 flex-1">

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { paginatedSelect } from "@/lib/supabase/paginate";
 
 import { eventDetail, eventLabel, NOTABLE } from "./activity-format";
 
@@ -324,5 +325,77 @@ export async function fetchActivityTotals(): Promise<ActivityTotals | null> {
     return { downloads, impressions, adClicks, visitorsToday };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Anonymous visitors with more than one COMPLETED download today or this
+ * week — the "×2 / ×3" the Live Activity feed can't show per-row (owner,
+ * 2026-08-16: "when an anonymous user download more than once… show on the
+ * who as x2 or 3 or 4 or 5… that anonymous user have downloaded that day, or
+ * week").
+ *
+ * ── Why this is a separate list, not a badge on the existing feed rows ────
+ * The feed above reads `downloads` (legacy table), and that table has no
+ * visitor identity for an anonymous row — only `user_id`, always null for a
+ * guest. There is nothing to group repeat anonymous rows BY there; two
+ * "Anonymous · Downloaded" rows could be the same person or two different
+ * ones and the table cannot say which. `analytics_downloads.visitor_id` is
+ * the one place a stable per-browser id for anonymous traffic actually
+ * exists (the same column `lib/analytics/digest.ts`'s repeat-downloader
+ * count reads), so this list is sourced from there instead of retrofitted
+ * onto the legacy feed.
+ */
+export interface RepeatAnonymousVisitor {
+  /** First 8 chars of the visitor id — enough to distinguish rows in an admin
+   *  list without displaying the full token, which is otherwise meaningless
+   *  to a human anyway. */
+  visitorShort: string;
+  today: number;
+  week: number;
+}
+
+const REPEAT_VISITOR_ROW_CAP = 20_000;
+
+export async function fetchRepeatAnonymousVisitors(limit = 20): Promise<RepeatAnonymousVisitor[]> {
+  if (!hasSupabase) return [];
+  try {
+    const db = createAdminClient();
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setUTCHours(0, 0, 0, 0);
+    // Rolling 7 days, same basis fetchActivityTotals' MetricTotals.week uses —
+    // not a calendar week — so "this week" here means the same thing it means
+    // everywhere else in this file.
+    const startOfWeek = new Date(now.getTime() - 7 * 86_400_000);
+
+    const { rows } = await paginatedSelect<{ visitor_id: string; created_at: string }>(
+      (from, to) =>
+        db
+          .from("analytics_downloads")
+          .select("visitor_id, created_at")
+          .eq("status", "completed")
+          .is("user_id", null)
+          .gte("created_at", startOfWeek.toISOString())
+          .range(from, to),
+      REPEAT_VISITOR_ROW_CAP,
+    );
+
+    const counts = new Map<string, { today: number; week: number }>();
+    for (const r of rows) {
+      if (!r.visitor_id) continue;
+      const entry = counts.get(r.visitor_id) ?? { today: 0, week: 0 };
+      entry.week += 1;
+      if (r.created_at >= startOfToday.toISOString()) entry.today += 1;
+      counts.set(r.visitor_id, entry);
+    }
+
+    return [...counts.entries()]
+      .filter(([, c]) => c.today > 1 || c.week > 1)
+      .map(([visitorId, c]) => ({ visitorShort: visitorId.slice(0, 8), today: c.today, week: c.week }))
+      .sort((a, b) => b.week - a.week || b.today - a.today)
+      .slice(0, limit);
+  } catch {
+    return [];
   }
 }

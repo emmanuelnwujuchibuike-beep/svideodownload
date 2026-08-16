@@ -290,8 +290,31 @@ export function FloatingDownloadProgress({
   const isActive = (s: DownloadTask["status"]) => s === "downloading" || s === "queued" || s === "preparing";
   const activeCount = tasks.filter((t) => isActive(t.status)).length;
   const active = tasks.find((t) => isActive(t.status));
-  const finished = tasks.find((t) => t.status === "completed" || t.status === "failed");
+  /*
+    🔴 FAILURE FIRST (owner, 2026-08-16: "the multiple download sudden stop is
+    still happening without notifying if is a daily limit issue").
+
+    This used to be `tasks.find(t => t.status === "completed" || t.status ===
+    "failed")` — the FIRST finished task by ARRAY INDEX, not by anything
+    meaningful. A batch's files are pushed in order (item 0, 1, 2…), and only
+    COMPLETED tasks auto-dismiss after 6s (below) — failed ones sit until the
+    visitor deals with them. So for as long as item 0 happened to succeed, its
+    "Download complete" card was shown even if item 4 had already failed with
+    "Daily download limit reached" sitting right behind it in the list — the
+    failure was real and logged, but nothing on screen said so until item 0's
+    card auto-dismissed and the finder moved on. That gap reads exactly like
+    "it just stopped, no explanation."
+
+    A failure now always wins the card slot the moment nothing is still
+    running, whichever task it is and wherever it sits in the array.
+  */
+  const failedTasks = tasks.filter((t) => t.status === "failed");
+  const completedTasks = tasks.filter((t) => t.status === "completed");
+  const finished = failedTasks[0] ?? completedTasks[0];
   const task = active ?? finished;
+  // A mixed outcome ("some saved, some didn't") gets its own line under the
+  // headline rather than being silently absorbed into a single file's story.
+  const mixedOutcome = !active && failedTasks.length > 0 && completedTasks.length > 0;
   // Hold the card while the review player is open — closing the player must
   // return the visitor to the card and its Save to device / Download history
   // buttons, not to an empty screen because it timed out mid-review.
@@ -472,7 +495,9 @@ export function FloatingDownloadProgress({
                       : "Ready — save it to your device"
                     : "Download complete"
                   : task.status === "failed"
-                    ? "Download failed"
+                    ? failedTasks.length > 1
+                      ? `${failedTasks.length} downloads failed`
+                      : "Download failed"
                     : activeCount > 1
                       ? `Downloading ${activeCount} items…`
                       : task.status === "preparing"
@@ -526,7 +551,18 @@ export function FloatingDownloadProgress({
                   </p>
                 </>
               ) : task.status === "failed" ? (
-                <p className="mt-1 text-xs text-rose-400">{task.error || "Check your connection and retry."}</p>
+                <>
+                  <p className="mt-1 text-xs text-rose-400">{task.error || "Check your connection and retry."}</p>
+                  {/* Mixed batch outcome — never let a real failure hide behind
+                      the files that DID save (owner: "sudden stop… without
+                      notifying"). Named explicitly rather than left implicit
+                      in a headline that only mentions the failures. */}
+                  {mixedOutcome ? (
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {completedTasks.length} saved, {failedTasks.length} didn't.
+                    </p>
+                  ) : null}
+                </>
               ) : null}
 
               {/* Actions */}

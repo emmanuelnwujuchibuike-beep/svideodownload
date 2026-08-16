@@ -318,16 +318,16 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-        {/* Owner decision, CHANGED 2026-07-16: LIGHT is now the default for a
-            brand-new visitor (was "system"). `enableSystem` deliberately STAYS
-            on — that's what keeps "System" available as a real choice in the
-            toggle for anyone who wants it; it just isn't what you get by
-            default any more. This is one of THREE layers that must agree or the
-            theme flashes on boot — see the note on `readInitial` in
-            lib/theme/theme-mode-client.ts for the other two. */}
+        {/* Owner decision, REVERTED 2026-08-16: SYSTEM is the default for a
+            brand-new visitor again (was "light" since 2026-07-16 — see the
+            full explanation on `readInitial` in lib/theme/theme-mode-client.ts
+            for why that interim change is safe to undo now). `enableSystem`
+            was already on either way. This is one of THREE layers that must
+            agree or the theme flashes on boot — see that same note for the
+            other two. */}
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >

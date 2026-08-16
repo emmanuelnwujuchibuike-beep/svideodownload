@@ -227,6 +227,35 @@ export function StoryViewer({
   const [pct, setPct] = useState(0);
   const [replying, setReplying] = useState(false);
   const [resharing, setResharing] = useState(false);
+  /*
+    ── Press-and-hold = full clear screen (owner, 2026-08-16: "the story and
+    history should show full clear screen on press and hold") ────────────────
+    Reuses the exact pause mechanism `replying` already drives — video.pause()
+    and the image auto-advance RAF both already gate on that flag below, so
+    holding just needed to join the same gate rather than a second, parallel
+    pause path. A tap on the same left/right zones still navigates: the hold
+    threshold (220ms) is short enough to feel immediate but long enough that
+    an ordinary tap never crosses it, and `wasHold` suppresses the click that
+    would otherwise fire once the pointer lifts off a genuine hold.
+  */
+  const [holding, setHolding] = useState(false);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasHold = useRef(false);
+  const startHold = useCallback(() => {
+    wasHold.current = false;
+    holdTimer.current = setTimeout(() => {
+      wasHold.current = true;
+      haptic("light");
+      setHolding(true);
+    }, 220);
+  }, []);
+  const endHold = useCallback(() => {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    setHolding(false);
+  }, []);
   const videoRef = useRef<HTMLVideoElement>(null);
   const { handle } = useEntitlements();
 
@@ -287,30 +316,40 @@ export function StoryViewer({
     } else setSi(0);
   }, [si, gi, groups]);
 
-  // Auto-advance: images on a timer, videos when they end (progress via timeupdate).
-  // Paused while the viewer is composing a reply.
+  // The image timer's own elapsed time, kept across a hold/reply pause so
+  // resuming continues the segment instead of restarting it — a ref because
+  // the pause/resume effect below must not reset it (only navigation should).
+  const elapsedRef = useRef(0);
   useEffect(() => {
-    if (!story || story.mediaKind === "video" || replying) return;
-    setPct(0);
-    const startedAt = performance.now();
+    elapsedRef.current = 0;
+  }, [gi, si]);
+
+  // Auto-advance: images on a timer, videos when they end (progress via timeupdate).
+  // Paused (not reset) while the viewer is composing a reply, or held for a
+  // clear look — `startedAt` is backdated by whatever had already elapsed, so
+  // un-pausing resumes the same segment rather than restarting its 5s.
+  useEffect(() => {
+    if (!story || story.mediaKind === "video" || replying || holding) return;
+    const startedAt = performance.now() - elapsedRef.current;
     let raf = 0;
     const tick = (now: number) => {
-      const p = Math.min(100, ((now - startedAt) / IMAGE_MS) * 100);
+      elapsedRef.current = now - startedAt;
+      const p = Math.min(100, (elapsedRef.current / IMAGE_MS) * 100);
       setPct(p);
       if (p >= 100) next();
       else raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [gi, si, story, next, replying]);
+  }, [gi, si, story, next, replying, holding]);
 
-  // Pause the story video while replying.
+  // Pause the story video while replying, or held for a clear look.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (replying) v.pause();
+    if (replying || holding) v.pause();
     else void v.play().catch(() => {});
-  }, [replying, gi, si]);
+  }, [replying, holding, gi, si]);
 
   // Escape + scroll lock.
   useEffect(() => {
@@ -391,7 +430,22 @@ export function StoryViewer({
       dragMomentum={false}
       onDragEnd={handleDragEnd}
     >
-      <div className="absolute right-4 top-[calc(1.25rem+var(--frenz-safe-top))] z-20 flex items-center gap-2">
+      {/*
+        Every piece of chrome below fades out together while `holding` —
+        "full clear screen on press and hold" (owner, 2026-08-16). One class
+        on each element rather than one wrapping div: several of these are
+        already individually `absolute`-positioned at their own coordinates
+        (progress bar, author row, buttons), and wrapping them would either
+        collapse that positioning or require re-deriving it on a new parent.
+        `pointer-events-none` while hidden so a hold-release near a button's
+        old position can't register a stray tap on chrome that isn't visible.
+      */}
+      <div
+        className={cn(
+          "absolute right-4 top-[calc(1.25rem+var(--frenz-safe-top))] z-20 flex items-center gap-2 transition-opacity duration-150",
+          holding && "pointer-events-none opacity-0",
+        )}
+      >
         {/* Author: turn resharing on/off for THIS story. Viewer: reshare it —
             but only when the author allows it (owner, 2026-07-16). The row is
             hidden rather than disabled when it's off: a greyed-out "Reshare"
@@ -437,7 +491,12 @@ export function StoryViewer({
         0.625rem breathing gap rather than the 0.75rem it had, which is what
         the media stage's own top offset below is now measured FROM.
       */}
-      <div className="absolute inset-x-3 top-[calc(0.625rem+var(--frenz-safe-top))] z-20 flex gap-1">
+      <div
+        className={cn(
+          "absolute inset-x-3 top-[calc(0.625rem+var(--frenz-safe-top))] z-20 flex gap-1 transition-opacity duration-150",
+          holding && "opacity-0",
+        )}
+      >
         {group.stories.map((_, idx) => (
           <span key={idx} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
             <span className="block h-full rounded-full bg-white" style={{ width: `${idx < si ? 100 : idx === si ? pct : 0}%` }} />
@@ -446,7 +505,12 @@ export function StoryViewer({
       </div>
 
       {/* author */}
-      <div className="absolute left-4 top-[calc(1.75rem+var(--frenz-safe-top))] z-20 flex items-center gap-2 text-white">
+      <div
+        className={cn(
+          "absolute left-4 top-[calc(1.75rem+var(--frenz-safe-top))] z-20 flex items-center gap-2 text-white transition-opacity duration-150",
+          holding && "pointer-events-none opacity-0",
+        )}
+      >
         {group.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={group.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover ring-1 ring-white/30" />
@@ -456,44 +520,59 @@ export function StoryViewer({
         <span className="text-sm font-semibold">{group.displayName}</span>
       </div>
 
-      {/* tap zones: left third = back, the rest = forward (full-screen coverage) */}
-      <button type="button" aria-label="Previous" onClick={prev} className="absolute inset-y-0 left-0 z-10 w-1/3" />
-      <button type="button" aria-label="Next" onClick={next} className="absolute inset-y-0 left-1/3 right-0 z-10" />
+      {/*
+        tap zones: left third = back, the rest = forward (full-screen coverage).
+        Also the hold surface — press either zone and hold past 220ms to clear
+        the screen; release before that and it's an ordinary tap. `onClick`
+        checks `wasHold` because a hold's release still fires a click event,
+        which must NOT also navigate.
+      */}
+      <button
+        type="button"
+        aria-label="Previous"
+        onPointerDown={startHold}
+        onPointerUp={endHold}
+        onPointerLeave={endHold}
+        onPointerCancel={endHold}
+        onClick={() => { if (!wasHold.current) prev(); }}
+        className="absolute inset-y-0 left-0 z-10 w-1/3"
+      />
+      <button
+        type="button"
+        aria-label="Next"
+        onPointerDown={startHold}
+        onPointerUp={endHold}
+        onPointerLeave={endHold}
+        onPointerCancel={endHold}
+        onClick={() => { if (!wasHold.current) next(); }}
+        className="absolute inset-y-0 left-1/3 right-0 z-10"
+      />
 
       {/*
-        ── The stage, corrected (owner, 2026-08-11) ──────────────────────────
-        "i want it to reach the line of the safe area, and the progress bar
-         should be above, none should overlap each other, the story should
-         cover down below entirely, the bottom should be covered with the
-         video, just like whatsapp... only the safe area will be avoided but
-         it should be on the line of the safe area... video just little
-         beneath [the progress bar]."
+        ── The stage, corrected AGAIN (owner, 2026-08-16) ────────────────────
+        "the story top progress bar... needed that progress bar to be on top
+        of the video or image, and to the bottom 0, and the top should not
+        cross the safe area."
 
-        Two corrections to the previous pass, both from the same principle: the
-        TOP safe area is the only thing this viewer avoids, and it avoids as
-        little of it as possible.
-
-        🔴 The bottom padding is GONE. The prior pass added
-        `pb-[env(safe-area-inset-bottom)]`, reading "don't go to the safe area"
-        as applying to both edges — it doesn't. WhatsApp's own story viewer runs
-        the video under the home indicor, and only the reply composer (which
-        keeps its own `pb-[max(...,env(safe-area-inset-bottom))]` below,
-        untouched) needs to sit clear of it. The video reaches the true bottom
-        edge now, exactly like the reference named for this.
-
-        🔴 The top padding is no longer just `var(--frenz-safe-top)` — it clears
-        the PROGRESS BAR, not merely the notch. The bar sits at
-        `safe-top + 0.625rem` and is `0.25rem` tall, so a stage inset by only
-        `safe-top` put its own pixels one row underneath the bar — both visible
-        in the same strip, the literal overlap complained about. `safe-top +
-        1.25rem` clears the bar plus a small gap, so the video begins "just a
-        little beneath it" and nothing paints twice in the same few rows. The
-        avatar/name row and the close/reshare buttons are unaffected — they were
-        already positioned below the bar, and (like WhatsApp) they OVERLAY the
-        video rather than pushing it down further; only the progress bar carves
-        out space the video may not use.
+        Reverses the 2026-08-11 pass directly above (kept in git history, not
+        repeated here): that version padded the stage below the progress bar
+        so the two never occupied the same pixels. The current, more recent
+        instruction is the opposite shape — the bar OVERLAYS the media rather
+        than the media stopping short of it, which is also how History's
+        equivalent stage already worked and was confirmed correct the same
+        day ("the history top is perfect already"). Media is `inset-0` again,
+        genuinely full-bleed including the region behind the progress bar and
+        the status bar; the bar itself keeps its own `safe-top`-aware position
+        AND now an explicit `z-20` vs. the stage's explicit `z-0` (was
+        implicit `z-auto` before — CSS stacking already put it on top either
+        way, but this makes the ordering a fact of the markup, not an
+        inference from the spec). "Should not cross the safe area" is about
+        the CONTROLS (the bar, the buttons) staying clear of the notch, which
+        their own `safe-top`-based offsets already guarantee — it was never
+        asking the MEDIA to stop short, which is the one thing an immersive
+        full-bleed video viewer specifically should not do.
       */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center pt-[calc(1.25rem+var(--frenz-safe-top))]">
+      <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
         {story.mediaKind === "video" ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video
@@ -519,13 +598,22 @@ export function StoryViewer({
         )}
       </div>
       {story.caption ? (
-        <p className="pointer-events-none absolute inset-x-0 bottom-28 z-[15] px-6 text-center text-sm text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
+        <p
+          className={cn(
+            "pointer-events-none absolute inset-x-0 bottom-28 z-[15] px-6 text-center text-sm text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] transition-opacity duration-150",
+            holding && "opacity-0",
+          )}
+        >
           {story.caption}
         </p>
       ) : null}
 
-      {/* Reply bar — text, emojis & stickers (delivered as a DM) */}
-      {isOwn ? null : (
+      {/* Reply bar — text, emojis & stickers (delivered as a DM). Hidden with
+          the rest of the chrome while holding, not just faded: it sits UNDER
+          a `pointer-events-none` toggle of its own composer input, and a
+          held thumb resting near the bottom of the screen must not land on a
+          text field it can no longer see. */}
+      {isOwn || holding ? null : (
         <StoryReplyBar toUserId={group.userId} name={group.displayName.split(" ")[0] || group.displayName} onFocusChange={setReplying} />
       )}
     </motion.div>

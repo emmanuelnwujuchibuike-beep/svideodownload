@@ -186,11 +186,13 @@ export function MobileNav() {
                   the reel deck is `z-30`, so anything painted here is painted
                   OVER the reel's own chrome. The reel's bottom stack
                   (REEL_PROGRESS_BOTTOM in reel-viewer.tsx) puts the scrubber at
-                  5.25rem — INSIDE this feather, not above it (owner, 2026-08-16:
-                  "close to the bottom NAV just like tiktok"). That's the
-                  feather's actual job: it exists so content sitting over it
-                  stays legible, not so content stays clear of it entirely. The
-                  two numbers are still a pair; move one and check the other.
+                  4.75rem — flush with this bar's own top edge, the closest it
+                  can sit without the bar itself starting to cover it (owner,
+                  2026-08-16, twice: "close to the bottom NAV just like tiktok",
+                  then "should come down more"). That's the feather's actual
+                  job: it exists so content sitting over it stays legible, not
+                  so content stays clear of it entirely. The two numbers are
+                  still a pair; move one and check the other.
 
                   `before:pointer-events-none` is load-bearing for the same
                   z-order reason: a pseudo-element is part of its originating

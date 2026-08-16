@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ClipboardPaste, Loader2, X } from "lucide-react";
+import { ClipboardPaste, Loader2, Search, X } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 
 import {
@@ -140,7 +140,7 @@ export function HeroCtaForm() {
             className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
           >
             <ClipboardPaste className="h-4 w-4" />
-            <span className="hidden sm:inline">Paste</span>
+            <span>Paste</span>
           </button>
         </div>
         {blocked ? (
@@ -167,8 +167,8 @@ export function HeroCtaForm() {
         aria-label={fetching ? "Fetching your link" : "Download"}
         className="inline-flex h-14 shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-7 text-base font-semibold text-white shadow-lg transition hover:opacity-95 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
       >
-        {fetching ? <Loader2 aria-hidden className="h-5 w-5 animate-spin" /> : <ArrowRight aria-hidden className="h-5 w-5" />}
-        <span className="hidden sm:inline">{fetching ? "Fetching…" : "Download"}</span>
+        {fetching ? <Loader2 aria-hidden className="h-5 w-5 animate-spin" /> : <Search aria-hidden className="h-5 w-5" />}
+        <span>{fetching ? "Fetching…" : "Download"}</span>
       </button>
     </form>
   );

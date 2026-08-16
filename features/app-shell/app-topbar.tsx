@@ -112,7 +112,19 @@ export function AppTopbar() {
         // stays exactly as opaque as the 2026-08-11 "let the download page top
         // header and safe area be white" decision required; this only adds a
         // wash on top of that white, it does not retint it.
-        onDownloads && "bg-[image:radial-gradient(ellipse_140%_160%_at_50%_-40%,hsl(var(--brand-purple)/0.30),hsl(var(--brand-purple)/0.10)_45%,transparent_75%)] dark:bg-[image:none]",
+        //
+        // 🔴 RETUNED 2026-08-16 (owner: "the white top header is cutting out
+        // the purple gradient"). This bar is only ~90px tall including the
+        // safe area, which is not enough room for a radial ellipse to fall off
+        // AND still have visible colour left at the bottom edge — it used to
+        // fade from 0.30 toward transparent well before reaching the bottom,
+        // so DownloadsHero's separate glow picked up from near-zero and the
+        // seam between the two read as a hard cut. Now near-flat across the
+        // bar's own height (0.30 → 0.16, most of the fall-off pushed past
+        // 60%) so the colour at the BOTTOM of this bar matches the intensity
+        // DownloadsHero's glow now starts at — see that component for the
+        // matching value.
+        onDownloads && "bg-[image:radial-gradient(ellipse_160%_220%_at_50%_-60%,hsl(var(--brand-purple)/0.30),hsl(var(--brand-purple)/0.16)_60%,hsl(var(--brand-purple)/0.16)_100%)] dark:bg-[image:none]",
       )}
     >
       {/* Far-left: search + add friends — kept apart from the action cluster so

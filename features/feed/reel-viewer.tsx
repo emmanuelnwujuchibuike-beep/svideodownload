@@ -178,26 +178,33 @@ const LETTERBOX = "bg-black";
  * "the progress bar is too close to the sound … push them upper so they can
  * give more space for the progress bar").
  *
- * 🔴 Corrected the other direction six days later (owner, 2026-08-16: "bring
- * down this area… close to the bottom NAV just like tiktok"). The 2026-08-10
- * fix solved the RIGHT problem — the scrubber and the caption were crowding
- * each other — but it over-corrected the distance to the nav bar as a side
- * effect, leaving a dead black band between the content and the tab bar that
- * neither TikTok nor Instagram has. The gap the caption and scrubber keep
- * BETWEEN THEMSELVES (1.75rem, the exact fix from the 10th) is preserved
- * untouched here; only their shared distance FROM THE NAV shrinks.
+ * 🔴 Corrected the other direction six days later, twice (owner, 2026-08-16
+ * first: "bring down this area… close to the bottom NAV just like tiktok";
+ * then, same day, again: "the details, caption, music and engagement tray
+ * should come down more"). The 2026-08-10 fix solved the RIGHT problem — the
+ * scrubber and the caption were crowding each other — but it over-corrected
+ * the distance to the nav bar as a side effect, leaving a dead black band
+ * between the content and the tab bar that neither TikTok nor Instagram has.
+ * The first same-day correction narrowed that band but, per the follow-up,
+ * not enough. The gap the caption and scrubber keep BETWEEN THEMSELVES
+ * (1.75rem, the exact fix from the 10th) is preserved untouched across both
+ * corrections; only their shared distance FROM THE NAV shrinks.
  *
  * Measured from the true bottom edge, on mobile:
  *
  *   0            the nav's own floor (it owns `env(safe-area-inset-bottom)`)
- *   4.75rem      the top of the mobile tab bar
+ *   4.75rem      the top of the mobile tab bar — content cannot sit BELOW
+ *                          this without the opaque bar (it paints at a
+ *                          higher z-index, see below) visually clipping it.
  *   +2rem        the tab bar's feathered scrim above itself (mobile-nav.tsx)
- *   PROGRESS     5.25rem — the scrubber, 0.5rem clear of the bar itself but
- *                          well inside the feather — which is the point: that
- *                          feather exists so bottom content stays legible
- *                          OVER it, not so content stays entirely above it.
- *   CONTENT      7rem    — caption, sound row and action rail, the same
- *                          1.75rem above the scrubber as before.
+ *   PROGRESS     4.75rem — the scrubber, flush against the bar's own top
+ *                          edge — the closest it can sit without the bar
+ *                          itself starting to cover it. Deep inside the
+ *                          feather, which is the point: that feather exists
+ *                          so bottom content stays legible OVER it, not so
+ *                          content stays entirely above it.
+ *   CONTENT      6.5rem  — caption, sound row and action rail, the same
+ *                          1.75rem above the scrubber as always.
  *
  * Every one of them adds `env(safe-area-inset-bottom)` so nothing lands in the
  * home-indicator strip. The modal variant (no tab bar under it) keeps its own
@@ -207,9 +214,9 @@ const LETTERBOX = "bg-black";
  * mobile-nav.tsx`: that scrim is painted at z-40 and this deck is z-30, so it
  * paints OVER anything here that shares its band. Move one, check the other.
  */
-const REEL_PROGRESS_BOTTOM = "!bottom-[calc(5.25rem+env(safe-area-inset-bottom))] lg:!bottom-4";
-const REEL_CONTENT_BOTTOM = "bottom-[calc(7rem+env(safe-area-inset-bottom))] lg:bottom-6";
-const REEL_CONTENT_PAD = "pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8";
+const REEL_PROGRESS_BOTTOM = "!bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:!bottom-4";
+const REEL_CONTENT_BOTTOM = "bottom-[calc(6.5rem+env(safe-area-inset-bottom))] lg:bottom-6";
+const REEL_CONTENT_PAD = "pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-8";
 
 function fmt(s: number): string {
   if (!Number.isFinite(s) || s < 0) s = 0;

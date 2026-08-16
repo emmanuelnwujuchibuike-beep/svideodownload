@@ -6,7 +6,6 @@ import { PressIcon } from "@/components/motion/press-icon";
 import {
   FrenzFriendsOutline,
   FrenzFriendsSolid,
-  FrenzReelsSolid,
   FrenzSparkleOutline,
   FrenzSparkleSolid,
 } from "@/components/icons/frenz-icons";
@@ -24,39 +23,37 @@ const TABS: {
 }[] = [
   { key: "for_you", label: "For You", outline: FrenzSparkleOutline, solid: FrenzSparkleSolid },
   { key: "following", label: "Following", outline: FrenzFriendsOutline, solid: FrenzFriendsSolid },
-  // Reels never carries the active/toggle state (see below) — it always
-  // renders its solid glyph.
-  { key: "recent", label: "Reels", outline: FrenzReelsSolid, solid: FrenzReelsSolid },
 ];
 
 /**
  * The feed's segmented control, lifted into the top nav (owner spec: "take
- * For You, Following and Reels upwards to the top nav"). Matches the owner's
+ * For You and Following upwards to the top nav"). Matches the owner's
  * mockup: the active tab ("For You" by default) expands into a vivid
- * blue→purple brand-gradient pill (white icon+label), the others collapse to
+ * blue→purple brand-gradient pill (white icon+label), the other collapses to
  * a plain circular chip — the same flat gray look as the search/add-friend
  * icons either side of this row. Owner correction (2026-07-13): the small
  * brand-purple accent dot every inactive chip used to carry is removed —
- * "remove the purple dots from the top nav". "Reels" never carries the
- * active state itself (tapping it opens the deck / navigates away rather
- * than selecting a persistent tab — `sort` never becomes "recent"), so it
- * always renders as that same plain chip.
+ * "remove the purple dots from the top nav".
+ *
+ * 🔴 REELS REMOVED (owner, 2026-08-16: "move the reel button at the top to
+ * bottom in full bleed"). It used to be a third, permanently-inactive tab
+ * here that opened the deck instead of toggling `sort`; that affordance now
+ * lives as its own tab in the bottom nav (see mobile-nav.tsx) instead of
+ * sharing this segmented control. Swiping past "Following" still opens Reels
+ * in place (smart-feed.tsx's `swipeTo`/`onSegment("recent")`) — that gesture
+ * is unrelated to this row and stays exactly as it was.
  */
 export function FeedTopbarTabs({
   sort,
   onSegment,
-  onReelsPreload,
 }: {
   sort: HomeFeedSort;
   onSegment: (key: HomeFeedSort) => void;
-  /** Belt-and-suspenders reels-chunk warm-up on pointerdown (fires before click). */
-  onReelsPreload?: () => void;
 }) {
   return (
     <div className="flex items-center gap-2">
       {TABS.map((t) => {
         const active = sort === t.key;
-        const isReels = t.key === "recent";
         const Icon = active ? t.solid : t.outline;
         return (
           <motion.button
@@ -70,7 +67,6 @@ export function FeedTopbarTabs({
               playSound("tap");
               onSegment(t.key);
             }}
-            onPointerDown={isReels ? onReelsPreload : undefined}
             aria-label={t.label}
             aria-pressed={active}
             whileTap={{ scale: 0.92 }}

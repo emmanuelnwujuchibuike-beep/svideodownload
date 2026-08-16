@@ -453,7 +453,7 @@ export function SmartFeed({
   // closure, so it's never stale between sort changes. Cleared on unmount so
   // every other page's topbar search bar is untouched.
   useEffect(() => {
-    setTopbarCenter(<FeedTopbarTabs sort={sort} onSegment={onSegment} onReelsPreload={preloadReelsFeed} />);
+    setTopbarCenter(<FeedTopbarTabs sort={sort} onSegment={onSegment} />);
     return () => setTopbarCenter(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort]);

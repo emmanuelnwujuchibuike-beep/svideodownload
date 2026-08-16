@@ -252,7 +252,21 @@ export function WallpaperExplore({
           the page content instead of announcing itself as a nav section.
         */}
         <div
-          className="pointer-events-none sticky z-30 px-4 pt-3"
+          /*
+            🔴 z-40, not z-30 (owner, 2026-08-16, with a screenshot: "this
+            search button in wallpaper page still goes under the somethings
+            when scrolling").
+
+            Every grid tile's own download button (ExploreTile, below) is
+            ALSO `z-30` — and since neither this bar nor a tile establishes
+            its own stacking context, both compete within the same one. At a
+            tie, CSS paints whichever is LATER in the document on top, and
+            the grid comes after this bar — so once a tile's button scrolled
+            up to the same screen position as the search button, the tile
+            won and the search button visually sank behind it. z-40 removes
+            the tie outright rather than depending on document order.
+          */
+          className="pointer-events-none sticky z-40 px-4 pt-3"
           style={{ top: "calc(var(--frenz-safe-top, 0px) + 4rem)" }}
         >
           <div className="pointer-events-none mx-auto flex w-full max-w-3xl items-start justify-between">

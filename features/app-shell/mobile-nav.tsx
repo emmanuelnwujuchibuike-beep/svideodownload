@@ -5,7 +5,7 @@ import { Headset, History } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import {
@@ -21,7 +21,6 @@ import {
 } from "@/components/icons/frenz-icons";
 import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { useEntitlements } from "@/features/auth/use-entitlements";
-import { CreateActionSheet } from "@/features/create/create-action-sheet";
 import { useQuery } from "@/features/data";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { haptic } from "@/lib/motion/haptics";
@@ -41,13 +40,24 @@ import { cn } from "@/lib/utils";
  * is gone; that "floating glass dock" look is reserved for an eventual real
  * native app shell, not the web/PWA chrome.
  *
- * Inactive tabs are plain, muted outline icons with a label; the ACTIVE tab
- * swaps to its solid glyph in the brand blue (`text-primary`) — a flat inline
- * color change, Facebook/Snapchat style. Only a couple of px of spring-
- * animated lift remain (see NavLift) — never a floating badge. The Create
- * button is the one deliberately different element: a permanently-raised
- * gradient circle. Destinations are this app's real ones. Every tab tap fires
+ * 🔴 ICON-ONLY, no labels (owner, 2026-08-16, against the Facebook/Instagram
+ * reference screenshots: "professional simple and clean… 3d and mid big").
+ * Every tab used to carry a text label under its glyph; the reference bars
+ * carry none, just bigger icons on a taller bar. Inactive tabs are plain,
+ * muted outline icons; the ACTIVE tab swaps to its solid glyph in the brand
+ * blue (`text-primary`) — a flat inline color change, Facebook/Snapchat
+ * style, which is now the ONLY way a tab reads as selected (see `aria-label`
+ * on each tab for the accessible name the removed visible label used to be).
+ * Only a couple of px of spring-animated lift remain (see NavLift) — never a
+ * floating badge. Destinations are this app's real ones. Every tab tap fires
  * the shared haptic + the soft nav "tap" tone.
+ *
+ * The Create "+" that used to live here as a permanently-raised gradient
+ * circle is gone from this bar entirely — moved to `AppTopbar`, non-round,
+ * next to search (owner: "move the + button to top… don't make the plus
+ * button round"). Full Bleed's five tabs are now Home / Friends / Reels /
+ * Chats / Profile — Reels, previously only reachable from the top feed
+ * segmented control, takes the slot Create vacated.
  *
  * Perf: no idle animation anywhere in this bar — only the micro-lift spring
  * and PressIcon's tap spring ever animate, both input-driven. The bar sits
@@ -70,13 +80,12 @@ import { cn } from "@/lib/utils";
   which reaches the same "more contrast, more premium" ask without moving
   a class every other selector in this file depends on.
 */
-const GLYPH_ACTIVE = "text-primary [filter:drop-shadow(0_3px_8px_rgba(79,70,229,0.65))]";
-const GLYPH_INACTIVE = "text-muted-foreground [filter:drop-shadow(0_2px_3px_rgba(2,6,23,0.24))]";
+const GLYPH_ACTIVE = "text-primary [filter:drop-shadow(0_4px_10px_rgba(79,70,229,0.7))]";
+const GLYPH_INACTIVE = "text-muted-foreground [filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.3))]";
 
 export function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const [createOpen, setCreateOpen] = useState(false);
   const mode = useAppMode();
   const { handle, avatarUrl } = useEntitlements();
   // Cached-first: shows the last-known unread count instantly, updates live via
@@ -152,7 +161,10 @@ export function MobileNav() {
           which is exactly why it is scoped to the immersive route.
         */
         className={cn(
-          "relative flex items-end justify-around px-2 pb-[max(env(safe-area-inset-bottom),0.65rem)] pt-2.5",
+          // Taller + no label row (owner: "mid big") — a bit more top/bottom
+          // breathing room than the label version needed, since the icon is
+          // now the whole tab rather than sharing the row with text under it.
+          "relative flex items-center justify-around px-2 pb-[max(env(safe-area-inset-bottom),0.85rem)] pt-3.5",
           immersive
             ? [
                 /*
@@ -244,22 +256,17 @@ export function MobileNav() {
               depending on a cookie the viewer never set deliberately. A
               Downloader (and every signed-out visitor arriving from the landing,
               since that is the default mode) got Home · Reels · History ·
-              Support · Profile with Reels lit. A Full Bleed member got Home ·
-              Friends · [+] · Chats · Profile — a bar with NO REELS TAB while
-              standing on Reels, plus a raised Create button over a full-screen
-              player.
+              Support · Profile with Reels lit. A Full Bleed member's own bar
+              (now Home · Friends · Reels · Chats · Profile — see the `else`
+              branch below) would light its OWN Reels tab instead, a different
+              set of four siblings around it.
 
-              `immersive` forces the first set for everyone. Home still points at
-              `/downloads` here, which is the correct destination in the mode this
-              set belongs to; a Full Bleed member reaching it lands on the
-              download page and their own nav returns on the next screen. That is
-              the trade for one consistent bar, and it is the one the owner
-              asked for.
-
-              The Create button is the specific thing worth losing on this
-              surface: a raised gradient circle over a full-screen video is the
-              single loudest element on the screen, and it opens a composer that
-              has nothing to do with watching.
+              `immersive` forces the Downloader set for everyone standing on
+              /reels. Home still points at `/downloads` here, which is the
+              correct destination in the mode this set belongs to; a Full Bleed
+              member reaching it lands on the download page and their own nav
+              returns on the next screen. That is the trade for one consistent
+              bar, and it is the one the owner asked for.
             */}
             {/* `/home` is an ALIAS for this page in Downloader mode — middleware
                 rewrites it rather than redirecting, so the PWA's start_url costs
@@ -274,28 +281,12 @@ export function MobileNav() {
           <>
             <NavTab label="Home" href="/home" icon={FrenzHomeOutline} activeIcon={FrenzHomeSolid} active={pathname === "/home"} onWarm={router.prefetch} />
             <NavTab label="Friends" href="/friends" icon={FrenzFriendsOutline} activeIcon={FrenzFriendsSolid} active={pathname.startsWith("/friends")} onWarm={router.prefetch} />
-
-            {/* Create — the signature gradient circle. Opens the action sheet (the
-                owner's picked mockup). Full Bleed only; Downloader mode has no
-                Create/Chats — those are the Full Bleed features. */}
-            <PressIcon className="-mt-5 self-center">
-              <button
-                type="button"
-                onClick={() => { haptic("selection"); playSound("tap"); setCreateOpen(true); }}
-                aria-label="Create"
-                aria-haspopup="dialog"
-                aria-expanded={createOpen}
-                className="group relative flex h-[52px] w-[52px] items-center justify-center"
-              >
-                <span aria-hidden className="bg-brand absolute inset-0 rounded-full opacity-45 blur-[10px] transition group-active:opacity-70" />
-                <span className="bg-brand relative flex h-[52px] w-[52px] items-center justify-center rounded-full text-white shadow-lg shadow-violet-500/30 ring-[3px] ring-card/80">
-                  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                </span>
-              </button>
-            </PressIcon>
-
+            {/* Reels — takes the middle slot Create used to occupy (owner,
+                2026-08-16: "move the reel button at the top to bottom in full
+                bleed"). It used to be reachable only from the top feed's
+                segmented control (FeedTopbarTabs); that entry is removed in
+                favor of this one, so there is exactly one Reels affordance. */}
+            <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={router.prefetch} />
             <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={unread} onWarm={router.prefetch} />
           </>
         )}
@@ -315,13 +306,14 @@ export function MobileNav() {
             haptic("light");
             playSound("tap");
           }}
-          className="relative flex flex-col items-center gap-1 px-2 pb-0.5"
+          aria-label="Profile"
+          className="relative flex items-center justify-center px-3 py-1"
         >
           <NavLift active={profileActive}>
             <PressIcon active={profileActive}>
               <span
                 className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-full transition",
+                  "flex h-8 w-8 items-center justify-center rounded-full transition",
                   // No avatar → the plain person glyph, no colored tile behind
                   // it (owner, 2026-07-16). It follows the same active/inactive
                   // contrast as every other tab rather than sitting on a blue
@@ -338,21 +330,13 @@ export function MobileNav() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <FrenzPersonSolid className={cn("h-6 w-6", profileActive ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
+                  <FrenzPersonSolid className={cn("h-7 w-7", profileActive ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
                 )}
               </span>
             </PressIcon>
           </NavLift>
-          <span className={cn("text-[10px] font-semibold transition-colors", profileActive ? "text-primary" : "text-muted-foreground")}>Profile</span>
         </Link>
       </nav>
-
-      {/* The "+" action sheet (owner's picked mockup). Rendered here rather
-          than in AppOverlays because the "+" that opens it lives in this bar
-          and nothing else can open it — so its state has no reason to be
-          global. It portals to <body>, so this bar's own stacking/blur can't
-          trap it. */}
-      <CreateActionSheet open={createOpen} onClose={() => setCreateOpen(false)} />
     </div>
   );
 }
@@ -371,7 +355,7 @@ function NavLift({ active, children }: { active: boolean; children: ReactNode })
   const reduceMotion = useReducedMotion();
   return (
     <motion.span
-      className="relative flex h-8 w-8 items-center justify-center"
+      className="relative flex h-9 w-9 items-center justify-center"
       animate={reduceMotion ? undefined : { y: active ? -2 : 0 }}
       transition={reduceMotion ? { duration: 0 } : springs.bounce}
     >
@@ -405,6 +389,8 @@ function NavTab({
   return (
     <Link
       href={href}
+      aria-label={label}
+      aria-current={active ? "page" : undefined}
       onPointerDown={guard ? undefined : () => onWarm?.(href)}
       onClick={(e) => {
         if (guard) {
@@ -417,19 +403,18 @@ function NavTab({
         haptic("light");
         playSound("tap");
       }}
-      className="relative flex flex-col items-center gap-1 px-2 pb-0.5"
+      className="relative flex items-center justify-center px-3 py-1"
     >
       <NavLift active={active}>
         <PressIcon active={active} className="relative">
-          <Glyph strokeWidth={2.1} className={cn("h-6 w-6 transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
+          <Glyph strokeWidth={2.1} className={cn("h-7 w-7 transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
           {badge > 0 ? (
-            <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-card">
+            <span className="absolute -right-3 -top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-card">
               {badge > 9 ? "9+" : badge}
             </span>
           ) : null}
         </PressIcon>
       </NavLift>
-      <span className={cn("text-[10px] font-semibold transition-colors", active ? "text-primary" : "text-muted-foreground")}>{label}</span>
     </Link>
   );
 }

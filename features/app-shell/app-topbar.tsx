@@ -1,6 +1,6 @@
 "use client";
 
-import { IoCloudUploadOutline, IoSearchOutline } from "react-icons/io5";
+import { IoAddOutline, IoCloudUploadOutline, IoSearchOutline } from "react-icons/io5";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
@@ -8,10 +8,12 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { PressIcon } from "@/components/motion/press-icon";
 import { IconTile } from "@/components/icons/icon-tile";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { UserMenu } from "@/features/auth/user-menu";
+import { CreateActionSheet } from "@/features/create/create-action-sheet";
 import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -20,7 +22,9 @@ import { cn } from "@/lib/utils";
 export function AppTopbar() {
   const router = useRouter();
   const pathname = usePathname();
+  const mode = useAppMode();
   const [q, setQ] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
   // The owner's Messages mockup starts straight at the big "Messages" title —
   // no global topbar above it on mobile. That page carries its own header
   // (compose + tools circles), so the topbar hides there below lg; every
@@ -28,8 +32,8 @@ export function AppTopbar() {
   // full-screen overlay, so only the index needs this.
   const onMessagesIndex = pathname === "/messages";
   const inputRef = useRef<HTMLInputElement | null>(null);
-  // The feed lifts its For You/Following/Reels control up here (owner spec)
-  // — every other page's search bar is untouched, since only the feed ever
+  // The feed lifts its For You/Following control up here (owner spec) —
+  // every other page's search bar is untouched, since only the feed ever
   // populates this slot.
   const center = useTopbarCenter();
 
@@ -97,9 +101,46 @@ export function AppTopbar() {
         onMessagesIndex && "hidden lg:flex",
       )}
     >
-      {/* Far-left: search + add friends — kept apart from the action cluster so
-          the right side never gets crowded. */}
+      {/* Far-left: create + search + add friends — kept apart from the action
+          cluster so the right side never gets crowded. */}
       <div className="flex shrink-0 items-center gap-2">
+        {/*
+          🔴 CREATE, MOVED HERE FROM THE BOTTOM NAV (owner, 2026-08-16: "move
+          the + button to top just like [Facebook/Instagram] style, don't
+          make the plus button round, make it professional"). Reference:
+          Instagram puts a plain "+" at the far top-left, no filled circle
+          behind it — this reuses `IconTile`, the same bare-glyph treatment
+          every other icon in this bar already has, rather than the raised
+          gradient circle the bottom nav used to render.
+
+          `lg:hidden` matches exactly where the bottom nav (and the "+" that
+          used to live in it) is shown — the desktop sidebar has no Create
+          entry of its own, so the pre-existing desktop icon further down
+          this bar stays as the wide-screen entry point. Mode-gated the same
+          way the old bottom-nav button was: Downloader mode has no
+          Create/Chats, those are Full Bleed features only.
+        */}
+        {mode !== "downloader" ? (
+          <PressIcon className="lg:hidden">
+            <button
+              type="button"
+              onClick={() => {
+                haptic("selection");
+                playSound("tap");
+                setCreateOpen(true);
+              }}
+              aria-label="Create"
+              aria-haspopup="dialog"
+              aria-expanded={createOpen}
+              className="flex h-10 w-10 items-center justify-center"
+            >
+              <IconTile>
+                <IoAddOutline className="h-[22px] w-[22px]" />
+              </IconTile>
+            </button>
+          </PressIcon>
+        ) : null}
+
         {/* Mobile search entry (the search box is tablet+ only) */}
         <PressIcon className="relative sm:hidden">
           <Link
@@ -173,27 +214,34 @@ export function AppTopbar() {
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {/* Create — goes straight to the dedicated Post surface (owner,
             2026-07-16: each create button opens its OWN create page; there is
-            no shared composer to re-steer any more). */}
-        <PressIcon className="hidden sm:inline-flex">
-          <Link
-            href="/create/post"
-            onPointerDown={() => router.prefetch("/create/post")}
-            aria-label="Create a post"
-            title="Create"
-            className="inline-flex h-11 w-11 items-center justify-center"
-          >
-            <IconTile>
-              <IoCloudUploadOutline className="h-[21px] w-[21px]" />
-            </IconTile>
-          </Link>
-        </PressIcon>
+            no shared composer to re-steer any more). Desktop only: below
+            `lg` the plain "+" in the far-left cluster is the one Create
+            entry (opening the fuller action sheet) — `hidden lg:inline-flex`
+            keeps the two from ever showing at the same time on a tablet.
+            Mode-gated the same as its mobile counterpart: Downloader mode
+            has no Create surface at all. */}
+        {mode !== "downloader" ? (
+          <PressIcon className="hidden lg:inline-flex">
+            <Link
+              href="/create/post"
+              onPointerDown={() => router.prefetch("/create/post")}
+              aria-label="Create a post"
+              title="Create"
+              className="inline-flex h-11 w-11 items-center justify-center"
+            >
+              <IconTile>
+                <IoCloudUploadOutline className="h-[21px] w-[21px]" />
+              </IconTile>
+            </Link>
+          </PressIcon>
+        ) : null}
 
         {/* Notifications — mobile/tablet only (large screens use the sidebar
             Notifications item, so the top-right stays uncluttered). The
-            mockup's other right-side circles (two-people, play) are the
-            feed's own Following/Reels segments, rendered by FeedTopbarTabs
-            in the center slot — adding separate Friends/Reels icons here
-            duplicated them and pushed this bell off-screen. */}
+            mockup's other right-side circle (two-people) is the feed's own
+            Following segment, rendered by FeedTopbarTabs in the center slot
+            — adding a separate Friends icon here duplicated it and pushed
+            this bell off-screen. */}
         <span className="lg:hidden">
           <NotificationBell />
         </span>
@@ -206,6 +254,11 @@ export function AppTopbar() {
           <UserMenu />
         </div>
       </div>
+      {/* The "+" action sheet (owner's picked mockup) — triggered by the plain
+          "+" above. Rendered here rather than in AppOverlays because nothing
+          else can open it, so its state has no reason to be global. It
+          portals to <body>, so this header's own stacking can't trap it. */}
+      <CreateActionSheet open={createOpen} onClose={() => setCreateOpen(false)} />
     </header>
   );
 }

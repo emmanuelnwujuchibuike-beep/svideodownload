@@ -236,129 +236,137 @@ export function WallpaperExplore({
           the sticky back/search row below starts already at its stuck offset
           instead of rendering hidden behind the header for the first frame. */}
       <main className="frenz-canvas-page min-h-dvh pb-24 pt-[calc(var(--frenz-safe-top,0px)+4rem)]">
-        {/* ── 1 + 2 + 3: top bar, editorial hero, fanned deck ──────────────── */}
         {/*
-          The back/search row STICKS directly under SiteHeader rather than
-          scrolling away with the hero and card deck below it — the owner was
-          explicit both controls must stay reachable while scrolling, not just
-          present on first paint. `top` matches SiteHeader's own rendered
-          height exactly (safe-top padding + the `h-16` row), so it lands
-          flush with no gap and no overlap.
+          🔴 ONLY the back/search row is sticky (owner, 2026-08-16: "i never
+          said the top section to be fixed, i said only the search and back
+          button should be sticky and the top header fixed, no the entirely
+          wallpaper hero… the wallpaper download button and other things go
+          over the top section when scrolled").
+
+          The previous version wrapped BOTH the back/search row AND the
+          "Wallpapers" headline/description/card-deck in one `sticky`
+          `<header>` — the comment above it literally said "1 + 2 + 3" and
+          meant it, which is exactly the bug: the whole three-part block
+          stuck to the top and sat on top of the grid as it scrolled beneath
+          it, instead of just the two controls. Split into two elements now:
+          this bar is the sticky one; the headline block right after it is
+          back in NORMAL FLOW and scrolls away like any other content.
         */}
-        <header
-          className="sticky z-30 bg-[hsl(var(--frenz-canvas))] pb-2 pt-3"
+        <div
+          className="sticky z-30 bg-[hsl(var(--frenz-canvas))] px-4 pb-2 pt-3"
           style={{ top: "calc(var(--frenz-safe-top, 0px) + 4rem)" }}
         >
-          <div className="mx-auto w-full max-w-3xl px-4">
-            <div className="flex items-start justify-between">
-              {/*
-                The reference draws a hamburger here. This is a back control
-                instead, deliberately: a drawer here would be a menu glyph with
-                nothing real behind it, the exact dead affordance this codebase
-                has had to remove before. Same slot, same white rounded tile, an
-                honest icon.
+          <div className="mx-auto flex w-full max-w-3xl items-start justify-between">
+            {/*
+              The reference draws a hamburger here. This is a back control
+              instead, deliberately: a drawer here would be a menu glyph with
+              nothing real behind it, the exact dead affordance this codebase
+              has had to remove before. Same slot, same white rounded tile, an
+              honest icon.
 
-                🔴 Corrected 2026-08-09. This comment previously justified itself
-                with "the page already carries the app's bottom navigation" —
-                it does not. `MobileNav` is mounted in the (app) layout and
-                /wallpapers sits outside it, so for as long as that sentence
-                stood, this arrow was the page's ONLY link to anywhere. The site
-                footer now renders below the grid, which is the real fix; the
-                back control stays because it is still the right control.
+              🔴 Corrected 2026-08-09. This comment previously justified itself
+              with "the page already carries the app's bottom navigation" —
+              it does not. `MobileNav` is mounted in the (app) layout and
+              /wallpapers sits outside it, so for as long as that sentence
+              stood, this arrow was the page's ONLY link to anywhere. The site
+              footer now renders below the grid, which is the real fix; the
+              back control stays because it is still the right control.
+            */}
+            <Link
+              href="/"
+              aria-label="Back to home"
+              className="flex h-11 w-11 items-center justify-center rounded-2xl bg-card text-foreground shadow-soft ring-1 ring-inset ring-border/50 transition active:scale-95"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Link>
+            <button
+              type="button"
+              onClick={() => setSearchOpen((s) => !s)}
+              aria-label={searchOpen ? "Close search" : "Search wallpapers"}
+              aria-expanded={searchOpen}
+              className={cn(
+                "flex h-11 w-11 items-center justify-center rounded-2xl shadow-soft ring-1 ring-inset transition active:scale-95",
+                searchOpen
+                  ? "bg-primary text-primary-foreground ring-primary/40"
+                  : "bg-card text-foreground ring-border/50",
+              )}
+            >
+              {searchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+            </button>
+          </div>
+        </div>
+
+        {/* The headline + card deck — NOT sticky, scrolls away normally. */}
+        <div className="mx-auto w-full max-w-3xl px-4">
+          <div className="relative mt-3 flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 pb-2">
+              {/*
+                🔴 Small-screen collision (owner, 2026-08-09, with a
+                screenshot: the card deck painted straight over the word
+                "Wallpapers").
+
+                Not a z-index problem — an arithmetic one. The headline was a
+                flat 2.75rem (44px) and the deck a flat 150px wide. On a 430px
+                phone that leaves the text column 236px while "Wallpapers" at
+                44px extra-bold needs about 240, and a single unbreakable word
+                cannot wrap — so it overflowed its column and ran under the
+                deck, which paints later and therefore on top.
+
+                Both sides are now proportional instead of fixed, so the two
+                columns can never trade places at some untested width:
+                the type scales with the viewport up to its designed 44px, and
+                the deck takes a share of the row rather than a pixel count.
               */}
-              <Link
-                href="/"
-                aria-label="Back to home"
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-card text-foreground shadow-soft ring-1 ring-inset ring-border/50 transition active:scale-95"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </Link>
+              <h1 className="text-[clamp(1.75rem,8.6vw,2.75rem)] font-extrabold leading-[0.95] tracking-[-0.045em] sm:text-6xl">
+                Wallpapers
+              </h1>
+              <p className="mt-3 text-[15px] leading-snug text-muted-foreground sm:text-base">
+                Stunning HD wallpapers
+                <br />
+                for your screen.
+                <br />
+                <span className="font-semibold text-primary">Free</span> to download.
+              </p>
+            </div>
+
+            {/* The deck — real covers, and a real entry into the viewer. */}
+            {deck.length > 0 ? (
               <button
                 type="button"
-                onClick={() => setSearchOpen((s) => !s)}
-                aria-label={searchOpen ? "Close search" : "Search wallpapers"}
-                aria-expanded={searchOpen}
-                className={cn(
-                  "flex h-11 w-11 items-center justify-center rounded-2xl shadow-soft ring-1 ring-inset transition active:scale-95",
-                  searchOpen
-                    ? "bg-primary text-primary-foreground ring-primary/40"
-                    : "bg-card text-foreground ring-border/50",
-                )}
+                onClick={() => open(deck[0]!)}
+                aria-label="Browse wallpapers full screen"
+                /* A SHARE of the row (38%), capped at the design's 190px, and
+                   holding its shape with an aspect ratio rather than a fixed
+                   height — see the headline note above. */
+                className="relative aspect-[150/168] w-[38%] max-w-[190px] shrink-0"
               >
-                {searchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+                {deck.map((w, i) => (
+                  <span
+                    key={w.id}
+                    className={cn(
+                      "absolute inset-y-2 left-1/2 block w-[62%] -translate-x-1/2 overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/10 transition-transform duration-300",
+                      i === 0 && "z-30 rotate-0",
+                      i === 1 && "z-20 -translate-x-[92%] -rotate-[11deg]",
+                      i === 2 && "z-10 -translate-x-[8%] rotate-[11deg]",
+                    )}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- public storage CDN; next/image 403s on these */}
+                    <img src={w.thumbUrl} alt="" aria-hidden className="h-full w-full object-cover" />
+                  </span>
+                ))}
+                {/* Only where the top cover genuinely is one. */}
+                {deckBadge ? (
+                  <span className="absolute bottom-1 right-0 z-40 rounded-xl bg-neutral-900/90 px-2.5 py-1 text-center text-white shadow-lg backdrop-blur">
+                    <span className="block text-base font-extrabold leading-none">{deckBadge.short}</span>
+                    <span className="mt-0.5 block text-[8px] font-bold uppercase tracking-[0.12em] text-white/70">
+                      {deckBadge.long}
+                    </span>
+                  </span>
+                ) : null}
               </button>
-            </div>
-
-            <div className="relative mt-3 flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1 pb-2">
-                {/*
-                  🔴 Small-screen collision (owner, 2026-08-09, with a
-                  screenshot: the card deck painted straight over the word
-                  "Wallpapers").
-
-                  Not a z-index problem — an arithmetic one. The headline was a
-                  flat 2.75rem (44px) and the deck a flat 150px wide. On a 430px
-                  phone that leaves the text column 236px while "Wallpapers" at
-                  44px extra-bold needs about 240, and a single unbreakable word
-                  cannot wrap — so it overflowed its column and ran under the
-                  deck, which paints later and therefore on top.
-
-                  Both sides are now proportional instead of fixed, so the two
-                  columns can never trade places at some untested width:
-                  the type scales with the viewport up to its designed 44px, and
-                  the deck takes a share of the row rather than a pixel count.
-                */}
-                <h1 className="text-[clamp(1.75rem,8.6vw,2.75rem)] font-extrabold leading-[0.95] tracking-[-0.045em] sm:text-6xl">
-                  Wallpapers
-                </h1>
-                <p className="mt-3 text-[15px] leading-snug text-muted-foreground sm:text-base">
-                  Stunning HD wallpapers
-                  <br />
-                  for your screen.
-                  <br />
-                  <span className="font-semibold text-primary">Free</span> to download.
-                </p>
-              </div>
-
-              {/* The deck — real covers, and a real entry into the viewer. */}
-              {deck.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => open(deck[0]!)}
-                  aria-label="Browse wallpapers full screen"
-                  /* A SHARE of the row (38%), capped at the design's 190px, and
-                     holding its shape with an aspect ratio rather than a fixed
-                     height — see the headline note above. */
-                  className="relative aspect-[150/168] w-[38%] max-w-[190px] shrink-0"
-                >
-                  {deck.map((w, i) => (
-                    <span
-                      key={w.id}
-                      className={cn(
-                        "absolute inset-y-2 left-1/2 block w-[62%] -translate-x-1/2 overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/10 transition-transform duration-300",
-                        i === 0 && "z-30 rotate-0",
-                        i === 1 && "z-20 -translate-x-[92%] -rotate-[11deg]",
-                        i === 2 && "z-10 -translate-x-[8%] rotate-[11deg]",
-                      )}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element -- public storage CDN; next/image 403s on these */}
-                      <img src={w.thumbUrl} alt="" aria-hidden className="h-full w-full object-cover" />
-                    </span>
-                  ))}
-                  {/* Only where the top cover genuinely is one. */}
-                  {deckBadge ? (
-                    <span className="absolute bottom-1 right-0 z-40 rounded-xl bg-neutral-900/90 px-2.5 py-1 text-center text-white shadow-lg backdrop-blur">
-                      <span className="block text-base font-extrabold leading-none">{deckBadge.short}</span>
-                      <span className="mt-0.5 block text-[8px] font-bold uppercase tracking-[0.12em] text-white/70">
-                        {deckBadge.long}
-                      </span>
-                    </span>
-                  ) : null}
-                </button>
-              ) : null}
-            </div>
+            ) : null}
           </div>
-        </header>
+        </div>
 
         {/* Search — an inline field under the bar, opened from the icon. */}
         {searchOpen ? (

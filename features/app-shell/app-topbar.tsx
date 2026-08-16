@@ -27,24 +27,6 @@ export function AppTopbar() {
   // other route keeps it. Thread pages already cover it with their own
   // full-screen overlay, so only the index needs this.
   const onMessagesIndex = pathname === "/messages";
-  /*
-    A faded purple wash, /downloads only (owner, 2026-08-16: "a faded purple
-    gradient at the top… don't change the top header buttons or structure").
-    Pathname-scoped for the same reason `mobile-nav.tsx`'s own `immersive` flag
-    is: this ONE topbar instance is shared by every route in the (app) shell
-    (mounted once in the persistent layout, not per-page), so a page-specific
-    look can only be reached by checking where we are, not by a prop the page
-    could pass in.
-
-    🔴 RESHAPED same day (owner: "the download page top gradient isnt as i
-    said i said circle gradient, faded" — pointing to a reference screenshot
-    of a radial glow, not a flat linear band). Was `linear-gradient(to_bottom,
-    …)`; now the SAME radial shape `DownloadsHero` continues below the bar
-    (features/downloads/downloads-sections.tsx), so the glow reads as one
-    continuous shape spanning the header and the top of the page rather than
-    two different gradients meeting at a seam.
-  */
-  const onDownloads = pathname === "/downloads";
   const inputRef = useRef<HTMLInputElement | null>(null);
   // The feed lifts its For You/Following/Reels control up here (owner spec)
   // — every other page's search bar is untouched, since only the feed ever
@@ -104,27 +86,15 @@ export function AppTopbar() {
         // /downloads — owner, 2026-08-11: "let the download page top header and
         // safe area be white". A hook class briefly lived here so a `:has()` rule
         // could retint the bar; it and the rule are gone. See globals.css.
+        // 🔴 PURPLE WASH REMOVED ENTIRELY (owner, 2026-08-16: "remove the top
+        // purple gradient on the download page entirely" — after several
+        // rounds of retuning it, not a request for another adjustment). Plain
+        // `bg-background`, matching every other page's header. Do not re-add
+        // a gradient here without a fresh, explicit ask — this exact feature
+        // was built, reshaped twice for seam/intensity issues, and then
+        // explicitly removed in one conversation.
         "border-b border-border/20 bg-background",
         onMessagesIndex && "hidden lg:flex",
-        // The wash — a radial glow anchored above the bar's top-center, not a
-        // linear top-to-bottom band (see the note above). A background-IMAGE
-        // layered over the unchanged `bg-background`, light mode only. The bar
-        // stays exactly as opaque as the 2026-08-11 "let the download page top
-        // header and safe area be white" decision required; this only adds a
-        // wash on top of that white, it does not retint it.
-        //
-        // 🔴 RETUNED 2026-08-16 (owner: "the white top header is cutting out
-        // the purple gradient"). This bar is only ~90px tall including the
-        // safe area, which is not enough room for a radial ellipse to fall off
-        // AND still have visible colour left at the bottom edge — it used to
-        // fade from 0.30 toward transparent well before reaching the bottom,
-        // so DownloadsHero's separate glow picked up from near-zero and the
-        // seam between the two read as a hard cut. Now near-flat across the
-        // bar's own height (0.30 → 0.16, most of the fall-off pushed past
-        // 60%) so the colour at the BOTTOM of this bar matches the intensity
-        // DownloadsHero's glow now starts at — see that component for the
-        // matching value.
-        onDownloads && "bg-[image:radial-gradient(ellipse_160%_220%_at_50%_-60%,hsl(var(--brand-purple)/0.30),hsl(var(--brand-purple)/0.16)_60%,hsl(var(--brand-purple)/0.16)_100%)] dark:bg-[image:none]",
       )}
     >
       {/* Far-left: search + add friends — kept apart from the action cluster so

@@ -36,7 +36,6 @@ import { PLATFORMS, detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
 import type { MediaKind, PlatformId } from "@/types";
 
-import { setHeroFetching } from "./hero-link-store";
 import { useDownloader } from "./use-downloader";
 
 // Result card (+ its framer-motion dependency) only ever appears after a
@@ -114,20 +113,6 @@ export function Downloader({
   const previewRef = useRef<HTMLDivElement | null>(null);
 
   const isBusy = status === "fetching";
-  /*
-    Publish the fetch state so the landing hero's Download button can BE the
-    spinner. Effect rather than a render-time call because it writes to a module
-    store that other components subscribe to — doing that during render is a
-    side effect in the render phase.
-
-    The cleanup clears the flag on unmount: a visitor who navigates away
-    mid-fetch must not leave the CTA spinning forever on their return.
-  */
-  useEffect(() => {
-    if (!heroHandlesFetching) return;
-    setHeroFetching(isBusy);
-    return () => setHeroFetching(false);
-  }, [heroHandlesFetching, isBusy]);
   const detected = url ? detectPlatform(url) : null;
 
   // Set once the user taps download on this fetch's result — drives the

@@ -5,6 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FullscreenInterstitial } from "@/features/monetization/fullscreen-interstitial";
 import { useInterstitialConfig } from "@/features/monetization/use-interstitial-skip";
 import { useShowAds } from "@/features/monetization/use-show-ads";
+import { dismissToast, toast } from "@/features/ui/toast";
+
+/** Fixed id so opening a new gate can never stack a second "Preparing…" toast
+ *  on top of one already showing, and so it can be found and dismissed from
+ *  anywhere the gate resolves. */
+const PREP_TOAST_ID = "batch-ad-gate-prep";
 
 /**
  * Batch downloads: free, paid for by an ad (owner, 2026-08-09).
@@ -84,12 +90,30 @@ export function BatchAdGate({
   const [hasAd, setHasAd] = useState<boolean | null>(null);
   const proceeded = useRef(false);
 
-  const runNow = useCallback(() => {
-    if (proceeded.current) return;
-    proceeded.current = true;
-    setPhase("idle");
-    onProceed();
-  }, [onProceed]);
+  /*
+    🔴 "sometimes it works" (owner, 2026-08-16) — the missing piece was never
+    the LOGIC, it was that nothing on screen said anything was happening while
+    the ad slot resolved. `FullscreenInterstitial` correctly renders itself
+    invisible AND non-blocking while `hasAd` is still `null` (right — a hidden
+    ad must never eat a tap), but that also means a visitor on a slow
+    connection sees a dead screen for as long as the fetch takes, which reads
+    exactly like "the button does nothing" even though the code is working
+    its way through the gate correctly. `runNow`'s `slow` flag distinguishes
+    "resolved normally" from "gave up waiting" so only the second case says
+    anything — the happy path (ad shown, or a fast confirmed no-fill) stays
+    silent, as it always has.
+  */
+  const runNow = useCallback(
+    (slow?: boolean) => {
+      if (proceeded.current) return;
+      proceeded.current = true;
+      setPhase("idle");
+      dismissToast(PREP_TOAST_ID);
+      if (slow) toast("Slow connection — continuing without the ad", "info", { duration: 3500 });
+      onProceed();
+    },
+    [onProceed],
+  );
 
   // ── Open the gate ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -104,6 +128,11 @@ export function BatchAdGate({
     setHasAd(null);
     setRemaining(Math.max(0, batchGateSeconds));
     setPhase("gate");
+    // Immediate feedback the instant the tap registers — see the note on
+    // `runNow` above for why a silent wait was the actual "does nothing" bug.
+    // A `loading` toast has no auto-dismiss timer, so it sits exactly as long
+    // as the gate takes and is always explicitly cleared in `runNow`.
+    toast("Preparing your download…", "loading", { id: PREP_TOAST_ID });
     // `batch` (the array reference), not a derived boolean — see the prop
     // comment above for why that distinction is the entire fix.
   }, [batch, showAds, enabled, batchGateSeconds, runNow]);
@@ -113,16 +142,25 @@ export function BatchAdGate({
     the dependency bug fixed, nothing before this stopped `hasAd` itself from
     hanging at `null` indefinitely if `/api/ads` never resolves at all — the
     existing 1200ms grace check only acts when `hasAd === false`, never when
-    it's still `null`. 6 seconds is generously past any real ad-fill latency;
-    past it, treat the slot exactly like a confirmed no-fill and let the
-    batch through — the standing rule this whole component is built on is
-    that a placement failing to load must never hold a download hostage.
+    it's still `null`.
+
+    🔴 SHORTENED 6000ms → 2500ms same day ("sometimes it works… poor
+    network?"). 6s generously covers real ad-fill latency, but it also means
+    up to 6 FULL SECONDS of the dead-silent screen described above on
+    anything slower than a great connection — long past when a visitor
+    reasonably concludes the tap didn't register and gives up. 2.5s is still
+    well past a normal ad response and short enough that, paired with the
+    "Preparing…" toast above, a slow attempt now reads as "this is taking a
+    moment" instead of "this is broken". Past it, treat the slot exactly like
+    a confirmed no-fill and let the batch through — the standing rule this
+    whole component is built on is that a placement failing to load must
+    never hold a download hostage.
   */
   useEffect(() => {
     if (phase !== "gate" || hasAd !== null) return;
     const id = setTimeout(() => {
-      if (phase === "gate" && hasAd === null) runNow();
-    }, 6000);
+      if (phase === "gate" && hasAd === null) runNow(true);
+    }, 2500);
     return () => clearTimeout(id);
   }, [phase, hasAd, runNow]);
 

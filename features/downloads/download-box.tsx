@@ -10,15 +10,9 @@ import { useUser } from "@/features/auth/use-user";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
 import { useDownloader } from "@/features/downloader/use-downloader";
-import { PreviewCard } from "@/features/downloader/preview-card";
-import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
-import { QuotaGate } from "@/features/downloads/quota-gate";
 import { onDownloadCompleted, startDownload } from "@/features/downloads/manager";
 import { useHistory } from "@/features/history/use-history";
 import { limitForPlan, totalUsedBytes } from "@/features/history/usage";
-import { DownloadCompleteAd } from "@/features/monetization/download-complete-ad";
-import { FetchedAd } from "@/features/monetization/fetched-ad";
-import { ResultOffer } from "@/features/monetization/result-offer";
 import { getAutoDownload, getPreferredQuality } from "@/lib/download-hub/auto-download";
 import { buildDownloadContext, pickFormat } from "@/lib/download-hub/context";
 import type { DownloadContext } from "@/lib/download-hub/types";
@@ -29,6 +23,40 @@ import { detectPlatform } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 import { sourceUrlSchema } from "@/lib/validation";
 import type { MediaKind } from "@/types";
+
+/*
+  🔴 CODE-SPLIT, ALL OF IT (owner, 2026-08-16: "make the download page…
+  reusable" → landing now renders this exact component, which put the
+  landing page's cold-entry bundle at 322 kB against a 275 kB ceiling, and
+  even pushed /downloads itself to its own 300 kB ceiling — this component
+  was never held to either budget while it only lived behind /downloads'
+  sign-in gate).
+
+  None of the six below can render on the FIRST paint of this component —
+  `PreviewCard`/`FetchedAd`/`ResultOffer` need `metadata`, which does not
+  exist until a fetch resolves; `FloatingDownloadProgress` needs a queued
+  task; `QuotaGate` needs the storage ceiling to actually be hit;
+  `DownloadCompleteAd` needs a finished transfer. Every one was a STATIC
+  import anyway, so 100% of visitors — landing's overwhelming majority, who
+  paste nothing — paid for all six on load. `PreviewCard` in particular
+  already had this exact split one call site over: `downloader.tsx` dynamic-
+  imports it, this file didn't. Same fix, same `{ ssr: false }` reasoning as
+  `DiscoveryGateway` below (already split, kept as-is): none of these six
+  need to exist in server-rendered HTML — they render from client state that
+  is null on the server regardless.
+*/
+const PreviewCard = dynamic(() => import("@/features/downloader/preview-card").then((m) => m.PreviewCard), { ssr: false });
+const FloatingDownloadProgress = dynamic(
+  () => import("@/features/downloads/floating-progress").then((m) => m.FloatingDownloadProgress),
+  { ssr: false },
+);
+const QuotaGate = dynamic(() => import("@/features/downloads/quota-gate").then((m) => m.QuotaGate), { ssr: false });
+const DownloadCompleteAd = dynamic(
+  () => import("@/features/monetization/download-complete-ad").then((m) => m.DownloadCompleteAd),
+  { ssr: false },
+);
+const FetchedAd = dynamic(() => import("@/features/monetization/fetched-ad").then((m) => m.FetchedAd), { ssr: false });
+const ResultOffer = dynamic(() => import("@/features/monetization/result-offer").then((m) => m.ResultOffer), { ssr: false });
 
 // Renders only after a download completes, and pulls in the Learning Academy
 // content it links to — code-split so the Hub's initial bundle does not carry it.

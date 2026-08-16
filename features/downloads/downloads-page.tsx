@@ -1,22 +1,14 @@
 "use client";
 
-import { ArrowRight, Compass, Pause, Play, RotateCw, X } from "lucide-react";
+import { Pause, Play, RotateCw, X } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { useAppMode } from "@/features/app-shell/use-app-mode";
-import { DownloadBox } from "@/features/downloads/download-box";
 import type { PlatformStatusMap } from "@/lib/platform-status";
 
-import {
-  CloudStorageCard,
-  DownloadQuickActions,
-  DownloadStats,
-  DownloadTrustStrip,
-  DownloadsHero,
-  RecentDownloads,
-} from "@/features/downloads/downloads-sections";
+import { DownloadPageCore } from "@/features/downloads/download-page-core";
+import { DownloadQuickActions, DownloadTrustStrip } from "@/features/downloads/downloads-sections";
 import { HubWarmup } from "@/features/downloads/hub-warmup";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
@@ -146,110 +138,20 @@ export function DownloadsPage({
           nothing lags the first time it is needed. Renders nothing. */}
       <HubWarmup />
 
-      {/* ── The owner's reference layout (public/new downloadpage.jpg), in order:
-             hero → paste card → cloud storage → stat tiles → recent → quick
-             actions → trust strip. Every figure below is computed from the
-             viewer's real download history. ── */}
-
-      <DownloadsHero />
-
-      {/* Paste card. `id="download"` is the target the rail's "Download from
-          Link" quick action points at — the anchor previously existed only on
-          the landing hero, so that control did nothing on this page. */}
       {/*
-        🔴 THE PURPLE STRIPE MOVED OFF THIS CARD (owner, 2026-08-11: "the stripe
-        … is supposed to be around this placeholder and not the parent
-        container").
-
-        It was originally a `p-px` gradient wrapper around this whole card. The
-        placeholder the owner meant is the paste INPUT, so the gradient now lives
-        on that field in `download-box.tsx` — at 2px, filling the pale ring the
-        input used to draw for itself.
-
-        This card goes back to being an ordinary surface: soft shadow plus the
-        faint inset ring every other card on the page has. The ring was removed
-        when the violet hairline was here (two lines side by side read as a
-        double border); with the hairline gone, its absence is what would look
-        wrong.
+        ── The shared top of the page, now literally shared (owner, 2026-08-16:
+        "make the download page to the reusable… let the from the recent
+        download all the way up to the download, discover explore text, all
+        section must be shared") ──────────────────────────────────────────
+        Hero, paste card, Explore/Wallpaper tiles, the under-download ad slot,
+        cloud storage, stat tiles and Recent downloads all live in
+        `DownloadPageCore` now — the landing page renders the exact same
+        component. Everything below this line is /downloads-only, per the
+        owner's own stated boundary ("recent download" is the last shared
+        section) — quick actions, the usage dashboard, the downloading list,
+        history panel, wallpaper gallery and trust strip stay here.
       */}
-      <section id="download" className="scroll-mt-20">
-        <div className="rounded-[1.5rem] bg-white p-4 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-[#0b1020] dark:ring-white/10 sm:p-5">
-          <DownloadBox surface="card" platformStatus={platformStatus} />
-        </div>
-      </section>
-
-      {/*
-        🔴 Explore Features BESIDE Wallpapers — the landing's pair, brought over
-        (owner, 2026-08-11: "i want the download page to be a blend of the landing
-        page and the download page as it is in my screenshot").
-
-        The Wallpaper tile was alone and full-width here, which made it read as a
-        banner for one feature. In the reference the two sit side by side as
-        equals, exactly as on the landing: two places to go next, offered
-        together. This ADDS the Explore tile; nothing is taken away, and the
-        Wallpaper card is the same component with the same dwell flourish it has
-        always had.
-
-        Both are plain server-rendered links inside an already-client page — no
-        new state, no new effect, nothing that hydrates beyond what was here.
-      */}
-      <div className="grid grid-cols-2 gap-3">
-        <Link
-          href="/features"
-          className="group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl bg-white p-4 text-left text-slate-900 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] transition duration-200 hover:-translate-y-0.5 active:scale-[0.995] dark:bg-white/[0.04] dark:text-white dark:ring-white/10"
-        >
-          {/* Decoration FIRST in the markup, content after with `relative z-[1]`.
-              A positioned element paints above static siblings, so an absolutely
-              positioned flourish declared last covers its own card's text — the
-              exact regression that shipped on the landing's Wallpaper tile. */}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute -right-8 top-6 h-32 w-32 rotate-[18deg] rounded-[2rem] bg-gradient-to-br from-violet-400/25 via-indigo-400/15 to-transparent blur-[1px] transition-transform duration-500 group-hover:rotate-[22deg] motion-reduce:transition-none dark:from-violet-400/20 dark:via-indigo-400/10"
-          />
-          <span className="relative z-[1] flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30">
-            <Compass className="h-6 w-6" />
-          </span>
-          <span className="relative z-[1] mt-auto flex items-end justify-between gap-3 pt-4">
-            <span className="min-w-0">
-              <span className="block text-base font-bold leading-tight">Explore Features</span>
-              <span className="mt-1 block text-xs leading-snug text-slate-500 dark:text-white/60">
-                See everything Frenz can do.
-              </span>
-            </span>
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/70 transition group-hover:bg-slate-200 dark:bg-white/10 dark:ring-white/15">
-              <ArrowRight className="h-4 w-4 text-slate-600 transition-transform group-hover:translate-x-0.5 dark:text-white" />
-            </span>
-          </span>
-        </Link>
-
-        <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} />
-      </div>
-
-      {/*
-        ── Where the Wallpaper Gallery went ──────────────────────────────────
-
-        It is in the two-up grid directly above, paired with Explore Features
-        (owner, 2026-08-11 — the reference screenshot). The constraint it was
-        moved here for in the first place (2026-08-09: "separate the wallpaper
-        button from the supported platform in the download page") is still met
-        and is in fact met better: it is outside the paste card, a sibling of it,
-        directly below the one place on this page everybody already looks — it
-        simply now shares that row with its counterpart instead of spanning the
-        full width alone.
-      */}
-
-      {/* Under the paste card — adjusts to whatever ad size the zone serves
-          (AdSurface hugs the unit). The site's highest-attention placement. */}
-      <AdSurface zone="under_download" maxWidth="max-w-3xl" />
-
-      <CloudStorageCard items={items} />
-
-      <DownloadStats items={items} />
-
-      {/* "View all" and "Favorites" both open the dedicated history page — a
-          prefetched <Link>, so the route is already warm and the transition is
-          instant rather than a spinner (owner). */}
-      <RecentDownloads items={items} />
+      <DownloadPageCore platformStatus={platformStatus} ctaWallpaperUrl={ctaWallpaperUrl} />
 
       <DownloadQuickActions />
 

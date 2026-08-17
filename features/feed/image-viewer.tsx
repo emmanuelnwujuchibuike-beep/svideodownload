@@ -353,9 +353,12 @@ function ImageStage({
               draggable={false}
             />
             {/* blurred fill behind the letterbox so a photo whose shape doesn't
-                match the screen never sits on plain black */}
+                match the screen never sits on plain black. 70%, not 30%
+                (owner, 2026-08-17, with a screenshot: the letterbox still
+                read as flat black rather than an obvious blur) — same fix,
+                same reasoning, as reel-viewer.tsx's own backdrop that day. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt="" aria-hidden className="pointer-events-none absolute inset-0 -z-10 h-full w-full scale-110 object-cover opacity-30 blur-2xl" />
+            <img src={src} alt="" aria-hidden className="pointer-events-none absolute inset-0 -z-10 h-full w-full scale-110 object-cover opacity-70 blur-2xl" />
           </div>
         )}
 
@@ -645,6 +648,14 @@ function AlbumSwipe({
   indexRef.current = index;
   const raf = useRef(0);
   const startPt = useRef<{ x: number; y: number } | null>(null);
+  // Tracks the most recent pointer position DURING a drag — needed because
+  // `pointercancel` (which iOS Safari fires far more often than `pointerup`
+  // for a vertical gesture that started on this horizontal-scroll element —
+  // the same quirk `reel-viewer.tsx`'s own pinch-zoom handler documents)
+  // carries no useful coordinates of its own. Without this, a cancelled
+  // gesture had no position to evaluate a dismiss against — the owner,
+  // 2026-08-17: "the slide down to close also doesnt work".
+  const lastPt = useRef<{ x: number; y: number } | null>(null);
   const moved = useRef(false);
   const lastTap = useRef(0);
   // Starts true for any real album; a single-slide "album" (shouldn't
@@ -712,6 +723,7 @@ function AlbumSwipe({
 
   const onPointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
+    lastPt.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
     // ANY touch on the album — tap, drag, whatever it turns out to be —
     // ends autoplay for good (owner: "when tapped it stops and demands a
@@ -720,28 +732,32 @@ function AlbumSwipe({
     if (autoPlaying) setAutoPlaying(false);
   };
   const onPointerMove = (e: React.PointerEvent) => {
+    lastPt.current = { x: e.clientX, y: e.clientY };
     if (!startPt.current || moved.current) return;
     if (Math.abs(e.clientX - startPt.current.x) > 10 || Math.abs(e.clientY - startPt.current.y) > 10) moved.current = true;
   };
-  const onPointerUp = (e: React.PointerEvent) => {
+  /*
+    🔴 Y-AXIS POST NAVIGATION REMOVED (owner, 2026-08-17: "remove the Y
+    axis scroll and movement from the multi post in feed"/"...from the
+    multi post viewer"). This used to let a mostly-vertical swipe move to
+    the next/previous POST, Reels-style, whenever a post list was
+    available. Back to the original, simpler rule: a mostly-vertical
+    swipe DOWN dismisses the viewer; a mostly-horizontal drag is the
+    album's own native swipe-between-slides and is never misread as
+    either.
+  */
+  const maybeDismiss = (endX: number, endY: number) => {
     const start = startPt.current;
+    if (!start) return;
+    const dx = endX - start.x;
+    const dy = endY - start.y;
+    if (Math.abs(dy) > Math.abs(dx) && dy > 90) onDismiss();
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    const wasMoved = moved.current;
     startPt.current = null;
-    if (moved.current) {
-      /*
-        🔴 Y-AXIS POST NAVIGATION REMOVED (owner, 2026-08-17: "remove the Y
-        axis scroll and movement from the multi post in feed"/"...from the
-        multi post viewer"). This used to let a mostly-vertical swipe move to
-        the next/previous POST, Reels-style, whenever a post list was
-        available. Back to the original, simpler rule: a mostly-vertical
-        swipe DOWN dismisses the viewer; a mostly-horizontal drag is the
-        album's own native swipe-between-slides and is never misread as
-        either.
-      */
-      if (start) {
-        const dx = e.clientX - start.x;
-        const dy = e.clientY - start.y;
-        if (Math.abs(dy) > Math.abs(dx) && dy > 90) onDismiss();
-      }
+    if (wasMoved) {
+      maybeDismiss(e.clientX, e.clientY);
       return;
     }
     const now = Date.now();
@@ -755,9 +771,24 @@ function AlbumSwipe({
       }, 290);
     }
   };
+  // `pointercancel` (not `pointerup`) is what actually fires for a vertical
+  // drag on this element on iOS Safari — see `lastPt`'s own comment above.
+  // No tap/double-tap fallback here: a cancelled gesture was never a clean
+  // tap to begin with.
+  const onPointerCancel = () => {
+    const wasMoved = moved.current;
+    startPt.current = null;
+    if (wasMoved && lastPt.current) maybeDismiss(lastPt.current.x, lastPt.current.y);
+  };
 
   return (
-    <div className="absolute inset-0" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+    <div
+      className="absolute inset-0"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+    >
       <div
         ref={scroller}
         onScroll={onScroll}
@@ -773,7 +804,9 @@ function AlbumSwipe({
                 <div className="absolute inset-0 bg-black" />
               ) : (
                 <>
-                  {/* blurred fill so a slide whose shape doesn't match the screen never letterboxes onto plain black */}
+                  {/* blurred fill so a slide whose shape doesn't match the screen
+                      never letterboxes onto plain black. 70%, not 30% — see the
+                      single-photo backdrop above for the same 2026-08-17 fix. */}
                   {(m.thumbnailUrl ?? (m.kind === "image" ? m.url : null)) ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -782,7 +815,7 @@ function AlbumSwipe({
                       aria-hidden
                       loading="eager"
                       decoding="async"
-                      className="absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl"
+                      className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl"
                     />
                   ) : null}
                   {m.kind === "video" ? (

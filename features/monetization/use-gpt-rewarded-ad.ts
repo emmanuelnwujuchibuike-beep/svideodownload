@@ -122,8 +122,28 @@ export function useGptRewardedAd() {
   const tokenRef = useRef<symbol | null>(null);
   const listenersRef = useRef<Array<{ type: string; fn: (event: never) => void }>>([]);
 
+  /*
+    🔴 Releases the module-level "one slot at a time" lock (fixed 2026-08-16:
+    "the download button flashes once, then does nothing on every click
+    after"). Every terminal-failure path below (no slot returned, the
+    ready-timeout, an empty render, the user closing the ad) called
+    `setState(...)` directly without going through this — so the very FIRST
+    failed attempt (extremely likely in practice: rewarded out-of-page ads
+    have real device/page eligibility requirements Google enforces, and the
+    fallback public test ad unit won't reliably fill in every browsing
+    context) left `activeToken` permanently set. `watch()` in
+    use-reward-flow.ts's retry ("Try Again") calls `request()` directly, not
+    `reset()`, so `request()`'s own `if (activeToken !== null) return;` guard
+    then silently no-ops on every later click, forever — exactly the
+    reported symptom. This is now called at every terminal transition, not
+    only on a fresh `reset()`.
+  */
+  const releaseToken = useCallback((token: symbol) => {
+    if (activeToken === token) activeToken = null;
+  }, []);
+
   const destroy = useCallback(() => {
-    if (tokenRef.current && activeToken === tokenRef.current) activeToken = null;
+    if (tokenRef.current) releaseToken(tokenRef.current);
     tokenRef.current = null;
     const gt = typeof window !== "undefined" ? window.googletag : undefined;
     if (gt?.pubads) {
@@ -137,7 +157,7 @@ export function useGptRewardedAd() {
     slotRef.current = null;
     makeVisibleRef.current = null;
     grantedRef.current = false;
-  }, []);
+  }, [releaseToken]);
 
   useEffect(() => destroy, [destroy]);
 
@@ -152,6 +172,7 @@ export function useGptRewardedAd() {
 
       const timeout = setTimeout(() => {
         if (tokenRef.current === token && stateRef.current !== "reward_ready" && stateRef.current !== "reward_granted") {
+          releaseToken(token);
           setState("reward_failed");
         }
       }, READY_TIMEOUT_MS);
@@ -164,6 +185,7 @@ export function useGptRewardedAd() {
           const slot = gt.defineOutOfPageSlot(adUnitPath, gt.enums.OutOfPageFormat.REWARDED);
           if (!slot) {
             clearTimeout(timeout);
+            releaseToken(token);
             setState("reward_failed");
             return;
           }
@@ -186,13 +208,16 @@ export function useGptRewardedAd() {
           const onClosed = () => {
             if (tokenRef.current !== token) return;
             // A grant that arrived before close is handled already — closing
-            // afterward must never downgrade it back to "not granted".
+            // afterward must never downgrade it back to "not granted". Either
+            // way the slot is done with, so the lock releases regardless.
+            releaseToken(token);
             setState((s) => (grantedRef.current ? s : "reward_closed"));
           };
           const onRenderEnded = (event: GptSlotRenderEndedEvent) => {
             if (tokenRef.current !== token) return;
             if (event.slot === slot && event.isEmpty) {
               clearTimeout(timeout);
+              releaseToken(token);
               setState("reward_failed");
             }
           };
@@ -213,7 +238,7 @@ export function useGptRewardedAd() {
         });
       });
     },
-    [destroy, setState],
+    [destroy, setState, releaseToken],
   );
 
   /** The ONLY function allowed to call `makeRewardedVisible()` — and only

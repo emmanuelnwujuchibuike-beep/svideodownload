@@ -3,39 +3,31 @@
  *  THE FEED'S SHARED "HOW TALL CAN MEDIA GET" RULE
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Owner brief (2026-08-16): "the feed should be premium like Twitter and
- * thread, every long video or image should shrink on the feed like Twitter…
- * it should be two [posts] that will be able to show complete like Twitter
- * and thread style… show full in reels only when clicked."
+ * 🔴 REVERSED 2026-08-17 (owner, with X/Twitter reference screenshots: "in
+ * twitter video size how depends on the size, it doesnt give a fied size and
+ * occupy the space with black bakground"). The 2026-08-16 brief directly
+ * below asked for "like Twitter" but the mechanism it built was the OPPOSITE
+ * of Twitter's real one: it forced every post's container into a fixed 4:5–
+ * 16:9 band and letterboxed (blurred-fill) anything that didn't match, where
+ * real Twitter/X applies NO ratio floor or ceiling at all — a post's media
+ * renders at its own true aspect, full width, and the only limit is a MAX
+ * HEIGHT (not a locked ratio). This function now returns the media's real,
+ * unclamped ratio; a max-height CSS cap on the actual `<video>`/`<img>`
+ * elements (see feed-video.tsx / feed-image.tsx) is what keeps a
+ * pathologically tall clip from taking over the screen — and unlike the old
+ * ratio clamp, it never produces a mismatched box for `object-contain` to
+ * letterbox inside, because the container's shape IS the media's shape.
  *
- * ── Why the ceiling is an ASPECT RATIO, not a viewport-height guess ────────
- *
- * A portrait clip or photo at its raw shape can run up to 16:9 rotated —
- * height = 1.78× its own width — and that is what made one post occupy most
- * of a screen: nothing was wrong with any single post, there just wasn't a
- * budget. The fix caps TALLNESS RELATIVE TO WIDTH at 4:5 (height = 1.25×
- * width) — Instagram and Threads' own feed cap, for the same reason: unlike a
- * `vh` cap, a width-relative ratio produces the same proportions on a phone,
- * a tablet, or a 4K monitor, and needs no knowledge of the viewport's height
- * to compute. Two posts capped this way, plus their header/caption/action
- * chrome, are what makes "roughly two per screen" true across device sizes
- * rather than only at whichever one screen height it was tuned against.
- *
- * The WIDE end is untouched (16:9, height = 0.5625× width) — landscape media
- * was never the complaint; it is already short.
- *
- * ── Why this never crops ────────────────────────────────────────────────────
- *
- * This clamps the CONTAINER, not the media. Every consumer renders its actual
- * video/image with `object-contain` inside a box sized to this ratio, so
- * anything taller than 4:5 is shown SMALLER, letterboxed within the box —
- * shrunk to fit, exactly the "never crop" rule this app holds everywhere else
- * (see the story-viewer and reel-viewer notes on `object-contain` vs
- * `object-cover`). The full, uncapped frame is one tap away — into the
- * fullscreen Reels/Image viewer, which is where "show full… only when
- * clicked" already happens; this ratio applies to the inline feed card only.
+ * ── The original 2026-08-16 brief, kept for context ─────────────────────────
+ * "the feed should be premium like Twitter and thread, every long video or
+ * image should shrink on the feed like Twitter… it should be two [posts]
+ * that will be able to show complete like Twitter and thread style… show
+ * full in reels only when clicked." The "shrink" and "two per screen" goals
+ * are still real — they're now met by the max-height cap instead of a ratio
+ * clamp, which was solving them by producing letterboxed, not truly full,
+ * media.
  */
 export function clampFeedRatio(w?: number | null, h?: number | null): number | null {
   if (!w || !h || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
-  return Math.min(16 / 9, Math.max(4 / 5, w / h));
+  return w / h;
 }

@@ -27,11 +27,11 @@ const TAP_MOVE_TOLERANCE = 18;
  * reachable. Cloudflare Stream items fall back to the Stream player.
  */
 /**
- * The feed's shared tallness ceiling — see `lib/media/aspect.ts`. Kept as a
- * local alias (rather than calling the import everywhere below) because this
- * file already had a `clampRatio` name at every call site and the owner's
- * 2026-08-16 "shrink like Twitter" change is a one-line delegation, not a
- * rename that needs to ripple through the file.
+ * The clip's true aspect ratio — see `lib/media/aspect.ts`'s 2026-08-17
+ * reversal note (it no longer CLAMPS anything, despite the name; a `max-h`
+ * safety net on the actual elements below is what limits tallness now).
+ * Kept as a local alias, not renamed, purely to avoid rippling the change
+ * through every call site in this file for a cosmetic reason.
  */
 const clampRatio = clampFeedRatio;
 
@@ -96,13 +96,13 @@ export function FeedVideo({
   const [covered, setCovered] = useState(true);
   const [shouldLoad, setShouldLoad] = useState(false);
   // The card shows the video at its TRUE aspect ratio — nothing is ever
-  // cropped. Tall clips expand toward full 9:16; short/wide clips render as
-  // they are (letterboxed only past the clamps).
+  // cropped or letterboxed. The `max-h-[70vh]`/`lg:max-h-[82vh]` safety net
+  // below is the only ceiling on tallness.
   //
   // Seeded from the SERVER's stored dimensions when they exist, so the box is
   // the right shape before a single byte of video is fetched; measured from the
-  // element on `loadedmetadata` otherwise. Same clamp on both paths, so the two
-  // cannot disagree and resize the card for no reason.
+  // element on `loadedmetadata` otherwise. Same function on both paths, so the
+  // two cannot disagree and resize the card for no reason.
   const [ratio, setRatio] = useState<number | null>(() => clampRatio(width, height));
   const inViewRef = useRef(false);
   const readyRef = useRef(false);
@@ -284,16 +284,19 @@ export function FeedVideo({
   return (
     <div
       ref={wrap}
-      // The "we don't know yet" placeholder must not reserve MORE height than
-      // the cap itself allows once the real ratio arrives — 4/5 matches
-      // `clampRatio`'s own floor, so the box never has to visibly shrink the
-      // instant metadata (or a server-known width/height) lands.
+      // The "we don't know yet" placeholder — before metadata (or a
+      // server-known width/height) arrives, 4/5 is just a reasonable guess,
+      // never a ceiling applied to a KNOWN ratio (see aspect.ts's 2026-08-17
+      // reversal note — `ratio` itself is the media's true, unclamped shape).
       style={{ aspectRatio: ratio ?? 4 / 5 }}
       className={cn(
         "group relative overflow-hidden bg-black",
-        // On laptops/desktops the whole video fits the screen height (never taller
-        // than 82vh) so you never scroll to see a full clip; phones stay immersive.
-        "lg:flex lg:!aspect-auto lg:max-h-[82vh] lg:items-center lg:justify-center",
+        // Twitter-style: full width, the media's OWN true aspect ratio, no
+        // forced box. `max-h` is a SAFETY NET only — generous enough that it
+        // essentially never triggers for real phone-shot content, so it never
+        // becomes a de-facto ratio clamp again; it exists purely to stop a
+        // genuinely pathological upload from breaking the page's layout.
+        "max-h-[70vh] lg:flex lg:!aspect-auto lg:max-h-[82vh] lg:items-center lg:justify-center",
         className,
       )}
     >
@@ -321,7 +324,7 @@ export function FeedVideo({
           the page whose stillness is load-bearing, and the pause indicator
           already gives the gesture unambiguous feedback.
         */
-        className="h-full w-full touch-pan-y object-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset lg:h-auto lg:max-h-[82vh] lg:w-auto"
+        className="h-full max-h-[70vh] w-full touch-pan-y object-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset lg:h-auto lg:max-h-[82vh] lg:w-auto"
         // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
         // open media") — purely additive: Enter/Space opens directly,
         // bypassing the tap/double-tap/hold pointer state machine above
@@ -339,9 +342,10 @@ export function FeedVideo({
         onLoadedMetadata={() => {
           const v = video.current;
           if (!v || !v.videoWidth || !v.videoHeight) return;
-          // Exact ratio, clamped: tallest a card goes is full 9:16, widest 16:9.
-          // The element is the authority — a stored dimension can be stale or
-          // wrong, and by now we have the real thing.
+          // The clip's real, unclamped ratio — the element is the authority
+          // here (a stored dimension can be stale or wrong, and by now we
+          // have the real thing); tallness is bounded only by the max-h
+          // safety net on the wrapper/element, not by this value.
           setRatio(clampRatio(v.videoWidth, v.videoHeight));
           // Resume where this post's video last stopped (tab switch, viewer
           // close, remount) — the feed never "restarts from the top".

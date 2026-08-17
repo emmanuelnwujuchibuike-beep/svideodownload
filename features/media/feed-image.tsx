@@ -115,20 +115,21 @@ export function FeedImage({
   };
 
   /*
+    🔴 REVERSED 2026-08-17 (owner, with X/Twitter reference screenshots: real
+    Twitter/X applies NO aspect-ratio floor/ceiling to feed media — it renders
+    at its own true shape, full width, capped only by a max HEIGHT). See
+    `lib/media/aspect.ts`'s reversal note for the full reasoning; the
+    2026-08-16 brief directly below is kept for context, but `clampFeedRatio`
+    no longer clamps anything despite the name — `ratio` here is the photo's
+    real, unaltered shape. The `max-h-[70vh]` on the container below is the
+    new safety net (a genuine ceiling, but a generous one meant to essentially
+    never trigger on real content, not a de-facto ratio clamp).
+
     ── The feed's Twitter/Threads density cap (owner, 2026-08-16) ────────────
     "every long video or image should shrink on the feed like Twitter… two
-    posts that will be able to show complete."
-
-    `clampFeedRatio` is the same 4:5-tallest ceiling `FeedVideo` uses — see
-    `lib/media/aspect.ts`. Applied to the CONTAINER as an explicit aspect
-    ratio (not left to next/image's own intrinsic width/height sizing), which
-    is what lets a portrait photo taller than 4:5 be shown SMALLER —
-    letterboxed within this box via `object-contain` below — rather than
-    stretching the card to the photo's true height.
-
-    This is why the foreground switches to `fill` mode a few lines down: a
-    `fill` image has no size of its own, so the container's aspect-ratio is
-    what actually determines the rendered height, instead of racing it.
+    posts that will be able to show complete." `fill` mode is still used —
+    a `fill` image has no size of its own, so the container's aspect-ratio
+    (now the photo's TRUE one) is what determines the rendered height.
   */
   const ratio = hasDims ? clampFeedRatio(width, height) : null;
 
@@ -144,7 +145,7 @@ export function FeedImage({
       // press, or press-and-hold.
       style={ratio ? { aspectRatio: ratio } : undefined}
       className={cn(
-        "relative flex items-center justify-center overflow-hidden bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+        "relative flex max-h-[70vh] items-center justify-center overflow-hidden bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
         className,
       )}
       // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
@@ -199,10 +200,11 @@ export function FeedImage({
           src={src}
           alt={alt}
           // `fill`, not `width`/`height`: the CONTAINER's aspect-ratio (set
-          // above, clamped to the 4:5 density cap) is what sizes this image
-          // now — the image itself has no intrinsic size to contribute or to
-          // fight the clamp with. `object-contain` still means a source
-          // taller than the clamp is shrunk to fit, never cropped.
+          // above, the photo's own TRUE shape, unclamped) is what sizes this
+          // image now — `object-contain` is effectively a no-op in the
+          // common case since the box already matches the image exactly, and
+          // only shrinks it (never crops) in the rare case the `max-h-[70vh]`
+          // safety net on the container actually triggers.
           fill
           sizes="(max-width: 768px) 100vw, 640px"
           // EAGER, not next/image's default lazy. The feed only mounts a card

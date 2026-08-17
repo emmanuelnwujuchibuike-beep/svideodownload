@@ -289,13 +289,24 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const [queue, setQueue] = useState<RewardAd[]>([]);
   const [totalAds, setTotalAds] = useState(0);
   /*
-    Real GPT rewarded ad for VIDEO downloads (owner, 2026-08-16 GPT spec) —
-    replaces the old admin-video/timer `RewardedAdGate` path for video only.
-    `onGranted`'s `items[0]` is the server-REDEEMED item (Parts 11-12): its
-    `formatId`/`kind` are what the session actually stored, not necessarily
-    identical in value to what was requested, but always THE authority —
-    using it here (rather than the locally-captured `formatId`/`kind`) is
-    what keeps this consistent with what `/api/download` will itself enforce.
+    🔴 VIDEO PAUSED off the real GPT rewarded ad (owner, 2026-08-16, direct
+    correction: "top quality video still doesnt click… reduced my visitor").
+
+    Root cause: no Google Ad Manager account is configured
+    (`NEXT_PUBLIC_GPT_REWARDED_AD_UNIT_PATH` is unset everywhere), so this
+    was requesting GOOGLE'S OWN PUBLIC TEST rewarded ad unit in production —
+    which is not reliably fillable for real visitors. The lock-up bug fixed
+    earlier the same day made "Try Again" work again instead of freezing
+    forever, but if the underlying test ad never fills, retrying just
+    repeats the same failure — every top-2-quality video download dead-ends.
+
+    `downloadUnlock`/`onDownloadUnlockGranted` are left fully wired below
+    (dormant, not called) rather than deleted: once a real Ad Manager
+    account and ad unit exist, restoring the real flow is a one-line
+    `downloadUnlock.open(...)` swap back in `startDownload`, not a rebuild.
+    Until then, video quality tiers route through the SAME proven
+    admin-video/timer `RewardedAdGate` that image/audio already use below —
+    it works today.
   */
   const onDownloadUnlockGranted = useCallback(
     (items: RewardSessionItem[], rewardSessionId: string) => {
@@ -317,10 +328,6 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       tierConfig,
     });
     if (ads.length > 0) {
-      if (kind === "video") {
-        downloadUnlock.open([{ url: metadata.sourceUrl, formatId, kind, title: metadata.title }]);
-        return;
-      }
       setQueue(ads);
       setTotalAds(ads.length);
       setGate({ formatId, kind });
@@ -812,10 +819,8 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       step={totalAds - queue.length + 1}
       totalSteps={totalAds}
       onReward={() => {
-        // VIDEO no longer reaches this gate at all — see `downloadUnlock`
-        // (a real GPT reward flow) above. Only image/audio top-tier ads
-        // still use this admin-video/timer mechanism (a separate, earlier,
-        // out-of-scope feature).
+        // Video, image and audio all reach this gate now (video paused off
+        // the real GPT flow — see the note on `downloadUnlock` above).
         const rest = queue.slice(1);
         setQueue(rest);
         // Only the LAST ad releases the download. Anything else would hand over

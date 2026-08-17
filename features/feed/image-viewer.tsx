@@ -42,6 +42,7 @@ import { PostEditSheet } from "@/features/social/post-edit-sheet";
 import { ReportSheet } from "@/features/social/report-sheet";
 import { toast } from "@/features/ui/toast";
 import { downloadPost } from "@/lib/media/download-post";
+import { clampFeedRatio } from "@/lib/media/aspect";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import { springs } from "@/lib/motion/springs";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
@@ -131,6 +132,24 @@ function ImageStage({
   const [editReady, setEditReady] = useState(false);
   const lastTap = useRef(0);
   const startY = useRef<number | null>(null);
+  // Last known pointer position DURING a drag — `pointercancel` (which iOS
+  // Safari fires far more often than `pointerup` for a vertical gesture, the
+  // same quirk documented on AlbumSwipe below) carries no coordinates of its
+  // own, so a cancelled gesture had nothing to evaluate a dismiss against.
+  const lastPt = useRef<{ x: number; y: number } | null>(null);
+  // The photo's true aspect ratio — seeded from the server's stored
+  // dimensions (so the box is already the right shape before a single byte
+  // of the full-res image has loaded) and refined once the actual `<img>`
+  // reports its natural size. Every OTHER media surface in this codebase
+  // (feed-image, feed-video, reel-viewer) already does this; this single-
+  // photo branch never did, which is the concrete gap behind the owner's
+  // 2026-08-17 report that a fullscreen photo "is not full screen" — without
+  // an explicit box shape, the `<img>` had nothing to size itself against
+  // until it finished decoding, and no `object-contain`/backdrop treatment
+  // to fall back on in the meantime.
+  const [measuredRatio, setMeasuredRatio] = useState<number | null>(null);
+  const seedRatio = clampFeedRatio(item.mediaWidth, item.mediaHeight);
+  const ratio = measuredRatio ?? seedRatio;
 
   useEffect(() => {
     // overflowY only (not the `overflow` shorthand) — the shorthand also resets
@@ -333,23 +352,61 @@ function ImageStage({
         ) : (
           <div
             className="absolute inset-0 flex items-center justify-center"
-            onPointerDown={(e) => (startY.current = e.clientY)}
+            // 🔴 `touch-action: none` (owner, 2026-08-17: "Image viewer still
+            // move when I drag it… not only multiple post, all image").
+            // Without this, a vertical drag here was never actually claimed
+            // by our own pointer handlers — `document.body.style.overflowY =
+            // "hidden"` (above) stops normal scrolling but does NOT reliably
+            // stop iOS Safari's native rubber-band/bounce gesture on a touch
+            // that starts on an unconstrained element, so the photo could
+            // visibly move/bounce under a finger before our dismiss logic
+            // ever saw the gesture. `none`, not `pan-y`: unlike AlbumSwipe
+            // (which needs `pan-x` for its own horizontal slide), this photo
+            // never needs the browser to pan it in ANY direction — every
+            // gesture here is either a tap or our own dismiss-swipe.
+            style={{ touchAction: "none" }}
+            onPointerDown={(e) => {
+              startY.current = e.clientY;
+              lastPt.current = { x: e.clientX, y: e.clientY };
+            }}
+            onPointerMove={(e) => {
+              lastPt.current = { x: e.clientX, y: e.clientY };
+            }}
             onPointerUp={(e) => {
               if (startY.current !== null && e.clientY - startY.current > 90) onClose();
               else onImgPointerUp(e);
               startY.current = null;
+            }}
+            // `pointercancel` (not `pointerup`) is what iOS Safari actually
+            // fires for a vertical drag here — see AlbumSwipe's own comment
+            // on `lastPt` below for the full explanation. No tap/double-tap
+            // fallback: a cancelled gesture was never a clean tap.
+            onPointerCancel={() => {
+              const start = startY.current;
+              startY.current = null;
+              if (start !== null && lastPt.current && lastPt.current.y - start > 90) onClose();
             }}
           >
             {/* Always object-contain — tapping a photo to "view" it must show
                 the WHOLE picture, never a cropped fill. (An earlier full-bleed
                 object-cover rule cropped near-screen-aspect photos, so the
                 edges were cut off — it read as "the picture doesn't show
-                full".) A blurred backdrop still fills the letterbox space. */}
+                full".) A blurred backdrop still fills the letterbox space.
+                `aspectRatio` (seeded from stored dims, refined on load) gives
+                the box a definite shape from the first paint instead of
+                waiting on decode — the fix for "is not full screen". */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={src}
               alt={title}
-              className="max-h-full max-w-full select-none object-contain"
+              style={ratio ? { aspectRatio: ratio } : undefined}
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                if (measuredRatio === null && img.naturalWidth && img.naturalHeight) {
+                  setMeasuredRatio(clampFeedRatio(img.naturalWidth, img.naturalHeight));
+                }
+              }}
+              className="h-auto max-h-full w-auto max-w-full select-none object-contain"
               draggable={false}
             />
             {/* blurred fill behind the letterbox so a photo whose shape doesn't
@@ -690,6 +747,23 @@ function AlbumSwipe({
   // browser's connection cap. Only the tapped slide + its immediate
   // neighbours load at first; more unlock (and stay unlocked) as you swipe.
   const [unlocked, setUnlocked] = useState<Set<number>>(() => new Set([startIndex - 1, startIndex, startIndex + 1].filter((i) => i >= 0 && i < items.length)));
+  // Per-slide true aspect ratio — seeded from each item's own stored
+  // `width`/`height` (already populated by the feed's post-creation
+  // pipelines, same source `reel-viewer.tsx`'s own album handling already
+  // reads) and refined once that slide's real `<img>`/`<video>` reports its
+  // natural size. This component was the one media surface in the codebase
+  // that never sized its slides at all — no `aspectRatio`, no `object-fit`
+  // target to letterbox against — so a slide had nothing but its own raw
+  // intrinsic size (0×0, or a `<video>`'s ~300×150 browser default, before
+  // metadata loads) to render at. That's the concrete gap behind "the multi
+  // image still moves and doesn't cover the whole screen edge to edge".
+  const [measuredRatios, setMeasuredRatios] = useState<Record<number, number>>({});
+  const ratioFor = (i: number, m: NonNullable<FeedItem["mediaItems"]>[number]) => measuredRatios[i] ?? clampFeedRatio(m.width, m.height) ?? undefined;
+  const onMediaMeasured = (i: number, w: number, h: number) => {
+    if (measuredRatios[i] !== undefined) return;
+    const r = clampFeedRatio(w, h);
+    if (r) setMeasuredRatios((prev) => ({ ...prev, [i]: r }));
+  };
   useEffect(() => {
     setUnlocked((prev) => {
       if (prev.has(index) && prev.has(Math.max(0, index - 1)) && prev.has(Math.min(items.length - 1, index + 1))) return prev;
@@ -827,7 +901,12 @@ function AlbumSwipe({
                       loop
                       playsInline
                       preload={Math.abs(i - index) <= 1 ? "auto" : "metadata"}
-                      className="relative max-h-full max-w-full select-none object-contain"
+                      style={{ aspectRatio: ratioFor(i, m) }}
+                      onLoadedMetadata={(e) => {
+                        const v = e.currentTarget;
+                        if (v.videoWidth && v.videoHeight) onMediaMeasured(i, v.videoWidth, v.videoHeight);
+                      }}
+                      className="relative h-auto max-h-full w-auto max-w-full select-none object-contain"
                       ref={(el) => {
                         if (!el) return;
                         // Autoplay only while this slide is the active one.
@@ -837,7 +916,18 @@ function AlbumSwipe({
                     />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={m.url} alt="" draggable={false} loading="eager" className="relative max-h-full max-w-full select-none object-contain" />
+                    <img
+                      src={m.url}
+                      alt=""
+                      draggable={false}
+                      loading="eager"
+                      style={{ aspectRatio: ratioFor(i, m) }}
+                      onLoad={(e) => {
+                        const img = e.currentTarget;
+                        if (img.naturalWidth && img.naturalHeight) onMediaMeasured(i, img.naturalWidth, img.naturalHeight);
+                      }}
+                      className="relative h-auto max-h-full w-auto max-w-full select-none object-contain"
+                    />
                   )}
                 </>
               )}

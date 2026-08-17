@@ -277,7 +277,21 @@ export function ReelProgress({
           // 20px interactive row around a 3px visual — see the note on WCAG
           // 2.5.8. `touch-none` so a horizontal drag seeks instead of the deck
           // interpreting it as a swipe.
-          "group/seek relative flex items-center outline-none",
+          //
+          // 🔴 `items-end`, not `items-center` (owner, 2026-08-17, a FOURTH
+          // time on this exact pair: "the progress bar is too upwards, it
+          // needs to sit at the close top of the bottom nav"). The anchor
+          // (REEL_PROGRESS_BOTTOM in reel-viewer.tsx, 4.75rem) already sits
+          // flush with the nav's own top edge — that part was never the
+          // problem. What WAS the problem: this row is a 20px touch target
+          // (WCAG 2.5.8) around a 3px visual, and centering the visual
+          // inside it put the actual bar ~8px ABOVE the anchor, with the
+          // other ~9px of invisible padding wasted BELOW it, against
+          // nothing. Bottom-aligning the visual keeps the full 20px touch
+          // target (nothing shrinks, nothing gets harder to hit) while
+          // moving the VISIBLE bar itself down to the anchor — i.e. flush
+          // with the nav — instead of floating above it.
+          "group/seek relative flex items-end outline-none",
           canSeek ? "h-5 cursor-pointer touch-none" : "h-2",
           "focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-0",
         )}

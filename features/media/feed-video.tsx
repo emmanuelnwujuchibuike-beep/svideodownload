@@ -325,16 +325,22 @@ export function FeedVideo({
         "group relative mx-auto overflow-hidden rounded-2xl bg-black",
         // Twitter-style: full width, the media's OWN true aspect ratio — a
         // HEIGHT ceiling, never a ratio clamp, so it can't disagree with the
-        // clip's true shape (no letterboxing/cropping). SETTLED 2026-08-17
-        // after a same-day tightening (70vh→45vh) turned out to shrink WIDTH
-        // for portrait clips too (the two are locked together under
-        // object-contain) — the owner wanted width preserved over height
-        // compactness: "increase the width… reach the extreme end of the
-        // right side… dont crop tall image or video". 85vh is a genuine
-        // last-resort ceiling now, not a routine lever — it essentially
-        // never triggers for realistic phone-shot content, only truly
-        // pathological uploads.
-        "max-h-[85vh] lg:flex lg:!aspect-auto lg:max-h-[82vh] lg:items-center lg:justify-center",
+        // clip's true shape (no letterboxing/cropping). A same-day tightening
+        // to 45vh (2026-08-17) had shrunk WIDTH too, but that was because
+        // width and height were still locked together at the time (a plain
+        // `w-full` on the CALLER fighting this box's own sizing — see
+        // feed-post-card.tsx). That coupling is gone now: this wrapper is a
+        // normal in-flow block box, so its width comes from the normal block
+        // layout algorithm regardless of what `max-h` does to its height —
+        // `aspect-ratio` only ever supplies the auto dimension (height) here,
+        // never re-derives width once max-height clamps it. Confirmed before
+        // lowering this a second time (owner, 2026-08-17: "reduce the length
+        // of 16:9 videos in feed card but don't reduce the width, the width
+        // must be fixed or wider") — a tall/portrait clip now genuinely gets
+        // shorter without losing an inch of width; the space this removes
+        // from the top/bottom is picked up by the blurred backdrop below,
+        // same as any other letterboxed shape.
+        "max-h-[60vh] lg:flex lg:!aspect-auto lg:max-h-[60vh] lg:items-center lg:justify-center",
         className,
       )}
     >
@@ -393,7 +399,7 @@ export function FeedVideo({
           the page whose stillness is load-bearing, and the pause indicator
           already gives the gesture unambiguous feedback.
         */
-        className="h-full max-h-[85vh] w-full touch-pan-y object-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset lg:h-auto lg:max-h-[82vh] lg:w-auto"
+        className="h-full max-h-[60vh] w-full touch-pan-y object-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset lg:h-auto lg:max-h-[60vh] lg:w-auto"
         // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
         // open media") — purely additive: Enter/Space opens directly,
         // bypassing the tap/double-tap/hold pointer state machine above

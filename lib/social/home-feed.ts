@@ -766,7 +766,19 @@ async function loadHomeFeed(
       // Opt-outs are hidden from discovery, but a creator you follow can still appear.
       if (optedOut.has(r.publisher_id) && !followingSet.has(r.publisher_id) && r.publisher_id !== viewerId) continue;
       const n = perPublisher.get(r.publisher_id) ?? 0;
-      if (n >= diversityCap) continue;
+      // 🔴 THE VIEWER'S OWN POSTS ARE NEVER CAPPED (owner, 2026-08-17: "many
+      // images and videos i uploaded are not showing in feed, all should
+      // show completely"). `diversityCap` defaults to 2 (lib/social/feed.ts)
+      // and applies uniformly to every publisher in the ranked window,
+      // including the viewer themselves — once there are more than 8 active
+      // publishers, a viewer who has posted 10 times would see at most 2 of
+      // THEIR OWN uploads, ever, for that refresh, with no way to reach the
+      // other 8 by scrolling (the cap is applied once to the whole 400-row
+      // window before pagination slices it, not per-page). The diversity cap
+      // itself stays intact for every OTHER publisher — it exists to stop
+      // one creator from flooding a viewer's feed, and that's still correct
+      // for content that isn't the viewer's own.
+      if (n >= diversityCap && r.publisher_id !== viewerId) continue;
       perPublisher.set(r.publisher_id, n + 1);
 
       const prof = profById.get(r.publisher_id);

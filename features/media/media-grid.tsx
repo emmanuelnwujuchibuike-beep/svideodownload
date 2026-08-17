@@ -157,9 +157,16 @@ function GridCell({
           <Play className="h-3 w-3 fill-white text-white" />
         </span>
       ) : null}
+      {/*
+        🔴 A "+" SIGN AND "SEE MORE", TOGETHER (owner, 2026-08-17: "it should
+        show a + sign and a see more next to it on the fourth image"). A bare
+        "+N" number alone was under-specifying it — both elements are the
+        ask, not just the count.
+      */}
       {overlayCount !== null ? (
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/55 text-xl font-bold text-white">
-          +{overlayCount}
+        <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/60 text-white">
+          <span className="text-2xl font-bold leading-none">+{overlayCount}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-white/85">See more</span>
         </span>
       ) : null}
       <AnimatePresence>

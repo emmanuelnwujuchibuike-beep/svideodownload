@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { collectPhotos, declaredSize, mergePhotos, photoIdOf } from "./facebook";
+import {
+  collectPhotos,
+  collectStoryVideoUrls,
+  declaredSize,
+  isStoryPath,
+  mergePhotos,
+  photoIdOf,
+  tryStorySlides,
+} from "./facebook";
 
 /**
  * Facebook PHOTO posts (owner, 2026-08-09: "this is the facebook image link that
@@ -131,5 +139,128 @@ describe("mergePhotos — the two renders together", () => {
 
   it("gives up cleanly on a render with no media at all", () => {
     expect(mergePhotos([{ html: "<html><body>nothing here</body></html>" }])).toHaveLength(0);
+  });
+});
+
+/**
+ * Facebook STORIES — fetch every slide, like Snapchat (owner, 2026-08-17:
+ * "facebook story is suppose to fetch all the posts in the story like
+ * snapchat and not just single").
+ *
+ * ── Why these fixtures are INVENTED, unlike the photo-post ones above ──────
+ * This file's own convention is real, captured renders — not possible here.
+ * A real Facebook Story requires a logged-in session to view at all
+ * (confirmed 2026-08-17 against a real owner-supplied link: every
+ * unauthenticated UA this extractor uses redirected straight to Facebook's
+ * login page), and asking the owner for their session cookies is exactly
+ * what this codebase's own security posture rules out. So these fixtures
+ * repeat the `playable_url`/`playable_url_quality_hd`/fbcdn patterns that
+ * ARE independently confirmed real elsewhere in this file (buildFormats,
+ * collectPhotos above), multiple times, to verify the PARSING LOGIC is
+ * correct if a real authenticated page ever does hydrate more than one
+ * slide's worth of them. They do NOT verify that Facebook's real story
+ * page actually contains more than one — that remains unverified, see the
+ * long comment on `tryStorySlides` in facebook.ts.
+ */
+const STORY_URL = "https://www.facebook.com/stories/122098061367170758/UzpfSVNDOjIxMDU2MzMxNzcwMDY2MDU=/";
+const ORDINARY_POST_URL = "https://www.facebook.com/watch/?v=1234567890";
+
+describe("isStoryPath", () => {
+  it("matches the real share-link shape", () => {
+    expect(isStoryPath(new URL(STORY_URL).pathname)).toBe(true);
+  });
+  it("does not match an ordinary post/watch/reel path", () => {
+    expect(isStoryPath("/watch/")).toBe(false);
+    expect(isStoryPath("/reel/123456/")).toBe(false);
+    expect(isStoryPath("/someuser/videos/123456/")).toBe(false);
+  });
+});
+
+describe("collectStoryVideoUrls", () => {
+  it("counts an ordinary single video's hd+sd pair as ONE slide, not two", () => {
+    const html = `{"playable_url":"https:\\/\\/video.fbcdn.net\\/sd.mp4","playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/hd.mp4"}`;
+    const found = collectStoryVideoUrls(html);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.url).toContain("hd.mp4");
+  });
+
+  it("finds one slide per DISTINCT hd url when several are present", () => {
+    const html = [
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/slide1.mp4"}`,
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/slide2.mp4"}`,
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/slide3.mp4"}`,
+    ].join(",");
+    const found = collectStoryVideoUrls(html);
+    expect(found.map((f) => f.url)).toEqual([
+      "https://video.fbcdn.net/slide1.mp4",
+      "https://video.fbcdn.net/slide2.mp4",
+      "https://video.fbcdn.net/slide3.mp4",
+    ]);
+  });
+
+  it("falls back to SD urls only when NO hd url exists anywhere in the page", () => {
+    const html = `{"playable_url":"https:\\/\\/video.fbcdn.net\\/only-sd.mp4"}`;
+    const found = collectStoryVideoUrls(html);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.url).toContain("only-sd.mp4");
+  });
+
+  it("never mixes hd and sd counting — sd is ignored entirely once any hd exists", () => {
+    const html = [
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/slide1-hd.mp4"}`,
+      `{"playable_url":"https:\\/\\/video.fbcdn.net\\/slide2-sd-only.mp4"}`,
+    ].join(",");
+    // slide2 has no hd counterpart, so the conservative rule (documented on
+    // collectStoryVideoUrls) misses it rather than risk double-counting.
+    const found = collectStoryVideoUrls(html);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.url).toContain("slide1-hd.mp4");
+  });
+});
+
+describe("tryStorySlides", () => {
+  it("returns null for a non-story URL even with multiple video urls present", () => {
+    const html = [
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/a.mp4"}`,
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/b.mp4"}`,
+    ].join(",");
+    expect(tryStorySlides(ORDINARY_POST_URL, [html])).toBeNull();
+  });
+
+  it("returns null when the story page only ever embeds ONE slide (the safe, unchanged fallback)", () => {
+    const html = `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/only-one.mp4"}`;
+    expect(tryStorySlides(STORY_URL, [html])).toBeNull();
+  });
+
+  it("returns every slide, each flagged isSeparateItem, when the page embeds several", () => {
+    const html = [
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/s1.mp4"}`,
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/s2.mp4"}`,
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/s3.mp4"}`,
+    ].join(",");
+    const formats = tryStorySlides(STORY_URL, [html]);
+    expect(formats).toHaveLength(3);
+    expect(formats?.every((f) => f.isSeparateItem === true)).toBe(true);
+    expect(formats?.every((f) => f.kind === "video")).toBe(true);
+  });
+
+  it("merges video AND photo slides across multiple renders, deduping repeats", () => {
+    const videoHtml = [
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/s1.mp4"}`,
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/s2.mp4"}`,
+    ].join(",");
+    const photoHtml = `<img src="https://scontent.fna.fbcdn.net/v/t39.30808-6/111111_222222_333333_n.jpg?stp=dst-jpg" />`;
+    // Same video render repeated (as if two UAs hydrated the same tray) must
+    // not double the count.
+    const formats = tryStorySlides(STORY_URL, [videoHtml, videoHtml, photoHtml]);
+    expect(formats).toHaveLength(3); // 2 distinct videos + 1 photo, not 4
+    expect(formats?.filter((f) => f.kind === "video")).toHaveLength(2);
+    expect(formats?.filter((f) => f.kind === "image")).toHaveLength(1);
+    expect(formats?.every((f) => f.isSeparateItem === true)).toBe(true);
+  });
+
+  it("never throws on a malformed URL", () => {
+    expect(() => tryStorySlides("not a url", ["<html></html>"])).not.toThrow();
+    expect(tryStorySlides("not a url", ["<html></html>"])).toBeNull();
   });
 });

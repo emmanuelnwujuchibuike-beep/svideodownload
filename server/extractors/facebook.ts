@@ -196,7 +196,7 @@ export function collectPhotos(html: string): PhotoCandidate[] {
   return out;
 }
 
-function toImageFormat(c: PhotoCandidate, index: number, total: number): MediaFormat {
+function toImageFormat(c: PhotoCandidate, index: number, total: number, isSeparateItem?: boolean): MediaFormat {
   const tier = sizeTier(c.size);
   const name = total > 1 ? `Photo ${index + 1}` : "Photo";
   return {
@@ -216,6 +216,11 @@ function toImageFormat(c: PhotoCandidate, index: number, total: number): MediaFo
     directUrl: c.url,
     // scontent refuses requests without a browser UA and a facebook referer.
     httpHeaders: { "User-Agent": DESKTOP_UA, Referer: "https://www.facebook.com/" },
+    // Multi-photo POSTS rely on the "more than one image format" fallback
+    // (see the type's own doc) and never needed this. A STORY tray can mix
+    // photo and video slides, which that fallback doesn't cover — see
+    // `tryStoryExtract` below.
+    ...(isSeparateItem ? { isSeparateItem: true } : {}),
   };
 }
 
@@ -268,6 +273,153 @@ async function render(url: string, ua: string, signal: AbortSignal): Promise<str
   }
 }
 
+/*
+  ═══════════════════════════════════════════════════════════════════════════
+   FACEBOOK STORIES — fetch every slide, like Snapchat (owner, 2026-08-17)
+  ═══════════════════════════════════════════════════════════════════════════
+
+  "facebook story is suppose to fetch all the posts in the story like
+  snapchat and not just single".
+
+  ── Two hard facts this is built around, both measured directly ───────────
+
+  1. A Facebook Story is NOT publicly viewable. Fetching a real story link
+     (owner-supplied, 2026-08-17) with every UA this file already uses —
+     desktop, crawler, mobile — redirected straight to Facebook's login page
+     for all three; zero story content came back unauthenticated. This is
+     Facebook's own restriction, not a bug here. `extractorFetch` already
+     attaches YTDLP_COOKIES automatically for any facebook.com/
+     web.facebook.com request (cookies.ts), so this extraction goes exactly
+     as far as a real, currently-valid logged-in session lets it, and simply
+     finds nothing beyond that — never an error the caller can't recover
+     from (see the fallback below).
+
+  2. The share link's own id (e.g. `UzpfSVNDOjIxMDU2MzMxNzcwMDY2MDU=` in
+     `/stories/<actorId>/<storyId>/`) points at ONE specific slide, not "the
+     whole story" — unlike a Snapchat story link, which already represents
+     the full multi-snap sequence as one unit. Facebook exposes no public
+     API this app can call to ask for a user's whole active tray, and
+     guessing at Facebook's internal GraphQL doc_ids (they rotate per
+     release and aren't discoverable without live access) would almost
+     certainly break on the first Facebook deploy.
+
+  ── The approach, and why it's safe even though it's unverified ───────────
+
+  Instead of naming a specific JSON field for "the tray" (which would need
+  to be guessed, and Facebook's exact hydration key names are known from
+  `collectPhotos` above to shift between renders anyway), this scrapes EVERY
+  distinct video/photo URL the authenticated page embeds — the same
+  resilient technique `collectPhotos` already uses for multi-photo posts,
+  for the same reason: a web app cannot offer "swipe to the next slide"
+  without embedding every slide's real, playable media URL SOMEWHERE in its
+  payload. So:
+
+    · If the authenticated render hydrates the WHOLE bucket (needed for
+      smooth swipe navigation, and plausible but not confirmed against real
+      data), this finds every slide.
+    · If it only ever embeds the ONE requested slide, this safely finds
+      exactly one, `tryStoryExtract` returns null, and the caller's existing
+      single-item path runs completely unchanged — today's behaviour,
+      exactly as before.
+
+  Either way this can only ADD a capability, never regress the one that
+  already exists. This has not been verified against a real authenticated
+  fetch — genuinely can't be, without live Facebook credentials this app
+  should never ask for — so treat "returns more than one slide" as the
+  signal that it's working, and "always exactly one" as the signal that
+  Facebook's real render doesn't hydrate the full tray and a different
+  approach (visiting the poster's story ring separately) would be needed.
+*/
+
+/** `/stories/<actorId>/<storyId>/...` — the share-link shape for one slide. */
+export function isStoryPath(pathname: string): boolean {
+  return /^\/stories\/\d+\//.test(pathname);
+}
+
+/**
+ * Every distinct VIDEO url the page declares, in source order. HD fields are
+ * preferred and, when any exist, SD fields are skipped entirely — an
+ * ordinary single video post declares BOTH an hd and an sd URL for the SAME
+ * video, and counting both would misread one slide as two. The trade-off
+ * (a story slide with only an SD stream is missed if ANY other slide has
+ * HD) is the safer failure mode: undercounting loses a slide, overcounting
+ * would corrupt every ordinary post's slide count.
+ */
+export function collectStoryVideoUrls(html: string): { url: string; pos: number }[] {
+  const out: { url: string; pos: number }[] = [];
+  const seen = new Set<string>();
+  const collect = (patterns: RegExp[]) => {
+    for (const re of patterns) {
+      for (const m of html.matchAll(re)) {
+        const url = unescapeJsonUrl(m[1]!);
+        if (!url.startsWith("http") || seen.has(url)) continue;
+        seen.add(url);
+        out.push({ url, pos: m.index ?? out.length });
+      }
+    }
+  };
+  collect([/"playable_url_quality_hd":"([^"]+)"/g, /"browser_native_hd_url":"([^"]+)"/g]);
+  if (out.length > 0) return out;
+  collect([/"playable_url":"([^"]+)"/g, /"browser_native_sd_url":"([^"]+)"/g]);
+  return out;
+}
+
+/**
+ * Attempts the full tray from renders the caller ALREADY fetched (no extra
+ * request) — returns null when it can't do better than the single item the
+ * caller's existing path already handles, so `extract()` only prefers this
+ * result when it genuinely found MORE than one slide.
+ */
+export function tryStorySlides(url: string, htmls: string[]): MediaFormat[] | null {
+  let pathname: string;
+  try {
+    pathname = new URL(url).pathname;
+  } catch {
+    return null;
+  }
+  if (!isStoryPath(pathname)) return null;
+
+  const videoUrls: { url: string; pos: number }[] = [];
+  const seenVideo = new Set<string>();
+  const photoCandidates: PhotoCandidate[] = [];
+  const seenPhoto = new Set<string>();
+  // Every render may have hydrated a different slice of the tray — merge
+  // across all of them, same reasoning as `mergePhotos` above.
+  for (const html of htmls) {
+    for (const v of collectStoryVideoUrls(html)) {
+      if (seenVideo.has(v.url)) continue;
+      seenVideo.add(v.url);
+      videoUrls.push(v);
+    }
+    for (const p of collectPhotos(html)) {
+      if (seenPhoto.has(p.url)) continue;
+      seenPhoto.add(p.url);
+      photoCandidates.push(p);
+    }
+  }
+  if (videoUrls.length + photoCandidates.length <= 1) return null;
+
+  const headers = { "User-Agent": DESKTOP_UA, Referer: "https://www.facebook.com/" };
+  const formats: MediaFormat[] = videoUrls.map((v, i) => ({
+    formatId: `fb-story-v${i}`,
+    kind: "video",
+    label: `Story video ${i + 1}`,
+    ext: "mp4",
+    resolution: null,
+    fps: null,
+    filesize: null,
+    tbr: null,
+    vcodec: "h264",
+    acodec: "aac",
+    directUrl: v.url,
+    httpHeaders: headers,
+    isSeparateItem: true,
+  }));
+  photoCandidates.forEach((p, i) => formats.push(toImageFormat(p, i, photoCandidates.length, true)));
+
+  return formats;
+}
+
 export const facebookExtractor: Extractor = {
   name: "facebook",
   canHandle(_url: string, platform: PlatformId) {
@@ -308,11 +460,18 @@ export const facebookExtractor: Extractor = {
       throw new ExtractionError("Facebook refused every request for this post");
     }
 
+    // Story tray FIRST — see the module doc above `tryStorySlides`. Only
+    // wins when it genuinely found more than the one slide the logic below
+    // would return anyway; otherwise falls straight through unchanged.
+    const storySlides = tryStorySlides(url, htmls);
+
     // Video from whichever render carried it; photos merged across all of them.
-    let formats: MediaFormat[] = [];
-    for (const html of htmls) {
-      formats = buildFormats(html);
-      if (formats.length > 0) break;
+    let formats: MediaFormat[] = storySlides ?? [];
+    if (formats.length === 0) {
+      for (const html of htmls) {
+        formats = buildFormats(html);
+        if (formats.length > 0) break;
+      }
     }
     if (formats.length === 0) {
       formats = mergePhotos(htmls.map((html) => ({ html })));
@@ -334,8 +493,16 @@ export const facebookExtractor: Extractor = {
       cannot. Try it here, before returning, and only keep the SD fallback if
       yt-dlp comes back empty or throws — a working low-quality download must
       never regress to no download at all.
+
+      Skipped entirely for a story tray (`storySlides`): yt-dlp has no
+      dedicated Facebook Story support (confirmed: `yt-dlp --list-extractors`
+      lists `facebook`/`facebook:reel`/`facebook:ads` but no `facebook:story`),
+      so it would return at most the SAME one slide this file's own
+      single-item path already finds — silently discarding every other
+      slide `tryStorySlides` worked to recover. A multi-slide result beats a
+      higher-bitrate single one here.
     */
-    if (formats[0]?.kind === "video" && !formats.some((f) => f.formatId === "fb-hd")) {
+    if (!storySlides && formats[0]?.kind === "video" && !formats.some((f) => f.formatId === "fb-hd")) {
       try {
         const yt = await ytdlpExtract(url);
         if (yt.formats.length > 0) return yt;

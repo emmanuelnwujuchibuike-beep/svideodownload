@@ -3,13 +3,27 @@
  *  HOW A CLIP IS FITTED TO THE SCREEN — one rule, in one place
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * This lived inline in `reel-viewer.tsx` and has been rewritten by three
- * different instructions from the owner. Each rewrite was correct about the
- * case in front of it and each one broke a case it was not looking at, which is
- * what a rule that cannot be tested does. It is a pure function now, with the
- * whole history as its specification.
+ * 🔴 REVERSED 2026-08-17 — a full "premium edge-to-edge media viewer" spec,
+ * with its own numbered acceptance tests, states as PRIORITY #1 (above even
+ * "maintain existing functionality"): "NEVER crop any part of the user's
+ * original media" — explicitly including a standard 9:16 clip (test 1:
+ * "9:16 portrait — Expected: FULL MEDIA VISIBLE, NO CROP, NO DISTORTION").
+ * This directly overrides the second instruction in the history below
+ * ("long views should reach the safe area at all cost"), which is the ONE
+ * documented case this file's whole three-instruction history exists to
+ * protect — flagged to the owner explicitly before this rewrite, who
+ * confirmed the new spec wins even for that case. `shouldFullBleed` now
+ * always returns false: nothing crops, ever, regardless of shape or how
+ * closely it matches the screen. The fit is `object-contain` unconditionally
+ * in `reel-viewer.tsx` now — see that file's own media-layer note for how
+ * the unused space is filled (a blurred backdrop, not a crop).
  *
- * ── The instructions, in order ─────────────────────────────────────────────
+ * The full three-instruction history is kept below, unedited, because it is
+ * still the reason a "never crop" rule this absolute needed confirming
+ * explicitly rather than assumed — the SAME product had an "at all cost"
+ * edge-to-edge instruction for this exact shape once already.
+ *
+ * ── The instructions, in order (superseded, kept for history) ──────────────
  *
  * 1. "make reels videos not to ever crop width when trying to go full edge to
  *    edge, only videos capable of full edge to edge should be full edge to
@@ -34,44 +48,40 @@
  *    route 1 either. What made it LOOK stretched was the letterbox treatment,
  *    not the fit: the bands behind it were filled with an overscanned, blurred
  *    copy of the same frame at 75% opacity, so the picture visibly ran to every
- *    edge of the screen. See `LETTERBOX` below.
+ *    edge of the screen. The 2026-08-17 spec's own background layer is the
+ *    same idea done correctly this time: the blur sits ONLY behind an honest,
+ *    uncropped foreground, never behind a foreground that's ALSO being zoomed
+ *    by `cover` — the two effects stacked is what actually read as "stretched"
+ *    before, not the blur alone.
  *
- * ── The rule ───────────────────────────────────────────────────────────────
+ * ── The rule (2026-08-17) ────────────────────────────────────────────────
  *
- *   fill the screen  ⟺  cropping ≤ 1.5%  OR  the clip is at least 9:16 tall
- *
- * The first arm is free: at 1.5% nothing meaningful is lost — a few pixels,
- * never a face, a caption or a subtitle. The second arm is the owner's "at all
- * cost", scoped to the shape that instruction is about.
+ *   fill the screen  ⟺  never. `shouldFullBleed` always returns false.
  */
 
 /**
  * A clip at or below this width ÷ height counts as a "long" vertical video.
- *
- * 9:16 is 0.5625, so this admits the standard reel shape and everything taller,
- * and excludes 2:3 (0.667), 3:4 (0.75), 4:5 (0.8), square and every landscape
- * shape. Those are the "shorter videos" that keep their own size.
+ * Kept only as a documented constant for `fit.test.ts`'s shape-boundary
+ * check — no longer read by `shouldFullBleed` itself.
  */
 export const TALL_CLIP_ASPECT = 0.6;
 
-/** The largest fraction `cover` may silently discard when the shapes nearly match. */
+/** No longer used by `shouldFullBleed` (nothing crops "for free" anymore) —
+ *  kept so any lingering import doesn't break; safe to remove once nothing
+ *  references it. */
 export const FREE_CROP = 0.015;
 
 /**
- * Should a clip of this shape fill the screen edge to edge?
+ * Should a clip of this shape fill the screen edge to edge (i.e. crop)?
  *
- * Both arguments are width ÷ height. Returns false for a degenerate size (a
- * `<video>` reports 0x0 until metadata arrives, and an unknown clip must never
- * be cropped on a guess).
+ * 🔴 Always false as of 2026-08-17 — see the file header. The parameters are
+ * kept (rather than deleting the function and touching every call site) so
+ * `reel-viewer.tsx` can still call this the same way; it just never says yes.
  */
 export function shouldFullBleed(clipAspect: number, screenAspect: number): boolean {
-  if (!Number.isFinite(clipAspect) || clipAspect <= 0) return false;
-  if (!Number.isFinite(screenAspect) || screenAspect <= 0) return false;
-  // The ACTUAL fraction `cover` would discard — the quantity the first
-  // instruction is about, which a ratio difference is not.
-  const cropped =
-    clipAspect > screenAspect ? 1 - screenAspect / clipAspect : 1 - clipAspect / screenAspect;
-  return cropped <= FREE_CROP || clipAspect <= TALL_CLIP_ASPECT;
+  void clipAspect;
+  void screenAspect;
+  return false;
 }
 
 /** Screen aspect for the current viewport. Callers in effects/handlers only. */

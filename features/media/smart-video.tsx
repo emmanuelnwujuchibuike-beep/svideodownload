@@ -1,5 +1,7 @@
 "use client";
 
+import type { CSSProperties } from "react";
+
 import { streamIframeUrl } from "@/lib/media/stream";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +20,7 @@ export function SmartVideo({
   loop,
   muted,
   className,
+  style,
 }: {
   streamUid?: string | null;
   src?: string | null;
@@ -27,6 +30,8 @@ export function SmartVideo({
   loop?: boolean;
   muted?: boolean;
   className?: string;
+  /** e.g. `{ aspectRatio: 9/16 }` — shapes the element/frame to the clip's true ratio. */
+  style?: CSSProperties;
 }) {
   if (streamUid) {
     const params = new URLSearchParams();
@@ -43,6 +48,7 @@ export function SmartVideo({
         loading="lazy"
         allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
         allowFullScreen
+        style={style}
         className={cn("h-full w-full border-0", className)}
       />
     );
@@ -59,7 +65,15 @@ export function SmartVideo({
       loop={loop}
       muted={muted || autoPlay}
       playsInline
-      className={cn("h-full w-full", className)}
+      // 🔴 `object-contain`, not the browser default `fill` (owner, 2026-08-17
+      // — never crop OR distort). `h-full w-full` with no `object-fit` at all
+      // stretches the clip to whatever box it's given, which is worse than
+      // cropping — the picture itself gets visibly warped. Callers that need
+      // a true-aspect box (not just "fits inside whatever space exists")
+      // should size the container with `aspectRatio` and pass that through
+      // `className`, same pattern as `reel-viewer.tsx`'s own native path.
+      style={style}
+      className={cn("h-full w-full object-contain", className)}
     />
   );
 }

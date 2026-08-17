@@ -63,8 +63,8 @@ import { createPortal } from "react-dom";
 import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design";
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
-import { shouldFullBleed, viewportAspect } from "@/features/reels/viewer/fit";
 import { LivingPlayback } from "@/features/reels/viewer/living-playback";
+import { clampFeedRatio } from "@/lib/media/aspect";
 import {
   applyRate,
   DEFAULT_RATE,
@@ -145,27 +145,33 @@ interface CommentsData {
 }
 
 /**
- * ── 🔴 THE LETTERBOX IS BLACK (owner, 2026-08-11) ──────────────────────────
+ * ── 🔴 THE LETTERBOX HAS A BLURRED BACKDROP AGAIN (owner, 2026-08-17) ───────
  *
+ * A full "premium edge-to-edge media viewer" spec makes "never crop any part
+ * of the user's original media" priority #1 — see `features/reels/viewer/
+ * fit.ts`'s header for the full history, including that this reverses an
+ * explicit "long views should reach the safe area at all cost" instruction
+ * for the standard 9:16 shape, confirmed with the owner before this rewrite.
+ * `shouldFullBleed` is gone; nothing crops anymore, on any shape, on any
+ * screen — the foreground is ALWAYS `object-contain`.
+ *
+ * The 2026-08-11 note directly below explains why a blurred backdrop was
+ * removed once already — a SQUARE clip on a tall phone reportedly looked
+ * "stretched". That blur sat behind a foreground that was ALSO sometimes
+ * cropped by `cover` (route 2/3 in the old fit rule) — the two effects
+ * compounding is what actually read as stretching, not the blur alone. This
+ * time the foreground never crops, so the same failure mode shouldn't recur;
+ * flagged here explicitly since it's the reason this exact pattern was tried
+ * and reversed once before on this same product.
+ *
+ * ── 2026-08-11 note (superseded, kept for context) ──────────────────────────
  * "even square short videos in reels are also stretching, i said only long
- * videos."
- *
- * The FIT was already correct — `shouldFullBleed` refuses a square clip on every
- * screen, and there is a test for it. What made square clips LOOK stretched was
- * what filled the bands around them: an overscanned, blurred copy of the same
- * frame at 75% opacity. On a 9:16 clip that band is a thin sliver and reads as
- * the picture's own colour bleeding past its edge, which is what it was added
- * for. On a SQUARE clip on a 0.46 phone the bands are 54% OF THE SCREEN — so
- * most of what you see is a giant zoomed copy of the video, and the clip reads
- * as filling the screen. Exactly the thing being reported.
- *
- * That filler also has no job left. It existed to make a 9:16 clip look like it
- * reached the safe area; 9:16 now genuinely DOES reach it, by covering. The only
- * clips that still letterbox are the ones the owner wants to "show their
- * respective size", and a magnified copy of the frame is the opposite of that.
- *
- * So the ground is plain black — the classic letterbox, and the only treatment
- * under which a square video reads as a square video.
+ * videos." The FIT was already correct — `shouldFullBleed` refused a square
+ * clip on every screen. What made it LOOK stretched was what filled the
+ * bands around it: an overscanned, blurred copy of the same frame at 75%
+ * opacity, so on a square clip on a 0.46 phone the bands were 54% of the
+ * screen — mostly a giant zoomed copy of the video, and a foreground that
+ * was ALSO being zoomed by `cover` on the shapes that qualified for it.
  */
 const LETTERBOX = "bg-black";
 
@@ -710,13 +716,19 @@ function ReelCard({
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
   const [buffering, setBuffering] = useState(false);
-  // Whether this clip fills the screen. `shouldFullBleed` owns the rule and the
-  // reasoning; this is just where the answer is remembered once metadata lands.
-  const [fullBleed, setFullBleed] = useState(false);
-  // The same question answered EARLIER, from the poster image's natural size, so
-  // the cover under the video is already the right shape before metadata
-  // arrives and there is no letterbox-to-full-bleed pop on entry.
-  const [posterBleed, setPosterBleed] = useState(false);
+  /*
+    🔴 REPLACES `fullBleed`/`posterBleed` (owner, 2026-08-17 — never crop).
+    The clip's TRUE aspect ratio, measured from either the poster image's own
+    natural size or the video's `videoWidth`/`videoHeight` once metadata
+    arrives — whichever resolves first. Seeded from stored `mediaWidth`/
+    `mediaHeight` when the server knows them (see `ratio` below, computed
+    once `slide`/`albumVideos` are in scope), so the box is already the
+    right shape on the FIRST paint instead of guessing and correcting later
+    — the exact "wrong size then resize" flash the owner reported and fixed
+    for Feed's own inline video/image this same day. Reset on every slide
+    change (an album's items can each have their own shape).
+  */
+  const [measuredRatio, setMeasuredRatio] = useState<number | null>(null);
   // Latch so a LOOPING reel reports its completion once, not every pass.
   const completionCounted = useRef(false);
   /*
@@ -879,6 +891,20 @@ function ReelCard({
   const slidePoster = isAlbum ? (albumVideos[slide]?.thumbnailUrl ?? item.thumbnailUrl) : item.thumbnailUrl;
   // Per-slide resume key (slide 0 keeps the plain post id).
   const playbackKey = isAlbum && slide > 0 ? `${item.id}#${slide}` : item.id;
+
+  // Stored dims for the CURRENT slide, when the server knows them — album
+  // items carry their own width/height, same as a single-media reel's
+  // top-level mediaWidth/mediaHeight (see the FeedItem type). Seeds `ratio`
+  // below so the box is already the right shape before a single byte of
+  // poster/video has loaded.
+  const seedRatio = clampFeedRatio(
+    isAlbum ? albumVideos[slide]?.width : item.mediaWidth,
+    isAlbum ? albumVideos[slide]?.height : item.mediaHeight,
+  );
+  // An album slide can be a totally different shape from the last one — the
+  // measured ratio must not carry over when the slide changes.
+  useEffect(() => setMeasuredRatio(null), [slide]);
+  const ratio = measuredRatio ?? seedRatio;
 
   // Client-only read (localStorage) after mount — avoids an SSR/CSR mismatch.
   useEffect(() => {
@@ -1536,30 +1562,33 @@ function ReelCard({
 
   return (
     <>
-      {/* Cover — always painted underneath so a snapped-in reel never flashes black.
-          The clip shows at its TRUE aspect (object-contain — nothing ever cropped);
-          the blurred backdrop fills whatever the letterbox leaves. */}
+      {/* Cover — always painted underneath so a snapped-in reel never flashes black. */}
       {slidePoster ? (
         /*
           The cover, painted underneath so a snapped-in reel never flashes black.
 
-          🔴 ONE layer on a black ground — see LETTERBOX for why the blurred,
-          overscanned second copy is gone.
-
-          It also fits the SAME WAY the video will: `posterBleed` runs the poster
-          image's own natural size through `shouldFullBleed`, the identical rule
-          the <video> uses on its metadata. Without that the cover was always
-          `contain` and a 9:16 clip showed letterboxed for a moment and then
-          popped to full bleed the instant metadata arrived. The poster is a
-          frame OF the clip, so its shape is the clip's shape and the guess is
-          exact.
+          🔴 TWO layers now (owner, 2026-08-17 — never crop): a blurred,
+          scaled `object-cover` backdrop fills the WHOLE section regardless of
+          the picture's own shape, and the real, uncropped picture sits on top
+          of it at its TRUE aspect ratio (`object-contain`, seeded from
+          `ratio` above so it's already the right shape on the first paint —
+          no letterbox-then-pop). See LETTERBOX's own note for why a blurred
+          backdrop was removed once before and why this version shouldn't
+          repeat that problem (the foreground here never crops, unlike then).
 
           The CONTROLS stay out of the safe areas either way: the tabs, the
           close/••• buttons, the rail and the progress bar all pad themselves by
           `--frenz-safe-top` / `env(safe-area-inset-bottom)`. Only the picture
           goes under the notch and the home indicator, which is the ask.
         */
-        <div className={cn("absolute inset-0", LETTERBOX)}>
+        <div className={cn("absolute inset-0 flex items-center justify-center overflow-hidden", LETTERBOX)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={slidePoster}
+            alt=""
+            aria-hidden
+            className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
+          />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={slidePoster}
@@ -1567,16 +1596,14 @@ function ReelCard({
             aria-hidden
             loading="lazy"
             decoding="async"
+            style={ratio ? { aspectRatio: ratio } : undefined}
             onLoad={(e) => {
               const img = e.currentTarget;
-              if (img.naturalWidth && img.naturalHeight) {
-                setPosterBleed(shouldFullBleed(img.naturalWidth / img.naturalHeight, viewportAspect()));
+              if (measuredRatio === null && img.naturalWidth && img.naturalHeight) {
+                setMeasuredRatio(clampFeedRatio(img.naturalWidth, img.naturalHeight));
               }
             }}
-            className={cn(
-              "absolute inset-0 h-full w-full",
-              (fullBleed || posterBleed) ? "object-cover" : "object-contain",
-            )}
+            className="relative z-10 max-h-full max-w-full object-contain"
           />
         </div>
       ) : null}
@@ -1876,16 +1903,17 @@ function ReelCard({
               loop
               playsInline
               preload={preload}
-              // TikTok-style full bleed on phones: a clip shaped close to the
-              // screen COVERS it edge-to-edge (video runs under the status bar
-              // and home indicator — no letterbox slivers). Clearly different
-              // shapes (landscape/square) stay object-contain over the blurred
-              // backdrop so nothing meaningful is cut off. Desktop keeps the
-              // centered true-aspect column.
-              className={cn(
-                "relative z-10 h-full w-full lg:h-auto lg:max-h-full lg:w-auto lg:max-w-full lg:!object-contain",
-                fullBleed ? "object-cover" : "object-contain",
-              )}
+              // 🔴 NEVER crops, on any shape, on any screen (owner, 2026-08-17
+              // — see LETTERBOX's note above for the full history). Always
+              // `object-contain`, mobile and desktop alike — the old
+              // `fullBleed`-driven `cover` toggle for phone-shaped clips is
+              // gone. `aspectRatio` (from `ratio` above) sizes the element to
+              // its TRUE shape immediately, seeded from stored dimensions
+              // when known, so there's no letterbox-then-pop once metadata
+              // loads — the poster block's own blurred backdrop underneath
+              // fills whatever space this leaves.
+              style={ratio ? { aspectRatio: ratio } : undefined}
+              className="relative z-10 h-auto max-h-full w-auto max-w-full object-contain"
               onPlay={() => {
                 video.current && claimPlayback(video.current);
                 setBuffering(false);
@@ -1919,14 +1947,11 @@ function ReelCard({
               onLoadedMetadata={(e) => {
                 const v = e.currentTarget;
                 setDur(v.duration || 0);
-                if (v.videoWidth && v.videoHeight) {
-                  /*
-                    The fit rule and its whole history live in
-                    features/reels/viewer/fit.ts, next to the tests that pin
-                    every shape three separate owner instructions have been
-                    about — including the square clip that must NOT fill.
-                  */
-                  setFullBleed(shouldFullBleed(v.videoWidth / v.videoHeight, viewportAspect()));
+                // The element is the authority on the clip's real shape — a
+                // stored/poster-derived seed can be stale or slightly off,
+                // and by now we have the true thing.
+                if (measuredRatio === null && v.videoWidth && v.videoHeight) {
+                  setMeasuredRatio(clampFeedRatio(v.videoWidth, v.videoHeight));
                 }
                 // Resume where this reel last stopped (tab switch / reopen) —
                 // switching For You/Following continues, never restarts.
@@ -1959,7 +1984,21 @@ function ReelCard({
             />
           ) : null
         ) : (
-          <SmartVideo streamUid={item.streamUid} src={item.mediaUrl} poster={item.thumbnailUrl} controls autoPlay={isActive} loop className="relative z-10 max-h-full" />
+          // 🔴 Same true-aspect sizing as the native path above (owner,
+          // 2026-08-17 — never crop). For the Stream-iframe branch this
+          // shapes the FRAME correctly so Cloudflare's own player (which we
+          // can't reach inside a cross-origin iframe) has a correctly-shaped
+          // box to contain-fit within, rather than a generic full-bleed one.
+          <SmartVideo
+            streamUid={item.streamUid}
+            src={item.mediaUrl}
+            poster={item.thumbnailUrl}
+            controls
+            autoPlay={isActive}
+            loop
+            className="relative z-10 h-auto max-h-full w-auto max-w-full"
+            style={ratio ? { aspectRatio: ratio } : undefined}
+          />
         )}
 
         {/*
@@ -2790,26 +2829,34 @@ function AlbumNeighborPreview({
   thumbnailUrl: string | null;
 }) {
   const x = useTransform(dragX, (v) => v + direction * (typeof window !== "undefined" ? window.innerWidth : 0));
-  // Fitted by the SAME rule as the active card, from the poster's own natural
-  // size — a neighbour that letterboxes differently makes the ground behind the
-  // video visibly change halfway through the drag.
-  const [bleed, setBleed] = useState(false);
+  // 🔴 Never crops (owner, 2026-08-17) — same true-aspect + blurred-backdrop
+  // treatment as the active card, from the poster's own natural size, fitted
+  // by the SAME mechanism so the ground behind it doesn't visibly change
+  // shape halfway through the drag.
+  const [ratio, setRatio] = useState<number | null>(null);
   if (!thumbnailUrl) return null;
   return (
-    <motion.div className={cn("pointer-events-none absolute inset-0", LETTERBOX)} style={{ x }} aria-hidden>
+    <motion.div
+      className={cn("pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden", LETTERBOX)}
+      style={{ x }}
+      aria-hidden
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={thumbnailUrl} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={thumbnailUrl}
         alt=""
         loading="lazy"
         decoding="async"
+        style={ratio ? { aspectRatio: ratio } : undefined}
         onLoad={(e) => {
           const img = e.currentTarget;
           if (img.naturalWidth && img.naturalHeight) {
-            setBleed(shouldFullBleed(img.naturalWidth / img.naturalHeight, viewportAspect()));
+            setRatio(clampFeedRatio(img.naturalWidth, img.naturalHeight));
           }
         }}
-        className={cn("absolute inset-0 h-full w-full", bleed ? "object-cover" : "object-contain")}
+        className="relative z-10 max-h-full max-w-full object-contain"
       />
     </motion.div>
   );

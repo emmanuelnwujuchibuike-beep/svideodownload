@@ -10,13 +10,32 @@ import { detectPlatform } from "@/lib/platforms";
  *   APIFY_TOKEN          = <your token>
  *   APIFY_IG_ACTOR       = apify/instagram-scraper            (default)
  *   APIFY_THREADS_ACTOR  = futurizerush/meta-threads-scraper  (optional, for Threads)
+ *   APIFY_IG_STORY_ACTOR = <a dedicated Story-scraper actor>  (optional, for IG Stories)
  *
  * Dormant (returns null) when APIFY_TOKEN isn't set.
+ *
+ * ── Why Stories need a SEPARATE actor (owner, 2026-08-17) ───────────────────
+ * `APIFY_IG_ACTOR` (apify/instagram-scraper) has no Story support at all —
+ * confirmed against its own published input schema, which only offers
+ * Posts/Reels/Comments/Mentions/Details. This isn't a workaround for our own
+ * session being rejected by Instagram's private API for Stories (confirmed by
+ * reading yt-dlp's own InstagramStoryIE source: it hits the exact same
+ * i.instagram.com/api/v1 endpoint family our disabled custom extractor did,
+ * with no fallback the way ordinary-post extraction has) — it's a different
+ * actor entirely, e.g. `datavoyantlab/advanced-instagram-stories-scraper`,
+ * which needs no Instagram login of its own and returns data already shaped
+ * like Instagram's native API (media_type/image_versions2/video_versions),
+ * the same shape `server/extractors/instagram.ts`'s disabled extractor already
+ * has parsing logic for. No default actor id: unlike the posts actor, this is
+ * a separate paid subscription the owner has to consciously pick and enable,
+ * so it stays fully inert (falls through to yt-dlp's "log in required" error)
+ * until `APIFY_IG_STORY_ACTOR` is explicitly set.
  */
 
 const APIFY_TOKEN = process.env.APIFY_TOKEN?.trim().replace(/^["']|["']$/g, "");
 const APIFY_IG_ACTOR = (process.env.APIFY_IG_ACTOR || "apify/instagram-scraper").trim();
 const APIFY_THREADS_ACTOR = process.env.APIFY_THREADS_ACTOR?.trim();
+const APIFY_IG_STORY_ACTOR = process.env.APIFY_IG_STORY_ACTOR?.trim();
 const TIMEOUT_MS = Number(process.env.APIFY_TIMEOUT_MS || 120_000);
 // The Threads actor only fetches a user's RECENT posts (no per-URL lookup), so
 // we must pull enough to include the target. Higher = finds older posts but
@@ -100,6 +119,72 @@ function igFormats(item: IgItem): { formats: MediaFormat[]; thumb: string | null
     }
   });
   return { formats, thumb };
+}
+
+/* -------------------------- Instagram Stories -------------------------- */
+
+/**
+ * Shaped like Instagram's OWN native `api/v1` response (media_type/
+ * image_versions2/video_versions) — the dedicated Story actor returns data in
+ * this form rather than the flattened `videoUrl`/`displayUrl` shape
+ * `apify/instagram-scraper` uses for posts above. Deliberately the SAME field
+ * names `server/extractors/instagram.ts`'s disabled custom extractor already
+ * parses (`IgMedia`/`bestImage`), since both are describing the same
+ * upstream API shape.
+ *
+ * 🔴 `video_versions` is inferred by strong analogy (every other field was
+ * confirmed against the actor's published example output, which happened to
+ * show a photo story) — NOT independently confirmed. If a real video story
+ * comes back with zero formats where a photo one works fine, this is the
+ * first thing to check: hit `/api/admin/debug?igstory=<username>` and look at
+ * what key actually holds the video URL.
+ */
+interface IgStoryImageCandidate {
+  url?: string;
+  width?: number;
+}
+interface IgStoryVideoVersion {
+  url?: string;
+  width?: number;
+}
+interface IgStoryItem {
+  id?: string;
+  media_type?: number; // 1 = image, 2 = video
+  video_versions?: IgStoryVideoVersion[];
+  image_versions2?: { candidates?: IgStoryImageCandidate[] };
+  user?: { username?: string };
+  username?: string; // some actors flatten this to the top level instead
+  error?: string;
+}
+
+function bestStoryUrl(candidates: { url?: string; width?: number }[] | undefined): string | null {
+  const widest = (candidates ?? [])
+    .filter((c): c is { url: string; width?: number } => !!c.url?.startsWith("http"))
+    .sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0];
+  return widest?.url ?? null;
+}
+
+/** One MediaFormat per Story slide — mirrors `tryStorySlides` (Facebook) and
+ *  the yt-dlp playlist path (`mapPlaylistFormats` in ytdlp-service.ts):
+ *  every real slide is a SEPARATE downloadable item, not a quality ladder. */
+function igStoryFormats(items: IgStoryItem[]): MediaFormat[] {
+  const formats: MediaFormat[] = [];
+  items.forEach((item, i) => {
+    if (item.error) return;
+    const videoUrl = bestStoryUrl(item.video_versions);
+    if (videoUrl) {
+      formats.push({
+        formatId: `ig-story-${i}`, kind: "video", label: `Story ${i + 1}`, ext: "mp4",
+        resolution: null, fps: null, filesize: null, tbr: null,
+        vcodec: "h264", acodec: "aac", directUrl: videoUrl, httpHeaders: IMG_HEADERS,
+        isSeparateItem: true,
+      });
+      return;
+    }
+    const imgUrl = bestStoryUrl(item.image_versions2?.candidates);
+    if (imgUrl) formats.push({ ...imageFormat(`ig-story-${i}`, `Story ${i + 1}`, imgUrl), isSeparateItem: true });
+  });
+  return formats;
 }
 
 /* ------------------------------ Threads ------------------------------ */
@@ -225,14 +310,53 @@ export async function apifyExtract(url: string): Promise<VideoMetadata | null> {
   // Instagram
   /*
     🔴 Stories can't go through the "posts" path below (owner, 2026-08-17:
-    Story fetching "takes ages"). `resultsType: "posts"` + `directUrls` asks
-    the actor to resolve a POST, and a Story url is never one — every call
-    here was burning up to APIFY_TIMEOUT_MS (120s default) only to come back
-    empty, on EVERY Story fetch, stacked on top of whatever yt-dlp already
-    spent. Bail immediately instead; ytdlp-service.ts's canonicalizeUrl +
-    playlist handling is the real Story path now.
+    first "takes ages" — `resultsType: "posts"` + `directUrls` asks the actor
+    to resolve a POST, and a Story url is never one, so every call here just
+    burned up to APIFY_TIMEOUT_MS for nothing; then, once that timeout drain
+    was fixed, the REAL link still said "couldn't fetch" because Instagram
+    Stories need a dedicated actor — see the module doc above.
+
+    ytdlp-service.ts's canonicalizeUrl + playlist handling gets first crack at
+    a Story url (cheaper, tried before this function is even called — see
+    server/extractors/index.ts). This only runs at all once THAT has already
+    failed with yt-dlp's `login_required` (confirmed via yt-dlp's own
+    InstagramStoryIE source: it hits i.instagram.com/api/v1/feed/reels_media,
+    the same endpoint family our own session has never been able to use, with
+    no fallback the way ordinary posts have). A dedicated Story actor sidesteps
+    that wall entirely by not depending on our session at all.
   */
-  if (/\/stories\//i.test(url)) return null;
+  if (/\/stories\//i.test(url)) {
+    if (!APIFY_IG_STORY_ACTOR) return null; // no actor configured — stays inert
+    const m = url.match(/instagram\.com\/stories\/([^/?#]+)/i);
+    const username = m?.[1];
+    // Highlights are a curated collection identified by an id, not a live
+    // username tray — this actor (and canonicalizeUrl's tray-root rewrite)
+    // both assume "a username has a current story", which doesn't apply here.
+    if (!username || username === "highlights") return null;
+    const items = (await runActor(APIFY_IG_STORY_ACTOR, {
+      usernames: [username],
+    })) as IgStoryItem[] | null;
+    if (!items?.length) return null;
+    const formats = igStoryFormats(items);
+    if (formats.length === 0) return null;
+    return {
+      id: username,
+      platform: platform.id,
+      platformName: platform.name,
+      sourceUrl: url,
+      title: `${username}'s Instagram Story`,
+      description: null,
+      thumbnail: formats[0]?.directUrl ?? null,
+      durationSeconds: null,
+      creator: items[0]?.user?.username || items[0]?.username || username,
+      uploadDate: null,
+      viewCount: null,
+      likeCount: null,
+      webpageUrl: url,
+      formats,
+      extractor: "ytdlp",
+    };
+  }
 
   const items = (await runActor(APIFY_IG_ACTOR, {
     directUrls: [url],

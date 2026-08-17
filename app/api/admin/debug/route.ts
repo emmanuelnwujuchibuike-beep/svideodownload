@@ -155,6 +155,54 @@ export async function GET(request: Request) {
     }
   }
 
+  /*
+    Instagram Story actor diagnostic — separate from `apify=` above because
+    it's a DIFFERENT actor with a different (Instagram-native) output shape
+    (see the doc comment on APIFY_IG_STORY_ACTOR in apify-instagram.ts).
+    `?igstory=<username>` — bare username, not a full story URL, since that's
+    what the actor's own input schema takes. Surfaces the raw first item's
+    keys so a wrong field-name guess (video_versions in particular — inferred
+    by analogy, not confirmed against a real video story) can be caught and
+    fixed against real data instead of another blind guess.
+  */
+  const igStoryUsername = sp.get("igstory");
+  if (igStoryUsername) {
+    const token = process.env.APIFY_TOKEN?.trim().replace(/^["']|["']$/g, "");
+    const actorId = process.env.APIFY_IG_STORY_ACTOR?.trim();
+    if (!token) return NextResponse.json({ enabled: false, note: "APIFY_TOKEN not set on this service" });
+    if (!actorId) return NextResponse.json({ enabled: false, note: "APIFY_IG_STORY_ACTOR not set on this service" });
+    const actor = actorId.replace("/", "~");
+    try {
+      const r = await fetch(
+        `https://api.apify.com/v2/acts/${actor}/run-sync-get-dataset-items?token=${token}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ usernames: [igStoryUsername] }),
+          signal: AbortSignal.timeout(120000),
+        },
+      );
+      const body = await r.text();
+      let json: unknown = null;
+      try { json = JSON.parse(body); } catch { /* */ }
+      const arr = Array.isArray(json) ? (json as Record<string, unknown>[]) : null;
+      const first = arr?.[0] as Record<string, unknown> | undefined;
+      return NextResponse.json({
+        enabled: true,
+        actor: actorId,
+        status: r.status,
+        items: arr?.length ?? null,
+        firstItemKeys: first ? Object.keys(first).slice(0, 25) : null,
+        mediaType: first?.media_type ?? null,
+        hasVideoVersions: Array.isArray(first?.video_versions),
+        hasImageVersions2: !!first?.image_versions2,
+        snippet: arr ? null : body.slice(0, 400),
+      });
+    } catch (e) {
+      return NextResponse.json({ enabled: true, error: e instanceof Error ? e.message : "apify story actor failed" });
+    }
+  }
+
   const dl = sp.get("dl");
   if (dl) {
     const fmt = sp.get("fmt") || "best";

@@ -1576,6 +1576,17 @@ function ReelCard({
           backdrop was removed once before and why this version shouldn't
           repeat that problem (the foreground here never crops, unlike then).
 
+          Opacity 70%, not the Feed's own 30% — measured against the owner's
+          screenshot: the container itself IS genuinely edge-to-edge (deck,
+          section and card all measured exactly equal to the viewport, no
+          safe-area padding anywhere on the media), so what read as "black
+          space above/below" was this backdrop at too LOW an opacity on dark
+          footage (a tree canopy), not a structural gap. 70% roughly matches
+          the ORIGINAL, pre-2026-08-11 backdrop's own 75% — reads clearly as
+          a blurred continuation of the frame instead of flat black, on a
+          full-screen surface where it's far more prominent than the Feed's
+          small inline preview.
+
           The CONTROLS stay out of the safe areas either way: the tabs, the
           close/••• buttons, the rail and the progress bar all pad themselves by
           `--frenz-safe-top` / `env(safe-area-inset-bottom)`. Only the picture
@@ -1587,7 +1598,7 @@ function ReelCard({
             src={slidePoster}
             alt=""
             aria-hidden
-            className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
+            className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl"
           />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -2842,7 +2853,7 @@ function AlbumNeighborPreview({
       aria-hidden
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={thumbnailUrl} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
+      <img src={thumbnailUrl} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={thumbnailUrl}

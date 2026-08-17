@@ -42,8 +42,9 @@ import { PostEditSheet } from "@/features/social/post-edit-sheet";
 import { ReportSheet } from "@/features/social/report-sheet";
 import { toast } from "@/features/ui/toast";
 import { downloadPost } from "@/lib/media/download-post";
-import { clampFeedRatio } from "@/lib/media/aspect";
+import { clampFeedRatio, isReelsShaped } from "@/lib/media/aspect";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
+import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import type { CommentNode } from "@/lib/social/engagement";
@@ -131,12 +132,85 @@ function ImageStage({
   const [editOpen, setEditOpen] = useState(false);
   const [editReady, setEditReady] = useState(false);
   const lastTap = useRef(0);
-  const startY = useRef<number | null>(null);
-  // Last known pointer position DURING a drag — `pointercancel` (which iOS
-  // Safari fires far more often than `pointerup` for a vertical gesture, the
-  // same quirk documented on AlbumSwipe below) carries no coordinates of its
-  // own, so a cancelled gesture had nothing to evaluate a dismiss against.
-  const lastPt = useRef<{ x: number; y: number } | null>(null);
+  /*
+    ── DRAG-DOWN-TO-DISMISS, THE WALLPAPER-REELS WAY (owner, 2026-08-17: "the
+    drag down also doesnt work… i just want the drag down and view should be
+    like wallpaper reels… make the drag down and image fixed of the
+    wallpaper reel to be in the image viewer and multiple post") ───────────
+
+    The PREVIOUS version had two independent, differently-written dismiss
+    systems — one here (Pointer Events, `startY`/`onImgPointerUp`) for a
+    single photo, a completely separate one in `AlbumSwipe` (Pointer Events,
+    `startPt`/`maybeDismiss`) for an album — plus this component's own X-axis
+    horizontal scroll underneath the album's version. Two systems for one
+    gesture is exactly the kind of thing that silently fights itself, which
+    is the most likely reading of "the drag down also doesnt work."
+
+    `wallpaper-reels.tsx` has exactly ONE implementation of this gesture and
+    it demonstrably works, so it's reused verbatim rather than reinvented a
+    third time: real `touchstart`/`touchmove`/`touchend` (not Pointer
+    Events), a damped `dragY` that tracks the finger 1:1 at first and eases
+    off (`dy * 0.6`, capped at 260px) so it reads as resistance rather than a
+    free fall, applied as a `transform: translateY(...) scale(...)` on the
+    WHOLE viewer (not just the media) so the caption/rail move with it too —
+    that's the "image fixed" part of the ask: everything drags together as
+    one rigid sheet, nothing lags or drifts independently.
+
+    Lives at THIS level (not inside AlbumSwipe) so there is exactly one
+    source of truth regardless of whether the open item is a single photo or
+    an album — `AlbumSwipe` below no longer has any dismiss logic of its own
+    at all, only its native horizontal scroll and tap/double-tap.
+
+    Armed by axis, not by scroll position (wallpaper-reels arms only at
+    `scrollTop === 0` because ITS conflict is with vertical native scroll;
+    this viewer's conflict is with AlbumSwipe's HORIZONTAL native scroll
+    instead) — the first ~10px of movement is left unclassified, then a
+    clearly-vertical, clearly-downward drag commits to `dragY`; anything
+    more horizontal, or upward, is released back to the album's own native
+    pan-x scroll and never revisited for the rest of that touch.
+  */
+  const DISMISS_PX = 110;
+  const [dragY, setDragY] = useState(0);
+  const dragFrom = useRef<{ x: number; y: number } | null>(null);
+  const dragCommitted = useRef(false);
+  const onViewerTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) {
+      dragFrom.current = null;
+      return;
+    }
+    const t = e.touches[0]!;
+    dragFrom.current = { x: t.clientX, y: t.clientY };
+    dragCommitted.current = false;
+  };
+  const onViewerTouchMove = (e: React.TouchEvent) => {
+    const from = dragFrom.current;
+    if (!from) return;
+    const t = e.touches[0];
+    if (!t) return;
+    const dx = t.clientX - from.x;
+    const dy = t.clientY - from.y;
+    if (!dragCommitted.current) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      if (dy <= 0 || Math.abs(dy) <= Math.abs(dx)) {
+        dragFrom.current = null; // horizontal, or upward — not a dismiss drag
+        return;
+      }
+      dragCommitted.current = true;
+    }
+    setDragY(Math.min(dy * 0.6, 260));
+  };
+  const onViewerTouchEnd = () => {
+    dragFrom.current = null;
+    if (!dragCommitted.current) return;
+    dragCommitted.current = false;
+    setDragY((y) => {
+      if (y > DISMISS_PX) {
+        haptic("light");
+        onClose();
+      }
+      return 0;
+    });
+  };
   // The photo's true aspect ratio — seeded from the server's stored
   // dimensions (so the box is already the right shape before a single byte
   // of the full-res image has loaded) and refined once the actual `<img>`
@@ -150,6 +224,21 @@ function ImageStage({
   const [measuredRatio, setMeasuredRatio] = useState<number | null>(null);
   const seedRatio = clampFeedRatio(item.mediaWidth, item.mediaHeight);
   const ratio = measuredRatio ?? seedRatio;
+  /*
+    🔴 THE ONE EXCEPTION TO NEVER-CROP (owner, 2026-08-17): "16:9 should
+    reach full edge to edge, it can crop a little if necessary to reach
+    there but image size below 16:9 shouldnt crop… should stay full screen
+    with bottom nav." See `isReelsShaped` in lib/media/aspect.ts for the full
+    reasoning — only media at or beyond standard reels tallness (9:16 and
+    taller/narrower) gets the `wallpaper-reels.tsx`-style `object-cover`
+    treatment; everything else keeps the never-crop `object-contain` +
+    blurred backdrop exactly as shipped earlier the same day.
+  */
+  const tall = isReelsShaped(ratio);
+  const mediaFitClassName = tall
+    ? "h-full w-full select-none object-cover"
+    : "h-auto max-h-full w-auto max-w-full select-none object-contain";
+  const mediaFitStyle = tall ? undefined : ratio ? { aspectRatio: ratio } : undefined;
 
   useEffect(() => {
     // overflowY only (not the `overflow` shorthand) — the shorthand also resets
@@ -314,6 +403,18 @@ function ImageStage({
       role="dialog"
       aria-modal="true"
       aria-label="Photo"
+      onTouchStart={onViewerTouchStart}
+      onTouchMove={onViewerTouchMove}
+      onTouchEnd={onViewerTouchEnd}
+      style={{
+        transform: dragY ? `translateY(${dragY}px) scale(${1 - Math.min(dragY / 2200, 0.06)})` : undefined,
+        // No transition WHILE dragging (must track the finger exactly), one
+        // on release so it springs back instead of snapping — same recipe as
+        // wallpaper-reels.tsx.
+        transition: dragY ? "none" : "transform 220ms var(--ease-out)",
+        borderRadius: dragY ? "1.5rem" : undefined,
+        overflow: dragY ? "hidden" : undefined,
+      }}
     >
       {/* `lg:pr-24` reserves a real gutter on large screens so the action rail
           (below) never overlaps the comments sidebar — mirrors the reel
@@ -347,75 +448,45 @@ function ImageStage({
             onIndexChange={setSlide}
             onTap={() => setUi((v) => !v)}
             onDoubleTap={likeBurst}
-            onDismiss={onClose}
           />
         ) : (
           <div
-            className="absolute inset-0 flex items-center justify-center"
-            // 🔴 `touch-action: none` (owner, 2026-08-17: "Image viewer still
-            // move when I drag it… not only multiple post, all image").
-            // Without this, a vertical drag here was never actually claimed
-            // by our own pointer handlers — `document.body.style.overflowY =
-            // "hidden"` (above) stops normal scrolling but does NOT reliably
-            // stop iOS Safari's native rubber-band/bounce gesture on a touch
-            // that starts on an unconstrained element, so the photo could
-            // visibly move/bounce under a finger before our dismiss logic
-            // ever saw the gesture. `none`, not `pan-y`: unlike AlbumSwipe
-            // (which needs `pan-x` for its own horizontal slide), this photo
-            // never needs the browser to pan it in ANY direction — every
-            // gesture here is either a tap or our own dismiss-swipe.
-            style={{ touchAction: "none" }}
-            onPointerDown={(e) => {
-              startY.current = e.clientY;
-              lastPt.current = { x: e.clientX, y: e.clientY };
-            }}
-            onPointerMove={(e) => {
-              lastPt.current = { x: e.clientX, y: e.clientY };
-            }}
-            onPointerUp={(e) => {
-              if (startY.current !== null && e.clientY - startY.current > 90) onClose();
-              else onImgPointerUp(e);
-              startY.current = null;
-            }}
-            // `pointercancel` (not `pointerup`) is what iOS Safari actually
-            // fires for a vertical drag here — see AlbumSwipe's own comment
-            // on `lastPt` below for the full explanation. No tap/double-tap
-            // fallback: a cancelled gesture was never a clean tap.
-            onPointerCancel={() => {
-              const start = startY.current;
-              startY.current = null;
-              if (start !== null && lastPt.current && lastPt.current.y - start > 90) onClose();
-            }}
+            className={cn("absolute inset-0", !tall && "flex items-center justify-center")}
+            // Drag-to-dismiss lives on the OUTER wrapper now (see the note
+            // there) — this element only ever needs to recognise a tap /
+            // double-tap, never its own gesture-vs-scroll disambiguation.
+            onPointerUp={onImgPointerUp}
           >
-            {/* Always object-contain — tapping a photo to "view" it must show
-                the WHOLE picture, never a cropped fill. (An earlier full-bleed
-                object-cover rule cropped near-screen-aspect photos, so the
-                edges were cut off — it read as "the picture doesn't show
-                full".) A blurred backdrop still fills the letterbox space.
-                `aspectRatio` (seeded from stored dims, refined on load) gives
-                the box a definite shape from the first paint instead of
-                waiting on decode — the fix for "is not full screen". */}
+            {/* Below reels-tallness: always object-contain — the WHOLE
+                picture, never cropped. At or beyond reels-tallness: fills
+                edge to edge via object-cover, same as wallpaper-reels.tsx —
+                see `tall`/`isReelsShaped` above. `aspectRatio` (seeded from
+                stored dims, refined on load) gives the contained case a
+                definite shape from the first paint instead of waiting on
+                decode. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={src}
               alt={title}
-              style={ratio ? { aspectRatio: ratio } : undefined}
+              style={mediaFitStyle}
               onLoad={(e) => {
                 const img = e.currentTarget;
                 if (measuredRatio === null && img.naturalWidth && img.naturalHeight) {
                   setMeasuredRatio(clampFeedRatio(img.naturalWidth, img.naturalHeight));
                 }
               }}
-              className="h-auto max-h-full w-auto max-w-full select-none object-contain"
+              className={mediaFitClassName}
               draggable={false}
             />
-            {/* blurred fill behind the letterbox so a photo whose shape doesn't
-                match the screen never sits on plain black. 70%, not 30%
-                (owner, 2026-08-17, with a screenshot: the letterbox still
-                read as flat black rather than an obvious blur) — same fix,
-                same reasoning, as reel-viewer.tsx's own backdrop that day. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt="" aria-hidden className="pointer-events-none absolute inset-0 -z-10 h-full w-full scale-110 object-cover opacity-70 blur-2xl" />
+            {/* Blurred fill behind the letterbox — only meaningful when
+                there's letterbox space left to fill; a reels-shaped photo
+                above already covers the box completely on its own. 70%, not
+                30% (owner, 2026-08-17, with a screenshot: the letterbox
+                still read as flat black rather than an obvious blur). */}
+            {!tall ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={src} alt="" aria-hidden className="pointer-events-none absolute inset-0 -z-10 h-full w-full scale-110 object-cover opacity-70 blur-2xl" />
+            ) : null}
           </div>
         )}
 
@@ -678,11 +749,14 @@ const ALBUM_AUTO_SLIDE_MS = 3500;
  * the first), then AUTO-SLIDES through the rest Stories-style until the
  * viewer touches the screen at all, at which point autoplay stops for good
  * and every further slide change is manual (owner, 2026-08-17: "auto slide
- * and when tapped it stops and demands a manual slide"). A vertical swipe
- * DOWN dismisses the viewer (owner, same day, later: "remove the Y axis
- * scroll and movement from the multi post viewer" — an earlier version of
- * this component let a vertical swipe move to the next/previous POST
- * instead; removed, see the pointer-up handler below).
+ * and when tapped it stops and demands a manual slide"). Drag-down-to-
+ * dismiss is NOT handled here — it lives on the parent `ImageStage`'s outer
+ * wrapper (see its own extensive comment), so this component only ever
+ * needs to own its native horizontal scroll and tap/double-tap. A vertical
+ * swipe never moves to the next/previous POST either (owner, same day,
+ * earlier: "remove the Y axis scroll and movement from the multi post
+ * viewer") — a mostly-vertical gesture here is always either the parent's
+ * dismiss-drag or nothing, never post navigation.
  */
 function AlbumSwipe({
   items,
@@ -690,14 +764,12 @@ function AlbumSwipe({
   onIndexChange,
   onTap,
   onDoubleTap,
-  onDismiss,
 }: {
   items: NonNullable<FeedItem["mediaItems"]>;
   startIndex: number;
   onIndexChange: (i: number) => void;
   onTap: () => void;
   onDoubleTap: (x: number, y: number) => void;
-  onDismiss: () => void;
 }) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [index, setIndex] = useState(startIndex);
@@ -705,14 +777,6 @@ function AlbumSwipe({
   indexRef.current = index;
   const raf = useRef(0);
   const startPt = useRef<{ x: number; y: number } | null>(null);
-  // Tracks the most recent pointer position DURING a drag — needed because
-  // `pointercancel` (which iOS Safari fires far more often than `pointerup`
-  // for a vertical gesture that started on this horizontal-scroll element —
-  // the same quirk `reel-viewer.tsx`'s own pinch-zoom handler documents)
-  // carries no useful coordinates of its own. Without this, a cancelled
-  // gesture had no position to evaluate a dismiss against — the owner,
-  // 2026-08-17: "the slide down to close also doesnt work".
-  const lastPt = useRef<{ x: number; y: number } | null>(null);
   const moved = useRef(false);
   const lastTap = useRef(0);
   // Starts true for any real album; a single-slide "album" (shouldn't
@@ -797,7 +861,6 @@ function AlbumSwipe({
 
   const onPointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
-    lastPt.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
     // ANY touch on the album — tap, drag, whatever it turns out to be —
     // ends autoplay for good (owner: "when tapped it stops and demands a
@@ -806,34 +869,15 @@ function AlbumSwipe({
     if (autoPlaying) setAutoPlaying(false);
   };
   const onPointerMove = (e: React.PointerEvent) => {
-    lastPt.current = { x: e.clientX, y: e.clientY };
     if (!startPt.current || moved.current) return;
     if (Math.abs(e.clientX - startPt.current.x) > 10 || Math.abs(e.clientY - startPt.current.y) > 10) moved.current = true;
-  };
-  /*
-    🔴 Y-AXIS POST NAVIGATION REMOVED (owner, 2026-08-17: "remove the Y
-    axis scroll and movement from the multi post in feed"/"...from the
-    multi post viewer"). This used to let a mostly-vertical swipe move to
-    the next/previous POST, Reels-style, whenever a post list was
-    available. Back to the original, simpler rule: a mostly-vertical
-    swipe DOWN dismisses the viewer; a mostly-horizontal drag is the
-    album's own native swipe-between-slides and is never misread as
-    either.
-  */
-  const maybeDismiss = (endX: number, endY: number) => {
-    const start = startPt.current;
-    if (!start) return;
-    const dx = endX - start.x;
-    const dy = endY - start.y;
-    if (Math.abs(dy) > Math.abs(dx) && dy > 90) onDismiss();
   };
   const onPointerUp = (e: React.PointerEvent) => {
     const wasMoved = moved.current;
     startPt.current = null;
-    if (wasMoved) {
-      maybeDismiss(e.clientX, e.clientY);
-      return;
-    }
+    // A real drag already did its job as either the native horizontal scroll
+    // or the parent's own dismiss-drag (see ImageStage) — never also a tap.
+    if (wasMoved) return;
     const now = Date.now();
     if (now - lastTap.current < 300) {
       lastTap.current = 0;
@@ -845,14 +889,8 @@ function AlbumSwipe({
       }, 290);
     }
   };
-  // `pointercancel` (not `pointerup`) is what actually fires for a vertical
-  // drag on this element on iOS Safari — see `lastPt`'s own comment above.
-  // No tap/double-tap fallback here: a cancelled gesture was never a clean
-  // tap to begin with.
   const onPointerCancel = () => {
-    const wasMoved = moved.current;
     startPt.current = null;
-    if (wasMoved && lastPt.current) maybeDismiss(lastPt.current.x, lastPt.current.y);
   };
 
   return (
@@ -872,16 +910,27 @@ function AlbumSwipe({
       >
         {items.map((m, i) => {
           const loaded = isNear(i) || unlocked.has(i);
+          const slideRatio = ratioFor(i, m) ?? null;
+          // 🔴 THE ONE EXCEPTION TO NEVER-CROP — see `isReelsShaped`'s note
+          // in lib/media/aspect.ts. Below reels-tallness: never crops, same
+          // as always. At or beyond it: fills the slide edge to edge via
+          // object-cover, wallpaper-reels.tsx style.
+          const tall = isReelsShaped(slideRatio);
+          const fitClassName = tall
+            ? "relative h-full w-full select-none object-cover"
+            : "relative h-auto max-h-full w-auto max-w-full select-none object-contain";
+          const fitStyle = tall ? undefined : slideRatio ? { aspectRatio: slideRatio } : undefined;
           return (
-            <div key={i} className="relative flex h-full w-full shrink-0 snap-center items-center justify-center">
+            <div key={i} className={cn("relative h-full w-full shrink-0 snap-center", !tall && "flex items-center justify-center")}>
               {!loaded ? (
                 <div className="absolute inset-0 bg-black" />
               ) : (
                 <>
-                  {/* blurred fill so a slide whose shape doesn't match the screen
-                      never letterboxes onto plain black. 70%, not 30% — see the
-                      single-photo backdrop above for the same 2026-08-17 fix. */}
-                  {(m.thumbnailUrl ?? (m.kind === "image" ? m.url : null)) ? (
+                  {/* Blurred fill — only meaningful when there's letterbox
+                      space left to fill; a reels-shaped slide above already
+                      covers the box completely on its own. 70%, not 30% —
+                      see the single-photo backdrop for the same fix. */}
+                  {!tall && (m.thumbnailUrl ?? (m.kind === "image" ? m.url : null)) ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={(m.thumbnailUrl ?? m.url)!}
@@ -901,12 +950,12 @@ function AlbumSwipe({
                       loop
                       playsInline
                       preload={Math.abs(i - index) <= 1 ? "auto" : "metadata"}
-                      style={{ aspectRatio: ratioFor(i, m) }}
+                      style={fitStyle}
                       onLoadedMetadata={(e) => {
                         const v = e.currentTarget;
                         if (v.videoWidth && v.videoHeight) onMediaMeasured(i, v.videoWidth, v.videoHeight);
                       }}
-                      className="relative h-auto max-h-full w-auto max-w-full select-none object-contain"
+                      className={fitClassName}
                       ref={(el) => {
                         if (!el) return;
                         // Autoplay only while this slide is the active one.
@@ -921,12 +970,12 @@ function AlbumSwipe({
                       alt=""
                       draggable={false}
                       loading="eager"
-                      style={{ aspectRatio: ratioFor(i, m) }}
+                      style={fitStyle}
                       onLoad={(e) => {
                         const img = e.currentTarget;
                         if (img.naturalWidth && img.naturalHeight) onMediaMeasured(i, img.naturalWidth, img.naturalHeight);
                       }}
-                      className="relative h-auto max-h-full w-auto max-w-full select-none object-contain"
+                      className={fitClassName}
                     />
                   )}
                 </>

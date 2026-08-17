@@ -64,7 +64,7 @@ import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design"
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
 import { LivingPlayback } from "@/features/reels/viewer/living-playback";
-import { clampFeedRatio } from "@/lib/media/aspect";
+import { clampFeedRatio, isReelsShaped } from "@/lib/media/aspect";
 import {
   applyRate,
   DEFAULT_RATE,
@@ -911,6 +911,23 @@ function ReelCard({
   // measured ratio must not carry over when the slide changes.
   useEffect(() => setMeasuredRatio(null), [slide]);
   const ratio = measuredRatio ?? seedRatio;
+  /*
+    🔴 THE ONE EXCEPTION TO NEVER-CROP (owner, 2026-08-17, after seeing the
+    never-crop rule ship): "reels should reach the safe area with videos
+    from 16:9 upwards and below should stay fixed… 16:9 above can crop a
+    little when necessary to reach but below 16:9 should stay their normal
+    size." See `isReelsShaped`'s own note in lib/media/aspect.ts for the
+    full reasoning — this narrows the never-crop rule to exactly the shape
+    class every "reels/wallpaper full screen" surface in this app already
+    assumes (9:16 and taller/narrower), matching `wallpaper-reels.tsx`'s own
+    `object-cover` treatment. Everything else is completely unchanged from
+    the never-crop rewrite earlier the same day.
+  */
+  const tall = isReelsShaped(ratio);
+  const mediaFitClassName = tall
+    ? "relative z-10 h-full w-full object-cover"
+    : "relative z-10 h-auto max-h-full w-auto max-w-full object-contain";
+  const mediaFitStyle = tall ? undefined : ratio ? { aspectRatio: ratio } : undefined;
 
   // Client-only read (localStorage) after mount — avoids an SSR/CSR mismatch.
   useEffect(() => {
@@ -1598,14 +1615,20 @@ function ReelCard({
           `--frenz-safe-top` / `env(safe-area-inset-bottom)`. Only the picture
           goes under the notch and the home indicator, which is the ask.
         */
-        <div className={cn("absolute inset-0 flex items-center justify-center overflow-hidden", LETTERBOX)}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={slidePoster}
-            alt=""
-            aria-hidden
-            className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl"
-          />
+        <div className={cn("absolute inset-0 overflow-hidden", !tall && "flex items-center justify-center", LETTERBOX)}>
+          {/* Blurred backdrop only makes sense when there's letterbox space
+              LEFT to fill — a reels-shaped poster below fills the section
+              completely on its own via `object-cover`, so the backdrop would
+              just be an invisible, wasted layer underneath it. */}
+          {!tall ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={slidePoster}
+              alt=""
+              aria-hidden
+              className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl"
+            />
+          ) : null}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={slidePoster}
@@ -1613,14 +1636,14 @@ function ReelCard({
             aria-hidden
             loading="lazy"
             decoding="async"
-            style={ratio ? { aspectRatio: ratio } : undefined}
+            style={mediaFitStyle}
             onLoad={(e) => {
               const img = e.currentTarget;
               if (measuredRatio === null && img.naturalWidth && img.naturalHeight) {
                 setMeasuredRatio(clampFeedRatio(img.naturalWidth, img.naturalHeight));
               }
             }}
-            className="relative z-10 max-h-full max-w-full object-contain"
+            className={mediaFitClassName}
           />
         </div>
       ) : null}
@@ -1920,17 +1943,16 @@ function ReelCard({
               loop
               playsInline
               preload={preload}
-              // 🔴 NEVER crops, on any shape, on any screen (owner, 2026-08-17
-              // — see LETTERBOX's note above for the full history). Always
-              // `object-contain`, mobile and desktop alike — the old
-              // `fullBleed`-driven `cover` toggle for phone-shaped clips is
-              // gone. `aspectRatio` (from `ratio` above) sizes the element to
-              // its TRUE shape immediately, seeded from stored dimensions
-              // when known, so there's no letterbox-then-pop once metadata
-              // loads — the poster block's own blurred backdrop underneath
-              // fills whatever space this leaves.
-              style={ratio ? { aspectRatio: ratio } : undefined}
-              className="relative z-10 h-auto max-h-full w-auto max-w-full object-contain"
+              // Never crops UNLESS this clip is reels-shaped (9:16 and
+              // taller/narrower — see `tall`/`isReelsShaped` above), in which
+              // case it fills edge to edge via `object-cover`, same as
+              // `wallpaper-reels.tsx`. Everything less tall keeps the
+              // original never-crop `object-contain` + `aspectRatio` sizing
+              // (2026-08-17) unchanged — there's no letterbox-then-pop once
+              // metadata loads, and the poster block's own blurred backdrop
+              // underneath fills whatever space that leaves.
+              style={mediaFitStyle}
+              className={mediaFitClassName}
               onPlay={() => {
                 video.current && claimPlayback(video.current);
                 setBuffering(false);
@@ -2013,8 +2035,8 @@ function ReelCard({
             controls
             autoPlay={isActive}
             loop
-            className="relative z-10 h-auto max-h-full w-auto max-w-full"
-            style={ratio ? { aspectRatio: ratio } : undefined}
+            className={mediaFitClassName}
+            style={mediaFitStyle}
           />
         )}
 
@@ -2846,34 +2868,41 @@ function AlbumNeighborPreview({
   thumbnailUrl: string | null;
 }) {
   const x = useTransform(dragX, (v) => v + direction * (typeof window !== "undefined" ? window.innerWidth : 0));
-  // 🔴 Never crops (owner, 2026-08-17) — same true-aspect + blurred-backdrop
-  // treatment as the active card, from the poster's own natural size, fitted
-  // by the SAME mechanism so the ground behind it doesn't visibly change
-  // shape halfway through the drag.
+  // Same true-aspect (or, once reels-shaped, edge-to-edge crop) treatment as
+  // the active card — see `isReelsShaped` above — fitted by the SAME
+  // mechanism so the ground behind it doesn't visibly change shape halfway
+  // through the drag.
   const [ratio, setRatio] = useState<number | null>(null);
+  const tall = isReelsShaped(ratio);
+  const mediaFitClassName = tall
+    ? "relative z-10 h-full w-full object-cover"
+    : "relative z-10 h-auto max-h-full w-auto max-w-full object-contain";
+  const mediaFitStyle = tall ? undefined : ratio ? { aspectRatio: ratio } : undefined;
   if (!thumbnailUrl) return null;
   return (
     <motion.div
-      className={cn("pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden", LETTERBOX)}
+      className={cn("pointer-events-none absolute inset-0 overflow-hidden", !tall && "flex items-center justify-center", LETTERBOX)}
       style={{ x }}
       aria-hidden
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={thumbnailUrl} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl" />
+      {!tall ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={thumbnailUrl} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl" />
+      ) : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={thumbnailUrl}
         alt=""
         loading="lazy"
         decoding="async"
-        style={ratio ? { aspectRatio: ratio } : undefined}
+        style={mediaFitStyle}
         onLoad={(e) => {
           const img = e.currentTarget;
           if (img.naturalWidth && img.naturalHeight) {
             setRatio(clampFeedRatio(img.naturalWidth, img.naturalHeight));
           }
         }}
-        className="relative z-10 max-h-full max-w-full object-contain"
+        className={mediaFitClassName}
       />
     </motion.div>
   );

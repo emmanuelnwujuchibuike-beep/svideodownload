@@ -30,3 +30,33 @@ export function clampFeedRatio(w?: number | null, h?: number | null): number | n
   if (!w || !h || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
   return w / h;
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE ONE EXCEPTION TO "NEVER CROP" — REELS-SHAPED MEDIA
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * 🔴 2026-08-17, after the owner saw the never-crop rule ship: "16:9 should
+ * reach full edge to edge, it can crop a little if necessary to reach there
+ * but image size below 16:9 shouldn't crop… reels should reach the safe area
+ * with videos from 16:9 upwards and below should stay fixed."
+ *
+ * This narrows, rather than reverses, the never-crop rule confirmed earlier
+ * the same day. Everything below this ratio (4:5, 1:1, landscape — anything
+ * LESS tall than standard reels video) keeps object-contain + a blurred
+ * backdrop exactly as shipped, unchanged. Only media at or beyond standard
+ * reels tallness — 9:16 and narrower, the shape every "reels/wallpaper full
+ * screen" reference in this app already assumes — is allowed the same
+ * object-cover treatment `wallpaper-reels.tsx` has always used. A real phone
+ * screen is taller than 9:16 (closer to 9:19.5-20), so even a "perfect" 9:16
+ * clip still loses a sliver off one axis to fill it — that sliver is the
+ * "crop a little if necessary" the owner explicitly asked for, scoped to
+ * exactly this shape class and no other.
+ */
+export const REELS_SHAPE_RATIO = 9 / 16;
+
+/** True once a clip/photo is at or beyond standard reels tallness — see the
+ *  note above for why only this class is allowed to crop to fill. */
+export function isReelsShaped(ratio: number | null): boolean {
+  return ratio !== null && ratio <= REELS_SHAPE_RATIO;
+}

@@ -333,13 +333,25 @@ export function Downloader({
             />
             <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
               {url ? (
+                /*
+                  🔴 VISIBLE, NOT A GHOST (owner: "make the X button... more
+                  visible and bold so users see it and knows is a way to
+                  download another video"). It used to carry no background at
+                  all except on hover — a thin gray glyph sitting on top of
+                  the URL text, easy to mistake for a stray character rather
+                  than a button (see the owner's screenshot). A persistent
+                  filled circle, a real border and a bolder stroke give it
+                  the same resting visual weight as the Paste button beside
+                  it, so it reads as an affordance on sight, not just on hover.
+                */
                 <button
                   type="button"
                   onClick={handleClear}
-                  aria-label="Clear"
-                  className="rounded-xl p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                  aria-label="Clear — paste a different link"
+                  title="Clear"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-foreground ring-1 ring-inset ring-border transition hover:bg-rose-500/15 hover:text-rose-600 hover:ring-rose-500/40 active:scale-90 dark:hover:text-rose-400"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4" strokeWidth={2.75} />
                 </button>
               ) : null}
               <button

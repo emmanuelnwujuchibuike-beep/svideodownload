@@ -37,6 +37,7 @@ import {
   type DownloadTask,
 } from "@/features/downloads/manager";
 import { usePlayerQueue } from "@/features/downloads/player-store";
+import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
 import { RewardConsentSheet } from "@/features/monetization/reward-consent-sheet";
 import { useRewardFlow } from "@/features/monetization/use-reward-flow";
 import type { DownloadRecord } from "@/types";
@@ -342,10 +343,23 @@ export function FloatingDownloadProgress({
   const finished = failedTasks[0] ?? completedTasks[0];
   const task = active ?? finished;
   /*
-    "Review video" is now reward-gated (owner, 2026-08-16 GPT spec, §13-15) —
-    a second, independent reward context from the download unlock, never
-    auto-chained to it (§16). It is entered only from this button's own tap,
-    after the download this card belongs to has already fully finished.
+    "Review video" is reward-gated — a second, independent reward context
+    from the download unlock, never auto-chained to it. Entered only from
+    this button's own tap, after the download this card belongs to has
+    already fully finished.
+
+    🔴 PAUSED off the real GPT flow (owner, 2026-08-17: "review video button
+    doesnt work, i think is the gpt" — correctly guessed). Same root cause as
+    the download-unlock gate: no real Google Ad Manager account exists, so
+    this was hitting Google's public TEST rewarded ad unit, which doesn't
+    reliably fill. `videoPreview`/`useRewardFlow("VIDEO_PREVIEW", ...)` is
+    left fully wired below (dormant, sheet never opens since nothing calls
+    `.open()`) for the same one-line restore once a real ad unit exists — see
+    the identical note on `downloadUnlock` in preview-card.tsx. The "Review
+    video" button now opens the proven `RewardedAdGate` (same component
+    image/audio/video-download already use) instead; it self-grants
+    immediately if the admin hasn't configured a `reward_video` ad, so this
+    can never dead-end.
   */
   const router = useRouter();
   const onPreviewGranted = useCallback(() => {
@@ -354,6 +368,7 @@ export function FloatingDownloadProgress({
     router.push(`/history?review=${encodeURIComponent(task.id)}`);
   }, [task, router]);
   const videoPreview = useRewardFlow("VIDEO_PREVIEW", onPreviewGranted);
+  const [previewGateOpen, setPreviewGateOpen] = useState(false);
   // A mixed outcome ("some saved, some didn't") gets its own line under the
   // headline rather than being silently absorbed into a single file's story.
   const mixedOutcome = !active && failedTasks.length > 0 && completedTasks.length > 0;
@@ -668,11 +683,7 @@ export function FloatingDownloadProgress({
                   */
                   <button
                     type="button"
-                    onClick={() =>
-                      videoPreview.open([
-                        { url: task.url, formatId: task.formatId, kind: task.kind, title: task.title },
-                      ])
-                    }
+                    onClick={() => setPreviewGateOpen(true)}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 px-3 py-2 text-xs font-semibold transition hover:bg-secondary"
                   >
                     <Play className="h-3.5 w-3.5" />{" "}
@@ -882,6 +893,14 @@ export function FloatingDownloadProgress({
           </div>
       </div>
       <RewardConsentSheet {...videoPreview.sheetProps} />
+      <RewardedAdGate
+        open={previewGateOpen}
+        onReward={() => {
+          setPreviewGateOpen(false);
+          onPreviewGranted();
+        }}
+        onCancel={() => setPreviewGateOpen(false)}
+      />
     </div>
   );
 }

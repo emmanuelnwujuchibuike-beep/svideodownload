@@ -94,8 +94,8 @@ describe("no automatic ad chaining (§16)", () => {
     expect(floatingProgress).not.toMatch(/downloadUnlock\.open|DOWNLOAD_UNLOCK/);
   });
 
-  it("\"Review video\" opens the preview flow only from the button's own onClick", () => {
-    const idx = floatingProgress.indexOf("videoPreview.open([");
+  it("\"Review video\" opens its gate only from the button's own onClick (2026-08-17: VIDEO_PREVIEW paused off GPT, same reason as DOWNLOAD_UNLOCK — no real ad account, see the note on `videoPreview` above)", () => {
+    const idx = floatingProgress.indexOf("setPreviewGateOpen(true)");
     expect(idx).toBeGreaterThan(-1);
     const before = floatingProgress.slice(Math.max(0, idx - 60), idx);
     expect(before).toMatch(/onClick={\(\) =>/);

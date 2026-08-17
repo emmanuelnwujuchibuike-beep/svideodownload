@@ -256,12 +256,33 @@ export function DownloadBox({
               onChange={(e) => setUrl(e.target.value)}
               placeholder="Paste any link here (TikTok, Instagram, X, Facebook…)"
               aria-label="Video URL"
-              className="h-[3.25rem] w-full rounded-[0.7rem] bg-background px-4 pr-24 text-base text-foreground outline-none"
+              className={`h-[3.25rem] w-full rounded-[0.7rem] bg-background px-4 ${url ? "pr-36" : "pr-24"} text-base text-foreground outline-none`}
             />
             <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
               {url ? (
-                <button type="button" onClick={clear} aria-label="Clear" className="rounded-lg p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
-                  <X className="h-4 w-4" />
+                /*
+                  🔴 THIS is the button the landing page actually renders — the
+                  earlier "make it visible" fix (2026-08-17) landed on
+                  features/downloader/downloader.tsx, a component the landing
+                  page never mounts (it renders THIS file, download-box.tsx,
+                  per the 2026-08-16 "landing = DownloadPageCore" merge). Same
+                  two bugs as that fix: `pr-24` didn't grow to fit this
+                  button's width, so it overlapped the pasted URL text; and
+                  `bg-secondary`/`ring-border` are only a few points of
+                  lightness from `bg-background`, so a filled circle in those
+                  tokens is invisible on this near-white input. `foreground`
+                  is always the opposite pole from `background` in this token
+                  system, so `bg-foreground/10` + `ring-foreground/20` give
+                  real contrast in both themes.
+                */
+                <button
+                  type="button"
+                  onClick={clear}
+                  aria-label="Clear — paste a different link"
+                  title="Clear"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground/10 text-foreground ring-1 ring-inset ring-foreground/20 transition hover:bg-rose-500/15 hover:text-rose-600 hover:ring-rose-500/40 active:scale-90 dark:hover:text-rose-400"
+                >
+                  <X className="h-4 w-4" strokeWidth={2.75} />
                 </button>
               ) : null}
               <button type="button" onClick={handlePaste} className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-2 text-sm font-medium text-foreground transition hover:bg-secondary/70">

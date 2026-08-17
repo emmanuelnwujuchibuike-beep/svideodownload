@@ -329,27 +329,34 @@ export function Downloader({
               onChange={(e) => setUrl(e.target.value)}
               placeholder={`Paste your ${placeholderPlatform} link…`}
               aria-label="Video URL"
-              className="h-16 w-full rounded-2xl bg-background/60 px-5 pr-28 text-base outline-none ring-1 ring-inset ring-border/80 transition-all focus:bg-background/90 focus:ring-2 focus:ring-primary sm:text-lg"
+              className={`h-16 w-full rounded-2xl bg-background/60 px-5 ${url ? "pr-36" : "pr-28"} text-base outline-none ring-1 ring-inset ring-border/80 transition-all focus:bg-background/90 focus:ring-2 focus:ring-primary sm:text-lg`}
             />
             <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
               {url ? (
                 /*
                   🔴 VISIBLE, NOT A GHOST (owner: "make the X button... more
                   visible and bold so users see it and knows is a way to
-                  download another video"). It used to carry no background at
-                  all except on hover — a thin gray glyph sitting on top of
-                  the URL text, easy to mistake for a stray character rather
-                  than a button (see the owner's screenshot). A persistent
-                  filled circle, a real border and a bolder stroke give it
-                  the same resting visual weight as the Paste button beside
-                  it, so it reads as an affordance on sight, not just on hover.
+                  download another video"). Two bugs compounded here: (1) the
+                  input's reserved `pr-*` padding didn't grow to fit this
+                  wider button, so it overlapped the pasted URL text — fixed
+                  by widening padding to `pr-36` whenever `url` is set. (2)
+                  `bg-secondary`/`ring-border` (~95%/~88% lightness) sit on a
+                  near-white input (`bg-background` 100%) — a few points of
+                  lightness apart is imperceptible, so the "filled circle"
+                  rendered as no circle at all (confirmed via zoomed
+                  screenshot: bare X floating in whitespace). `foreground` is
+                  always the opposite pole from `background` in this token
+                  system (near-black in light mode, near-white in dark), so
+                  `bg-foreground/10` + `ring-foreground/20` give real
+                  contrast in both themes instead of one more silent-token
+                  near-match.
                 */
                 <button
                   type="button"
                   onClick={handleClear}
                   aria-label="Clear — paste a different link"
                   title="Clear"
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-foreground ring-1 ring-inset ring-border transition hover:bg-rose-500/15 hover:text-rose-600 hover:ring-rose-500/40 active:scale-90 dark:hover:text-rose-400"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground/10 text-foreground ring-1 ring-inset ring-foreground/20 transition hover:bg-rose-500/15 hover:text-rose-600 hover:ring-rose-500/40 active:scale-90 dark:hover:text-rose-400"
                 >
                   <X className="h-4 w-4" strokeWidth={2.75} />
                 </button>

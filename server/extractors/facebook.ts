@@ -381,8 +381,22 @@ export function tryStorySlides(url: string, htmls: string[]): MediaFormat[] | nu
 
   const videoUrls: { url: string; pos: number }[] = [];
   const seenVideo = new Set<string>();
-  const photoCandidates: PhotoCandidate[] = [];
-  const seenPhoto = new Set<string>();
+  /*
+    🔴 Merge photos by PHOTO IDENTITY, not by exact URL (owner, 2026-08-17:
+    "it duplicate a the file to a separate thumbnail that are just blurred
+    image together with the real multi story").
+
+    The same underlying photo commonly appears at more than one URL in the
+    page — a small, deliberately blurred low-quality placeholder rendition
+    (the same progressive-loading pattern browsers use everywhere) AND the
+    real, full rendition. Deduping on the exact URL string treats those as
+    TWO photos; `photoIdOf` (see above) is what recognises they're the SAME
+    photo across renditions — this is the exact bug `mergePhotos` above was
+    already built to solve for ordinary multi-photo posts. Reusing that
+    "keep the largest declared size" merge here, instead of a plain Set,
+    is the fix.
+  */
+  const photoBest = new Map<string, PhotoCandidate>();
   // Every render may have hydrated a different slice of the tray — merge
   // across all of them, same reasoning as `mergePhotos` above.
   for (const html of htmls) {
@@ -392,11 +406,23 @@ export function tryStorySlides(url: string, htmls: string[]): MediaFormat[] | nu
       videoUrls.push(v);
     }
     for (const p of collectPhotos(html)) {
-      if (seenPhoto.has(p.url)) continue;
-      seenPhoto.add(p.url);
-      photoCandidates.push(p);
+      const prev = photoBest.get(p.photoId);
+      if (!prev || p.size > prev.size) {
+        photoBest.set(p.photoId, prev ? { ...p, order: prev.order } : p);
+      }
     }
   }
+  /*
+    🔴 A VIDEO slide's own poster/cover frame is a real fbcdn photo asset
+    too, and `collectPhotos` cannot tell it apart from a genuine standalone
+    photo slide — it has no way to know a given image is "the still frame
+    FOR that video" rather than its own separate item. Once any video slide
+    exists, treating every scraped photo as an ADDITIONAL slide is exactly
+    what produced the reported duplicate — a real video plus a spurious
+    "blurred" extra beside it. A pure-photo story (no video slides at all)
+    is unaffected; its photos are the real content and stay.
+  */
+  const photoCandidates = videoUrls.length > 0 ? [] : [...photoBest.values()].sort((a, b) => a.order - b.order);
   if (videoUrls.length + photoCandidates.length <= 1) return null;
 
   const headers = { "User-Agent": DESKTOP_UA, Referer: "https://www.facebook.com/" };

@@ -244,19 +244,60 @@ describe("tryStorySlides", () => {
     expect(formats?.every((f) => f.kind === "video")).toBe(true);
   });
 
-  it("merges video AND photo slides across multiple renders, deduping repeats", () => {
+  it("deduplicates repeated video renders across multiple UAs", () => {
     const videoHtml = [
       `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/s1.mp4"}`,
       `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/s2.mp4"}`,
     ].join(",");
-    const photoHtml = `<img src="https://scontent.fna.fbcdn.net/v/t39.30808-6/111111_222222_333333_n.jpg?stp=dst-jpg" />`;
     // Same video render repeated (as if two UAs hydrated the same tray) must
     // not double the count.
-    const formats = tryStorySlides(STORY_URL, [videoHtml, videoHtml, photoHtml]);
-    expect(formats).toHaveLength(3); // 2 distinct videos + 1 photo, not 4
-    expect(formats?.filter((f) => f.kind === "video")).toHaveLength(2);
-    expect(formats?.filter((f) => f.kind === "image")).toHaveLength(1);
-    expect(formats?.every((f) => f.isSeparateItem === true)).toBe(true);
+    const formats = tryStorySlides(STORY_URL, [videoHtml, videoHtml]);
+    expect(formats).toHaveLength(2);
+    expect(formats?.every((f) => f.kind === "video")).toBe(true);
+  });
+
+  /*
+    🔴 The two bugs the owner reported, 2026-08-17: "it duplicate a the
+    file to a separate thumbnail that are just blurred image together with
+    the real multi story".
+  */
+  it("does NOT treat a video slide's own poster/cover photo as an extra slide", () => {
+    // A video story where the page also embeds each video's own still-frame
+    // poster as an fbcdn photo asset — collectPhotos has no way to tell that
+    // apart from a real standalone photo slide, so once ANY video exists,
+    // scraped photos are dropped rather than counted as extra slides.
+    const html = [
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/s1.mp4"}`,
+      `{"playable_url_quality_hd":"https:\\/\\/video.fbcdn.net\\/s2.mp4"}`,
+      `<img src="https://scontent.fna.fbcdn.net/v/t39.30808-6/111111_222222_333333_n.jpg?stp=dst-jpg" />`,
+    ].join(",");
+    const formats = tryStorySlides(STORY_URL, [html]);
+    expect(formats).toHaveLength(2); // the 2 videos, NOT 2 videos + 1 "photo"
+    expect(formats?.every((f) => f.kind === "video")).toBe(true);
+  });
+
+  it("merges a blurred low-quality rendition and the real rendition of the SAME photo into one slide", () => {
+    // Same photoId (111111_222222_333333), two different renditions — a
+    // small blurred placeholder and the real, larger copy. Must collapse to
+    // ONE slide (the larger), not two — this was the literal bug: exact-URL
+    // dedup treated them as different photos.
+    const blurred = `<img src="https://scontent.fna.fbcdn.net/v/t39.30808-6/111111_222222_333333_n.jpg?stp=dst-webp_s16x16_blur" />`;
+    const real = `<img src="https://scontent.fna.fbcdn.net/v/t39.30808-6/111111_222222_333333_n.jpg?stp=dst-jpg_s600x600" />`;
+    const another = `<img src="https://scontent.fna.fbcdn.net/v/t39.30808-6/444444_555555_666666_n.jpg?stp=dst-jpg_s600x600" />`;
+    const formats = tryStorySlides(STORY_URL, [[blurred, real, another].join("")]);
+    expect(formats).toHaveLength(2); // 2 distinct photos, not 3
+    expect(formats?.every((f) => f.kind === "image")).toBe(true);
+    // The kept rendition is the larger (real) one, not the blurred placeholder.
+    const merged = formats?.find((f) => f.directUrl?.includes("111111_222222_333333"));
+    expect(merged?.directUrl).toContain("s600x600");
+  });
+
+  it("a pure photo story (no video slides) still returns every real photo, merged by identity", () => {
+    const photo1 = `<img src="https://scontent.fna.fbcdn.net/v/t39.30808-6/111111_222222_333333_n.jpg?stp=dst-jpg_s600x600" />`;
+    const photo2 = `<img src="https://scontent.fna.fbcdn.net/v/t39.30808-6/444444_555555_666666_n.jpg?stp=dst-jpg_s600x600" />`;
+    const formats = tryStorySlides(STORY_URL, [[photo1, photo2].join("")]);
+    expect(formats).toHaveLength(2);
+    expect(formats?.every((f) => f.kind === "image" && f.isSeparateItem === true)).toBe(true);
   });
 
   it("never throws on a malformed URL", () => {

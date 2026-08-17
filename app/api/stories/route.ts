@@ -60,6 +60,16 @@ const schema = z.object({
   caption: z.string().trim().max(300).optional(),
   /** Cover image captured from the first frame of a video upload. */
   thumbnailUrl: z.string().url().max(2048).optional(),
+  /**
+   * Natural pixel size of the cover media, captured client-side
+   * (`readImageSize`/`captureVideoPoster`). Owner, 2026-08-17: native
+   * uploads never carried this to the `posts` row at all (only album items
+   * in `post_media`, below, ever got it) — every native post fell back to
+   * the feed's generic aspect-ratio guess, the same "wrong size... whenever
+   * i enter" glitch the downloader/repost pipeline had for the same reason.
+   */
+  mediaWidth: z.number().int().positive().nullable().optional(),
+  mediaHeight: z.number().int().positive().nullable().optional(),
   /** Where the upload goes: the Feed, the Reels product, a 24h story, or feed+story.
       Feed and Reels are separate — nothing appears in both unless published twice. */
   destination: z.enum(["post", "reel", "story", "both"]).optional(),
@@ -93,7 +103,7 @@ export async function POST(request: Request) {
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid upload." }, { status: 400 });
-  const { mediaUrl, mediaKind, caption, thumbnailUrl } = parsed.data;
+  const { mediaUrl, mediaKind, caption, thumbnailUrl, mediaWidth, mediaHeight } = parsed.data;
   // Every post carries a cover: the image itself, or the captured video frame.
   const cover = mediaKind === "image" ? mediaUrl : (thumbnailUrl ?? null);
   const destination = parsed.data.destination ?? (parsed.data.shareReel ? "both" : "post");
@@ -147,6 +157,11 @@ export async function POST(request: Request) {
         title: (caption ?? "").slice(0, 300),
         media_url: mediaUrl,
         thumbnail_url: cover,
+        // Falls back to the album's own item-0 dimensions when the top-level
+        // field is absent — a client that only sent per-item `media[]` sizes
+        // (the older album path) still gets its cover post sized correctly.
+        media_width: mediaWidth ?? media?.[0]?.width ?? null,
+        media_height: mediaHeight ?? media?.[0]?.height ?? null,
         visibility: "public",
         status: "published",
       };

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { NEUTRAL_EDIT, type PhotoEdit } from "@/features/create/photo-editor";
 import { captureVideoPoster } from "@/lib/media/video-poster";
+import { readImageSize } from "@/lib/media/read-image-size";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
 
@@ -229,7 +230,13 @@ export async function publishComposition({
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Please sign in.");
 
-  const uploaded: { url: string; kind: "image" | "video"; thumbnailUrl: string | null }[] = [];
+  const uploaded: {
+    url: string;
+    kind: "image" | "video";
+    thumbnailUrl: string | null;
+    width: number | null;
+    height: number | null;
+  }[] = [];
   for (let i = 0; i < items.length; i++) {
     const it = items[i]!;
     onProgress?.(items.length > 1 ? `Uploading ${i + 1} of ${items.length}…` : "Uploading…");
@@ -238,7 +245,25 @@ export async function publishComposition({
       .replace(/[^a-z0-9]/g, "");
 
     let posterBlob: Blob | null = null;
-    if (it.kind === "video") posterBlob = await captureVideoPoster(it.file).catch(() => null);
+    let width: number | null = null;
+    let height: number | null = null;
+    // 🔴 Owner, 2026-08-17: "it still glitches and show a wrong size... whenever
+    // i enter" — neither path here ever captured the file's real dimensions, so
+    // every native upload published with none and the feed fell back to a
+    // generic aspect-ratio guess on every single post. Video's read is free —
+    // `captureVideoPoster` already loads the file into a `<video>` element to
+    // grab the poster frame, so it returns the SAME element's `videoWidth`/
+    // `videoHeight` alongside the blob, no separate pass needed.
+    if (it.kind === "video") {
+      const captured = await captureVideoPoster(it.file).catch(() => ({ blob: null, width: null, height: null }));
+      posterBlob = captured.blob;
+      width = captured.width;
+      height = captured.height;
+    } else {
+      const size = await readImageSize(it.file).catch(() => null);
+      width = size?.w ?? null;
+      height = size?.h ?? null;
+    }
 
     let mediaUrl: string;
     try {
@@ -263,7 +288,7 @@ export async function publishComposition({
         contentType: "image/jpeg",
       }).catch(() => null);
     }
-    uploaded.push({ url: mediaUrl, kind: it.kind, thumbnailUrl });
+    uploaded.push({ url: mediaUrl, kind: it.kind, thumbnailUrl, width, height });
   }
 
   onProgress?.("Publishing…");
@@ -277,8 +302,18 @@ export async function publishComposition({
       caption: caption.trim() || undefined,
       thumbnailUrl: cover.kind === "image" ? cover.url : (cover.thumbnailUrl ?? undefined),
       destination,
+      mediaWidth: cover.width,
+      mediaHeight: cover.height,
       ...(uploaded.length > 1
-        ? { media: uploaded.map((u) => ({ url: u.url, kind: u.kind, thumbnailUrl: u.thumbnailUrl })) }
+        ? {
+            media: uploaded.map((u) => ({
+              url: u.url,
+              kind: u.kind,
+              thumbnailUrl: u.thumbnailUrl,
+              width: u.width,
+              height: u.height,
+            })),
+          }
         : {}),
     }),
   });

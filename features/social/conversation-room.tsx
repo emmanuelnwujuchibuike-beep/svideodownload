@@ -1507,10 +1507,10 @@ export function ConversationRoom({
           // Best-effort on purpose: a failed capture must not fail the SEND.
           // The bubble's `#t=0.1` fallback still paints the first frame in that
           // case, so the worst outcome is a slower cover, never a broken one.
-          const poster = await captureVideoPoster(file).catch(() => null);
-          if (poster) {
+          const captured = await captureVideoPoster(file).catch(() => ({ blob: null, width: null, height: null }));
+          if (captured.blob) {
             thumbnailUrl =
-              (await uploadPostMedia({ data: poster, kind: "image", ext: "jpg", contentType: "image/jpeg" }).catch(
+              (await uploadPostMedia({ data: captured.blob, kind: "image", ext: "jpg", contentType: "image/jpeg" }).catch(
                 () => undefined,
               )) ?? undefined;
           }

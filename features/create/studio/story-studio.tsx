@@ -23,6 +23,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { closeStudio, useStudioOpen } from "@/features/create/studio/studio-store";
 import { captureVideoPoster } from "@/lib/media/video-poster";
+import { readImageSize } from "@/lib/media/read-image-size";
 import { haptic } from "@/lib/motion/haptics";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { cn } from "@/lib/utils";
@@ -41,33 +42,6 @@ interface Block {
   /** Natural pixel size of an image block (so the feed can use next/image). */
   width?: number;
   height?: number;
-}
-
-/** Read an image file's natural pixel size (cheap; decoded off the main thread). */
-async function readImageSize(file: File): Promise<{ w: number; h: number } | null> {
-  try {
-    if (typeof createImageBitmap === "function") {
-      const bmp = await createImageBitmap(file);
-      const size = { w: bmp.width, h: bmp.height };
-      bmp.close?.();
-      return size;
-    }
-  } catch {
-    /* fall through */
-  }
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      resolve({ w: img.naturalWidth, h: img.naturalHeight });
-      URL.revokeObjectURL(url);
-    };
-    img.onerror = () => {
-      resolve(null);
-      URL.revokeObjectURL(url);
-    };
-    img.src = url;
-  });
 }
 
 const MOODS = [
@@ -174,8 +148,12 @@ function StudioInner() {
       let poster: string | undefined;
       let size: { w: number; h: number } | null = null;
       if (kind === "video") {
-        const blob = await captureVideoPoster(file).catch(() => null);
-        if (blob) poster = await uploadPostMedia({ data: blob, kind: "image", ext: "jpg", contentType: "image/jpeg" }).catch(() => undefined);
+        const captured = await captureVideoPoster(file).catch(() => ({ blob: null, width: null, height: null }));
+        if (captured.blob) poster = await uploadPostMedia({ data: captured.blob, kind: "image", ext: "jpg", contentType: "image/jpeg" }).catch(() => undefined);
+        // Same "no separate pass" capture the poster grab already did — see
+        // captureVideoPoster's 2026-08-17 note (owner: video blocks used to
+        // always publish with no dimensions at all).
+        if (captured.width && captured.height) size = { w: captured.width, h: captured.height };
       } else {
         size = await readImageSize(file); // capture natural dimensions for next/image
       }
@@ -219,8 +197,12 @@ function StudioInner() {
           description,
           thumbnailUrl: media.type === "image" ? media.url : media.poster ?? null,
           visibility: "public",
-          mediaWidth: media.type === "image" ? media.width ?? null : null,
-          mediaHeight: media.type === "image" ? media.height ?? null : null,
+          // 🔴 No longer image-only (owner, 2026-08-17: video posts still
+          // glitched to a wrong size on entry) — `onPickMedia` above now
+          // captures a video block's dimensions the same way it always did
+          // for images, via `captureVideoPoster`'s own video-element read.
+          mediaWidth: media.width ?? null,
+          mediaHeight: media.height ?? null,
         }),
       });
       const json = await res.json();

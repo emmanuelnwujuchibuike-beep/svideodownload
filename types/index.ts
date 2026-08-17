@@ -147,6 +147,23 @@ export interface VideoMetadata {
   formats: MediaFormat[];
   /** Which extractor produced this metadata (for observability/debugging). */
   extractor: ExtractorName;
+  /**
+   * Natural pixel size of the best available format, when the extractor
+   * reported it. Feeds `posts.media_width`/`media_height` on repost
+   * (`PublishButton`) so the feed can size a post's media box correctly on
+   * the FIRST paint instead of guessing — without this, every reposted/
+   * downloaded post fell back to a generic aspect-ratio guess that visibly
+   * corrected itself once the browser measured the real file, a jarring
+   * resize on every single post (owner, 2026-08-17: "it still glitches and
+   * show a wrong size... whenever i enter"). Optional — most extractors
+   * don't populate it yet (only `ytdlp-service.ts` does, as of 2026-08-17);
+   * every other extractor still constructs valid `VideoMetadata` without
+   * it, same as before this field existed. Null for a multi-item playlist
+   * (an Instagram Story tray) — each slide can have its own shape, and this
+   * is one pair for the whole metadata object.
+   */
+  width?: number | null;
+  height?: number | null;
 }
 
 /** A locally-persisted record of a download the user performed. */

@@ -70,6 +70,14 @@ export function PublishButton({ metadata, highlight = false }: { metadata: Video
           category: category || null,
           thumbnailUrl: metadata.thumbnail ?? null,
           durationSec: metadata.durationSeconds ?? null,
+          // 🔴 Owner, 2026-08-17: reposted/downloaded posts never carried
+          // their real dimensions, so the feed fell back to a generic guess
+          // that visibly corrected itself once the browser measured the
+          // actual file — "it still glitches and show a wrong size...
+          // whenever i enter". `/api/posts` already accepted these fields
+          // (`lib/social/posts.ts`'s `publishPost`); nothing sent them.
+          mediaWidth: metadata.width ?? null,
+          mediaHeight: metadata.height ?? null,
           visibility,
         }),
       });

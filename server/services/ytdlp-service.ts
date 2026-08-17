@@ -486,10 +486,36 @@ function mapPlaylistFormats(entries: RawInfo[]): MediaFormat[] {
   return formats;
 }
 
+/**
+ * Best-quality width/height pair for the whole video — the SAME "highest
+ * available" tier the format picker already surfaces (`mapFormats`), just
+ * carrying the actual pixel dimensions rather than a height-only label, so
+ * the feed can size a reposted post's media box correctly from the first
+ * paint (owner, 2026-08-17 — see `VideoMetadata.width`'s doc comment).
+ * Single-file extractors (Snapchat, Reddit, etc.) usually put dimensions at
+ * the TOP level with no `formats[]` at all; multi-format extractors need the
+ * highest-resolution format that reports both.
+ */
+function pickDimensions(info: RawInfo): { width: number | null; height: number | null } {
+  if (info.width && info.height) return { width: info.width, height: info.height };
+  let best: { width: number; height: number; tbr: number } | null = null;
+  for (const f of info.formats ?? []) {
+    if (!f.width || !f.height) continue;
+    const tbr = f.tbr ?? 0;
+    if (!best || f.height > best.height || (f.height === best.height && tbr > best.tbr)) {
+      best = { width: f.width, height: f.height, tbr };
+    }
+  }
+  return best ? { width: best.width, height: best.height } : { width: null, height: null };
+}
+
 function mapInfo(info: RawInfo, sourceUrl: string): VideoMetadata {
   const platform = detectPlatform(sourceUrl);
   const entries = info._type === "playlist" ? info.entries : undefined;
   const isPlaylist = !!entries?.length;
+  // Playlists (Instagram Story trays) are several distinct slides, each
+  // potentially its own shape — no single width/height represents them all.
+  const dims = isPlaylist ? { width: null, height: null } : pickDimensions(info);
   return {
     id: info.id || crypto.randomUUID(),
     platform: platform.id,
@@ -508,6 +534,8 @@ function mapInfo(info: RawInfo, sourceUrl: string): VideoMetadata {
     webpageUrl: info.webpage_url || sourceUrl,
     formats: isPlaylist ? mapPlaylistFormats(entries!) : mapFormats(info),
     extractor: "ytdlp",
+    width: dims.width,
+    height: dims.height,
   };
 }
 

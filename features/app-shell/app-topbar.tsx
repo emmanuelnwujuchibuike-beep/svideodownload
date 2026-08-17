@@ -1,6 +1,6 @@
 "use client";
 
-import { IoAddOutline, IoCloudUploadOutline, IoSearchOutline } from "react-icons/io5";
+import { IoAdd, IoCloudUploadOutline, IoSearchOutline } from "react-icons/io5";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
@@ -149,31 +149,25 @@ export function AppTopbar() {
               aria-haspopup="dialog"
               aria-expanded={createOpen}
               /*
-                🔴 BOLDER STILL (owner, 2026-08-17: "remove the border from
-                the plus button... make the plus button more darker contrast,
-                with more 3d and bold dark style for clear visuals"). The
-                2026-08-16 attempt directly below was a step in this same
-                direction but under-shot it: `bg-primary/12` is a 12%-opacity
-                TINT, barely darker than the bar itself, and the ring IS the
-                border the owner is now asking to remove entirely. Solid
-                `.bg-brand` fill (the same blue→purple gradient the feed's
-                "For You" pill already uses — see feed-topbar-tabs.tsx) reads
-                as genuinely bold and dark against the plain icons beside it;
-                the inset top highlight + drop shadow give it real dimension
-                ("3d") instead of a flat color swap.
-
-                🔴 MORE CONTRAST (owner, 2026-08-16: "make the plus button in
-                the feed page to have more contrast and be more visible").
-                The bare IconTile glyph every other topbar icon uses (no
-                background, by an earlier owner instruction) read as too
-                quiet for the one icon that opens the whole Create flow. A
-                filled ROUNDED-SQUARE tile — never a circle, per "don't make
-                the plus button round" — in the brand color gives it its own
-                visual weight against the other plain icons beside it.
+                🔴 CORRECTED — NO BACKGROUND AT ALL (owner, 2026-08-17, after
+                the gradient-tile attempt directly below: "i didnt say give it
+                a blue background, i meant a black plus icon alone that is 3d
+                with dark contrast and bolder like the bottom nav icon... i
+                said remove the border so only the icon stays darker, more 3d
+                and bolder"). The gradient tile was solving a problem the
+                owner never described — a filled box, when a bare, bolder
+                GLYPH was what was asked for both times. `mobile-nav.tsx`'s
+                own bottom-nav icons are exactly this recipe: no background,
+                `text-foreground` (the darkest token, not a brand tint), a
+                `drop-shadow` filter for the "3d" lift, and — the actual
+                boldness lever for an Ionicon, which has no useful
+                `strokeWidth` — the FILLED glyph (`IoAdd`) instead of the
+                outline one every other icon in this bar uses, so it reads as
+                visually heavier without a box around it.
               */
-              className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand text-white shadow-[0_3px_10px_-2px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] transition active:scale-95"
+              className="flex h-11 w-11 items-center justify-center text-foreground transition active:scale-95"
             >
-              <IoAddOutline className="h-[26px] w-[26px]" />
+              <IoAdd className="h-7 w-7 [filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.35))]" />
             </button>
           </PressIcon>
         ) : null}

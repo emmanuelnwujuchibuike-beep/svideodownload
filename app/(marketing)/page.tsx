@@ -99,18 +99,17 @@ export default function HomePage() {
         mobile menu, and the sticky ad (the failure removed in 135ed36).
       */}
       {/*
-        🔴 CORRECTED 2026-08-16 (owner, in two passes: first "no purple gradient
-        body or background anywhere", then the clarification — "native app body
-        are gray, and every other thing is white, header, sections, bottom nav
-        and all"). The ground stays: `--frenz-canvas` is now a TRUE neutral gray
-        (0% saturation, see the token's own note in globals.css) rather than the
-        45%-saturation lavender it was — that was the actual bug, not the
-        presence of a tinted ground at all. What DOES stay removed is the
-        header's `topGradient` wash: the owner was explicit that only /downloads
-        gets the purple glow, never the landing header.
+        🔴 REVERSED 2026-08-17 (owner: "change the landing page body theme from
+        grey to white like the download page" → "the body, header, everything
+        thats gray background to white"). The 2026-08-16 entry directly below
+        is the decision this replaces — kept deliberately, in two passes, one
+        day earlier. Left in place rather than deleted as a record that gray
+        was tried on purpose, in case a future request asks for it back. The
+        header's `topGradient` wash stays removed either way — that was never
+        about the gray ground, and the owner was explicit it's /downloads-only.
       */}
-      <div className="bg-[hsl(var(--frenz-canvas))] text-foreground">
-        <SiteHeader canvas />
+      <div className="bg-background text-foreground">
+        <SiteHeader />
         <main>
         <Hero />
         {/*

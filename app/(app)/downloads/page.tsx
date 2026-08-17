@@ -14,6 +14,15 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 /*
+  🔴 REVERSED 2026-08-17 (owner: "the body, header, everything thats gray
+  background to white ... i want the history page to be plain white too" —
+  confirmed this route, not the separate /history destination, which was
+  already white). The paragraph below is why the body was gray in the first
+  place; left as a record rather than deleted. The top bar was ALREADY white
+  before this change (the note's own point), so removing `canvas` from
+  `<AppContent>` below just brings the body up to match it — nothing else
+  here needed to move.
+
   🔴 THE TOP BAR AND SAFE AREA STAY WHITE — deliberately NOT the canvas (owner,
   2026-08-11: "let the download page top header and safe area be white").
 
@@ -26,7 +35,6 @@ export const dynamic = "force-dynamic";
 
   So the root layout's white `theme-color` is exactly right for this page and
   needs no per-route override, and `AppTopbar` keeps its default `bg-background`.
-  The body below it is still the canvas — see `<AppContent canvas>`.
 */
 
 export const metadata: Metadata = {
@@ -64,12 +72,7 @@ export const metadata: Metadata = {
 */
 export default function Downloads() {
   return (
-    /* `canvas` — the native-app ground, shared with the landing page (owner,
-       2026-08-11). It is on the SYNCHRONOUS shell rather than inside the
-       boundary below, so the tint is in the very first bytes and the skeleton
-       already paints on it; putting it on the streamed child would mean a white
-       flash for exactly as long as the data takes. */
-    <AppContent canvas>
+    <AppContent>
       <Suspense fallback={<DownloadsSkeleton />}>
         <DownloadsData />
       </Suspense>

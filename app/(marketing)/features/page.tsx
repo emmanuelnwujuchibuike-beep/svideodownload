@@ -90,13 +90,15 @@ export default function FeaturesPage() {
   );
 
   return (
-    /* 🔴 CORRECTED 2026-08-16 (owner: "native app body are gray, and every
-       other thing is white"). The gray ground stays — `--frenz-canvas` was
-       the bug (lavender-tinted, not gray; see the token's note in
-       globals.css), now fixed at the token so it's fixed here for free. No
-       `topGradient` here either way — this page never had one. */
-    <div className="bg-[hsl(var(--frenz-canvas))] text-foreground">
-      <SiteHeader canvas />
+    /* 🔴 REVERSED 2026-08-17 (owner: "the body, header, everything thats gray
+       background to white ... and also the feature page"). The 2026-08-16
+       entry directly below is the decision this replaces — that pass kept a
+       neutral-gray ground deliberately, twice-confirmed same day. Noted here
+       rather than deleted so the history of "we tried gray on purpose" isn't
+       lost if a future gray request shows up again. No `topGradient` here
+       either way — this page never had one. */
+    <div className="bg-background text-foreground">
+      <SiteHeader />
       {/* Native rhythm: content starts directly under the bar, as on iOS and as
           on the landing. `+7rem` left about a screen-third of empty canvas above
           the back button, which reads as a marketing page's letterhead — the

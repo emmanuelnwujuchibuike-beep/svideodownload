@@ -116,6 +116,12 @@ interface RawFormat {
   filesize?: number;
   filesize_approx?: number;
   format_note?: string;
+  // Only read for playlist ENTRIES (Instagram Story slides) — see
+  // `pickEntryMedia` below. Ordinary single-item extraction never touches
+  // this: the download step re-invokes yt-dlp with a height/"best" selector
+  // instead of a captured URL, so a stale CDN link is never at risk of being
+  // served for those.
+  url?: string;
 }
 
 interface RawInfo {
@@ -146,6 +152,10 @@ interface RawInfo {
   tbr?: number;
   filesize?: number;
   filesize_approx?: number;
+  // A tray-root Instagram Story URL (see `canonicalizeUrl`) resolves to a
+  // PLAYLIST — one entry per slide — instead of a single item.
+  _type?: string;
+  entries?: RawInfo[];
 }
 
 function runYtDlp(
@@ -413,17 +423,82 @@ function mapFormats(info: RawInfo): MediaFormat[] {
   return [...video, ...audio];
 }
 
+/** Headers Instagram's CDN accepts for a signed media URL captured at extraction
+ *  time — mirrors the header shape already proven working for Instagram direct
+ *  URLs elsewhere in this codebase (apify-instagram.ts, the disabled custom
+ *  extractor). No cookies/session needed: the signature is IN the URL. */
+const IG_DIRECT_HEADERS = { "User-Agent": "Mozilla/5.0", Referer: "https://www.instagram.com/" };
+
+/**
+ * Picks the single best real media URL out of ONE playlist entry (one
+ * Instagram Story slide). Unlike `mapFormats` above — which builds a
+ * multi-tier quality LADDER re-resolved by yt-dlp at download time — a story
+ * slide is downloaded straight from the URL captured HERE (see
+ * `mapPlaylistFormats`), because a second yt-dlp call against the tray-root
+ * URL has no way to say "give me slide 3 again". So this returns one URL, not
+ * a ladder, same as `tryStorySlides` does for Facebook Stories.
+ */
+function pickEntryMedia(entry: RawInfo): { url: string; height: number | null; ext: string } | null {
+  let best: RawFormat | null = null;
+  for (const f of entry.formats ?? []) {
+    if (!f.url) continue;
+    const isStoryboard = f.ext === "mhtml" || /storyboard/i.test(f.format_note || "");
+    const hasVideo = !isStoryboard && f.vcodec !== "none" && (!!f.vcodec || !!f.height || !!f.width);
+    if (!hasVideo) continue;
+    if (!best || (f.height ?? 0) > (best.height ?? 0)) best = f;
+  }
+  if (best?.url) return { url: best.url, height: best.height ?? null, ext: best.ext || "mp4" };
+  // Single-file shape: the entry itself carries the URL directly, no formats[].
+  if (entry.url && entry.vcodec !== "none") {
+    return { url: entry.url, height: entry.height ?? null, ext: entry.ext || "mp4" };
+  }
+  return null;
+}
+
+/**
+ * One MediaFormat per Story slide yt-dlp resolved. A slide yt-dlp couldn't
+ * extract (historically: photo-only story frames — yt-dlp's Instagram support
+ * is video-first) is silently skipped rather than failing the whole story,
+ * same undercount-over-corrupt trade-off `tryStorySlides` documents for
+ * Facebook.
+ */
+function mapPlaylistFormats(entries: RawInfo[]): MediaFormat[] {
+  const formats: MediaFormat[] = [];
+  entries.forEach((entry, i) => {
+    const media = pickEntryMedia(entry);
+    if (!media) return;
+    formats.push({
+      formatId: `ig-story-${i}`,
+      kind: "video",
+      label: `Story ${i + 1}`,
+      ext: media.ext,
+      resolution: media.height ? `${media.height}p` : null,
+      fps: null,
+      filesize: null,
+      tbr: null,
+      vcodec: "h264",
+      acodec: "aac",
+      directUrl: media.url,
+      httpHeaders: IG_DIRECT_HEADERS,
+      isSeparateItem: true,
+    });
+  });
+  return formats;
+}
+
 function mapInfo(info: RawInfo, sourceUrl: string): VideoMetadata {
   const platform = detectPlatform(sourceUrl);
+  const entries = info._type === "playlist" ? info.entries : undefined;
+  const isPlaylist = !!entries?.length;
   return {
     id: info.id || crypto.randomUUID(),
     platform: platform.id,
     platformName: platform.name,
     sourceUrl,
-    title: info.title?.trim() || "Untitled",
+    title: info.title?.trim() || (isPlaylist ? "Instagram Story" : "Untitled"),
     description: info.description?.trim() || null,
-    thumbnail: info.thumbnail || null,
-    durationSeconds: info.duration ?? null,
+    thumbnail: info.thumbnail || (isPlaylist ? (entries!.find((e) => e.thumbnail)?.thumbnail ?? null) : null),
+    durationSeconds: isPlaylist ? null : (info.duration ?? null),
     creator: info.uploader || info.channel || info.creator || null,
     uploadDate: info.upload_date
       ? `${info.upload_date.slice(0, 4)}-${info.upload_date.slice(4, 6)}-${info.upload_date.slice(6, 8)}`
@@ -431,7 +506,7 @@ function mapInfo(info: RawInfo, sourceUrl: string): VideoMetadata {
     viewCount: info.view_count ?? null,
     likeCount: info.like_count ?? null,
     webpageUrl: info.webpage_url || sourceUrl,
-    formats: mapFormats(info),
+    formats: isPlaylist ? mapPlaylistFormats(entries!) : mapFormats(info),
     extractor: "ytdlp",
   };
 }
@@ -486,6 +561,30 @@ async function canonicalizeUrl(url: string): Promise<string> {
       const m = u.pathname.match(/\/pin\/(\d+)/);
       if (m) return `https://www.pinterest.com/pin/${m[1]}/`;
     }
+
+    /*
+      🔴 INSTAGRAM STORIES: drop the specific item id, keep only the username
+      (owner, 2026-08-17: "it only fetch a random single wrong file... and is
+      suppose to fetch all posts on the story").
+
+      A copied story link points at ONE item (`/stories/<user>/<id>/`).
+      yt-dlp's story extractor fetches the user's whole current tray and then
+      tries to MATCH `<id>` against it to return just that one — a match that
+      has proven unreliable (wrong item back), and even when it works it
+      discards every other slide. The bare tray root (`/stories/<user>/`) has
+      no id to match, so the extractor has no single-item path to take and
+      always hands back the FULL tray as a playlist; `mapInfo` below turns
+      every entry in it into its own downloadable format, the same way
+      `tryStorySlides` already does for Facebook Stories. `/stories/highlights/
+      <id>/` is excluded — a Highlight is a curated collection identified BY
+      that id, not an ephemeral tray with a root to fall back to.
+    */
+    if (host === "instagram.com" || host === "instagr.am") {
+      const m = u.pathname.match(/^\/stories\/([^/]+)\//);
+      if (m && m[1] !== "highlights") {
+        return `https://www.instagram.com/stories/${m[1]}/`;
+      }
+    }
   } catch {
     /* fall through to original url */
   }
@@ -500,9 +599,12 @@ async function canonicalizeUrl(url: string): Promise<string> {
  */
 export async function extractMetadata(url: string): Promise<VideoMetadata> {
   url = await canonicalizeUrl(url);
+  // An Instagram Story tray root (see canonicalizeUrl) IS the playlist we
+  // want in full — `--no-playlist` must not be there to trim it back down.
+  const isIgStoryTray = /^https:\/\/www\.instagram\.com\/stories\/[^/]+\/$/.test(url);
   const baseArgs = [
     "-J",
-    "--no-playlist",
+    ...(isIgStoryTray ? [] : ["--no-playlist"]),
     "--no-warnings",
     "--no-call-home",
     "--socket-timeout",

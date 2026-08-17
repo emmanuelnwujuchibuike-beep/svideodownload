@@ -223,6 +223,17 @@ export async function apifyExtract(url: string): Promise<VideoMetadata | null> {
   }
 
   // Instagram
+  /*
+    🔴 Stories can't go through the "posts" path below (owner, 2026-08-17:
+    Story fetching "takes ages"). `resultsType: "posts"` + `directUrls` asks
+    the actor to resolve a POST, and a Story url is never one — every call
+    here was burning up to APIFY_TIMEOUT_MS (120s default) only to come back
+    empty, on EVERY Story fetch, stacked on top of whatever yt-dlp already
+    spent. Bail immediately instead; ytdlp-service.ts's canonicalizeUrl +
+    playlist handling is the real Story path now.
+  */
+  if (/\/stories\//i.test(url)) return null;
+
   const items = (await runActor(APIFY_IG_ACTOR, {
     directUrls: [url],
     resultsType: "posts",

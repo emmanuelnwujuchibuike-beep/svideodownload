@@ -63,11 +63,21 @@ interface CommentsData {
  */
 export function ImageViewer({
   item,
+  posts,
   startIndex = 0,
   autoOpenComments,
   onClose,
 }: {
   item: FeedItem | null;
+  /**
+   * The ordered list of feed posts this viewer can move between on a
+   * vertical swipe (owner, 2026-08-17: a multi-photo post's viewer should
+   * "slide in reels" — the same Y-axis-between-posts model ReelsFeed already
+   * gives videos, via `SmartFeed`'s `photoPosts`). Optional: when absent (or
+   * `item` isn't in it), Y-axis navigation is simply unavailable — never a
+   * crash, just no-op past the album's own X-axis slides.
+   */
+  posts?: FeedItem[];
   /** Which slide of an album was actually tapped — not always the first. */
   startIndex?: number;
   /** Open straight into the comments sheet — a feed "Comment" tap should land
@@ -77,10 +87,38 @@ export function ImageViewer({
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  // The post actually on screen — starts as whatever the feed tapped, but a
+  // Y-axis swipe inside an album can move it forward/back through `posts`
+  // without closing and reopening the whole viewer.
+  const [current, setCurrent] = useState(item);
+  useEffect(() => setCurrent(item), [item]);
+
+  const navigatePost = useCallback(
+    (dir: "next" | "prev") => {
+      if (!posts || !current) return;
+      const idx = posts.findIndex((p) => p.id === current.id);
+      if (idx === -1) return;
+      const target = posts[dir === "next" ? idx + 1 : idx - 1];
+      if (target) setCurrent(target);
+    },
+    [posts, current],
+  );
+
   if (!mounted) return null;
   return createPortal(
     <AnimatePresence>
-      {item ? <ImageStage key={item.id} item={item} startIndex={startIndex} autoOpenComments={autoOpenComments} onClose={onClose} /> : null}
+      {current ? (
+        <ImageStage
+          key={current.id}
+          item={current}
+          // Only honour the tapped slide index on the ORIGINAL post — a post
+          // reached via Y-axis navigation always opens on its first slide.
+          startIndex={current.id === item?.id ? startIndex : 0}
+          autoOpenComments={current.id === item?.id ? autoOpenComments : false}
+          onClose={onClose}
+          onNavigatePost={posts && posts.length > 1 ? navigatePost : undefined}
+        />
+      ) : null}
     </AnimatePresence>,
     document.body,
   );
@@ -91,11 +129,15 @@ function ImageStage({
   startIndex = 0,
   autoOpenComments,
   onClose,
+  onNavigatePost,
 }: {
   item: FeedItem;
   startIndex?: number;
   autoOpenComments?: boolean;
   onClose: () => void;
+  /** Present only when there's a real adjacent post to move to (see
+   *  ImageViewer above) — undefined means "no Y-axis navigation available". */
+  onNavigatePost?: (dir: "next" | "prev") => void;
 }) {
   const src = item.mediaUrl || item.thumbnailUrl || "";
   // An album (>1 item) swipes through every photo/video right here in
@@ -320,6 +362,7 @@ function ImageStage({
             onTap={() => setUi((v) => !v)}
             onDoubleTap={likeBurst}
             onDismiss={onClose}
+            onNavigatePost={onNavigatePost}
           />
         ) : (
           <div
@@ -601,13 +644,19 @@ function ImageStage({
   );
 }
 
+/** Stories-style: how long an unattended slide stays up before auto-advancing. */
+const ALBUM_AUTO_SLIDE_MS = 3500;
+
 /**
- * Fullscreen album — swipes horizontally through every photo/video of a
- * multi-media post, opening on the exact slide that was tapped (never
- * always the first). Reuses the same tap/double-tap/swipe-down-to-dismiss
- * gesture model as a single photo: a tap toggles the chrome, a double-tap
- * likes the post (comments/likes/caption stay post-level, matching how
- * Instagram/TikTok carousel posts work — one thread for the whole post).
+ * Fullscreen album — opens on the exact slide that was tapped (never always
+ * the first), then AUTO-SLIDES through the rest Stories-style until the
+ * viewer touches the screen at all, at which point autoplay stops for good
+ * and every further slide change is manual (owner, 2026-08-17: "auto slide
+ * and when tapped it stops and demands a manual slide"). A vertical swipe
+ * moves to the NEXT/PREVIOUS POST — Y-axis Reels-style navigation between
+ * whole posts — rather than dismissing the viewer, whenever a post list to
+ * navigate is actually available (`onNavigatePost` — see ImageViewer); with
+ * none, it falls back to the original swipe-down-to-dismiss.
  */
 function AlbumSwipe({
   items,
@@ -616,6 +665,7 @@ function AlbumSwipe({
   onTap,
   onDoubleTap,
   onDismiss,
+  onNavigatePost,
 }: {
   items: NonNullable<FeedItem["mediaItems"]>;
   startIndex: number;
@@ -623,13 +673,39 @@ function AlbumSwipe({
   onTap: () => void;
   onDoubleTap: (x: number, y: number) => void;
   onDismiss: () => void;
+  onNavigatePost?: (dir: "next" | "prev") => void;
 }) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [index, setIndex] = useState(startIndex);
+  const indexRef = useRef(index);
+  indexRef.current = index;
   const raf = useRef(0);
   const startPt = useRef<{ x: number; y: number } | null>(null);
   const moved = useRef(false);
   const lastTap = useRef(0);
+  // Starts true for any real album; a single-slide "album" (shouldn't
+  // normally reach this component, but defensively) never auto-advances
+  // into nothing.
+  const [autoPlaying, setAutoPlaying] = useState(items.length > 1);
+
+  // Stories-style auto-advance: one persistent interval (not recreated on
+  // every slide change — it reads the CURRENT index via ref each tick)
+  // until it either reaches the last slide or the viewer touches the
+  // screen at all (see `stopAutoPlay` in the pointer handlers below).
+  useEffect(() => {
+    if (!autoPlaying) return;
+    const id = setInterval(() => {
+      const el = scroller.current;
+      if (!el || el.clientWidth === 0) return;
+      const next = indexRef.current + 1;
+      if (next >= items.length) {
+        setAutoPlaying(false);
+        return;
+      }
+      el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
+    }, ALBUM_AUTO_SLIDE_MS);
+    return () => clearInterval(id);
+  }, [autoPlaying, items.length]);
 
   // Sequential/priority loading (same fix as the feed's inline MediaCarousel
   // — see [[media-zoom-scroll-fixes]]): every slide used to mount its real
@@ -673,6 +749,11 @@ function AlbumSwipe({
   const onPointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
+    // ANY touch on the album — tap, drag, whatever it turns out to be —
+    // ends autoplay for good (owner: "when tapped it stops and demands a
+    // manual slide"). Deliberately in pointerDOWN, not resolved later in
+    // pointerUp, so it can never race a fast follow-up gesture.
+    if (autoPlaying) setAutoPlaying(false);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!startPt.current || moved.current) return;
@@ -682,13 +763,19 @@ function AlbumSwipe({
     const start = startPt.current;
     startPt.current = null;
     if (moved.current) {
-      // A real drag: a mostly-VERTICAL downward swipe dismisses (same as a
-      // single photo); a mostly-horizontal one is the album's own native
-      // swipe-between-slides — never misread as a tap or a dismiss.
+      // A real drag: a mostly-VERTICAL swipe moves to the next/previous POST
+      // — Reels-style Y-axis navigation between whole posts (owner: "when
+      // slide from Y axis it slides in reels") — when there's a post list to
+      // navigate; otherwise it falls back to the original swipe-DOWN-to-
+      // dismiss. A mostly-horizontal drag is the album's own native
+      // swipe-between-slides and is never misread as either.
       if (start) {
         const dx = e.clientX - start.x;
         const dy = e.clientY - start.y;
-        if (Math.abs(dy) > Math.abs(dx) && dy > 90) onDismiss();
+        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 90) {
+          if (onNavigatePost) onNavigatePost(dy < 0 ? "next" : "prev");
+          else if (dy > 0) onDismiss();
+        }
       }
       return;
     }

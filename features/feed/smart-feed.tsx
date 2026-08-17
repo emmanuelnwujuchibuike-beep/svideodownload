@@ -252,6 +252,11 @@ export function SmartFeed({
   // cards then never re-render just because the list grew.
   const videosRef = useRef(videos);
   videosRef.current = videos;
+  // Every loaded photo/album post, in feed order — the ImageViewer's own
+  // "reel playlist" (owner, 2026-08-17: a multi-photo post's viewer should
+  // "slide in reels" on a vertical swipe, the same Y-axis-between-posts
+  // pattern ReelsFeed already gives videos via `videos` above).
+  const photoPosts = useMemo(() => items.filter((i) => i.mediaKind === "image"), [items]);
 
   // Warm every full-screen viewer's chunk once the feed itself has settled —
   // whichever a viewer taps next (a video, an image, or Reels), its code is
@@ -895,7 +900,15 @@ export function SmartFeed({
         />
       ) : null}
       {imageReady && image && !viewerChunksReady ? <ImageOpenFallback item={image} startIndex={imageStartIndex} /> : null}
-      {imageReady ? <ImageViewer item={image} startIndex={imageStartIndex} autoOpenComments={imageAutoComments} onClose={() => setImage(null)} /> : null}
+      {imageReady ? (
+        <ImageViewer
+          item={image}
+          posts={photoPosts}
+          startIndex={imageStartIndex}
+          autoOpenComments={imageAutoComments}
+          onClose={() => setImage(null)}
+        />
+      ) : null}
 
       {/* Instant, in-place full reels experience (For You / Following tabs), nav
           visible, seeded on the tapped video — closes via state (no navigation). */}

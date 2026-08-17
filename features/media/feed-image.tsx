@@ -27,6 +27,7 @@ export function FeedImage({
   onDoubleTapLike,
   onExpand,
   className,
+  children,
 }: {
   src: string;
   alt: string;
@@ -37,6 +38,16 @@ export function FeedImage({
   onDoubleTapLike: () => void;
   onExpand: () => void;
   className?: string;
+  /**
+   * Overlay content (e.g. a views-count badge) positioned relative to THIS
+   * component's own box — not the caller's outer wrapper. 2026-08-17: a
+   * views badge rendered as a SIBLING in feed-post-card.tsx, absolutely
+   * positioned against that outer wrapper, floated away from the actual
+   * photo once this box could be narrower than its wrapper (the max-h-45vh
+   * cap centering a tall photo). Passing it in here instead means it's
+   * always anchored to the real, possibly-narrower media box.
+   */
+  children?: React.ReactNode;
 }) {
   const hasDims = !!width && !!height && width > 0 && height > 0;
   const [burst, setBurst] = useState(0);
@@ -121,15 +132,21 @@ export function FeedImage({
     `lib/media/aspect.ts`'s reversal note for the full reasoning; the
     2026-08-16 brief directly below is kept for context, but `clampFeedRatio`
     no longer clamps anything despite the name — `ratio` here is the photo's
-    real, unaltered shape. The `max-h-[70vh]` on the container below is the
-    new safety net (a genuine ceiling, but a generous one meant to essentially
-    never trigger on real content, not a de-facto ratio clamp).
+    real, unaltered shape. The `max-h-[45vh]` on the container below is what
+    keeps a post compact — a HEIGHT ceiling, not a ratio clamp, so the box
+    never disagrees with the photo's true shape (no letterboxing), but for
+    genuinely tall content it DOES actively trigger, on purpose.
 
-    ── The feed's Twitter/Threads density cap (owner, 2026-08-16) ────────────
+    ── The feed's Twitter/Threads density cap (owner, 2026-08-16, retightened
+    2026-08-17: "they should be skrinked so two post can show on one
+    screenview") ─────────────────────────────────────────────────────────
     "every long video or image should shrink on the feed like Twitter… two
-    posts that will be able to show complete." `fill` mode is still used —
-    a `fill` image has no size of its own, so the container's aspect-ratio
-    (now the photo's TRUE one) is what determines the rendered height.
+    posts that will be able to show complete." First implemented at 70vh,
+    which the owner's own screenshots showed was still too tall — 45vh is
+    closer to the ~43% height a post's media occupies in the owner's X
+    reference screenshot. `fill` mode is still used — a `fill` image has no
+    size of its own, so the container's aspect-ratio (now the photo's TRUE
+    one) is what determines the rendered height.
   */
   const ratio = hasDims ? clampFeedRatio(width, height) : null;
 
@@ -150,7 +167,7 @@ export function FeedImage({
         // above), it needs to center itself and carry its own rounded corners —
         // the outer wrapper's rounding only reaches the card's own edges, which
         // this box no longer touches in that case.
-        "relative mx-auto flex max-h-[70vh] items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+        "relative mx-auto flex max-h-[45vh] items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
         className,
       )}
       // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
@@ -206,10 +223,10 @@ export function FeedImage({
           alt={alt}
           // `fill`, not `width`/`height`: the CONTAINER's aspect-ratio (set
           // above, the photo's own TRUE shape, unclamped) is what sizes this
-          // image now — `object-contain` is effectively a no-op in the
-          // common case since the box already matches the image exactly, and
-          // only shrinks it (never crops) in the rare case the `max-h-[70vh]`
-          // safety net on the container actually triggers.
+          // image now — `object-contain` is a no-op for a short/wide photo
+          // (box already matches it exactly) and only shrinks (never crops)
+          // a tall photo once the `max-h-[45vh]` cap narrows the box below
+          // the photo's own preferred height.
           fill
           sizes="(max-width: 768px) 100vw, 640px"
           // EAGER, not next/image's default lazy. The feed only mounts a card
@@ -263,6 +280,8 @@ export function FeedImage({
       <span className={cn("pointer-events-none absolute bottom-2 left-2.5 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur", liked && "hidden")}>
         Double-tap to Wow
       </span>
+
+      {children}
     </div>
   );
 }

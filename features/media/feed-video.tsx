@@ -106,6 +106,18 @@ export function FeedVideo({
   const [showPause, setShowPause] = useState(false);
   const [covered, setCovered] = useState(true);
   const [shouldLoad, setShouldLoad] = useState(false);
+  // 🔴 Owner, 2026-08-17, with a screenshot: "the feed should never show this
+  // question mark and a white line when loading delays or bad network,
+  // rather is should show a blank and loading state". That glyph is the
+  // BROWSER's own default broken-image icon — neither the poster overlay
+  // `<img>` below nor the blurred backdrop had an `onError` handler, so a
+  // failed/timed-out fetch on a bad connection fell through to the
+  // browser's raw fallback instead of anything this app controls. Once
+  // either fails, `posterBroken` hides BOTH (and drops the native
+  // `<video poster>` attribute, which has no reliable error event of its
+  // own to catch) — the wrapper's plain `bg-black` is the "blank" state,
+  // no glyph, no icon, ever.
+  const [posterBroken, setPosterBroken] = useState(false);
   // The card shows the video at its TRUE aspect ratio — nothing is ever
   // cropped or letterboxed. The `max-h-[85vh]`/`lg:max-h-[82vh]` safety net
   // below is the only ceiling on tallness.
@@ -339,13 +351,14 @@ export function FeedVideo({
         `poster` frame this component already has on hand. Once the box
         resizes to the correct ratio, this is fully covered and invisible.
       */}
-      {poster ? (
+      {poster && !posterBroken ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={poster}
           alt=""
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10 h-full w-full scale-110 object-cover opacity-30 blur-2xl"
+          onError={() => setPosterBroken(true)}
         />
       ) : null}
 
@@ -354,7 +367,14 @@ export function FeedVideo({
         ref={video}
         // Source (HLS or MP4, seeked to a first frame when there's no poster) is
         // attached imperatively by useAdaptiveSource when near the viewport.
-        poster={poster ?? undefined}
+        //
+        // No `poster` once it's known broken — the native attribute has no
+        // reliable error event of its own, so a failed fetch there falls
+        // through to the BROWSER's own default broken-image glyph with
+        // nothing this component can catch or replace. The controlled `<img>`
+        // cover overlay below (which DOES have `onError`) is the only poster
+        // rendering path once a failure is detected.
+        poster={posterBroken ? undefined : (poster ?? undefined)}
         loop
         muted
         playsInline
@@ -420,10 +440,20 @@ export function FeedVideo({
       />
 
       {/* Cover — shows the poster until the first frame actually plays, so a
-          not-yet-decoded clip never flashes a blank black screen. */}
-      {covered && poster ? (
+          not-yet-decoded clip never flashes a blank black screen. `onError`
+          is the actual fix for the browser's own broken-image glyph on a
+          bad connection (see `posterBroken` above) — on failure this just
+          stops rendering, leaving the plain `bg-black` wrapper: blank, not
+          broken. */}
+      {covered && poster && !posterBroken ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full object-contain" />
+        <img
+          src={poster}
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+          onError={() => setPosterBroken(true)}
+        />
       ) : null}
 
       {/* Paused-while-holding indicator */}

@@ -181,16 +181,26 @@ export function FeedImage({
           Deliberately a separate, tiny (16px) optimized fetch — not the full-res
           `src` — so it downloads near-instantly instead of duplicating the
           full-quality image the foreground already requests (Loading Architecture:
-          never load full-resolution images just to blur them). */}
-      <Image
-        src={src}
-        alt=""
-        aria-hidden
-        width={16}
-        height={16}
-        quality={20}
-        className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl"
-      />
+          never load full-resolution images just to blur them).
+          `!broken`/`onError` (owner, 2026-08-17: "the feed should never show
+          this question mark and a white line when loading delays or bad
+          network") — a failed fetch on this tiny request otherwise falls
+          through to the browser's own broken-image glyph same as the
+          foreground would; sharing the foreground's `broken` state means one
+          failure hides both instead of the backdrop lingering broken behind
+          the (already-handled) foreground placeholder. */}
+      {!broken ? (
+        <Image
+          src={src}
+          alt=""
+          aria-hidden
+          width={16}
+          height={16}
+          quality={20}
+          className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl"
+          onError={() => setBroken(true)}
+        />
+      ) : null}
       {/* Foreground: next/image (AVIF/WebP + right-sized) when the natural size is
           known; otherwise a plain lazy <img> at natural aspect (older posts).
           A load failure (404/CORS/offline) falls back to a branded placeholder

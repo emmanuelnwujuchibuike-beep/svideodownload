@@ -753,33 +753,29 @@ async function loadHomeFeed(
     const muted = new Set(((mutes.data ?? []) as { muted_id: string }[]).map((m) => m.muted_id));
     const followingSet = new Set(followingIds);
 
-    // Per-publisher diversity cap keeps one creator from flooding the feed — but
-    // on a small creator base it starves it (2 creators × cap 2 = only 4 posts).
-    // So relax the cap hard when there are few distinct creators to show.
-    const distinctPublishers = new Set(rows.map((r) => r.publisher_id)).size;
-    const diversityCap = distinctPublishers <= 8 ? 1000 : Math.max(settings.diversityCap, 2);
+    /*
+      🔴 THE DIVERSITY CAP IS OFF (owner, 2026-08-17 — first "many images and
+      videos i uploaded are not showing in feed", then, after an exempt-the-
+      viewer-only fix still left it capping everyone else: "the feed still
+      doesnt show all the media and videos i and all users have uploaded...
+      all should show completely, rank by new and most liked").
 
-    const perPublisher = new Map<string, number>();
+      It used to cap every publisher (including the viewer) to `diversityCap`
+      posts (default 2, lib/social/feed.ts) in the whole ranked 400-row
+      window, applied ONCE before pagination slices it — so scrolling further
+      never reached whatever got capped, which is exactly the "I see a
+      Continue-in-Reels button" symptom (nextOffset going null well before
+      every real post was ever shown). The owner's explicit standing
+      instruction for THIS surface is comprehensiveness, not algorithmic
+      diversity throttling — so nothing here caps by publisher any more.
+      `lib/social/feed.ts`'s Explore feed is untouched — that surface's own
+      diversity cap is a separate decision this instruction wasn't about.
+    */
     const kept: FeedItem[] = [];
     for (const r of rows) {
       if (suspended.has(r.publisher_id) || lowTrust.has(r.publisher_id) || blocked.has(r.publisher_id) || muted.has(r.publisher_id)) continue;
       // Opt-outs are hidden from discovery, but a creator you follow can still appear.
       if (optedOut.has(r.publisher_id) && !followingSet.has(r.publisher_id) && r.publisher_id !== viewerId) continue;
-      const n = perPublisher.get(r.publisher_id) ?? 0;
-      // 🔴 THE VIEWER'S OWN POSTS ARE NEVER CAPPED (owner, 2026-08-17: "many
-      // images and videos i uploaded are not showing in feed, all should
-      // show completely"). `diversityCap` defaults to 2 (lib/social/feed.ts)
-      // and applies uniformly to every publisher in the ranked window,
-      // including the viewer themselves — once there are more than 8 active
-      // publishers, a viewer who has posted 10 times would see at most 2 of
-      // THEIR OWN uploads, ever, for that refresh, with no way to reach the
-      // other 8 by scrolling (the cap is applied once to the whole 400-row
-      // window before pagination slices it, not per-page). The diversity cap
-      // itself stays intact for every OTHER publisher — it exists to stop
-      // one creator from flooding a viewer's feed, and that's still correct
-      // for content that isn't the viewer's own.
-      if (n >= diversityCap && r.publisher_id !== viewerId) continue;
-      perPublisher.set(r.publisher_id, n + 1);
 
       const prof = profById.get(r.publisher_id);
       if (!prof) continue;

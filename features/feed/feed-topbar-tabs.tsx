@@ -25,15 +25,29 @@ const TABS: {
   { key: "following", label: "Following", outline: FrenzFriendsOutline, solid: FrenzFriendsSolid },
 ];
 
+// Same two-tier recipe as mobile-nav.tsx's `GLYPH_ACTIVE`/`GLYPH_INACTIVE` —
+// reused verbatim (not just "inspired by") so this row's icons read as the
+// SAME weight/depth as the bottom nav's, per the owner's own comparison.
+const GLYPH_ACTIVE = "text-primary [filter:drop-shadow(0_4px_10px_rgba(79,70,229,0.7))]";
+const GLYPH_INACTIVE = "text-muted-foreground [filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.3))]";
+
 /**
  * The feed's segmented control, lifted into the top nav (owner spec: "take
- * For You and Following upwards to the top nav"). Matches the owner's
- * mockup: the active tab ("For You" by default) expands into a vivid
- * blue→purple brand-gradient pill (white icon+label), the other collapses to
- * a plain circular chip — the same flat gray look as the search/add-friend
- * icons either side of this row. Owner correction (2026-07-13): the small
- * brand-purple accent dot every inactive chip used to carry is removed —
- * "remove the purple dots from the top nav".
+ * For You and Following upwards to the top nav"). The active tab expands to
+ * show its label; the inactive one collapses to an icon-only circular chip.
+ *
+ * 🔴 BLUE GRADIENT PILL REMOVED (owner, 2026-08-17: "remove the blue
+ * background on the for you and following button that shows a button is
+ * active… use just text icon color active and not a background color just a
+ * light premium glass gray background… make the for you and following icon
+ * more premium and 3d with a darker and bolder icon like the bottom nav
+ * icon"). The vivid `bg-brand` pill this used to animate between tabs is
+ * gone — the SAME sliding-pill motion (`layoutId`, unchanged) now animates a
+ * neutral glass-gray chip instead, and "active" is signaled by the icon/label
+ * turning `text-primary` (color, not a background) plus the mobile-nav-style
+ * drop-shadow filter for the bolder/3d look, not by a filled background.
+ * Owner correction (2026-07-13, still true): no purple accent dot on the
+ * inactive chip.
  *
  * 🔴 REELS REMOVED (owner, 2026-08-16: "move the reel button at the top to
  * bottom in full bleed"). It used to be a third, permanently-inactive tab
@@ -73,20 +87,20 @@ export function FeedTopbarTabs({
             transition={springs.press}
             className={cn(
               "relative flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full font-bold transition-colors",
-              active
-                ? "px-4 text-[13px] text-white"
-                : "w-10 bg-secondary/50 text-foreground/85 ring-1 ring-inset ring-border/50 hover:bg-secondary",
+              active ? cn("px-4 text-[13px] text-primary") : cn("w-10 text-muted-foreground", "hover:bg-secondary"),
             )}
           >
             {active ? (
               <motion.span
                 layoutId="feed-topbar-pill"
                 transition={springs.bounce}
-                className="absolute inset-0 -z-10 rounded-full bg-brand shadow-[0_4px_16px_-4px] shadow-[hsl(var(--brand-purple)/0.45)]"
+                className="absolute inset-0 -z-10 rounded-full bg-secondary/70 ring-1 ring-inset ring-border/60"
               />
-            ) : null}
+            ) : (
+              <span className="absolute inset-0 -z-10 rounded-full bg-secondary/50 ring-1 ring-inset ring-border/50" />
+            )}
             <PressIcon active={active}>
-              <Icon className={active ? "h-[18px] w-[18px]" : "h-5 w-5"} />
+              <Icon className={cn(active ? "h-[18px] w-[18px]" : "h-5 w-5", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
             </PressIcon>
             {active ? <span className="whitespace-nowrap">{t.label}</span> : null}
           </motion.button>

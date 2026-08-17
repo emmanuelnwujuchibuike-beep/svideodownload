@@ -1,6 +1,6 @@
 "use client";
 
-import { IoAdd, IoCloudUploadOutline, IoSearchOutline } from "react-icons/io5";
+import { IoAdd, IoCloudUploadOutline, IoPersonAdd, IoSearchOutline } from "react-icons/io5";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
@@ -30,6 +30,15 @@ export function AppTopbar() {
   // other route keeps it. Thread pages already cover it with their own
   // full-screen overlay, so only the index needs this.
   const onMessagesIndex = pathname === "/messages";
+  // The add-friends icon used to live in the far-left cluster before the
+  // plus button took its slot (owner, 2026-08-16 — see that comment below).
+  // Owner, 2026-08-17: "put the add friend button we remove from the feed
+  // top header earlier and put it on the friends page top header at the
+  // right side close to the notification icon" — it's back, but scoped to
+  // ONLY the /friends hub itself (not its sub-pages like /friends/discover,
+  // which is literally where this button navigates TO — showing it there
+  // too would be a link to the page you're already on).
+  const onFriendsIndex = pathname === "/friends";
   const inputRef = useRef<HTMLInputElement | null>(null);
   // The feed lifts its For You/Following control up here (owner spec) —
   // every other page's search bar is untouched, since only the feed ever
@@ -242,6 +251,35 @@ export function AppTopbar() {
               <IconTile>
                 <IoCloudUploadOutline className="h-[26px] w-[26px]" />
               </IconTile>
+            </Link>
+          </PressIcon>
+        ) : null}
+
+        {/*
+          🔴 ADD-FRIENDS, BACK — BUT ONLY ON /friends ITSELF (owner,
+          2026-08-17). Bare glyph, no box/ring — the same recipe as the plus
+          button above (`text-foreground` + drop-shadow filter + the filled
+          Ionicon variant for boldness, since Ionicons have no useful
+          `strokeWidth`), per the owner's explicit "make the icon as dark and
+          3d as the other icon on the top header". Same `lg:hidden` scope as
+          the notification bell it sits beside — desktop already has the
+          full-page discovery UI inline on this route.
+        */}
+        {onFriendsIndex ? (
+          <PressIcon className="lg:hidden">
+            <Link
+              href="/friends/discover"
+              onPointerEnter={() => router.prefetch("/friends/discover")}
+              onPointerDown={() => router.prefetch("/friends/discover")}
+              onClick={() => {
+                haptic("light");
+                playSound("tap");
+              }}
+              aria-label="Add friends"
+              title="Add friends"
+              className="flex h-11 w-11 items-center justify-center text-foreground transition active:scale-95"
+            >
+              <IoPersonAdd className="h-[26px] w-[26px] [filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.35))]" />
             </Link>
           </PressIcon>
         ) : null}

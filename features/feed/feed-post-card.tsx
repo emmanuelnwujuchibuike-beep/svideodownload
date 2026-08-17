@@ -380,7 +380,7 @@ function FeedPostCardImpl({
           follow reposted this, plus their recommendation caption when they wrote
           one. Never distracts from the content below. */}
       {item.repostBadge && item.repostBadge.count > 0 ? (
-        <div className="px-4 pt-3">
+        <div className="px-2 pt-1 sm:px-3">
           <button
             type="button"
             onClick={() => {
@@ -425,7 +425,7 @@ function FeedPostCardImpl({
           controls (Feature 17 Part 13's "Discovery Transparency" made
           actionable, not just descriptive text). */}
       {reason ? (
-        <div className="px-4 pb-0 pt-3 sm:px-5">
+        <div className="px-2 pb-0 pt-1 sm:px-3">
           <button
             type="button"
             onClick={() => { setPrefsReady(true); setPrefsOpen(true); }}
@@ -437,124 +437,146 @@ function FeedPostCardImpl({
         </div>
       ) : null}
 
-      {/* Header */}
-      <div className="flex items-center gap-3 p-4 pb-3 sm:p-5 sm:pb-3">
-        <Link href={`/u/${item.publisher.handle}`} className="shrink-0 rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] transition-transform duration-300 group-hover:scale-105">
+      {/*
+        🔴 TWO-COLUMN TWITTER LAYOUT (owner, 2026-08-17: "the profile ring
+        and header should be at the far left end like twitter... the media
+        and profile position" — after an earlier message of the owner's had
+        read as walking this back, a later message in the same day clarified
+        it was still wanted: "you have not done feed card arangement"). The
+        avatar is now its OWN fixed-width left column, top-aligned; every-
+        thing else — name/handle/time, the F-mark + menu, caption, poll,
+        media, and the action row — lives in ONE right column next to it,
+        matching X's actual two-column tweet layout instead of Instagram's
+        stacked "avatar+name spans full width, media spans full width below"
+        arrangement this card used before. Card padding also tightened from
+        p-4/p-5 to px-2 (owner: "go to the extreme right end with just
+        padding 2") so the whole row sits closer to the screen edge.
+      */}
+      <div className="flex gap-2.5 px-2 sm:px-3">
+        <Link
+          href={`/u/${item.publisher.handle}`}
+          className="shrink-0 self-start rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] transition-transform duration-300 group-hover:scale-105"
+        >
           {item.publisher.avatarUrl ? (
-            <Image src={item.publisher.avatarUrl} alt="" width={44} height={44} className="h-11 w-11 rounded-full object-cover ring-2 ring-card" />
+            <Image src={item.publisher.avatarUrl} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover ring-2 ring-card" />
           ) : (
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white ring-2 ring-card">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white ring-2 ring-card">
               {item.publisher.displayName.charAt(0).toUpperCase()}
             </span>
           )}
         </Link>
-        <div className="min-w-0 flex-1">
-          <Link href={`/u/${item.publisher.handle}`} className="flex items-center gap-1 text-[15px] font-semibold leading-tight hover:underline">
-            <span className="truncate">{item.publisher.displayName}</span>
-            {item.publisher.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
-          </Link>
-          <p className="text-xs text-muted-foreground">@{item.publisher.handle} · {timeAgo(item.createdAt)}</p>
-        </div>
 
-        {!item.isOwner ? (
-          <button
-            type="button"
-            onClick={toggleFollow}
-            disabled={busy}
-            className={cn(
-              "hidden items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-60 sm:inline-flex",
-              following ? "bg-secondary text-foreground" : "bg-gradient-to-r from-blue-600 to-violet-600 text-white hover:opacity-95",
-            )}
-          >
-            {following ? <Check className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
-            {following ? "Following" : "Follow"}
-          </button>
-        ) : null}
-
-        {/*
-          🔴 F-MARK WATERMARK, TOP-RIGHT OF EVERY POST (owner, 2026-08-17, with
-          reference screenshots of the real X app: "the X logo by top side of
-          every post . all should be the same , replace the X logo with F
-          logo"). Real X stamps its own brand mark in this exact spot on every
-          tweet's header row — decorative, not interactive (no link, no click
-          target), same treatment here with Frenz's own mark instead. Sits
-          before the overflow menu, matching X's own left-to-right order
-          (brand mark, then the row's trailing controls).
-        */}
-        <FrenzLogo size={16} alt="" className="opacity-50" />
-
-        {/* Overflow menu */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-label="Post options"
-            aria-expanded={menuOpen}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-          >
-            <MoreHorizontal className="h-5 w-5" />
-          </button>
-          <AnimatePresence>
-            {menuOpen ? (
-              <>
-                <button type="button" aria-label="Close menu" onClick={() => setMenuOpen(false)} className="fixed inset-0 z-40 cursor-default" />
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-xl border border-border/70 bg-card py-1 shadow-elevated"
-                >
-                  <MenuItem icon={Share2} label="Share" onClick={() => { setMenuOpen(false); void share(); }} />
-                  <MenuItem icon={LinkIcon} label="Copy link" onClick={copyLink} />
-                  <MenuItem icon={Download} label="Download" onClick={() => { setMenuOpen(false); void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title }); }} />
-                  {item.isOwner ? (
-                    <MenuItem icon={Pencil} label="Edit post" onClick={() => { setMenuOpen(false); setEditReady(true); setEditOpen(true); }} />
-                  ) : null}
-                  {!item.isOwner ? (
-                    <>
-                      <MenuItem icon={UserPlus} label={following ? "Unfollow creator" : "Follow creator"} onClick={toggleFollow} />
-                      <MenuItem icon={BellOff} label="Mute creator" onClick={muteCreator} />
-                    </>
-                  ) : null}
-                  <MenuItem icon={FolderPlus} label="Save to collection" onClick={() => { setMenuOpen(false); setPickerReady(true); setPickerOpen(true); }} />
-                  {item.category ? (
-                    <MenuItem icon={Sparkles} label="Content preferences" onClick={() => { setMenuOpen(false); setPrefsReady(true); setPrefsOpen(true); }} />
-                  ) : null}
-                  <MenuItem icon={EyeOff} label="Hide this post" onClick={() => onRemove(item.id)} />
-                  <MenuItem icon={Ban} label="Not interested" onClick={() => onRemove(item.id)} />
-                  <MenuItem icon={Flag} label="Report" danger onClick={openReport} />
-                </motion.div>
-              </>
-            ) : null}
-          </AnimatePresence>
-        </div>
-      </div>
-
-      {/* Caption */}
-      {title ? (
-        <div className="px-4 pb-3 sm:px-5">
-          <p className="text-[15px] leading-relaxed">
-            <RichText text={title} />
-          </p>
-          {item.category ? (
-            <Link href={`/explore?q=${encodeURIComponent(`#${item.category}`)}`} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
-              #{item.category}
+        <div className="min-w-0 flex-1 pt-0.5">
+          {/* Name row — ONE line like X (name, verified tick, @handle · time),
+              not the old two-line Instagram-style stack. `truncate` on each
+              piece keeps a long name or handle from pushing the trailing
+              F-mark/menu off the row instead of wrapping. */}
+          <div className="flex items-center gap-1.5 text-[15px] leading-tight">
+            <Link href={`/u/${item.publisher.handle}`} className="flex min-w-0 shrink items-center gap-1 font-semibold hover:underline">
+              <span className="truncate">{item.publisher.displayName}</span>
+              {item.publisher.isVerified ? <VerifiedTick className="h-3.5 w-3.5 shrink-0" /> : null}
             </Link>
+            <span className="shrink-0 truncate text-xs text-muted-foreground">@{item.publisher.handle} · {timeAgo(item.createdAt)}</span>
+            <span className="min-w-2 flex-1" />
+
+            {!item.isOwner ? (
+              <button
+                type="button"
+                onClick={toggleFollow}
+                disabled={busy}
+                className={cn(
+                  "hidden shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-60 sm:inline-flex",
+                  following ? "bg-secondary text-foreground" : "bg-gradient-to-r from-blue-600 to-violet-600 text-white hover:opacity-95",
+                )}
+              >
+                {following ? <Check className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
+                {following ? "Following" : "Follow"}
+              </button>
+            ) : null}
+
+            {/*
+              🔴 F-MARK WATERMARK, TOP-RIGHT OF EVERY POST (owner, 2026-08-17,
+              with reference screenshots of the real X app: "the X logo by
+              top side of every post . all should be the same , replace the
+              X logo with F logo"). Real X stamps its own brand mark in this
+              exact spot on every tweet's header row — decorative, not
+              interactive (no link, no click target), same treatment here
+              with Frenz's own mark instead.
+            */}
+            <FrenzLogo size={16} alt="" className="shrink-0 opacity-50" />
+
+            {/* Overflow menu */}
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-label="Post options"
+                aria-expanded={menuOpen}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+              >
+                <MoreHorizontal className="h-5 w-5" />
+              </button>
+              <AnimatePresence>
+                {menuOpen ? (
+                  <>
+                    <button type="button" aria-label="Close menu" onClick={() => setMenuOpen(false)} className="fixed inset-0 z-40 cursor-default" />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-xl border border-border/70 bg-card py-1 shadow-elevated"
+                    >
+                      <MenuItem icon={Share2} label="Share" onClick={() => { setMenuOpen(false); void share(); }} />
+                      <MenuItem icon={LinkIcon} label="Copy link" onClick={copyLink} />
+                      <MenuItem icon={Download} label="Download" onClick={() => { setMenuOpen(false); void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title }); }} />
+                      {item.isOwner ? (
+                        <MenuItem icon={Pencil} label="Edit post" onClick={() => { setMenuOpen(false); setEditReady(true); setEditOpen(true); }} />
+                      ) : null}
+                      {!item.isOwner ? (
+                        <>
+                          <MenuItem icon={UserPlus} label={following ? "Unfollow creator" : "Follow creator"} onClick={toggleFollow} />
+                          <MenuItem icon={BellOff} label="Mute creator" onClick={muteCreator} />
+                        </>
+                      ) : null}
+                      <MenuItem icon={FolderPlus} label="Save to collection" onClick={() => { setMenuOpen(false); setPickerReady(true); setPickerOpen(true); }} />
+                      {item.category ? (
+                        <MenuItem icon={Sparkles} label="Content preferences" onClick={() => { setMenuOpen(false); setPrefsReady(true); setPrefsOpen(true); }} />
+                      ) : null}
+                      <MenuItem icon={EyeOff} label="Hide this post" onClick={() => onRemove(item.id)} />
+                      <MenuItem icon={Ban} label="Not interested" onClick={() => onRemove(item.id)} />
+                      <MenuItem icon={Flag} label="Report" danger onClick={openReport} />
+                    </motion.div>
+                  </>
+                ) : null}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Caption */}
+          {title ? (
+            <div className="pb-3 pt-0.5">
+              <p className="text-[15px] leading-relaxed">
+                <RichText text={title} />
+              </p>
+              {item.category ? (
+                <Link href={`/explore?q=${encodeURIComponent(`#${item.category}`)}`} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
+                  #{item.category}
+                </Link>
+              ) : null}
+            </div>
           ) : null}
-        </div>
-      ) : null}
 
-      {/* Poll (vote) — below the caption */}
-      {item.hasPoll ? (
-        <div className="px-4 pb-3">
-          <PostPollInline postId={item.id} />
-        </div>
-      ) : null}
+          {/* Poll (vote) — below the caption */}
+          {item.hasPoll ? (
+            <div className="pb-3">
+              <PostPollInline postId={item.id} />
+            </div>
+          ) : null}
 
-      {/* Media — taller/bigger than a typical compact card (closer to X/
-          Instagram's large feed previews) so video/photo posts read as the
-          hero of the card, not a thumbnail. */}
-      {item.mediaItems && item.mediaItems.length > 1 ? (
+          {/* Media — taller/bigger than a typical compact card (closer to X/
+              Instagram's large feed previews) so video/photo posts read as the
+              hero of the card, not a thumbnail. */}
+          {item.mediaItems && item.mediaItems.length > 1 ? (
         /*
           🔴 STATIC GRID, NOT A SWIPEABLE CAROUSEL, for the inline feed
           preview (owner, 2026-08-17 redesign spec, section 9: "Create a
@@ -612,17 +634,27 @@ function FeedPostCardImpl({
             // normal (fills the card) and capped (narrower, centered) cases.
             width={item.mediaWidth ?? undefined}
             height={item.mediaHeight ?? undefined}
-          />
-          {/* Views/duration — the two corners FeedVideo's own mute + expand
-              controls use are bottom-right and top-right, so this goes
-              top-left, the one unclaimed corner. */}
-          {item.viewsCount > 0 || item.durationSec ? (
-            <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
-              {item.viewsCount > 0 ? `${formatCompactNumber(item.viewsCount)} views` : null}
-              {item.viewsCount > 0 && item.durationSec ? " · " : null}
-              {item.durationSec ? formatDuration(item.durationSec) : null}
-            </span>
-          ) : null}
+          >
+            {/*
+              🔴 MOVED INSIDE `FeedVideo` (owner, 2026-08-17: the tighter
+              45vh cap now regularly narrows portrait clips below the card's
+              full width). This badge used to be a SIBLING here, absolutely
+              positioned against the outer wrapper div above — which stays
+              full width even when the clip itself shrinks, so the badge
+              floated away from the actual video instead of sitting on its
+              corner. `FeedVideo` renders `children` inside its OWN,
+              correctly-sized box, so the badge now tracks the real clip.
+              Top-left: FeedVideo's own mute + expand controls already claim
+              top-right and bottom-right.
+            */}
+            {item.viewsCount > 0 || item.durationSec ? (
+              <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+                {item.viewsCount > 0 ? `${formatCompactNumber(item.viewsCount)} views` : null}
+                {item.viewsCount > 0 && item.durationSec ? " · " : null}
+                {item.durationSec ? formatDuration(item.durationSec) : null}
+              </span>
+            ) : null}
+          </FeedVideo>
         </div>
       ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
         // Image posts behave like videos: full-size, double-tap to like, tap to open.
@@ -640,15 +672,18 @@ function FeedPostCardImpl({
             onExpand={() => open(item)}
             // 🔴 NO `w-full`/`max-h` override HERE — same reasoning as FeedVideo
             // above: a forced `width: 100%` fights the wrapper's own
-            // `aspect-ratio` + `max-h-[70vh]`, leaving black bars on the sides
-            // once a tall photo hits the cap. FeedImage's own internal 70vh is
+            // `aspect-ratio` + `max-h-[45vh]`, leaving black bars on the sides
+            // once a tall photo hits the cap. FeedImage's own internal 45vh is
             // the single source of truth now, not overridden per call site.
-          />
-          {item.viewsCount > 0 ? (
-            <span className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
-              {formatCompactNumber(item.viewsCount)} views
-            </span>
-          ) : null}
+          >
+            {/* Moved inside `FeedImage` — see the matching note on the video
+                branch above; same "badge floated off a shrunk box" bug. */}
+            {item.viewsCount > 0 ? (
+              <span className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+                {formatCompactNumber(item.viewsCount)} views
+              </span>
+            ) : null}
+          </FeedImage>
         </div>
       ) : item.mediaKind === "audio" ? (
         <button type="button" onClick={() => open(item)} className="block w-full text-left" aria-label="Play">
@@ -717,55 +752,57 @@ function FeedPostCardImpl({
         depending on which surface you're on — a worse inconsistency than
         keeping the existing, already-established accent.
       */}
-      <div className="mt-1 flex items-center justify-between px-4 pb-1 sm:px-5">
-        <div className="flex items-center gap-1">
-          <span className="relative inline-flex">
-            <ActionButton
-              active={liked}
-              onClick={(e) => {
-                if (!liked) floatReaction(e.clientX, e.clientY);
-                void react("like");
-              }}
-              icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
-              count={likes}
-              activeClass="text-violet-500"
-              label="Wow"
-              press={wowPress}
-            />
-            <ReactionPicker
-              open={reactionsOpen}
-              onClose={() => setReactionsOpen(false)}
-              onPick={(emotion, _glyph, e) => {
-                floatReaction(e.clientX, e.clientY);
-                void reactWithEmotion(emotion);
-              }}
-            />
-          </span>
-          <ActionButton
-            icon={MessageCircle}
-            count={item.commentsCount}
-            onClick={() => {
-              setCommentsReady(true);
-              setCommentsOpen(true);
-            }}
-            label="Comment"
-          />
-          {!item.isOwner ? (
-            <span className="relative inline-flex">
-              <RepostBurst triggerKey={repostBurst} />
-              <ActionButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-500" onClick={repost} label="Repost" press={repostPress} />
-            </span>
-          ) : null}
-          <ActionButton
-            icon={SendIcon}
-            onClick={() => {
-              setShareReady(true);
-              setShareOpen(true);
-            }}
-            label="Send"
-          />
+          <div className="mt-1 flex items-center justify-between pb-1">
+            <div className="flex items-center gap-1">
+              <span className="relative inline-flex">
+                <ActionButton
+                  active={liked}
+                  onClick={(e) => {
+                    if (!liked) floatReaction(e.clientX, e.clientY);
+                    void react("like");
+                  }}
+                  icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
+                  count={likes}
+                  activeClass="text-violet-500"
+                  label="Wow"
+                  press={wowPress}
+                />
+                <ReactionPicker
+                  open={reactionsOpen}
+                  onClose={() => setReactionsOpen(false)}
+                  onPick={(emotion, _glyph, e) => {
+                    floatReaction(e.clientX, e.clientY);
+                    void reactWithEmotion(emotion);
+                  }}
+                />
+              </span>
+              <ActionButton
+                icon={MessageCircle}
+                count={item.commentsCount}
+                onClick={() => {
+                  setCommentsReady(true);
+                  setCommentsOpen(true);
+                }}
+                label="Comment"
+              />
+              {!item.isOwner ? (
+                <span className="relative inline-flex">
+                  <RepostBurst triggerKey={repostBurst} />
+                  <ActionButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-500" onClick={repost} label="Repost" press={repostPress} />
+                </span>
+              ) : null}
+              <ActionButton
+                icon={SendIcon}
+                onClick={() => {
+                  setShareReady(true);
+                  setShareOpen(true);
+                }}
+                label="Send"
+              />
+            </div>
+            <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-blue-500" label="Save" />
+          </div>
         </div>
-        <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-blue-500" label="Save" />
       </div>
 
       {shareReady ? (

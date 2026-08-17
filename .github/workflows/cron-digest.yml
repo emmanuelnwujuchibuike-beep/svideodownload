@@ -11,9 +11,16 @@ name: Cron - Admin digest
 # slip under load is normal and fine here — the route decides which
 # digest(s) are due for TODAY, not for this exact minute).
 on:
-  schedule:
-    - cron: "0 1 * * *" # 1am UTC daily
-  workflow_dispatch: {} # manual "Run workflow" button, for testing
+  # 🔴 Schedule PAUSED (2026-08-16): failing every night because the
+  # CRON_SECRET repo secret was never set, and the daily failure emails were
+  # unwanted noise. Re-enable by uncommenting the two lines below ONCE
+  # CRON_SECRET is set to the SAME value in both this repo's Settings →
+  # Secrets and variables → Actions, AND Vercel's Production env vars
+  # (redeploy after adding it there). Until then, use the "Run workflow"
+  # button on this workflow's Actions page to send a digest on demand.
+  # schedule:
+  #   - cron: "0 1 * * *" # 1am UTC daily
+  workflow_dispatch: {} # manual "Run workflow" button
 
 concurrency:
   group: cron-digest

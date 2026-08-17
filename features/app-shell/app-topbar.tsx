@@ -149,6 +149,19 @@ export function AppTopbar() {
               aria-haspopup="dialog"
               aria-expanded={createOpen}
               /*
+                🔴 BOLDER STILL (owner, 2026-08-17: "remove the border from
+                the plus button... make the plus button more darker contrast,
+                with more 3d and bold dark style for clear visuals"). The
+                2026-08-16 attempt directly below was a step in this same
+                direction but under-shot it: `bg-primary/12` is a 12%-opacity
+                TINT, barely darker than the bar itself, and the ring IS the
+                border the owner is now asking to remove entirely. Solid
+                `.bg-brand` fill (the same blue→purple gradient the feed's
+                "For You" pill already uses — see feed-topbar-tabs.tsx) reads
+                as genuinely bold and dark against the plain icons beside it;
+                the inset top highlight + drop shadow give it real dimension
+                ("3d") instead of a flat color swap.
+
                 🔴 MORE CONTRAST (owner, 2026-08-16: "make the plus button in
                 the feed page to have more contrast and be more visible").
                 The bare IconTile glyph every other topbar icon uses (no
@@ -158,9 +171,9 @@ export function AppTopbar() {
                 the plus button round" — in the brand color gives it its own
                 visual weight against the other plain icons beside it.
               */
-              className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-inset ring-primary/25"
+              className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand text-white shadow-[0_3px_10px_-2px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] transition active:scale-95"
             >
-              <IoAddOutline className="h-[26px] w-[26px] text-primary" />
+              <IoAddOutline className="h-[26px] w-[26px]" />
             </button>
           </PressIcon>
         ) : null}

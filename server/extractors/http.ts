@@ -62,10 +62,10 @@ export async function extractorFetch(
     const p = reFetchViaProxy(input, init);
     if (p) {
       const r = await p;
-      await recordRequest(true);
+      void recordRequest(true);
       if (method !== "HEAD") {
         const b = await r.text();
-        await recordProxyBytes(platform, b.length);
+        void recordProxyBytes(platform, b.length);
         return new Response(b, { status: r.status, headers: r.headers });
       }
       return r;
@@ -82,7 +82,7 @@ export async function extractorFetch(
       if (await shouldUseProxy(platform, 1)) {
         const p = reFetchViaProxy(input, init);
         if (p) {
-          await recordRequest(true);
+          void recordRequest(true);
           return p;
         }
       }
@@ -91,11 +91,18 @@ export async function extractorFetch(
     if (isBlockedStatus(res.status) && (await shouldUseProxy(platform, 1))) {
       const p = reFetchViaProxy(input, init);
       if (p) {
-        await recordRequest(true);
+        void recordRequest(true);
         return p;
       }
     }
-    await recordRequest(false);
+    // 🔴 Fire-and-forget (2026-08-16: "TikTok still takes time to fetch").
+    // This was `await`ed, so every single extraction request — including
+    // TikTok's short-link HEAD resolve below — paid a full Upstash Redis
+    // round-trip AFTER the real network response came back, purely to bump a
+    // usage counter nothing in the response depends on. `incr()` already
+    // swallows its own errors (see proxy-manager.ts), so there is nothing to
+    // await for correctness — only latency to lose by doing so.
+    void recordRequest(false);
     return res;
   }
 
@@ -114,8 +121,8 @@ export async function extractorFetch(
       if (p) {
         const r = await p;
         const b = await r.text();
-        await recordRequest(true);
-        await recordProxyBytes(platform, b.length);
+        void recordRequest(true);
+        void recordProxyBytes(platform, b.length);
         return new Response(b, { status: r.status, headers: r.headers });
       }
     }
@@ -130,8 +137,8 @@ export async function extractorFetch(
       try {
         const r = await p;
         const b = await r.text();
-        await recordRequest(true);
-        await recordProxyBytes(platform, b.length);
+        void recordRequest(true);
+        void recordProxyBytes(platform, b.length);
         return new Response(b, { status: r.status, headers: r.headers });
       } catch {
         // Proxy attempt failed — fall through to the original direct response.
@@ -139,6 +146,8 @@ export async function extractorFetch(
     }
   }
 
-  await recordRequest(false);
+  // Same fire-and-forget fix as the HEAD branch above — this is the line every
+  // TikWM lookup (the fast path for every TikTok fetch) was paying for.
+  void recordRequest(false);
   return new Response(body, { status, headers });
 }

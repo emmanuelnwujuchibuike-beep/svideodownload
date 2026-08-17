@@ -17,6 +17,30 @@ const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
 
 const PROXY_TIMEOUT_MS = Number(process.env.PROXY_DOWNLOAD_TIMEOUT_MS || 20_000);
 
+/*
+  🔴 Every ffmpeg child process below (the codec probe, the H.264 transcode,
+  the downscale) previously had NO execution timeout at all — unlike every
+  yt-dlp subprocess in ytdlp-service.ts, which has always had one (see
+  `runYtDlp`'s hard timeout, `runDownloadProcess`'s idle timeout). If the
+  source CDN throttled or stalled mid-stream — exactly what a datacenter IP
+  hitting TikTok/Facebook/Instagram can trigger — ffmpeg would simply hang,
+  and the request never resolved: no error, no fallback, nothing shown beyond
+  "Preparing... this is taking longer than expected" forever (owner,
+  2026-08-16: "high top two quality video download still glitches, it doesnt
+  download"). TikTok's top-ranked formats are the ones most likely to hit
+  this path (needsCodecCheck below), since its own bitrate tiers don't expose
+  a trustworthy codec and are routed through the probe/transcode either way.
+
+  Both timers are IDLE timeouts (reset on every chunk of ffmpeg output), the
+  same shape as `runDownloadProcess`'s: a genuinely long transcode keeps
+  succeeding as long as it's making progress, and only a stream that's
+  actually stopped moving gets killed. Once ffmpeg can fail fast instead of
+  hanging forever, `resolveDownload`'s own existing fallback chain (yt-dlp,
+  then a rescue H.264 stream) actually gets a chance to run.
+*/
+const FFMPEG_PROBE_TIMEOUT_MS = Number(process.env.FFMPEG_PROBE_TIMEOUT_MS || 10_000);
+const FFMPEG_IDLE_TIMEOUT_MS = Number(process.env.FFMPEG_IDLE_TIMEOUT_MS || 120_000);
+
 const PRIVATE_HOST = /^(localhost|127\.|0\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1\]?|\[?fc00:|\[?fe80:)/i;
 
 function contentTypeFor(ext: string): string {
@@ -176,9 +200,28 @@ function runCodecProbe(format: MediaFormat): Promise<string | null> {
       return;
     }
     let err = "";
+    let settled = false;
+    // A container-header probe reads a few KB and should finish in well under
+    // a second — a stalled/throttled source is treated the same as "codec
+    // unknown" (null), which routes the caller to the safe, validated
+    // transcode path rather than hanging the whole download.
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGKILL");
+      resolve(null);
+    }, FFMPEG_PROBE_TIMEOUT_MS);
     child.stderr?.on("data", (c: Buffer) => (err += c.toString()));
-    child.on("error", () => resolve(null));
+    child.on("error", () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(null);
+    });
     child.on("close", () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       const m = err.match(/Video:\s*([a-z0-9]+)/i);
       resolve(m ? m[1]!.toLowerCase() : null);
     });
@@ -243,19 +286,39 @@ async function transcodeToH264(format: MediaFormat, knownCodec?: string | null):
         return;
       }
       let err = "";
+      let settled = false;
+      // Idle timeout, not a hard wall — see the module-level note on
+      // FFMPEG_IDLE_TIMEOUT_MS. Reset on every stderr chunk, which ffmpeg
+      // emits continuously (its own progress line) while actively encoding;
+      // only a source that's genuinely stopped advancing gets killed.
+      let idleTimer: NodeJS.Timeout;
+      const resetIdle = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          child.kill("SIGKILL");
+          reject(new YtDlpError("transcode stalled", "TIMEOUT"));
+        }, FFMPEG_IDLE_TIMEOUT_MS);
+      };
+      resetIdle();
       child.stderr.on("data", (c: Buffer) => {
         if (err.length < 2000) err += c.toString();
+        resetIdle();
       });
-      child.on("error", (e: Error) =>
-        reject(new YtDlpError(e.message, "DOWNLOAD_FAILED")),
-      );
-      child.on("close", (code) =>
-        code === 0
-          ? resolve()
-          : reject(
-              new YtDlpError(`transcode failed: ${err.slice(-300)}`, "DOWNLOAD_FAILED"),
-            ),
-      );
+      child.on("error", (e: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(idleTimer);
+        reject(new YtDlpError(e.message, "DOWNLOAD_FAILED"));
+      });
+      child.on("close", (code) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(idleTimer);
+        if (code === 0) resolve();
+        else reject(new YtDlpError(`transcode failed: ${err.slice(-300)}`, "DOWNLOAD_FAILED"));
+      });
     }),
   );
 }
@@ -312,15 +375,36 @@ async function downscaleTo(format: MediaFormat, maxHeight: number): Promise<Down
         return;
       }
       let err = "";
+      let settled = false;
+      // Same idle-timeout shape as transcodeToH264 above.
+      let idleTimer: NodeJS.Timeout;
+      const resetIdle = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          child.kill("SIGKILL");
+          reject(new YtDlpError("downscale stalled", "TIMEOUT"));
+        }, FFMPEG_IDLE_TIMEOUT_MS);
+      };
+      resetIdle();
       child.stderr.on("data", (c: Buffer) => {
         if (err.length < 2000) err += c.toString();
+        resetIdle();
       });
-      child.on("error", (e: Error) => reject(new YtDlpError(e.message, "DOWNLOAD_FAILED")));
-      child.on("close", (code) =>
-        code === 0
-          ? resolve()
-          : reject(new YtDlpError(`downscale failed: ${err.slice(-300)}`, "DOWNLOAD_FAILED")),
-      );
+      child.on("error", (e: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(idleTimer);
+        reject(new YtDlpError(e.message, "DOWNLOAD_FAILED"));
+      });
+      child.on("close", (code) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(idleTimer);
+        if (code === 0) resolve();
+        else reject(new YtDlpError(`downscale failed: ${err.slice(-300)}`, "DOWNLOAD_FAILED"));
+      });
     }),
   );
 }

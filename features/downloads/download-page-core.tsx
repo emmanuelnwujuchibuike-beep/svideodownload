@@ -58,9 +58,13 @@ import type { PlatformStatusMap } from "@/lib/platform-status";
 export function DownloadPageCore({
   platformStatus,
   ctaWallpaperUrl = null,
-  /** Landing-only: rotates the Wallpaper tile through the last 10 uploads
-   *  every 2s (see wallpaper-cta-rotator.tsx). /downloads never passes this —
-   *  same component, one caller supplying data the other doesn't have wired. */
+  /** Rotates the Wallpaper tile through up to 10 recent uploads every 2s
+   *  (see wallpaper-cta-rotator.tsx). Both callers pass this now — landing's
+   *  `Hero` fetches its own `listWallpapers(null, 10)`; `/downloads` reuses
+   *  the first 10 of the gallery's own already-fetched list (2026-08-17 fix:
+   *  it used to render this same tile with nothing here, so it fell back to
+   *  a single static image and never rotated — the owner's "wallpaper
+   *  button isnt changing wallpaper... like the landing page" report). */
   rotateUrls,
   showDisclaimer = false,
 }: {

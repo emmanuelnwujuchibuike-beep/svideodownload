@@ -108,6 +108,20 @@ export function DownloadsPage({
   const { items, toggleFavorite, removeDownload } = useHistory();
   const { tasks, pauseDownload, resumeDownload, retryDownload, cancelDownload, pauseAll } = useDownloadManager();
 
+  /*
+    🔴 THE MISSING PROP (owner, 2026-08-17: "the wallpaper button isnt
+    changing wallpaper in the background like the landing page wallpaper
+    button"). `DownloadPageCore`'s CTA tile only rotates through several
+    photos when handed `rotateUrls` — the landing page's own `Hero` fetches
+    a dedicated `listWallpapers(null, 10)` for it, but this page never
+    passed anything, so `/downloads`'s tile fell back to a single static
+    image and never rotated. `wallpapers` is already fetched (for the
+    gallery grid below) from the SAME published set the landing page's
+    query hits — reusing its first 10 here is the fix, with no extra
+    network round-trip.
+  */
+  const rotateUrls = useMemo(() => wallpapers.slice(0, 10).map((w) => w.url).filter(Boolean), [wallpapers]);
+
   const [tab, setTab] = useState<Tab>("All");
   const [search, setSearch] = useState("");
   const mode = useAppMode();
@@ -151,7 +165,7 @@ export function DownloadsPage({
         section) — quick actions, the usage dashboard, the downloading list,
         history panel, wallpaper gallery and trust strip stay here.
       */}
-      <DownloadPageCore platformStatus={platformStatus} ctaWallpaperUrl={ctaWallpaperUrl} />
+      <DownloadPageCore platformStatus={platformStatus} ctaWallpaperUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
 
       <DownloadQuickActions />
 

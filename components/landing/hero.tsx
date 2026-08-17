@@ -39,10 +39,13 @@ export async function Hero() {
   /*
     The last 10 published wallpapers, newest first — for the CTA tile's
     rotation (owner, 2026-08-16: "wallpapers that will be changed will be the
-    last 10 wallpapers uploaded in wallpaper pages"). Landing-only: /downloads
-    never passes `rotateUrls` to the same tile. Best-effort — an empty
-    library or a read failure just means the tile falls back to the admin's
-    own static pick, exactly like before this existed.
+    last 10 wallpapers uploaded in wallpaper pages"). `/downloads` now passes
+    its own `rotateUrls` too (2026-08-17 fix, features/downloads/
+    downloads-page.tsx — it used to pass nothing, so its tile never rotated),
+    reusing its already-fetched gallery list instead of a second query like
+    this one. Best-effort here: an empty library or a read failure just means
+    the tile falls back to the admin's own static pick, exactly like before
+    this existed.
   */
   const [landing, platformStatus, recentWallpaperUrls] = await Promise.all([
     getLandingSettings(),

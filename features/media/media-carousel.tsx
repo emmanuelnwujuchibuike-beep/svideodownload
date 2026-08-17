@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { WowSolid } from "@/components/brand/wow-icon";
 import { FadeImage } from "@/features/ui/fade-image";
+import { useTapOrDoubleTap } from "@/lib/hooks/use-tap-or-double-tap";
 import { prefetchImage } from "@/lib/media/prefetch-image";
 import { cn } from "@/lib/utils";
 
@@ -60,9 +61,11 @@ export function MediaCarousel({
   const [index, setIndex] = useState(0);
   const raf = useRef(0);
   const [burst, setBurst] = useState(0);
-  const lastTap = useRef(0);
-  const startPt = useRef<{ x: number; y: number } | null>(null);
-  const moved = useRef(false);
+  // Which slide is under the finger right now — the shared tap/double-tap
+  // gesture below is ONE instance for the whole carousel (same as before:
+  // one lastTap timer, not one per slide), so its deferred onTap/onDoubleTap
+  // callbacks read this to know WHICH slide to act on.
+  const pressed = useRef<{ i: number; m: CarouselMedia } | null>(null);
 
   // Sequential/priority loading: an album with many photos was firing N
   // simultaneous image requests the instant it mounted, so the ONE slide
@@ -100,35 +103,48 @@ export function MediaCarousel({
     }
   }, [unlocked, items]);
 
-  const onSlidePointerDown = (e: React.PointerEvent) => {
-    startPt.current = { x: e.clientX, y: e.clientY };
-    moved.current = false;
+  /*
+    🔴 REVERSED 2026-08-17 (owner spec: "A double tap MUST NOT open the Reels
+    viewer" — "Most important acceptance criterion", stated repeatedly). See
+    FeedImage's identical note for the full reasoning — the 2026-07-15 "zero
+    wait" trade-off directly below is the decision this replaces, for exactly
+    the same reason: a fast double-tap on an album slide used to open the
+    viewer AND fire the bonus Wow burst.
+
+    2026-07-15 (owner: opening should be instant, zero wait) — a tap used to
+    be held back waiting to see if a second tap followed; removed so a tap
+    opened the fullscreen viewer immediately, with a fast second tap firing
+    the Wow burst as a bonus rather than gating the open.
+  */
+  const tap = useTapOrDoubleTap({
+    onTap: () => {
+      const p = pressed.current;
+      if (!p) return;
+      if (onExpandItem) onExpandItem(p.i, p.m);
+      else onExpand?.();
+    },
+    onDoubleTap: () => {
+      setBurst((b) => b + 1);
+      onDoubleTapLike?.();
+    },
+  });
+  const onSlidePointerDown = (i: number, m: CarouselMedia) => (e: React.PointerEvent) => {
+    pressed.current = { i, m };
+    tap.onPointerDown(e);
     // Same tap-time head start as FeedImage — warms whichever fullscreen
     // viewer this slide might open (image album → ImageViewer, video album →
     // ReelsFeed; cheap to request both, only one is ever actually used).
     void import("@/features/feed/image-viewer");
     void import("@/features/reels/reels-feed");
   };
-  const onSlidePointerMove = (e: React.PointerEvent) => {
-    if (!startPt.current || moved.current) return;
-    if (Math.abs(e.clientX - startPt.current.x) > 12 || Math.abs(e.clientY - startPt.current.y) > 12) moved.current = true;
-  };
-  // 2026-07-15 (owner: opening should be instant, zero wait) — see
-  // FeedImage's identical fix/comment. A tap opens the fullscreen viewer
-  // immediately, no longer held back waiting to see if a second tap
-  // follows; a genuinely fast second tap additionally fires the Wow burst
-  // as a bonus, never gating or delaying the open.
-  const DBLTAP_WINDOW = 220;
-  const onSlideTap = (i: number, m: CarouselMedia) => () => {
-    if (moved.current) return;
-    const now = Date.now();
-    if (now - lastTap.current < DBLTAP_WINDOW) {
-      lastTap.current = 0;
-      setBurst((b) => b + 1);
-      onDoubleTapLike?.();
-      return;
-    }
-    lastTap.current = now;
+  // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still open
+  // media") — Enter/Space opens the CURRENT slide directly, same action a
+  // resolved single tap fires. Only the active slide is in the tab order
+  // (see `tabIndex` at each slide below) — the standard accessible-carousel
+  // pattern, so tabbing past an album doesn't stop N times for N slides.
+  const onSlideKeyDown = (i: number, m: CarouselMedia) => (e: React.KeyboardEvent) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
     if (onExpandItem) onExpandItem(i, m);
     else onExpand?.();
   };
@@ -227,14 +243,19 @@ export function MediaCarousel({
                     <CarouselVideo
                       src={m.url}
                       poster={m.thumbnailUrl}
-                      onPointerDown={onSlidePointerDown}
-                      onPointerMove={onSlidePointerMove}
-                      onPointerUp={onSlideTap(i, m)}
+                      tabIndex={i === index ? 0 : -1}
+                      onKeyDown={onSlideKeyDown(i, m)}
+                      onPointerDown={onSlidePointerDown(i, m)}
+                      onPointerMove={tap.onPointerMove}
+                      onPointerUp={tap.onPointerUp}
+                      onPointerLeave={tap.onPointerLeave}
+                      onPointerCancel={tap.onPointerCancel}
                     />
                   ) : (
                     <div
                       role="button"
                       aria-label="Open photo"
+                      tabIndex={i === index ? 0 : -1}
                       // No press-scale (2026-07-15, owner: images shouldn't
                       // move under touch/press-hold) — see FeedImage's
                       // identical fix. cursor-default overrides Tailwind
@@ -244,10 +265,13 @@ export function MediaCarousel({
                       // wheel redirect above already made it scroll
                       // correctly; a plain arrow matches every other
                       // (single-media) feed post.
-                      className="absolute inset-0 cursor-default"
-                      onPointerDown={onSlidePointerDown}
-                      onPointerMove={onSlidePointerMove}
-                      onPointerUp={onSlideTap(i, m)}
+                      className="absolute inset-0 cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                      onKeyDown={onSlideKeyDown(i, m)}
+                      onPointerDown={onSlidePointerDown(i, m)}
+                      onPointerMove={tap.onPointerMove}
+                      onPointerUp={tap.onPointerUp}
+                      onPointerLeave={tap.onPointerLeave}
+                      onPointerCancel={tap.onPointerCancel}
                     >
                       <FadeImage src={m.url} alt="" fill sizes="(max-width: 768px) 100vw, 640px" className="object-contain" loading="eager" />
                     </div>
@@ -261,10 +285,14 @@ export function MediaCarousel({
                 <div
                   role="button"
                   aria-label="Open"
-                  className="absolute inset-0 cursor-default"
-                  onPointerDown={onSlidePointerDown}
-                  onPointerMove={onSlidePointerMove}
-                  onPointerUp={onSlideTap(i, m)}
+                  tabIndex={i === index ? 0 : -1}
+                  className="absolute inset-0 cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                  onKeyDown={onSlideKeyDown(i, m)}
+                  onPointerDown={onSlidePointerDown(i, m)}
+                  onPointerMove={tap.onPointerMove}
+                  onPointerUp={tap.onPointerUp}
+                  onPointerLeave={tap.onPointerLeave}
+                  onPointerCancel={tap.onPointerCancel}
                 />
               ) : null}
             </div>
@@ -338,15 +366,23 @@ export function MediaCarousel({
 function CarouselVideo({
   src,
   poster,
+  tabIndex,
+  onKeyDown,
   onPointerDown,
   onPointerMove,
   onPointerUp,
+  onPointerLeave,
+  onPointerCancel,
 }: {
   src: string;
   poster: string | null;
+  tabIndex: number;
+  onKeyDown: (e: React.KeyboardEvent) => void;
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: (e: React.PointerEvent) => void;
+  onPointerLeave: (e: React.PointerEvent) => void;
+  onPointerCancel: (e: React.PointerEvent) => void;
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
@@ -370,10 +406,14 @@ function CarouselVideo({
     <div
       role="button"
       aria-label="Watch video"
-      className="absolute inset-0 cursor-default"
+      tabIndex={tabIndex}
+      className="absolute inset-0 cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+      onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerLeave={onPointerLeave}
+      onPointerCancel={onPointerCancel}
     >
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video

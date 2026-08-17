@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { WowSolid } from "@/components/brand/wow-icon";
 import { FadeImage } from "@/features/ui/fade-image";
+import { useTapOrDoubleTap } from "@/lib/hooks/use-tap-or-double-tap";
 import { clampFeedRatio } from "@/lib/media/aspect";
 import { prefetchImage } from "@/lib/media/prefetch-image";
 import { cn } from "@/lib/utils";
@@ -38,9 +39,6 @@ export function FeedImage({
   className?: string;
 }) {
   const hasDims = !!width && !!height && width > 0 && height > 0;
-  const lastTap = useRef(0);
-  const startPt = useRef<{ x: number; y: number } | null>(null);
-  const moved = useRef(false);
   const [burst, setBurst] = useState(0);
   // A 404/CORS/offline failure otherwise falls through to the browser's own
   // default broken-image icon — jarring and off-brand. Reset SYNCHRONOUSLY
@@ -78,41 +76,42 @@ export function FeedImage({
     return () => obs.disconnect();
   }, [src]);
 
+  /*
+    🔴 REVERSED 2026-08-17 (owner spec: "A double tap MUST NOT open the Reels
+    viewer" — "Most important acceptance criterion", stated repeatedly).
+
+    The 2026-07-15 entry directly below is the decision this replaces: a
+    single tap used to open the viewer IMMEDIATELY, with a fast second tap
+    ALSO firing the Wow burst as a bonus afterward — meaning a genuine double
+    tap opened the viewer AND liked, exactly the sequence the owner has now
+    named explicitly unacceptable. `useTapOrDoubleTap` (shared with
+    MediaCarousel below) restores the hold-briefly-in-case-a-second-tap-
+    follows pattern `FeedVideo` already used for this same reason, at a short
+    280ms default rather than reverting to some slower original value — a
+    real but small latency cost, deliberately traded for correctness per
+    today's explicit, repeated instruction.
+
+    2026-07-15 (owner: opening should be instant, zero wait) — a single tap
+    used to wait out a 220ms window before opening, purely to see whether a
+    SECOND tap was coming (double-tap-to-Wow) — real, felt latency on every
+    single open. `ImageViewer` (the full-screen viewer this opens into)
+    already has its own independent double-tap-to-like once open.
+  */
+  const tap = useTapOrDoubleTap({
+    onTap: () => onExpand(),
+    onDoubleTap: () => {
+      setBurst((b) => b + 1);
+      onDoubleTapLike();
+    },
+  });
   const onPointerDown = (e: React.PointerEvent) => {
-    startPt.current = { x: e.clientX, y: e.clientY };
-    moved.current = false;
+    tap.onPointerDown(e);
     // Kick the fullscreen viewer's chunk off at the very first touch — not
     // idle-time-after-mount, not tap-up — so it's had the longest possible
-    // head start by the time a real single tap resolves below. A no-op if
+    // head start by the time the delayed tap actually opens it. A no-op if
     // it's already cached (Next dedupes identical dynamic-import specifiers
     // with whatever else in the app requested the same module).
     void import("@/features/feed/image-viewer");
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!startPt.current || moved.current) return;
-    if (Math.abs(e.clientX - startPt.current.x) > 12 || Math.abs(e.clientY - startPt.current.y) > 12) moved.current = true;
-  };
-  // 2026-07-15 (owner: opening should be instant, zero wait): a single tap
-  // used to wait out a 220ms window before opening, purely to see whether a
-  // SECOND tap was coming (double-tap-to-Wow) — real, felt latency on every
-  // single open. `ImageViewer` (the full-screen viewer this opens into)
-  // already has its own independent double-tap-to-like once open, so
-  // there's no need to gate the inline thumbnail's open on that disambig
-  // any more: a tap opens immediately, full stop. A genuinely fast second
-  // tap (still tracked below) additionally fires the Wow burst here too —
-  // pure bonus, never blocks or delays the open.
-  const DBLTAP_WINDOW = 220;
-  const onPointerUp = () => {
-    if (moved.current) return;
-    const now = Date.now();
-    if (now - lastTap.current < DBLTAP_WINDOW) {
-      lastTap.current = 0;
-      setBurst((b) => b + 1);
-      onDoubleTapLike();
-      return;
-    }
-    lastTap.current = now;
-    onExpand();
   };
 
   /*
@@ -144,10 +143,28 @@ export function FeedImage({
       // press cue. The image now stays perfectly still through any touch,
       // press, or press-and-hold.
       style={ratio ? { aspectRatio: ratio } : undefined}
-      className={cn("relative flex items-center justify-center overflow-hidden bg-neutral-950", className)}
+      className={cn(
+        "relative flex items-center justify-center overflow-hidden bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+        className,
+      )}
+      // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
+      // open media"): Enter/Space opens directly, same action as a resolved
+      // single tap — no double-press analog exists for a keyboard, and Wow
+      // already has its own independent, keyboard-reachable button in the
+      // action row below, so nothing here is the ONLY way to reach it.
+      role="button"
+      tabIndex={0}
+      aria-label="Open photo"
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        onExpand();
+      }}
       onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
+      onPointerMove={tap.onPointerMove}
+      onPointerUp={tap.onPointerUp}
+      onPointerLeave={tap.onPointerLeave}
+      onPointerCancel={tap.onPointerCancel}
     >
       {/* Blurred backdrop fills any letterbox space around the contained image.
           Deliberately a separate, tiny (16px) optimized fetch — not the full-res

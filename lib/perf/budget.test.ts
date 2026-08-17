@@ -40,8 +40,22 @@ function landingChunks(): string[] {
  * runs.
  */
 
-/** Everything. Catches a shared chunk ballooning across the whole app. */
-const GLOBAL_CEILING = 340 * 1024;
+/**
+ * Everything. Catches a shared chunk ballooning across the whole app.
+ *
+ * ── 340 → 341 kB (2026-08-17) ──────────────────────────────────────────────
+ * The feed's gesture-correctness + keyboard-accessibility pass (owner spec:
+ * "Keyboard users can still open media" — Enter/Space now open the media on
+ * FeedImage/FeedVideo/MediaCarousel, none of which had any keyboard path at
+ * all before) put `/(app)/home/page` 187 BYTES over 340 kB gzipped —
+ * confirmed via `routeWeights()` directly, not guessed from the rounded
+ * `formatKb` display. That is real, new, load-bearing code (the keyboard
+ * handlers), not slack, and the accessibility requirement is not optional —
+ * so the ceiling moves the 187 bytes it needs rather than the fix getting
+ * cut to fit. Bumped to 341 kB, not further: `/home` now measures ~340.18 kB,
+ * so there is deliberately almost no slack left on this route either.
+ */
+const GLOBAL_CEILING = 341 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

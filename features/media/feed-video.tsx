@@ -321,7 +321,21 @@ export function FeedVideo({
           the page whose stillness is load-bearing, and the pause indicator
           already gives the gesture unambiguous feedback.
         */
-        className="h-full w-full touch-pan-y object-contain lg:h-auto lg:max-h-[82vh] lg:w-auto"
+        className="h-full w-full touch-pan-y object-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset lg:h-auto lg:max-h-[82vh] lg:w-auto"
+        // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
+        // open media") — purely additive: Enter/Space opens directly,
+        // bypassing the tap/double-tap/hold pointer state machine above
+        // entirely rather than routing through it, since there's no
+        // keyboard analog for "hold" or "double-press" here. Wow already has
+        // its own independent, keyboard-reachable button in the action row.
+        role="button"
+        tabIndex={0}
+        aria-label="Open video"
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          e.preventDefault();
+          onExpand?.();
+        }}
         onLoadedMetadata={() => {
           const v = video.current;
           if (!v || !v.videoWidth || !v.videoHeight) return;

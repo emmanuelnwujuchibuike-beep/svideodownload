@@ -1,11 +1,17 @@
 "use client";
 
 import {
+  CheckCircle2,
   ChevronLeft,
   Cloud,
   Download,
+  HardDrive,
   Heart,
   History,
+  Image as ImageIcon,
+  Layers,
+  Music2,
+  Play,
   Search,
   Share2,
   Trash2,
@@ -42,6 +48,173 @@ const KIND_FILTERS: { key: KindFilter; label: string }[] = [
   { key: "image", label: "Images" },
   { key: "audio", label: "Audio" },
 ];
+
+/**
+ * The /history page's own top card — owner, 2026-08-17, from a reference
+ * screenshot of a gradient "Your Downloads" card (eyebrow, gradient headline,
+ * stat pills, a prominent Select button and a drawn folder illustration).
+ *
+ * `standalone` ONLY. `embedded` (inside the /downloads card) and the bare
+ * /library case keep the plain header below completely untouched — the doc
+ * comment on `HistoryPanel`'s `embedded` prop is explicit that those two stay
+ * identical to each other, and this card is a bigger visual moment than either
+ * of THOSE hosts wants sitting inside their own chrome.
+ *
+ * ── Paid for in paint, not weight ───────────────────────────────────────────
+ * No new image asset, no animation library: the folder illustration is the
+ * same drawn-icons-in-a-gradient-tile technique `DownloadsHero` already uses
+ * (features/downloads/downloads-sections.tsx) — an icon in a rounded gradient
+ * square, `motion-safe:animate-float` (a no-op under prefers-reduced-motion,
+ * already gated at the Tailwind-variant level), plus small badge chips. Unlike
+ * that component it is NOT `hidden` below `sm:` — the reference shows it on a
+ * phone viewport, so it stays visible at every width, just smaller.
+ *
+ * Every number is real (`itemCount`/`usedBytes` come from the caller's own
+ * `useHistory()` read) — no seeded stats, per this codebase's standing rule
+ * against invented figures.
+ */
+function HistoryHero({
+  itemCount,
+  usedBytes,
+  selecting,
+  onToggleSelect,
+  confirmClear,
+  onRequestClear,
+  onConfirmClear,
+  onCancelClear,
+}: {
+  itemCount: number;
+  usedBytes: number;
+  selecting: boolean;
+  onToggleSelect: () => void;
+  confirmClear: boolean;
+  onRequestClear: () => void;
+  onConfirmClear: () => void;
+  onCancelClear: () => void;
+}) {
+  return (
+    <div className="lux-enter relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-blue-50 via-violet-50/70 to-indigo-50 p-5 ring-1 ring-inset ring-violet-900/[0.06] dark:from-blue-500/[0.08] dark:via-violet-500/[0.06] dark:to-indigo-500/[0.08] dark:ring-white/10 sm:p-6">
+      {/* Same one-shot static glow the rest of this page uses — painted once,
+          never animated (see the note further down on why nothing here loops). */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -left-10 -top-14 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(37,99,255,0.14),transparent_70%)]"
+      />
+
+      {/* Clear-all — tucked into the corner rather than a full utility row;
+          Select (below) is the header's one prominent action now. Same
+          confirm-before-destroy behaviour as before, just relocated. */}
+      <div className="relative flex justify-end">
+        {confirmClear ? (
+          <span className="flex items-center gap-1 text-sm">
+            <button
+              type="button"
+              onClick={onConfirmClear}
+              className="rounded-lg px-2.5 py-1.5 font-bold text-rose-500 transition active:scale-95"
+            >
+              Clear all?
+            </button>
+            <button
+              type="button"
+              onClick={onCancelClear}
+              className="rounded-lg px-2.5 py-1.5 font-semibold text-muted-foreground transition active:scale-95"
+            >
+              Cancel
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onRequestClear}
+            aria-label="Clear all downloads"
+            className="-mr-1.5 -mt-1.5 rounded-lg p-2 text-muted-foreground/70 transition hover:text-rose-500 active:scale-95"
+          >
+            <Trash2 className="h-[18px] w-[18px]" />
+          </button>
+        )}
+      </div>
+
+      <div className="relative -mt-8 flex items-center gap-4 sm:-mt-9">
+        <div className="min-w-0 flex-1">
+          <span className="text-[13px] font-bold uppercase tracking-wide text-primary">History</span>
+          <h1 className="mt-1 text-[1.7rem] font-extrabold leading-[1.08] tracking-[-0.03em] text-foreground sm:text-4xl">
+            Your{" "}
+            <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
+              Downloads
+            </span>
+          </h1>
+          <p className="mt-2 max-w-sm text-pretty text-sm leading-relaxed text-muted-foreground">
+            Manage, organize and access all your downloaded content in one place.
+          </p>
+        </div>
+
+        {/* Folder + cloud, badged with the page's own three media kinds —
+            drawn, not shipped as an asset. `aria-hidden`: purely decorative,
+            the real facts are the stat pills below. */}
+        <div aria-hidden className="relative h-24 w-24 shrink-0 sm:h-32 sm:w-32">
+          <span className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-500/30 to-blue-500/30 blur-2xl" />
+          <span className="absolute inset-2 flex items-center justify-center rounded-[1.5rem] bg-gradient-to-br from-violet-500 to-blue-600 shadow-xl motion-safe:animate-float">
+            <History className="h-10 w-10 text-white sm:h-14 sm:w-14" />
+          </span>
+          <span className="absolute -left-1 top-1 flex h-8 w-8 items-center justify-center rounded-xl bg-card shadow-md ring-1 ring-border/60 sm:h-9 sm:w-9">
+            <ImageIcon className="h-3.5 w-3.5 text-fuchsia-500 sm:h-4 sm:w-4" />
+          </span>
+          <span className="absolute -right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-card shadow-md ring-1 ring-border/60 sm:h-9 sm:w-9">
+            <Play className="h-3.5 w-3.5 fill-current text-blue-500 sm:h-4 sm:w-4" />
+          </span>
+          <span className="absolute -bottom-1 left-1/3 flex h-8 w-8 items-center justify-center rounded-xl bg-card shadow-md ring-1 ring-border/60 sm:h-9 sm:w-9">
+            <Music2 className="h-3.5 w-3.5 text-violet-500 sm:h-4 sm:w-4" />
+          </span>
+        </div>
+      </div>
+
+      {/* Stats + Select, one wrapping row — two real facts as pill-stats, the
+          Private Cloud badge, then the header's one prominent action. */}
+      <div className="relative mt-5 flex flex-wrap items-center gap-2">
+        <StatPill icon={Layers} value={String(itemCount)} label={itemCount === 1 ? "Item" : "Items"} />
+        <StatPill icon={HardDrive} value={formatBytes(usedBytes)} label="Total Size" />
+        <span className="inline-flex items-center gap-1.5 rounded-2xl bg-card px-3.5 py-2.5 text-[13px] font-bold text-primary shadow-sm ring-1 ring-inset ring-border/50">
+          Private Cloud <Cloud className="h-4 w-4" />
+        </span>
+        <button
+          type="button"
+          onClick={onToggleSelect}
+          aria-pressed={selecting}
+          className={cn(
+            "lux-btn ml-auto inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-[13px] font-bold transition duration-150 active:scale-95",
+            selecting
+              ? "bg-foreground text-background shadow-sm"
+              : "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/30",
+          )}
+        >
+          <span className="relative z-[2] inline-flex items-center gap-1.5">
+            <CheckCircle2 className="h-4 w-4" /> {selecting ? "Done" : "Select"}
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StatPill({
+  icon: Icon,
+  value,
+  label,
+}: {
+  icon: typeof Layers;
+  value: string;
+  label: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-2xl bg-card px-3.5 py-2 shadow-sm ring-1 ring-inset ring-border/50">
+      <Icon className="h-4 w-4 text-primary" aria-hidden />
+      <span className="flex flex-col leading-none">
+        <span className="text-sm font-extrabold text-foreground">{value}</span>
+        <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
+      </span>
+    </span>
+  );
+}
 
 export function HistoryPanel({
   standalone = false,
@@ -203,111 +376,123 @@ export function HistoryPanel({
       {/* Minimal side padding (owner) so the media grid stretches to the far edges. */}
       <div className={cn(embedded ? "" : "mx-auto max-w-6xl px-2 sm:px-4")}>
         {/*
-          ── Built to public/mainhistorypage.jpg, top to bottom ──────────────
-            1. a quiet bar: "‹ History" on the left, "Select" on the right
-            2. "Your Downloads" as its own headline
-            3. one meta line — count · size · where it lives
-            4. a full-width search field
-            5. All / Videos / Images / Audio, the active one filled
-            6. day sections with counts (in MediaGallery)
-            7. the grid (in MediaGallery), two columns by default
+          Top-to-bottom structure below: the header (the new `HistoryHero`
+          card for `standalone` — see its own doc comment; the original quiet
+          "‹ History … Select" bar + plain headline for `embedded`/library,
+          built to public/mainhistorypage.jpg and unchanged since), then a
+          full-width search field, All/Videos/Images/Audio filter chips, day
+          sections with counts (in MediaGallery), then the grid itself.
 
-          Nothing from the previous version was dropped to get there. "Clear
-          all" moved into the bar rather than disappearing, the live counts
-          stayed on the filter pills, and Favorites keeps its own chip — the
-          reference simply doesn't show a library with favourites in it.
+          Nothing from the pre-hero version was dropped for `standalone`
+          either — "Clear all" moved into the new card's corner, the live
+          counts stayed on the filter pills, Favorites keeps its own chip.
         */}
-        <div className="mb-4 flex items-center justify-between gap-3">
-          {embedded ? (
-            <span className="text-[15px] font-semibold text-muted-foreground">History</span>
-          ) : (
-            <Link
-              href="/"
-              className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[15px] font-semibold text-primary transition active:scale-95"
-            >
-              <ChevronLeft className="h-5 w-5" /> History
-            </Link>
-          )}
-
-          <div className="flex items-center gap-1">
-            {confirmClear ? (
-              <span className="flex items-center gap-1 text-sm">
-                <button
-                  type="button"
-                  onClick={() => { tap(); clearHistory(); setConfirmClear(false); }}
-                  className="rounded-lg px-2.5 py-1.5 font-bold text-rose-500 transition active:scale-95"
-                >
-                  Clear all?
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { tap(); setConfirmClear(false); }}
-                  className="rounded-lg px-2.5 py-1.5 font-semibold text-muted-foreground transition active:scale-95"
-                >
-                  Cancel
-                </button>
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => { tap(); setConfirmClear(true); }}
-                aria-label="Clear all downloads"
-                className="rounded-lg p-2 text-muted-foreground transition hover:text-rose-500 active:scale-95"
-              >
-                <Trash2 className="h-[18px] w-[18px]" />
-              </button>
-            )}
-            {/* Select reads as a real control now — it toggles the whole page
-                into a different mode, which a bare text link never signalled. */}
-            <button
-              type="button"
-              onClick={() => { tap(); setSelecting((v) => !v); setSelected(new Set()); }}
-              aria-pressed={selecting}
-              className={cn(
-                "lux-btn rounded-xl px-3 py-1.5 text-[15px] font-bold transition duration-150 active:scale-95",
-                selecting
-                  ? "bg-foreground text-background shadow-sm"
-                  : "bg-primary/10 text-primary ring-1 ring-inset ring-primary/25 hover:bg-primary/15",
-              )}
-            >
-              <span className="relative z-[2]">{selecting ? "Done" : "Select"}</span>
-            </button>
-          </div>
-        </div>
-
-        {/*
-          ── Premium, and paid for in paint rather than in frames ────────────
-          Owner, 2026-08-09: "premium, alive, luxurious and professional
-          without breaking the performance rule."
-
-          The glow is a single static radial and the headline is a gradient
-          fill — both painted once, neither animated. The only motion on this
-          page is the one-shot entrance and the sheen that plays under a
-          finger. See the `.lux-btn` note in globals.css for why nothing here
-          loops.
-        */}
-        <div className="relative">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute -left-10 -top-12 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(37,99,255,0.12),transparent_70%)]"
+        {standalone ? (
+          <HistoryHero
+            itemCount={items.length}
+            usedBytes={usedBytes}
+            selecting={selecting}
+            onToggleSelect={() => { tap(); setSelecting((v) => !v); setSelected(new Set()); }}
+            confirmClear={confirmClear}
+            onRequestClear={() => { tap(); setConfirmClear(true); }}
+            onConfirmClear={() => { tap(); clearHistory(); setConfirmClear(false); }}
+            onCancelClear={() => { tap(); setConfirmClear(false); }}
           />
-          <h2 className="lux-title lux-enter relative text-[2rem] font-extrabold leading-none tracking-[-0.03em] sm:text-4xl">
-            Your Downloads
-          </h2>
-        </div>
-        {/* One line, three real facts. The size is measured from the records
-            themselves, not estimated from a count. */}
-        <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted-foreground">
-          <span className="font-semibold text-foreground">
-            {items.length} item{items.length === 1 ? "" : "s"}
-          </span>
-          <span aria-hidden>·</span>
-          <span className="font-semibold text-foreground">{formatBytes(usedBytes)}</span>
-          <span aria-hidden>·</span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[13px] font-semibold text-primary ring-1 ring-inset ring-primary/20">
-            Private Cloud <Cloud className="h-3.5 w-3.5" />
-          </span>
-        </p>
+        ) : (
+          <>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              {embedded ? (
+                <span className="text-[15px] font-semibold text-muted-foreground">History</span>
+              ) : (
+                <Link
+                  href="/"
+                  className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[15px] font-semibold text-primary transition active:scale-95"
+                >
+                  <ChevronLeft className="h-5 w-5" /> History
+                </Link>
+              )}
+
+              <div className="flex items-center gap-1">
+                {confirmClear ? (
+                  <span className="flex items-center gap-1 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => { tap(); clearHistory(); setConfirmClear(false); }}
+                      className="rounded-lg px-2.5 py-1.5 font-bold text-rose-500 transition active:scale-95"
+                    >
+                      Clear all?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { tap(); setConfirmClear(false); }}
+                      className="rounded-lg px-2.5 py-1.5 font-semibold text-muted-foreground transition active:scale-95"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { tap(); setConfirmClear(true); }}
+                    aria-label="Clear all downloads"
+                    className="rounded-lg p-2 text-muted-foreground transition hover:text-rose-500 active:scale-95"
+                  >
+                    <Trash2 className="h-[18px] w-[18px]" />
+                  </button>
+                )}
+                {/* Select reads as a real control now — it toggles the whole page
+                    into a different mode, which a bare text link never signalled. */}
+                <button
+                  type="button"
+                  onClick={() => { tap(); setSelecting((v) => !v); setSelected(new Set()); }}
+                  aria-pressed={selecting}
+                  className={cn(
+                    "lux-btn rounded-xl px-3 py-1.5 text-[15px] font-bold transition duration-150 active:scale-95",
+                    selecting
+                      ? "bg-foreground text-background shadow-sm"
+                      : "bg-primary/10 text-primary ring-1 ring-inset ring-primary/25 hover:bg-primary/15",
+                  )}
+                >
+                  <span className="relative z-[2]">{selecting ? "Done" : "Select"}</span>
+                </button>
+              </div>
+            </div>
+
+            {/*
+              ── Premium, and paid for in paint rather than in frames ────────────
+              Owner, 2026-08-09: "premium, alive, luxurious and professional
+              without breaking the performance rule."
+
+              The glow is a single static radial and the headline is a gradient
+              fill — both painted once, neither animated. The only motion on this
+              page is the one-shot entrance and the sheen that plays under a
+              finger. See the `.lux-btn` note in globals.css for why nothing here
+              loops.
+            */}
+            <div className="relative">
+              <span
+                aria-hidden
+                className="pointer-events-none absolute -left-10 -top-12 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(37,99,255,0.12),transparent_70%)]"
+              />
+              <h2 className="lux-title lux-enter relative text-[2rem] font-extrabold leading-none tracking-[-0.03em] sm:text-4xl">
+                Your Downloads
+              </h2>
+            </div>
+            {/* One line, three real facts. The size is measured from the records
+                themselves, not estimated from a count. */}
+            <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted-foreground">
+              <span className="font-semibold text-foreground">
+                {items.length} item{items.length === 1 ? "" : "s"}
+              </span>
+              <span aria-hidden>·</span>
+              <span className="font-semibold text-foreground">{formatBytes(usedBytes)}</span>
+              <span aria-hidden>·</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[13px] font-semibold text-primary ring-1 ring-inset ring-primary/20">
+                Private Cloud <Cloud className="h-3.5 w-3.5" />
+              </span>
+            </p>
+          </>
+        )}
 
         {/* Full width, as in the reference — search is the fastest way through a
             long history and it was previously sharing its row with a chip. */}

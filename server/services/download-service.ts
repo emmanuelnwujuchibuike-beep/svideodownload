@@ -41,6 +41,52 @@ const PROXY_TIMEOUT_MS = Number(process.env.PROXY_DOWNLOAD_TIMEOUT_MS || 20_000)
 const FFMPEG_PROBE_TIMEOUT_MS = Number(process.env.FFMPEG_PROBE_TIMEOUT_MS || 10_000);
 const FFMPEG_IDLE_TIMEOUT_MS = Number(process.env.FFMPEG_IDLE_TIMEOUT_MS || 120_000);
 
+/*
+  🔴 The raw-proxy path had the SAME class of bug as the ffmpeg spawns above,
+  in a different shape (owner, 2026-08-16: "download on tiktok loads
+  forever"). `PROXY_TIMEOUT_MS` only bounds the wait for `fetch()` to
+  RESOLVE — which happens the moment response HEADERS arrive, not when the
+  body finishes. `proxyDownload` then handed `res.body` straight back as the
+  stream Next.js pipes to the browser, with nothing watching it afterward. A
+  source that starts responding (headers arrive fine) and then stalls or
+  throttles mid-body — the exact behavior a datacenter IP can trigger — hung
+  forever with the timeout already spent and gone. This is very likely the
+  DOMINANT path for TikTok specifically now: the H.264-first format ordering
+  (see tiktok.ts) means most TikTok downloads probe as h264 and take this
+  exact raw-proxy route rather than the ffmpeg transcode path above.
+*/
+const PROXY_STREAM_IDLE_TIMEOUT_MS = Number(process.env.PROXY_STREAM_IDLE_TIMEOUT_MS || 30_000);
+
+/**
+ * Wraps a body stream so a source that stops sending bytes errors out after
+ * `idleMs` of silence, instead of the response staying open indefinitely.
+ * Idle, not a hard wall — reset on every chunk — so a large, healthy,
+ * continuously-flowing file is never cut off.
+ */
+function withIdleTimeout(stream: ReadableStream<Uint8Array>, idleMs: number): ReadableStream<Uint8Array> {
+  let timer: NodeJS.Timeout;
+  const stalled = () => new YtDlpError("download stalled", "TIMEOUT");
+  const ts = new TransformStream<Uint8Array, Uint8Array>({
+    start(controller) {
+      timer = setTimeout(() => controller.error(stalled()), idleMs);
+    },
+    transform(chunk, controller) {
+      clearTimeout(timer);
+      controller.enqueue(chunk);
+      timer = setTimeout(() => controller.error(stalled()), idleMs);
+    },
+    flush() {
+      clearTimeout(timer);
+    },
+  });
+  // Errors surfaced via controller.error() above already propagate to the
+  // readable side (what the caller consumes); this catch only exists so a
+  // source-stream failure (not our timeout) doesn't become an unhandled
+  // rejection — pipeTo cancels the source reader either way.
+  stream.pipeTo(ts.writable).catch(() => clearTimeout(timer));
+  return ts.readable;
+}
+
 const PRIVATE_HOST = /^(localhost|127\.|0\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1\]?|\[?fc00:|\[?fe80:)/i;
 
 function contentTypeFor(ext: string): string {
@@ -105,7 +151,7 @@ async function proxyDownload(format: MediaFormat): Promise<DownloadResult> {
   }
 
   return {
-    stream: res.body as ReadableStream<Uint8Array>,
+    stream: withIdleTimeout(res.body as ReadableStream<Uint8Array>, PROXY_STREAM_IDLE_TIMEOUT_MS),
     ext: format.ext,
     contentType: contentTypeFor(format.ext),
     filesize: Number(res.headers.get("content-length")) || 0,

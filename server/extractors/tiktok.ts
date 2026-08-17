@@ -600,25 +600,29 @@ export const tiktokExtractor: Extractor = {
     const platform = detectPlatform(url);
 
     /*
-      TikWM FIRST, native second — the reverse of the obvious order, and it is
-      deliberate.
+      RACE TikWM and native, don't chain them (owner, 2026-08-16: "tiktok
+      still delays a lot to fetch" — a repeat complaint after the earlier
+      round of timeout fixes).
 
-      TikTok serves a blank page to datacenter IPs, which is where this worker
-      runs, so `nativeExtract` almost always fails here. Trying it first meant
-      every TikTok download paid for that failed attempt — and then the registry's
-      residential-proxy retry of the whole chain — BEFORE reaching the TikWM API,
-      which is fast, needs no proxy, and returns a clean no-watermark file. That
-      serial wait is the reported "takes long before the download starts", and any
-      wobble in the later steps surfaced as an outright failure.
+      Measured LIVE against tikwm.com's own API, independent of anything in
+      this codebase: 9, 11, 14, then 16 seconds across four back-to-back
+      calls — getting slower, not settling. That is the free third-party
+      service this extractor was calling FIRST and awaiting in full (up to
+      TIKWM_TIMEOUT_MS) before native ever got a turn. Serially, a slow TikWM
+      call added its ENTIRE duration on top of whatever native takes; the
+      worst case was their SUM.
 
-      TikWM is now the fast path. Native stays as the fallback for the cases TikWM
-      cannot serve (it is down, rate-limited, or the video is one it refuses), and
-      it is the path the residential proxy still backs. So reliability is at least
-      as good — both routes still run — while the common case is much faster and
-      spends no proxy bandwidth.
+      Racing them removes that stacking — the worst case becomes whichever
+      route is slower, not both added together. `nativeExtract` still often
+      fails outright from a datacenter IP (the reason TikWM was made primary
+      in the first place — see the removed comment this replaced), and
+      `extractorFetch` already retries it through the residential proxy on a
+      detected block, so this costs one extra outbound request in the common
+      case and nothing in reliability: both routes still run, and whichever
+      answers first wins.
 
-      Resolving the short link up front so BOTH routes get the canonical watch URL
-      (TikWM occasionally 404s a `vt.tiktok.com` link it would resolve fine).
+      Resolving the short link up front so BOTH routes get the canonical watch
+      URL (TikWM occasionally 404s a `vt.tiktok.com` link it would resolve fine).
     */
     let canonical = url;
     try {
@@ -627,11 +631,17 @@ export const tiktokExtractor: Extractor = {
       /* keep the original; TikWM handles most short links itself */
     }
 
-    const viaApi = await tikwmExtract(canonical, platform);
-    if (viaApi) return viaApi;
+    const viaApi = tikwmExtract(canonical, platform).then(
+      (r) => r ?? Promise.reject(new ExtractionError("TikWM returned no usable media")),
+    );
+    const viaNative = nativeExtract(canonical, platform);
 
-    // TikWM unavailable — fall back to the native parse (which the registry may
-    // retry through the residential proxy).
-    return nativeExtract(canonical, platform);
+    try {
+      return await Promise.any([viaApi, viaNative]);
+    } catch {
+      // Both routes failed — the registry falls back to yt-dlp from here,
+      // same as before.
+      throw new ExtractionError("TikTok extraction failed on all direct routes");
+    }
   },
 };

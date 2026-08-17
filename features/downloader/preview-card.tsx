@@ -849,7 +849,6 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         setPendingBatch(null);
         if (items) runBatch(items, auth);
       }}
-      onCancel={() => setPendingBatch(null)}
       showComplete={batchFinished}
       onCompleteClosed={() => setBatchFinished(false)}
     />

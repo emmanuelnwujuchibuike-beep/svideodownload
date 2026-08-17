@@ -124,21 +124,35 @@ describe("no consumer reveals an interstitial on the UNANSWERED state", () => {
     expect(src).toMatch(/shown=\{hasAd === true\}/);
   });
 
-  it("no creative → unavailable, not a silent grant (2026-08-16 spec)", () => {
+  it("no creative → the batch just runs, never a dead end (owner, 2026-08-16, superseding the same-day 'unavailable' spec)", () => {
     /*
-      🔴 Intentional behaviour change, not a regression. This used to let the
-      batch through unconditionally when the ad slot never filled — correct
-      for a passive skip-countdown, wrong once the batch gate started issuing
-      a real server-side reward session (lib/monetization/reward-sessions.ts):
-      the spec's Part 16 explicitly requires "ad unavailable → do NOT count
-      the reward, do NOT consume the daily allowance", which a silent
-      let-it-through would violate. The overlay still never traps anyone —
-      "Advertisement unavailable" offers an explicit Try Again — it just no
-      longer pretends a reward was earned when no ad ever ran.
+      🔴 Reversed same day it shipped. The "Advertisement unavailable" dead
+      end (no creative → block the batch, Try Again only) was a deliberate
+      Part 16 choice — then the owner corrected it directly: "shouldnt stop
+      download when there are no ad… when there are ad available user must
+      watch complete before download will be granted." No ad inventory is not
+      the visitor's problem to solve, so every "nothing to show" path now
+      calls the SAME `bypass()` used for Pro/Business — `onProceed(null)`,
+      no reward session pretended or required. The other half of that
+      sentence is what MUST still hold: an ad that IS available can only be
+      granted once it's run its full course, which is `shown={hasAd === true}`
+      above plus `canSkip={remaining <= 0}` down in the render — never a
+      skip-then-grant.
     */
     const src = readFileSync(join(process.cwd(), "features/downloader/batch-ad-gate.tsx"), "utf8");
+    // The dead-end mechanism itself (state, setter, the "Try Again" UI) must
+    // not come back — checked as actual identifiers, not prose, since the
+    // surrounding comments legitimately reference the old behaviour by name.
+    expect(src, "the dead-end mechanism must not come back").not.toMatch(
+      /\bmarkUnavailable\b|setUnavailable\(true\)|if \(unavailable\)/,
+    );
     expect(src).toMatch(/if \(hasAd === false\)/);
-    expect(src).toMatch(/if \(phase === "gate"\) markUnavailable\(\);/);
+    expect(src).toMatch(/if \(phase === "gate"\) bypass\(\);/);
+    // The ceiling for a slot that never answers at all must fail open too.
+    expect(src).toMatch(/if \(phase === "gate" && hasAd === null\) bypass\(true\);/);
+    // Full-duration watch requirement, unchanged: skip is only ever possible
+    // once the countdown reaches zero, so "resolved" always means "watched".
+    expect(src).toMatch(/canSkip=\{remaining <= 0\}/);
   });
 });
 

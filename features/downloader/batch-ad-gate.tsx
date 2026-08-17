@@ -29,22 +29,24 @@ export interface BatchAuthorization {
  * have the thing they came for. Pro and Business skip both ads, which is
  * exactly what they are paying for.
  *
- * ── 🔴 Now server-verified (owner, 2026-08-16 spec: "secure, production-ready
- *    rewarded-ad system") ─────────────────────────────────────────────────
- * This used to grant the batch on nothing more than "a creative rendered" —
- * existence, not completion — and even THAT was skipped if the ad slot was
- * simply slow to answer. That is real ground given up here: an ad that
- * genuinely rendered and ran its course now goes through a server-side
- * reward session (`lib/monetization/reward-sessions.ts`) before `onProceed`
- * fires, and — this is the real behaviour change — an ad that never loads no
- * longer lets the batch through anyway. It shows "Advertisement unavailable"
- * instead. The ad UI/timing itself (skip countdown, upsell) is UNCHANGED;
- * only what happens once it resolves is different.
+ * ── 🔴 Server-verified when there IS an ad; never a dead end when there
+ *    isn't (owner, 2026-08-16, first the "secure, production-ready
+ *    rewarded-ad system" spec, then a direct correction the same day) ────
+ * An ad that genuinely rendered and ran its FULL course (the skip control
+ * stays hidden — see `canSkip={remaining <= 0}` below — until the countdown
+ * finishes, so "resolved" only ever means "watched completely") goes through
+ * a server-side reward session (`lib/monetization/reward-sessions.ts`)
+ * before `onProceed` fires.
  *
- * `onProceed(null)` still means "bypass — no reward session at all", for the
- * two cases that never depended on an ad in the first place: Pro/Business, or
- * the feature switched off in the admin. Neither of those can get stuck,
- * because neither of them touches the async ad-slot fetch at all.
+ * This USED to also block the batch outright — "Advertisement unavailable",
+ * dead end, Try Again only — whenever no ad loaded at all. The owner
+ * corrected that: no ad inventory is not the visitor's problem to solve, so
+ * every "there's simply nothing to show" path (the slot never answers, it
+ * answers with no creative, or the reward confirmation itself fails after an
+ * ad that already ran its course) now fails OPEN — `onProceed(null)`, the
+ * same signal already used for Pro/Business and "feature switched off". The
+ * one thing that never changes is the other half: whenever an ad IS
+ * available, it must be watched in full before anything is granted.
  */
 export function BatchAdGate({
   /*
@@ -62,14 +64,12 @@ export function BatchAdGate({
   */
   batch,
   onProceed,
-  onCancel,
   /** Set once a batch has finished, to run the short closing ad. */
   showComplete,
   onCompleteClosed,
 }: {
   batch: readonly RewardSessionItem[] | null;
   onProceed: (auth: BatchAuthorization | null) => void;
-  onCancel: () => void;
   showComplete: boolean;
   onCompleteClosed: () => void;
 }) {
@@ -81,9 +81,6 @@ export function BatchAdGate({
   const [remaining, setRemaining] = useState(0);
   // Null until the slot reports. `false` means "no creative".
   const [hasAd, setHasAd] = useState<boolean | null>(null);
-  // The ad genuinely never became available (Part 16/18) — a distinct dead
-  // end from "idle", with its own explicit "Try Again".
-  const [unavailable, setUnavailable] = useState(false);
   const proceeded = useRef(false);
   // Opened in parallel with the ad UI (Part 9: session created BEFORE the ad
   // is shown) so `grant()` almost never has to wait on it — a real ad takes
@@ -102,15 +99,11 @@ export function BatchAdGate({
     [onProceed],
   );
 
-  const markUnavailable = useCallback(() => {
-    if (proceeded.current) return;
-    proceeded.current = true;
-    setPhase("idle");
-    dismissToast(PREP_TOAST_ID);
-    setUnavailable(true);
-  }, []);
-
-  /** The ad rendered and ran its course — confirm the reward before granting. */
+  /** The ad rendered and ran its FULL course (see `canSkip` below — this is
+   *  only reachable once the countdown hit zero) — confirm the reward and
+   *  grant. If the confirmation call itself fails, the ad has already been
+   *  watched in full by this point, so the fair outcome is to let the batch
+   *  through anyway rather than deny a download that was already earned. */
   const grant = useCallback(async () => {
     if (proceeded.current || !batch) return;
     proceeded.current = true;
@@ -120,21 +113,16 @@ export function BatchAdGate({
       const session = await (startPromiseRef.current ?? start("batch", [...batch]));
       const result = await complete("batch", session.rewardSessionId);
       onProceed({ rewardSessionId: session.rewardSessionId, items: result.items });
-    } catch {
-      setUnavailable(true);
+    } catch (e) {
+      console.warn("[batch-ad-gate] reward confirmation failed after a completed ad, proceeding anyway:", e);
+      onProceed(null);
     }
   }, [batch, start, complete, onProceed]);
-
-  const tryAgain = useCallback(() => {
-    setUnavailable(false);
-    onCancel();
-  }, [onCancel]);
 
   // ── Open the gate ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!batch) return;
     proceeded.current = false;
-    setUnavailable(false);
 
     // Premium members, or the feature switched off: straight through, no
     // reward session at all.
@@ -152,17 +140,18 @@ export function BatchAdGate({
 
   /*
     Ceiling for a slot that never answers at all (`hasAd` stuck at `null`).
-    Unlike before, this no longer proceeds — no creative ever confirmed means
-    there's nothing to have watched, so it's treated as unavailable rather
-    than let through silently.
+    Fails OPEN (owner, 2026-08-16: "shouldnt stop download when there are no
+    ad") — no creative ever confirmed means there was never anything to
+    watch, so the batch just runs rather than dead-ending on "Advertisement
+    unavailable".
   */
   useEffect(() => {
     if (phase !== "gate" || hasAd !== null) return;
     const id = setTimeout(() => {
-      if (phase === "gate" && hasAd === null) markUnavailable();
+      if (phase === "gate" && hasAd === null) bypass(true);
     }, 2500);
     return () => clearTimeout(id);
-  }, [phase, hasAd, markUnavailable]);
+  }, [phase, hasAd, bypass]);
 
   // ── The closing ad ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -184,16 +173,15 @@ export function BatchAdGate({
   }, [phase, remaining]);
 
   /*
-    No creative → for the GATE, this is now "unavailable" (see above). For the
+    No creative → same fail-open rule as the ceiling above, for the GATE. The
     purely cosmetic CLOSING ad — which runs after the batch has already
-    succeeded — there is no grant decision to make either way, so it simply
-    closes.
+    succeeded — has no grant decision to make either way, so it simply closes.
   */
   useEffect(() => {
     if (phase === "idle") return;
     const id = setTimeout(() => {
       if (hasAd === false) {
-        if (phase === "gate") markUnavailable();
+        if (phase === "gate") bypass();
         else {
           setPhase("idle");
           onCompleteClosed();
@@ -201,7 +189,7 @@ export function BatchAdGate({
       }
     }, 1200);
     return () => clearTimeout(id);
-  }, [phase, hasAd, markUnavailable, onCompleteClosed]);
+  }, [phase, hasAd, bypass, onCompleteClosed]);
 
   const close = useCallback(() => {
     if (phase === "gate") void grant();
@@ -210,26 +198,6 @@ export function BatchAdGate({
       onCompleteClosed();
     }
   }, [phase, grant, onCompleteClosed]);
-
-  if (unavailable) {
-    return (
-      <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-        <div className="w-full max-w-sm rounded-3xl bg-card p-6 text-center shadow-luxury">
-          <p className="text-base font-bold">Advertisement unavailable</p>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            We couldn't load a rewarded ad right now. Please try again.
-          </p>
-          <button
-            type="button"
-            onClick={tryAgain}
-            className="mt-4 w-full rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground transition active:scale-[0.98]"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   if (phase === "idle") return null;
 
@@ -260,5 +228,4 @@ export function BatchAdGate({
   );
 }
 
-/** Cancel is exposed for callers that need to abandon a pending batch. */
 export type BatchAdGateProps = Parameters<typeof BatchAdGate>[0];

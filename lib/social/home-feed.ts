@@ -216,15 +216,27 @@ export function rankForYou(
     const interest = row.category && boosted.has(row.category as Category) ? 60 : 0;
     const createdMs = new Date(row.created_at).getTime();
     const isBrandNew = now - createdMs < NEW_POST_WINDOW_MS;
+    // 🔴 DAY BUCKET (owner, 2026-08-17: "feed post should be ranked by date
+    // first before most liked, so every refresh shows the newest post...
+    // shows the newest on every cold entry"). 0 = posted within the last 24h,
+    // 1 = the 24h before that, etc. This becomes the PRIMARY sort key below —
+    // a post from an earlier bucket can never outrank one from a newer
+    // bucket, however much more engagement it has. `quality` is unbounded
+    // (likes + 2*comments + 3*shares + …), which is exactly how a viral post
+    // from days ago used to keep beating today's posts once it aged out of
+    // the 30-minute "brand new" pin below — that pin only ever protected the
+    // newest few posts, not "today" as a whole.
+    const dayBucket = Math.floor(ageHours / 24);
     const base = relationship + quality + freshness + interest;
     // Per-refresh reshuffle (owner: "every refresh should reshuffle the feed
     // post arrangement like tiktok"). MULTIPLICATIVE, not additive: it varies a
     // post's score by ±SHUFFLE_SPREAD/2 of its OWN value, so posts of similar
     // standing trade places on each refresh while a genuinely strong post never
     // gets buried and a weak one never rockets to the top — the feed feels
-    // alive without the ranking becoming a lottery.
+    // alive without the ranking becoming a lottery. Still scoped to WITHIN a
+    // day bucket now, never across one.
     const score = seed ? base * (1 + (seededUnit(seed, row.id) - 0.5) * SHUFFLE_SPREAD) : base;
-    return { row, score, i, createdMs, isBrandNew };
+    return { row, score, i, createdMs, isBrandNew, dayBucket };
   });
   scored.sort((a, b) => {
     // TIER 1 — a brand-new post is always above an older one, and is NOT
@@ -239,17 +251,16 @@ export function rankForYou(
     // posts" pill honest: it refreshes, and the thing it promised is visibly
     // at the top instead of somewhere down the list where the ranker happened
     // to put it.
-    //
-    // A score-based fix (a big freshness bonus) was the obvious alternative and
-    // is worse: `quality` is unbounded (likes + 2*comments + 3*shares + …), so
-    // any fixed bonus is an arms race a viral old post eventually wins, and the
-    // ±25% jitter perturbs it anyway. A hard tier can't be outbid.
     if (a.isBrandNew !== b.isBrandNew) return a.isBrandNew ? -1 : 1;
     // Among brand-new posts: strict recency, newest first. `a.i - b.i` is the
     // tiebreak for identical timestamps (rows arrive newest-first), so equal
     // ages keep their original order rather than shuffling arbitrarily.
     if (a.isBrandNew) return b.createdMs - a.createdMs || a.i - b.i;
-    // TIER 2 — everything else: jittered score, tiebreak on original
+    // TIER 2 — day bucket, ascending (today before yesterday before the day
+    // before that, …). This is the actual fix: no amount of `quality` lets a
+    // post cross a day boundary anymore.
+    if (a.dayBucket !== b.dayBucket) return a.dayBucket - b.dayBucket;
+    // TIER 3 — within the same day: jittered score, tiebreak on original
     // (recency) order so equal scores never shuffle arbitrarily between
     // otherwise-identical requests.
     return b.score - a.score || a.i - b.i;

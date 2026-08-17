@@ -181,13 +181,14 @@ describe("rankForYou — brand-new posts pin to the top", () => {
     ]);
   });
 
-  it("does not pin a post older than the 30-minute window", () => {
+  it("does not PIN a post older than the 30-minute window — but same-day scoring still applies", () => {
     const rows = [
-      makeRow({ id: "strong-old", likes_count: 900, created_at: SHARED_CREATED_AT }),
+      makeRow({ id: "strong-recent", likes_count: 900, created_at: minsAgo(60) }),
       makeRow({ id: "weak-stale", likes_count: 0, created_at: minsAgo(45) }),
     ];
-    // 45min is outside the window, so normal scoring decides — the strong post wins.
-    expect(rankForYou(rows, new Set(), undefined)[0]?.id).toBe("strong-old");
+    // Both outside the 30min pin AND in the same day bucket — normal scoring
+    // decides between them, same as before this file's 2026-08-17 revision.
+    expect(rankForYou(rows, new Set(), undefined)[0]?.id).toBe("strong-recent");
   });
 
   it("still reshuffles the non-pinned tail while a new post holds the top", () => {
@@ -211,5 +212,56 @@ describe("rankForYou — brand-new posts pin to the top", () => {
     const ranked = rankForYou(rows, new Set(), undefined, "seed");
     expect(ranked).toHaveLength(21);
     expect(new Set(ranked.map((r) => r.id)).size).toBe(21);
+  });
+});
+
+/**
+ * Day-bucket ranking (owner, 2026-08-17: "feed post should be ranked by date
+ * first before most liked, so every refresh shows the newest post... shows
+ * the newest on every cold entry"). Before this, only a JUST-posted item
+ * (inside the 30-minute pin above) was guaranteed to beat an older one — past
+ * that window, an unbounded `quality` score let a viral post from days ago
+ * keep outranking a plain, ordinary post from earlier today. The day bucket
+ * is a SECOND, wider tier between the 30-minute pin and normal scoring: a
+ * post from an earlier day can never outrank one from a newer day, however
+ * much more engagement it has; within the SAME day, scoring/shuffle still
+ * decide the order exactly as before.
+ */
+describe("rankForYou — day bucket beats quality across days", () => {
+  const daysAgo = (d: number) => new Date(Date.now() - d * 24 * 60 * 60 * 1000 - 60 * 60 * 1000).toISOString();
+
+  it("a plain post from today outranks a viral post from yesterday", () => {
+    const rows = [
+      makeRow({ id: "viral-yesterday", likes_count: 50_000, created_at: daysAgo(1) }),
+      makeRow({ id: "plain-today", likes_count: 0, created_at: daysAgo(0) }),
+    ];
+    expect(rankForYou(rows, new Set())[0]?.id).toBe("plain-today");
+  });
+
+  it("a viral post from LAST WEEK still never beats an ordinary post from today", () => {
+    const rows = [
+      makeRow({ id: "viral-last-week", likes_count: 1_000_000, created_at: daysAgo(7) }),
+      makeRow({ id: "plain-today", likes_count: 0, created_at: daysAgo(0) }),
+    ];
+    for (const seed of ["s1", "s2", "s3"]) {
+      expect(rankForYou(rows, new Set(), undefined, seed)[0]?.id).toBe("plain-today");
+    }
+  });
+
+  it("within the SAME day, quality still decides the order as before", () => {
+    const rows = [
+      makeRow({ id: "weak-today", likes_count: 0, created_at: daysAgo(0) }),
+      makeRow({ id: "strong-today", likes_count: 500, created_at: daysAgo(0) }),
+    ];
+    expect(rankForYou(rows, new Set())[0]?.id).toBe("strong-today");
+  });
+
+  it("orders three days correctly: today, then yesterday, then two days ago — regardless of likes", () => {
+    const rows = [
+      makeRow({ id: "two-days-ago", likes_count: 999_999, created_at: daysAgo(2) }),
+      makeRow({ id: "yesterday", likes_count: 500, created_at: daysAgo(1) }),
+      makeRow({ id: "today", likes_count: 0, created_at: daysAgo(0) }),
+    ];
+    expect(rankForYou(rows, new Set()).map((r) => r.id)).toEqual(["today", "yesterday", "two-days-ago"]);
   });
 });

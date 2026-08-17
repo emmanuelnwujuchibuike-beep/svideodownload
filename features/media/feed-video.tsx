@@ -80,7 +80,7 @@ export function FeedVideo({
    * THIS component's own box — not the caller's outer wrapper. 2026-08-17: a
    * badge rendered as a SIBLING in feed-post-card.tsx, absolutely positioned
    * against that outer wrapper, floated away from the actual clip once this
-   * box could be narrower than its wrapper (the max-h-45vh cap centering a
+   * box could be narrower than its wrapper (the max-h cap centering a
    * tall/portrait video). Passing it in here instead means it's always
    * anchored to the real, possibly-narrower media box.
    */
@@ -107,7 +107,7 @@ export function FeedVideo({
   const [covered, setCovered] = useState(true);
   const [shouldLoad, setShouldLoad] = useState(false);
   // The card shows the video at its TRUE aspect ratio — nothing is ever
-  // cropped or letterboxed. The `max-h-[45vh]`/`lg:max-h-[82vh]` safety net
+  // cropped or letterboxed. The `max-h-[85vh]`/`lg:max-h-[82vh]` safety net
   // below is the only ceiling on tallness.
   //
   // Seeded from the SERVER's stored dimensions when they exist, so the box is
@@ -313,13 +313,16 @@ export function FeedVideo({
         "group relative mx-auto overflow-hidden rounded-2xl bg-black",
         // Twitter-style: full width, the media's OWN true aspect ratio — a
         // HEIGHT ceiling, never a ratio clamp, so it can't disagree with the
-        // clip's true shape (no letterboxing). Retightened 2026-08-17
-        // (70vh→45vh, owner: "post should not be that long… skrinked so two
-        // post can show on one screenview") after the owner's own screenshots
-        // showed 70vh was still occupying most of the viewport for a single
-        // portrait clip — this DOES actively trigger on ordinary tall/
-        // portrait content now, by design, not just on pathological uploads.
-        "max-h-[45vh] lg:flex lg:!aspect-auto lg:max-h-[82vh] lg:items-center lg:justify-center",
+        // clip's true shape (no letterboxing/cropping). SETTLED 2026-08-17
+        // after a same-day tightening (70vh→45vh) turned out to shrink WIDTH
+        // for portrait clips too (the two are locked together under
+        // object-contain) — the owner wanted width preserved over height
+        // compactness: "increase the width… reach the extreme end of the
+        // right side… dont crop tall image or video". 85vh is a genuine
+        // last-resort ceiling now, not a routine lever — it essentially
+        // never triggers for realistic phone-shot content, only truly
+        // pathological uploads.
+        "max-h-[85vh] lg:flex lg:!aspect-auto lg:max-h-[82vh] lg:items-center lg:justify-center",
         className,
       )}
     >
@@ -370,7 +373,7 @@ export function FeedVideo({
           the page whose stillness is load-bearing, and the pause indicator
           already gives the gesture unambiguous feedback.
         */
-        className="h-full max-h-[45vh] w-full touch-pan-y object-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset lg:h-auto lg:max-h-[82vh] lg:w-auto"
+        className="h-full max-h-[85vh] w-full touch-pan-y object-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset lg:h-auto lg:max-h-[82vh] lg:w-auto"
         // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
         // open media") — purely additive: Enter/Space opens directly,
         // bypassing the tap/double-tap/hold pointer state machine above

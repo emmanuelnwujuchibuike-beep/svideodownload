@@ -43,8 +43,8 @@ export function FeedImage({
    * component's own box — not the caller's outer wrapper. 2026-08-17: a
    * views badge rendered as a SIBLING in feed-post-card.tsx, absolutely
    * positioned against that outer wrapper, floated away from the actual
-   * photo once this box could be narrower than its wrapper (the max-h-45vh
-   * cap centering a tall photo). Passing it in here instead means it's
+   * photo once this box could be narrower than its wrapper (the max-h cap
+   * centering a tall photo). Passing it in here instead means it's
    * always anchored to the real, possibly-narrower media box.
    */
   children?: React.ReactNode;
@@ -126,27 +126,15 @@ export function FeedImage({
   };
 
   /*
-    🔴 REVERSED 2026-08-17 (owner, with X/Twitter reference screenshots: real
-    Twitter/X applies NO aspect-ratio floor/ceiling to feed media — it renders
-    at its own true shape, full width, capped only by a max HEIGHT). See
-    `lib/media/aspect.ts`'s reversal note for the full reasoning; the
-    2026-08-16 brief directly below is kept for context, but `clampFeedRatio`
-    no longer clamps anything despite the name — `ratio` here is the photo's
-    real, unaltered shape. The `max-h-[45vh]` on the container below is what
-    keeps a post compact — a HEIGHT ceiling, not a ratio clamp, so the box
-    never disagrees with the photo's true shape (no letterboxing), but for
-    genuinely tall content it DOES actively trigger, on purpose.
-
-    ── The feed's Twitter/Threads density cap (owner, 2026-08-16, retightened
-    2026-08-17: "they should be skrinked so two post can show on one
-    screenview") ─────────────────────────────────────────────────────────
-    "every long video or image should shrink on the feed like Twitter… two
-    posts that will be able to show complete." First implemented at 70vh,
-    which the owner's own screenshots showed was still too tall — 45vh is
-    closer to the ~43% height a post's media occupies in the owner's X
-    reference screenshot. `fill` mode is still used — a `fill` image has no
-    size of its own, so the container's aspect-ratio (now the photo's TRUE
-    one) is what determines the rendered height.
+    🔴 SETTLED 2026-08-17 (see `lib/media/aspect.ts`'s matching note for the
+    full owner-quote history — several revisions same day). Final shape:
+    `ratio` is the photo's real, fully unclamped shape (no floor, no
+    ceiling) — full card width always, `object-contain` never crops, and the
+    generous `max-h-[85vh]` below is a true last-resort ceiling for a
+    genuinely pathological upload, not a routine lever. For any realistic
+    phone-shot photo this never triggers, so width and the blurred backdrop
+    below are basically moot in practice — the box's shape simply IS the
+    photo's own true shape.
   */
   const ratio = hasDims ? clampFeedRatio(width, height) : null;
 
@@ -167,7 +155,7 @@ export function FeedImage({
         // above), it needs to center itself and carry its own rounded corners —
         // the outer wrapper's rounding only reaches the card's own edges, which
         // this box no longer touches in that case.
-        "relative mx-auto flex max-h-[45vh] items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+        "relative mx-auto flex max-h-[85vh] items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
         className,
       )}
       // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
@@ -225,7 +213,7 @@ export function FeedImage({
           // above, the photo's own TRUE shape, unclamped) is what sizes this
           // image now — `object-contain` is a no-op for a short/wide photo
           // (box already matches it exactly) and only shrinks (never crops)
-          // a tall photo once the `max-h-[45vh]` cap narrows the box below
+          // a tall photo once the `max-h-[85vh]` cap narrows the box below
           // the photo's own preferred height.
           fill
           sizes="(max-width: 768px) 100vw, 640px"

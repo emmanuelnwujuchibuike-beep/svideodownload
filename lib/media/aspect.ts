@@ -3,29 +3,28 @@
  *  THE FEED'S SHARED "HOW TALL CAN MEDIA GET" RULE
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * 🔴 REVERSED 2026-08-17 (owner, with X/Twitter reference screenshots: "in
- * twitter video size how depends on the size, it doesnt give a fied size and
- * occupy the space with black bakground"). The 2026-08-16 brief directly
- * below asked for "like Twitter" but the mechanism it built was the OPPOSITE
- * of Twitter's real one: it forced every post's container into a fixed 4:5–
- * 16:9 band and letterboxed (blurred-fill) anything that didn't match, where
- * real Twitter/X applies NO ratio floor or ceiling at all — a post's media
- * renders at its own true aspect, full width, and the only limit is a MAX
- * HEIGHT (not a locked ratio). This function now returns the media's real,
- * unclamped ratio; a max-height CSS cap on the actual `<video>`/`<img>`
- * elements (see feed-video.tsx / feed-image.tsx) is what keeps a
- * pathologically tall clip from taking over the screen — and unlike the old
- * ratio clamp, it never produces a mismatched box for `object-contain` to
- * letterbox inside, because the container's shape IS the media's shape.
+ * 🔴 SETTLED 2026-08-17, after several same-day revisions. Owner's full set
+ * of constraints, taken together: media must reach the card's FULL width
+ * ("increase the width... i want the post to reach the extreme end of the
+ * right side"); never cropped ("dont crop tall image or video"); and the
+ * width must be REAL content, not a blurred backdrop standing in for it
+ * ("remember the width shouldnt include the black blurred background").
  *
- * ── The original 2026-08-16 brief, kept for context ─────────────────────────
- * "the feed should be premium like Twitter and thread, every long video or
- * image should shrink on the feed like Twitter… it should be two [posts]
- * that will be able to show complete like Twitter and thread style… show
- * full in reels only when clicked." The "shrink" and "two per screen" goals
- * are still real — they're now met by the max-height cap instead of a ratio
- * clamp, which was solving them by producing letterboxed, not truly full,
- * media.
+ * Those three, together, leave no room for a ratio floor or a tight
+ * max-height: for a fixed full width and an UNCLAMPED true ratio with
+ * `object-contain`, height is fully determined (`width / ratio`) — there is
+ * no free dimension left to cap without breaking one of the three
+ * constraints above. So this function is back to the media's real,
+ * unclamped ratio (no floor, no ceiling — a landscape and a portrait clip
+ * are each exactly their own shape), and the max-height on the actual
+ * elements (`feed-image.tsx`/`feed-video.tsx`) is set generously enough
+ * that it essentially never triggers for realistic phone-shot content —
+ * true last-resort protection against a genuinely pathological upload
+ * (a 1:20 image, say), not a routine compactness lever. The owner's
+ * "the current height is already okay" meant they'd already accepted
+ * that fixing width would mean SOME posts render taller than the
+ * previous, over-tight cap allowed — not that height must stay pinned to
+ * a specific pixel value.
  */
 export function clampFeedRatio(w?: number | null, h?: number | null): number | null {
   if (!w || !h || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;

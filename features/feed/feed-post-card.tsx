@@ -450,17 +450,20 @@ function FeedPostCardImpl({
         stacked "avatar+name spans full width, media spans full width below"
         arrangement this card used before. Card padding also tightened from
         p-4/p-5 to px-2 (owner: "go to the extreme right end with just
-        padding 2") so the whole row sits closer to the screen edge.
+        padding 2") so the whole row sits closer to the screen edge. Avatar
+        shrunk again 40px->36px and the gap to its content column tightened
+        (owner, same day: "the space on the left for the profile ring
+        shouldnt be that big").
       */}
-      <div className="flex gap-2.5 px-2 sm:px-3">
+      <div className="flex gap-2 px-2 sm:px-3">
         <Link
           href={`/u/${item.publisher.handle}`}
           className="shrink-0 self-start rounded-full bg-gradient-to-br from-primary/70 to-accent/70 p-[2px] transition-transform duration-300 group-hover:scale-105"
         >
           {item.publisher.avatarUrl ? (
-            <Image src={item.publisher.avatarUrl} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover ring-2 ring-card" />
+            <Image src={item.publisher.avatarUrl} alt="" width={36} height={36} className="h-9 w-9 rounded-full object-cover ring-2 ring-card" />
           ) : (
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white ring-2 ring-card">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-base font-bold text-white ring-2 ring-card">
               {item.publisher.displayName.charAt(0).toUpperCase()}
             </span>
           )}
@@ -636,9 +639,11 @@ function FeedPostCardImpl({
             height={item.mediaHeight ?? undefined}
           >
             {/*
-              🔴 MOVED INSIDE `FeedVideo` (owner, 2026-08-17: the tighter
-              45vh cap now regularly narrows portrait clips below the card's
-              full width). This badge used to be a SIBLING here, absolutely
+              🔴 MOVED INSIDE `FeedVideo` (owner, 2026-08-17: an earlier,
+              tighter max-height cap regularly narrowed portrait clips below
+              the card's full width — the max-height is generous now, but a
+              genuinely pathological clip could still hit it). This badge
+              used to be a SIBLING here, absolutely
               positioned against the outer wrapper div above — which stays
               full width even when the clip itself shrinks, so the badge
               floated away from the actual video instead of sitting on its
@@ -672,9 +677,9 @@ function FeedPostCardImpl({
             onExpand={() => open(item)}
             // 🔴 NO `w-full`/`max-h` override HERE — same reasoning as FeedVideo
             // above: a forced `width: 100%` fights the wrapper's own
-            // `aspect-ratio` + `max-h-[45vh]`, leaving black bars on the sides
-            // once a tall photo hits the cap. FeedImage's own internal 45vh is
-            // the single source of truth now, not overridden per call site.
+            // `aspect-ratio` + `max-h`, leaving black bars on the sides once
+            // a tall photo hits the cap. FeedImage's own internal max-height
+            // is the single source of truth now, not overridden per call site.
           >
             {/* Moved inside `FeedImage` — see the matching note on the video
                 branch above; same "badge floated off a shrunk box" bug. */}

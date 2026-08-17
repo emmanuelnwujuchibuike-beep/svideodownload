@@ -63,21 +63,11 @@ interface CommentsData {
  */
 export function ImageViewer({
   item,
-  posts,
   startIndex = 0,
   autoOpenComments,
   onClose,
 }: {
   item: FeedItem | null;
-  /**
-   * The ordered list of feed posts this viewer can move between on a
-   * vertical swipe (owner, 2026-08-17: a multi-photo post's viewer should
-   * "slide in reels" — the same Y-axis-between-posts model ReelsFeed already
-   * gives videos, via `SmartFeed`'s `photoPosts`). Optional: when absent (or
-   * `item` isn't in it), Y-axis navigation is simply unavailable — never a
-   * crash, just no-op past the album's own X-axis slides.
-   */
-  posts?: FeedItem[];
   /** Which slide of an album was actually tapped — not always the first. */
   startIndex?: number;
   /** Open straight into the comments sheet — a feed "Comment" tap should land
@@ -87,36 +77,17 @@ export function ImageViewer({
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  // The post actually on screen — starts as whatever the feed tapped, but a
-  // Y-axis swipe inside an album can move it forward/back through `posts`
-  // without closing and reopening the whole viewer.
-  const [current, setCurrent] = useState(item);
-  useEffect(() => setCurrent(item), [item]);
-
-  const navigatePost = useCallback(
-    (dir: "next" | "prev") => {
-      if (!posts || !current) return;
-      const idx = posts.findIndex((p) => p.id === current.id);
-      if (idx === -1) return;
-      const target = posts[dir === "next" ? idx + 1 : idx - 1];
-      if (target) setCurrent(target);
-    },
-    [posts, current],
-  );
 
   if (!mounted) return null;
   return createPortal(
     <AnimatePresence>
-      {current ? (
+      {item ? (
         <ImageStage
-          key={current.id}
-          item={current}
-          // Only honour the tapped slide index on the ORIGINAL post — a post
-          // reached via Y-axis navigation always opens on its first slide.
-          startIndex={current.id === item?.id ? startIndex : 0}
-          autoOpenComments={current.id === item?.id ? autoOpenComments : false}
+          key={item.id}
+          item={item}
+          startIndex={startIndex}
+          autoOpenComments={autoOpenComments}
           onClose={onClose}
-          onNavigatePost={posts && posts.length > 1 ? navigatePost : undefined}
         />
       ) : null}
     </AnimatePresence>,
@@ -129,15 +100,11 @@ function ImageStage({
   startIndex = 0,
   autoOpenComments,
   onClose,
-  onNavigatePost,
 }: {
   item: FeedItem;
   startIndex?: number;
   autoOpenComments?: boolean;
   onClose: () => void;
-  /** Present only when there's a real adjacent post to move to (see
-   *  ImageViewer above) — undefined means "no Y-axis navigation available". */
-  onNavigatePost?: (dir: "next" | "prev") => void;
 }) {
   const src = item.mediaUrl || item.thumbnailUrl || "";
   // An album (>1 item) swipes through every photo/video right here in
@@ -362,7 +329,6 @@ function ImageStage({
             onTap={() => setUi((v) => !v)}
             onDoubleTap={likeBurst}
             onDismiss={onClose}
-            onNavigatePost={onNavigatePost}
           />
         ) : (
           <div
@@ -653,10 +619,10 @@ const ALBUM_AUTO_SLIDE_MS = 3500;
  * viewer touches the screen at all, at which point autoplay stops for good
  * and every further slide change is manual (owner, 2026-08-17: "auto slide
  * and when tapped it stops and demands a manual slide"). A vertical swipe
- * moves to the NEXT/PREVIOUS POST — Y-axis Reels-style navigation between
- * whole posts — rather than dismissing the viewer, whenever a post list to
- * navigate is actually available (`onNavigatePost` — see ImageViewer); with
- * none, it falls back to the original swipe-down-to-dismiss.
+ * DOWN dismisses the viewer (owner, same day, later: "remove the Y axis
+ * scroll and movement from the multi post viewer" — an earlier version of
+ * this component let a vertical swipe move to the next/previous POST
+ * instead; removed, see the pointer-up handler below).
  */
 function AlbumSwipe({
   items,
@@ -665,7 +631,6 @@ function AlbumSwipe({
   onTap,
   onDoubleTap,
   onDismiss,
-  onNavigatePost,
 }: {
   items: NonNullable<FeedItem["mediaItems"]>;
   startIndex: number;
@@ -673,7 +638,6 @@ function AlbumSwipe({
   onTap: () => void;
   onDoubleTap: (x: number, y: number) => void;
   onDismiss: () => void;
-  onNavigatePost?: (dir: "next" | "prev") => void;
 }) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [index, setIndex] = useState(startIndex);
@@ -763,19 +727,20 @@ function AlbumSwipe({
     const start = startPt.current;
     startPt.current = null;
     if (moved.current) {
-      // A real drag: a mostly-VERTICAL swipe moves to the next/previous POST
-      // — Reels-style Y-axis navigation between whole posts (owner: "when
-      // slide from Y axis it slides in reels") — when there's a post list to
-      // navigate; otherwise it falls back to the original swipe-DOWN-to-
-      // dismiss. A mostly-horizontal drag is the album's own native
-      // swipe-between-slides and is never misread as either.
+      /*
+        🔴 Y-AXIS POST NAVIGATION REMOVED (owner, 2026-08-17: "remove the Y
+        axis scroll and movement from the multi post in feed"/"...from the
+        multi post viewer"). This used to let a mostly-vertical swipe move to
+        the next/previous POST, Reels-style, whenever a post list was
+        available. Back to the original, simpler rule: a mostly-vertical
+        swipe DOWN dismisses the viewer; a mostly-horizontal drag is the
+        album's own native swipe-between-slides and is never misread as
+        either.
+      */
       if (start) {
         const dx = e.clientX - start.x;
         const dy = e.clientY - start.y;
-        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 90) {
-          if (onNavigatePost) onNavigatePost(dy < 0 ? "next" : "prev");
-          else if (dy > 0) onDismiss();
-        }
+        if (Math.abs(dy) > Math.abs(dx) && dy > 90) onDismiss();
       }
       return;
     }

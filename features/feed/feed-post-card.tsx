@@ -27,6 +27,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
+import { FrenzLogo } from "@/components/brand/frenz-logo";
 import Link from "next/link";
 import { memo, useEffect, useRef, useState } from "react";
 
@@ -470,6 +471,18 @@ function FeedPostCardImpl({
           </button>
         ) : null}
 
+        {/*
+          🔴 F-MARK WATERMARK, TOP-RIGHT OF EVERY POST (owner, 2026-08-17, with
+          reference screenshots of the real X app: "the X logo by top side of
+          every post . all should be the same , replace the X logo with F
+          logo"). Real X stamps its own brand mark in this exact spot on every
+          tweet's header row — decorative, not interactive (no link, no click
+          target), same treatment here with Frenz's own mark instead. Sits
+          before the overflow menu, matching X's own left-to-right order
+          (brand mark, then the row's trailing controls).
+        */}
+        <FrenzLogo size={16} alt="" className="opacity-50" />
+
         {/* Overflow menu */}
         <div className="relative">
           <button
@@ -586,9 +599,19 @@ function FeedPostCardImpl({
             // reserving a 3:4 guess and correcting once the browser has parsed
             // the file (owner: "it just only show the exact height of the video
             // or image").
+            //
+            // 🔴 NO `w-full` HERE (owner, 2026-08-17: "there are still black side
+            // background… the single videos still stretch a lot"). A forced
+            // `width: 100%` fights the wrapper's own `aspect-ratio` + `max-h`:
+            // once a tall clip hits the height cap, CSS shrinks the wrapper's
+            // HEIGHT but a width pinned to 100% can't follow — the true-ratio
+            // video ends up narrower than its own black wrapper, exposing black
+            // bars on the sides. Leaving width unset lets the wrapper's default
+            // block sizing (fill available width) and the aspect-ratio/max-h
+            // "transferred size" behavior agree on ONE box shape in both the
+            // normal (fills the card) and capped (narrower, centered) cases.
             width={item.mediaWidth ?? undefined}
             height={item.mediaHeight ?? undefined}
-            className="w-full"
           />
           {/* Views/duration — the two corners FeedVideo's own mute + expand
               controls use are bottom-right and top-right, so this goes
@@ -615,11 +638,11 @@ function FeedPostCardImpl({
               if (!liked) void react("like");
             }}
             onExpand={() => open(item)}
-            // 80vh, matching FeedImage's own cap on the <img>. At 85vh the
-            // container was 5vh taller than the tallest image it could ever
-            // hold, so every tall photo sat in a band of blurred backdrop it did
-            // not need — the image version of the same "exact height" ask.
-            className="max-h-[80vh] w-full"
+            // 🔴 NO `w-full`/`max-h` override HERE — same reasoning as FeedVideo
+            // above: a forced `width: 100%` fights the wrapper's own
+            // `aspect-ratio` + `max-h-[70vh]`, leaving black bars on the sides
+            // once a tall photo hits the cap. FeedImage's own internal 70vh is
+            // the single source of truth now, not overridden per call site.
           />
           {item.viewsCount > 0 ? (
             <span className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">

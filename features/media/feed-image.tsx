@@ -145,7 +145,12 @@ export function FeedImage({
       // press, or press-and-hold.
       style={ratio ? { aspectRatio: ratio } : undefined}
       className={cn(
-        "relative flex max-h-[70vh] items-center justify-center overflow-hidden bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+        // `mx-auto` + `rounded-2xl` of its own: once the max-h cap narrows this
+        // box below the card's full width (see the 2026-08-17 black-bars note
+        // above), it needs to center itself and carry its own rounded corners —
+        // the outer wrapper's rounding only reaches the card's own edges, which
+        // this box no longer touches in that case.
+        "relative mx-auto flex max-h-[70vh] items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
         className,
       )}
       // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still

@@ -290,7 +290,15 @@ export function FeedVideo({
       // reversal note — `ratio` itself is the media's true, unclamped shape).
       style={{ aspectRatio: ratio ?? 4 / 5 }}
       className={cn(
-        "group relative overflow-hidden bg-black",
+        // `mx-auto` + its own `rounded-2xl`: once the max-h cap narrows this
+        // box below the card's full width, it needs to center itself and carry
+        // its own rounded corners — the outer wrapper's rounding only reaches
+        // the card's own edges, which this box no longer touches in that case
+        // (owner, 2026-08-17: "there are still black side background… the
+        // single videos still stretch a lot" — a forced `w-full` on the caller
+        // side used to fight this box's own aspect-ratio/max-h sizing; fixed by
+        // dropping that override, see feed-post-card.tsx).
+        "group relative mx-auto overflow-hidden rounded-2xl bg-black",
         // Twitter-style: full width, the media's OWN true aspect ratio, no
         // forced box. `max-h` is a SAFETY NET only — generous enough that it
         // essentially never triggers for real phone-shot content, so it never

@@ -184,17 +184,26 @@ const LETTERBOX = "bg-black";
  * "the progress bar is too close to the sound … push them upper so they can
  * give more space for the progress bar").
  *
- * 🔴 Corrected the other direction six days later, twice (owner, 2026-08-16
- * first: "bring down this area… close to the bottom NAV just like tiktok";
- * then, same day, again: "the details, caption, music and engagement tray
- * should come down more"). The 2026-08-10 fix solved the RIGHT problem — the
- * scrubber and the caption were crowding each other — but it over-corrected
- * the distance to the nav bar as a side effect, leaving a dead black band
- * between the content and the tab bar that neither TikTok nor Instagram has.
- * The first same-day correction narrowed that band but, per the follow-up,
- * not enough. The gap the caption and scrubber keep BETWEEN THEMSELVES
- * (1.75rem, the exact fix from the 10th) is preserved untouched across both
- * corrections; only their shared distance FROM THE NAV shrinks.
+ * 🔴 Corrected the other direction, THREE times now (owner, 2026-08-16 first:
+ * "bring down this area… close to the bottom NAV just like tiktok"; then, same
+ * day, again: "the details, caption, music and engagement tray should come
+ * down more"; then 2026-08-17, a third time: "i want the text tray… to be
+ * brought down more and more so the progress bar sits at the tip of the
+ * bottom nav without giving more than 1 Y axis padding space between them").
+ *
+ * The scrubber's OWN floor (4.75rem) is NOT reduced further this pass, even
+ * though the owner's wording points at it directly — see mobile-nav.tsx's own
+ * comment on this exact pair of constants: the nav's gradient is
+ * `from-black/95 via-black/90 to-black/75`, so even its lightest point (right
+ * at 4.75rem, the bar's own top edge) is still 75%-opacity black. Moving the
+ * scrubber BELOW that line doesn't bring it "closer to the nav" — it moves it
+ * BEHIND the nav's own near-solid background (z-40 over this deck's z-30),
+ * which would make it hard to see or tap rather than closer to anything. What
+ * moved instead: the CONTENT tray's own gap ABOVE the scrubber, which was
+ * genuinely loose (1.75rem) and had real room to close — down to 0.5rem, the
+ * "1 Y axis padding space" the owner asked for, just measured against the
+ * scrubber (the one part of this stack that's actually free to move) rather
+ * than the nav itself.
  *
  * Measured from the true bottom edge, on mobile:
  *
@@ -205,12 +214,9 @@ const LETTERBOX = "bg-black";
  *   +2rem        the tab bar's feathered scrim above itself (mobile-nav.tsx)
  *   PROGRESS     4.75rem — the scrubber, flush against the bar's own top
  *                          edge — the closest it can sit without the bar
- *                          itself starting to cover it. Deep inside the
- *                          feather, which is the point: that feather exists
- *                          so bottom content stays legible OVER it, not so
- *                          content stays entirely above it.
- *   CONTENT      6.5rem  — caption, sound row and action rail, the same
- *                          1.75rem above the scrubber as always.
+ *                          itself starting to cover it.
+ *   CONTENT      5.25rem — caption, sound row and action rail, now just
+ *                          0.5rem above the scrubber (was 1.75rem).
  *
  * Every one of them adds `env(safe-area-inset-bottom)` so nothing lands in the
  * home-indicator strip. The modal variant (no tab bar under it) keeps its own
@@ -221,8 +227,8 @@ const LETTERBOX = "bg-black";
  * paints OVER anything here that shares its band. Move one, check the other.
  */
 const REEL_PROGRESS_BOTTOM = "!bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:!bottom-4";
-const REEL_CONTENT_BOTTOM = "bottom-[calc(6.5rem+env(safe-area-inset-bottom))] lg:bottom-6";
-const REEL_CONTENT_PAD = "pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-8";
+const REEL_CONTENT_BOTTOM = "bottom-[calc(5.25rem+env(safe-area-inset-bottom))] lg:bottom-6";
+const REEL_CONTENT_PAD = "pb-[calc(5.25rem+env(safe-area-inset-bottom))] lg:pb-8";
 
 function fmt(s: number): string {
   if (!Number.isFinite(s) || s < 0) s = 0;

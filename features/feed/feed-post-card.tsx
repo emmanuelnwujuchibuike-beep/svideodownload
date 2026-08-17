@@ -36,7 +36,7 @@ import { PostPollInline } from "@/features/social/post-poll-inline";
 import { AnimatedCount } from "@/features/ui/animated-count";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
-import { MediaCarousel } from "@/features/media/media-carousel";
+import { MediaGrid } from "@/features/media/media-grid";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 
@@ -361,12 +361,19 @@ function FeedPostCardImpl({
       }}
       // Warm this post's comments on hover so opening the sheet is instant.
       onPointerEnter={() => prefetchPostComments(item.id)}
-      // Facebook-style full-bleed card (owner spec): no bordered "box" framing
-      // each post — just the feed's own background plus a small, static
-      // premium shadow for a 3D lift. A plain box-shadow (not backdrop-blur
-      // or a hover-triggered repaint) is compositor-cheap, so this keeps the
-      // performance rule intact even rendered dozens of times per scroll.
-      className="group relative cv-auto overflow-hidden rounded-xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_14px_-4px_rgba(0,0,0,0.10)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.25),0_4px_14px_-4px_rgba(0,0,0,0.45)]"
+      /*
+        🔴 CONTINUOUS TIMELINE, NOT A FLOATING CARD (owner, 2026-08-17 redesign
+        spec, superseding the Facebook-style card from the previous pass):
+        "Change the feed from a traditional floating-card layout into a
+        continuous social timeline... Do not place every post inside a heavily
+        elevated white/gray card." The elevated box-shadow + rounded corners +
+        `bg-card` surface are gone; every post is now the SAME flat surface as
+        the feed itself, separated from its neighbour by one hairline border
+        only (spec section 15 — "approximately 1px", barely visible in light,
+        low-opacity white in dark). `space-y-4` between cards is gone too (see
+        smart-feed.tsx) — posts now sit edge to edge, the border IS the gap.
+      */
+      className="group relative cv-auto border-b border-border/70 py-3 last:border-b-0 dark:border-white/[0.07]"
     >
       {/* Repost discovery — lightweight "@x reposted" attribution when someone you
           follow reposted this, plus their recommendation caption when they wrote
@@ -535,12 +542,19 @@ function FeedPostCardImpl({
           Instagram's large feed previews) so video/photo posts read as the
           hero of the card, not a thumbnail. */}
       {item.mediaItems && item.mediaItems.length > 1 ? (
-        /* Album / carousel — swipeable slides with counter + dots. Full
-           card width (owner spec: "the post should fit the full width with
-           the card") — no horizontal inset, no separate rounding; the
-           media touches the same edges the card itself does. */
-        <div className="mb-3 overflow-hidden">
-          <MediaCarousel
+        /*
+          🔴 STATIC GRID, NOT A SWIPEABLE CAROUSEL, for the inline feed
+          preview (owner, 2026-08-17 redesign spec, section 9: "Create a
+          premium Instagram-style media grid"). `MediaGrid` (new, additive —
+          `MediaCarousel` itself is untouched, still used wherever a genuine
+          swipe-through view is wanted) owns its own rounding internally —
+          section 7's "10-16px border radius" reverses the old "no separate
+          rounding" rule from when the whole POST was itself a rounded card;
+          now the post is a flat timeline row with no rounding of its own, so
+          the media needs it to read as premium rather than a bare rectangle.
+        */
+        <div className="mb-3">
+          <MediaGrid
             items={item.mediaItems}
             onExpandItem={(index) => open(item, false, index)}
             liked={liked}
@@ -551,8 +565,10 @@ function FeedPostCardImpl({
         </div>
       ) : item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
         // Big, immersive inline preview: autoplays muted in view, tap → fullscreen
-        // reel, press-hold → pause.
-        <div className="relative mb-3 overflow-hidden">
+        // reel, press-hold → pause. Rounded (spec section 7) — see the
+        // album/carousel note above for why this reverses the old flush-edge
+        // rule now that the post itself has no rounding of its own.
+        <div className="relative mb-3 overflow-hidden rounded-2xl">
           <FeedVideo
             src={item.mediaUrl}
             streamUid={item.streamUid}
@@ -587,7 +603,8 @@ function FeedPostCardImpl({
         </div>
       ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
         // Image posts behave like videos: full-size, double-tap to like, tap to open.
-        <div className="relative mb-3 overflow-hidden">
+        // Rounded (spec section 7) — see the album/carousel note above.
+        <div className="relative mb-3 overflow-hidden rounded-2xl">
           <FeedImage
             src={item.mediaUrl || item.thumbnailUrl!}
             alt={item.title}
@@ -612,7 +629,7 @@ function FeedPostCardImpl({
         </div>
       ) : item.mediaKind === "audio" ? (
         <button type="button" onClick={() => open(item)} className="block w-full text-left" aria-label="Play">
-          <div className="mb-3 flex items-center gap-3 bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/15">
+          <div className="mb-3 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/15">
             <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white">
               <Music className="h-5 w-5" />
             </span>
@@ -629,7 +646,7 @@ function FeedPostCardImpl({
         </button>
       ) : (
         <button type="button" onClick={() => open(item)} className="block w-full text-left" aria-label="Open">
-          <div className="relative mb-3 aspect-video overflow-hidden bg-neutral-900">
+          <div className="relative mb-3 aspect-video overflow-hidden rounded-2xl bg-neutral-900">
             {item.thumbnailUrl ? (
               // No hover zoom (owner, 2026-08-11): the same "media stays still"
               // rule as FeedVideo. A poster that grows under the pointer is the
@@ -656,10 +673,29 @@ function FeedPostCardImpl({
         </button>
       )}
 
-      {/* Actions — Wow / Comment / Repost / Send / Save; anything rarer
-          (Download, …) lives in the ••• overflow so content stays the focus. */}
-      <div className="mx-3 mb-3 mt-1 flex items-center justify-between rounded-2xl bg-secondary/40 px-1 py-1 ring-1 ring-inset ring-border/40">
-        <div className="flex items-center">
+      {/*
+        🔴 LIGHTWEIGHT INLINE ROW, NOT A BOXED PILL (owner, 2026-08-17 redesign
+        spec, section 11): "Replace the current large enclosed reaction
+        container. Use a clean inline engagement row." The `bg-secondary/40
+        ring-1 ...` capsule is gone — icons now sit directly on the post's own
+        surface with breathing room between them, matching X's density rather
+        than a boxed toolbar. Icons bumped 19px→20px (spec: "approximately
+        20-22px"). Colors restrained to the brand palette (spec section 18:
+        "do not introduce random additional accent colors") — Save's old
+        amber-500 had no brand justification and is now blue, distinct from
+        Wow's purple.
+
+        Repost KEEPS its established emerald rather than switching to the
+        spec's suggested indigo — deliberately: `RepostBurst` (the "Reposted!"
+        bubble) and this same active-color are a SHARED, cross-surface pair
+        also used by reel-viewer.tsx, which section 26 explicitly puts out of
+        scope ("Only update the feed experience"). Recoloring just this one
+        instance would split one interaction into two different colors
+        depending on which surface you're on — a worse inconsistency than
+        keeping the existing, already-established accent.
+      */}
+      <div className="mt-1 flex items-center justify-between px-4 pb-1 sm:px-5">
+        <div className="flex items-center gap-1">
           <span className="relative inline-flex">
             <ActionButton
               active={liked}
@@ -706,7 +742,7 @@ function FeedPostCardImpl({
             label="Send"
           />
         </div>
-        <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-amber-500" label="Save" />
+        <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-blue-500" label="Save" />
       </div>
 
       {shareReady ? (
@@ -842,13 +878,15 @@ function ActionButton({
         transition={{ duration: 0.32, ease: [0.34, 1.4, 0.5, 1] }}
         className="inline-flex"
       >
-        <Icon className={cn("h-[19px] w-[19px]", fill && "fill-current")} strokeWidth={2.1} />
+        <Icon className={cn("h-5 w-5", fill && "fill-current")} strokeWidth={2} />
       </motion.span>
       {count !== undefined && count > 0 ? <AnimatedCount value={count} className="text-xs font-semibold tabular-nums" /> : null}
     </>
   );
+  // Muted by default, brand-colored only when active (spec section 11) — was
+  // `text-foreground` at rest, full contrast even for an untouched icon.
   const cls = cn(
-    "group/act inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-foreground transition-colors hover:bg-secondary/70 active:scale-95",
+    "group/act inline-flex items-center gap-1.5 rounded-full px-2.5 py-2 text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground active:scale-95",
     active && activeClass,
   );
   if (href) {

@@ -721,6 +721,20 @@ export function SmartFeed({
       // swipes are read in JS only (never blocked), same as the reel viewer.
       style={{ touchAction: "pan-y" }}
     >
+      {/*
+        🔴 COMFORTABLE READING WIDTH ON DESKTOP (owner, 2026-08-17 redesign
+        spec, section 24): "Do not stretch the feed across the entire screen.
+        Use a centered feed column with an appropriate maximum width."
+        `AppContent` (features/app-shell/app-content.tsx) caps the whole
+        main+rightRail ROW at 1600px, shared by every app page — scoping the
+        actual reading-column cap HERE instead keeps that shared component
+        untouched. Only matters ≥ this breakpoint: 42rem (672px) is wider than
+        any phone viewport, so mobile is unaffected; between `lg` and `xl` the
+        right rail is hidden (home/page.tsx), so without this the feed's
+        `flex-1` column would otherwise stretch to fill nearly the full
+        1600px row on a laptop-width screen.
+      */}
+      <div className="mx-auto w-full max-w-2xl">
       {/* Premium pull-to-refresh indicator */}
       <div
         aria-hidden
@@ -814,13 +828,26 @@ export function SmartFeed({
             ) : stream.length === 0 && !error ? (
               <ZeroEmptyFeed sort={sort} deck={deck} />
             ) : (
-              <div className="space-y-4">
+              /*
+                🔴 CONTINUOUS TIMELINE (owner, 2026-08-17 redesign spec): the
+                uniform `space-y-4` gap that used to space every floating card
+                apart evenly is gone — a `FeedPostCard` now supplies its own
+                separation (a hairline `border-b`, see that component), so
+                posts sit flush against each other with no visible gap, the
+                border itself reading as the seam. `SparkCard` is deliberately
+                NOT a timeline post — a distinct, gradient-tinted discovery
+                card woven between posts on purpose — so it keeps its own
+                vertical margin to stay visually set apart, same as before.
+              */
+              <div>
                 <AnimatePresence initial={false}>
                   {stream.map((slot) =>
                     slot.type === "post" ? (
                       <FeedPostCard key={slot.item.id} item={slot.item} reason={slot.reason} onRemove={remove} onOpen={openViewer} />
                     ) : (
-                      <SparkCard key={slot.card.id} card={slot.card} />
+                      <div key={slot.card.id} className="my-4 first:mt-0">
+                        <SparkCard card={slot.card} />
+                      </div>
                     ),
                   )}
                 </AnimatePresence>
@@ -858,6 +885,7 @@ export function SmartFeed({
           ) : null}
         </>
       )}
+      </div>{/* end max-w-2xl reading column */}
 
       {viewerReady ? (
         <PostViewer

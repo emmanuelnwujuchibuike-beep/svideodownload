@@ -2226,6 +2226,14 @@ function ReelCard({
             count={likes}
             label="Wow"
             onClick={(e) => {
+              // 🔴 Haptic+sound on a DIRECT tap too, not just double-tap-on-
+              // video (owner, 2026-08-18: "clicking the wow button directly
+              // should make haptic sound too"). GlassButton (under RailButton)
+              // already fires a generic "light" haptic on every click; this
+              // supersedes it with the real "wow" pattern+chime double-tap
+              // already gets — navigator.vibrate() calling a new pattern
+              // replaces the pending one, so the two calls don't double-buzz.
+              fireWowFeedback();
               if (!liked) floatReaction(e.clientX, e.clientY);
               void react("like");
             }}
@@ -2696,6 +2704,10 @@ function ReelCard({
                     activeClass="text-violet-500"
                     count={likes}
                     onClick={(e) => {
+                      // Same direct-tap haptic+sound as the mobile rail's Wow
+                      // above — SidebarAct (unlike RailButton/GlassButton) had
+                      // no haptic wrapper of its own at all.
+                      fireWowFeedback();
                       if (!liked) floatReaction(e.clientX, e.clientY);
                       void react("like");
                     }}

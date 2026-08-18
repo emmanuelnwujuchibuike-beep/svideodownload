@@ -204,10 +204,20 @@ export function MobileNav({
   // of whether the user ever taps those tabs, unlike the hover/press-triggered
   // prefetches below (onWarm/onPointerDown), which stay on: those only spend
   // bandwidth once the user has already shown real intent to navigate there.
+  //
+  // 🔴 `/feed` warmed from HERE specifically (owner, 2026-08-18: "i want the
+  // feed page start loading immediately the landing page and download page
+  // opens... just like the history page"). This component is what's mounted
+  // on both of those — the marketing nav and `/downloads`' own bare
+  // `<MobileNav />` — so it's the one place a single addition reaches both
+  // without duplicating the effect. Paired with the new `feed/loading.tsx`
+  // (mirroring `home/loading.tsx`): that gives the route a static Suspense
+  // boundary to actually prefetch INTO — without it, this prefetch had
+  // nothing to warm but the page's own inline (non-prefetchable) Suspense.
   useEffect(() => {
     if (isSlowConnection()) return;
     const id = setTimeout(() => {
-      for (const r of ["/home", "/friends", "/messages", profileHref]) router.prefetch(r);
+      for (const r of ["/home", "/friends", "/messages", "/feed", profileHref]) router.prefetch(r);
     }, 400);
     return () => clearTimeout(id);
   }, [router, profileHref]);
@@ -397,21 +407,29 @@ export function MobileNav({
               onWarm={router.prefetch}
             />
             {/*
-              🔴 FEED HERE, NOT REELS, WHENEVER `forceFeedTab` (owner,
-              2026-08-18: "put a feed button in place where reels button is
-              in the bottom nav of landing page and download page... so
-              guest can see but can't interact and can't post" — then, once
-              mode-dependent drift surfaced on BOTH marketing pages and
-              `/downloads` itself, confirmed this should hold for every
-              visitor to either, not just guests). A signed-in visitor on
-              the actual signed-in social app (home/friends/messages/etc.)
-              still gets their real Reels tab here unchanged.
+              🔴 ALWAYS FEED HERE, NEVER A PATHNAME ALLOWLIST (owner,
+              2026-08-18: "when i enter signed in profile page, the feed
+              button turns to the reels button" — the FOURTH page to trip
+              this same bug class after /downloads, /feed itself, and
+              marketing pages). This used to be `!forceFeedTab && handle ?
+              Reels : Feed`, which reads as "genuine full-bleed users keep
+              Reels here" but can never actually do that: this whole branch
+              only renders when `fullBleedActive` is false, and
+              `fullBleedActive` is `!forceFeedTab && mode === "full" &&
+              !!handle` — so `mode === "full"` being true here would already
+              imply `forceFeedTab` is true too (contradicting the `!forceFeedTab`
+              this ternary also required), making the Reels case dead for
+              every ACTUAL full-mode user. The only visitor who ever hit it
+              was a signed-in DOWNLOADER-mode user on any page outside the
+              `forceFeedTab` allowlist — exactly the profile-page report,
+              and every allowlist entry before it. A genuine full-bleed
+              session never reaches this branch at all (see `fullBleedActive`
+              below); it gets its real Reels tab from the OTHER branch,
+              unchanged. So within this branch the answer is simply always
+              Feed — no pathname list to keep extending as new pages surface
+              the same gap.
             */}
-            {!forceFeedTab && handle ? (
-              <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={(href) => { router.prefetch(href); warmReels(); }} />
-            ) : (
-              <NavTab label="Feed" href="/feed" icon={LayoutGrid} activeIcon={LayoutGrid} active={pathname.startsWith("/feed")} onWarm={router.prefetch} />
-            )}
+            <NavTab label="Feed" href="/feed" icon={LayoutGrid} activeIcon={LayoutGrid} active={pathname.startsWith("/feed")} onWarm={router.prefetch} />
             <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
             <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />
           </>

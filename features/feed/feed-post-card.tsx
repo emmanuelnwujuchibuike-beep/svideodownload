@@ -37,6 +37,7 @@ import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { RichText } from "@/components/social/rich-text";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { AnimatedCount } from "@/features/ui/animated-count";
+import { fireWowFeedback } from "@/features/ui/wow-burst";
 import { FeedImage } from "@/features/media/feed-image";
 import { FeedVideo } from "@/features/media/feed-video";
 import { MediaGrid } from "@/features/media/media-grid";
@@ -415,8 +416,14 @@ function FeedPostCardImpl({
       onPointerDown={light ? (e) => e.stopPropagation() : undefined}
       className={cn(
         "flex items-center justify-between",
+        // 🔴 DARKER GROUND (owner, 2026-08-18: "more premium and 3d and more
+        // darker, fitting the professionality of instagram and twitter").
+        // /70→/25 read as a thin, slightly-too-light wash next to the reels
+        // rail's own near-solid scrim (see mobile-nav.tsx's immersive
+        // gradient) — deepened to match that same weight so the icons sit on
+        // a real dark ground rather than a light haze, on any video frame.
         light
-          ? "absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 via-black/25 to-transparent px-1.5 pb-1 pt-6"
+          ? "absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-1.5 pb-1 pt-8"
           : "mt-1 pb-1",
       )}
     >
@@ -425,6 +432,12 @@ function FeedPostCardImpl({
           <ActionButton
             active={liked}
             onClick={(e) => {
+              // 🔴 Haptic+sound on a DIRECT tap too, not just the double-tap-
+              // on-media gesture (owner, 2026-08-18: "clicking the wow button
+              // directly should make haptic sound too"). Same reasoning as
+              // the burst below it — this is tactile button feedback, not a
+              // persisted action, so it plays regardless of auth/like state.
+              fireWowFeedback();
               // The burst plays regardless of auth — a guest tap "just
               // interacts" (owner, 2026-08-18); requireAuth only gates the
               // part that would otherwise persist to the server unsigned.
@@ -1012,10 +1025,30 @@ function ActionButton({
         transition={{ duration: 0.32, ease: [0.34, 1.4, 0.5, 1] }}
         className="inline-flex"
       >
-        <Icon className={cn(light ? "h-4 w-4" : "h-5 w-5", fill && "fill-current")} strokeWidth={2} />
+        <Icon
+          className={cn(
+            light ? "h-4 w-4" : "h-5 w-5",
+            fill && "fill-current",
+            // 🔴 PREMIUM/3D/DARKER (owner, 2026-08-18, against a screenshot of
+            // this exact row: "more premium and 3d and more darker, fitting
+            // the professionality of instagram and twitter"). Matches the
+            // reels rail's own already-validated-against-an-Instagram-
+            // reference treatment (glass-button.tsx) — a real multi-stop drop
+            // shadow reads as depth/weight rather than a flat glyph floating
+            // on the gradient, which is what a bare `drop-shadow-sm` gave.
+            light && "drop-shadow-[0_2px_5px_rgba(0,0,0,0.5)]",
+          )}
+          strokeWidth={light ? 2.3 : 2}
+        />
       </motion.span>
       {count !== undefined && count > 0 ? (
-        <AnimatedCount value={count} className={cn("text-xs font-semibold tabular-nums", light && "drop-shadow-sm")} />
+        <AnimatedCount
+          value={count}
+          className={cn(
+            "text-xs tabular-nums",
+            light ? "font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]" : "font-semibold",
+          )}
+        />
       ) : null}
     </>
   );

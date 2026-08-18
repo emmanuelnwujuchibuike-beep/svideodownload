@@ -19,6 +19,37 @@ function heightOf(f: MediaFormat): number | null {
 }
 
 /**
+ * Explicit, defensive best-first ordering — the rest of this module (and
+ * every client-side "download the highest quality" default: `PreviewCard`'s
+ * `activeId`/tab defaults, and the batch flow, which just downloads whatever
+ * `formats[0]`/each selected entry resolves to) had only ever RELIED on "extractors
+ * already sort best-first" as an unenforced convention, never verified it.
+ * A new or changed extractor that got the order wrong would silently ship
+ * "highest quality" downloads that weren't, with nothing to catch it.
+ *
+ * Sorts by measured height when known (descending), falling back to bitrate
+ * (`tbr`) when two formats tie or neither has a height — never reorders
+ * `isSeparateItem` entries relative to each other, since those are distinct
+ * pieces of content (story slide 1, 2, 3…) whose ORDER is meaningful, not a
+ * quality ladder to rank.
+ */
+function bestFirst(videos: MediaFormat[]): MediaFormat[] {
+  const ladder = videos.filter((f) => !f.isSeparateItem);
+  const separate = videos.filter((f) => f.isSeparateItem);
+  const sorted = [...ladder].sort((a, b) => {
+    const ha = heightOf(a);
+    const hb = heightOf(b);
+    if (ha != null && hb != null && ha !== hb) return hb - ha;
+    if (ha != null && hb == null) return -1;
+    if (ha == null && hb != null) return 1;
+    return (b.tbr ?? 0) - (a.tbr ?? 0);
+  });
+  // Separate items keep their own relative (chronological) order and are
+  // never interleaved with the quality-ladder entries' new positions.
+  return videos.map((f) => (f.isSeparateItem ? separate.shift()! : sorted.shift()!));
+}
+
+/**
  * Some sources (most commonly TikTok, when its native page parse is blocked
  * and the app falls back to the TikWM API) expose only ONE video quality. On a
  * weak connection or an older device that's the only choice — and if that
@@ -32,16 +63,23 @@ function heightOf(f: MediaFormat): number | null {
  * (yt-dlp-backed formats manage their own quality ladder already).
  */
 export function withQualityLadder(formats: MediaFormat[]): MediaFormat[] {
-  const videos = formats.filter((f) => f.kind === "video");
-  if (videos.length >= MAX_VIDEO_TIERS || videos.length === 0) return formats;
+  // Sorted UNCONDITIONALLY, before any of the branches below — every one of
+  // them used to return `formats` (the raw, only-conventionally-ordered
+  // input) unchanged, which is exactly the case `bestFirst` exists to guard:
+  // a "no synthesis needed" source is the MOST common case (most sources
+  // already have 4+ native tiers) and was also the one path this function
+  // never touched the ordering on at all.
+  const videos = bestFirst(formats.filter((f) => f.kind === "video"));
+  const nonVideo = formats.filter((f) => f.kind !== "video");
+  const sorted = [...videos, ...nonVideo];
+  if (videos.length >= MAX_VIDEO_TIERS || videos.length === 0) return sorted;
 
-  // Extractors already sort best-first — the first entry with a direct URL is
-  // what we derive synthesized tiers from. Prefer a known-H.264 source: the
-  // downscale has to DECODE it, and an H.264 stream decodes on every ffmpeg
-  // build, while e.g. TikTok's HD stream is bytevc1/H.265 (the tier that used
-  // to take every synthesized tier down with it when decoding failed).
+  // Prefer a known-H.264 source: the downscale has to DECODE it, and an
+  // H.264 stream decodes on every ffmpeg build, while e.g. TikTok's HD
+  // stream is bytevc1/H.265 (the tier that used to take every synthesized
+  // tier down with it when decoding failed).
   const source = videos.find((f) => !!f.directUrl && f.vcodec === "h264") ?? videos.find((f) => !!f.directUrl);
-  if (!source) return formats;
+  if (!source) return sorted;
 
   const sourceHeight = heightOf(source);
   /*
@@ -63,7 +101,7 @@ export function withQualityLadder(formats: MediaFormat[]): MediaFormat[] {
     tier, so none get synthesized for it; the real, unlabeled format(s) ship
     as-is instead of an invented ladder.
   */
-  if (sourceHeight == null) return formats;
+  if (sourceHeight == null) return sorted;
   const existingHeights = new Set(videos.map(heightOf).filter((h): h is number => h != null));
 
   const synthesized: MediaFormat[] = [];
@@ -87,8 +125,7 @@ export function withQualityLadder(formats: MediaFormat[]): MediaFormat[] {
       transcodeMaxHeight: tier,
     });
   }
-  if (synthesized.length === 0) return formats;
+  if (synthesized.length === 0) return sorted;
 
-  const nonVideo = formats.filter((f) => f.kind !== "video");
   return [...videos, ...synthesized, ...nonVideo];
 }

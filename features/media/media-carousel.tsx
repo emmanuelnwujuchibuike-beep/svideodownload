@@ -9,6 +9,8 @@ import { FadeImage } from "@/features/ui/fade-image";
 import { useTapOrDoubleTap } from "@/lib/hooks/use-tap-or-double-tap";
 import { prefetchImage } from "@/lib/media/prefetch-image";
 import { claimPlayback, isSuspended, releasePlayback } from "@/lib/media/video-coordinator";
+import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 
 export interface CarouselMedia {
@@ -125,6 +127,8 @@ export function MediaCarousel({
       else onExpand?.();
     },
     onDoubleTap: () => {
+      haptic("wow");
+      playSound("wow");
       setBurst((b) => b + 1);
       onDoubleTapLike?.();
     },

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
-import { FrenzReelsOutline } from "@/components/icons/frenz-icons";
 import { PressIcon } from "@/components/motion/press-icon";
 import { IconTile } from "@/components/icons/icon-tile";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -53,16 +52,15 @@ export function AppTopbar() {
   // too would be a link to the page you're already on).
   const onFriendsIndex = pathname === "/friends";
   /*
-    🔴 REELS TAKES THE EMPTY "+" SLOT ON /feed FOR GUESTS (owner, 2026-08-18:
-    "the reels buttons should be place at the top header of the feed page
-    that is in the download and landing page in place of the plus sign
-    thats not there"). A signed-out visitor on /feed has no Create button
-    (see the `!!handle` gate below), so that slot — both the mobile far-left
-    icon and its desktop counterpart — sits empty. A plain `<Link>` rather
-    than the in-place `openReelsInPlace()` SmartFeed uses for its own segmented
-    control: this bar is mounted far above that component's tree, and a full
-    navigation is the right cost for an icon a guest taps rarely, not often
-    enough to justify new cross-tree plumbing.
+    🔴 NO CREATE BUTTON ON /feed, FOR EVERYONE (owner, 2026-08-18: "the reels
+    buttons should be place at the top header of the feed page... in place
+    of the plus sign thats not there", then, once the bottom nav was made
+    Feed-not-Reels on every marketing page: "no plus button, reels at the top
+    header"). Reels itself ended up living inline next to For You/Following
+    in the center slot (see FeedTopbarTabs' `showReelsLink`), tight against
+    them per a follow-up ask, rather than off in this corner — this flag now
+    only suppresses Create here, so /feed never shows an authoring entry
+    point regardless of sign-in state.
   */
   const onFeedIndex = pathname === "/feed";
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -171,7 +169,9 @@ export function AppTopbar() {
           way the old bottom-nav button was: Downloader mode has no
           Create/Chats, those are Full Bleed features only.
         */}
-        {mode !== "downloader" && !!handle ? (
+        {/* Empty on /feed — Reels lives inline next to For You/Following in the
+            center slot now (see FeedTopbarTabs), not off in this corner. */}
+        {!onFeedIndex && mode !== "downloader" && !!handle ? (
           <PressIcon className="lg:hidden">
             <button
               type="button"
@@ -204,22 +204,6 @@ export function AppTopbar() {
             >
               <IoAdd className="h-7 w-7 [filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.35))]" />
             </button>
-          </PressIcon>
-        ) : onFeedIndex && !handle ? (
-          <PressIcon className="lg:hidden">
-            <Link
-              href="/reels"
-              onPointerDown={() => router.prefetch("/reels")}
-              onClick={() => {
-                haptic("selection");
-                playSound("tap");
-              }}
-              aria-label="Reels"
-              title="Reels"
-              className="flex h-11 w-11 items-center justify-center text-foreground transition active:scale-95"
-            >
-              <FrenzReelsOutline className="h-7 w-7 [filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.35))]" />
-            </Link>
           </PressIcon>
         ) : null}
       </div>
@@ -281,7 +265,7 @@ export function AppTopbar() {
             keeps the two from ever showing at the same time on a tablet.
             Mode-gated the same as its mobile counterpart: Downloader mode
             has no Create surface at all. */}
-        {mode !== "downloader" && !!handle ? (
+        {!onFeedIndex && mode !== "downloader" && !!handle ? (
           <PressIcon className="hidden lg:inline-flex">
             <Link
               href="/create/post"
@@ -292,20 +276,6 @@ export function AppTopbar() {
             >
               <IconTile>
                 <IoCloudUploadOutline className="h-[26px] w-[26px]" />
-              </IconTile>
-            </Link>
-          </PressIcon>
-        ) : onFeedIndex && !handle ? (
-          <PressIcon className="hidden lg:inline-flex">
-            <Link
-              href="/reels"
-              onPointerDown={() => router.prefetch("/reels")}
-              aria-label="Reels"
-              title="Reels"
-              className="inline-flex h-11 w-11 items-center justify-center"
-            >
-              <IconTile>
-                <FrenzReelsOutline className="h-[26px] w-[26px]" />
               </IconTile>
             </Link>
           </PressIcon>

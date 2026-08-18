@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Newspaper } from "lucide-react";
+import { FileImage } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
@@ -193,7 +193,7 @@ export function ReelTabs({
               "focus-visible:ring-2 focus-visible:ring-white/80",
             )}
           >
-            <Newspaper className="h-3.5 w-3.5" aria-hidden />
+            <FileImage className="h-3.5 w-3.5" aria-hidden />
             Feed
           </Link>
         </>

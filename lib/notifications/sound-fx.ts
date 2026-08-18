@@ -18,7 +18,7 @@ import { getCachedSoundPrefs } from "@/lib/social/notification-sound-prefs-clien
  * either iOS or Android.
  */
 
-type SoundType = "message" | "mention" | "reaction" | "typing" | "tap";
+type SoundType = "message" | "mention" | "reaction" | "typing" | "tap" | "wow";
 
 let ctx: AudioContext | null = null;
 function getContext(): AudioContext | null {
@@ -73,6 +73,16 @@ const TONES: Record<SoundType, Note[]> = {
   // — the quietest tone here by design: it fires on every bottom-nav/sidebar
   // navigation, so it must read as a soft physical "tick", never a beep.
   tap: [{ freq: 950, at: 0, duration: 0.035, gain: 0.05 }],
+  // Double-tap-to-Wow (owner, 2026-08-18: "double tap should have a haptic
+  // sound different from other haptic sounds already made"). A quick two-note
+  // ascending sparkle, brighter and richer than every single-blip tone above
+  // (including "reaction", already spoken for elsewhere — see
+  // wallpaper-reels.tsx) — the rising interval is what reads as a small
+  // celebratory moment rather than another flavor of the same click.
+  wow: [
+    { freq: 880, at: 0, duration: 0.07, gain: 0.1 },
+    { freq: 1320, at: 0.05, duration: 0.12, gain: 0.12 },
+  ],
 };
 
 function playNote(audioCtx: AudioContext, note: Note): void {

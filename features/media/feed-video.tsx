@@ -8,6 +8,8 @@ import { WowSolid } from "@/components/brand/wow-icon";
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { clampFeedRatio } from "@/lib/media/aspect";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
+import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
 import { claimPlayback, isSuspended, recentlyScrolled, recordView, releasePlayback } from "@/lib/media/video-coordinator";
@@ -309,6 +311,8 @@ export function FeedVideo({
       // Second tap arrived in time → Wow, not fullscreen.
       lastTapAt.current = 0;
       if (expandTimer.current) clearTimeout(expandTimer.current);
+      haptic("wow");
+      playSound("wow");
       setBurst((b) => b + 1);
       onDoubleTapLike?.();
       return;
@@ -360,19 +364,15 @@ export function FeedVideo({
       // reversal note — `ratio` itself is the media's true, unclamped shape).
       style={{ aspectRatio: ratio ?? 4 / 5 }}
       className={cn(
-        // 🔴 NO `mx-auto` (owner, 2026-08-18: the widened video "only adjusted
-        // to the middle... it should still remain at padding right of at least
-        // 2 and not centered... just expand the right side... so it balance
-        // like images are"). Now that the wrapper spans the card's true full
-        // width (see feed-post-card.tsx's own breakout note), centering a
-        // max-h-narrowed box within that wider span pulled it toward the
-        // card's center — visibly off from where the avatar/caption above it
-        // sit. A plain block box with an explicit (max-h-derived) width is
-        // LEFT-aligned by default with no margin rule at all, so removing
-        // `mx-auto` is the whole fix: any slack from the aspect-ratio/max-h
-        // math now lands on the right only, the same side images already
-        // balance toward, never split evenly on both sides.
-        "group relative overflow-hidden rounded-2xl bg-black",
+        // 🔴 RIGHT-aligned, not left (owner, 2026-08-18, correcting the first
+        // pass: "the 16:9 long videos should be at the opposite far end where
+        // image are"). A max-h-narrowed box is left-aligned by default with no
+        // margin rule at all — which is what the first fix shipped, and it was
+        // backwards. `ml-auto` pushes any slack from the aspect-ratio/max-h
+        // math to the LEFT (toward the avatar column) so the video's own right
+        // edge lands exactly where a full-width image's right edge already
+        // does, instead of stopping short in the middle of the card.
+        "group relative ml-auto overflow-hidden rounded-2xl bg-black",
         // Twitter-style: full width, the media's OWN true aspect ratio — a
         // HEIGHT ceiling, never a ratio clamp, so it can't disagree with the
         // clip's true shape (no letterboxing/cropping). A same-day tightening
@@ -390,7 +390,7 @@ export function FeedVideo({
         // shorter without losing an inch of width; the space this removes
         // from the top/bottom is picked up by the blurred backdrop below,
         // same as any other letterboxed shape.
-        "max-h-[60vh] lg:flex lg:!aspect-auto lg:max-h-[60vh] lg:items-center lg:justify-start",
+        "max-h-[60vh] lg:flex lg:!aspect-auto lg:max-h-[60vh] lg:items-center lg:justify-end",
         className,
       )}
     >
@@ -557,12 +557,17 @@ export function FeedVideo({
         Double-tap Wow burst — centered (same reliable pattern as the paused
         indicator above), not tap-position-tracked.
 
-        🔴 BIGGER, "3D", FLOATING UP (owner, 2026-08-18: "make the wow
-        animation be bigger and realistic... floating out of the phone... to
-        the top safe area"). A bigger peak scale (1.7 vs. the previous 1.5),
-        a rise toward the top of the box (percentage-based `y`, so it scales
-        with the video's own height instead of a fixed px value), and a
-        small rotate + a shadow that deepens as it lifts — the standard
+        🔴 BIGGER, "3D", FLOATING UP — round two (owner, 2026-08-18, first
+        pass: "make the wow animation be bigger and realistic... floating out
+        of the phone... to the top safe area"; correction after it shipped
+        too small: "let it get bigger in 3d to occupy a large part of the
+        screen while floating up to the safe area"). Base size roughly
+        doubled (h-28 → h-48/h-64), peak scale bumped to 2.1, and `y`'s
+        percentage keyframes stay untouched on purpose — percentage `y` scales
+        with the ELEMENT's own size, so simply making the glyph bigger also
+        makes the float travel further in absolute pixels, without having to
+        hand-tune the distance separately. A rise toward the top of the box,
+        a small rotate + a shadow that deepens as it lifts — the standard
         "elevation" trick for a sense of depth without real CSS 3D transforms
         (`rotateX`/perspective), which are more prone to looking janky and
         heavier to composite on a low-end phone. Percentage `y` also means it
@@ -585,14 +590,14 @@ export function FeedVideo({
               initial={{ opacity: 0, scale: 0.3, y: "0%", rotate: -10 }}
               animate={{
                 opacity: [0, 1, 1, 0],
-                scale: [0.3, 1.7, 1.5, 1.3],
+                scale: [0.3, 2.1, 1.85, 1.6],
                 y: ["0%", "-8%", "-50%", "-92%"],
                 rotate: [-10, 6, -3, 0],
               }}
               transition={{ duration: 1.15, ease: [0.16, 1, 0.3, 1], times: [0, 0.2, 0.65, 1] }}
               className="drop-shadow-[0_20px_36px_rgba(0,0,0,0.55)]"
             >
-              <WowSolid className="h-28 w-28" />
+              <WowSolid className="h-48 w-48 sm:h-56 sm:w-56 lg:h-64 lg:w-64" />
             </motion.span>
           </span>
         ) : null}

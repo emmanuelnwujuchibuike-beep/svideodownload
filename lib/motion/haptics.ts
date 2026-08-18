@@ -35,6 +35,14 @@ const PATTERNS = {
   medium: 18,
   /** A rare, maximal moment (e.g. an Easter egg unlock). Used sparingly. */
   strong: 35,
+  /**
+   * The double-tap-to-Wow burst (owner, 2026-08-18: "double tap should have
+   * a haptic sound different from other haptic sounds already made"). A
+   * short double-pulse rather than one of the single-buzz tiers above — the
+   * distinguishing feature isn't intensity, it's SHAPE, so it reads as its
+   * own distinct gesture even at a glance-length vibration.
+   */
+  wow: [10, 40, 14],
 } as const;
 
 export type HapticIntent = keyof typeof PATTERNS;
@@ -67,7 +75,9 @@ function iosHapticTick(): void {
 export function haptic(intent: HapticIntent): void {
   try {
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-      navigator.vibrate(PATTERNS[intent]);
+      const pattern = PATTERNS[intent];
+      const arg: number | number[] = typeof pattern === "number" ? pattern : [...pattern];
+      navigator.vibrate(arg);
       return;
     }
     iosHapticTick();

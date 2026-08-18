@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Headset, History, Newspaper } from "lucide-react";
+import { FileImage, Headset, History } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -100,7 +100,27 @@ function warmReels() {
   void import("@/features/reels/reels-feed");
 }
 
-export function MobileNav() {
+export function MobileNav({
+  /*
+    🔴 MARKETING PAGES ALWAYS SHOW FEED, NEVER REELS (owner, 2026-08-18,
+    resolving a direct conflict with the 2026-08-16 "tab set depends only on
+    mode, never on route" rule — surfaced and confirmed via AskUserQuestion
+    before making this change): landing and the SEO downloader pages kept
+    disagreeing about whether this slot showed Reels or Feed, because which
+    branch rendered depended on the VIEWER's own `mode` cookie — a signed-in
+    visitor happening to carry `mode=full` hit the OTHER branch entirely (the
+    Full Bleed 5-tab set below, which has no Feed option at all and always
+    shows Reels). `marketing` forces the simple 4-tab set with Feed in this
+    slot unconditionally, so every marketing-page visitor sees the identical
+    bar regardless of sign-in state or mode — Reels moves to the page's own
+    top header instead (see AppTopbar's `onFeedIndex` handling). The actual
+    signed-in app shell (home/friends/messages/etc.) is untouched — this only
+    ever applies where `MobileAppNav` (the marketing wrapper) renders.
+  */
+  marketing = false,
+}: {
+  marketing?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const mode = useAppMode();
@@ -148,7 +168,7 @@ export function MobileNav() {
     them to login. Gating on `handle` too means a guest always sees the
     Downloader set regardless of what the mode cookie says.
   */
-  const fullBleedActive = mode === "full" && !!handle;
+  const fullBleedActive = !marketing && mode === "full" && !!handle;
 
   // Warm the primary destinations once so the FIRST tap opens instantly — dynamic
   // routes (Messages/Friends) otherwise fetch on first navigation, which felt like
@@ -350,21 +370,19 @@ export function MobileNav() {
               onWarm={router.prefetch}
             />
             {/*
-              🔴 GUESTS GET FEED HERE, NOT REELS (owner, 2026-08-18: "put a
-              feed button in place where reels button is in the bottom nav of
-              landing page and download page... so guest can see but can't
-              interact and can't post"). Scoped to `!handle` specifically,
-              not to Downloader mode generally — a SIGNED-IN visitor who
-              happens to be in Downloader mode still gets their real Reels
-              tab here unchanged; only a genuinely signed-out visitor sees
-              this swap, since /feed (not /reels) is this app's guest-safe,
-              watch-only entry point — see app/(app)/feed/page.tsx's own doc
-              comment.
+              🔴 FEED HERE, NOT REELS, WHENEVER `marketing` (owner, 2026-08-18:
+              "put a feed button in place where reels button is in the bottom
+              nav of landing page and download page... so guest can see but
+              can't interact and can't post" — then, once mode-dependent
+              drift surfaced, confirmed this should hold for EVERY marketing
+              visitor, not just guests). A signed-in visitor on the actual
+              signed-in app (this component's non-marketing mount) still
+              gets their real Reels tab here unchanged.
             */}
-            {handle ? (
+            {!marketing && handle ? (
               <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={(href) => { router.prefetch(href); warmReels(); }} />
             ) : (
-              <NavTab label="Feed" href="/feed" icon={Newspaper} activeIcon={Newspaper} active={pathname.startsWith("/feed")} onWarm={router.prefetch} />
+              <NavTab label="Feed" href="/feed" icon={FileImage} activeIcon={FileImage} active={pathname.startsWith("/feed")} onWarm={router.prefetch} />
             )}
             <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
             <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />

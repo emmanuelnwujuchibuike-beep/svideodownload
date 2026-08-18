@@ -232,7 +232,7 @@ export function IosInstallPrompt() {
             <div className="flex items-start gap-3">
               <FrenzLogo size={40} className="mt-0.5 shrink-0" />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold leading-snug">
+                <p className="text-base font-bold leading-snug">
                   {mode === "android"
                     ? "Add Frenz to your Home Screen"
                     : mode === "ios-inapp"
@@ -244,7 +244,7 @@ export function IosInstallPrompt() {
                     ? "A full-screen, app-like view with no browser bar, quicker access from your Home Screen, and faster downloads — plus notifications if you'd like them. You can turn notifications off anytime in Notification settings."
                     : mode === "ios-inapp"
                       ? "This link opened inside an app that can't install web apps. Copy the link below, open it in Safari, then add it to your Home Screen there for a full-screen, app-like view with no browser bar, quicker access, and faster downloads — with notifications if you'd like them (you can turn them off anytime in Notification settings)."
-                      : `A full-screen, app-like view with no browser bar, quicker access from your Home Screen, and faster downloads — plus notifications if you'd like them (you can turn them off anytime in Notification settings). Nothing below is a button on this page — Apple requires every website to be added from ${browserName}'s own menu first. No site can skip this step.`}
+                      : "A full-screen, app-like view with no browser bar, quicker access from your Home Screen, and faster downloads — plus notifications if you'd like them (you can turn them off anytime in Notification settings). Nothing below is a button on this page."}
                 </p>
                 {mode === "android" ? (
                   <button
@@ -264,18 +264,18 @@ export function IosInstallPrompt() {
                   </button>
                 ) : (
                   <div className="mt-2.5">
-                    <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-bold">1</span>
-                      <span className="inline-flex items-center gap-1 text-foreground">
-                        Tap <Share className="h-3.5 w-3.5 text-blue-500" /> Share in {browserName}
+                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-foreground">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold">1</span>
+                      <span className="inline-flex items-center gap-1">
+                        Tap <Share className="h-4 w-4 text-blue-500" /> Share in {browserName}
                       </span>
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-bold">2</span>
-                      <span className="inline-flex items-center gap-1 text-foreground">
-                        <SquarePlus className="h-3.5 w-3.5 text-violet-500" /> Add to Home Screen
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold">2</span>
+                      <span className="inline-flex items-center gap-1">
+                        <SquarePlus className="h-4 w-4 text-violet-500" /> Add to Home Screen
                       </span>
                     </p>
-                    <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <ChevronDown className="h-3.5 w-3.5 shrink-0 animate-bounce" aria-hidden />
+                    <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-foreground/80">
+                      <ChevronDown className="h-4 w-4 shrink-0 animate-bounce" aria-hidden />
                       That Share icon is in {browserName}&apos;s own toolbar around your screen&apos;s edge, not here.
                     </p>
                   </div>

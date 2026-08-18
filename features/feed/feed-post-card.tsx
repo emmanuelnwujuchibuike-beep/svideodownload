@@ -744,9 +744,15 @@ function FeedPostCardImpl({
             // is the single source of truth now, not overridden per call site.
           >
             {/* Moved inside `FeedImage` — see the matching note on the video
-                branch above; same "badge floated off a shrunk box" bug. */}
+                branch above; same "badge floated off a shrunk box" bug.
+                🔴 TOP-LEFT, NOT BOTTOM-RIGHT (owner, 2026-08-18: "the views is
+                being covered by the save button"). The blended engagement
+                row below ends in Save, bottom-right — same corner this badge
+                used to claim. Moved to match the video branch's own
+                already-correct convention instead of re-solving the same
+                collision differently in each branch. */}
             {item.viewsCount > 0 ? (
-              <span className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+              <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
                 {formatCompactNumber(item.viewsCount)} views
               </span>
             ) : null}

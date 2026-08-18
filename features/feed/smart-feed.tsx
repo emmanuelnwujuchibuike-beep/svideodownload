@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, ArrowUp, Clock, Sparkles, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import dynamic from "next/dynamic";
@@ -147,6 +147,7 @@ export function SmartFeed({
   viewerChunksReadyRef.current = viewerChunksReady;
   const sentinel = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
+  const pathname = usePathname();
 
   // Per-tab cache (For You / Following) so switching is instant and never
   // reloads/flashes a skeleton once a tab has been visited — each entry keeps
@@ -466,10 +467,10 @@ export function SmartFeed({
       setTopbarCenter(null);
       return;
     }
-    setTopbarCenter(<FeedTopbarTabs sort={sort} onSegment={onSegment} />);
+    setTopbarCenter(<FeedTopbarTabs sort={sort} onSegment={onSegment} showReelsLink={pathname === "/feed"} />);
     return () => setTopbarCenter(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort, !!reel]);
+  }, [sort, !!reel, pathname]);
 
   // Restores the scroll position saved for a tab, once its content has
   // actually rendered (so the page is tall enough to scroll to it). Guarded so

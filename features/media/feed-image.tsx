@@ -10,6 +10,8 @@ import { FadeImage } from "@/features/ui/fade-image";
 import { useTapOrDoubleTap } from "@/lib/hooks/use-tap-or-double-tap";
 import { clampFeedRatio } from "@/lib/media/aspect";
 import { prefetchImage } from "@/lib/media/prefetch-image";
+import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 
 /**
@@ -111,6 +113,11 @@ export function FeedImage({
   const tap = useTapOrDoubleTap({
     onTap: () => onExpand(),
     onDoubleTap: () => {
+      // Same distinct double-pulse haptic + rising-chime sound as the video
+      // card's Wow burst (owner, 2026-08-18: "double tap should have a
+      // haptic sound different from other haptic sounds already made").
+      haptic("wow");
+      playSound("wow");
       setBurst((b) => b + 1);
       onDoubleTapLike();
     },

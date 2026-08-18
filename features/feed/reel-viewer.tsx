@@ -137,6 +137,7 @@ import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-po
 import { suppressReel } from "@/lib/social/reels-session";
 import { streamHlsUrl, streamThumbnailUrl } from "@/lib/media/stream";
 import { haptic } from "@/lib/motion/haptics";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { springs } from "@/lib/motion/springs";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { useEntitlements } from "@/features/auth/use-entitlements";
@@ -1487,6 +1488,11 @@ function ReelCard({
 
   // Double-tap to like: a heart blooms at the tap point; never un-likes.
   const likeBurst = (x: number, y: number) => {
+    // Distinct double-pulse haptic + rising chime (owner, 2026-08-18: "double
+    // tap should have a haptic sound different from other haptic sounds
+    // already made") — same "wow" intent as the feed card's own double-tap.
+    haptic("wow");
+    playSound("wow");
     setBursts((b) => [...b.slice(-4), { id: Date.now() + Math.random(), x, y }]);
     if (!liked) void react("like");
   };

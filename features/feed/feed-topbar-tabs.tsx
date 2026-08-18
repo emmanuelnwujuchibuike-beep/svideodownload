@@ -1,11 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import {
   FrenzFriendsOutline,
   FrenzFriendsSolid,
+  FrenzReelsOutline,
   FrenzSparkleOutline,
   FrenzSparkleSolid,
 } from "@/components/icons/frenz-icons";
@@ -49,20 +51,33 @@ const GLYPH_INACTIVE = "text-muted-foreground [filter:drop-shadow(0_3px_5px_rgba
  * Owner correction (2026-07-13, still true): no purple accent dot on the
  * inactive chip.
  *
- * 🔴 REELS REMOVED (owner, 2026-08-16: "move the reel button at the top to
- * bottom in full bleed"). It used to be a third, permanently-inactive tab
- * here that opened the deck instead of toggling `sort`; that affordance now
- * lives as its own tab in the bottom nav (see mobile-nav.tsx) instead of
- * sharing this segmented control. Swiping past "Following" still opens Reels
- * in place (smart-feed.tsx's `swipeTo`/`onSegment("recent")`) — that gesture
- * is unrelated to this row and stays exactly as it was.
+ * 🔴 REELS REMOVED, THEN BACK (owner, 2026-08-16: "move the reel button at
+ * the top to bottom in full bleed" — it became its own bottom-nav tab
+ * instead of sharing this row). 2026-08-18: the bottom nav on marketing
+ * pages (landing, the SEO downloader pages, and — by extension — /feed
+ * itself) was made to always show Feed instead of Reels, for every visitor
+ * regardless of sign-in state (see mobile-nav.tsx's `marketing` prop), which
+ * left those pages with no Reels affordance in the bottom nav to move it
+ * back OUT of. It briefly lived as its own icon in AppTopbar's corner
+ * instead; the owner then asked for it "closer to the for you button like
+ * the following button is" — so `showReelsLink` renders it back in THIS
+ * row, on the SAME `gap-2` flex line as For You/Following, which is what
+ * actually guarantees identical spacing rather than approximating it from
+ * a separate component. Unlike For You/Following it's a real navigation
+ * (`<Link>`, not `onSegment`) — tapping it leaves the feed for the full
+ * Reels deck, it doesn't just retarget this component's own `sort`.
  */
 export function FeedTopbarTabs({
   sort,
   onSegment,
+  showReelsLink,
 }: {
   sort: HomeFeedSort;
   onSegment: (key: HomeFeedSort) => void;
+  /** /feed only (see the note above) — /home already has Reels in its own
+   *  signed-in bottom nav, so repeating it here would just be a second entry
+   *  point for the same destination. */
+  showReelsLink?: boolean;
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -106,6 +121,22 @@ export function FeedTopbarTabs({
           </motion.button>
         );
       })}
+      {showReelsLink ? (
+        <Link
+          href="/reels"
+          onClick={() => {
+            haptic("light");
+            playSound("tap");
+          }}
+          aria-label="Reels"
+          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary"
+        >
+          <span className="absolute inset-0 -z-10 rounded-full bg-secondary/50 ring-1 ring-inset ring-border/50" />
+          <PressIcon>
+            <FrenzReelsOutline className={cn("h-5 w-5", GLYPH_INACTIVE)} />
+          </PressIcon>
+        </Link>
+      ) : null}
     </div>
   );
 }

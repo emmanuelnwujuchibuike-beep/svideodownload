@@ -476,6 +476,7 @@ export function ReelsFeed({
         onChange={(id) => switchTab(id as Tab)}
         available={["for_you", "following"]}
         className="lg:left-[calc(50%-4.5rem)]"
+        feedHref="/feed"
       />
 
       {switching ? (

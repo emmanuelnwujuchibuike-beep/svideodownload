@@ -1,6 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { Rows3 } from "lucide-react";
+import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
@@ -86,16 +88,30 @@ export function ReelTabs({
    */
   available,
   className,
+  /**
+   * A real navigation OUT of Reels entirely, into the Feed product — not
+   * another reel-content tab (owner, 2026-08-18: "restyle this for you and
+   * following tray to also include a feed button... users who haven't
+   * signed in can click on it from the landing page and enter feed").
+   * Rendered as a `<Link>`, not an `onChange` call: tapping it leaves this
+   * deck rather than swapping which reels play in place. Kept visually
+   * distinct from the tabs (its own icon, a hairline divider before it)
+   * precisely so it doesn't read as a sixth interchangeable reel feed.
+   */
+  feedHref,
 }: {
   active: ReelTabId;
   onChange: (id: ReelTabId) => void;
   available: readonly ReelTabId[];
   className?: string;
+  feedHref?: string;
 }) {
   const tabs = REEL_TABS.filter((t) => available.includes(t.id));
   // A single destination is not a choice — rendering one tab is chrome that
-  // teaches nothing and still costs the safe-area strip it sits in.
-  if (tabs.length < 2) return null;
+  // teaches nothing and still costs the safe-area strip it sits in. The Feed
+  // link (when present) still renders on its own below, since it isn't a
+  // reel-content tab and the "not a real choice" reasoning doesn't apply to it.
+  if (tabs.length < 2 && !feedHref) return null;
 
   return (
     <div
@@ -118,7 +134,7 @@ export function ReelTabs({
         className,
       )}
     >
-      {tabs.map((t) => {
+      {tabs.length >= 2 ? tabs.map((t) => {
         const on = active === t.id;
         return (
           <button
@@ -165,7 +181,23 @@ export function ReelTabs({
             ) : null}
           </button>
         );
-      })}
+      }) : null}
+
+      {feedHref ? (
+        <>
+          {tabs.length >= 2 ? <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-white/20" /> : null}
+          <Link
+            href={feedHref}
+            className={cn(
+              "relative flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-[13px] font-semibold text-white/60 outline-none transition hover:text-white/85 active:scale-95",
+              "focus-visible:ring-2 focus-visible:ring-white/80",
+            )}
+          >
+            <Rows3 className="h-3.5 w-3.5" aria-hidden />
+            Feed
+          </Link>
+        </>
+      ) : null}
     </div>
   );
 }

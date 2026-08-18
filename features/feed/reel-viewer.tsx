@@ -85,7 +85,6 @@ import { useLivingInterface } from "@/features/reels/viewer/use-living-interface
 import { RichText } from "@/components/social/rich-text";
 import { SmartVideo } from "@/features/media/smart-video";
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
-import { Comments } from "@/features/social/comments";
 import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { AnimatedCount } from "@/features/ui/animated-count";
@@ -107,11 +106,8 @@ import { floatReaction } from "@/features/ui/reaction-float";
 const ReelMoreSheet = dynamic(() => import("@/features/feed/reel-sheets").then((m) => m.ReelMoreSheet));
 const ReelSendSheet = dynamic(() => import("@/features/feed/reel-sheets").then((m) => m.ReelSendSheet));
 
-import { RepostComposer } from "@/features/social/repost-composer";
-import { RepostSheet } from "@/features/social/repost/repost-sheet";
 import { WhyThisChip } from "@/features/social/repost/why-this";
 import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
-import { RepostersSheet } from "@/features/social/reposters-sheet";
 // Code-split, each gated behind its own "ready" flag (never mounted until
 // the corresponding action is actually tapped) — reels are the main video
 // feed, so static imports here put every one of these sheets' full weight
@@ -121,6 +117,14 @@ const ShareQrSheet = dynamic(() => import("@/features/social/share-qr-sheet").th
 const CollectionPicker = dynamic(() => import("@/features/social/collection-picker").then((m) => m.CollectionPicker), { ssr: false });
 const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
 const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").then((m) => m.PostEditSheet), { ssr: false });
+// No `ssr: false` on the four below — same reasoning as ReelMoreSheet/
+// ReelSendSheet above: none of them render anything until their own `open`
+// prop is true, so SSR costs nothing, and `ssr: false` has a standing history
+// of never resolving in this project (see the note above).
+const Comments = dynamic(() => import("@/features/social/comments").then((m) => m.Comments));
+const RepostComposer = dynamic(() => import("@/features/social/repost-composer").then((m) => m.RepostComposer));
+const RepostSheet = dynamic(() => import("@/features/social/repost/repost-sheet").then((m) => m.RepostSheet));
+const RepostersSheet = dynamic(() => import("@/features/social/reposters-sheet").then((m) => m.RepostersSheet));
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { RepostBurst } from "@/features/social/repost-burst";
@@ -128,7 +132,6 @@ import { claimPlayback, recordView, releasePlayback, suspendPlayback } from "@/l
 import { toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
-import { downloadPost } from "@/lib/media/download-post";
 import { getQualityPreference, setQualityPreference, type QualityPreference } from "@/lib/media/network-conditions";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { suppressReel } from "@/lib/social/reels-session";
@@ -849,14 +852,17 @@ function ReelCard({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerReady, setPickerReady] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [composerReady, setComposerReady] = useState(false);
   const [composerMode, setComposerMode] = useState<"create" | "edit">("create");
   const [composerCaption, setComposerCaption] = useState<string | null>(null);
   // The audience picked in the destination sheet, carried into the quote composer.
   const [composerAudience, setComposerAudience] = useState<RepostAudience>("public");
   const [repostSheetOpen, setRepostSheetOpen] = useState(false);
+  const [repostSheetReady, setRepostSheetReady] = useState(false);
   /** Send's two-option chooser — see the note on the rail's Send control. */
   const [sendChooserOpen, setSendChooserOpen] = useState(false);
   const [repostersOpen, setRepostersOpen] = useState(false);
+  const [repostersReady, setRepostersReady] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareReady, setShareReady] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
@@ -872,7 +878,10 @@ function ReelCard({
   const sidebarWowPress = useLongPress(() => setSidebarReactionsOpen(true));
   const repostState = useRepostState(item.id, item.viewerReposted ?? false, item.repostsCount ?? 0);
   // Holding the Repost button opens the advanced options sheet.
-  const repostPress = useLongPress(() => setRepostSheetOpen(true));
+  const repostPress = useLongPress(() => {
+    setRepostSheetReady(true);
+    setRepostSheetOpen(true);
+  });
   const [repostBurst, setRepostBurst] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const [srcReady, setSrcReady] = useState(false);
@@ -1264,11 +1273,15 @@ function ReelCard({
     "recommend this" and "write about this" the same action and left no room for
     the audience at all.
   */
-  const repost = () => setRepostSheetOpen(true);
+  const repost = () => {
+    setRepostSheetReady(true);
+    setRepostSheetOpen(true);
+  };
 
   const openComposer = (mode: "create" | "edit", caption: string | null) => {
     setComposerMode(mode);
     setComposerCaption(caption);
+    setComposerReady(true);
     setComposerOpen(true);
   };
 
@@ -2285,7 +2298,10 @@ function ReelCard({
           {item.repostBadge && item.repostBadge.count > 0 ? (
             <button
               type="button"
-              onClick={() => setRepostersOpen(true)}
+              onClick={() => {
+                setRepostersReady(true);
+                setRepostersOpen(true);
+              }}
               className="flex items-center transition active:scale-95"
               aria-label={`${item.repostBadge.count} people you follow reposted this — see who`}
             >
@@ -2717,7 +2733,14 @@ function ReelCard({
         }}
         onDownload={() => {
           setMoreOpen(false);
-          void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined });
+          // `downloadPost` is a function, not a component, so `dynamic()`
+          // doesn't apply — a plain deferred import() is what keeps its
+          // download-manager/analytics-event code (a few kB) out of every
+          // reel's first-load JS for a tap that happens on a minority of
+          // views.
+          void import("@/lib/media/download-post").then((m) =>
+            m.downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title: title ?? undefined }),
+          );
         }}
         onEditPost={() => {
           setMoreOpen(false);
@@ -2770,17 +2793,19 @@ function ReelCard({
       {pickerReady ? <CollectionPicker postId={item.id} open={pickerOpen} onClose={() => setPickerOpen(false)} /> : null}
 
       {/* Repost composer — optional recommendation caption or instant Post Now */}
-      <RepostComposer
-        post={{ id: item.id, title: title ?? "", thumbnailUrl: item.thumbnailUrl, publisher: item.publisher }}
-        currentCount={repostState.count}
-        open={composerOpen}
-        onClose={() => setComposerOpen(false)}
-        onReposted={onReposted}
-        mode={composerMode}
-        initialCaption={composerCaption}
-        audience={composerAudience}
-        sourceRepostId={item.viaRepostId ?? null}
-      />
+      {composerReady ? (
+        <RepostComposer
+          post={{ id: item.id, title: title ?? "", thumbnailUrl: item.thumbnailUrl, publisher: item.publisher }}
+          currentCount={repostState.count}
+          open={composerOpen}
+          onClose={() => setComposerOpen(false)}
+          onReposted={onReposted}
+          mode={composerMode}
+          initialCaption={composerCaption}
+          audience={composerAudience}
+          sourceRepostId={item.viaRepostId ?? null}
+        />
+      ) : null}
 
       {/*
         The repost destination sheet (Part 4). Reached from the Send chooser's
@@ -2792,28 +2817,30 @@ function ReelCard({
         audience at all — that file is deleted rather than left orphaned, since
         both surfaces now open this one.
       */}
-      <RepostSheet
-        postId={item.id}
-        post={{ title, thumbnailUrl: item.thumbnailUrl, handle: item.publisher.handle }}
-        currentCount={repostState.count}
-        open={repostSheetOpen}
-        onClose={() => setRepostSheetOpen(false)}
-        alreadyReposted={repostState.reposted}
-        sourceRepostId={item.viaRepostId ?? null}
-        onReposted={onReposted}
-        onQuote={(audience) => {
-          setComposerAudience(audience);
-          openComposer("create", null);
-        }}
-        onSendInChat={openShare}
-        onSaveForLater={() => {
-          setPickerReady(true);
-          setPickerOpen(true);
-        }}
-      />
+      {repostSheetReady ? (
+        <RepostSheet
+          postId={item.id}
+          post={{ title, thumbnailUrl: item.thumbnailUrl, handle: item.publisher.handle }}
+          currentCount={repostState.count}
+          open={repostSheetOpen}
+          onClose={() => setRepostSheetOpen(false)}
+          alreadyReposted={repostState.reposted}
+          sourceRepostId={item.viaRepostId ?? null}
+          onReposted={onReposted}
+          onQuote={(audience) => {
+            setComposerAudience(audience);
+            openComposer("create", null);
+          }}
+          onSendInChat={openShare}
+          onSaveForLater={() => {
+            setPickerReady(true);
+            setPickerOpen(true);
+          }}
+        />
+      ) : null}
 
       {/* Who reposted — behind the avatar cluster */}
-      <RepostersSheet postId={item.id} open={repostersOpen} onClose={() => setRepostersOpen(false)} />
+      {repostersReady ? <RepostersSheet postId={item.id} open={repostersOpen} onClose={() => setRepostersOpen(false)} /> : null}
 
       {reportReady ? <ReportSheet targetType="post" targetId={item.id} open={reportOpen} onClose={() => setReportOpen(false)} /> : null}
 

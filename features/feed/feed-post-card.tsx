@@ -29,7 +29,10 @@ import {
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { memo, useEffect, useRef, useState } from "react";
+
+import { useEntitlements } from "@/features/auth/use-entitlements";
 
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { RichText } from "@/components/social/rich-text";
@@ -63,7 +66,6 @@ const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then(
 const CommentsSheet = dynamic(() => import("@/features/social/comments-sheet").then((m) => m.CommentsSheet), { ssr: false });
 import { floatReaction } from "@/features/ui/reaction-float";
 import { useLongPress } from "@/lib/hooks/use-long-press";
-import { downloadPost } from "@/lib/media/download-post";
 import { enqueueOfflineAction } from "@/lib/offline/action-queue";
 import { isCategory } from "@/lib/social/categories";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
@@ -152,6 +154,7 @@ function FeedPostCardImpl({
   // Holding the Repost button opens the same destination sheet the tap does —
   // one surface reached two ways, rather than a second menu to keep in step.
   const repostPress = useLongPress(() => {
+    if (!requireAuth()) return;
     setRepostSheetReady(true);
     setRepostSheetOpen(true);
   });
@@ -189,7 +192,29 @@ function FeedPostCardImpl({
     onOpen(target, startComments, startIndex);
   };
 
+  /*
+    ── Guest gate (2026-08-18, guest feed access) ──────────────────────────────
+    This card now also renders for signed-out visitors (the new guest-
+    accessible /feed route — "watch feed but can't interact"). `useEntitlements`
+    is already memoized app-wide, so this costs nothing extra when a signed-in
+    viewer's identity was already resolved elsewhere on the page.
+    `identityReady` guards against a false "signed out" reading before the
+    (synchronous, cookie-based) check has actually resolved.
+  */
+  const router = useRouter();
+  const pathname = usePathname();
+  const { handle: viewerHandle, ready: identityReady } = useEntitlements();
+  const requireAuth = (): boolean => {
+    if (identityReady && !viewerHandle) {
+      toast("Sign in to like, comment and share.", "info", { duration: 2500 });
+      router.push(`/login?next=${encodeURIComponent(pathname)}`);
+      return false;
+    }
+    return true;
+  };
+
   const react = async (type: "like" | "save") => {
+    if (!requireAuth()) return;
     const isLike = type === "like";
     const cur = isLike ? liked : saved;
     const next = !cur;
@@ -233,6 +258,7 @@ function FeedPostCardImpl({
   // (`like:<postId>`) — a flavor picked right after an offline plain-Like
   // replaces it rather than queuing a second, redundant write.
   const reactWithEmotion = async (emotion: ReactionEmotion) => {
+    if (!requireAuth()) return;
     const wasLiked = liked;
     const prevEmotion = myEmotion;
     setLiked(true);
@@ -275,6 +301,7 @@ function FeedPostCardImpl({
   };
 
   const toggleFollow = async () => {
+    if (!requireAuth()) return;
     setBusy(true);
     try {
       // Shared store updates every card/reel for this creator at once.
@@ -292,6 +319,7 @@ function FeedPostCardImpl({
     "write about this" one action and left nowhere to say who it reaches.
   */
   const repost = () => {
+    if (!requireAuth()) return;
     setMenuOpen(false);
     setRepostSheetReady(true);
     setRepostSheetOpen(true);
@@ -328,6 +356,99 @@ function FeedPostCardImpl({
       toast("Couldn't mute.", "error");
     }
   };
+
+  // True for exactly the two media shapes that render inside their own
+  // full-bleed box (FeedVideo/FeedImage) and can have the engagement row
+  // blended onto them — see engagementRow's own note just below.
+  const overlayEngagement =
+    !(item.mediaItems && item.mediaItems.length > 1) &&
+    ((item.mediaKind === "video" && !!(item.streamUid || item.mediaUrl)) ||
+      (item.mediaKind === "image" && !!(item.mediaUrl || item.thumbnailUrl)));
+
+  /*
+    ── Blended engagement row (2026-08-18 follow-up) ───────────────────────────
+    Owner, from a screenshot of the shipped inline row (see the row's own note
+    below): "the buttons on the feed card... blended underneath the video
+    without causing visual noise and cluster" — a separate white toolbar under
+    every video/photo read as clutter. For video and single-image posts (the
+    two cases that render inside their own full-bleed, correctly-sized box —
+    see FeedVideo/FeedImage's `children` prop) this now renders AS AN OVERLAY
+    on the media's bottom edge instead of a sibling row below it, `light`
+    styling (white icons, translucent hover) over a gradient scrim, the same
+    treatment the views/duration badge already gets. Multi-photo grids, audio
+    cards and text-only posts keep the original below-content row — MediaGrid
+    is a different, denser composition (see the width note above: only single
+    video breaks out of the avatar column) and a text-only post has no media
+    to blend onto in the first place.
+  */
+  const engagementRow = (light: boolean) => (
+    <div
+      className={cn(
+        "flex items-center justify-between",
+        light
+          ? "absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 via-black/25 to-transparent px-1.5 pb-1 pt-6"
+          : "mt-1 pb-1",
+      )}
+    >
+      <div className="flex items-center gap-1">
+        <span className="relative inline-flex">
+          <ActionButton
+            active={liked}
+            onClick={(e) => {
+              // Checked before the floating-heart plays — a guest tap must
+              // never show the "liked" animation for a like that's about to
+              // be blocked and redirected.
+              if (!requireAuth()) return;
+              if (!liked) floatReaction(e.clientX, e.clientY);
+              void react("like");
+            }}
+            icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
+            count={likes}
+            activeClass="text-violet-500"
+            label="Wow"
+            press={wowPress}
+            light={light}
+          />
+          <ReactionPicker
+            open={reactionsOpen}
+            onClose={() => setReactionsOpen(false)}
+            onPick={(emotion, _glyph, e) => {
+              floatReaction(e.clientX, e.clientY);
+              void reactWithEmotion(emotion);
+            }}
+          />
+        </span>
+        <ActionButton
+          icon={MessageCircle}
+          count={item.commentsCount}
+          onClick={() => {
+            if (!requireAuth()) return;
+            setCommentsReady(true);
+            setCommentsOpen(true);
+          }}
+          label="Comment"
+          light={light}
+        />
+        {!item.isOwner ? (
+          <span className="relative inline-flex">
+            <RepostBurst triggerKey={repostBurst} />
+            <ActionButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-500" onClick={repost} label="Repost" press={repostPress} light={light} />
+          </span>
+        ) : null}
+        <ActionButton
+          icon={SendIcon}
+          onClick={() => {
+            if (!requireAuth()) return;
+            setShareReady(true);
+            setShareOpen(true);
+          }}
+          label="Send"
+          light={light}
+        />
+      </div>
+      <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-blue-500" label="Save" light={light} />
+    </div>
+  );
 
   return (
     <motion.article
@@ -516,7 +637,14 @@ function FeedPostCardImpl({
                     >
                       <MenuItem icon={Share2} label="Share" onClick={() => { setMenuOpen(false); setShareReady(true); setShareOpen(true); }} />
                       <MenuItem icon={LinkIcon} label="Copy link" onClick={copyLink} />
-                      <MenuItem icon={Download} label="Download" onClick={() => { setMenuOpen(false); void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title }); }} />
+                      <MenuItem
+                        icon={Download}
+                        label="Download"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          void import("@/lib/media/download-post").then((m) => m.downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title }));
+                        }}
+                      />
                       {item.isOwner ? (
                         <MenuItem icon={Pencil} label="Edit post" onClick={() => { setMenuOpen(false); setEditReady(true); setEditOpen(true); }} />
                       ) : null}
@@ -587,68 +715,14 @@ function FeedPostCardImpl({
           />
         </div>
       ) : item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
-        // Big, immersive inline preview: autoplays muted in view, tap → fullscreen
-        // reel, press-hold → pause. Rounded (spec section 7) — see the
-        // album/carousel note above for why this reverses the old flush-edge
-        // rule now that the post itself has no rounding of its own.
-        <div className="relative mb-3 overflow-hidden rounded-2xl">
-          <FeedVideo
-            src={item.mediaUrl}
-            streamUid={item.streamUid}
-            streamReady={item.streamReady}
-            streamFailed={item.streamFailed}
-            poster={item.thumbnailUrl}
-            postId={item.id}
-            onExpand={() => open(item)}
-            onDoubleTapLike={() => {
-              if (!liked) void react("like");
-            }}
-            // FeedVideo renders the clip at its TRUE aspect ratio — tall clips
-            // expand, short/wide ones show as they are. Handing it the stored
-            // dimensions means it knows that shape on the FIRST paint instead of
-            // reserving a 3:4 guess and correcting once the browser has parsed
-            // the file (owner: "it just only show the exact height of the video
-            // or image").
-            //
-            // 🔴 NO `w-full` HERE (owner, 2026-08-17: "there are still black side
-            // background… the single videos still stretch a lot"). A forced
-            // `width: 100%` fights the wrapper's own `aspect-ratio` + `max-h`:
-            // once a tall clip hits the height cap, CSS shrinks the wrapper's
-            // HEIGHT but a width pinned to 100% can't follow — the true-ratio
-            // video ends up narrower than its own black wrapper, exposing black
-            // bars on the sides. Leaving width unset lets the wrapper's default
-            // block sizing (fill available width) and the aspect-ratio/max-h
-            // "transferred size" behavior agree on ONE box shape in both the
-            // normal (fills the card) and capped (narrower, centered) cases.
-            width={item.mediaWidth ?? undefined}
-            height={item.mediaHeight ?? undefined}
-          >
-            {/*
-              🔴 MOVED INSIDE `FeedVideo` (owner, 2026-08-17: an earlier,
-              tighter max-height cap regularly narrowed portrait clips below
-              the card's full width — the max-height is generous now, but a
-              genuinely pathological clip could still hit it). This badge
-              used to be a SIBLING here, absolutely
-              positioned against the outer wrapper div above — which stays
-              full width even when the clip itself shrinks, so the badge
-              floated away from the actual video instead of sitting on its
-              corner. `FeedVideo` renders `children` inside its OWN,
-              correctly-sized box, so the badge now tracks the real clip.
-              Top-left: FeedVideo's own mute + expand controls already claim
-              top-right and bottom-right.
-            */}
-            {item.viewsCount > 0 || item.durationSec ? (
-              <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
-                {item.viewsCount > 0 ? `${formatCompactNumber(item.viewsCount)} views` : null}
-                {item.viewsCount > 0 && item.durationSec ? " · " : null}
-                {item.durationSec ? formatDuration(item.durationSec) : null}
-              </span>
-            ) : null}
-          </FeedVideo>
-        </div>
+        // Rendered full-width BELOW, outside the avatar-offset column — see
+        // the width note where that block lives, right after this column
+        // closes. Nothing renders here for a video post.
+        null
       ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
         // Image posts behave like videos: full-size, double-tap to like, tap to open.
-        // Rounded (spec section 7) — see the album/carousel note above.
+        // Rounded (spec section 7) — see the album/carousel note above. Stays in
+        // THIS column (avatar-offset), unlike video — see the width note below.
         <div className="relative mb-3 overflow-hidden rounded-2xl">
           <FeedImage
             src={item.mediaUrl || item.thumbnailUrl!}
@@ -673,6 +747,8 @@ function FeedPostCardImpl({
                 {formatCompactNumber(item.viewsCount)} views
               </span>
             ) : null}
+            {/* Blended engagement row — see engagementRow's own note. */}
+            {engagementRow(true)}
           </FeedImage>
         </div>
       ) : item.mediaKind === "audio" ? (
@@ -741,59 +817,90 @@ function FeedPostCardImpl({
         instance would split one interaction into two different colors
         depending on which surface you're on — a worse inconsistency than
         keeping the existing, already-established accent.
+
+        🔴 2026-08-18: only rendered HERE (below the content, on the card's own
+        surface) for the cases with no full-bleed media box to blend onto — a
+        multi-photo grid, an audio card, or a text-only post. Video and single-
+        image posts get this SAME row rendered as an overlay on the media
+        itself instead (see `engagementRow`'s own note) — `overlayEngagement`
+        below is true for exactly those two cases.
       */}
-          <div className="mt-1 flex items-center justify-between pb-1">
-            <div className="flex items-center gap-1">
-              <span className="relative inline-flex">
-                <ActionButton
-                  active={liked}
-                  onClick={(e) => {
-                    if (!liked) floatReaction(e.clientX, e.clientY);
-                    void react("like");
-                  }}
-                  icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
-                  count={likes}
-                  activeClass="text-violet-500"
-                  label="Wow"
-                  press={wowPress}
-                />
-                <ReactionPicker
-                  open={reactionsOpen}
-                  onClose={() => setReactionsOpen(false)}
-                  onPick={(emotion, _glyph, e) => {
-                    floatReaction(e.clientX, e.clientY);
-                    void reactWithEmotion(emotion);
-                  }}
-                />
-              </span>
-              <ActionButton
-                icon={MessageCircle}
-                count={item.commentsCount}
-                onClick={() => {
-                  setCommentsReady(true);
-                  setCommentsOpen(true);
-                }}
-                label="Comment"
-              />
-              {!item.isOwner ? (
-                <span className="relative inline-flex">
-                  <RepostBurst triggerKey={repostBurst} />
-                  <ActionButton icon={Repeat2} active={repostState.reposted} count={repostState.count} activeClass="text-emerald-500" onClick={repost} label="Repost" press={repostPress} />
-                </span>
-              ) : null}
-              <ActionButton
-                icon={SendIcon}
-                onClick={() => {
-                  setShareReady(true);
-                  setShareOpen(true);
-                }}
-                label="Send"
-              />
-            </div>
-            <ActionButton active={saved} onClick={() => react("save")} icon={Bookmark} fill={saved} activeClass="text-blue-500" label="Save" />
-          </div>
+          {overlayEngagement ? null : engagementRow(false)}
         </div>
       </div>
+
+      {/*
+        🔴 VIDEO BREAKS OUT OF THE AVATAR COLUMN (owner, 2026-08-18: "expand
+        the width of a long 16:9 video on the feed"). The two-column layout
+        above indents everything — including media — by the avatar's ~44px,
+        which is exactly why a wide/landscape clip (short by nature once width
+        is fixed) read as small: less width directly means less height too.
+        Matches X's own actual rendering — name/handle stay indented, attached
+        video does not. Scoped to video only (not photos/albums/audio): those
+        stay in the column above, unchanged, per the owner's own scoping when
+        asked which media types this should apply to.
+      */}
+      {item.mediaKind === "video" && (item.streamUid || item.mediaUrl) && !(item.mediaItems && item.mediaItems.length > 1) ? (
+        <div className="mb-3 px-2 sm:px-3">
+          <div className="relative overflow-hidden rounded-2xl">
+            <FeedVideo
+              src={item.mediaUrl}
+              streamUid={item.streamUid}
+              streamReady={item.streamReady}
+              streamFailed={item.streamFailed}
+              poster={item.thumbnailUrl}
+              postId={item.id}
+              onExpand={() => open(item)}
+              onDoubleTapLike={() => {
+                if (!liked) void react("like");
+              }}
+              // FeedVideo renders the clip at its TRUE aspect ratio — tall clips
+              // expand, short/wide ones show as they are. Handing it the stored
+              // dimensions means it knows that shape on the FIRST paint instead of
+              // reserving a 3:4 guess and correcting once the browser has parsed
+              // the file (owner: "it just only show the exact height of the video
+              // or image").
+              //
+              // 🔴 NO `w-full` HERE (owner, 2026-08-17: "there are still black side
+              // background… the single videos still stretch a lot"). A forced
+              // `width: 100%` fights the wrapper's own `aspect-ratio` + `max-h`:
+              // once a tall clip hits the height cap, CSS shrinks the wrapper's
+              // HEIGHT but a width pinned to 100% can't follow — the true-ratio
+              // video ends up narrower than its own black wrapper, exposing black
+              // bars on the sides. Leaving width unset lets the wrapper's default
+              // block sizing (fill available width) and the aspect-ratio/max-h
+              // "transferred size" behavior agree on ONE box shape in both the
+              // normal (fills the card) and capped (narrower, centered) cases.
+              width={item.mediaWidth ?? undefined}
+              height={item.mediaHeight ?? undefined}
+            >
+              {/*
+                🔴 MOVED INSIDE `FeedVideo` (owner, 2026-08-17: an earlier,
+                tighter max-height cap regularly narrowed portrait clips below
+                the card's full width — the max-height is generous now, but a
+                genuinely pathological clip could still hit it). This badge
+                used to be a SIBLING here, absolutely
+                positioned against the outer wrapper div above — which stays
+                full width even when the clip itself shrinks, so the badge
+                floated away from the actual video instead of sitting on its
+                corner. `FeedVideo` renders `children` inside its OWN,
+                correctly-sized box, so the badge now tracks the real clip.
+                Top-left: FeedVideo's own mute + expand controls already claim
+                top-right and bottom-right.
+              */}
+              {item.viewsCount > 0 || item.durationSec ? (
+                <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+                  {item.viewsCount > 0 ? `${formatCompactNumber(item.viewsCount)} views` : null}
+                  {item.viewsCount > 0 && item.durationSec ? " · " : null}
+                  {item.durationSec ? formatDuration(item.durationSec) : null}
+                </span>
+              ) : null}
+              {/* Blended engagement row — see engagementRow's own note. */}
+              {engagementRow(true)}
+            </FeedVideo>
+          </div>
+        </div>
+      ) : null}
 
       {shareReady ? (
         <ShareSheet
@@ -912,6 +1019,7 @@ function ActionButton({
   href,
   label,
   press,
+  light,
 }: {
   icon: typeof Heart;
   count?: number;
@@ -923,6 +1031,11 @@ function ActionButton({
   label: string;
   /** Long-press handlers (from useLongPress) for buttons with a hold action. */
   press?: ReturnType<typeof useLongPress>;
+  /** Blended-on-media variant (Feature 15 feed redesign follow-up, 2026-08-18):
+   *  white/translucent instead of the card-surface muted/secondary colors, for
+   *  when this sits directly over a video/image rather than on the card's own
+   *  background. `activeClass`'s brand colors still apply on top either way. */
+  light?: boolean;
 }) {
   const inner = (
     <>
@@ -935,13 +1048,18 @@ function ActionButton({
       >
         <Icon className={cn("h-5 w-5", fill && "fill-current")} strokeWidth={2} />
       </motion.span>
-      {count !== undefined && count > 0 ? <AnimatedCount value={count} className="text-xs font-semibold tabular-nums" /> : null}
+      {count !== undefined && count > 0 ? (
+        <AnimatedCount value={count} className={cn("text-xs font-semibold tabular-nums", light && "drop-shadow-sm")} />
+      ) : null}
     </>
   );
   // Muted by default, brand-colored only when active (spec section 11) — was
   // `text-foreground` at rest, full contrast even for an untouched icon.
   const cls = cn(
-    "group/act inline-flex items-center gap-1.5 rounded-full px-2.5 py-2 text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground active:scale-95",
+    "group/act inline-flex items-center gap-1.5 rounded-full px-2.5 py-2 transition-colors active:scale-95",
+    light
+      ? "text-white/90 drop-shadow-sm hover:bg-white/15 hover:text-white"
+      : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
     active && activeClass,
   );
   if (href) {

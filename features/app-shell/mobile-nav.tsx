@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Headset, History } from "lucide-react";
+import { Headset, History, Rows3 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -349,7 +349,23 @@ export function MobileNav() {
               active={pathname === "/downloads" || pathname === "/home" || (!handle && pathname === "/")}
               onWarm={router.prefetch}
             />
-            <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={(href) => { router.prefetch(href); warmReels(); }} />
+            {/*
+              🔴 GUESTS GET FEED HERE, NOT REELS (owner, 2026-08-18: "put a
+              feed button in place where reels button is in the bottom nav of
+              landing page and download page... so guest can see but can't
+              interact and can't post"). Scoped to `!handle` specifically,
+              not to Downloader mode generally — a SIGNED-IN visitor who
+              happens to be in Downloader mode still gets their real Reels
+              tab here unchanged; only a genuinely signed-out visitor sees
+              this swap, since /feed (not /reels) is this app's guest-safe,
+              watch-only entry point — see app/(app)/feed/page.tsx's own doc
+              comment.
+            */}
+            {handle ? (
+              <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={(href) => { router.prefetch(href); warmReels(); }} />
+            ) : (
+              <NavTab label="Feed" href="/feed" icon={Rows3} activeIcon={Rows3} active={pathname.startsWith("/feed")} onWarm={router.prefetch} />
+            )}
             <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
             <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />
           </>

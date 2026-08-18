@@ -644,32 +644,54 @@ export function SiteHeader({
               ) : null}
 
               {enabled && !user ? (
-                /*
-                  Mirrors UserMenu's desktop CTA exactly — same gradient, glow,
-                  sheen and copy — differing only in being full-width.
-                  One control, one treatment, on every viewport.
-                */
-                <Link
-                  href="/login?next=/account"
-                  onClick={closeMenu}
-                  className="group relative mt-4 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-3.5 text-base font-semibold text-white shadow-lg shadow-violet-500/30 transition-all duration-300 active:scale-[0.97]"
-                >
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 opacity-40 blur-md motion-safe:animate-pulse"
-                  />
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full"
-                  />
-                  {/* Owner (2026-08-04): "change the launch app button in the
-                      menu in the landing page to login button" — and the
-                      fingerprint goes with it. "Launch app" described a
-                      destination that does not exist (there is no app to
-                      launch); this is a sign-in, so it says so. */}
-                  {t("nav.login")}
-                  <ArrowRight className="h-5 w-5" />
-                </Link>
+                <>
+                  {/*
+                    A genuinely real destination now, unlike the "Launch app"
+                    button removed below for pointing at nothing (owner,
+                    2026-08-04) — /feed is guest-accessible on purpose
+                    (2026-08-18: "users who haven't signed in can click on it
+                    from the landing page and enter feed"). Plain text, not a
+                    catalogue key: NAV_LINKS' `MessageKey` convention is a
+                    50-language commitment (every catalogue must carry every
+                    key, enforced by catalogue-integrity.test.ts) that a single
+                    new row doesn't justify — falls back to English everywhere
+                    else in the interim, same as any other un-translated string
+                    in this file outside that one array.
+                  */}
+                  <Link
+                    href="/feed"
+                    onClick={closeMenu}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-secondary"
+                  >
+                    Watch the feed
+                  </Link>
+                  {/*
+                    Mirrors UserMenu's desktop CTA exactly — same gradient, glow,
+                    sheen and copy — differing only in being full-width.
+                    One control, one treatment, on every viewport.
+                  */}
+                  <Link
+                    href="/login?next=/account"
+                    onClick={closeMenu}
+                    className="group relative mt-2 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 px-4 py-3.5 text-base font-semibold text-white shadow-lg shadow-violet-500/30 transition-all duration-300 active:scale-[0.97]"
+                  >
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 opacity-40 blur-md motion-safe:animate-pulse"
+                    />
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full"
+                    />
+                    {/* Owner (2026-08-04): "change the launch app button in the
+                        menu in the landing page to login button" — and the
+                        fingerprint goes with it. "Launch app" described a
+                        destination that does not exist (there is no app to
+                        launch); this is a sign-in, so it says so. */}
+                    {t("nav.login")}
+                    <ArrowRight className="h-5 w-5" />
+                  </Link>
+                </>
               ) : null}
             </nav>
           </div>

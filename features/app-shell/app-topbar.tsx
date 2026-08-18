@@ -12,6 +12,7 @@ import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import { UserMenu } from "@/features/auth/user-menu";
 import { CreateActionSheet } from "@/features/create/create-action-sheet";
 import { haptic } from "@/lib/motion/haptics";
@@ -22,6 +23,17 @@ export function AppTopbar() {
   const router = useRouter();
   const pathname = usePathname();
   const mode = useAppMode();
+  /*
+    🔴 `mode` ALONE isn't a reliable "can this visitor post" signal (owner,
+    2026-08-18: the Create button must not show on the guest-accessible /feed
+    page). `mode` is a durable cookie/localStorage PREFERENCE, independent of
+    whether anyone is actually signed in — a genuinely signed-out visitor with
+    a stale "full" mode value from an earlier session on this browser would
+    still read `mode !== "downloader"` as true. `handle` is the real auth
+    signal (mirrors mobile-nav.tsx's `fullBleedActive = mode === "full" &&
+    !!handle` — the same class of bug, fixed the same way there already).
+  */
+  const { handle } = useEntitlements();
   const [q, setQ] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   // The owner's Messages mockup starts straight at the big "Messages" title —
@@ -145,7 +157,7 @@ export function AppTopbar() {
           way the old bottom-nav button was: Downloader mode has no
           Create/Chats, those are Full Bleed features only.
         */}
-        {mode !== "downloader" ? (
+        {mode !== "downloader" && !!handle ? (
           <PressIcon className="lg:hidden">
             <button
               type="button"
@@ -239,7 +251,7 @@ export function AppTopbar() {
             keeps the two from ever showing at the same time on a tablet.
             Mode-gated the same as its mobile counterpart: Downloader mode
             has no Create surface at all. */}
-        {mode !== "downloader" ? (
+        {mode !== "downloader" && !!handle ? (
           <PressIcon className="hidden lg:inline-flex">
             <Link
               href="/create/post"

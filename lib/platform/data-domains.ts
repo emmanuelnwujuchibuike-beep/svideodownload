@@ -62,10 +62,18 @@ export const DATA_DOMAINS: DataDomain[] = [
       "post_views",
       "post_guest_likes",
       "comment_reactions",
+      // Creator-muted commenters (Feature 15 Part 5 tranche 4, migration
+      // 0122) — narrower than a block: the muted user keeps following/
+      // messaging/seeing the creator's posts, they just can't comment.
+      "comment_muted_users",
       "reposts",
       // What a repost actually caused — impressions, opens and onward reposts,
       // one row per (repost, actor, event). Feature 15 Part 4, migration 0116.
       "repost_attributions",
+      // A plain share's minimal history log — powers graded antispam
+      // (allow/throttle/block) the way `reposts` powers repost's. Feature 15
+      // Part 6, migration 0121.
+      "share_events",
       "follows",
       "friendships",
       "friend_requests",

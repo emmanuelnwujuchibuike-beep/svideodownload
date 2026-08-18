@@ -38,8 +38,11 @@ import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
 import { CollectionPicker } from "@/features/social/collection-picker";
 import { Comments } from "@/features/social/comments";
+import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
 import { ReportSheet } from "@/features/social/report-sheet";
+import { ShareSheet } from "@/features/social/share-sheet";
+import { ShareQrSheet } from "@/features/social/share-qr-sheet";
 import { toast } from "@/features/ui/toast";
 import { downloadPost } from "@/lib/media/download-post";
 import { clampFeedRatio, isReelsShaped } from "@/lib/media/aspect";
@@ -296,16 +299,14 @@ function ImageStage({
     }
   };
 
-  const share = async () => {
-    const url = `${window.location.origin}/p/${item.id}`;
-    try {
-      if (navigator.share) await navigator.share({ title, url });
-      else await navigator.clipboard.writeText(url);
-    } catch {
-      /* cancelled */
-    }
-    fetch(`/api/posts/${item.id}/event`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "share" }) }).catch(() => {});
-  };
+  // Part 6: the real Share sheet (DMs/groups + copy link + OS share + QR),
+  // replacing a bare navigator.share()/clipboard-copy fork that never
+  // recorded WHO a post was shared with (only a raw counter bump). No repost
+  // affordance exists in this viewer today (confirmed — grepped for any
+  // repost/reshare mechanism here, none), so `onRepost` is simply omitted.
+  const [shareOpen, setShareOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+  const share = () => setShareOpen(true);
 
   // ── Overflow (•••) actions — same set reels/the app already offer. ──────────
   const postUrl = () => `${window.location.origin}/p/${item.id}`;
@@ -560,26 +561,19 @@ function ImageStage({
 
         {/* Comments sheet — mobile/tablet only; large screens use the persistent
             sidebar instead. */}
-        <AnimatePresence>
-          {showComments ? (
-            <div className="lg:hidden">
-              <button type="button" aria-label="Close comments" onClick={() => setShowComments(false)} className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]" />
-              <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", stiffness: 380, damping: 36 }} className="fixed inset-x-0 bottom-0 z-50 mx-auto flex h-[68vh] max-w-2xl flex-col rounded-t-3xl border-t border-white/10 bg-card/95 shadow-[0_-8px_40px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
-                <div className="shrink-0 px-5 pt-3">
-                  <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border" />
-                  <h3 className="text-sm font-bold">Comments{item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}</h3>
-                </div>
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-1">
-                  {comments ? (
-                    <Comments postId={item.id} comments={comments.comments} loggedIn={comments.loggedIn} canComment={comments.canComment} disabledReason={comments.canComment ? null : "Comments are unavailable."} count={item.commentsCount} variant="sheet" />
-                  ) : (
-                    <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
-                  )}
-                </div>
-              </motion.div>
-            </div>
-          ) : null}
-        </AnimatePresence>
+        <div className="lg:hidden">
+          <GlassSheetShell
+            open={showComments}
+            onClose={() => setShowComments(false)}
+            title={`Comments${item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}`}
+          >
+            {comments ? (
+              <Comments postId={item.id} comments={comments.comments} loggedIn={comments.loggedIn} canComment={comments.canComment} disabledReason={comments.canComment ? null : "Comments are unavailable."} count={item.commentsCount} variant="sheet" />
+            ) : (
+              <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+            )}
+          </GlassSheetShell>
+        </div>
       </div>
 
       {/* Persistent comments sidebar — large screens only. Publisher + caption +
@@ -737,6 +731,15 @@ function ImageStage({
       ) : null}
 
       <ReportSheet targetType="post" targetId={item.id} open={reportOpen} onClose={() => setReportOpen(false)} />
+
+      <ShareSheet
+        postId={item.id}
+        title={title ?? undefined}
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        onQrCode={() => setQrOpen(true)}
+      />
+      <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} />
     </motion.div>
   );
 }

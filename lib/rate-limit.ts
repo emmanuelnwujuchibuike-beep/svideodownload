@@ -110,6 +110,14 @@ export const deviceLimiter: Limiter = buildLimiter(
   Number(process.env.RATE_LIMIT_DEVICE_PER_MIN || 20),
 );
 
+// Feature 15 Part 6 — dedicated share limiter. Previously `/api/posts/[id]/share`
+// borrowed assistantLimiter (semantically an AI-usage bound, not a sharing one)
+// and `/api/reshare` had no limiter at all. One shared bound for both actions —
+// same order of magnitude as assistantLimiter, tuned for "a person sharing a
+// few things a minute," not a blast tool (share itself is already capped at 10
+// recipients per call; this bounds how often that call can be made).
+export const shareLimiter: Limiter = buildLimiter(Number(process.env.RATE_LIMIT_SHARE_PER_MIN || 20));
+
 // Reward-gated downloads (HD/batch unlock). Starting a session is cheap to spam
 // (no ad shown yet), so it gets the tighter bound; completing one is rarer and
 // already gated behind actually watching something.

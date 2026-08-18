@@ -1,4 +1,4 @@
-import { BarChart3, Bookmark, Download, Eye, Gem, Heart, MessageCircle, Share2, Users } from "lucide-react";
+import { BarChart3, Bookmark, Download, Eye, Gem, Heart, MessageCircle, Route, Share2, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -7,8 +7,19 @@ import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { AppContent } from "@/features/app-shell/app-content";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { getCreatorAnalytics } from "@/lib/social/creator-analytics";
+import { getShareJourney, type ShareKind } from "@/lib/social/share/insights";
 import { createClient } from "@/lib/supabase/server";
 import { cn, formatCompactNumber } from "@/lib/utils";
+
+const SHARE_KIND_LABEL: Record<ShareKind, string> = {
+  dm: "Direct message",
+  group: "Group chat",
+  copy_link: "Copied link",
+  os_share: "Share sheet",
+  email: "Email",
+  sms: "Text message",
+  qr: "QR code",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +50,9 @@ export default async function CreatorAnalyticsPage() {
               Creator analytics
             </h1>
             <p className="mt-2 text-muted-foreground">Performance across your published downloads.</p>
+            <Link href="/account/creator-lounge" className="mt-2 inline-block text-sm font-semibold text-primary hover:opacity-80">
+              Open Creator Lounge →
+            </Link>
           </div>
           <DiamondCrownBadge plan="business" size="md" showLabel />
         </header>
@@ -73,7 +87,7 @@ function Locked() {
 }
 
 async function Analytics({ userId }: { userId: string }) {
-  const a = await getCreatorAnalytics(userId);
+  const [a, journey] = await Promise.all([getCreatorAnalytics(userId), getShareJourney(userId)]);
 
   if (a.totals.posts === 0) {
     return (
@@ -161,6 +175,37 @@ async function Analytics({ userId }: { userId: string }) {
           ))}
         </ul>
       </section>
+
+      {/* Share Journey™ — a real funnel (sent → opened), not a propagation
+          tree (see lib/social/share/insights.ts's own header on why). */}
+      {journey.totalShares > 0 ? (
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-card">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold">
+            <Route className="h-4 w-4 text-violet-500" /> Share Journey™
+          </h2>
+          <div className="mb-4 grid grid-cols-2 gap-3 text-center sm:grid-cols-3">
+            <Mini label="Total shares" value={formatCompactNumber(journey.totalShares)} accent />
+            <Mini label="Reached recipients" value={formatCompactNumber(journey.addressableRecipients)} />
+            <Mini label="Opened it" value={formatCompactNumber(journey.recipientsWhoOpened)} />
+          </div>
+          <div className="space-y-2">
+            {(Object.entries(journey.byKind) as [ShareKind, number][])
+              .sort((x, y) => y[1] - x[1])
+              .map(([kind, count]) => (
+                <div key={kind} className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-muted-foreground">{SHARE_KIND_LABEL[kind]}</span>
+                  <span className="font-semibold">{formatCompactNumber(count)}</span>
+                </div>
+              ))}
+          </div>
+          {journey.addressableRecipients === 0 ? (
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              &quot;Opened it&quot; only measures direct-message and group shares, where the recipient is actually known — copied
+              links, email, SMS and QR shares have no addressable recipient to track.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }

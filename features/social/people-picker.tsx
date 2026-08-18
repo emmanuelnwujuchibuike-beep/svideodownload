@@ -22,9 +22,31 @@ export interface Person {
   avatarUrl: string | null;
 }
 
+export interface Group {
+  /** Conversation id — a group has no single "other" user, so it's addressed
+   *  by conversation, not by a member's user id (see ShareSheet's `toGroups`). */
+  id: string;
+  title: string;
+  avatarUrl: string | null;
+  memberCount: number;
+}
+
 // Recents + friends, module-cached briefly so reopening a sheet is instant.
 let peopleCache: { at: number; people: Person[] } | null = null;
 
+/**
+ * Smart Share Circle™ — recents-then-friends was a flat two-tier order with
+ * no ranking WITHIN either tier. Friends are now sorted by relationship
+ * strength (lib/social/share-circle.ts reusing the same privacy-reviewed
+ * `relationshipStrength` scorer Part 4's repost ranking already reuses), so
+ * a favourited best friend you haven't messaged in a week still ranks above
+ * someone you happened to message once. Recent-conversation partners who
+ * AREN'T mutual friends have no score to reuse yet — they keep their
+ * existing recency order and simply sort after every scored friend, rather
+ * than inventing a cross-category comparison. Scores are fetched alongside
+ * (not blocking) the two existing calls — a slow/failed score fetch just
+ * falls back to the pre-Part-6 flat order, never blocks the picker.
+ */
 export async function loadPeople(): Promise<Person[]> {
   if (peopleCache && Date.now() - peopleCache.at < 60_000) return peopleCache.people;
   const seenIds = new Set<string>();
@@ -35,10 +57,10 @@ export async function loadPeople(): Promise<Person[]> {
       people.push(p);
     }
   };
-  // Recent chats first (most likely recipients), then friends.
-  const [convRes, friendRes] = await Promise.allSettled([
+  const [convRes, friendRes, scoreRes] = await Promise.allSettled([
     fetch("/api/messages").then((r) => (r.ok ? r.json() : null)),
     fetch("/api/friends").then((r) => (r.ok ? r.json() : null)),
+    fetch("/api/share/circle").then((r) => (r.ok ? r.json() : null)),
   ]);
   if (convRes.status === "fulfilled" && convRes.value?.conversations) {
     for (const c of convRes.value.conversations as { other: Person | null }[]) add(c.other);
@@ -46,8 +68,35 @@ export async function loadPeople(): Promise<Person[]> {
   if (friendRes.status === "fulfilled" && friendRes.value?.friends) {
     for (const f of friendRes.value.friends as { user: Person }[]) add(f.user);
   }
+  const scores: Record<string, number> =
+    scoreRes.status === "fulfilled" ? ((scoreRes.value?.scores as Record<string, number>) ?? {}) : {};
+  if (Object.keys(scores).length > 0) {
+    // A stable sort (guaranteed by the spec since ES2019) keeps every
+    // unscored person in their existing recency order relative to each
+    // other — only scored friends get reordered, and only among themselves.
+    people.sort((a, b) => (scores[b.id] ?? -1) - (scores[a.id] ?? -1));
+  }
   peopleCache = { at: Date.now(), people };
   return people;
+}
+
+// Group conversations, module-cached the same way loadPeople() is.
+let groupsCache: { at: number; groups: Group[] } | null = null;
+
+export async function loadGroups(): Promise<Group[]> {
+  if (groupsCache && Date.now() - groupsCache.at < 60_000) return groupsCache.groups;
+  try {
+    const res = await fetch("/api/messages");
+    if (!res.ok) return [];
+    const j = (await res.json()) as { conversations?: { id: string; type: string; title: string | null; avatarUrl: string | null; memberCount: number }[] };
+    const groups = (j.conversations ?? [])
+      .filter((c) => c.type === "group")
+      .map((c) => ({ id: c.id, title: c.title ?? "Group", avatarUrl: c.avatarUrl, memberCount: c.memberCount }));
+    groupsCache = { at: Date.now(), groups };
+    return groups;
+  } catch {
+    return [];
+  }
 }
 
 export function PeoplePickerGrid({

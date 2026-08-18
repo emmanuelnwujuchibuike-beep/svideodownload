@@ -86,6 +86,7 @@ import { RichText } from "@/components/social/rich-text";
 import { SmartVideo } from "@/features/media/smart-video";
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
 import { Comments } from "@/features/social/comments";
+import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
@@ -114,6 +115,7 @@ import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } 
 import { ReportSheet } from "@/features/social/report-sheet";
 import { RepostersSheet } from "@/features/social/reposters-sheet";
 import { ShareSheet } from "@/features/social/share-sheet";
+import { ShareQrSheet } from "@/features/social/share-qr-sheet";
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { RepostBurst } from "@/features/social/repost-burst";
@@ -835,6 +837,7 @@ function ReelCard({
   const [sendChooserOpen, setSendChooserOpen] = useState(false);
   const [repostersOpen, setRepostersOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   // Long-press Wow → the reaction picker; the picked glyph replaces the icon.
   // Two independent instances: the action rail (visible on every size) and the
   // desktop-only persistent comments sidebar render their OWN Wow button — both
@@ -1196,20 +1199,9 @@ function ReelCard({
     }
   };
 
-  const share = async () => {
+  const share = () => {
     setMoreOpen(false);
-    const url = `${window.location.origin}/p/${item.id}`;
-    try {
-      if (navigator.share) await navigator.share({ title: item.title, url });
-      else await navigator.clipboard.writeText(url);
-    } catch {
-      /* cancelled */
-    }
-    fetch(`/api/posts/${item.id}/event`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "share" }),
-    }).catch(() => {});
+    setShareOpen(true);
   };
 
   const toggleFollow = async () => {
@@ -2525,80 +2517,53 @@ function ReelCard({
         ) : null}
       </div>
 
-      {/* Comments sheet — fixed half-height panel, mobile/tablet only (large
-          screens use the persistent sidebar below instead). The reel behind it
-          is frozen (the deck is scroll-locked), so scrolling to the bottom of
-          the comments never jumps to the next video. The video is paused; a
-          toggle lets you keep watching while you type. */}
-      {mounted ? createPortal(
-      <AnimatePresence>
-        {showComments ? (
-          <div className="lg:hidden">
-            {/* Portaled to <body> + fixed so it sits above the bottom nav. */}
-            <button type="button" aria-label="Close comments" onClick={closeComments} className="fixed inset-0 z-[90] bg-black/50 backdrop-blur-[2px]" />
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", stiffness: 380, damping: 36 }}
-              className="fixed inset-x-0 bottom-0 z-[95] mx-auto flex h-[68vh] max-w-2xl flex-col rounded-t-3xl border-t border-white/10 bg-card/95 shadow-[0_-8px_40px_rgba(0,0,0,0.35)] backdrop-blur-2xl"
-              onAnimationStart={loadComments}
+      {/* Comments sheet — fixed, gesture-resizable panel, mobile/tablet only
+          (large screens use the persistent sidebar below instead). The reel
+          behind it is frozen (the deck is scroll-locked), so scrolling to the
+          bottom of the comments never jumps to the next video. The video is
+          paused; a toggle lets you keep watching while you type. */}
+      <div className="lg:hidden">
+        <GlassSheetShell
+          open={showComments}
+          onClose={closeComments}
+          onOpen={loadComments}
+          title={`Comments${item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}`}
+          headerExtra={
+            <button
+              type="button"
+              onClick={toggleSheetVideo}
+              aria-label={sheetVideoPaused ? "Play video" : "Pause video"}
+              className="flex items-center gap-1 rounded-full bg-secondary/70 px-2.5 py-1 text-xs font-semibold text-muted-foreground transition hover:text-foreground"
             >
-              {/* Grabber + controls */}
-              <div className="shrink-0 px-5 pt-3">
-                <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border" />
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold">
-                    Comments{item.commentsCount > 0 ? ` · ${formatCompactNumber(item.commentsCount)}` : ""}
-                  </h3>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={toggleSheetVideo}
-                      aria-label={sheetVideoPaused ? "Play video" : "Pause video"}
-                      className="flex items-center gap-1 rounded-full bg-secondary/70 px-2.5 py-1 text-xs font-semibold text-muted-foreground transition hover:text-foreground"
-                    >
-                      {sheetVideoPaused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
-                      {sheetVideoPaused ? "Play" : "Pause"}
-                    </button>
-                    <button type="button" onClick={closeComments} aria-label="Close comments" className="rounded-full p-1.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
+              {sheetVideoPaused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
+              {sheetVideoPaused ? "Play" : "Pause"}
+            </button>
+          }
+        >
+          {loadingComments ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+          ) : comments ? (
+            <>
+              {item.hasPoll ? (
+                <div className="mb-4">
+                  <PostPollInline postId={item.id} loggedIn={comments.loggedIn} />
                 </div>
-              </div>
-
-              {/* Scrollable list — contained so its scroll never chains out */}
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-1">
-                {loadingComments ? (
-                  <div className="flex items-center justify-center py-8 text-muted-foreground">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  </div>
-                ) : comments ? (
-                  <>
-                    {item.hasPoll ? (
-                      <div className="mb-4">
-                        <PostPollInline postId={item.id} loggedIn={comments.loggedIn} />
-                      </div>
-                    ) : null}
-                    <Comments
-                      postId={item.id}
-                      comments={comments.comments}
-                      loggedIn={comments.loggedIn}
-                      canComment={comments.canComment}
-                      disabledReason={comments.canComment ? null : "Comments are unavailable."}
-                      count={item.commentsCount}
-                      variant="sheet"
-                    />
-                  </>
-                ) : null}
-              </div>
-            </motion.div>
-          </div>
-        ) : null}
-      </AnimatePresence>,
-      document.body,
-    ) : null}
+              ) : null}
+              <Comments
+                postId={item.id}
+                comments={comments.comments}
+                loggedIn={comments.loggedIn}
+                canComment={comments.canComment}
+                disabledReason={comments.canComment ? null : "Comments are unavailable."}
+                count={item.commentsCount}
+                variant="sheet"
+              />
+            </>
+          ) : null}
+        </GlassSheetShell>
+      </div>
 
       {/* Persistent comments sidebar — large screens only, active reel only (so
           mounted-but-buffering neighbours never stack a duplicate fixed panel).
@@ -2831,7 +2796,9 @@ function ReelCard({
         open={shareOpen}
         onClose={() => setShareOpen(false)}
         onRepost={item.isOwner ? undefined : () => openComposer("create", null)}
+        onQrCode={() => setQrOpen(true)}
       />
+      <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} />
 
       {/* Inline editor — a creator edits caption/visibility (or deletes) without
           leaving the reel. */}

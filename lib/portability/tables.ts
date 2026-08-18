@@ -109,6 +109,7 @@ export const OWNER_COLUMN: Record<string, string> = {
   post_polls: "owner_id",
   poll_votes: "user_id",
   comment_reactions: "user_id",
+  comment_muted_users: "creator_id",
   reposts: "user_id",
   // Keyed on ACTOR, not on whose repost it was. A member is entitled to the
   // record of what they themselves saw, opened and engaged with; the mirror
@@ -117,6 +118,10 @@ export const OWNER_COLUMN: Record<string, string> = {
   // member a list of other people's browsing. Reach stays a number everywhere,
   // including here.
   repost_attributions: "actor_id",
+  // Keyed on the sharer, same reasoning as `reposts` above — a member is
+  // entitled to a record of what THEY shared, not a list of everyone who
+  // shared their own posts (that stays a count, via posts.shares_count).
+  share_events: "sharer_id",
   stories: "user_id",
   // follower_id = accounts you chose to follow. The other side is exported
   // separately as `followers`, see FOLLOW_MIRROR.

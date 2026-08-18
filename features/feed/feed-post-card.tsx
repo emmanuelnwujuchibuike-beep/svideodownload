@@ -57,6 +57,7 @@ const RepostComposer = dynamic(() => import("@/features/social/repost-composer")
 const RepostSheet = dynamic(() => import("@/features/social/repost/repost-sheet").then((m) => m.RepostSheet), { ssr: false });
 const RepostersSheet = dynamic(() => import("@/features/social/reposters-sheet").then((m) => m.RepostersSheet), { ssr: false });
 const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m) => m.ShareSheet), { ssr: false });
+const ShareQrSheet = dynamic(() => import("@/features/social/share-qr-sheet").then((m) => m.ShareQrSheet), { ssr: false });
 const ContentPreferencesSheet = dynamic(() => import("@/features/social/content-preferences-sheet").then((m) => m.ContentPreferencesSheet), { ssr: false });
 const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
 const CommentsSheet = dynamic(() => import("@/features/social/comments-sheet").then((m) => m.CommentsSheet), { ssr: false });
@@ -128,6 +129,8 @@ function FeedPostCardImpl({
   const [repostersOpen, setRepostersOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareReady, setShareReady] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrReady, setQrReady] = useState(false);
   // Long-press Wow → the reaction picker; the picked glyph replaces the icon.
   const [reactionsOpen, setReactionsOpen] = useState(false);
   const [myEmotion, setMyEmotion] = useState<string | null>(item.viewerReactionEmotion ?? null);
@@ -259,24 +262,6 @@ function FeedPostCardImpl({
       }
       setMyEmotion(prevEmotion);
     }
-  };
-
-  const share = async () => {
-    const url = `${window.location.origin}/p/${item.id}`;
-    try {
-      if (navigator.share) await navigator.share({ title: item.title, url });
-      else {
-        await navigator.clipboard.writeText(url);
-        toast("Link copied.", "success");
-      }
-    } catch {
-      /* user cancelled */
-    }
-    fetch(`/api/posts/${item.id}/event`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "share" }),
-    }).catch(() => {});
   };
 
   const copyLink = async () => {
@@ -529,7 +514,7 @@ function FeedPostCardImpl({
                       exit={{ opacity: 0, scale: 0.95 }}
                       className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-xl border border-border/70 bg-card py-1 shadow-elevated"
                     >
-                      <MenuItem icon={Share2} label="Share" onClick={() => { setMenuOpen(false); void share(); }} />
+                      <MenuItem icon={Share2} label="Share" onClick={() => { setMenuOpen(false); setShareReady(true); setShareOpen(true); }} />
                       <MenuItem icon={LinkIcon} label="Copy link" onClick={copyLink} />
                       <MenuItem icon={Download} label="Download" onClick={() => { setMenuOpen(false); void downloadPost({ id: item.id, mediaUrl: item.mediaUrl, title }); }} />
                       {item.isOwner ? (
@@ -817,8 +802,13 @@ function FeedPostCardImpl({
           open={shareOpen}
           onClose={() => setShareOpen(false)}
           onRepost={item.isOwner ? undefined : () => openComposer("create", null)}
+          onQrCode={() => {
+            setQrReady(true);
+            setQrOpen(true);
+          }}
         />
       ) : null}
+      {qrReady ? <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} /> : null}
 
       {item.isOwner && editReady ? (
         <PostEditSheet

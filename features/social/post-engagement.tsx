@@ -1,8 +1,10 @@
 "use client";
 
-import { Bookmark, Check, Heart, MessageCircle, Share2 } from "lucide-react";
+import { Bookmark, Heart, MessageCircle, Share2 } from "lucide-react";
 import { useState } from "react";
 
+import { ShareSheet } from "@/features/social/share-sheet";
+import { ShareQrSheet } from "@/features/social/share-qr-sheet";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
@@ -29,8 +31,8 @@ export function PostEngagement({
   const [saved, setSaved] = useState(initial.saved);
   const [likes, setLikes] = useState(initial.likes);
   const [saves, setSaves] = useState(initial.saves);
-  const [shares, setShares] = useState(initial.shares);
-  const [copied, setCopied] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   const react = async (type: "like" | "save") => {
     if (!loggedIn) {
@@ -67,25 +69,6 @@ export function PostEngagement({
     }
   };
 
-  const share = async () => {
-    const url = `${window.location.origin}/p/${postId}`;
-    try {
-      if (navigator.share) await navigator.share({ url });
-      else {
-        await navigator.clipboard.writeText(url);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }
-      setShares((n) => n + 1);
-      navigator.sendBeacon?.(
-        `/api/posts/${postId}/event`,
-        new Blob([JSON.stringify({ type: "share" })], { type: "application/json" }),
-      );
-    } catch {
-      /* user cancelled share */
-    }
-  };
-
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Pill
@@ -102,8 +85,8 @@ export function PostEngagement({
       >
         <Bookmark className={cn("h-[18px] w-[18px] transition-transform", saved && "scale-110 fill-current")} /> {formatCompactNumber(saves)}
       </Pill>
-      <Pill onClick={share}>
-        {copied ? <Check className="h-[18px] w-[18px] text-emerald-500" /> : <Share2 className="h-[18px] w-[18px]" />} {formatCompactNumber(shares)}
+      <Pill onClick={() => setShareOpen(true)}>
+        <Share2 className="h-[18px] w-[18px]" /> {formatCompactNumber(initial.shares)}
       </Pill>
       <a
         href="#comments"
@@ -111,6 +94,9 @@ export function PostEngagement({
       >
         <MessageCircle className="h-[18px] w-[18px]" /> {formatCompactNumber(initial.comments)}
       </a>
+
+      <ShareSheet postId={postId} open={shareOpen} onClose={() => setShareOpen(false)} onQrCode={() => setQrOpen(true)} />
+      <ShareQrSheet postId={postId} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${postId}`} open={qrOpen} onClose={() => setQrOpen(false)} />
     </div>
   );
 }

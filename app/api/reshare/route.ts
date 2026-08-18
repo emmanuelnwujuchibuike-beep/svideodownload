@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { shareLimiter } from "@/lib/rate-limit";
 import { reshare, setReshareAllowed } from "@/lib/social/reshare";
 import { createClient } from "@/lib/supabase/server";
 
@@ -41,6 +42,11 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  // Previously unrated-limited entirely (confirmed by audit) — same shared
+  // bound the plain-share route uses (lib/rate-limit.ts's shareLimiter).
+  const { success } = await shareLimiter.limit(`reshare:${user.id}`);
+  if (!success) return NextResponse.json({ error: "You're resharing too fast." }, { status: 429 });
 
   let body: unknown;
   try {

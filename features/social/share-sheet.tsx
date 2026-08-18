@@ -1,22 +1,22 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Copy, Link2, Repeat2, Search, Send, Share2, X } from "lucide-react";
+import { Check, Link2, Mail, MessageSquareText, QrCode, Repeat2, Search, Send, Share2, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 
-import { loadPeople, PeoplePickerGrid, type Person } from "@/features/social/people-picker";
+import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
+import { loadGroups, loadPeople, PeoplePickerGrid, type Group, type Person } from "@/features/social/people-picker";
 import { toast } from "@/features/ui/toast";
-import { hapticPattern } from "@/lib/motion/haptics";
-import { springs } from "@/lib/motion/springs";
+import { haptic, hapticPattern } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
 /**
  * The Share sheet — the paper-plane experience (owner spec): send a post to
- * friends as DMs (multi-select + optional message), copy the link, hand off to
- * the OS share sheet, or repost. Bottom sheet on phones, centered card on
- * desktop; blur backdrop; adaptive themes; Esc/backdrop close; loaded lazily
- * (dynamic import) so the feed bundle never pays for it.
+ * friends OR groups as DMs (multi-select + optional message), copy the link,
+ * generate a QR code, hand off to the OS share sheet, or repost. Chrome is the
+ * shared `GlassSheetShell` (Part 6: previously its own bespoke wrapper with no
+ * drag/resize and thinner haptics than reshare-sheet.tsx — now the exact same
+ * premium shell comments use, not a second near-identical implementation).
  */
 
 export function ShareSheet({
@@ -25,6 +25,7 @@ export function ShareSheet({
   open,
   onClose,
   onRepost,
+  onQrCode,
 }: {
   postId: string;
   title?: string;
@@ -32,42 +33,34 @@ export function ShareSheet({
   onClose: () => void;
   /** When provided, a Repost row appears (opens the existing repost flow). */
   onRepost?: () => void;
+  /** When provided, a QR Code row appears (opens a QR sheet for this post's link). */
+  onQrCode?: () => void;
 }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
   const [people, setPeople] = useState<Person[] | null>(null);
+  const [groups, setGroups] = useState<Group[] | null>(null);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [sentCount, setSentCount] = useState<number | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   // Load recipients when the sheet first opens (cached for reopens).
-  useEffect(() => {
-    if (!open || people) return;
-    let cancelled = false;
-    void loadPeople().then((p) => {
-      if (!cancelled) setPeople(p);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, people]);
+  const loadDestinations = () => {
+    if (!people) void loadPeople().then(setPeople);
+    if (!groups) void loadGroups().then(setGroups);
+  };
 
-  // Fresh state per open + Esc to close.
+  // Fresh state per open.
   useEffect(() => {
     if (!open) return;
     setSelected(new Set());
+    setSelectedGroups(new Set());
     setNote("");
     setQuery("");
     setSentCount(null);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -77,17 +70,45 @@ export function ShareSheet({
       return next;
     });
   };
+  const toggleGroup = (id: string) => {
+    haptic("light");
+    setSelectedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
+  const totalSelected = selected.size + selectedGroups.size;
   const postUrl = () => `${window.location.origin}/p/${postId}`;
 
+  // Bumps posts.shares_count via the existing whitelisted counter RPC — every
+  // OTHER "Share" entry point in the app already did this via its own bare
+  // navigator.share() fork; the rich sheet itself never did (confirmed: no
+  // event/counter call anywhere in its old copyLink/shareExternal/send), so
+  // unifying every surface onto this ONE sheet would have silently zeroed
+  // out share counting everywhere instead of fixing the fork. One bump per
+  // successful ACTION, not per recipient. `kind` also ledgers a share_events
+  // row (Part 6 tranche 3's Share Journey™ breakdown) for signed-in callers —
+  // omitted for the DM/group send() path below, which already writes its own
+  // properly-attributed row (with real recipient ids) server-side.
+  const bumpShareCounter = (kind?: "copy_link" | "os_share" | "email" | "sms") => {
+    fetch(`/api/posts/${postId}/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "share", kind }),
+    }).catch(() => {});
+  };
+
   const send = async () => {
-    if (selected.size === 0 || sending) return;
+    if (totalSelected === 0 || sending) return;
     setSending(true);
     try {
       const res = await fetch(`/api/posts/${postId}/share`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: [...selected], note: note.trim() || undefined }),
+        body: JSON.stringify({ to: [...selected], toGroups: [...selectedGroups], note: note.trim() || undefined }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -95,6 +116,10 @@ export function ShareSheet({
         return;
       }
       setSentCount(json.sent as number);
+      // Throttled by the graded antispam check (lib/social/share/antispam.ts)
+      // — still delivered (the recipients chose to receive it), but doesn't
+      // count toward the public shares total. See the route's own comment.
+      if (!json.throttled) bumpShareCounter();
       hapticPattern([10, 40, 10]);
       setTimeout(onClose, 950);
     } catch {
@@ -108,6 +133,7 @@ export function ShareSheet({
     try {
       await navigator.clipboard.writeText(postUrl());
       toast("Link copied successfully.", "success");
+      bumpShareCounter("copy_link");
       onClose();
     } catch {
       toast("Couldn't copy the link.", "error");
@@ -118,6 +144,7 @@ export function ShareSheet({
     try {
       if (navigator.share) {
         await navigator.share({ title: title || "Frenz", url: postUrl() });
+        bumpShareCounter("os_share");
         onClose();
       } else {
         await copyLink();
@@ -127,151 +154,166 @@ export function ShareSheet({
     }
   };
 
-  // Portaled to <body> — this sheet is `fixed inset-0`, and mounting it
-  // wherever the caller happens to sit (a feed card, a reel's action rail…)
-  // risks it inheriting an ancestor's `transform`/`overflow-hidden` (feed
-  // cards have both), which silently turns "fixed" into "clipped to that
-  // card's box" — the exact bug that cut the sheet off at the bottom.
-  if (!mounted) return null;
-  return createPortal(
-    <AnimatePresence>
-      {open ? (
-        <div className="fixed inset-0 z-[110]" role="dialog" aria-modal="true" aria-label="Share post">
-          {/* Backdrop */}
-          <motion.button
-            type="button"
-            aria-label="Close"
+  // Email / SMS — mailto:/sms: links need no new infra (the OS handles the
+  // actual send, same as it already does for shareExternal above); bare
+  // <a> navigation rather than window.location so a popup/tracking blocker
+  // can't silently swallow it.
+  const shareEmail = () => {
+    bumpShareCounter("email");
+    onClose();
+    const a = document.createElement("a");
+    a.href = `mailto:?subject=${encodeURIComponent(title || "Check this out on Frenz")}&body=${encodeURIComponent(postUrl())}`;
+    a.click();
+  };
+  const shareSms = () => {
+    bumpShareCounter("sms");
+    onClose();
+    const a = document.createElement("a");
+    // `?body=` (not `&body=`) is the form that works across both iOS and
+    // Android SMS handlers — the one genuinely cross-platform sms: shape.
+    a.href = `sms:?body=${encodeURIComponent(`${title ? `${title} ` : ""}${postUrl()}`)}`;
+    a.click();
+  };
+
+  return (
+    <GlassSheetShell
+      open={open}
+      onClose={onClose}
+      onOpen={loadDestinations}
+      title="Share"
+      defaultHeightVh={62}
+      overlay={
+        sentCount !== null ? (
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-black/55 backdrop-blur-sm"
-          />
-
-          {/* Sheet */}
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={springs.sheet}
-            className="glass-strong absolute inset-x-0 bottom-0 mx-auto max-h-[82dvh] w-full max-w-lg overflow-hidden rounded-t-3xl sm:bottom-6 sm:rounded-3xl"
-            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+            className="flex h-full flex-col items-center justify-center gap-3 bg-card"
           >
-            {/* Success overlay */}
-            <AnimatePresence>
-              {sentCount !== null ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-card"
-                >
-                  <motion.span
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: "spring", stiffness: 380, damping: 20 }}
-                    className="flex h-16 w-16 items-center justify-center rounded-full bg-brand text-white shadow-lg"
-                  >
-                    <Check className="h-8 w-8" strokeWidth={3} />
-                  </motion.span>
-                  <p className="text-sm font-semibold">
-                    Sent to {sentCount} {sentCount === 1 ? "person" : "people"}
-                  </p>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 pb-2 pt-4">
-              <h2 className="text-base font-bold tracking-tight">Share</h2>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-muted-foreground transition hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Search */}
-            <div className="px-5 pb-3">
-              <div className="flex items-center gap-2 rounded-2xl bg-secondary px-3.5 py-2.5">
-                <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <input
-                  ref={searchRef}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search people"
-                  aria-label="Search people"
-                  className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                />
-              </div>
-            </div>
-
-            {/* People */}
-            <div className="max-h-56 overflow-y-auto px-5 pb-2">
-              <PeoplePickerGrid
-                people={people}
-                query={query}
-                selected={selected}
-                onToggle={toggle}
-                emptyHint="Add friends to send posts privately."
-              />
-            </div>
-
-            {/* Note + Send (appears once someone is selected) */}
-            <AnimatePresence initial={false}>
-              {selected.size > 0 ? (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden border-t border-border/60"
-                >
-                  <div className="flex items-center gap-2 px-5 py-3">
-                    <input
-                      value={note}
-                      onChange={(e) => setNote(e.target.value.slice(0, 500))}
-                      placeholder="Write a message…"
-                      aria-label="Message"
-                      className="w-full rounded-2xl bg-secondary px-3.5 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
-                    />
-                    <button
-                      type="button"
-                      onClick={send}
-                      disabled={sending}
-                      className="bg-brand flex shrink-0 items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition active:scale-95 disabled:opacity-60"
-                    >
-                      <Send className="h-4 w-4" /> Send{selected.size > 1 ? ` · ${selected.size}` : ""}
-                    </button>
-                  </div>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-
-            {/* Other ways to share */}
-            <div className="grid grid-cols-3 gap-2 border-t border-border/60 px-5 py-4">
-              <SheetAction icon={Link2} label="Copy link" onClick={copyLink} />
-              <SheetAction icon={Share2} label="Share via…" onClick={shareExternal} />
-              {onRepost ? (
-                <SheetAction
-                  icon={Repeat2}
-                  label="Repost"
-                  onClick={() => {
-                    onClose();
-                    onRepost();
-                  }}
-                />
-              ) : (
-                <SheetAction icon={Copy} label="Copy link" onClick={copyLink} className="invisible" />
-              )}
-            </div>
+            <motion.span
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 380, damping: 20 }}
+              className="flex h-16 w-16 items-center justify-center rounded-full bg-brand text-white shadow-lg"
+            >
+              <Check className="h-8 w-8" strokeWidth={3} />
+            </motion.span>
+            <p className="text-sm font-semibold">
+              Sent to {sentCount} {sentCount === 1 ? "destination" : "destinations"}
+            </p>
           </motion.div>
+        ) : null
+      }
+    >
+      {/* Search */}
+      <div className="pb-3">
+        <div className="flex items-center gap-2 rounded-2xl bg-secondary px-3.5 py-2.5">
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <input
+            ref={searchRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search people and groups"
+            aria-label="Search people and groups"
+            className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+      </div>
+
+      {/* Groups — Part 6 fix: previously ShareSheet had no way to address a
+          group conversation at all (only 1:1), unlike reshare's picker. Own
+          small row rather than forcing group shapes through PeoplePickerGrid,
+          which CreateGroupSheet also reuses for a person-only picker. */}
+      {groups && groups.length > 0 ? (
+        <div className="mb-2 flex gap-3 overflow-x-auto pb-2">
+          {groups
+            .filter((g) => !query.trim() || g.title.toLowerCase().includes(query.trim().toLowerCase()))
+            .map((g) => {
+              const on = selectedGroups.has(g.id);
+              return (
+                <button key={g.id} type="button" onClick={() => toggleGroup(g.id)} aria-pressed={on} className="flex shrink-0 flex-col items-center gap-1.5">
+                  <span className={cn("relative rounded-full p-[2px] transition", on ? "bg-gradient-to-br from-blue-600 to-violet-600" : "bg-transparent")}>
+                    {g.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={g.avatarUrl} alt="" className="h-14 w-14 rounded-full object-cover ring-2 ring-card" />
+                    ) : (
+                      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white ring-2 ring-card">
+                        <Users className="h-6 w-6" />
+                      </span>
+                    )}
+                    {on ? (
+                      <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white ring-2 ring-card">
+                        <Check className="h-3 w-3" strokeWidth={3.5} />
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="max-w-[4.5rem] truncate text-[11px] font-medium text-muted-foreground">{g.title}</span>
+                </button>
+              );
+            })}
         </div>
       ) : null}
-    </AnimatePresence>,
-    document.body,
+
+      {/* People */}
+      <div className="max-h-56 overflow-y-auto pb-2">
+        <PeoplePickerGrid
+          people={people}
+          query={query}
+          selected={selected}
+          onToggle={toggle}
+          emptyHint="Add friends to send posts privately."
+        />
+      </div>
+
+      {/* Note + Send (appears once something is selected) */}
+      <AnimatePresence initial={false}>
+        {totalSelected > 0 ? (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-t border-border/60"
+          >
+            <div className="flex items-center gap-2 py-3">
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value.slice(0, 500))}
+                placeholder="Write a message…"
+                aria-label="Message"
+                className="w-full rounded-2xl bg-secondary px-3.5 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
+              />
+              <button
+                type="button"
+                onClick={send}
+                disabled={sending}
+                className="bg-brand flex shrink-0 items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition active:scale-95 disabled:opacity-60"
+              >
+                <Send className="h-4 w-4" /> Send{totalSelected > 1 ? ` · ${totalSelected}` : ""}
+              </button>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      {/* Other ways to share */}
+      <div className="grid grid-cols-3 gap-2 border-t border-border/60 py-4">
+        <SheetAction icon={Link2} label="Copy link" onClick={copyLink} />
+        <SheetAction icon={Share2} label="Share via…" onClick={shareExternal} />
+        <SheetAction icon={Mail} label="Email" onClick={shareEmail} />
+        <SheetAction icon={MessageSquareText} label="Text (SMS)" onClick={shareSms} />
+        {onQrCode ? <SheetAction icon={QrCode} label="QR code" onClick={() => { onClose(); onQrCode(); }} /> : null}
+        {onRepost ? (
+          <SheetAction
+            icon={Repeat2}
+            label="Repost"
+            onClick={() => {
+              onClose();
+              onRepost();
+            }}
+          />
+        ) : null}
+      </div>
+    </GlassSheetShell>
   );
 }
 

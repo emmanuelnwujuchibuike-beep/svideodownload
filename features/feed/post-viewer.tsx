@@ -27,6 +27,8 @@ import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
 import { Comments } from "@/features/social/comments";
 import { PostEditSheet } from "@/features/social/post-edit-sheet";
+import { ShareSheet } from "@/features/social/share-sheet";
+import { ShareQrSheet } from "@/features/social/share-qr-sheet";
 import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useLongPress } from "@/lib/hooks/use-long-press";
@@ -173,20 +175,12 @@ function ViewerInner({
     }
   };
 
-  const share = async () => {
-    const url = `${window.location.origin}/p/${item.id}`;
-    try {
-      if (navigator.share) await navigator.share({ title: item.title, url });
-      else await navigator.clipboard.writeText(url);
-    } catch {
-      /* cancelled */
-    }
-    fetch(`/api/posts/${item.id}/event`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "share" }),
-    }).catch(() => {});
-  };
+  // Part 6: the real Share sheet (DMs/groups + copy link + OS share + QR),
+  // replacing a bare navigator.share()/clipboard-copy fork — no repost
+  // mechanism exists in this viewer today, so `onRepost` is omitted.
+  const [shareOpen, setShareOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+  const share = () => setShareOpen(true);
 
   const toggleFollow = async () => {
     await toggleFollowShared(item.publisher.id, !following);
@@ -426,6 +420,9 @@ function ViewerInner({
           onDeleted={onClose}
         />
       ) : null}
+
+      <ShareSheet postId={item.id} title={title ?? undefined} open={shareOpen} onClose={() => setShareOpen(false)} onQrCode={() => setQrOpen(true)} />
+      <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} />
     </motion.div>
   );
 }

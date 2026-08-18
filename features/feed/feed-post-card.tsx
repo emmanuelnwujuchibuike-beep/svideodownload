@@ -397,6 +397,22 @@ function FeedPostCardImpl({
   */
   const engagementRow = (light: boolean) => (
     <div
+      /*
+        🔴 STOPS THE TAP-TO-OPEN GESTURE UNDERNEATH (owner: "interacting a
+        post that the engagement is overlayed on top of the post in feed
+        shouldn't open it on full"). Only matters for `light` (the overlay
+        case, on video/single-image) — FeedImage's own tap-to-expand gesture
+        listens on its OUTER container via onPointerDown/Move/Up, and this
+        row renders INSIDE that same container as `children`, so a pointer
+        interaction that starts on a Wow/Comment/Save button bubbled straight
+        up into the image's own gesture state machine, which had no idea it
+        wasn't a genuine tap on the photo itself. Stopping propagation right
+        here, before it leaves this row, is enough — each button's own
+        onClick still fires normally, since stopPropagation only blocks the
+        event from continuing PAST this point, not from reaching its actual
+        target.
+      */
+      onPointerDown={light ? (e) => e.stopPropagation() : undefined}
       className={cn(
         "flex items-center justify-between",
         light
@@ -404,7 +420,7 @@ function FeedPostCardImpl({
           : "mt-1 pb-1",
       )}
     >
-      <div className="flex items-center gap-1">
+      <div className={cn("flex min-w-0 items-center", light ? "gap-0.5" : "gap-1")}>
         <span className="relative inline-flex">
           <ActionButton
             active={liked}
@@ -996,7 +1012,7 @@ function ActionButton({
         transition={{ duration: 0.32, ease: [0.34, 1.4, 0.5, 1] }}
         className="inline-flex"
       >
-        <Icon className={cn("h-5 w-5", fill && "fill-current")} strokeWidth={2} />
+        <Icon className={cn(light ? "h-4 w-4" : "h-5 w-5", fill && "fill-current")} strokeWidth={2} />
       </motion.span>
       {count !== undefined && count > 0 ? (
         <AnimatedCount value={count} className={cn("text-xs font-semibold tabular-nums", light && "drop-shadow-sm")} />
@@ -1005,8 +1021,20 @@ function ActionButton({
   );
   // Muted by default, brand-colored only when active (spec section 11) — was
   // `text-foreground` at rest, full contrast even for an untouched icon.
+  //
+  // 🔴 TIGHTER PADDING/GAP WHEN `light` (owner: "long videos crop off the
+  // save button... falling off the post card"). This row sits on top of the
+  // media itself, and a tall/portrait clip's rendered WIDTH can be narrower
+  // than the row's natural minimum width at the original `px-2.5 py-2` — the
+  // flex row (Wow/Comment/Repost/Send on the left, Save pushed to the far
+  // right via `justify-between`) had nowhere to shrink, so Save overflowed
+  // past the media box and got clipped by its `overflow-hidden`. Smaller
+  // icons (h-4 vs h-5) above plus tighter padding/gap here meaningfully
+  // lowers that minimum width; the below-content row (`!light`, always full
+  // card width) is untouched since it never hits this narrow-container case.
   const cls = cn(
-    "group/act inline-flex items-center gap-1.5 rounded-full px-2.5 py-2 transition-colors active:scale-95",
+    "group/act inline-flex shrink-0 items-center rounded-full transition-colors active:scale-95",
+    light ? "gap-1 px-1.5 py-1.5" : "gap-1.5 px-2.5 py-2",
     light
       ? "text-white/90 drop-shadow-sm hover:bg-white/15 hover:text-white"
       : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground",

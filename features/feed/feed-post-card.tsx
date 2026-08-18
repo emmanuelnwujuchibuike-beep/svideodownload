@@ -29,7 +29,6 @@ import {
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
 import { memo, useEffect, useRef, useState } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
@@ -193,21 +192,25 @@ function FeedPostCardImpl({
   };
 
   /*
-    ── Guest gate (2026-08-18, guest feed access) ──────────────────────────────
+    ── Guest gate (2026-08-18, guest feed access; softened 2026-08-18) ─────────
     This card now also renders for signed-out visitors (the new guest-
     accessible /feed route — "watch feed but can't interact"). `useEntitlements`
     is already memoized app-wide, so this costs nothing extra when a signed-in
     viewer's identity was already resolved elsewhere on the page.
     `identityReady` guards against a false "signed out" reading before the
     (synchronous, cookie-based) check has actually resolved.
+
+    🔴 NO LONGER REDIRECTS (owner, 2026-08-18: "interaction from guest in the
+    feed and reels shouldn't lead to sign in page, rather it just interact and
+    goes out"). A tap that used to bounce a guest straight to /login now just
+    stays put with a toast — callers that have a safe, non-persisted local
+    flourish (the Wow burst) still play it; this only gates the part that
+    would otherwise hit the server as an unauthenticated request.
   */
-  const router = useRouter();
-  const pathname = usePathname();
   const { handle: viewerHandle, ready: identityReady } = useEntitlements();
   const requireAuth = (): boolean => {
     if (identityReady && !viewerHandle) {
       toast("Sign in to like, comment and share.", "info", { duration: 2500 });
-      router.push(`/login?next=${encodeURIComponent(pathname)}`);
       return false;
     }
     return true;
@@ -395,11 +398,11 @@ function FeedPostCardImpl({
           <ActionButton
             active={liked}
             onClick={(e) => {
-              // Checked before the floating-heart plays — a guest tap must
-              // never show the "liked" animation for a like that's about to
-              // be blocked and redirected.
-              if (!requireAuth()) return;
+              // The burst plays regardless of auth — a guest tap "just
+              // interacts" (owner, 2026-08-18); requireAuth only gates the
+              // part that would otherwise persist to the server unsigned.
               if (!liked) floatReaction(e.clientX, e.clientY);
+              if (!requireAuth()) return;
               void react("like");
             }}
             icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}

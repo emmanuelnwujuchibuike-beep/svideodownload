@@ -139,6 +139,7 @@ import { streamHlsUrl, streamThumbnailUrl } from "@/lib/media/stream";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import type { RepostAudience } from "@/lib/social/repost/audience";
 import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
@@ -817,6 +818,19 @@ function ReelCard({
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
   const following = useFollowState(item.publisher.id, item.isFollowing);
+  /*
+    🔴 GUEST INTERACTIONS ARE LOCAL-ONLY, NEVER A REDIRECT (owner, 2026-08-18:
+    "interaction from guest in the feed and reels shouldn't lead to sign in
+    page, rather it just interact and goes out"). This viewer never gated
+    itself on identity — a guest's tap already optimistically flipped Wow/Save
+    on, then silently reverted a beat later once the unauthenticated request
+    404/401'd, which reads as the button "not working" rather than a deliberate
+    choice. `viewerHandle` lets `react`/`reactWithEmotion` below skip the
+    network call entirely for a guest, so the local flip is the whole story —
+    no flicker, no navigation, nothing sent to the server that was never
+    going to be accepted.
+  */
+  const { handle: viewerHandle } = useEntitlements();
   const [likes, setLikes] = useState(item.likesCount);
   const [showComments, setShowComments] = useState(false);
   const [sheetVideoPaused, setSheetVideoPaused] = useState(false);
@@ -1192,6 +1206,7 @@ function ReelCard({
       setLikes((n) => n + (next ? 1 : -1));
       if (!next) setMyEmotion(null);
     } else setSaved(next);
+    if (!viewerHandle) return; // guest — the local flip is the whole interaction
     try {
       const res = await fetch(`/api/posts/${item.id}/react`, {
         method: next ? "POST" : "DELETE",
@@ -1214,6 +1229,7 @@ function ReelCard({
     setLiked(true);
     if (!wasLiked) setLikes((n) => n + 1);
     setMyEmotion(emotion);
+    if (!viewerHandle) return; // guest — the local flip is the whole interaction
     try {
       const res = await fetch(`/api/posts/${item.id}/react`, {
         method: "POST",
@@ -1242,6 +1258,13 @@ function ReelCard({
   };
 
   const toggleFollow = async () => {
+    // Following persists a real relationship — unlike Wow/Save there's no
+    // honest local-only version of it, so a guest gets a toast instead
+    // (never a redirect — same rule as everywhere else in this viewer).
+    if (!viewerHandle) {
+      toast("Sign in to follow creators.", "info", { duration: 2500 });
+      return;
+    }
     // Shared store keeps this in sync with the feed card + every other reel.
     await toggleFollowShared(item.publisher.id, !following);
   };

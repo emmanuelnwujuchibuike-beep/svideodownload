@@ -360,15 +360,19 @@ export function FeedVideo({
       // reversal note — `ratio` itself is the media's true, unclamped shape).
       style={{ aspectRatio: ratio ?? 4 / 5 }}
       className={cn(
-        // `mx-auto` + its own `rounded-2xl`: once the max-h cap narrows this
-        // box below the card's full width, it needs to center itself and carry
-        // its own rounded corners — the outer wrapper's rounding only reaches
-        // the card's own edges, which this box no longer touches in that case
-        // (owner, 2026-08-17: "there are still black side background… the
-        // single videos still stretch a lot" — a forced `w-full` on the caller
-        // side used to fight this box's own aspect-ratio/max-h sizing; fixed by
-        // dropping that override, see feed-post-card.tsx).
-        "group relative mx-auto overflow-hidden rounded-2xl bg-black",
+        // 🔴 NO `mx-auto` (owner, 2026-08-18: the widened video "only adjusted
+        // to the middle... it should still remain at padding right of at least
+        // 2 and not centered... just expand the right side... so it balance
+        // like images are"). Now that the wrapper spans the card's true full
+        // width (see feed-post-card.tsx's own breakout note), centering a
+        // max-h-narrowed box within that wider span pulled it toward the
+        // card's center — visibly off from where the avatar/caption above it
+        // sit. A plain block box with an explicit (max-h-derived) width is
+        // LEFT-aligned by default with no margin rule at all, so removing
+        // `mx-auto` is the whole fix: any slack from the aspect-ratio/max-h
+        // math now lands on the right only, the same side images already
+        // balance toward, never split evenly on both sides.
+        "group relative overflow-hidden rounded-2xl bg-black",
         // Twitter-style: full width, the media's OWN true aspect ratio — a
         // HEIGHT ceiling, never a ratio clamp, so it can't disagree with the
         // clip's true shape (no letterboxing/cropping). A same-day tightening
@@ -386,7 +390,7 @@ export function FeedVideo({
         // shorter without losing an inch of width; the space this removes
         // from the top/bottom is picked up by the blurred backdrop below,
         // same as any other letterboxed shape.
-        "max-h-[60vh] lg:flex lg:!aspect-auto lg:max-h-[60vh] lg:items-center lg:justify-center",
+        "max-h-[60vh] lg:flex lg:!aspect-auto lg:max-h-[60vh] lg:items-center lg:justify-start",
         className,
       )}
     >
@@ -529,7 +533,14 @@ export function FeedVideo({
 
       {/* Expand — the same fullscreen reel a tap on the clip itself opens
           (owner spec: one consistent "zoom" behavior, not a second,
-          separate in-place fullscreen mode). */}
+          separate in-place fullscreen mode).
+
+          🔴 MOVED TO THE TOP, under Mute (owner, 2026-08-18: "the full screen
+          icon on the feed card is clashing with the engagement"). The bottom
+          edge is now the blended engagement row's own territory (see
+          feed-post-card.tsx's engagementRow) — bottom-right is exactly where
+          Save used to sit. Stacked directly under Mute rather than beside it
+          so neither corner gets crowded. */}
       <button
         type="button"
         onClick={(e) => {
@@ -537,29 +548,51 @@ export function FeedVideo({
           onExpand?.();
         }}
         aria-label="Open in fullscreen"
-        className="absolute bottom-2.5 right-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+        className="absolute right-2.5 top-[3.25rem] z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
       >
         <Maximize2 className="h-4 w-4" />
       </button>
 
-      {/* Hint */}
-      <span className="pointer-events-none absolute bottom-2 left-2.5 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 opacity-0 backdrop-blur transition-opacity duration-200 group-hover:opacity-100">
-        Double-tap to Wow
-      </span>
+      {/*
+        Double-tap Wow burst — centered (same reliable pattern as the paused
+        indicator above), not tap-position-tracked.
 
-      {/* Double-tap Wow burst — centered (same reliable pattern as the
-          paused indicator above), not tap-position-tracked. */}
+        🔴 BIGGER, "3D", FLOATING UP (owner, 2026-08-18: "make the wow
+        animation be bigger and realistic... floating out of the phone... to
+        the top safe area"). A bigger peak scale (1.7 vs. the previous 1.5),
+        a rise toward the top of the box (percentage-based `y`, so it scales
+        with the video's own height instead of a fixed px value), and a
+        small rotate + a shadow that deepens as it lifts — the standard
+        "elevation" trick for a sense of depth without real CSS 3D transforms
+        (`rotateX`/perspective), which are more prone to looking janky and
+        heavier to composite on a low-end phone. Percentage `y` also means it
+        never needs to escape this box's own `overflow-hidden` — it's fully
+        faded well before reaching the top edge, so nothing gets a visible
+        hard clip.
+
+        Performance: transform (scale/y/rotate) + opacity only — no
+        layout-triggering properties. Accessibility: purely decorative
+        (`pointer-events-none`, no text), and reduced-motion is already
+        handled globally — the (app) layout's `MotionConfig
+        reducedMotion="user"` collapses every transform here to instant under
+        the OS setting, leaving only the opacity fade.
+      */}
       <AnimatePresence>
         {burst > 0 ? (
           <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
             <motion.span
               key={burst}
-              initial={{ opacity: 0, scale: 0.4 }}
-              animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.3, 1.1, 1.5] }}
-              transition={{ duration: 0.9, ease: "easeOut", times: [0, 0.2, 0.6, 1] }}
-              className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
+              initial={{ opacity: 0, scale: 0.3, y: "0%", rotate: -10 }}
+              animate={{
+                opacity: [0, 1, 1, 0],
+                scale: [0.3, 1.7, 1.5, 1.3],
+                y: ["0%", "-8%", "-50%", "-92%"],
+                rotate: [-10, 6, -3, 0],
+              }}
+              transition={{ duration: 1.15, ease: [0.16, 1, 0.3, 1], times: [0, 0.2, 0.65, 1] }}
+              className="drop-shadow-[0_20px_36px_rgba(0,0,0,0.55)]"
             >
-              <WowSolid className="h-20 w-20" />
+              <WowSolid className="h-28 w-28" />
             </motion.span>
           </span>
         ) : null}

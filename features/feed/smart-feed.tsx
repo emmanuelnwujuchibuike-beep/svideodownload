@@ -451,11 +451,25 @@ export function SmartFeed({
   // which is fine — `changeSegment` reads the current `sort` via this same
   // closure, so it's never stale between sort changes. Cleared on unmount so
   // every other page's topbar search bar is untouched.
+  //
+  // 🔴 ALSO cleared while the in-place Reels overlay is open (owner,
+  // 2026-08-18: "this NAV is glitching, when I click on feed while in the
+  // reels page it doesn't move, but when I click on following it just
+  // brings me to feed"). `openReelsInPlace` sets `reel` without touching
+  // `sort`, so this effect never re-ran and `FeedTopbarTabs` (For You /
+  // Following / Reels) stayed mounted and tappable in the topbar, sitting
+  // directly under ReelsFeed's OWN `ReelTabs` (For You / Following / Feed) —
+  // two different controls, two different meanings for "Following", fighting
+  // over the same taps. Only one can own this screen region at a time.
   useEffect(() => {
+    if (reel) {
+      setTopbarCenter(null);
+      return;
+    }
     setTopbarCenter(<FeedTopbarTabs sort={sort} onSegment={onSegment} />);
     return () => setTopbarCenter(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort]);
+  }, [sort, !!reel]);
 
   // Restores the scroll position saved for a tab, once its content has
   // actually rendered (so the page is tall enough to scroll to it). Guarded so

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Headset, History, Rows3 } from "lucide-react";
+import { Headset, History, Newspaper } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -364,7 +364,7 @@ export function MobileNav() {
             {handle ? (
               <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={(href) => { router.prefetch(href); warmReels(); }} />
             ) : (
-              <NavTab label="Feed" href="/feed" icon={Rows3} activeIcon={Rows3} active={pathname.startsWith("/feed")} onWarm={router.prefetch} />
+              <NavTab label="Feed" href="/feed" icon={Newspaper} activeIcon={Newspaper} active={pathname.startsWith("/feed")} onWarm={router.prefetch} />
             )}
             <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
             <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />

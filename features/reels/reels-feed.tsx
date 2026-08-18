@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BrandLoader } from "@/features/app-shell/brand-loader";
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import { ReelDeck } from "@/features/feed/reel-viewer";
 import { ReelTabs } from "@/features/reels/viewer/reel-tabs";
 import { getApi } from "@/lib/sdk/browser";
@@ -94,6 +95,7 @@ export function ReelsFeed({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { handle: viewerHandle } = useEntitlements();
   // Deep-linked from a "Comment" tap (?start=<id>&comments=1) OR passed directly.
   const autoOpenCommentsId = commentsId ?? (searchParams.get("comments") === "1" ? searchParams.get("start") : null);
   // Overlay use closes via state; the /reels route goes back (instant, cached) or
@@ -484,20 +486,45 @@ export function ReelsFeed({
           <BrandLoader size={60} delayMs={0} overlay={false} />
         </div>
       ) : items.length === 0 ? (
-        <div className="flex min-h-[80vh] flex-col items-center justify-center px-6 text-center">
-          <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-secondary text-muted-foreground">
-            <Clapperboard className="h-6 w-6" />
-          </span>
-          <p className="font-semibold">{tab === "following" ? "No reels from people you follow" : "No reels yet"}</p>
-          <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-            {tab === "following"
-              ? "Follow more creators to fill your Following reels."
-              : "Follow creators or publish a video to see reels here."}
-          </p>
-          <Link href="/explore" className="mt-4 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow-md brand-glow">
-            Discover creators
-          </Link>
-        </div>
+        /*
+          🔴 Following, signed OUT (owner, 2026-08-18: "the follow in guess is
+          supposed to show you don't follow any creator, sign to follow
+          creator page"). A guest's Following tab is empty for a different
+          reason than a signed-in viewer's — there is no account to have
+          followed anyone with — so it gets its own copy and a sign-in CTA
+          instead of "Discover creators", which would only lead to the same
+          dead end (following someone still needs an account).
+        */
+        tab === "following" && !viewerHandle ? (
+          <div className="flex min-h-[80vh] flex-col items-center justify-center px-6 text-center">
+            <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-secondary text-muted-foreground">
+              <Clapperboard className="h-6 w-6" />
+            </span>
+            <p className="font-semibold">You don't follow any creators</p>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">Sign in to follow creators and see their reels here.</p>
+            <Link
+              href={`/login?next=${encodeURIComponent("/reels")}`}
+              className="mt-4 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow-md brand-glow"
+            >
+              Sign in to follow creators
+            </Link>
+          </div>
+        ) : (
+          <div className="flex min-h-[80vh] flex-col items-center justify-center px-6 text-center">
+            <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-secondary text-muted-foreground">
+              <Clapperboard className="h-6 w-6" />
+            </span>
+            <p className="font-semibold">{tab === "following" ? "No reels from people you follow" : "No reels yet"}</p>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+              {tab === "following"
+                ? "Follow more creators to fill your Following reels."
+                : "Follow creators or publish a video to see reels here."}
+            </p>
+            <Link href="/explore" className="mt-4 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow-md brand-glow">
+              Discover creators
+            </Link>
+          </div>
+        )
       ) : (
         /* The two tabs SLIDE past each other (owner spec: smooth switching,
            never a reload or jump) — pure transform/opacity, GPU-composited.

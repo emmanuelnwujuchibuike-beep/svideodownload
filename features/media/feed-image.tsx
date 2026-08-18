@@ -274,11 +274,6 @@ export function FeedImage({
         ) : null}
       </AnimatePresence>
 
-      {/* Wow hint */}
-      <span className={cn("pointer-events-none absolute bottom-2 left-2.5 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur", liked && "hidden")}>
-        Double-tap to Wow
-      </span>
-
       {children}
     </div>
   );

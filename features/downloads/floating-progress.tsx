@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Minus,
+  Newspaper,
   Play,
   RotateCcw,
   Share,
@@ -806,21 +807,28 @@ export function FloatingDownloadProgress({
                     >
                       <ImageIcon className="h-[18px] w-[18px] text-white" strokeWidth={2.25} />
                     </WaitTile>
+                    {/*
+                      🔴 "Watch reels" → "Explore feed" (owner, 2026-08-18:
+                      "Replace the watch reels buttons here... explore feed" +
+                      "change the icon here too"). Same reasoning as every
+                      other guest entry point swapped this session: Feed is
+                      the broad, no-description-needed destination that works
+                      whether or not you're signed in, while Reels stays one
+                      tap away FROM Feed for whoever wants it. The icon moves
+                      with the destination — Newspaper, not a video/play
+                      glyph, matching the swap already made on the bottom nav
+                      and the Reels tab tray.
+                    */}
                     <WaitTile
-                      href="/reels"
-                      title="Watch reels"
-                      sub="Discover trending videos and more"
+                      href="/feed"
+                      title="Explore feed"
+                      sub="Discover trending posts and more"
                       tone="blue"
                       delayed
                       onNavigate={() => setMinimised(true)}
                     >
-                      {/* The reference draws a WHITE rounded plate with the play
-                          triangle knocked out in the tile's own colour — not a
-                          white outline glyph. Rebuilt as exactly that, so the
-                          reels disc reads as a video badge rather than as a
-                          second image icon. */}
                       <span className="flex h-[18px] w-[22px] items-center justify-center rounded-[5px] bg-white">
-                        <Play className="h-2.5 w-2.5 fill-blue-600 text-blue-600" />
+                        <Newspaper className="h-2.5 w-2.5 text-blue-600" strokeWidth={2.5} />
                       </span>
                     </WaitTile>
                   </div>

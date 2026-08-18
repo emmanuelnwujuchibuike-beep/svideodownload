@@ -10,7 +10,7 @@ import { clampFeedRatio } from "@/lib/media/aspect";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
-import { claimPlayback, recentlyScrolled, recordView, releasePlayback } from "@/lib/media/video-coordinator";
+import { claimPlayback, isSuspended, recentlyScrolled, recordView, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
 
 // A tap only counts if the pointer barely moved AND the page isn't mid-scroll.
@@ -142,7 +142,7 @@ export function FeedVideo({
 
   const playIfReady = useCallback(() => {
     const v = video.current;
-    if (v && inViewRef.current && readyRef.current && !userPaused.current) v.play().catch(() => {});
+    if (v && inViewRef.current && readyRef.current && !userPaused.current && !isSuspended()) v.play().catch(() => {});
   }, []);
   const onSrcReady = useCallback(() => {
     readyRef.current = true;
@@ -186,6 +186,47 @@ export function FeedVideo({
       releasePlayback(v);
     };
   }, [iframeMode, playIfReady, postId]);
+
+  /*
+    🔴 The Stream-iframe fallback (no HLS customer code configured, so there's
+    no `<video>` for the coordinator to reach) used to render with
+    `autoplay=true` UNCONDITIONALLY the moment it mounted — no IntersectionObserver
+    at all, so it kept playing regardless of scroll position, and had no way to
+    stop for another claim. On any feed with several Stream-backed posts and no
+    customer code, that meant every one of them autoplaying at once, permanently
+    — the exact "multiple videos playing simultaneously" bug, just with no
+    `<video>` element making it visible to `document.querySelectorAll("video")`.
+
+    Same 40%-visible threshold as the native path, and the same coordinator
+    claim via a lightweight handle whose `pause()` just drops `iframeInView` —
+    changing the iframe's `src` (dropping `autoplay=true`) is the only way to
+    actually stop a cross-origin player.
+  */
+  const [iframeInView, setIframeInView] = useState(false);
+  useEffect(() => {
+    if (!iframeMode) return;
+    const el = wrap.current;
+    if (!el) return;
+    const handle = { pause: () => setIframeInView(false) };
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry) return;
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.4 && !isSuspended()) {
+          claimPlayback(handle);
+          setIframeInView(true);
+        } else {
+          releasePlayback(handle);
+          setIframeInView(false);
+        }
+      },
+      { threshold: [0, 0.4, 1], rootMargin: "200px 0px" },
+    );
+    obs.observe(el);
+    return () => {
+      obs.disconnect();
+      releasePlayback(handle);
+    };
+  }, [iframeMode]);
 
   // Clear pending timers on unmount (no leaks during long scroll sessions).
   useEffect(
@@ -289,14 +330,19 @@ export function FeedVideo({
   if (iframeMode) {
     return (
       <div ref={wrap} className={cn("relative overflow-hidden bg-black", className)}>
-        <iframe
-          src={`${streamIframeUrl(streamUid!)}?autoplay=true&muted=true&loop=true`}
-          title="Video"
-          loading="lazy"
-          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-          allowFullScreen
-          className="pointer-events-none h-full w-full border-0"
-        />
+        {iframeInView ? (
+          <iframe
+            src={`${streamIframeUrl(streamUid!)}?autoplay=true&muted=true&loop=true`}
+            title="Video"
+            loading="lazy"
+            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+            allowFullScreen
+            className="pointer-events-none h-full w-full border-0"
+          />
+        ) : poster && !posterBroken ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full object-contain" onError={() => setPosterBroken(true)} />
+        ) : null}
         <button type="button" onClick={() => onExpand?.()} aria-label="Watch" className="absolute inset-0" />
         {children}
       </div>

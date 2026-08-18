@@ -8,6 +8,7 @@ import { WowSolid } from "@/components/brand/wow-icon";
 import { FadeImage } from "@/features/ui/fade-image";
 import { useTapOrDoubleTap } from "@/lib/hooks/use-tap-or-double-tap";
 import { prefetchImage } from "@/lib/media/prefetch-image";
+import { claimPlayback, isSuspended, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
 
 export interface CarouselMedia {
@@ -391,7 +392,7 @@ function CarouselVideo({
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (!entry) return;
-        if (entry.isIntersecting) v.play().catch(() => {});
+        if (entry.isIntersecting && !isSuspended()) v.play().catch(() => {});
         else v.pause();
       },
       { threshold: 0.55 },
@@ -400,6 +401,7 @@ function CarouselVideo({
     return () => {
       obs.disconnect();
       v.pause();
+      releasePlayback(v);
     };
   }, []);
   return (
@@ -425,6 +427,8 @@ function CarouselVideo({
         playsInline
         preload="metadata"
         className="h-full w-full object-contain"
+        onPlay={(e) => claimPlayback(e.currentTarget)}
+        onPause={(e) => releasePlayback(e.currentTarget)}
       />
     </div>
   );

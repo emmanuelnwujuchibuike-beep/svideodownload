@@ -5,22 +5,69 @@
  * player starts, it "claims" playback and the previously-playing element is
  * paused. This keeps the feed calm (no wall of simultaneously-playing clips) and
  * saves bandwidth/CPU on mobile.
+ *
+ * `Claimable` rather than `HTMLMediaElement` so a Cloudflare Stream iframe (no
+ * reachable `<video>` element to call `.pause()` on across the origin boundary)
+ * can register a callback-backed handle and participate in the same mutual
+ * exclusion as a real element — see smart-video.tsx / feed-video.tsx's
+ * `iframeMode`.
  */
-let active: HTMLMediaElement | null = null;
+export interface Claimable {
+  pause(): void;
+  play?(): void | Promise<void>;
+  readonly paused?: boolean;
+}
 
-export function claimPlayback(el: HTMLMediaElement): void {
-  if (active && active !== el) {
+let active: Claimable | null = null;
+
+export function claimPlayback(handle: Claimable): void {
+  if (active && active !== handle) {
     try {
       active.pause();
     } catch {
-      /* element may be gone */
+      /* element/handle may be gone */
     }
   }
-  active = el;
+  active = handle;
 }
 
-export function releasePlayback(el: HTMLMediaElement): void {
-  if (active === el) active = null;
+export function releasePlayback(handle: Claimable): void {
+  if (active === handle) active = null;
+}
+
+/**
+ * Occlusion gate: a full-screen surface mounted OVER the feed/reels (the post
+ * viewer, image viewer, reel deck) calls this on mount and releases it on
+ * unmount. It immediately pauses whatever was playing underneath, and — while
+ * held — tells the still-mounted feed's own visibility-driven autoplay to stay
+ * quiet, even though its IntersectionObserver still geometrically sees itself
+ * as "in view" (IO has no concept of z-index/occlusion, and the feed is never
+ * unmounted under these surfaces, only covered — see smart-feed.tsx).
+ *
+ * Reference-counted so two overlays opening in quick succession (a viewer
+ * launching a second sheet) can't have the first one's cleanup re-arm the feed
+ * while the second is still open.
+ */
+let suspendCount = 0;
+export function suspendPlayback(): () => void {
+  suspendCount += 1;
+  if (active) {
+    try {
+      active.pause();
+    } catch {
+      /* gone */
+    }
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    suspendCount = Math.max(0, suspendCount - 1);
+  };
+}
+
+export function isSuspended(): boolean {
+  return suspendCount > 0;
 }
 
 /**
@@ -34,17 +81,25 @@ if (typeof document !== "undefined") {
     "visibilitychange",
     () => {
       if (document.hidden) {
-        if (active && !active.paused) {
-          resumeOnReturn = true;
+        if (active) {
+          // A handle without a real `.paused` (an iframe callback) can't tell
+          // us whether it was actually playing — assume it was rather than
+          // skip the resume-on-return, since pausing an already-paused thing
+          // is harmless either way.
+          resumeOnReturn = active.paused !== true;
           try {
             active.pause();
           } catch {
             /* gone */
           }
         }
-      } else if (resumeOnReturn && active) {
+      } else if (resumeOnReturn && active && !isSuspended()) {
         resumeOnReturn = false;
-        void active.play().catch(() => {});
+        try {
+          void active.play?.()?.catch?.(() => {});
+        } catch {
+          /* gone */
+        }
       }
     },
     { passive: true },
@@ -86,4 +141,31 @@ export function recordView(postId: string): void {
   } catch {
     /* best-effort */
   }
+}
+
+/**
+ * Dev-only safety net (never runs in production): periodically scans every
+ * `<video>` in the document and, if more than one is genuinely playing at
+ * once, pauses every one except whichever the coordinator currently considers
+ * `active` — logging so the offending component gets fixed rather than
+ * silently tolerated. This catches a FUTURE component that plays a `<video>`
+ * without ever calling `claimPlayback`, which is exactly the class of bug that
+ * caused the original "two videos at once" report (some render paths never
+ * called into this module at all).
+ */
+if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
+  window.setInterval(() => {
+    const playing = Array.from(document.querySelectorAll("video")).filter((v) => !v.paused && !v.ended);
+    if (playing.length <= 1) return;
+    const keep = (active as HTMLMediaElement | null) ?? playing[0]!;
+    for (const v of playing) {
+      if (v === keep) continue;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[video-coordinator] more than one <video> is playing at once — this element never called claimPlayback():",
+        v,
+      );
+      v.pause();
+    }
+  }, 2000);
 }

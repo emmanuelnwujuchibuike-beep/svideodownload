@@ -30,7 +30,7 @@ import {
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
@@ -55,6 +55,7 @@ const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").
 const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
 import { downloadPost } from "@/lib/media/download-post";
 import { clampFeedRatio, isReelsShaped } from "@/lib/media/aspect";
+import { claimPlayback, releasePlayback, suspendPlayback } from "@/lib/media/video-coordinator";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
@@ -121,6 +122,20 @@ function ImageStage({
   onClose: () => void;
 }) {
   const src = item.mediaUrl || item.thumbnailUrl || "";
+  // This viewer mounts ON TOP of the still-mounted feed (which is only
+  // covered, never unmounted, behind it) — its own IntersectionObserver still
+  // geometrically sees itself "in view" and would otherwise stay eligible to
+  // resume. Suspending the whole session immediately pauses whatever was
+  // playing underneath and keeps the feed quiet for as long as this is open.
+  //
+  // A LAYOUT effect, not a passive one: layout effects for the whole tree
+  // complete before ANY passive effect runs, so this is guaranteed to pause
+  // the outgoing feed video before AlbumSwipe's own (passive) autoplay effect
+  // below gets a chance to claim playback for the newly-opened slide — a
+  // plain useEffect here raced the two and could pause this viewer's own
+  // video moments after it started, since child effects run before a
+  // parent's.
+  useLayoutEffect(() => suspendPlayback(), []);
   // An album (>1 item) swipes through every photo/video right here in
   // fullscreen, opening on the EXACT slide that was tapped.
   const albumItems = item.mediaItems && item.mediaItems.length > 1 ? item.mediaItems : null;
@@ -978,6 +993,8 @@ function AlbumSwipe({
                         if (v.videoWidth && v.videoHeight) onMediaMeasured(i, v.videoWidth, v.videoHeight);
                       }}
                       className={fitClassName}
+                      onPlay={(e) => claimPlayback(e.currentTarget)}
+                      onPause={(e) => releasePlayback(e.currentTarget)}
                       ref={(el) => {
                         if (!el) return;
                         // Autoplay only while this slide is the active one.

@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 
+import { claimPlayback, releasePlayback } from "@/lib/media/video-coordinator";
 import { streamIframeUrl } from "@/lib/media/stream";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +75,8 @@ export function SmartVideo({
       // `className`, same pattern as `reel-viewer.tsx`'s own native path.
       style={style}
       className={cn("h-full w-full object-contain", className)}
+      onPlay={(e) => claimPlayback(e.currentTarget)}
+      onPause={(e) => releasePlayback(e.currentTarget)}
     />
   );
 }

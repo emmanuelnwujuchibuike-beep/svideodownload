@@ -19,7 +19,7 @@ import {
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { MediaCarousel } from "@/features/media/media-carousel";
@@ -31,6 +31,7 @@ import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } 
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { downloadPost } from "@/lib/media/download-post";
+import { suspendPlayback } from "@/lib/media/video-coordinator";
 import type { CommentNode } from "@/lib/social/engagement";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import type { FeedItem } from "@/lib/social/home-feed";
@@ -86,6 +87,17 @@ function ViewerInner({
   startWithComments: boolean;
   onClose: () => void;
 }) {
+  // This viewer opens ON TOP of the still-mounted feed (only covered, never
+  // unmounted) — suspend it immediately so whatever was playing underneath
+  // pauses and can't resume while this is open.
+  //
+  // A LAYOUT effect: layout effects for the whole tree complete before any
+  // passive effect runs, so this always pauses the outgoing feed video before
+  // this viewer's own SmartVideo/MediaCarousel autoplay (a passive effect,
+  // which — being a child — would otherwise fire first) can claim playback,
+  // avoiding a race where this viewer's own just-started video gets paused
+  // moments after it started.
+  useLayoutEffect(() => suspendPlayback(), []);
   const { isPremium } = useEntitlements();
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);

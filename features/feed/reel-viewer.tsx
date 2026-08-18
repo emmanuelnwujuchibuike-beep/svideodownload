@@ -50,7 +50,7 @@ import { VerifiedTick } from "@/components/badges/identity-badges";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 /* ── Feature 15, Part 1 — the premium viewer layer ──────────────────────────
@@ -124,7 +124,7 @@ const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { RepostBurst } from "@/features/social/repost-burst";
-import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
+import { claimPlayback, recordView, releasePlayback, suspendPlayback } from "@/lib/media/video-coordinator";
 import { toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
@@ -369,6 +369,20 @@ export function ReelDeck({
    *  position per tab so returning to it resumes exactly where you left off. */
   onActiveIndexChange?: (index: number) => void;
 }) {
+  // "modal" opens ON TOP of the still-mounted feed (only covered, never
+  // unmounted — see smart-feed.tsx); this immediately pauses whatever was
+  // playing underneath and keeps it from resuming while the deck is open.
+  // Harmless on the standalone "page" variant, where there's nothing
+  // underneath to protect. Doesn't affect this deck's OWN active-reel
+  // playback below, which never checks the suspend flag.
+  //
+  // A LAYOUT effect: layout effects for the whole tree complete before any
+  // passive effect runs, so this always pauses the outgoing feed video before
+  // a ReelCard child's own (passive) autoplay effect can claim playback for
+  // the newly-active reel — a plain useEffect raced the two, since child
+  // effects fire before a parent's, and could pause this deck's own
+  // just-started video moments after it started.
+  useLayoutEffect(() => suspendPlayback(), []);
   const scroller = useRef<HTMLDivElement | null>(null);
   const raf = useRef<number | null>(null);
   const start = Math.min(Math.max(0, startIndex), items.length - 1);

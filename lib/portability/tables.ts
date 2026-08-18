@@ -74,6 +74,7 @@ export const NOT_EXPORTED: Record<string, string> = {
     people's actions to you in a form they never agreed to.
   */
   post_views: "Who viewed your posts. Exporting it would identify other people's browsing.",
+  sound_plays: "Who played your sounds. Same reasoning as post_views — the total is already exported through sounds.plays_count.",
   post_guest_likes: "Anonymous likes on your posts. There is no identity to return.",
   profile_view_stats: "Aggregate view counts, not a list of viewers.",
   profile_discovery_stats: "Aggregate discovery counts.",
@@ -122,6 +123,7 @@ export const OWNER_COLUMN: Record<string, string> = {
   // entitled to a record of what THEY shared, not a list of everyone who
   // shared their own posts (that stays a count, via posts.shares_count).
   share_events: "sharer_id",
+  sounds: "created_by",
   stories: "user_id",
   // follower_id = accounts you chose to follow. The other side is exported
   // separately as `followers`, see FOLLOW_MIRROR.

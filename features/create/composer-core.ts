@@ -215,11 +215,14 @@ export async function publishComposition({
   items,
   caption,
   destination,
+  soundId,
   onProgress,
 }: {
   items: AlbumItem[];
   caption: string;
   destination: Destination;
+  /** Feature 15 Part 7 — the sound picked for this Reel, if any. */
+  soundId?: string | null;
   onProgress?: (text: string) => void;
 }): Promise<PublishResult> {
   if (items.length === 0) throw new Error("Pick something to share first.");
@@ -304,6 +307,7 @@ export async function publishComposition({
       destination,
       mediaWidth: cover.width,
       mediaHeight: cover.height,
+      ...(soundId ? { soundId } : {}),
       ...(uploaded.length > 1
         ? {
             media: uploaded.map((u) => ({

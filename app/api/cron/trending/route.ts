@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/admin/guard";
 import { recomputeHotScores, recomputeTrustScores } from "@/lib/social/feed";
+import { recomputeSoundTrendScores } from "@/lib/social/sounds";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,8 +23,12 @@ async function run(request: Request) {
   }
   // Maintenance: refresh trust scores first (feeds into discovery), then
   // recompute trending with the latest counters.
-  const [trust, updated] = await Promise.all([recomputeTrustScores(), recomputeHotScores()]);
-  return NextResponse.json({ ok: true, updated, trust });
+  const [trust, updated, soundsUpdated] = await Promise.all([
+    recomputeTrustScores(),
+    recomputeHotScores(),
+    recomputeSoundTrendScores(),
+  ]);
+  return NextResponse.json({ ok: true, updated, trust, soundsUpdated });
 }
 
 export const GET = run; // Vercel cron uses GET

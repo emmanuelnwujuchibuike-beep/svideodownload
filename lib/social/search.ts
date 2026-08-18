@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { flagsOf, isAccountVisibleTo, relationTo } from "./account-visibility";
 import { friendIdSet } from "./friend-ids";
 import type { MediaKind, PostCard } from "./posts";
+import { searchSounds, type Sound } from "./sounds";
 
 /**
  * Universal search — people + posts (videos/reels, photos, audio) + hashtags.
@@ -110,20 +111,26 @@ export async function searchPosts(q: string, opts: { kind?: MediaKind; limit?: n
   }
 }
 
-export type SearchType = "all" | "people" | "video" | "image" | "audio";
+export type SearchType = "all" | "people" | "video" | "image" | "audio" | "sound";
 
 export interface SearchResult {
   people: SearchPerson[];
   posts: PostCard[];
+  sounds: Sound[];
 }
 
 export async function searchAll(q: string, type: SearchType, viewerId: string | null = null): Promise<SearchResult> {
   const term = clean(q);
-  if (!term) return { people: [], posts: [] };
-  if (type === "people") return { people: await searchPeople(q, 30, viewerId), posts: [] };
+  if (!term) return { people: [], posts: [], sounds: [] };
+  if (type === "people") return { people: await searchPeople(q, 30, viewerId), posts: [], sounds: [] };
+  if (type === "sound") return { people: [], posts: [], sounds: await searchSounds(q, 30) };
   if (type === "video" || type === "image" || type === "audio") {
-    return { people: [], posts: await searchPosts(q, { kind: type, limit: 30 }) };
+    return { people: [], posts: await searchPosts(q, { kind: type, limit: 30 }), sounds: [] };
   }
-  const [people, posts] = await Promise.all([searchPeople(q, 8, viewerId), searchPosts(q, { limit: 24 })]);
-  return { people, posts };
+  const [people, posts, sounds] = await Promise.all([
+    searchPeople(q, 8, viewerId),
+    searchPosts(q, { limit: 24 }),
+    searchSounds(q, 6),
+  ]);
+  return { people, posts, sounds };
 }

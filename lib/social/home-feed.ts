@@ -122,6 +122,13 @@ export interface FeedItem {
   mediaHeight?: number | null;
   /** Album/carousel items (ordered; present only on multi-media posts). */
   mediaItems?: { url: string; kind: "image" | "video"; thumbnailUrl: string | null; width: number | null; height: number | null }[];
+  /**
+   * The attached sound (Feature 15 Part 7), when this post carries one.
+   * Absent on the vast majority of posts — attaching a sound is opt-in, and
+   * the reel-viewer's sound row falls back to its own-audio label ("Original
+   * sound · @handle") exactly as before when this is undefined.
+   */
+  sound?: { id: string; title: string; artistLabel: string } | null;
 }
 
 export interface FeedPage {
@@ -488,6 +495,35 @@ async function streamStatus(
     }
   } catch {
     /* columns not migrated yet */
+  }
+  return out;
+}
+
+/**
+ * The attached sound's title/artist for each post that carries one (Feature
+ * 15 Part 7). Same two-step shape as the other batch lookups here: most posts
+ * have no `sound_id` at all, so this skips both queries entirely for a feed
+ * page with none — best-effort, before migration 0125 `posts.sound_id` simply
+ * doesn't exist and this returns empty rather than failing the whole feed.
+ */
+async function soundInfo(
+  db: ReturnType<typeof createAdminClient>,
+  ids: string[],
+): Promise<Map<string, { id: string; title: string; artistLabel: string }>> {
+  const out = new Map<string, { id: string; title: string; artistLabel: string }>();
+  if (ids.length === 0) return out;
+  try {
+    const { data: posts } = await db.from("posts").select("id, sound_id").in("id", ids).not("sound_id", "is", null);
+    const soundIds = [...new Set((posts ?? []).map((p) => (p as { sound_id: string }).sound_id))];
+    if (soundIds.length === 0) return out;
+    const { data: sounds } = await db.from("sounds").select("id, title, artist_label").in("id", soundIds);
+    const byId = new Map((sounds ?? []).map((s) => [(s as { id: string }).id, s as { id: string; title: string; artist_label: string }]));
+    for (const p of (posts ?? []) as { id: string; sound_id: string }[]) {
+      const s = byId.get(p.sound_id);
+      if (s) out.set(p.id, { id: s.id, title: s.title, artistLabel: s.artist_label });
+    }
+  } catch {
+    /* posts.sound_id/sounds not migrated yet */
   }
   return out;
 }
@@ -963,6 +999,14 @@ async function loadHomeFeed(
         }
       } catch {
         /* post_media not migrated */
+      }
+
+      const sounds = await soundInfo(db, items.map((i) => i.id));
+      if (sounds.size) {
+        for (const it of items) {
+          const s = sounds.get(it.id);
+          if (s) it.sound = s;
+        }
       }
     }
 

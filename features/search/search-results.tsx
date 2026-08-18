@@ -2,6 +2,7 @@
 
 import {
   Check,
+  Music,
   Search,
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
@@ -11,6 +12,7 @@ import { type FormEvent, useCallback, useRef, useState } from "react";
 
 import { PostGrid } from "@/components/social/post-grid";
 import type { SearchPerson, SearchResult, SearchType } from "@/lib/social/search";
+import type { Sound } from "@/lib/social/sounds";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 const TABS: { id: SearchType; label: string }[] = [
@@ -19,12 +21,14 @@ const TABS: { id: SearchType; label: string }[] = [
   { id: "video", label: "Reels" },
   { id: "image", label: "Photos" },
   { id: "audio", label: "Audio" },
+  { id: "sound", label: "Sounds" },
 ];
 
 /**
  * Universal search results with instant, cached type tabs (Top / People / Reels /
- * Photos / Audio). Switching a tab re-uses a cached result when possible; the
- * current results stay on screen while a new query loads (no skeleton flash).
+ * Photos / Audio / Sounds). Switching a tab re-uses a cached result when
+ * possible; the current results stay on screen while a new query loads (no
+ * skeleton flash).
  */
 export function SearchResults({ initialQuery, initial }: { initialQuery: string; initial: SearchResult }) {
   const router = useRouter();
@@ -39,7 +43,7 @@ export function SearchResults({ initialQuery, initial }: { initialQuery: string;
   const run = useCallback(async (q: string, t: SearchType) => {
     const term = q.trim();
     if (!term) {
-      setResult({ people: [], posts: [] });
+      setResult({ people: [], posts: [], sounds: [] });
       return;
     }
     const key = `${term}:${t}`;
@@ -79,7 +83,8 @@ export function SearchResults({ initialQuery, initial }: { initialQuery: string;
 
   const gridLayout = type === "image" ? "photo" : type === "video" ? "reel" : "card";
   const showPeople = (type === "all" || type === "people") && result.people.length > 0;
-  const showPosts = type !== "people";
+  const showPosts = type !== "people" && type !== "sound";
+  const showSounds = (type === "all" || type === "sound") && result.sounds.length > 0;
 
   return (
     <div>
@@ -119,8 +124,8 @@ export function SearchResults({ initialQuery, initial }: { initialQuery: string;
       </div>
 
       {!query ? (
-        <p className="py-16 text-center text-sm text-muted-foreground">Search for reels, posts, audio, hashtags and people.</p>
-      ) : !showPeople && (!showPosts || result.posts.length === 0) ? (
+        <p className="py-16 text-center text-sm text-muted-foreground">Search for reels, posts, audio, sounds, hashtags and people.</p>
+      ) : !showPeople && !showSounds && (!showPosts || result.posts.length === 0) ? (
         <p className="py-16 text-center text-sm text-muted-foreground">No results for &ldquo;{query}&rdquo;.</p>
       ) : (
         <div className={cn("space-y-6 transition-opacity", loading && "opacity-60")}>
@@ -130,6 +135,17 @@ export function SearchResults({ initialQuery, initial }: { initialQuery: string;
               <ul className="space-y-1.5">
                 {result.people.map((p) => (
                   <PersonRow key={p.id} person={p} />
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {showSounds ? (
+            <section>
+              {type === "all" ? <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-muted-foreground">Sounds</h2> : null}
+              <ul className="space-y-1.5">
+                {result.sounds.map((s) => (
+                  <SoundRow key={s.id} sound={s} />
                 ))}
               </ul>
             </section>
@@ -146,6 +162,29 @@ export function SearchResults({ initialQuery, initial }: { initialQuery: string;
 
       <style>{`@keyframes srch{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}`}</style>
     </div>
+  );
+}
+
+function SoundRow({ sound: s }: { sound: Sound }) {
+  return (
+    <li>
+      <Link href={`/sound/${s.id}`} className="flex items-center gap-3 rounded-2xl px-2 py-1.5 transition hover:bg-secondary/50">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-blue-600 to-violet-700">
+          {s.coverArtUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={s.coverArtUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <Music className="h-4 w-4 text-white/80" />
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold">{s.title}</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {s.artistLabel} · {formatCompactNumber(s.usageCount)} reels
+          </span>
+        </span>
+      </Link>
+    </li>
   );
 }
 

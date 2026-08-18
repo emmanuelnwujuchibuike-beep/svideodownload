@@ -1,8 +1,8 @@
 "use client";
 
-import { Clapperboard, ChevronLeft, Images, Loader2, Music2, RotateCcw, Video } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { Clapperboard, ChevronLeft, Images, Loader2, Music2, RotateCcw, Video, X } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import {
   REEL_RULES,
@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
  */
 export function ReelComposer() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -48,6 +49,29 @@ export function ReelComposer() {
   const [busyText, setBusyText] = useState<string | null>(null);
   const [doneUrl, setDoneUrl] = useState<string | null>(null);
 
+  /*
+    Feature 15 Part 7 — arriving from a Sound Page's (or the reel-viewer's
+    sound row's) "Use this sound" via `?sound=<id>`. Fetched rather than
+    trusted from the URL alone, so a stale/foreign/deleted id just shows
+    nothing to attach instead of a broken chip — the reel still publishes
+    fine either way.
+  */
+  const soundIdParam = searchParams.get("sound");
+  const [sound, setSound] = useState<{ id: string; title: string; artistLabel: string } | null>(null);
+  useEffect(() => {
+    if (!soundIdParam) return;
+    let alive = true;
+    fetch(`/api/sounds/${soundIdParam}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (alive && s) setSound({ id: s.id, title: s.title, artistLabel: s.artistLabel });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [soundIdParam]);
+
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     media.accept(e.target.files);
     e.target.value = "";
@@ -59,7 +83,7 @@ export function ReelComposer() {
     media.setErr(null);
     haptic("selection");
     try {
-      const res = await publishComposition({ items, caption, destination: "reel", onProgress: setBusyText });
+      const res = await publishComposition({ items, caption, destination: "reel", soundId: sound?.id, onProgress: setBusyText });
       clearDraft();
       setDoneUrl(res.link);
       router.refresh();
@@ -176,6 +200,23 @@ export function ReelComposer() {
             />
             <span className="pointer-events-none absolute bottom-2.5 right-3 text-[10px] tabular-nums text-white/40">{caption.length}/300</span>
           </div>
+
+          {sound ? (
+            <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full bg-white/10 py-1 pl-2.5 pr-1.5">
+              <Music2 className="h-3 w-3 shrink-0 text-white/70" aria-hidden />
+              <span className="min-w-0 truncate text-[11px] font-semibold text-white/85">
+                {sound.title} · {sound.artistLabel}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSound(null)}
+                aria-label="Remove sound"
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white/60 transition hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ) : null}
 
           <p className="mt-2 flex items-center gap-1.5 text-[11px] text-white/40">
             <Music2 className="h-3 w-3" /> Cover is taken from the first frame

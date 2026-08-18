@@ -81,6 +81,9 @@ const schema = z.object({
   media: z.array(mediaItem).min(2).max(20).optional(),
   // Legacy flag from the old story-only composer.
   shareReel: z.boolean().optional(),
+  /** Feature 15 Part 7: the sound picked in the Reel composer, if any — attached
+   *  after the post exists so a bad/foreign id can never block publishing. */
+  soundId: z.string().uuid().optional(),
 });
 
 /**
@@ -103,7 +106,7 @@ export async function POST(request: Request) {
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid upload." }, { status: 400 });
-  const { mediaUrl, mediaKind, caption, thumbnailUrl, mediaWidth, mediaHeight } = parsed.data;
+  const { mediaUrl, mediaKind, caption, thumbnailUrl, mediaWidth, mediaHeight, soundId } = parsed.data;
   // Every post carries a cover: the image itself, or the captured video frame.
   const cover = mediaKind === "image" ? mediaUrl : (thumbnailUrl ?? null);
   const destination = parsed.data.destination ?? (parsed.data.shareReel ? "both" : "post");
@@ -194,6 +197,16 @@ export async function POST(request: Request) {
             (r) => r,
             () => null,
           );
+      }
+
+      // Attaches AFTER the post exists — a sound id that's since gone private,
+      // deleted, or was never real just leaves the post with none rather than
+      // failing the whole publish over a picker that's incidental to it.
+      if (postId && soundId) {
+        await admin.from("posts").update({ sound_id: soundId }).eq("id", postId).then(
+          (r) => r,
+          () => null,
+        );
       }
     } else if (!wantStory) {
       return NextResponse.json({ error: "Finish setting up your profile to post." }, { status: 403 });

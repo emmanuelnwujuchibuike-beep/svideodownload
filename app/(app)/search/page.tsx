@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q } = await searchParams;
   const query = (q ?? "").trim();
-  const initial = query ? await searchAll(query, "all") : { people: [], posts: [] };
+  const initial = query ? await searchAll(query, "all") : { people: [], posts: [], sounds: [] };
 
   return (
     <AppContent>

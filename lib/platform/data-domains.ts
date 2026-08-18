@@ -74,6 +74,10 @@ export const DATA_DOMAINS: DataDomain[] = [
       // (allow/throttle/block) the way `reposts` powers repost's. Feature 15
       // Part 6, migration 0121.
       "share_events",
+      // A sound decoupled from any one post — attachable to a reel, its own
+      // page, discoverable/searchable. Feature 15 Part 7, migration 0125.
+      "sounds",
+      "sound_plays",
       "follows",
       "friendships",
       "friend_requests",

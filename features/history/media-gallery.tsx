@@ -23,6 +23,7 @@ import { SmartThumb } from "@/components/ui/smart-thumb";
 import { startDownload } from "@/features/downloads/manager";
 import { openPlayerQueue } from "@/features/downloads/player-store";
 import { estimateBytes } from "@/features/history/usage";
+import { PublishSoundSheet } from "@/features/history/publish-sound-sheet";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { BRAND_ICONS } from "@/lib/platform-icons";
@@ -176,6 +177,9 @@ export function MediaGallery({
   const [cols, setCols] = useState<number>(2);
   const [sort, setSort] = useState<SortKey>("time");
   const [limit, setLimit] = useState(initialGrid);
+  // Feature 15 Part 7 — one sheet instance for the whole gallery (grid + list
+  // both open it via the same handler), rather than one per tile.
+  const [publishTarget, setPublishTarget] = useState<DownloadRecord | null>(null);
 
   // Load persisted view prefs after mount (client-only — the panels this renders
   // in only paint after the local history loads, so there is no SSR mismatch).
@@ -371,6 +375,7 @@ export function MediaGallery({
                       onOpen={() => openAt(sorted.indexOf(item))}
                       onToggleFavorite={() => onToggleFavorite(item.id)}
                       onRemove={() => onRemove(item.id)}
+                      onPublishSound={() => setPublishTarget(item)}
                       selection={selection}
                     />
                   ))}
@@ -382,13 +387,13 @@ export function MediaGallery({
       ) : view === "grid" ? (
         <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
           {shown.map((item, i) => (
-            <GalleryTile key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} selection={selection} />
+            <GalleryTile key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} selection={selection} />
           ))}
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
           {shown.map((item, i) => (
-            <ListRow key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} selection={selection} />
+            <ListRow key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} selection={selection} />
           ))}
         </div>
       )}
@@ -408,6 +413,8 @@ export function MediaGallery({
           </button>
         </div>
       ) : null}
+
+      <PublishSoundSheet open={!!publishTarget} onClose={() => setPublishTarget(null)} item={publishTarget} />
     </div>
   );
 }
@@ -440,12 +447,14 @@ function GalleryTile({
   onOpen,
   onToggleFavorite,
   onRemove,
+  onPublishSound,
   selection,
 }: {
   item: DownloadRecord;
   onOpen: () => void;
   onToggleFavorite: () => void;
   onRemove: () => void;
+  onPublishSound: () => void;
   selection?: GallerySelection;
 }) {
   const platform = PLATFORMS[item.platform] ?? PLATFORMS.generic;
@@ -626,6 +635,13 @@ function GalleryTile({
                   }).catch(() => {});
                 }}
               />
+              {item.kind === "audio" ? (
+                <TileAction
+                  icon={<Music className="h-3.5 w-3.5" />}
+                  label="Publish as sound"
+                  onClick={() => { onPublishSound(); setMenuOpen(false); }}
+                />
+              ) : null}
               <TileAction
                 icon={<Trash2 className="h-3.5 w-3.5" />}
                 label="Remove"
@@ -683,7 +699,7 @@ function TileAction({
  * (a Remove button next to a selection you are building is a mis-tap with an
  * irreversible result), and the state is announced through `aria-pressed`.
  */
-function ListRow({ item, onOpen, onToggleFavorite, onRemove, selection }: { item: DownloadRecord; onOpen: () => void; onToggleFavorite: () => void; onRemove: () => void; selection?: GallerySelection }) {
+function ListRow({ item, onOpen, onToggleFavorite, onRemove, onPublishSound, selection }: { item: DownloadRecord; onOpen: () => void; onToggleFavorite: () => void; onRemove: () => void; onPublishSound: () => void; selection?: GallerySelection }) {
   const selecting = !!selection?.active;
   const picked = !!selection?.selected.has(item.id);
   /* One handler for both hit areas — the thumbnail and the text block are two
@@ -778,6 +794,13 @@ function ListRow({ item, onOpen, onToggleFavorite, onRemove, selection }: { item
         <IconButton label="Favorite" onClick={onToggleFavorite} active={item.favorite}>
           <Heart className={cn("h-4 w-4", item.favorite && "fill-current")} />
         </IconButton>
+        {item.kind === "audio" ? (
+          <span className="hidden sm:inline-flex">
+            <IconButton label="Publish as sound" onClick={onPublishSound}>
+              <Music className="h-4 w-4" />
+            </IconButton>
+          </span>
+        ) : null}
         <span className="hidden sm:inline-flex">
           <IconButton label="Copy link" onClick={copyLink}>
             {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}

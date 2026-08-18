@@ -2431,25 +2431,19 @@ function ReelCard({
 
         {/*
           ── The sound row ─────────────────────────────────────────────────────
-          🔴 "Original sound · @handle" is TRUE BY CONSTRUCTION here, not a
-          placeholder dressed up as data.
-
-          `FeedItem` carries no music or attribution field, and this project has
-          no licensing or track system at all — so every reel on Frenzsave plays
-          the audio that arrived with its own video. For a post by @handle, "the
-          original sound of @handle's post" is a factual description of what you
-          are hearing, which is exactly what the label says.
-
-          What it deliberately does NOT do is invent a track title, an artist, or
-          a "trending sound" count — the fabrications this row invites, and the
-          kind the Reality Ledger fails the build on.
-
-          It is a LINK to the creator, because that is the only real destination
-          the sound has today. When a music system exists, this becomes the sound
-          page and the label becomes data — the row is already the right shape.
+          Feature 15 Part 7: this is the music system the row below was always
+          waiting for (see its history — a "Reality Ledger" comment used to sit
+          here explaining why the label was a link to the creator rather than
+          invented track data). `item.sound` is real, attached data when a post
+          carries one — the row links to its own page and shows its real title
+          and attribution. It is ABSENT on the vast majority of posts (attaching
+          a sound is opt-in, never retroactive), so the original fallback is
+          unchanged for those: "Original sound · @handle", linking to the
+          creator, exactly as it always has — still true by construction, still
+          never inventing a title or an artist for audio that has neither.
         */}
         <Link
-          href={`/u/${item.publisher.handle}`}
+          href={item.sound ? `/sound/${item.sound.id}` : `/u/${item.publisher.handle}`}
           onClick={onClose}
           className={cn(
             "mt-2 inline-flex max-w-[min(70vw,20rem)] items-center gap-2 rounded-full px-2.5 py-1",
@@ -2458,7 +2452,7 @@ function ReelCard({
         >
           <Music className="h-3 w-3 shrink-0 text-white/80" aria-hidden />
           <span className="truncate text-[11px] font-semibold text-white/85">
-            Original sound · @{item.publisher.handle}
+            {item.sound ? `${item.sound.title} · ${item.sound.artistLabel}` : `Original sound · @${item.publisher.handle}`}
           </span>
         </Link>
         {/*

@@ -163,21 +163,18 @@ export function FeedImage({
       // press, or press-and-hold.
       style={ratio ? { aspectRatio: ratio } : undefined}
       className={cn(
-        // 🔴 FIXED LEFT LINE, FLEXIBLE RIGHT (owner, 2026-08-18, superseding
-        // the "don't restyle this box" note below — that call was made before
-        // the owner sent three real Twitter screenshots showing every post's
-        // media sharing ONE fixed left edge, with only the RIGHT edge varying
-        // by each image's own width: "the left is fixed and doesnt cross the
-        // line... some images can expand to the way end of right leaving only
-        // 1.5 or 1 padding, but the left is fixed"). `mx-auto` centers a
-        // narrower-than-full-width box, which puts slack on BOTH sides
-        // instead of only the right — exactly what the screenshots rule out.
-        // `mr-auto` puts all the slack on the right; `w-fit` (not the
-        // previously-assumed-safe default) is what stops this box from
-        // silently staying full-width once centering was the only thing
-        // holding it there — the same "wrapper vs. shrunk child" black-gap
-        // mechanism already fixed on FeedVideo's matching wrapper.
-        "relative mr-auto flex w-fit max-w-full max-h-[85vh] items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+        // 🔴 REVERTED — BACK IN THE AVATAR COLUMN, NOT SHRUNK (owner,
+        // 2026-08-18: "single video... shouldn't break through the avatar
+        // left area... images shouldn't shrink, they should only not break
+        // the avatar area" — reverses the SAME day's `mr-auto`/`w-fit`
+        // "fixed left line, flexible right" experiment). `w-fit` made this
+        // box hug the photo's own natural rendered width, which is exactly
+        // the "shrink" being reported once the photo is back in the
+        // narrower, avatar-indented column instead of a full-width breakout.
+        // Plain `mx-auto` — no `w-fit` — lets this box fill its column like
+        // a normal block element again; centering only matters on the rare
+        // photo whose `max-h` cap narrows it below that column's width.
+        "relative mx-auto flex max-h-[85vh] items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
         className,
       )}
       // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still

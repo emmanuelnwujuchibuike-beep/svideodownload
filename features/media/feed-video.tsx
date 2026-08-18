@@ -52,6 +52,7 @@ export function FeedVideo({
   width,
   height,
   children,
+  priority = false,
 }: {
   /**
    * The clip's natural pixel size, when the server knows it (`posts.media_width`
@@ -89,6 +90,18 @@ export function FeedVideo({
    * anchored to the real, possibly-narrower media box.
    */
   children?: React.ReactNode;
+  /**
+   * 🔴 True for the feed's first couple of cards (owner, 2026-08-18: "feed
+   * and reels should never load the first two videos on landing, they
+   * should load ahead"). `preload="metadata"` (the default below) only
+   * fetches enough to know duration/dimensions — actual playback still
+   * waits for the IntersectionObserver below to fire post-hydration before
+   * buffering real content, which is exactly the "loads on landing instead
+   * of ahead" gap for whichever clip is already on screen at first paint.
+   * `preload="auto"` here lets the browser start buffering real bytes the
+   * moment the HTML parses, independent of hydration or scroll position.
+   */
+  priority?: boolean;
 }) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
@@ -109,7 +122,11 @@ export function FeedVideo({
   const [muted, setMuted] = useState(true);
   const [showPause, setShowPause] = useState(false);
   const [covered, setCovered] = useState(true);
-  const [shouldLoad, setShouldLoad] = useState(false);
+  // Priority clips (the feed's first couple of cards) attach their source
+  // immediately rather than waiting on the IntersectionObserver below to
+  // fire post-hydration — the whole point of "load ahead" is not waiting on
+  // anything scroll-related for content already on screen at first paint.
+  const [shouldLoad, setShouldLoad] = useState(priority);
   // 🔴 Owner, 2026-08-17, with a screenshot: "the feed should never show this
   // question mark and a white line when loading delays or bad network,
   // rather is should show a blank and loading state". That glyph is the
@@ -372,12 +389,14 @@ export function FeedVideo({
       // reversal note — `ratio` itself is the media's true, unclamped shape).
       style={{ aspectRatio: ratio ?? 4 / 5 }}
       className={cn(
-        // 🔴 LEFT-aligned, Twitter-style (owner, 2026-08-18, final: "all videos
-        // and image should be at the left end like twitter style, just 2
-        // padding left, they should all be in left position" — after trying
-        // left, then right). `mr-auto` puts any horizontal slack on the RIGHT,
-        // so the media's left edge always lands on the card's own `pl-2`.
-        "group relative mr-auto overflow-hidden rounded-2xl bg-black",
+        // 🔴 BACK IN THE AVATAR COLUMN, NO SPECIAL ALIGNMENT NEEDED (owner,
+        // 2026-08-18: "single video... shouldn't break through the avatar
+        // left area" — this reverses the SAME day's earlier `mr-auto`/
+        // "break out to a wider box" experiment). This wrapper is a normal
+        // in-flow block inside the caption's own column again, so there is
+        // no extra horizontal slack to manage with a margin trick — it
+        // simply fills that column's width like any other block element.
+        "group relative overflow-hidden rounded-2xl bg-black",
         // Twitter-style: full width, the media's OWN true aspect ratio — a
         // HEIGHT ceiling, never a ratio clamp, so it can't disagree with the
         // clip's true shape (no letterboxing/cropping). A same-day tightening
@@ -409,7 +428,7 @@ export function FeedVideo({
           overflowing the card. With no slack left inside, alignment is
           decided entirely by `mr-auto` above.
         */
-        "max-h-[60vh] lg:flex lg:!aspect-auto lg:w-fit lg:max-w-full lg:max-h-[60vh] lg:items-center lg:justify-start",
+        "max-h-[60vh] lg:flex lg:!aspect-auto lg:w-fit lg:max-w-full lg:max-h-[60vh] lg:items-center lg:justify-center",
         className,
       )}
     >
@@ -453,7 +472,7 @@ export function FeedVideo({
         loop
         muted
         playsInline
-        preload="metadata"
+        preload={priority ? "auto" : "metadata"}
         /*
           🔴 NO press or hover transform on the clip (owner, 2026-08-11: "like
           videos be fixed in position even if they were press and hold, to avoid

@@ -104,12 +104,13 @@ function FeedPostCardImpl({
   onRemove,
   onOpen,
   /**
-   * True for the first card in the stream — the one actually likely to be
-   * the page's LCP element (owner, 2026-08-18: "make the feed page have the
-   * same LCP as landing"). Threaded down to `FeedImage` so its own image can
-   * ask the browser to fetch it eagerly instead of at the blanket "low"
-   * priority every OTHER card in the feed correctly uses to avoid competing
-   * with whatever's actually on screen.
+   * True for the feed's first TWO cards (owner, 2026-08-18: originally just
+   * the very first — "make the feed page have the same LCP as landing" —
+   * then widened: "feed and reels should never load the first two videos on
+   * landing, they should load ahead"). Threaded down to `FeedImage` (fetch
+   * eagerly instead of the blanket "low" priority every other card
+   * correctly uses) and `FeedVideo` (`preload="auto"` + attach the source
+   * immediately instead of waiting on its own IntersectionObserver).
    */
   priority = false,
 }: {
@@ -704,26 +705,76 @@ function FeedPostCardImpl({
 
           {/* Media — taller/bigger than a typical compact card (closer to X/
               Instagram's large feed previews) so video/photo posts read as the
-              hero of the card, not a thumbnail. */}
+              hero of the card, not a thumbnail.
+
+              🔴 BACK INSIDE THE AVATAR COLUMN, FOR EVERY MEDIA TYPE (owner,
+              2026-08-18, reversing this same day's earlier breakout attempt:
+              "single video, multi post and video shouldn't break through the
+              avatar left area... images shouldn't shrink, they should only
+              not break the avatar area"). Media no longer escapes to a wider,
+              avatar-independent box — it renders here, in the same indented
+              column as the caption, at that column's own natural width.
+          */}
           {item.mediaItems && item.mediaItems.length > 1 ? (
-        // Rendered full-width BELOW, outside the avatar-offset column, same
-        // as video/single-image (owner, 2026-08-18, confirmed against real
-        // Twitter reference screenshots: a multi-photo grid there starts at
-        // the exact same fixed left edge as every other post's media, not
-        // indented under the avatar — this used to be the one media type
-        // still left behind in the avatar column). Nothing renders here.
-        null
-      ) : item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
-        // Rendered full-width BELOW, outside the avatar-offset column — see
-        // the width note where that block lives, right after this column
-        // closes. Nothing renders here for a video post.
-        null
-      ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
-        // Rendered full-width BELOW, outside the avatar-offset column, exactly
-        // like video — see the width note where that block lives. Nothing
-        // renders here for a single-image post.
-        null
-      ) : item.mediaKind === "audio" ? (
+            <div className="mb-3">
+              <MediaGrid
+                items={item.mediaItems}
+                onExpandItem={(index) => open(item, false, index)}
+                onDoubleTapLike={() => {
+                  if (!liked) void react("like");
+                }}
+              />
+            </div>
+          ) : item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
+            <div className="relative mb-3 overflow-hidden rounded-2xl">
+              <FeedVideo
+                src={item.mediaUrl}
+                streamUid={item.streamUid}
+                streamReady={item.streamReady}
+                streamFailed={item.streamFailed}
+                poster={item.thumbnailUrl}
+                postId={item.id}
+                onExpand={() => open(item)}
+                onDoubleTapLike={() => {
+                  if (!liked) void react("like");
+                }}
+                width={item.mediaWidth ?? undefined}
+                height={item.mediaHeight ?? undefined}
+                priority={priority}
+              >
+                {item.viewsCount > 0 || item.durationSec ? (
+                  <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+                    {item.viewsCount > 0 ? `${formatCompactNumber(item.viewsCount)} views` : null}
+                    {item.viewsCount > 0 && item.durationSec ? " · " : null}
+                    {item.durationSec ? formatDuration(item.durationSec) : null}
+                  </span>
+                ) : null}
+                {engagementRow(true)}
+              </FeedVideo>
+            </div>
+          ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
+            <div className="relative mb-3 overflow-hidden rounded-2xl">
+              <FeedImage
+                src={item.mediaUrl || item.thumbnailUrl!}
+                alt={item.title}
+                width={item.mediaWidth ?? undefined}
+                height={item.mediaHeight ?? undefined}
+                liked={liked}
+                priority={priority}
+                onDoubleTapLike={() => {
+                  if (!liked) void react("like");
+                }}
+                onExpand={() => open(item)}
+              >
+                {item.viewsCount > 0 ? (
+                  <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+                    {formatCompactNumber(item.viewsCount)} views
+                  </span>
+                ) : null}
+                {engagementRow(true)}
+              </FeedImage>
+            </div>
+          ) : item.mediaKind === "audio" ? (
         <button type="button" onClick={() => open(item)} className="block w-full text-left" aria-label="Play">
           <div className="mb-3 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/15">
             <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white">
@@ -800,139 +851,6 @@ function FeedPostCardImpl({
           {overlayEngagement ? null : engagementRow(false)}
         </div>
       </div>
-
-      {/*
-        🔴 VIDEO BREAKS OUT OF THE AVATAR COLUMN (owner, 2026-08-18: "expand
-        the width of a long 16:9 video on the feed"). The two-column layout
-        above indents everything — including media — by the avatar's ~44px,
-        which is exactly why a wide/landscape clip (short by nature once width
-        is fixed) read as small: less width directly means less height too.
-        Matches X's own actual rendering — name/handle stay indented, attached
-        video does not. Scoped to video only (not photos/albums/audio): those
-        stay in the column above, unchanged, per the owner's own scoping when
-        asked which media types this should apply to.
-      */}
-      {item.mediaKind === "video" && (item.streamUid || item.mediaUrl) && !(item.mediaItems && item.mediaItems.length > 1) ? (
-        <div className="mb-3 px-2 sm:px-3">
-          <div className="relative overflow-hidden rounded-2xl">
-            <FeedVideo
-              src={item.mediaUrl}
-              streamUid={item.streamUid}
-              streamReady={item.streamReady}
-              streamFailed={item.streamFailed}
-              poster={item.thumbnailUrl}
-              postId={item.id}
-              onExpand={() => open(item)}
-              onDoubleTapLike={() => {
-                if (!liked) void react("like");
-              }}
-              // FeedVideo renders the clip at its TRUE aspect ratio — tall clips
-              // expand, short/wide ones show as they are. Handing it the stored
-              // dimensions means it knows that shape on the FIRST paint instead of
-              // reserving a 3:4 guess and correcting once the browser has parsed
-              // the file (owner: "it just only show the exact height of the video
-              // or image").
-              //
-              // 🔴 NO `w-full` HERE (owner, 2026-08-17: "there are still black side
-              // background… the single videos still stretch a lot"). A forced
-              // `width: 100%` fights the wrapper's own `aspect-ratio` + `max-h`:
-              // once a tall clip hits the height cap, CSS shrinks the wrapper's
-              // HEIGHT but a width pinned to 100% can't follow — the true-ratio
-              // video ends up narrower than its own black wrapper, exposing black
-              // bars on the sides. Leaving width unset lets the wrapper's default
-              // block sizing (fill available width) and the aspect-ratio/max-h
-              // "transferred size" behavior agree on ONE box shape in both the
-              // normal (fills the card) and capped (narrower, centered) cases.
-              width={item.mediaWidth ?? undefined}
-              height={item.mediaHeight ?? undefined}
-            >
-              {/*
-                🔴 MOVED INSIDE `FeedVideo` (owner, 2026-08-17: an earlier,
-                tighter max-height cap regularly narrowed portrait clips below
-                the card's full width — the max-height is generous now, but a
-                genuinely pathological clip could still hit it). This badge
-                used to be a SIBLING here, absolutely
-                positioned against the outer wrapper div above — which stays
-                full width even when the clip itself shrinks, so the badge
-                floated away from the actual video instead of sitting on its
-                corner. `FeedVideo` renders `children` inside its OWN,
-                correctly-sized box, so the badge now tracks the real clip.
-                Top-left: FeedVideo's own mute + expand controls already claim
-                top-right and bottom-right.
-              */}
-              {item.viewsCount > 0 || item.durationSec ? (
-                <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
-                  {item.viewsCount > 0 ? `${formatCompactNumber(item.viewsCount)} views` : null}
-                  {item.viewsCount > 0 && item.durationSec ? " · " : null}
-                  {item.durationSec ? formatDuration(item.durationSec) : null}
-                </span>
-              ) : null}
-              {/* Blended engagement row — see engagementRow's own note. */}
-              {engagementRow(true)}
-            </FeedVideo>
-          </div>
-        </div>
-      ) : null}
-
-      {/*
-        🔴 SINGLE IMAGES BREAK OUT TOO (owner, 2026-08-18: "all videos and
-        image should be at the left end like twitter style, just 2 padding
-        left, they should all be in left position" — confirmed via
-        AskUserQuestion that photos should leave the avatar column exactly
-        like video, reversing the earlier scoping that kept them indented).
-        Same `px-2 sm:px-3` breakout wrapper as video directly above, so both
-        media types start at the identical left X-position instead of a photo
-        sitting ~44px further right than a clip in the same feed.
-      */}
-      {item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) && !(item.mediaItems && item.mediaItems.length > 1) ? (
-        <div className="mb-3 px-2 sm:px-3">
-          <div className="relative overflow-hidden rounded-2xl">
-            <FeedImage
-              src={item.mediaUrl || item.thumbnailUrl!}
-              alt={item.title}
-              width={item.mediaWidth ?? undefined}
-              height={item.mediaHeight ?? undefined}
-              liked={liked}
-              priority={priority}
-              onDoubleTapLike={() => {
-                if (!liked) void react("like");
-              }}
-              onExpand={() => open(item)}
-            >
-              {/* Top-left, matching the video branch — the blended engagement
-                  row below ends in Save at bottom-right, which was covering
-                  this badge (owner, 2026-08-18). */}
-              {item.viewsCount > 0 ? (
-                <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
-                  {formatCompactNumber(item.viewsCount)} views
-                </span>
-              ) : null}
-              {engagementRow(true)}
-            </FeedImage>
-          </div>
-        </div>
-      ) : null}
-
-      {/*
-        🔴 MULTI-PHOTO GRIDS BREAK OUT TOO (owner, 2026-08-18, matching the
-        Twitter reference screenshots — a grid post there starts at the same
-        fixed left edge as every other post's media). `MediaGrid` doesn't
-        take overlay `children` the way FeedVideo/FeedImage do, so the
-        engagement row underneath it still renders in its ORIGINAL spot
-        (inside the avatar-offset column, via `overlayEngagement`/
-        `engagementRow(false)` below) — only the grid's own box moved.
-      */}
-      {item.mediaItems && item.mediaItems.length > 1 ? (
-        <div className="mb-3 px-2 sm:px-3">
-          <MediaGrid
-            items={item.mediaItems}
-            onExpandItem={(index) => open(item, false, index)}
-            onDoubleTapLike={() => {
-              if (!liked) void react("like");
-            }}
-          />
-        </div>
-      ) : null}
 
       {shareReady ? (
         <ShareSheet

@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { flagsOf, isAccountVisibleTo, relationTo } from "./account-visibility";
 import { type Category } from "./categories";
 import { friendIdSet } from "./friend-ids";
+import { slugifyTitle } from "./post-url";
 import type { RepostAudience } from "./repost/audience";
 import { filterVisibleReposts, repostViewer } from "./repost/visibility";
 import { attachSoundToPost, createSound } from "./sounds";
@@ -152,6 +153,23 @@ export async function publishPost(
     }
 
     /*
+      Descriptive SEO slug — SEPARATE best-effort update, same reasoning as the
+      dimensions above: a not-yet-applied migration 0126 must never block
+      publishing. Only categorized posts get one (see post-url.ts's postHref —
+      an uncategorized post has nowhere principled to live in /[category]/...
+      and stays on /p/[id] permanently). Assigned once, here, and never
+      regenerated later even if the title is edited — a stable URL matters
+      more than staying in sync with a later edit.
+    */
+    if (input.category) {
+      try {
+        await db.from("posts").update({ slug: slugifyTitle(input.title, id) }).eq("id", id);
+      } catch {
+        /* column not migrated yet — falls back to /p/[id] */
+      }
+    }
+
+    /*
       🔴 IMPLICIT "ORIGINAL AUDIO" SOUND (owner, 2026-08-18: "clicking the
       sound button in reels leads to profile instead of the sound page like
       tiktok and instagram, where users can save and use sound"). TikTok/
@@ -238,6 +256,9 @@ export interface PublicPost extends PostRow {
   publisher: PostPublisher;
   isOwner: boolean;
   indexable: boolean;
+  /** Null until migration 0126 lands, until backfilled, or when uncategorized —
+   *  postHref() (lib/social/post-url.ts) falls back to /p/[id] in every such case. */
+  slug: string | null;
 }
 
 /** Can `viewerId` see a post of this `visibility` by `publisherId`? */
@@ -340,8 +361,22 @@ export async function getPost(
       isFollowing = (count ?? 0) > 0;
     }
 
+    // Own small query, deliberately NOT folded into POST_SELECT: that constant
+    // is shared by every list query in this file (listUserPosts, listSavedPosts,
+    // relatedPosts, …), and a not-yet-applied migration 0126 would error ALL of
+    // them at once. Scoped here, a missing column only degrades this one field
+    // on this one (single-post, not hot-path) read.
+    let slug: string | null = null;
+    try {
+      const { data: slugRow } = await db.from("posts").select("slug").eq("id", id).maybeSingle();
+      slug = (slugRow as { slug: string | null } | null)?.slug ?? null;
+    } catch {
+      /* migration 0126 not applied yet */
+    }
+
     return {
       ...post,
+      slug,
       publisher: {
         id: prof.id as string,
         handle: prof.handle as string,
@@ -353,6 +388,30 @@ export async function getPost(
       isOwner: viewerId === post.publisher_id,
       indexable: post.visibility === "public" && post.status === "published",
     };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolves a post by its SEO slug (the /[category]/[year]/[month]/[slug]
+ * route) and defers everything else to `getPost` — same visibility rules,
+ * same shape, no duplicated logic. Returns null (→ the route 404s) for an
+ * unknown slug OR when migration 0126 hasn't been applied yet, which is the
+ * correct behavior either way: no slug URL could legitimately resolve yet.
+ */
+export async function getPostBySlug(
+  slug: string,
+  viewerId: string | null,
+  viewerIsAdmin = false,
+): Promise<PublicPost | null> {
+  if (!hasSupabase) return null;
+  try {
+    const db = createAdminClient();
+    const { data } = await db.from("posts").select("id").eq("slug", slug).maybeSingle();
+    const id = (data as { id: string } | null)?.id;
+    if (!id) return null;
+    return getPost(id, viewerId, viewerIsAdmin);
   } catch {
     return null;
   }

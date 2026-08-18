@@ -61,7 +61,6 @@ export function FeedImage({
    */
   priority?: boolean;
 }) {
-  const hasDims = !!width && !!height && width > 0 && height > 0;
   const [burst, setBurst] = useState(0);
   // A 404/CORS/offline failure otherwise falls through to the browser's own
   // default broken-image icon — jarring and off-brand. Reset SYNCHRONOUSLY
@@ -149,7 +148,24 @@ export function FeedImage({
     below are basically moot in practice — the box's shape simply IS the
     photo's own true shape.
   */
-  const ratio = hasDims ? clampFeedRatio(width, height) : null;
+  /*
+    🔴 CLIENT-MEASURED FALLBACK (2026-08-18) — mirrors FeedVideo's own
+    `onLoadedMetadata` → `setRatio(clampFeedRatio(videoWidth, videoHeight))`
+    pattern exactly (feed-video.tsx). A lot of existing image posts have no
+    stored media_width/media_height at all — anything reposted/downloaded
+    before publishPost started capturing it — and those used to fall
+    through to a fixed-height fallback rendered inside a full-width BLACK
+    container, i.e. the photo shrinks to its own intrinsic size while the
+    container stays full width: exactly the "shrinks with a black
+    background" regression this fixes. The tiny blurred backdrop <Image>
+    below is already being fetched for the letterbox-fill effect; its
+    `onLoad` hands back the real source image's aspect ratio for free
+    (naturalWidth/naturalHeight survive next/image's proportional resize
+    even at width=16), so this corrects to the photo's TRUE shape almost
+    immediately — same zero-black-bar guarantee the known-dims path always
+    had, now for every post regardless of what's in the database.
+  */
+  const [ratio, setRatio] = useState<number | null>(() => clampFeedRatio(width, height));
 
   return (
     <div
@@ -175,6 +191,13 @@ export function FeedImage({
         // a normal block element again; centering only matters on the rare
         // photo whose `max-h` cap narrows it below that column's width.
         "relative mx-auto flex max-h-[85vh] items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+        // Placeholder shape ONLY until `ratio` resolves (see the note above) —
+        // without this the container would collapse to zero height (no aspect-
+        // ratio style, no explicit height) for the brief window before the
+        // backdrop image loads. A common portrait-photo ratio is the least-bad
+        // guess; it self-corrects to the real shape via the state update, and
+        // in practice resolves before the card is ever scrolled into view.
+        !ratio && "aspect-[4/5]",
         className,
       )}
       // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
@@ -218,23 +241,30 @@ export function FeedImage({
           quality={20}
           className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl"
           onError={() => setBroken(true)}
+          // See the `ratio` state's own note above — this is the measurement,
+          // not just the backdrop. Only overrides when the DB didn't already
+          // give us real dimensions; once set, real media stays authoritative
+          // (matches FeedVideo, which also never re-trusts a stale prop after
+          // the true media has reported in).
+          onLoad={(e) => {
+            if (width && height) return;
+            const img = e.currentTarget;
+            const measured = clampFeedRatio(img.naturalWidth, img.naturalHeight);
+            if (measured) setRatio(measured);
+          }}
         />
       ) : null}
-      {/* Foreground: next/image (AVIF/WebP + right-sized) when the natural size is
-          known; otherwise a plain lazy <img> at natural aspect (older posts).
-          A load failure (404/CORS/offline) falls back to a branded placeholder
+      {/* Foreground: next/image (AVIF/WebP + right-sized), `fill`-sized against
+          the container's own aspect-ratio (set above — the photo's real,
+          unclamped shape, known from the DB or measured client-side). A load
+          failure (404/CORS/offline) falls back to a branded placeholder
           instead of the browser's own default broken-image icon. */}
       {broken ? (
         <div className="relative flex h-48 w-full max-w-full flex-col items-center justify-center gap-2 text-muted-foreground/70">
           <ImageOff className="h-8 w-8" aria-hidden />
           <span className="text-xs font-medium">Image unavailable</span>
         </div>
-      ) : ratio ? (
-        // `ratio` (not `hasDims`) gates this branch: `fill` mode needs the
-        // container to actually HAVE an aspect-ratio to size against, and
-        // `ratio` is exactly the signal for that (it's null whenever
-        // `clampFeedRatio` couldn't make sense of the stored dimensions, even
-        // if `hasDims` itself looked true).
+      ) : (
         <FadeImage
           src={src}
           alt={alt}
@@ -260,36 +290,6 @@ export function FeedImage({
           loading="eager"
           fetchPriority={priority ? "high" : "low"}
           className="object-contain"
-          onError={() => setBroken(true)}
-        />
-      ) : (
-        // 🔴 STILL next/image, EVEN WITHOUT A KNOWN RATIO (owner, 2026-08-18:
-        // measured /feed's LCP against landing's — landing's hero resolves
-        // in ~200ms through next/image's optimizer; a feed post missing
-        // stored dimensions was serving its ORIGINAL, unresized upload
-        // (217KB for the one actually measured) through a plain `<img>`,
-        // which is most of where the gap came from). No aspect-ratio means
-        // `fill` has nothing to size against, but `width`/`height` here are
-        // only a HINT for the optimizer's own srcset math, not the display
-        // size — `h-auto w-auto` + `object-contain` below (same CSS the
-        // plain `<img>` this replaces already used) still lets the browser
-        // render the photo at its own true intrinsic shape once it loads,
-        // same as before. What changes is that the bytes on the wire are now
-        // compressed/re-encoded (AVIF/WebP) instead of the raw original.
-        <Image
-          src={src}
-          alt={alt}
-          width={1600}
-          height={1600}
-          // Without this, next/image assumes the image displays at its full
-          // hinted width (1600px) on every viewport and requests the nearest
-          // breakpoint above that (1920px) regardless of how small the
-          // actual rendered box is — the same `sizes` the FadeImage branch
-          // above already uses, so a phone gets a phone-sized file.
-          sizes="(max-width: 768px) 100vw, 640px"
-          loading="eager"
-          fetchPriority={priority ? "high" : "low"}
-          className="relative h-auto max-h-[80vh] w-auto max-w-full object-contain"
           onError={() => setBroken(true)}
         />
       )}

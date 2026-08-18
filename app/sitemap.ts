@@ -7,6 +7,7 @@ import { SUPPORT_ARTICLES, articleHref } from "@/lib/support/articles";
 import { BLOG_SLUGS } from "@/lib/seo/blog";
 import { SEO_SLUGS } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
+import { CATEGORIES } from "@/lib/social/categories";
 
 /*
   ── No sitemap index, and no image/video sitemap. Both deliberate. ────────────
@@ -47,6 +48,22 @@ export default function sitemap(): MetadataRoute.Sitemap {
     lastModified: now,
     changeFrequency: "weekly",
     priority: 0.9,
+  }));
+
+  /*
+    Category hubs (/sports, /news, …) — the pages a Google search for "news"
+    or "sports" actually lands on (owner, 2026-08-18). Statically generated
+    for the real 13-category taxonomy (lib/social/categories.ts) alongside
+    SEO_SLUGS in the SAME [downloader]/page.tsx — see that file's own note on
+    why a category and a downloader-tool page share one route slot. Priority
+    matches the downloader pages: both are hub-shaped entry points into
+    deeper content (posts here, the tool itself there).
+  */
+  const categories: MetadataRoute.Sitemap = CATEGORIES.map((category) => ({
+    url: `${siteUrl}/${category}`,
+    lastModified: now,
+    changeFrequency: "daily",
+    priority: 0.8,
   }));
 
   const blog: MetadataRoute.Sitemap = BLOG_SLUGS.map((slug) => ({
@@ -121,6 +138,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: siteUrl, lastModified: now, changeFrequency: "daily", priority: 1 },
     ...downloaders,
+    ...categories,
     /*
       Wallpapers — a product surface, not an article, which is why it sits up
       here with the downloaders rather than down among the corpora.

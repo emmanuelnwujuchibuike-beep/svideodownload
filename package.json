@@ -19,6 +19,7 @@
     "backfill:thumbs": "node scripts/backfill-thumbnails.mjs",
     "backfill:posters": "node scripts/backfill-video-posters.mjs",
     "backfill:original-sounds": "node scripts/backfill-original-sounds.mjs",
+    "backfill:post-slugs": "node scripts/backfill-post-slugs.mjs",
     "backfill:wallpaper-dims": "node scripts/backfill-wallpaper-dimensions.mjs",
     "backfill:wallpaper-thumbs": "node scripts/backfill-wallpaper-thumbnails.mjs",
     "setup:r2-cors": "node scripts/setup-r2-cors.mjs",

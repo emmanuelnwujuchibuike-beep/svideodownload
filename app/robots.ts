@@ -39,7 +39,11 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: "*", allow: "/", disallow },
       ...aiAgents.map((userAgent) => ({ userAgent, allow: "/", disallow })),
     ],
-    sitemap: `${siteUrl}/sitemap.xml`,
+    // posts-sitemap.xml (every public post) and news-sitemap.xml (category
+    // "news" posts from the last 48h, Google News format) are DB-backed
+    // route handlers, kept separate from the static sitemap.xml above — see
+    // either file's own top-of-file note for why.
+    sitemap: [`${siteUrl}/sitemap.xml`, `${siteUrl}/posts-sitemap.xml`, `${siteUrl}/news-sitemap.xml`],
     host: siteUrl,
   };
 }

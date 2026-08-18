@@ -19,10 +19,12 @@ import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { RelatedLinks } from "@/components/seo/related-links";
 import { Downloader } from "@/features/downloader/downloader";
+import { categoryHubMetadata, CategoryHubView } from "@/features/social/category-hub-view";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { getSeoPage, howToSteps, SEO_SLUGS } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
+import { CATEGORIES, isCategory } from "@/lib/social/categories";
 
 /*
  * Static by contract, not by inference. Vercel was building `/` as DYNAMIC while
@@ -33,8 +35,20 @@ import { SITE_URL as siteUrl } from "@/lib/site";
  */
 export const dynamic = "force-static";
 
+/*
+  🔴 Category hub params ADDED alongside SEO_SLUGS (2026-08-18) — same route
+  slot, two different kinds of page. Next.js only allows one dynamic segment
+  NAME at this tree position across the whole app (route groups are
+  transparent to it), so the category hubs (`/sports`, `/news`, …) and the
+  ~150 generated downloader-tool pages (`/tiktok-downloader`, …) have to
+  share this one file even though they're unrelated content — verified empty
+  intersection between CATEGORIES and every SEO_SLUGS value, so a param is
+  never ambiguous between the two. See the branch in the component and in
+  generateMetadata below, both of which run BEFORE any downloader-specific
+  code and change nothing about how an SEO_SLUGS value is handled.
+*/
 export function generateStaticParams() {
-  return SEO_SLUGS.map((downloader) => ({ downloader }));
+  return [...SEO_SLUGS.map((downloader) => ({ downloader })), ...CATEGORIES.map((downloader) => ({ downloader }))];
 }
 
 export const dynamicParams = false;
@@ -45,6 +59,7 @@ export async function generateMetadata({
   params: Promise<{ downloader: string }>;
 }): Promise<Metadata> {
   const { downloader } = await params;
+  if (isCategory(downloader) && !getSeoPage(downloader)) return categoryHubMetadata(downloader);
   const page = getSeoPage(downloader);
   if (!page) return {};
 
@@ -76,6 +91,15 @@ export default async function DownloaderPage({
   params: Promise<{ downloader: string }>;
 }) {
   const { downloader } = await params;
+  if (isCategory(downloader) && !getSeoPage(downloader)) {
+    return (
+      <>
+        <SiteHeader />
+        <CategoryHubView category={downloader} />
+        <SiteFooter />
+      </>
+    );
+  }
   const page = getSeoPage(downloader);
   if (!page) notFound();
 

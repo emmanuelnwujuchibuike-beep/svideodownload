@@ -1,59 +1,11 @@
-import { createHash } from "node:crypto";
-
-import {
-  CalendarDays,
-  Download,
-  Eye,
-} from "lucide-react";
-import { VerifiedTick } from "@/components/badges/identity-badges";
 import type { Metadata } from "next";
-// Aliased — this file exports the reserved route-segment config
-// `export const dynamic = "force-dynamic"` further down, which would
-// otherwise collide with next/dynamic's default export name.
-import nextDynamic from "next/dynamic";
-import Link from "next/link";
-import { headers } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
-import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { isAdmin } from "@/lib/admin";
-import { jsonLd } from "@/lib/seo/json-ld";
-import { streamThumbnailUrl } from "@/lib/media/stream";
-import { SITE_URL } from "@/lib/site";
-import { SiteHeader } from "@/components/layout/site-header";
-import { RichText } from "@/components/social/rich-text";
-import { PostEditButton } from "@/features/social/post-edit-button";
-import { Comments } from "@/features/social/comments";
-import { FollowButton } from "@/features/social/follow-button";
-import { PostDeleteButton } from "@/features/social/post-delete-button";
-import { PostDownloadButton } from "@/features/social/post-download-button";
-import { PostEngagement } from "@/features/social/post-engagement";
-import { ReportButton } from "@/features/social/report-button";
-import { categoryLabel } from "@/lib/social/categories";
-import { getUserPlan } from "@/lib/monetization/plan";
-import { canComment, getViewerReactions, listComments } from "@/lib/social/engagement";
-import { getPoll } from "@/lib/social/polls";
-import { PostMedia } from "@/features/social/post-media";
-
-// Code-split (this is a Server Component, so no `ssr: false` — these still
-// render into the initial HTML for SEO/no-JS, but their hydration code
-// becomes its own chunk instead of shipping in every visitor's initial JS).
-// PostGrid ("related posts") is below the fold on every visit; PostPoll/
-// PollCreator only ever render for the minority of posts that carry a poll.
-const PostGrid = nextDynamic(() => import("@/components/social/post-grid").then((m) => m.PostGrid));
-const PostPoll = nextDynamic(() => import("@/features/social/post-poll").then((m) => m.PostPoll));
-const PollCreator = nextDynamic(() => import("@/features/social/post-poll").then((m) => m.PollCreator));
-import type { FeedItem } from "@/lib/social/home-feed";
-import { getPost, getPostMediaItems, recordPostView, relatedPosts } from "@/lib/social/posts";
+import { PostPageView, postPageMetadata } from "@/features/social/post-page-view";
+import { getPost } from "@/lib/social/posts";
+import { postHref } from "@/lib/social/post-url";
 import { createClient } from "@/lib/supabase/server";
-import { formatCompactNumber } from "@/lib/utils";
-
-const COMMENT_GATE_MSG: Record<string, string> = {
-  off: "Comments are turned off for this post.",
-  followers: "Only the creator's followers can comment.",
-  blocked: "You can't comment here.",
-  unavailable: "Comments are unavailable.",
-};
 
 export const dynamic = "force-dynamic";
 
@@ -78,20 +30,21 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!UUID.test(id)) return { title: "Not found", robots: { index: false, follow: false } };
   const post = await getPost(id, null);
   if (!post) return { title: "Not found", robots: { index: false, follow: false } };
-  return {
-    title: post.title,
-    description: post.description ?? `Watch & download from ${post.platform} on FrenzSave.`,
-    alternates: { canonical: `/p/${post.id}` },
-    robots: { index: post.indexable, follow: post.indexable },
-    openGraph: {
-      type: "video.other",
-      title: post.title,
-      description: post.description ?? undefined,
-      images: post.thumbnail_url ? [{ url: post.thumbnail_url }] : undefined,
-    },
-  };
+  // Moot once a redirect actually fires below (the response has no body to
+  // put this metadata into), but harmless — see the redirect's own note.
+  return postPageMetadata(post, `/p/${post.id}`);
 }
 
+/**
+ * /p/[id] — the permanent, never-changing post URL. Stays the canonical for
+ * an uncategorized post (nowhere principled to live at /[category]/...) and
+ * for any post migration 0126/its backfill hasn't reached yet; every other
+ * post 301s to its descriptive /[category]/[year]/[month]/[slug] URL below,
+ * consolidating old links'/shares' authority onto the new one rather than
+ * leaving two indexable URLs for the same content (see post-url.ts's
+ * postHref — the single function that decides this for every surface: the
+ * feed, PostGrid, share/copy-link, the sitemaps, and this redirect).
+ */
 export default async function PostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!UUID.test(id)) notFound();
@@ -100,245 +53,10 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const post = await getPost(id, me, viewerIsAdmin);
   if (!post) notFound();
 
-  // Deduped view (per viewer|ip per day) — fire and forget. Don't count the
-  // owner viewing their own post.
-  if (!post.isOwner) {
-    const ipHash = createHash("sha256")
-      .update((((await headers()).get("x-forwarded-for") ?? "").split(",")[0] || "anon").trim())
-      .digest("hex");
-    void recordPostView(post.id, me, ipHash);
+  if (post.slug && post.category) {
+    const canonical = postHref(post);
+    if (canonical !== `/p/${post.id}`) redirect(canonical);
   }
 
-  const [plan, related, reactions, comments, gate, poll, albumMedia] = await Promise.all([
-    getUserPlan(post.publisher_id),
-    relatedPosts(post),
-    getViewerReactions(post.id, me),
-    listComments(post.id, post.publisher_id, me),
-    me ? canComment(post.id, me) : Promise.resolve(null),
-    getPoll(post.id, me),
-    getPostMediaItems(post.id),
-  ]);
-  const commentDisabled =
-    gate && !gate.ok ? (COMMENT_GATE_MSG[gate.reason] ?? "Comments are unavailable.") : null;
-
-  // A rich media item so the hero can play inline + open a full reel-quality viewer.
-  const mediaItem: FeedItem = {
-    id: post.id,
-    title: post.title,
-    description: post.description,
-    platform: post.platform,
-    mediaKind: post.media_kind,
-    thumbnailUrl: post.thumbnail_url,
-    sourceUrl: post.source_url,
-    mediaUrl: post.media_url,
-    streamUid: post.stream_uid,
-    category: post.category,
-    durationSec: post.duration_sec,
-    viewsCount: post.views_count,
-    likesCount: post.likes_count,
-    commentsCount: post.comments_count,
-    sharesCount: post.shares_count,
-    savesCount: post.saves_count,
-    downloadsCount: post.downloads_count,
-    createdAt: post.created_at,
-    publisher: {
-      id: post.publisher.id,
-      handle: post.publisher.handle,
-      displayName: post.publisher.displayName,
-      avatarUrl: post.publisher.avatarUrl,
-      isVerified: post.publisher.isVerified,
-      plan,
-    },
-    viewerLiked: reactions.liked,
-    viewerSaved: reactions.saved,
-    isFollowing: post.publisher.isFollowing,
-    isOwner: post.isOwner,
-    hasPoll: false, // the post page renders the poll separately, above comments
-    // Albums: the ordered items so the hero renders the full carousel — not
-    // just the cover (pre-migration-0032 this is [] and nothing changes).
-    ...(albumMedia.length > 1 ? { mediaItems: albumMedia } : {}),
-  };
-
-  const isVideo = post.media_kind !== "image";
-
-  /*
-    A thumbnail is REQUIRED for a VideoObject.
-
-    Google Search Console flagged "No thumbnail URL provided": the old markup
-    only emitted `thumbnailUrl` when `post.thumbnail_url` was set, so any video
-    whose poster had not been backfilled produced an invalid VideoObject and was
-    dropped from video indexing. A representative image is acceptable to Google,
-    so this falls back rather than omitting the field:
-
-      1. the stored poster, when present;
-      2. the Cloudflare Stream auto-thumbnail, derivable from `stream_uid` for
-         any video we transcoded even if the poster column is null;
-      3. the site's own OG card as a last resort, so the field is never empty.
-
-    Absolute URLs throughout — structured data is read by a crawler with no page
-    context, and a relative thumbnail is treated as missing.
-  */
-  const streamThumb = post.stream_uid ? streamThumbnailUrl(post.stream_uid) : null;
-  const thumbnailUrl =
-    post.thumbnail_url || streamThumb || `${SITE_URL}/opengraph-image`;
-
-  const ld = isVideo
-    ? {
-        "@context": "https://schema.org",
-        "@type": "VideoObject",
-        name: post.title,
-        ...(post.description ? { description: post.description } : {}),
-        // Always present now — the whole point of the fallback chain above.
-        thumbnailUrl,
-        uploadDate: post.created_at,
-        // `contentUrl` is what Google fetches to index the actual video; without
-        // it a VideoObject is decorative. `embedUrl` is the page it plays on.
-        ...(post.media_url ? { contentUrl: post.media_url } : {}),
-        embedUrl: `${SITE_URL}/p/${post.id}`,
-        ...(post.duration_sec
-          ? { duration: `PT${Math.max(1, Math.round(post.duration_sec))}S` }
-          : {}),
-        interactionStatistic: {
-          "@type": "InteractionCounter",
-          interactionType: "https://schema.org/WatchAction",
-          userInteractionCount: post.views_count,
-        },
-      }
-    : {
-        "@context": "https://schema.org",
-        "@type": "ImageObject",
-        name: post.title,
-        ...(post.description ? { description: post.description } : {}),
-        contentUrl: post.media_url || thumbnailUrl,
-        uploadDate: post.created_at,
-      };
-
-  return (
-    <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
-      <SiteHeader social />
-      {/* Clears the header precisely: on mobile the header is just the safe-area
-          strip (so safe-top + a small gap); at lg+ the full h-16 bar is back. */}
-      <main className="container max-w-3xl pb-24 pt-[calc(var(--frenz-safe-top)+1.25rem)] lg:pt-24">
-        {post.status !== "published" ? (
-          <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
-            This post is <strong>{post.status.replace("_", " ")}</strong> and isn&apos;t publicly visible.
-          </div>
-        ) : null}
-
-        {/* Hero media — plays inline + opens a full reel-quality viewer */}
-        <PostMedia item={mediaItem} />
-
-        {/* Title + meta */}
-        <div className="mt-5 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-[-0.02em] sm:text-2xl">{post.title}</h1>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-              {post.source_author ? <span>by {post.source_author}</span> : null}
-              <span className="inline-flex items-center gap-1.5">
-                <CalendarDays className="h-4 w-4" />
-                {new Date(post.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
-              </span>
-              {post.category ? (
-                <Link href={`/explore?category=${post.category}`} className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-foreground transition hover:bg-secondary/70">
-                  {categoryLabel(post.category)}
-                </Link>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <PostDownloadButton postId={post.id} sourceUrl={post.source_url} mediaKind={post.media_kind} title={post.title} />
-            {post.isOwner ? (
-              <>
-                <PostEditButton
-                  postId={post.id}
-                  initialTitle={post.title}
-                  initialDescription={post.description}
-                  initialCategory={post.category}
-                  initialVisibility={post.visibility}
-                />
-                <PostDeleteButton postId={post.id} redirectTo={`/u/${post.publisher.handle}`} />
-              </>
-            ) : (
-              <ReportButton targetType="post" targetId={post.id} />
-            )}
-          </div>
-        </div>
-
-        {post.description ? (
-          <p className="mt-4 leading-relaxed text-muted-foreground">
-            <RichText text={post.description} />
-          </p>
-        ) : null}
-
-        {/* Engagement + reach — one premium glass panel */}
-        <div className="mt-6 rounded-3xl border border-border/60 bg-gradient-to-b from-card/80 to-card/40 p-4 shadow-soft ring-1 ring-inset ring-white/5 backdrop-blur sm:p-5">
-          <PostEngagement
-            postId={post.id}
-            loggedIn={!!me}
-            initial={{
-              liked: reactions.liked,
-              saved: reactions.saved,
-              likes: post.likes_count,
-              saves: post.saves_count,
-              shares: post.shares_count,
-              comments: post.comments_count,
-            }}
-          />
-          <div className="mt-4 flex items-center gap-2 border-t border-border/50 pt-4">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-              <Eye className="h-3.5 w-3.5 text-sky-500" /> {formatCompactNumber(post.views_count)} views
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-              <Download className="h-3.5 w-3.5 text-violet-500" /> {formatCompactNumber(post.downloads_count)} downloads
-            </span>
-          </div>
-        </div>
-
-        {/* Creator */}
-        <div className="mt-6 flex items-center gap-3 rounded-3xl border border-border/60 bg-gradient-to-br from-card to-card/50 p-4 shadow-soft ring-1 ring-inset ring-white/5 transition-shadow hover:shadow-md">
-          <Link href={`/u/${post.publisher.handle}`} className="shrink-0" prefetch>
-            {post.publisher.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={post.publisher.avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover ring-2 ring-violet-500/30 ring-offset-2 ring-offset-card" />
-            ) : (
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-lg font-bold text-white ring-2 ring-violet-500/30 ring-offset-2 ring-offset-card">
-                {post.publisher.displayName.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </Link>
-          <Link href={`/u/${post.publisher.handle}`} className="min-w-0 flex-1">
-            <span className="flex items-center gap-1.5">
-              <span className="truncate font-semibold">{post.publisher.displayName}</span>
-              {post.publisher.isVerified ? <VerifiedTick className="h-4 w-4 shrink-0" /> : null}
-              <DiamondCrownBadge plan={plan} size="xs" />
-            </span>
-            <span className="block truncate text-sm text-muted-foreground">@{post.publisher.handle}</span>
-          </Link>
-          {post.isOwner ? null : <FollowButton targetId={post.publisher.id} initialFollowing={post.publisher.isFollowing} canFollow={!!me} />}
-        </div>
-
-        {/* Poll (vote) — render if one exists; otherwise let the owner add one */}
-        {poll ? <PostPoll initial={poll} loggedIn={!!me} /> : post.isOwner ? <PollCreator postId={post.id} /> : null}
-
-        {/* Comments */}
-        <Comments
-          postId={post.id}
-          comments={comments}
-          loggedIn={!!me}
-          canComment={!!gate?.ok}
-          disabledReason={commentDisabled}
-          count={post.comments_count}
-        />
-
-        {/* Related */}
-        {related.length > 0 ? (
-          <section className="mt-10">
-            <h2 className="mb-3 text-lg font-semibold tracking-[-0.02em]">Related downloads</h2>
-            <PostGrid posts={related} />
-          </section>
-        ) : null}
-      </main>
-    </>
-  );
+  return <PostPageView post={post} me={me} canonicalPath={`/p/${post.id}`} />;
 }

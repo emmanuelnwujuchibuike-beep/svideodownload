@@ -71,6 +71,7 @@ import { isCategory } from "@/lib/social/categories";
 import { prefetchPostComments } from "@/lib/social/comments-cache";
 import { FrenzsaveError } from "@/lib/sdk";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
+import { postHref } from "@/lib/social/post-url";
 import type { RepostAudience } from "@/lib/social/repost/audience";
 import { toggleRepost, useRepostState } from "@/lib/social/repost-store";
 import type { FeedItem } from "@/lib/social/home-feed";
@@ -308,7 +309,7 @@ function FeedPostCardImpl({
   const copyLink = async () => {
     setMenuOpen(false);
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/p/${item.id}`);
+      await navigator.clipboard.writeText(`${window.location.origin}${postHref(item)}`);
       toast("Link copied.", "success");
     } catch {
       toast("Couldn't copy the link.", "error");
@@ -711,14 +712,42 @@ function FeedPostCardImpl({
             </div>
           </div>
 
-          {/* Caption */}
+          {/* Caption — a real <a href> to the post's canonical URL (postHref:
+              lib/social/post-url.ts), not just an onClick target. Section 8 of
+              the SEO brief: every post rendered in the feed needs a normal
+              crawlable link to its content page present in the HTML, not only
+              reachable via a JS click handler — this card previously had NONE
+              anywhere (2026-08-18 audit), so Google could browse /explore's
+              grid but not discover a single post from the feed itself.
+              Deliberately scoped to just the caption rather than also
+              wrapping the media box: FeedVideo/FeedImage's tap/double-tap/
+              hold gesture state machines are separately, heavily tuned (see
+              either file's own history of "SETTLED"/"REVERSED" notes) and
+              retrofitting them to double as real anchors risks exactly the
+              kind of regression this fix must not introduce. A plain click
+              still opens the instant in-app viewer (preventDefault below,
+              same interception PostGrid's MediaTile/PostCardItem already
+              use) — only Ctrl/Cmd/middle-click, right-click → copy link, and
+              a crawler's DOM parser see the real navigation. */}
           {title ? (
             <div className="pb-3 pt-0.5">
-              <p className="text-[15px] leading-relaxed">
+              <Link
+                href={postHref(item)}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
+                  e.preventDefault();
+                  open(item);
+                }}
+                className="block text-[15px] leading-relaxed"
+              >
                 <RichText text={title} />
-              </p>
+              </Link>
               {item.category ? (
-                <Link href={`/explore?q=${encodeURIComponent(`#${item.category}`)}`} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
+                // Was /explore?q=%23category (a search results page); now the
+                // real indexable hub — see category-hub-view.tsx's note on
+                // the owner's "search for news/sports should land on the
+                // hashtag page for that topic" (2026-08-18).
+                <Link href={`/${item.category}`} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
                   #{item.category}
                 </Link>
               ) : null}
@@ -894,7 +923,7 @@ function FeedPostCardImpl({
           }}
         />
       ) : null}
-      {qrReady ? <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} /> : null}
+      {qrReady ? <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}${postHref(item)}`} open={qrOpen} onClose={() => setQrOpen(false)} /> : null}
 
       {item.isOwner && editReady ? (
         <PostEditSheet

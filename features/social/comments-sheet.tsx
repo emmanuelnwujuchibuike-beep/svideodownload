@@ -48,17 +48,18 @@ export function CommentsSheet({
     };
   }, [open, postId]);
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflowY;
-    document.body.style.overflowY = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflowY = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
+  /*
+    🔴 REMOVED — GlassSheetShell already does this (owner, laptop view: after
+    opening and closing Comments in feed, the page won't scroll until a
+    refresh). This effect was a leftover per-caller duplicate of exactly what
+    GlassSheetShell's own doc comment says it was built to replace: it set
+    `document.body.style.overflowY` directly, GlassSheetShell separately sets
+    the `overflow` SHORTHAND — which the CSSOM expands into overflowX/Y, so
+    the two were reading and restoring EACH OTHER's values. Whichever
+    cleanup ran first captured the OTHER lock's "hidden" as its own "previous"
+    value and restored scroll back to locked instead of clearing it. One
+    lock (GlassSheetShell's) instead of two racing ones fixes it outright.
+  */
 
   return (
     <GlassSheetShell

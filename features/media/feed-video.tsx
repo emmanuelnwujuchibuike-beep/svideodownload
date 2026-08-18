@@ -174,8 +174,31 @@ export function FeedVideo({
   // scrolls back. `preload="metadata"` on the element keeps the MP4 path light too.
   useAdaptiveSource(video, { hlsUrl, src, poster, active: shouldLoad, onReady: onSrcReady, postId: postId ?? undefined });
 
-  // In-view autoplay / pause. Loads at a 200px margin (just before visible), plays
-  // muted once 40% on screen. Plays as soon as the source is ready.
+  /*
+    🔴 SPLIT FROM THE AUTOPLAY OBSERVER (owner: "the next post must always
+    load ahead... thumbnail and video first 15 to 30secs should loads ahead
+    before the page is opened"). This used to be ONE observer at 200px —
+    barely a quarter-screen of lead time — driving BOTH `shouldLoad` (when
+    to start buffering) AND the 40%-visible autoplay trigger. Simply
+    widening that single observer's rootMargin would have widened autoplay
+    too: intersectionRatio is computed against the EXPANDED root once
+    rootMargin grows, so "40% visible" would fire while the clip was still
+    hundreds of px offscreen. A separate, wide-margin observer that ONLY
+    sets `shouldLoad` — matching FeedImage's own 1200px prefetch margin —
+    gives real lead time to source-attach/buffer without touching when a
+    clip actually starts playing, which stays exactly as precise as before.
+  */
+  useEffect(() => {
+    if (iframeMode) return;
+    const el = wrap.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([entry]) => setShouldLoad(!!entry?.isIntersecting), { rootMargin: "1200px 0px" });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [iframeMode]);
+
+  // In-view autoplay / pause — unchanged 200px margin (just before visible),
+  // plays muted once 40% on screen. Plays as soon as the source is ready.
   useEffect(() => {
     if (iframeMode) return;
     const el = wrap.current;
@@ -184,7 +207,6 @@ export function FeedVideo({
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (!entry) return;
-        setShouldLoad(entry.isIntersecting);
         if (entry.isIntersecting && entry.intersectionRatio >= 0.4) {
           inViewRef.current = true;
           playIfReady();

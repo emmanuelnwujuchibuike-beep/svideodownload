@@ -546,19 +546,21 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       </div>
 
       {/* The stage — full-bleed media. object-contain never crops the width or
-          over-stretches beyond the source: it letterboxes on black and extends into
-          the safe area (owner: "full screen … to the safe area but never crop off
-          the width, never stretch more than it can"). iOS-gallery tap zones sit over
-          the media, under the chrome.
+          over-stretches beyond the source: it letterboxes on black, and the bottom
+          extends all the way to the true viewport edge (owner, 2026-08-16: "so it
+          reached the bottom 0"). iOS-gallery tap zones sit over the media, under
+          the chrome.
 
-          🔴 Owner, 2026-08-16, after the fact: "the history top is perfect
-          already, i mean the bottom so it reached the bottom 0" — the top was
-          never the problem here (that complaint was about the STORY viewer's
-          progress bar, see stories-row.tsx). Reverted the top padding this
-          briefly carried; `fixed inset-0` + `flex-1` + no padding on either
-          edge already puts the media's bottom at the true viewport edge, which
-          is what was actually being asked for. */}
-      <div className="relative flex min-h-0 flex-1 items-center justify-center">
+          🔴 Top is padded to `--frenz-safe-top` (owner, 2026-08-18: "the image
+          doesn't reach the safe area boundary, I want it to reach the safe area
+          tip at the top but not cross it... I only see a black top"). Before this,
+          the media extended UNDER the status bar/notch same as the bottom, which
+          on-device read as a dead black strip with the status-bar segments
+          missing from it rather than a clean edge — the status bar's own row
+          (below) already computes its `top` off the same variable, so it now sits
+          flush against the media's new top edge instead of floating in extra
+          space that used to be there for no visible reason. */}
+      <div className="relative flex min-h-0 flex-1 items-center justify-center pt-[var(--frenz-safe-top)]">
         {error ? (
           <div className="max-w-sm px-6 text-center text-white">
             <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10"><AlertCircle className="h-7 w-7" /></span>

@@ -16,7 +16,6 @@ import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } fro
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { RecommendedToolsClient } from "@/components/monetization/recommended-tools-client";
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
-import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
 import {
   getServerSnapshot as getServerDownloads,
   getSnapshot as getDownloads,
@@ -43,6 +42,15 @@ import { useDownloader } from "./use-downloader";
 // visitor submits a link — code-split it out of the landing page's initial
 // bundle instead of shipping it to every visitor who never converts.
 const PreviewCard = dynamic(() => import("./preview-card").then((m) => m.PreviewCard), { ssr: false });
+
+// Singleton progress card. Mounted post-hydration (see `chromeReady` below)
+// rather than unconditionally: `dynamic(ssr:false)` alone does not keep a
+// component's chunk out of the route's build manifest when the JSX reaches it
+// on the very first render — only an actually-false-until-mounted gate does.
+const FloatingDownloadProgress = dynamic(
+  () => import("@/features/downloads/floating-progress").then((m) => m.FloatingDownloadProgress),
+  { ssr: false },
+);
 
 // Discovery Gateway™ — only renders once a download has actually completed, so
 // code-split it (along with the Learning Academy content it links to) out of the
@@ -112,6 +120,16 @@ export function Downloader({
   const [phIndex, setPhIndex] = useState(0);
   const { status, metadata, error, fetchMetadata, reset } = useDownloader();
   const previewRef = useRef<HTMLDivElement | null>(null);
+
+  // Mounts FloatingDownloadProgress and ReviewPlayerMount one tick after
+  // hydration rather than on the very first render. Both are singleton
+  // "always there, watching for an event" chrome pieces with no reason to be
+  // in the SSR/build-time render pass — and being reached on that first pass
+  // is what pulls their (and download-player's framer-motion) chunks into
+  // this route's build manifest. A visitor cannot trigger a download inside
+  // a single tick, so nothing is missed.
+  const [chromeReady, setChromeReady] = useState(false);
+  useEffect(() => setChromeReady(true), []);
 
   const isBusy = status === "fetching";
   const detected = url ? detectPlatform(url) : null;
@@ -592,7 +610,7 @@ export function Downloader({
           mount alongside the app shell's own copy; first mount wins). Needed
           here since Downloader also renders on public pages outside the
           signed-in app shell, which is the only place AppOverlays mounts it. */}
-      <FloatingDownloadProgress />
+      {chromeReady ? <FloatingDownloadProgress /> : null}
 
       {/* In-browser review player — loads after hydration, renders only when a
           download is opened for review (see ReviewPlayerMount).
@@ -601,7 +619,7 @@ export function Downloader({
           claimed singleton, and the landing now renders TWO of these tools —
           two mounts would mean two players over one review. The download
           section's copy is the one that owns it. */}
-      {resultOnly ? null : <ReviewPlayerMount />}
+      {resultOnly || !chromeReady ? null : <ReviewPlayerMount />}
 
       {/* The storage gate — opens when a visitor at their plan ceiling
           taps download. Mounted lazily (code-split) on first open so it costs the

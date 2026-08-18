@@ -142,8 +142,16 @@ export function MobileNav({
     `(app)/layout.tsx`, since every OTHER page that layout renders (home,
     friends, messages, reels itself) must keep the real mode-dependent
     behavior untouched.
+
+    🔴 `/feed` NEEDS IT TOO, FOR THE SAME REASON (owner: "when i click feed
+    button in the download page, it enters the feed page but then the feed
+    button change back to the reels button"). `/feed` is ALSO under `(app)`,
+    so a signed-in visitor landing there fell straight out of `forceFeedTab`
+    the instant the URL changed — the very tab they just tapped flipped to
+    "Reels" under their thumb. Showing "Reels" while already ON the Feed page
+    never made sense anyway; the whole point of this tab is "you are here".
   */
-  const forceFeedTab = marketing || pathname === "/downloads";
+  const forceFeedTab = marketing || pathname === "/downloads" || pathname.startsWith("/feed");
   // Cached-first: shows the last-known unread count instantly, updates live via
   // the realtime inbox subscription (InboxRealtimeTracker). `revalidateOnFocus:
   // false` so an iOS back-swipe / app resume never refetches the inbox just to

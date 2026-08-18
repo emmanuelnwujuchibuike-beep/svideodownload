@@ -29,6 +29,7 @@ import {
   Info,
   Link2,
   Loader2,
+  Menu,
   MessageCircle,
   MoreVertical,
   Music,
@@ -104,7 +105,6 @@ import { floatReaction } from "@/features/ui/reaction-float";
   rendering costs nothing and the default is the safe one.
 */
 const ReelMoreSheet = dynamic(() => import("@/features/feed/reel-sheets").then((m) => m.ReelMoreSheet));
-const ReelSendSheet = dynamic(() => import("@/features/feed/reel-sheets").then((m) => m.ReelSendSheet));
 
 import { WhyThisChip } from "@/features/social/repost/why-this";
 import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
@@ -874,8 +874,6 @@ function ReelCard({
   const [composerAudience, setComposerAudience] = useState<RepostAudience>("public");
   const [repostSheetOpen, setRepostSheetOpen] = useState(false);
   const [repostSheetReady, setRepostSheetReady] = useState(false);
-  /** Send's two-option chooser — see the note on the rail's Send control. */
-  const [sendChooserOpen, setSendChooserOpen] = useState(false);
   const [repostersOpen, setRepostersOpen] = useState(false);
   const [repostersReady, setRepostersReady] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -2224,58 +2222,34 @@ function ReelCard({
           ui ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >
-        {/* 40px, down from 44px — it heads a rail of 42px discs, so it tracks
-            them (owner: "reduce the size of the engagement tray").
+        {/*
+          🔴 RAIL MATCHES THE REFERENCE IMAGE EXACTLY (owner, 2026-08-18: "make
+          the reels interface, positioning, structure and design everything
+          exactly from this image" — an Instagram Reels screenshot). Two real
+          structural reversals from what was here before, both confirmed
+          before making them:
 
-            🔴 THE STORY RING (Feature 15 Part 3, tranche 2) replaces the plain
-            white ring when this creator has a story that is still live. It is a
-            RING, not a badge: it costs no extra space on a rail that was
-            deliberately shrunk, and it is the convention people already read.
+          1. AVATAR + FOLLOW MOVED OFF THE RAIL, onto the bottom info panel
+             next to the username instead (see that panel below) — the
+             reference has no avatar on the rail at all. The 2026-08-16 "no
+             duplicate follow button" reasoning doesn't apply here since this
+             is a RELOCATION, not a second copy.
 
-            The liveness test runs in the DATABASE (`expires_at > now`), not in
-            JS — a story that expires between the query and the render would
-            otherwise draw a ring that opens nothing, which is the phantom-ring
-            bug the story cache already documents. */}
-        <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="relative mb-1">
-          <span
-            className={cn(
-              "block rounded-full",
-              item.publisherHasStory
-                ? "bg-gradient-to-tr from-blue-500 via-violet-500 to-fuchsia-500 p-[2px]"
-                : "p-0",
-            )}
-          >
-            {item.publisher.avatarUrl ? (
-              <Image
-                src={item.publisher.avatarUrl}
-                alt=""
-                width={40}
-                height={40}
-                className={cn("h-10 w-10 rounded-full object-cover", item.publisherHasStory ? "ring-2 ring-black/70" : "ring-2 ring-white")}
-              />
-            ) : (
-              <span className={cn("flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white", item.publisherHasStory ? "ring-2 ring-black/70" : "ring-2 ring-white")}>
-                {item.publisher.displayName.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </span>
-          {!item.isOwner && !following ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                void toggleFollow();
-              }}
-              aria-label="Follow"
-              className="absolute -bottom-2 left-1/2 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full bg-rose-500 text-white"
-            >
-              <UserPlus className="h-3 w-3" />
-            </button>
-          ) : null}
-        </Link>
+          2. REPOST SPLIT BACK OUT OF SEND (owner, confirmed via
+             AskUserQuestion — this reverses a 2026-08-11 "put the reshare
+             button inside the send button to avoid tray cluster" decision).
+             The reference shows Repost with its own count and Send as a bare
+             paper-plane with none, as two separate icons — exactly what the
+             desktop comments-panel's `SidebarAct` row already did for this
+             same pair (`repost`/`openShare`, a few hundred lines down); the
+             mobile rail was the one place still combining them.
 
-        {/* Refined action stack: Like · Comment · Repost · Save · More. Share and
-            everything else live in the premium overflow sheet. */}
+          `Menu` (≡) and the sound-thumbnail square are both new — the
+          reference's rail ends in a hamburger icon (same destination as the
+          existing top-right ••• button, `setMoreOpen`) and a small square
+          audio thumbnail. Save/Bookmark is gone from THIS rail to match —
+          "Add to collection" in the ••• sheet covers the same intent.
+        */}
         <span className="relative inline-flex">
           <RailButton
             icon={myEmotion ? makeEmotionIcon(reactionGlyph(myEmotion)!) : liked ? WowSolid : WowOutline}
@@ -2300,28 +2274,9 @@ function ReelCard({
           />
         </span>
         <RailButton icon={MessageCircle} count={item.commentsCount} label="Comment" onClick={openComments} />
-        {/*
-          ── 🔴 REPOST MOVED INSIDE SEND (owner, 2026-08-11) ───────────────────
-          "put the reshare button inside the send button to avoid tray cluster,
-          so when a user click the send button two options show."
-
-          Repost and Send are the same intent — "put this in front of someone
-          else" — separated only by audience: your own followers, or specific
-          people. Two adjacent rail buttons for one intent is what made the tray
-          read as a wall, and it is the pair a viewer is least likely to tell
-          apart at a glance from two similar glyphs.
-
-          Send now opens a two-option chooser first. The REPOST BADGE (the
-          stacked avatars of people you follow who reposted this) stays on the
-          rail as its own affordance, because it is not an action — it is social
-          proof, and tapping it opens "who reposted", which has nothing to do
-          with sending. The burst animation stays anchored here too so a repost
-          still pops where the badge lives.
-
-          The long-press-for-repost-options gesture moves onto the Send button,
-          so nothing that existed is lost — it is reached from the control that
-          now owns reposting.
-        */}
+        {/* The stacked-avatars badge (who-you-follow reposted this) is purely
+            conditional social proof — it simply doesn't render when a reel has
+            none, which is why the reference screenshot shows no trace of it. */}
         <div className="relative flex flex-col items-center gap-1">
           <RepostBurst triggerKey={repostBurst} />
           {item.repostBadge && item.repostBadge.count > 0 ? (
@@ -2346,22 +2301,34 @@ function ReelCard({
               {item.repostBadge.count > 3 ? <span className="ml-1 text-[10px] font-bold text-white drop-shadow">+{item.repostBadge.count - 3}</span> : null}
             </button>
           ) : null}
-          <RailButton
-            icon={SendIcon}
-            // The count on this control is the REPOST count, because that is the
-            // only one of the two that produces a public, countable object. A
-            // send is private by definition and counting it would be both
-            // meaningless and a privacy leak.
-            count={repostState.count}
-            active={repostState.reposted}
-            activeClass="text-emerald-400"
-            label="Send or repost"
-            onClick={() => setSendChooserOpen(true)}
-            press={repostPress}
-          />
+          <RailButton icon={Repeat2} count={repostState.count} active={repostState.reposted} activeClass="text-emerald-400" label="Repost" onClick={repost} press={repostPress} />
         </div>
-        <RailButton icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
-
+        {/* Plain Send, no count — a send is private by definition, counting it
+            would be both meaningless and a privacy leak (unchanged reasoning
+            from before the split). */}
+        <RailButton icon={SendIcon} label="Send" onClick={openShare} />
+        <RailButton icon={Menu} label="More options" onClick={() => setMoreOpen(true)} />
+        {/*
+          The sound thumbnail — a small square rather than the rail's round
+          discs, matching the reference. Links to the sound's own page when
+          this post carries one (Feature 15 Part 7); falls back to the
+          creator's profile for the vast majority of posts that don't, same
+          honesty rule the caption's own sound row already follows.
+        */}
+        <Link
+          href={item.sound ? `/sound/${item.sound.id}` : `/u/${item.publisher.handle}`}
+          onClick={onClose}
+          aria-label={item.sound ? `Sound: ${item.sound.title}` : "View profile"}
+          className="mt-1 block h-8 w-8 shrink-0 overflow-hidden rounded-md ring-1 ring-white/50"
+        >
+          {item.thumbnailUrl ? (
+            <Image src={item.thumbnailUrl} alt="" width={32} height={32} className="h-full w-full object-cover" />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-500 to-violet-600">
+              <Music className="h-4 w-4 text-white" />
+            </span>
+          )}
+        </Link>
       </div>
 
       {/*
@@ -2448,10 +2415,52 @@ function ReelCard({
           ui ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >
-        <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="inline-flex items-center gap-1.5 text-white">
-          <span className="font-bold">@{item.publisher.handle}</span>
-          {item.publisher.isVerified ? <VerifiedTick className="h-4 w-4" /> : null}
-        </Link>
+        {/*
+          🔴 AVATAR + FOLLOW MOVED HERE FROM THE RAIL (owner, 2026-08-18,
+          matching the reference image exactly). The story ring is the same
+          logic the rail's copy used to carry, just smaller (32px, matching
+          the reference's own proportions relative to the username line).
+        */}
+        <div className="flex items-center gap-2">
+          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="shrink-0">
+            <span
+              className={cn(
+                "block rounded-full",
+                item.publisherHasStory ? "bg-gradient-to-tr from-blue-500 via-violet-500 to-fuchsia-500 p-[2px]" : "p-0",
+              )}
+            >
+              {item.publisher.avatarUrl ? (
+                <Image
+                  src={item.publisher.avatarUrl}
+                  alt=""
+                  width={32}
+                  height={32}
+                  className={cn("h-8 w-8 rounded-full object-cover", item.publisherHasStory ? "ring-2 ring-black/70" : "ring-2 ring-white")}
+                />
+              ) : (
+                <span className={cn("flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-xs font-bold text-white", item.publisherHasStory ? "ring-2 ring-black/70" : "ring-2 ring-white")}>
+                  {item.publisher.displayName.charAt(0).toUpperCase()}
+                </span>
+              )}
+            </span>
+          </Link>
+          <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="inline-flex items-center gap-1.5 text-white">
+            <span className="font-bold">@{item.publisher.handle}</span>
+            {item.publisher.isVerified ? <VerifiedTick className="h-4 w-4" /> : null}
+          </Link>
+          {!item.isOwner ? (
+            <button
+              type="button"
+              onClick={() => void toggleFollow()}
+              className={cn(
+                "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition",
+                following ? "border-white/30 text-white/70" : "border-white text-white",
+              )}
+            >
+              {following ? "Following" : "Follow"}
+            </button>
+          ) : null}
+        </div>
         {title ? (
           <p className={cn("mt-1.5 max-w-md text-sm text-white/90", !infoOpen && "line-clamp-2")}>
             <RichText text={title} linkClassName="font-semibold text-white hover:underline" />
@@ -2804,20 +2813,6 @@ function ReelCard({
         onBlock={blockUser}
       />
 
-      <ReelSendSheet
-        open={sendChooserOpen}
-        onClose={() => setSendChooserOpen(false)}
-        reposted={repostState.reposted}
-        onSendToFriends={() => {
-          setSendChooserOpen(false);
-          openShare();
-        }}
-        onRepost={() => {
-          setSendChooserOpen(false);
-          repost();
-        }}
-      />
-
       {/* Save-to-collection picker */}
       {pickerReady ? <CollectionPicker postId={item.id} open={pickerOpen} onClose={() => setPickerOpen(false)} /> : null}
 
@@ -2984,36 +2979,30 @@ function RailButton({
   press?: ReturnType<typeof useLongPress>;
 }) {
   /*
-    ── Feature 15: every rail control is now a GlassButton ────────────────────
+    ── Feature 15: every rail control is a GlassButton, now bare ─────────────
 
-    This kept its own copy of the glass recipe, its own spring and its own press
-    scale, which is exactly how a "design system" ends up being nine buttons that
-    each look nearly right. Delegating means the rail inherits, for free and
-    identically everywhere:
+    Delegating to one shared button means the whole rail changes together and
+    cannot drift button-to-button — most recently proven when the glass disc
+    itself was removed (owner, 2026-08-18, matching a reference screenshot):
+    one edit to `glass-button.tsx` and all seven rail controls below went bare
+    at once, rather than needing seven separate edits that could disagree.
+    What every button still gets for free from that one place:
 
-      • the ONE glass recipe from design.ts (blur + tint + ring together — blur
-        alone does not guarantee contrast, because a blurred white shirt is
-        still white);
       • the adaptive ACTIVE colour, tinted from `--reel-accent`, so a liked
         button is lit by the video instead of by a hardcoded violet;
-      • the ripple, the soft glow, and haptics routed through the app's shared
-        `haptic()` vocabulary rather than raw `navigator.vibrate`;
+      • haptics routed through the app's shared `haptic()` vocabulary rather
+        than raw `navigator.vibrate`;
       • a visible focus ring, which this never had — the rail was reachable by
         keyboard and gave no indication of where focus was.
-
-    Every call site is unchanged: this signature is kept exactly as it was, so
-    the nine buttons below did not need touching and cannot drift from each other.
 
     `countNode` keeps `AnimatedCount` — a like should tick up, not jump — which is
     the one thing the generic button does not do on its own.
 
     🔴 42px, not 48px (owner, 2026-08-10: "reduce the size of the engagement
-    tray"). Five 48px discs plus their counts plus the avatar made the rail about
-    450px of a 851px screen — over half the height of the video, on the side of
-    the frame where the subject usually is. 42px with a 21px glyph keeps it well
-    clear of the 44px minimum touch target (WCAG 2.5.5 measures the TARGET, and
-    the button's own tap area is the disc plus the count beneath it, ~56px tall)
-    while giving roughly 60px back to the picture.
+    tray") — kept even after the glass disc's removal, since this is now just
+    the touch-target/focus-ring size, not a visible disc diameter, and 42px
+    still clears the 44px minimum touch target once the count text beneath it
+    is counted (WCAG 2.5.5 measures the TARGET, ~56px tall total).
   */
   return (
     <GlassButton

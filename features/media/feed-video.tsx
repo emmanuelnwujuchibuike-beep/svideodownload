@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Maximize2, Pause, Volume2, VolumeX } from "lucide-react";
+import { Pause, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { WowSolid } from "@/components/brand/wow-icon";
@@ -542,27 +542,12 @@ export function FeedVideo({
         {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
       </button>
 
-      {/* Expand — the same fullscreen reel a tap on the clip itself opens
-          (owner spec: one consistent "zoom" behavior, not a second,
-          separate in-place fullscreen mode).
-
-          🔴 MOVED TO THE TOP, under Mute (owner, 2026-08-18: "the full screen
-          icon on the feed card is clashing with the engagement"). The bottom
-          edge is now the blended engagement row's own territory (see
-          feed-post-card.tsx's engagementRow) — bottom-right is exactly where
-          Save used to sit. Stacked directly under Mute rather than beside it
-          so neither corner gets crowded. */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onExpand?.();
-        }}
-        aria-label="Open in fullscreen"
-        className="absolute right-2.5 top-[3.25rem] z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
-      >
-        <Maximize2 className="h-4 w-4" />
-      </button>
+      {/*
+        🔴 EXPAND BUTTON REMOVED (owner, 2026-08-18: "remove the zoom button on
+        my feed card, is causing visual noise"). A tap on the clip itself
+        already opens the same fullscreen reel this button used to — see
+        `onPointerUp` below — so nothing is lost, only the redundant icon.
+      */}
 
       {/*
         Double-tap Wow burst — centered (same reliable pattern as the paused

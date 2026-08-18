@@ -157,20 +157,21 @@ export function FeedImage({
       // press, or press-and-hold.
       style={ratio ? { aspectRatio: ratio } : undefined}
       className={cn(
-        // 🔴 DO NOT RESTYLE THIS BOX (owner, 2026-08-18: "the image view is
-        // perfect already like twitter, only not just positioned well, it
-        // should break out"). A `mr-auto`/`w-fit` pass was tried here and
-        // explicitly rejected — the photo's own rendering was never the
-        // problem, only WHERE the card put it. That fix belongs entirely in
-        // feed-post-card.tsx, which now renders this outside the
-        // avatar-indented column; this box keeps its original sizing.
-        //
-        // `mx-auto` + `rounded-2xl` of its own: once the max-h cap narrows this
-        // box below the card's full width (see the 2026-08-17 black-bars note
-        // above), it needs to center itself and carry its own rounded corners —
-        // the outer wrapper's rounding only reaches the card's own edges, which
-        // this box no longer touches in that case.
-        "relative mx-auto flex max-h-[85vh] items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+        // 🔴 FIXED LEFT LINE, FLEXIBLE RIGHT (owner, 2026-08-18, superseding
+        // the "don't restyle this box" note below — that call was made before
+        // the owner sent three real Twitter screenshots showing every post's
+        // media sharing ONE fixed left edge, with only the RIGHT edge varying
+        // by each image's own width: "the left is fixed and doesnt cross the
+        // line... some images can expand to the way end of right leaving only
+        // 1.5 or 1 padding, but the left is fixed"). `mx-auto` centers a
+        // narrower-than-full-width box, which puts slack on BOTH sides
+        // instead of only the right — exactly what the screenshots rule out.
+        // `mr-auto` puts all the slack on the right; `w-fit` (not the
+        // previously-assumed-safe default) is what stops this box from
+        // silently staying full-width once centering was the only thing
+        // holding it there — the same "wrapper vs. shrunk child" black-gap
+        // mechanism already fixed on FeedVideo's matching wrapper.
+        "relative mr-auto flex w-fit max-w-full max-h-[85vh] items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
         className,
       )}
       // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still

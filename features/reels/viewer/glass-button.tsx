@@ -1,53 +1,39 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useRef, useState } from "react";
 
 import { haptic, type HapticIntent } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
-import { glass, reelMotion } from "./design";
+import { reelMotion } from "./design";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  THE PREMIUM INTERACTION BUTTON (Feature 15, Part 1)
+ *  THE BARE ACTION-RAIL BUTTON (Feature 15 Part 1, restyled 2026-08-18)
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * "Rounded glass background, dynamic blur, soft glow, adaptive colour, premium
- *  shadow, micro bounce, spring motion, luxury ripple, high-quality haptics,
- *  120 FPS where supported."
+ * 🔴 GLASS DISC REMOVED (owner, 2026-08-18: "remove the existing glass
+ * background from the engagement tray icon" — matching a reference Instagram
+ * Reels screenshot, where every rail icon sits bare on the video with no
+ * circular backing at all). This used to wrap each glyph in a blurred,
+ * tinted, ring-lined disc (`glass.primary` from design.ts) with a ripple and
+ * a soft glow layered inside it. All three were disc-dependent effects with
+ * nothing to draw on once the disc was gone, so they left with it rather than
+ * being reimplemented as free-floating versions of themselves.
  *
- * Every control in the action rail is one of these, so the whole rail is
- * consistent by construction rather than by nine components agreeing.
- *
- * ── How each of those is actually delivered ────────────────────────────────
- *
- *  • GLASS + BLUR + SHADOW — one recipe from `design.ts`, not per-button values.
- *  • ADAPTIVE COLOUR — the active state tints from `--reel-accent`, the Living
- *    Interface™ variable, so a liked button is lit by the video rather than by a
- *    hardcoded violet. Falls back to the brand violet when no tint was sampled.
- *  • MICRO BOUNCE / SPRING — `whileTap` on the app's shared `press` spring, so a
- *    press here feels identical to a press anywhere else in Frenzsave.
- *  • RIPPLE — a scale+fade ring, drawn only on press and self-cleaning.
- *  • HAPTICS — routed through the app's `haptic()` vocabulary rather than raw
- *    `navigator.vibrate`, so intents stay consistent and the user's reduce-motion
- *    / OS settings are honoured in one place.
- *
- * ── 120 FPS, honestly ──────────────────────────────────────────────────────
- *
- * There is no web API to request a refresh rate; a page gets the display's rate
- * from rAF. What a developer actually controls is whether a frame can BE cheap,
- * and that is a real constraint honoured here: everything animated is `transform`
- * and `opacity` only — no width, no filter, no box-shadow animation — so frames
- * are composited without layout or paint and the browser can hit whatever the
- * panel supports. Claiming more than that would be marketing.
+ * What's left, and why it's still enough to feel deliberate rather than
+ * unfinished:
+ *  • A `drop-shadow` on the glyph itself — the legibility job the glass used
+ *    to do (contrast against any video frame), without needing a background.
+ *  • ADAPTIVE COLOUR — the active state still tints from `--reel-accent`, the
+ *    Living Interface™ variable, so a liked button is lit by the video rather
+ *    than by a hardcoded violet.
+ *  • MICRO BOUNCE / SPRING — `whileTap` on the app's shared `press` spring.
+ *  • HAPTICS — routed through the app's `haptic()` vocabulary.
  *
  * ── Reduced motion ────────────────────────────────────────────────────────
- *
- * The ripple and the bounce are suppressed by `motion-reduce`, and the button
- * keeps its colour change — the FEEDBACK survives, only the movement stops.
- * Removing the feedback along with the motion is the common mistake and it
- * leaves the user unable to tell whether their tap registered.
+ * The bounce is suppressed by `motion-reduce`; the button keeps its colour
+ * change — the feedback survives, only the movement stops.
  */
 
 export function GlassButton({
@@ -59,7 +45,7 @@ export function GlassButton({
   activeClassName,
   count,
   countNode,
-  /** Diameter of the glass disc, in px. */
+  /** Diameter of the button's touch target/focus ring, in px. */
   size = 48,
   /**
    * The glyph inside the disc. It is a CLASS and not a number derived from
@@ -101,15 +87,8 @@ export function GlassButton({
   /** Custom content instead of an icon (e.g. the avatar). */
   children?: React.ReactNode;
 }) {
-  const [ripples, setRipples] = useState<number[]>([]);
-  const seq = useRef(0);
-
   const handle = (e: React.MouseEvent) => {
     haptic(hapticIntent);
-    // The ripple is keyed and removes itself — no timer cleanup to leak, and no
-    // array that grows for the lifetime of the reel.
-    const id = seq.current++;
-    setRipples((r) => [...r, id]);
     onClick?.(e);
   };
 
@@ -127,39 +106,17 @@ export function GlassButton({
       <span
         style={{ width: size, height: size }}
         className={cn(
-          "relative flex items-center justify-center overflow-hidden rounded-full transition-colors",
-          glass.primary,
-          active && "bg-white/20 ring-white/30",
+          "relative flex items-center justify-center rounded-full transition-colors",
           // Focus must be visible on a video of any colour — a white ring alone
           // can vanish on a white frame, so it carries its own dark offset.
           "group-focus-visible/gb:ring-2 group-focus-visible/gb:ring-white",
         )}
       >
-        {/* RIPPLE — transform+opacity only, so it composites. */}
-        {ripples.map((id) => (
-          <span
-            key={id}
-            aria-hidden
-            onAnimationEnd={() => setRipples((r) => r.filter((x) => x !== id))}
-            className="pointer-events-none absolute inset-0 animate-[reel-ripple_460ms_ease-out_forwards] rounded-full bg-white/35 motion-reduce:hidden"
-          />
-        ))}
-
-        {/* SOFT GLOW behind an active control, tinted by the video. Sits under
-            the glyph and is `opacity`-animated only. */}
-        <span
-          aria-hidden
-          className={cn(
-            "pointer-events-none absolute inset-0 rounded-full bg-[hsl(var(--reel-accent,265_85%_65%))] blur-md transition-opacity duration-300",
-            active ? "opacity-40" : "opacity-0",
-          )}
-        />
-
         {children ??
           (Icon ? (
             <Icon
               className={cn(
-                "relative transition-colors",
+                "relative transition-colors drop-shadow-[0_2px_5px_rgba(0,0,0,0.5)]",
                 glyphClassName,
                 fill && active && "fill-current",
                 active

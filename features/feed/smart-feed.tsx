@@ -855,9 +855,9 @@ export function SmartFeed({
               */
               <div>
                 <AnimatePresence initial={false}>
-                  {stream.map((slot) =>
+                  {stream.map((slot, index) =>
                     slot.type === "post" ? (
-                      <FeedPostCard key={slot.item.id} item={slot.item} reason={slot.reason} onRemove={remove} onOpen={openViewer} />
+                      <FeedPostCard key={slot.item.id} item={slot.item} reason={slot.reason} onRemove={remove} onOpen={openViewer} priority={index === 0} />
                     ) : (
                       <div key={slot.card.id} className="my-4 first:mt-0">
                         <SparkCard card={slot.card} />

@@ -1,15 +1,12 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import { Pause, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { WowSolid } from "@/components/brand/wow-icon";
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
+import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
 import { clampFeedRatio } from "@/lib/media/aspect";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
-import { haptic } from "@/lib/motion/haptics";
-import { playSound } from "@/lib/notifications/sound-fx";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
 import { claimPlayback, isSuspended, recentlyScrolled, recordView, releasePlayback } from "@/lib/media/video-coordinator";
@@ -17,6 +14,11 @@ import { cn } from "@/lib/utils";
 
 // A tap only counts if the pointer barely moved AND the page isn't mid-scroll.
 const TAP_MOVE_TOLERANCE = 18;
+// How long a second tap has to land to count as a double-tap — and, just as
+// importantly, the FLOOR for how long the single-tap "open fullscreen" timer
+// must wait before firing (see the tap-up handler below for why these must
+// never be two different numbers).
+const DOUBLE_TAP_WINDOW_MS = 300;
 
 /**
  * Inline feed video. Autoplays muted when scrolled into view (Reels feel) and
@@ -307,20 +309,26 @@ export function FeedVideo({
     if (!(started && !moved.current && dur >= 40 && dur < 300 && !recentlyScrolled(500))) return;
 
     const now = Date.now();
-    if (now - lastTapAt.current < 300) {
+    if (now - lastTapAt.current < DOUBLE_TAP_WINDOW_MS) {
       // Second tap arrived in time → Wow, not fullscreen.
       lastTapAt.current = 0;
       if (expandTimer.current) clearTimeout(expandTimer.current);
-      haptic("wow");
-      playSound("wow");
+      fireWowFeedback();
       setBurst((b) => b + 1);
       onDoubleTapLike?.();
       return;
     }
     // Hold the open-fullscreen action briefly in case a second tap follows.
+    // 🔴 MUST be >= DOUBLE_TAP_WINDOW_MS, not shorter (owner: "video double
+    // tap sometimes open the video"). This used to fire at 280ms while the
+    // double-tap window above was 300ms — a genuine but slightly slow second
+    // tap landing between 280-300ms after the first arrived AFTER expand had
+    // already fired, opening fullscreen instead of registering as Wow. Using
+    // the SAME constant for both closes that 20ms race entirely: expand can
+    // never fire before the double-tap check has had its full window.
     lastTapAt.current = now;
     if (expandTimer.current) clearTimeout(expandTimer.current);
-    expandTimer.current = setTimeout(() => onExpand?.(), 280);
+    expandTimer.current = setTimeout(() => onExpand?.(), DOUBLE_TAP_WINDOW_MS);
   };
   const onPointerLeaveCancel = () => {
     if (holdTimer.current) clearTimeout(holdTimer.current);
@@ -550,54 +558,14 @@ export function FeedVideo({
       */}
 
       {/*
-        Double-tap Wow burst — centered (same reliable pattern as the paused
-        indicator above), not tap-position-tracked.
-
-        🔴 BIGGER, "3D", FLOATING UP — round two (owner, 2026-08-18, first
-        pass: "make the wow animation be bigger and realistic... floating out
-        of the phone... to the top safe area"; correction after it shipped
-        too small: "let it get bigger in 3d to occupy a large part of the
-        screen while floating up to the safe area"). Base size roughly
-        doubled (h-28 → h-48/h-64), peak scale bumped to 2.1, and `y`'s
-        percentage keyframes stay untouched on purpose — percentage `y` scales
-        with the ELEMENT's own size, so simply making the glyph bigger also
-        makes the float travel further in absolute pixels, without having to
-        hand-tune the distance separately. A rise toward the top of the box,
-        a small rotate + a shadow that deepens as it lifts — the standard
-        "elevation" trick for a sense of depth without real CSS 3D transforms
-        (`rotateX`/perspective), which are more prone to looking janky and
-        heavier to composite on a low-end phone. Percentage `y` also means it
-        never needs to escape this box's own `overflow-hidden` — it's fully
-        faded well before reaching the top edge, so nothing gets a visible
-        hard clip.
-
-        Performance: transform (scale/y/rotate) + opacity only — no
-        layout-triggering properties. Accessibility: purely decorative
-        (`pointer-events-none`, no text), and reduced-motion is already
-        handled globally — the (app) layout's `MotionConfig
-        reducedMotion="user"` collapses every transform here to instant under
-        the OS setting, leaving only the opacity fade.
+        Double-tap Wow burst — shared across every media surface now (owner,
+        2026-08-18: "reels, feed, multi post, single post, video post should
+        use one wow animation and haptic sound"), and portaled out of this
+        box's own `overflow-hidden` — see wow-burst.tsx's own doc comment for
+        why a portal instead of restructuring this component's already
+        three-times-revised sizing CSS.
       */}
-      <AnimatePresence>
-        {burst > 0 ? (
-          <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-            <motion.span
-              key={burst}
-              initial={{ opacity: 0, scale: 0.3, y: "0%", rotate: -10 }}
-              animate={{
-                opacity: [0, 1, 1, 0],
-                scale: [0.3, 2.1, 1.85, 1.6],
-                y: ["0%", "-8%", "-50%", "-92%"],
-                rotate: [-10, 6, -3, 0],
-              }}
-              transition={{ duration: 1.15, ease: [0.16, 1, 0.3, 1], times: [0, 0.2, 0.65, 1] }}
-              className="drop-shadow-[0_20px_36px_rgba(0,0,0,0.55)]"
-            >
-              <WowSolid className="h-48 w-48 sm:h-56 sm:w-56 lg:h-64 lg:w-64" />
-            </motion.span>
-          </span>
-        ) : null}
-      </AnimatePresence>
+      <WowBurst burstKey={burst} anchorRef={wrap} />
 
       {children}
     </div>

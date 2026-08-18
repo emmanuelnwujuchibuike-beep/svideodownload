@@ -1,11 +1,10 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import { Play } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { WowSolid } from "@/components/brand/wow-icon";
 import type { CarouselMedia } from "@/features/media/media-carousel";
+import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
 import { useTapOrDoubleTap } from "@/lib/hooks/use-tap-or-double-tap";
 import { prefetchImage } from "@/lib/media/prefetch-image";
 import { cn } from "@/lib/utils";
@@ -33,14 +32,11 @@ import { cn } from "@/lib/utils";
 export function MediaGrid({
   items,
   onExpandItem,
-  liked,
   onDoubleTapLike,
   className,
 }: {
   items: CarouselMedia[];
   onExpandItem: (index: number, item: CarouselMedia) => void;
-  /** Already Wowed — hides the "Double-tap to Wow" hint. */
-  liked?: boolean;
   onDoubleTapLike?: () => void;
   className?: string;
 }) {
@@ -85,16 +81,6 @@ export function MediaGrid({
           onDoubleTap={() => onDoubleTapLike?.()}
         />
       ))}
-      {/* One hint for the whole grid, matching FeedImage/MediaCarousel's
-          single-slide hint — not one per cell, which would read as noise. */}
-      <span
-        className={cn(
-          "pointer-events-none absolute bottom-2 left-2.5 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur",
-          liked && "hidden",
-        )}
-      >
-        Double-tap to Wow
-      </span>
     </div>
   );
 }
@@ -114,9 +100,15 @@ function GridCell({
   onDoubleTap: () => void;
 }) {
   const [burst, setBurst] = useState(0);
+  const cellRef = useRef<HTMLDivElement | null>(null);
   const tap = useTapOrDoubleTap({
     onTap,
     onDoubleTap: () => {
+      // 🔴 WAS SILENT — no haptic/sound at all (owner, 2026-08-18: "i didnt
+      // hear any haptic sound in multi post in feed"). Every other media
+      // surface already had this; the grid was the one place it was never
+      // added in the first place, not a regression.
+      fireWowFeedback();
       setBurst((b) => b + 1);
       onDoubleTap();
     },
@@ -125,6 +117,7 @@ function GridCell({
 
   return (
     <div
+      ref={cellRef}
       role="button"
       aria-label={media.kind === "video" ? "Watch video" : "Open photo"}
       tabIndex={0}
@@ -169,19 +162,11 @@ function GridCell({
           <span className="text-[11px] font-semibold uppercase tracking-wide text-white/85">See more</span>
         </span>
       ) : null}
-      <AnimatePresence>
-        {burst > 0 ? (
-          <motion.span
-            key={burst}
-            initial={{ opacity: 0, scale: 0.4 }}
-            animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.15, 1, 1.2] }}
-            transition={{ duration: 0.8, times: [0, 0.2, 0.7, 1] }}
-            className="pointer-events-none absolute inset-0 flex items-center justify-center drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
-          >
-            <WowSolid className="h-10 w-10" />
-          </motion.span>
-        ) : null}
-      </AnimatePresence>
+      {/* Shared with every other media surface now (owner, 2026-08-18: "multi
+          post double tap wow animation is still small, all multi, video and
+          single post should have same one animation"). Portaled, so it
+          isn't clipped by this cell's own `overflow-hidden`. */}
+      <WowBurst burstKey={burst} anchorRef={cellRef} />
     </div>
   );
 }

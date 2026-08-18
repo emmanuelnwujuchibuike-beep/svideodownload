@@ -1,17 +1,14 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import { ImageOff } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
-import { WowSolid } from "@/components/brand/wow-icon";
 import { FadeImage } from "@/features/ui/fade-image";
+import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
 import { useTapOrDoubleTap } from "@/lib/hooks/use-tap-or-double-tap";
 import { clampFeedRatio } from "@/lib/media/aspect";
 import { prefetchImage } from "@/lib/media/prefetch-image";
-import { haptic } from "@/lib/motion/haptics";
-import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 
 /**
@@ -30,6 +27,7 @@ export function FeedImage({
   onExpand,
   className,
   children,
+  priority = false,
 }: {
   src: string;
   alt: string;
@@ -50,6 +48,18 @@ export function FeedImage({
    * always anchored to the real, possibly-narrower media box.
    */
   children?: React.ReactNode;
+  /**
+   * 🔴 True only for the feed's first card (owner, 2026-08-18: "make the
+   * feed page have the same LCP as landing" — measured via Playwright:
+   * landing's LCP image resolves in ~200ms through next/image's optimizer,
+   * feed's took ~1.8s because EVERY card, including whichever one is
+   * actually the LCP element, was hardcoded to `fetchPriority="low"`. That
+   * hint tells the browser to schedule the fetch behind everything else on
+   * the page — correct for the 2nd+ card, actively harmful for the 1st.
+   * Threaded down from feed-post-card.tsx rather than guessed here, since
+   * this component has no way to know its own position in the stream.
+   */
+  priority?: boolean;
 }) {
   const hasDims = !!width && !!height && width > 0 && height > 0;
   const [burst, setBurst] = useState(0);
@@ -113,11 +123,7 @@ export function FeedImage({
   const tap = useTapOrDoubleTap({
     onTap: () => onExpand(),
     onDoubleTap: () => {
-      // Same distinct double-pulse haptic + rising-chime sound as the video
-      // card's Wow burst (owner, 2026-08-18: "double tap should have a
-      // haptic sound different from other haptic sounds already made").
-      haptic("wow");
-      playSound("wow");
+      fireWowFeedback();
       setBurst((b) => b + 1);
       onDoubleTapLike();
     },
@@ -255,40 +261,47 @@ export function FeedImage({
           // on the 2-second budget — the browser still fetches whatever is on
           // screen first.
           loading="eager"
-          fetchPriority="low"
+          fetchPriority={priority ? "high" : "low"}
           className="object-contain"
           onError={() => setBroken(true)}
         />
       ) : (
-        // No known dimensions (older post, pre-backfill) — the container has
-        // no aspect-ratio to size itself by, so this keeps the ORIGINAL
-        // intrinsic-sizing `<img>` (natural aspect, capped only by the 80vh
-        // safety ceiling) rather than a `fill` image with nothing to fill.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        // 🔴 STILL next/image, EVEN WITHOUT A KNOWN RATIO (owner, 2026-08-18:
+        // measured /feed's LCP against landing's — landing's hero resolves
+        // in ~200ms through next/image's optimizer; a feed post missing
+        // stored dimensions was serving its ORIGINAL, unresized upload
+        // (217KB for the one actually measured) through a plain `<img>`,
+        // which is most of where the gap came from). No aspect-ratio means
+        // `fill` has nothing to size against, but `width`/`height` here are
+        // only a HINT for the optimizer's own srcset math, not the display
+        // size — `h-auto w-auto` + `object-contain` below (same CSS the
+        // plain `<img>` this replaces already used) still lets the browser
+        // render the photo at its own true intrinsic shape once it loads,
+        // same as before. What changes is that the bytes on the wire are now
+        // compressed/re-encoded (AVIF/WebP) instead of the raw original.
+        <Image
           src={src}
           alt={alt}
+          width={1600}
+          height={1600}
+          // Without this, next/image assumes the image displays at its full
+          // hinted width (1600px) on every viewport and requests the nearest
+          // breakpoint above that (1920px) regardless of how small the
+          // actual rendered box is — the same `sizes` the FadeImage branch
+          // above already uses, so a phone gets a phone-sized file.
+          sizes="(max-width: 768px) 100vw, 640px"
           loading="eager"
-          fetchPriority="low"
-          className="relative max-h-[80vh] w-auto max-w-full object-contain"
+          fetchPriority={priority ? "high" : "low"}
+          className="relative h-auto max-h-[80vh] w-auto max-w-full object-contain"
           onError={() => setBroken(true)}
         />
       )}
 
-      {/* Double-tap Wow burst */}
-      <AnimatePresence>
-        {burst > 0 ? (
-          <motion.span
-            key={burst}
-            initial={{ opacity: 0, scale: 0.4 }}
-            animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.15, 1, 1.2] }}
-            transition={{ duration: 0.8, times: [0, 0.2, 0.7, 1] }}
-            className="pointer-events-none absolute drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
-          >
-            <WowSolid className="h-24 w-24" />
-          </motion.span>
-        ) : null}
-      </AnimatePresence>
+      {/* Double-tap Wow burst — shared across every media surface now (owner,
+          2026-08-18: "reels, feed, multi post, single post, video post
+          should use one wow animation and haptic sound"), portaled out of
+          this box's own `overflow-hidden` so it isn't clipped at the edge. */}
+      <WowBurst burstKey={burst} anchorRef={containerRef} />
 
       {children}
     </div>

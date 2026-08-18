@@ -38,7 +38,7 @@ export function isDoubleTap(now: number, lastTapAt: number, doubleTapMs: number)
 export function useTapOrDoubleTap({
   onTap,
   onDoubleTap,
-  expandDelayMs = 280,
+  expandDelayMs = 300,
   doubleTapMs = 300,
   moveTolerance = 12,
 }: {
@@ -46,9 +46,20 @@ export function useTapOrDoubleTap({
   onTap: () => void;
   /** Fires instead of `onTap` when a second tap lands within `doubleTapMs`. */
   onDoubleTap: () => void;
-  /** How long a single tap is held back, in case a second tap follows. Spec:
-   *  ~250-350ms. Matches FeedVideo's own value by default for consistency
-   *  across every media surface. */
+  /**
+   * How long a single tap is held back, in case a second tap follows.
+   *
+   * 🔴 MUST be >= `doubleTapMs`, never shorter (owner, 2026-08-18: "video
+   * double tap sometimes open the video" — traced to `FeedVideo`'s own
+   * inline copy of this exact pattern using 280ms here against a 300ms
+   * `doubleTapMs`, so a genuine but slightly slow second tap landing in that
+   * 20ms gap arrived AFTER the single-tap action had already fired. This
+   * hook inherited the same two numbers when it was extracted from that
+   * code, so it had the identical bug in `FeedImage`/`MediaCarousel` even
+   * though only the video case was reported. Now defaults equal to
+   * `doubleTapMs`, closing the race by construction — override only if you
+   * also raise `doubleTapMs` to match.
+   */
   expandDelayMs?: number;
   /** Window a second tap has to land in to count as a double-tap. */
   doubleTapMs?: number;

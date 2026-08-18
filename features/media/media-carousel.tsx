@@ -1,16 +1,13 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { WowSolid } from "@/components/brand/wow-icon";
 import { FadeImage } from "@/features/ui/fade-image";
+import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
 import { useTapOrDoubleTap } from "@/lib/hooks/use-tap-or-double-tap";
 import { prefetchImage } from "@/lib/media/prefetch-image";
 import { claimPlayback, isSuspended, releasePlayback } from "@/lib/media/video-coordinator";
-import { haptic } from "@/lib/motion/haptics";
-import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 
 export interface CarouselMedia {
@@ -61,6 +58,7 @@ export function MediaCarousel({
   className?: string;
 }) {
   const scroller = useRef<HTMLDivElement | null>(null);
+  const outerRef = useRef<HTMLDivElement | null>(null);
   const [index, setIndex] = useState(0);
   const raf = useRef(0);
   const [burst, setBurst] = useState(0);
@@ -127,8 +125,7 @@ export function MediaCarousel({
       else onExpand?.();
     },
     onDoubleTap: () => {
-      haptic("wow");
-      playSound("wow");
+      fireWowFeedback();
       setBurst((b) => b + 1);
       onDoubleTapLike?.();
     },
@@ -200,7 +197,7 @@ export function MediaCarousel({
   }, []);
 
   return (
-    <div className={cn("relative overflow-hidden bg-black", className)}>
+    <div ref={outerRef} className={cn("relative overflow-hidden bg-black", className)}>
       <div
         ref={scroller}
         onScroll={onScroll}
@@ -305,23 +302,10 @@ export function MediaCarousel({
         })}
       </div>
 
-      {/* Double-tap Wow burst — centered, same reliable pattern FeedVideo/
-          FeedImage use (not tap-position-tracked). */}
-      <AnimatePresence>
-        {burst > 0 ? (
-          <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-            <motion.span
-              key={burst}
-              initial={{ opacity: 0, scale: 0.4 }}
-              animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.3, 1.1, 1.5] }}
-              transition={{ duration: 0.9, ease: "easeOut", times: [0, 0.2, 0.6, 1] }}
-              className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
-            >
-              <WowSolid className="h-24 w-24" />
-            </motion.span>
-          </span>
-        ) : null}
-      </AnimatePresence>
+      {/* Double-tap Wow burst — shared across every media surface now (owner,
+          2026-08-18: "reels, feed, multi post, single post, video post
+          should use one wow animation and haptic sound"). */}
+      <WowBurst burstKey={burst} anchorRef={outerRef} />
 
       {/* Wow hint */}
       <span className={cn("pointer-events-none absolute bottom-2 left-2.5 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur", liked && "hidden")}>

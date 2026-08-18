@@ -92,37 +92,47 @@ function resolve(w: number, h: number): RailLayout {
   const short = Math.min(w, h);
   const landscape = w > h;
 
+  /*
+    🔴 EVERY INSET NUDGED SMALLER (owner, 2026-08-18: "move the tray a bit
+    more to the right... to relax to my left a bit more"). Each tier keeps
+    its ORIGINAL relative scaling (a bigger screen still gets a bigger
+    inset — the reach reasoning in this file's own doc comment is untouched)
+    — only the absolute values shifted a few px closer to the true edge,
+    which is what actually widens the gap between the rail and the caption/
+    video content it used to crowd.
+  */
+
   // Landscape: height is scarce. Keep the rail close to the edge and tighten it
   // vertically so it does not eat the video.
   if (landscape && short < 600) {
-    return { inset: 10, gap: 10, compact: true, form: "large-phone" };
+    return { inset: 6, gap: 10, compact: true, form: "large-phone" };
   }
 
   if (short < 360) {
     // Small phone. The edge is already within reach and there is no width to
     // spare — almost no correction, or the rail starts covering the video.
-    return { inset: 8, gap: 14, compact: false, form: "phone" };
+    return { inset: 4, gap: 14, compact: false, form: "phone" };
   }
   if (short < 412) {
-    return { inset: 12, gap: 16, compact: false, form: "phone" };
+    return { inset: 7, gap: 16, compact: false, form: "phone" };
   }
   if (short < 500) {
     // Large phone — the case this system exists for. The top of a flush rail is
     // out of the thumb arc here.
-    return { inset: 18, gap: 18, compact: false, form: "large-phone" };
+    return { inset: 12, gap: 18, compact: false, form: "large-phone" };
   }
   if (short < 700) {
     // Unfolded foldable. Wide, and usually held with both hands, but the rail
     // still wants to be nearer the middle than the bezel.
-    return { inset: 26, gap: 20, compact: false, form: "foldable" };
+    return { inset: 19, gap: 20, compact: false, form: "foldable" };
   }
   if (short < 1024) {
     // Tablet. The edge is genuinely unreachable one-handed.
-    return { inset: 34, gap: 22, compact: false, form: "tablet" };
+    return { inset: 26, gap: 22, compact: false, form: "tablet" };
   }
   // Desktop — a pointer, so reach is irrelevant and the inset is purely
   // compositional: the rail sits off the video's shoulder rather than on it.
-  return { inset: 28, gap: 20, compact: false, form: "desktop" };
+  return { inset: 21, gap: 20, compact: false, form: "desktop" };
 }
 
 export function useAdaptiveRail(): RailLayout {
@@ -130,7 +140,7 @@ export function useAdaptiveRail(): RailLayout {
   // common real device — so the first client paint is already right for most
   // visitors and there is nothing to correct.
   const [layout, setLayout] = useState<RailLayout>({
-    inset: 12,
+    inset: 7,
     gap: 22,
     compact: false,
     form: "phone",

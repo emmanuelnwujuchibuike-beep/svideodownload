@@ -103,11 +103,21 @@ function FeedPostCardImpl({
   reason,
   onRemove,
   onOpen,
+  /**
+   * True for the first card in the stream — the one actually likely to be
+   * the page's LCP element (owner, 2026-08-18: "make the feed page have the
+   * same LCP as landing"). Threaded down to `FeedImage` so its own image can
+   * ask the browser to fetch it eagerly instead of at the blanket "low"
+   * priority every OTHER card in the feed correctly uses to avoid competing
+   * with whatever's actually on screen.
+   */
+  priority = false,
 }: {
   item: FeedItem;
   reason?: SmartReason | null;
   onRemove: (id: string) => void;
   onOpen: (item: FeedItem, startComments?: boolean, startIndex?: number) => void;
+  priority?: boolean;
 }) {
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
@@ -696,27 +706,13 @@ function FeedPostCardImpl({
               Instagram's large feed previews) so video/photo posts read as the
               hero of the card, not a thumbnail. */}
           {item.mediaItems && item.mediaItems.length > 1 ? (
-        /*
-          🔴 STATIC GRID, NOT A SWIPEABLE CAROUSEL, for the inline feed
-          preview (owner, 2026-08-17 redesign spec, section 9: "Create a
-          premium Instagram-style media grid"). `MediaGrid` (new, additive —
-          `MediaCarousel` itself is untouched, still used wherever a genuine
-          swipe-through view is wanted) owns its own rounding internally —
-          section 7's "10-16px border radius" reverses the old "no separate
-          rounding" rule from when the whole POST was itself a rounded card;
-          now the post is a flat timeline row with no rounding of its own, so
-          the media needs it to read as premium rather than a bare rectangle.
-        */
-        <div className="mb-3">
-          <MediaGrid
-            items={item.mediaItems}
-            onExpandItem={(index) => open(item, false, index)}
-            liked={liked}
-            onDoubleTapLike={() => {
-              if (!liked) void react("like");
-            }}
-          />
-        </div>
+        // Rendered full-width BELOW, outside the avatar-offset column, same
+        // as video/single-image (owner, 2026-08-18, confirmed against real
+        // Twitter reference screenshots: a multi-photo grid there starts at
+        // the exact same fixed left edge as every other post's media, not
+        // indented under the avatar — this used to be the one media type
+        // still left behind in the avatar column). Nothing renders here.
+        null
       ) : item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
         // Rendered full-width BELOW, outside the avatar-offset column — see
         // the width note where that block lives, right after this column
@@ -897,6 +893,7 @@ function FeedPostCardImpl({
               width={item.mediaWidth ?? undefined}
               height={item.mediaHeight ?? undefined}
               liked={liked}
+              priority={priority}
               onDoubleTapLike={() => {
                 if (!liked) void react("like");
               }}
@@ -913,6 +910,27 @@ function FeedPostCardImpl({
               {engagementRow(true)}
             </FeedImage>
           </div>
+        </div>
+      ) : null}
+
+      {/*
+        🔴 MULTI-PHOTO GRIDS BREAK OUT TOO (owner, 2026-08-18, matching the
+        Twitter reference screenshots — a grid post there starts at the same
+        fixed left edge as every other post's media). `MediaGrid` doesn't
+        take overlay `children` the way FeedVideo/FeedImage do, so the
+        engagement row underneath it still renders in its ORIGINAL spot
+        (inside the avatar-offset column, via `overlayEngagement`/
+        `engagementRow(false)` below) — only the grid's own box moved.
+      */}
+      {item.mediaItems && item.mediaItems.length > 1 ? (
+        <div className="mb-3 px-2 sm:px-3">
+          <MediaGrid
+            items={item.mediaItems}
+            onExpandItem={(index) => open(item, false, index)}
+            onDoubleTapLike={() => {
+              if (!liked) void react("like");
+            }}
+          />
         </div>
       ) : null}
 

@@ -29,7 +29,6 @@ import {
   Info,
   Link2,
   Loader2,
-  Menu,
   MessageCircle,
   MoreVertical,
   Music,
@@ -138,6 +137,7 @@ import { suppressReel } from "@/lib/social/reels-session";
 import { streamHlsUrl, streamThumbnailUrl } from "@/lib/media/stream";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
+import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
 import { springs } from "@/lib/motion/springs";
 import { loadPostComments, prefetchPostComments } from "@/lib/social/comments-cache";
 import { useEntitlements } from "@/features/auth/use-entitlements";
@@ -806,7 +806,7 @@ function ReelCard({
   const [ui, setUi] = useState(true);
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubPct, setScrubPct] = useState(0);
-  const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [likeBurstKey, setLikeBurstKey] = useState(0);
   const seekBar = useRef<HTMLDivElement | null>(null);
   const pauseSignTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Press-and-hold pauses (existing gesture) AND now also opens the full options
@@ -1484,14 +1484,10 @@ function ReelCard({
     scheduleHide();
   };
 
-  // Double-tap to like: a heart blooms at the tap point; never un-likes.
-  const likeBurst = (x: number, y: number) => {
-    // Distinct double-pulse haptic + rising chime (owner, 2026-08-18: "double
-    // tap should have a haptic sound different from other haptic sounds
-    // already made") — same "wow" intent as the feed card's own double-tap.
-    haptic("wow");
-    playSound("wow");
-    setBursts((b) => [...b.slice(-4), { id: Date.now() + Math.random(), x, y }]);
+  // Double-tap to like: fires the shared Wow burst, centered over the media; never un-likes.
+  const likeBurst = () => {
+    fireWowFeedback();
+    setLikeBurstKey((k) => k + 1);
     if (!liked) void react("like");
   };
 
@@ -1614,7 +1610,7 @@ function ReelCard({
       lastTap.current = { t: 0, x: 0 };
       if (x < w * 0.4) seekBy(-10);
       else if (x > w * 0.6) seekBy(10);
-      else likeBurst(e.clientX, e.clientY); // double-tap center to like
+      else likeBurst(); // double-tap center to like
       return;
     }
     lastTap.current = { t: now, x };
@@ -2141,46 +2137,15 @@ function ReelCard({
           ) : null}
         </AnimatePresence>
 
-        {/*
-          ── Double-tap-to-like, corrected to actually read as Instagram's
-          (owner, 2026-08-16: "like should animate boldly above and disappears
-          just like Instagram in a premium way") ──────────────────────────────
-
-          This used to grow continuously (0.4→1.5 scale) while drifting 46px
-          upward for its whole 0.9s — that's the OTHER burst on this screen
-          (`floatReaction`, the rail's own "reaction rising into the air"
-          effect) wearing the double-tap's clothes. They read as the same
-          animation because they nearly were.
-
-          Instagram's heart does the opposite of floating: it POPS — overshoots
-          past full size with a spring-like bounce, settles, HOLDS in place with
-          no drift at all, then fades where it appeared. `feed-image.tsx` and
-          `media-carousel.tsx` already have this right (their bursts don't
-          drift); this bump matches their size and pop, and fixes the motion
-          curve to match their held-then-fade shape instead of the rail's
-          float-away one.
-
-          `top: b.y - 18` is a fixed offset, not an animated one — just enough
-          that the heart isn't centered directly under the thumb that caused it.
-        */}
-        {bursts.map((b) => (
-          <span
-            key={b.id}
-            aria-hidden
-            style={{ position: "fixed", left: b.x, top: b.y - 18, zIndex: 45 }}
-            className="pointer-events-none -translate-x-1/2 -translate-y-1/2"
-          >
-            <motion.span
-              initial={{ opacity: 0, scale: 0.3 }}
-              animate={{ opacity: [0, 1, 1, 1, 0], scale: [0.3, 1.3, 0.92, 1.06, 1] }}
-              transition={{ duration: 0.95, ease: "easeOut", times: [0, 0.28, 0.45, 0.6, 1] }}
-              onAnimationComplete={() => setBursts((x) => x.filter((i) => i.id !== b.id))}
-              className="block drop-shadow-[0_4px_18px_rgba(0,0,0,0.45)]"
-            >
-              <WowSolid className="h-24 w-24 lg:h-28 lg:w-28" />
-            </motion.span>
-          </span>
-        ))}
+        {/* Double-tap-to-like — shared across every media surface now (owner,
+            2026-08-18: "reels, feed, multi post, single post, video post
+            should use one wow animation and haptic sound"). Used to be its
+            own tap-position-tracked, pop-and-hold animation (a deliberate
+            2026-08-16 design distinct from the rest); centering it on
+            `mediaStage` instead is what "one animation" actually requires,
+            and matches how Instagram's own double-tap heart reads in
+            practice — centered, not pinned under the finger. */}
+        <WowBurst burstKey={likeBurstKey} anchorRef={mediaStage} />
       </motion.div>
 
       {/* Action rail — auto-hides over the video on mobile; on lg it lives OUTSIDE
@@ -2244,11 +2209,14 @@ function ReelCard({
              same pair (`repost`/`openShare`, a few hundred lines down); the
              mobile rail was the one place still combining them.
 
-          `Menu` (≡) and the sound-thumbnail square are both new — the
-          reference's rail ends in a hamburger icon (same destination as the
-          existing top-right ••• button, `setMoreOpen`) and a small square
-          audio thumbnail. Save/Bookmark is gone from THIS rail to match —
-          "Add to collection" in the ••• sheet covers the same intent.
+          The sound-thumbnail square is new too — a small square audio
+          thumbnail, matching the reference. The reference's rail also had a
+          hamburger (≡) "more" icon; that one was tried and reverted (owner:
+          "there is already a menu at the top") since this app's existing
+          top-right ••• already opens the exact same sheet, and the rail copy
+          was pure duplication rather than filling a real gap. Save/Bookmark
+          is gone from THIS rail to match — "Add to collection" in the •••
+          sheet covers the same intent.
         */}
         <span className="relative inline-flex">
           <RailButton
@@ -2307,17 +2275,33 @@ function ReelCard({
             would be both meaningless and a privacy leak (unchanged reasoning
             from before the split). */}
         <RailButton icon={SendIcon} label="Send" onClick={openShare} />
-        <RailButton icon={Menu} label="More options" onClick={() => setMoreOpen(true)} />
+        {/*
+          🔴 MENU RAIL BUTTON REMOVED (owner, 2026-08-18: "remove the reels
+          menu from the engagement tray, there is already a menu at the
+          top"). The reference image's rail had one, but this app already has
+          the top-right ••• for the same destination — a second one on the
+          rail was pure duplication, not matching a real gap.
+        */}
         {/*
           The sound thumbnail — a small square rather than the rail's round
           discs, matching the reference. Links to the sound's own page when
           this post carries one (Feature 15 Part 7); falls back to the
           creator's profile for the vast majority of posts that don't, same
           honesty rule the caption's own sound row already follows.
+
+          🔴 NO `onClick={onClose}` (owner: "the sound button doesn't open the
+          sound page, it just go back to feed"). The avatar Link above this
+          one carries the same handler, and it raced exactly like this: a
+          synchronous `onClose()` (unmounting this whole overlay, since it's
+          plain React state in the parent) fired in the SAME click as the
+          Link's own client-side navigation, and the unmount won — the
+          overlay vanished back to the feed before `/sound/:id` ever finished
+          navigating to. Removing it fixes the race; the overlay unmounts on
+          its own once the route actually changes, since it lives inside the
+          page it's routing away from.
         */}
         <Link
           href={item.sound ? `/sound/${item.sound.id}` : `/u/${item.publisher.handle}`}
-          onClick={onClose}
           aria-label={item.sound ? `Sound: ${item.sound.title}` : "View profile"}
           className="mt-1 block h-8 w-8 shrink-0 overflow-hidden rounded-md ring-1 ring-white/50"
         >
@@ -2400,15 +2384,27 @@ function ReelCard({
 
         3. THE SOUND ROW. Honest by construction — see the note on it below.
 
-        The creator AVATAR and FOLLOW button stay on the action rail rather than
-        being duplicated here. The brief lists them under both, but rendering two
-        follow buttons on one screen is the "less cluster" failure, and the rail's
-        is the one that is already in the thumb's reach.
+        🔴 CREATOR AVATAR + FOLLOW MOVED HERE FROM THE RAIL (2026-08-18,
+        matching the reference image) — this note used to say the opposite
+        ("stay on the rail... rendering two follow buttons is the less
+        cluster failure"), which is now stale; see the AskUserQuestion-backed
+        reasoning on that block below.
+
+        🔴 RIGHT PADDING RESERVES THE RAIL'S OWN COLUMN (owner, 2026-08-18:
+        "the caption at the bottom in reels shouldn't reach or touch the
+        engagement tray on every device screen size, it should go beneath").
+        This panel used to be `px-4` on both sides with no right-side
+        awareness of the rail at all — the rail is a separate, absolutely
+        positioned sibling, so nothing here ever measured it. `pr-20`
+        (80px) comfortably clears the rail's own ~46px button width plus its
+        largest adaptive inset (26px, tablet) on every tier `useAdaptiveRail`
+        produces, so caption text wraps before ever reaching the rail's
+        column instead of running underneath it.
       */}
       <div
         style={{ ["--reel-scrim" as string]: String(scrim) }}
         className={cn(
-          "absolute inset-x-0 bottom-0 px-4 pt-16 transition-opacity duration-200",
+          "absolute inset-x-0 bottom-0 pl-4 pr-20 pt-16 transition-opacity duration-200",
           "bg-gradient-to-t from-[rgba(0,0,0,var(--reel-scrim,0.8))] via-black/30 to-transparent",
           layer.info,
           captionPad,
@@ -2998,17 +2994,23 @@ function RailButton({
     `countNode` keeps `AnimatedCount` — a like should tick up, not jump — which is
     the one thing the generic button does not do on its own.
 
-    🔴 42px, not 48px (owner, 2026-08-10: "reduce the size of the engagement
-    tray") — kept even after the glass disc's removal, since this is now just
-    the touch-target/focus-ring size, not a visible disc diameter, and 42px
-    still clears the 44px minimum touch target once the count text beneath it
-    is counted (WCAG 2.5.5 measures the TARGET, ~56px tall total).
+    🔴 26px glyph, up from 21px (owner, 2026-08-18, once the glass disc was
+    gone: "make the icon in the engagement tray to be a bit more bigger,
+    bolder and more visible" — a bare icon on a busy video frame needs more
+    visual weight than the same glyph used to need sitting inside a glass
+    disc, which supplied its own contrast/definition. `size` (the touch
+    target) grows to match rather than leaving a bigger glyph inside the
+    same-diameter target it would otherwise crowd; still comfortably WCAG
+    2.5.5-sized either way. `strokeWidth` bumped 2.1 -> 2.6 at the call
+    below is the other half of "bolder" — a thicker line reads as more
+    confident at this size than a bigger glyph with a thin stroke would.
   */
   return (
     <GlassButton
       icon={Icon}
-      size={42}
-      glyphClassName="h-[21px] w-[21px]"
+      size={46}
+      glyphClassName="h-[26px] w-[26px]"
+      strokeWidth={2.6}
       label={label}
       onClick={onClick}
       active={active}

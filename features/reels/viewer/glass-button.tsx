@@ -58,6 +58,10 @@ export function GlassButton({
    * as a cramped 48px button rather than as a smaller one.
    */
   glyphClassName = "h-6 w-6",
+  /** Icon line weight. 2.1 was tuned for a glyph sitting inside a glass disc,
+   *  which supplied its own contrast — a bare icon on video needs a bolder
+   *  line to read as deliberate rather than thin (owner, 2026-08-18). */
+  strokeWidth = 2.1,
   hapticIntent = "light",
   press,
   className,
@@ -80,6 +84,7 @@ export function GlassButton({
   countNode?: React.ReactNode;
   size?: number;
   glyphClassName?: string;
+  strokeWidth?: number;
   hapticIntent?: HapticIntent;
   /** Long-press handlers, spread onto the button. */
   press?: Record<string, unknown>;
@@ -123,7 +128,7 @@ export function GlassButton({
                   ? (activeClassName ?? "text-[hsl(var(--reel-accent,265_85%_65%))]")
                   : "text-white",
               )}
-              strokeWidth={2.1}
+              strokeWidth={strokeWidth}
             />
           ) : null)}
       </span>

@@ -364,15 +364,12 @@ export function FeedVideo({
       // reversal note — `ratio` itself is the media's true, unclamped shape).
       style={{ aspectRatio: ratio ?? 4 / 5 }}
       className={cn(
-        // 🔴 RIGHT-aligned, not left (owner, 2026-08-18, correcting the first
-        // pass: "the 16:9 long videos should be at the opposite far end where
-        // image are"). A max-h-narrowed box is left-aligned by default with no
-        // margin rule at all — which is what the first fix shipped, and it was
-        // backwards. `ml-auto` pushes any slack from the aspect-ratio/max-h
-        // math to the LEFT (toward the avatar column) so the video's own right
-        // edge lands exactly where a full-width image's right edge already
-        // does, instead of stopping short in the middle of the card.
-        "group relative ml-auto overflow-hidden rounded-2xl bg-black",
+        // 🔴 LEFT-aligned, Twitter-style (owner, 2026-08-18, final: "all videos
+        // and image should be at the left end like twitter style, just 2
+        // padding left, they should all be in left position" — after trying
+        // left, then right). `mr-auto` puts any horizontal slack on the RIGHT,
+        // so the media's left edge always lands on the card's own `pl-2`.
+        "group relative mr-auto overflow-hidden rounded-2xl bg-black",
         // Twitter-style: full width, the media's OWN true aspect ratio — a
         // HEIGHT ceiling, never a ratio clamp, so it can't disagree with the
         // clip's true shape (no letterboxing/cropping). A same-day tightening
@@ -390,7 +387,21 @@ export function FeedVideo({
         // shorter without losing an inch of width; the space this removes
         // from the top/bottom is picked up by the blurred backdrop below,
         // same as any other letterboxed shape.
-        "max-h-[60vh] lg:flex lg:!aspect-auto lg:max-h-[60vh] lg:items-center lg:justify-end",
+        /*
+          🔴 `lg:w-fit` IS THE BLACK-BAR FIX (owner, 2026-08-18: "on large
+          view, 16:9 and all videos display like this, leave a black blank
+          space"). On lg this wrapper drops its aspect-ratio and becomes a
+          flex box, while the video inside sizes itself intrinsically under
+          `lg:max-h-[60vh]`. So a tall clip capped by that max-height ends up
+          NARROWER than the wrapper — and the wrapper, being a normal
+          full-width block, kept painting its `bg-black` across the leftover
+          span. That black gap is the wrapper, not the video. `w-fit` makes
+          the wrapper hug the clip's real rendered width so there is no
+          leftover span to paint; `max-w-full` keeps a wide clip from
+          overflowing the card. With no slack left inside, alignment is
+          decided entirely by `mr-auto` above.
+        */
+        "max-h-[60vh] lg:flex lg:!aspect-auto lg:w-fit lg:max-w-full lg:max-h-[60vh] lg:items-center lg:justify-start",
         className,
       )}
     >

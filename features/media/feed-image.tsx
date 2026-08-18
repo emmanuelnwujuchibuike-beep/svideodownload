@@ -157,6 +157,14 @@ export function FeedImage({
       // press, or press-and-hold.
       style={ratio ? { aspectRatio: ratio } : undefined}
       className={cn(
+        // 🔴 DO NOT RESTYLE THIS BOX (owner, 2026-08-18: "the image view is
+        // perfect already like twitter, only not just positioned well, it
+        // should break out"). A `mr-auto`/`w-fit` pass was tried here and
+        // explicitly rejected — the photo's own rendering was never the
+        // problem, only WHERE the card put it. That fix belongs entirely in
+        // feed-post-card.tsx, which now renders this outside the
+        // avatar-indented column; this box keeps its original sizing.
+        //
         // `mx-auto` + `rounded-2xl` of its own: once the max-h cap narrows this
         // box below the card's full width (see the 2026-08-17 black-bars note
         // above), it needs to center itself and carry its own rounded corners —

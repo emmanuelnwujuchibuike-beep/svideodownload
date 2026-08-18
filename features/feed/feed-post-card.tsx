@@ -723,43 +723,10 @@ function FeedPostCardImpl({
         // closes. Nothing renders here for a video post.
         null
       ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
-        // Image posts behave like videos: full-size, double-tap to like, tap to open.
-        // Rounded (spec section 7) — see the album/carousel note above. Stays in
-        // THIS column (avatar-offset), unlike video — see the width note below.
-        <div className="relative mb-3 overflow-hidden rounded-2xl">
-          <FeedImage
-            src={item.mediaUrl || item.thumbnailUrl!}
-            alt={item.title}
-            width={item.mediaWidth ?? undefined}
-            height={item.mediaHeight ?? undefined}
-            liked={liked}
-            onDoubleTapLike={() => {
-              if (!liked) void react("like");
-            }}
-            onExpand={() => open(item)}
-            // 🔴 NO `w-full`/`max-h` override HERE — same reasoning as FeedVideo
-            // above: a forced `width: 100%` fights the wrapper's own
-            // `aspect-ratio` + `max-h`, leaving black bars on the sides once
-            // a tall photo hits the cap. FeedImage's own internal max-height
-            // is the single source of truth now, not overridden per call site.
-          >
-            {/* Moved inside `FeedImage` — see the matching note on the video
-                branch above; same "badge floated off a shrunk box" bug.
-                🔴 TOP-LEFT, NOT BOTTOM-RIGHT (owner, 2026-08-18: "the views is
-                being covered by the save button"). The blended engagement
-                row below ends in Save, bottom-right — same corner this badge
-                used to claim. Moved to match the video branch's own
-                already-correct convention instead of re-solving the same
-                collision differently in each branch. */}
-            {item.viewsCount > 0 ? (
-              <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
-                {formatCompactNumber(item.viewsCount)} views
-              </span>
-            ) : null}
-            {/* Blended engagement row — see engagementRow's own note. */}
-            {engagementRow(true)}
-          </FeedImage>
-        </div>
+        // Rendered full-width BELOW, outside the avatar-offset column, exactly
+        // like video — see the width note where that block lives. Nothing
+        // renders here for a single-image post.
+        null
       ) : item.mediaKind === "audio" ? (
         <button type="button" onClick={() => open(item)} className="block w-full text-left" aria-label="Play">
           <div className="mb-3 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/15">
@@ -907,6 +874,44 @@ function FeedPostCardImpl({
               {/* Blended engagement row — see engagementRow's own note. */}
               {engagementRow(true)}
             </FeedVideo>
+          </div>
+        </div>
+      ) : null}
+
+      {/*
+        🔴 SINGLE IMAGES BREAK OUT TOO (owner, 2026-08-18: "all videos and
+        image should be at the left end like twitter style, just 2 padding
+        left, they should all be in left position" — confirmed via
+        AskUserQuestion that photos should leave the avatar column exactly
+        like video, reversing the earlier scoping that kept them indented).
+        Same `px-2 sm:px-3` breakout wrapper as video directly above, so both
+        media types start at the identical left X-position instead of a photo
+        sitting ~44px further right than a clip in the same feed.
+      */}
+      {item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) && !(item.mediaItems && item.mediaItems.length > 1) ? (
+        <div className="mb-3 px-2 sm:px-3">
+          <div className="relative overflow-hidden rounded-2xl">
+            <FeedImage
+              src={item.mediaUrl || item.thumbnailUrl!}
+              alt={item.title}
+              width={item.mediaWidth ?? undefined}
+              height={item.mediaHeight ?? undefined}
+              liked={liked}
+              onDoubleTapLike={() => {
+                if (!liked) void react("like");
+              }}
+              onExpand={() => open(item)}
+            >
+              {/* Top-left, matching the video branch — the blended engagement
+                  row below ends in Save at bottom-right, which was covering
+                  this badge (owner, 2026-08-18). */}
+              {item.viewsCount > 0 ? (
+                <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+                  {formatCompactNumber(item.viewsCount)} views
+                </span>
+              ) : null}
+              {engagementRow(true)}
+            </FeedImage>
           </div>
         </div>
       ) : null}

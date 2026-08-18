@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { FileImage, Headset, History } from "lucide-react";
+import { Headset, History, LayoutGrid } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -125,6 +125,25 @@ export function MobileNav({
   const router = useRouter();
   const mode = useAppMode();
   const { handle, avatarUrl } = useEntitlements();
+  /*
+    🔴 `/downloads` ITSELF NEEDS THIS TOO (owner, repeated: "the download page
+    still shows the reels button in the bottom nav" — kept recurring even
+    after the `marketing` fix above shipped). Root cause: `marketing` is only
+    ever passed by `MobileAppNav`, which `(marketing)/layout.tsx` renders —
+    the PUBLIC landing/SEO pages. `/downloads` (the signed-in Downloader home)
+    lives under the `(app)` route group instead, whose layout mounts a bare
+    `<MobileNav />` with no prop at all, so it was STILL falling through to
+    the mode-dependent branch below — a signed-in visitor with `mode=full`
+    hit the always-Reels Full Bleed tab set right here, same as marketing
+    pages did before the fix. `/downloads` is the Downloader product's own
+    home, the same product surface as the marketing pages just for a
+    signed-in visitor, so it gets the identical forced treatment — computed
+    from `pathname` here rather than threading a new prop through
+    `(app)/layout.tsx`, since every OTHER page that layout renders (home,
+    friends, messages, reels itself) must keep the real mode-dependent
+    behavior untouched.
+  */
+  const forceFeedTab = marketing || pathname === "/downloads";
   // Cached-first: shows the last-known unread count instantly, updates live via
   // the realtime inbox subscription (InboxRealtimeTracker). `revalidateOnFocus:
   // false` so an iOS back-swipe / app resume never refetches the inbox just to
@@ -168,7 +187,7 @@ export function MobileNav({
     them to login. Gating on `handle` too means a guest always sees the
     Downloader set regardless of what the mode cookie says.
   */
-  const fullBleedActive = !marketing && mode === "full" && !!handle;
+  const fullBleedActive = !forceFeedTab && mode === "full" && !!handle;
 
   // Warm the primary destinations once so the FIRST tap opens instantly — dynamic
   // routes (Messages/Friends) otherwise fetch on first navigation, which felt like
@@ -370,19 +389,20 @@ export function MobileNav({
               onWarm={router.prefetch}
             />
             {/*
-              🔴 FEED HERE, NOT REELS, WHENEVER `marketing` (owner, 2026-08-18:
-              "put a feed button in place where reels button is in the bottom
-              nav of landing page and download page... so guest can see but
-              can't interact and can't post" — then, once mode-dependent
-              drift surfaced, confirmed this should hold for EVERY marketing
-              visitor, not just guests). A signed-in visitor on the actual
-              signed-in app (this component's non-marketing mount) still
-              gets their real Reels tab here unchanged.
+              🔴 FEED HERE, NOT REELS, WHENEVER `forceFeedTab` (owner,
+              2026-08-18: "put a feed button in place where reels button is
+              in the bottom nav of landing page and download page... so
+              guest can see but can't interact and can't post" — then, once
+              mode-dependent drift surfaced on BOTH marketing pages and
+              `/downloads` itself, confirmed this should hold for every
+              visitor to either, not just guests). A signed-in visitor on
+              the actual signed-in social app (home/friends/messages/etc.)
+              still gets their real Reels tab here unchanged.
             */}
-            {!marketing && handle ? (
+            {!forceFeedTab && handle ? (
               <NavTab label="Reels" href="/reels" icon={FrenzReelsOutline} activeIcon={FrenzReelsSolid} active={pathname.startsWith("/reels")} onWarm={(href) => { router.prefetch(href); warmReels(); }} />
             ) : (
-              <NavTab label="Feed" href="/feed" icon={FileImage} activeIcon={FileImage} active={pathname.startsWith("/feed")} onWarm={router.prefetch} />
+              <NavTab label="Feed" href="/feed" icon={LayoutGrid} activeIcon={LayoutGrid} active={pathname.startsWith("/feed")} onWarm={router.prefetch} />
             )}
             <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
             <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />

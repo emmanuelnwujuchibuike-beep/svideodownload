@@ -5,9 +5,9 @@ import {
   ChevronRight,
   ChevronUp,
   Download,
-  FileImage,
   History,
   Image as ImageIcon,
+  LayoutGrid,
   Loader2,
   Minus,
   Play,
@@ -814,11 +814,11 @@ export function FloatingDownloadProgress({
                       other guest entry point swapped this session: Feed is
                       the broad, no-description-needed destination that works
                       whether or not you're signed in, while Reels stays one
-                      tap away FROM Feed for whoever wants it. `FileImage`
-                      (page + photo glyph, owner reference screenshot: "use an
-                      icon that has image symbol") replaces the plain-text
-                      Newspaper glyph everywhere it stood in for Feed —
-                      matches the bottom nav and the Reels tab tray.
+                      tap away FROM Feed for whoever wants it. `LayoutGrid`
+                      (owner reference mockup, "Feed Icon — Better Options",
+                      Option 5: "Grid/news feed layout") replaces the
+                      plain-text Newspaper glyph everywhere it stood in for
+                      Feed — matches the bottom nav and the Reels tab tray.
                     */}
                     <WaitTile
                       href="/feed"
@@ -828,7 +828,7 @@ export function FloatingDownloadProgress({
                       delayed
                       onNavigate={() => setMinimised(true)}
                     >
-                      <FileImage className="h-[18px] w-[18px] text-white" strokeWidth={2.25} />
+                      <LayoutGrid className="h-[18px] w-[18px] text-white" strokeWidth={2.25} />
                     </WaitTile>
                   </div>
                 </div>

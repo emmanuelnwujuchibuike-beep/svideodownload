@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FileImage } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
@@ -193,7 +193,7 @@ export function ReelTabs({
               "focus-visible:ring-2 focus-visible:ring-white/80",
             )}
           >
-            <FileImage className="h-3.5 w-3.5" aria-hidden />
+            <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
             Feed
           </Link>
         </>

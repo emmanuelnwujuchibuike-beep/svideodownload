@@ -8,6 +8,7 @@ import { type Category } from "./categories";
 import { friendIdSet } from "./friend-ids";
 import type { RepostAudience } from "./repost/audience";
 import { filterVisibleReposts, repostViewer } from "./repost/visibility";
+import { attachSoundToPost, createSound } from "./sounds";
 
 /**
  * Published-download ("post") data layer — directory model: metadata + a source
@@ -149,6 +150,45 @@ export async function publishPost(
         /* columns not migrated yet — dimensions are optional */
       }
     }
+
+    /*
+      🔴 IMPLICIT "ORIGINAL AUDIO" SOUND (owner, 2026-08-18: "clicking the
+      sound button in reels leads to profile instead of the sound page like
+      tiktok and instagram, where users can save and use sound"). TikTok/
+      Instagram can label this "original audio" because the creator filmed
+      it themselves; this app's `posts` table is a directory of REPUBLISHED
+      DOWNLOADS by default (see this file's own top-of-file doc comment), so
+      auto-attributing "original audio by @you" to something downloaded from
+      TikTok and republished here would be a false attribution — exactly the
+      kind of fabricated-claim problem this project has explicitly refused
+      elsewhere. `platform === "frenz"` is the one reliable signal that a
+      post is genuinely first-party (Creation Studio's own uploads stamp
+      this; every real repost carries the SOURCE platform's own name
+      instead) — confirmed via AskUserQuestion before scoping it this way.
+
+      Best-effort and non-blocking: `createSound`/`attachSoundToPost` both
+      already swallow their own errors and return null/false rather than
+      throwing (Sounds' migration 0125 may not even be applied everywhere
+      yet), so a failure here can never take down a successful publish.
+    */
+    if (input.platform === "frenz" && input.mediaKind !== "image") {
+      try {
+        const sound = await createSound({
+          createdBy: publisherId,
+          sourceType: "original",
+          title: "Original audio",
+          artistLabel: prof.handle ? `@${prof.handle}` : "Original audio",
+          coverArtUrl: input.thumbnailUrl ?? null,
+          audioUrl: input.sourceUrl.trim(),
+          waveformPeaks: [],
+          durationSec: input.durationSec ?? 0,
+        });
+        if (sound) await attachSoundToPost(id, publisherId, sound.id);
+      } catch {
+        /* never let this block a successful publish */
+      }
+    }
+
     return { ok: true, id };
   } catch {
     return { ok: false, error: "Couldn't publish.", code: "error" };

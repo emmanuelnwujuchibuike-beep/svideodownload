@@ -13,6 +13,8 @@ import {
   IoFilmOutline,
   IoFlame,
   IoFlameOutline,
+  IoMusicalNotes,
+  IoMusicalNotesOutline,
   IoNewspaper,
   IoNewspaperOutline,
   IoNotifications,
@@ -56,6 +58,7 @@ export function buildNav(_handle: string | null): NavItem[] {
     { label: "Explore", href: "/explore", icon: IoCompassOutline, activeIcon: IoCompass },
     { label: "Trending", href: "/explore?sort=trending", icon: IoFlameOutline, activeIcon: IoFlame },
     { label: "Reels", href: "/reels", icon: IoFilmOutline, activeIcon: IoFilm },
+    { label: "Sounds", href: "/sounds", icon: IoMusicalNotesOutline, activeIcon: IoMusicalNotes },
     { label: "News", href: "/blog", icon: IoNewspaperOutline, activeIcon: IoNewspaper },
     { label: "Communities", href: "/explore", icon: IoPeopleOutline, activeIcon: IoPeople, soon: true },
     { label: "Friends", href: "/friends", icon: FrenzFriendsOutline, activeIcon: FrenzFriendsSolid },
@@ -90,8 +93,10 @@ export function AppSidebar({ handle: _handle }: { handle: string | null }) {
     const id = setTimeout(() => {
       // /reels added (2026-07-11) — was missing, so the sidebar's Reels link
       // paid a real fresh-fetch on first click while every other tab here
-      // already opened instantly.
-      for (const r of ["/home", "/friends", "/messages", "/reels", profileHref]) router.prefetch(r);
+      // already opened instantly. /sounds added the same way (Feature 15
+      // Part 7) — its own page is a static shell (no server data fetch), so
+      // prefetching it costs almost nothing and makes the tap feel instant.
+      for (const r of ["/home", "/friends", "/messages", "/reels", "/sounds", profileHref]) router.prefetch(r);
     }, 400);
     return () => clearTimeout(id);
   }, [router, profileHref]);

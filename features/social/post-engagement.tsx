@@ -1,11 +1,17 @@
 "use client";
 
 import { Bookmark, Heart, MessageCircle, Share2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 
-import { ShareSheet } from "@/features/social/share-sheet";
-import { ShareQrSheet } from "@/features/social/share-qr-sheet";
 import { cn, formatCompactNumber } from "@/lib/utils";
+
+// Code-split — most page views never tap Share (matches feed-post-card.tsx's
+// own dynamic import of the same two sheets). This file renders directly on
+// /p/[id]'s first load, so a static import here put both sheets'
+// full weight into that route's initial bundle unconditionally.
+const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m) => m.ShareSheet), { ssr: false });
+const ShareQrSheet = dynamic(() => import("@/features/social/share-qr-sheet").then((m) => m.ShareQrSheet), { ssr: false });
 
 /**
  * Interactive like / save / share / comment bar for a post page. Optimistic,
@@ -32,6 +38,7 @@ export function PostEngagement({
   const [likes, setLikes] = useState(initial.likes);
   const [saves, setSaves] = useState(initial.saves);
   const [shareOpen, setShareOpen] = useState(false);
+  const [shareReady, setShareReady] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
 
   const react = async (type: "like" | "save") => {
@@ -85,7 +92,7 @@ export function PostEngagement({
       >
         <Bookmark className={cn("h-[18px] w-[18px] transition-transform", saved && "scale-110 fill-current")} /> {formatCompactNumber(saves)}
       </Pill>
-      <Pill onClick={() => setShareOpen(true)}>
+      <Pill onClick={() => { setShareReady(true); setShareOpen(true); }}>
         <Share2 className="h-[18px] w-[18px]" /> {formatCompactNumber(initial.shares)}
       </Pill>
       <a
@@ -95,8 +102,16 @@ export function PostEngagement({
         <MessageCircle className="h-[18px] w-[18px]" /> {formatCompactNumber(initial.comments)}
       </a>
 
-      <ShareSheet postId={postId} open={shareOpen} onClose={() => setShareOpen(false)} onQrCode={() => setQrOpen(true)} />
-      <ShareQrSheet postId={postId} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${postId}`} open={qrOpen} onClose={() => setQrOpen(false)} />
+      {/* Not mounted at all until the first tap — dynamic() alone only
+          removes the sheets from the INITIAL bundle; without this gate the
+          JSX below is still unconditionally in the tree (just hidden via
+          `open`), so the lazy chunk would fetch immediately on mount anyway. */}
+      {shareReady ? (
+        <>
+          <ShareSheet postId={postId} open={shareOpen} onClose={() => setShareOpen(false)} onQrCode={() => setQrOpen(true)} />
+          <ShareQrSheet postId={postId} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${postId}`} open={qrOpen} onClose={() => setQrOpen(false)} />
+        </>
+      ) : null}
     </div>
   );
 }

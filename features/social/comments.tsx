@@ -40,7 +40,7 @@ import { RichText } from "@/components/social/rich-text";
 import { VideoComment, VoiceMessage } from "@/features/social/comment-media";
 import { StickerPicker } from "@/features/social/sticker-picker";
 import { useEntitlements } from "@/features/auth/use-entitlements";
-import { useCommentTypingIndicator } from "@/features/social/use-typing";
+import type { TypingHandle } from "@/features/social/comment-typing-indicator";
 import { floatReaction } from "@/features/ui/reaction-float";
 import { toast } from "@/features/ui/toast";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
@@ -74,6 +74,10 @@ const PinLabelPicker = dynamic(() => import("@/features/social/pin-label-picker"
 // Most comments are never AI-assisted — same code-split reasoning.
 const CommentAiAssist = dynamic(() => import("@/features/social/comment-ai-assist").then((m) => m.CommentAiAssist), { ssr: false });
 const CommentThreadSummary = dynamic(() => import("@/features/social/comment-thread-summary").then((m) => m.CommentThreadSummary), { ssr: false });
+// Shares its internals with messaging's ~370-line presence-channel module —
+// see comment-typing-indicator.tsx's own header for why this one specifically
+// needs to be split, not just "most viewers never trigger it" like the rest.
+const CommentTypingIndicator = dynamic(() => import("@/features/social/comment-typing-indicator").then((m) => m.CommentTypingIndicator), { ssr: false });
 function preloadRecorders() {
   void import("@/features/social/voice-recorder");
 }
@@ -206,13 +210,16 @@ export function Comments({
   // `handle` (not the raw user id) is the presence key — unique and stable
   // per viewer, and the ONLY identity this component already has access to
   // without a new endpoint or a prop threaded through 5 files.
+  //
+  // The actual presence-channel hook is code-split (comment-typing-indicator.tsx)
+  // — it shares its internals with messaging's ~370-line use-typing.ts, which
+  // a static import here would otherwise put on every route that renders
+  // comments (home, /p/[id], reels, …), not just message threads.
   const { handle: viewerHandle, displayName: viewerDisplayName, ready: identityReady } = useEntitlements();
   const typingTopic = loggedIn && identityReady && viewerHandle ? postId : "";
-  const { typingNames, notifyTyping, clearTyping } = useCommentTypingIndicator(
-    typingTopic,
-    viewerHandle ?? "",
-    viewerDisplayName || viewerHandle || "Someone",
-  );
+  const [typingHandle, setTypingHandle] = useState<TypingHandle | null>(null);
+  const notifyTyping = useCallback(() => typingHandle?.notifyTyping(), [typingHandle]);
+  const clearTyping = useCallback(() => typingHandle?.clearTyping(), [typingHandle]);
 
   const refresh = useCallback(async () => {
     try {
@@ -443,14 +450,8 @@ export function Comments({
           {/* Live typing indicator — only the top-level composer broadcasts;
               a per-reply-target "who's typing where" breakdown is a fancier
               UI the brief doesn't specifically ask for at that granularity. */}
-          {typingNames.length > 0 ? (
-            <p className="-mt-3 mb-4 pl-1 text-xs font-medium text-muted-foreground">
-              {typingNames.length === 1
-                ? `${typingNames[0]} is typing…`
-                : typingNames.length === 2
-                  ? `${typingNames[0]} and ${typingNames[1]} are typing…`
-                  : `${typingNames[0]} and ${typingNames.length - 1} others are typing…`}
-            </p>
+          {typingTopic ? (
+            <CommentTypingIndicator postId={typingTopic} handle={viewerHandle ?? ""} displayName={viewerDisplayName || viewerHandle || "Someone"} onReady={setTypingHandle} />
           ) : null}
         </>
       ) : (

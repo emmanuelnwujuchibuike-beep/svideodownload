@@ -17,6 +17,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -26,9 +27,6 @@ import { SmartVideo } from "@/features/media/smart-video";
 import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
 import { Comments } from "@/features/social/comments";
-import { PostEditSheet } from "@/features/social/post-edit-sheet";
-import { ShareSheet } from "@/features/social/share-sheet";
-import { ShareQrSheet } from "@/features/social/share-qr-sheet";
 import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useLongPress } from "@/lib/hooks/use-long-press";
@@ -37,6 +35,14 @@ import type { CommentNode } from "@/lib/social/engagement";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
+
+// Code-split, each gated behind its own "ready" flag (never mounted until
+// the corresponding action is actually tapped) — this viewer is used from
+// the main home feed (smart-feed.tsx), so static imports here put every one
+// of these sheets' full weight into /(app)/home's initial bundle.
+const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m) => m.ShareSheet), { ssr: false });
+const ShareQrSheet = dynamic(() => import("@/features/social/share-qr-sheet").then((m) => m.ShareQrSheet), { ssr: false });
+const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").then((m) => m.PostEditSheet), { ssr: false });
 
 /** Builds a native device-download URL: the stored file when available, else
  *  an on-demand stream via the existing worker pipeline ("best" selector). */
@@ -90,6 +96,7 @@ function ViewerInner({
   const [likes, setLikes] = useState(item.likesCount);
   const [title, setTitle] = useState(item.title);
   const [editOpen, setEditOpen] = useState(false);
+  const [editReady, setEditReady] = useState(false);
   const [showComments, setShowComments] = useState(startWithComments);
   const [comments, setComments] = useState<CommentsData | null>(null);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -179,8 +186,12 @@ function ViewerInner({
   // replacing a bare navigator.share()/clipboard-copy fork — no repost
   // mechanism exists in this viewer today, so `onRepost` is omitted.
   const [shareOpen, setShareOpen] = useState(false);
+  const [shareReady, setShareReady] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
-  const share = () => setShareOpen(true);
+  const share = () => {
+    setShareReady(true);
+    setShareOpen(true);
+  };
 
   const toggleFollow = async () => {
     await toggleFollowShared(item.publisher.id, !following);
@@ -301,7 +312,7 @@ function ViewerInner({
           {item.isOwner ? (
             <button
               type="button"
-              onClick={() => setEditOpen(true)}
+              onClick={() => { setEditReady(true); setEditOpen(true); }}
               className="inline-flex items-center gap-1 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-secondary/70"
             >
               <Pencil className="h-3.5 w-3.5" /> Edit
@@ -411,7 +422,7 @@ function ViewerInner({
         )}
       </motion.aside>
 
-      {item.isOwner ? (
+      {item.isOwner && editReady ? (
         <PostEditSheet
           item={{ id: item.id, title: title ?? "" }}
           open={editOpen}
@@ -421,8 +432,12 @@ function ViewerInner({
         />
       ) : null}
 
-      <ShareSheet postId={item.id} title={title ?? undefined} open={shareOpen} onClose={() => setShareOpen(false)} onQrCode={() => setQrOpen(true)} />
-      <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} />
+      {shareReady ? (
+        <>
+          <ShareSheet postId={item.id} title={title ?? undefined} open={shareOpen} onClose={() => setShareOpen(false)} onQrCode={() => setQrOpen(true)} />
+          <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} />
+        </>
+      ) : null}
     </motion.div>
   );
 }

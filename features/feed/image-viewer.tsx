@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -36,14 +37,22 @@ import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { RichText } from "@/components/social/rich-text";
 import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
-import { CollectionPicker } from "@/features/social/collection-picker";
 import { Comments } from "@/features/social/comments";
 import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
-import { PostEditSheet } from "@/features/social/post-edit-sheet";
-import { ReportSheet } from "@/features/social/report-sheet";
-import { ShareSheet } from "@/features/social/share-sheet";
-import { ShareQrSheet } from "@/features/social/share-qr-sheet";
 import { toast } from "@/features/ui/toast";
+
+// Code-split, each gated behind its own "ready" flag below (never mounted
+// until the corresponding action is actually tapped) — static imports here
+// put every one of these sheets' full weight into every route that renders
+// this viewer, including /(app)/home via smart-feed. CollectionPicker and
+// PostEditSheet already had ready-gated CONDITIONAL RENDERING (pickerReady/
+// editReady below) — that only controls when the JSX mounts, not when the
+// module is bundled, so a static import still shipped the code regardless.
+const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m) => m.ShareSheet), { ssr: false });
+const ShareQrSheet = dynamic(() => import("@/features/social/share-qr-sheet").then((m) => m.ShareQrSheet), { ssr: false });
+const CollectionPicker = dynamic(() => import("@/features/social/collection-picker").then((m) => m.CollectionPicker), { ssr: false });
+const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").then((m) => m.PostEditSheet), { ssr: false });
+const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
 import { downloadPost } from "@/lib/media/download-post";
 import { clampFeedRatio, isReelsShaped } from "@/lib/media/aspect";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
@@ -130,6 +139,7 @@ function ImageStage({
   const [title, setTitle] = useState(item.title);
   const [moreOpen, setMoreOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [reportReady, setReportReady] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerReady, setPickerReady] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -305,8 +315,12 @@ function ImageStage({
   // affordance exists in this viewer today (confirmed — grepped for any
   // repost/reshare mechanism here, none), so `onRepost` is simply omitted.
   const [shareOpen, setShareOpen] = useState(false);
+  const [shareReady, setShareReady] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
-  const share = () => setShareOpen(true);
+  const share = () => {
+    setShareReady(true);
+    setShareOpen(true);
+  };
 
   // ── Overflow (•••) actions — same set reels/the app already offer. ──────────
   const postUrl = () => `${window.location.origin}/p/${item.id}`;
@@ -329,6 +343,7 @@ function ImageStage({
   };
   const openReport = () => {
     setMoreOpen(false);
+    setReportReady(true);
     setReportOpen(true);
   };
   const blockUser = async () => {
@@ -730,16 +745,20 @@ function ImageStage({
         />
       ) : null}
 
-      <ReportSheet targetType="post" targetId={item.id} open={reportOpen} onClose={() => setReportOpen(false)} />
+      {reportReady ? <ReportSheet targetType="post" targetId={item.id} open={reportOpen} onClose={() => setReportOpen(false)} /> : null}
 
-      <ShareSheet
-        postId={item.id}
-        title={title ?? undefined}
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        onQrCode={() => setQrOpen(true)}
-      />
-      <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} />
+      {shareReady ? (
+        <>
+          <ShareSheet
+            postId={item.id}
+            title={title ?? undefined}
+            open={shareOpen}
+            onClose={() => setShareOpen(false)}
+            onQrCode={() => setQrOpen(true)}
+          />
+          <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} />
+        </>
+      ) : null}
     </motion.div>
   );
 }

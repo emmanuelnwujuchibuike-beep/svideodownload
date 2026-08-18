@@ -107,20 +107,24 @@ import { floatReaction } from "@/features/ui/reaction-float";
 const ReelMoreSheet = dynamic(() => import("@/features/feed/reel-sheets").then((m) => m.ReelMoreSheet));
 const ReelSendSheet = dynamic(() => import("@/features/feed/reel-sheets").then((m) => m.ReelSendSheet));
 
-import { CollectionPicker } from "@/features/social/collection-picker";
 import { RepostComposer } from "@/features/social/repost-composer";
 import { RepostSheet } from "@/features/social/repost/repost-sheet";
 import { WhyThisChip } from "@/features/social/repost/why-this";
 import { makeEmotionIcon, reactionGlyph, ReactionPicker, type ReactionEmotion } from "@/features/social/reaction-picker";
-import { ReportSheet } from "@/features/social/report-sheet";
 import { RepostersSheet } from "@/features/social/reposters-sheet";
-import { ShareSheet } from "@/features/social/share-sheet";
-import { ShareQrSheet } from "@/features/social/share-qr-sheet";
+// Code-split, each gated behind its own "ready" flag (never mounted until
+// the corresponding action is actually tapped) — reels are the main video
+// feed, so static imports here put every one of these sheets' full weight
+// into every route that renders it.
+const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m) => m.ShareSheet), { ssr: false });
+const ShareQrSheet = dynamic(() => import("@/features/social/share-qr-sheet").then((m) => m.ShareQrSheet), { ssr: false });
+const CollectionPicker = dynamic(() => import("@/features/social/collection-picker").then((m) => m.CollectionPicker), { ssr: false });
+const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
+const PostEditSheet = dynamic(() => import("@/features/social/post-edit-sheet").then((m) => m.PostEditSheet), { ssr: false });
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { RepostBurst } from "@/features/social/repost-burst";
 import { claimPlayback, recordView, releasePlayback } from "@/lib/media/video-coordinator";
-import { PostEditSheet } from "@/features/social/post-edit-sheet";
 import { toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
@@ -824,9 +828,12 @@ function ReelCard({
   const [loadingComments, setLoadingComments] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [editOpen, setEditOpen] = useState(false);
+  const [editReady, setEditReady] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [reportReady, setReportReady] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerReady, setPickerReady] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerMode, setComposerMode] = useState<"create" | "edit">("create");
   const [composerCaption, setComposerCaption] = useState<string | null>(null);
@@ -837,6 +844,7 @@ function ReelCard({
   const [sendChooserOpen, setSendChooserOpen] = useState(false);
   const [repostersOpen, setRepostersOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [shareReady, setShareReady] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   // Long-press Wow → the reaction picker; the picked glyph replaces the icon.
   // Two independent instances: the action rail (visible on every size) and the
@@ -1199,9 +1207,15 @@ function ReelCard({
     }
   };
 
+  // Gates the code-split ShareSheet/ShareQrSheet mount — never fetched until
+  // one of the Send/Share entry points below is actually tapped.
+  const openShare = () => {
+    setShareReady(true);
+    setShareOpen(true);
+  };
   const share = () => {
     setMoreOpen(false);
-    setShareOpen(true);
+    openShare();
   };
 
   const toggleFollow = async () => {
@@ -1270,6 +1284,7 @@ function ReelCard({
   };
   const openReport = () => {
     setMoreOpen(false);
+    setReportReady(true);
     setReportOpen(true);
   };
   const blockUser = async () => {
@@ -2638,7 +2653,7 @@ function ReelCard({
                   />
                 </span>
                 <SidebarAct icon={Repeat2} label="Repost" active={repostState.reposted} activeClass="text-emerald-500" count={repostState.count} onClick={repost} press={repostPress} />
-                <SidebarAct icon={SendIcon} label="Send" onClick={() => setShareOpen(true)} />
+                <SidebarAct icon={SendIcon} label="Send" onClick={openShare} />
                 <SidebarAct icon={Bookmark} label="Save" active={saved} fill={saved} activeClass="text-amber-400" onClick={() => react("save")} />
               </div>
 
@@ -2689,6 +2704,7 @@ function ReelCard({
         onViewDetails={viewDetails}
         onAddToCollection={() => {
           setMoreOpen(false);
+          setPickerReady(true);
           setPickerOpen(true);
         }}
         onDownload={() => {
@@ -2697,6 +2713,7 @@ function ReelCard({
         }}
         onEditPost={() => {
           setMoreOpen(false);
+          setEditReady(true);
           setEditOpen(true);
         }}
         following={following}
@@ -2733,7 +2750,7 @@ function ReelCard({
         reposted={repostState.reposted}
         onSendToFriends={() => {
           setSendChooserOpen(false);
-          setShareOpen(true);
+          openShare();
         }}
         onRepost={() => {
           setSendChooserOpen(false);
@@ -2742,7 +2759,7 @@ function ReelCard({
       />
 
       {/* Save-to-collection picker */}
-      <CollectionPicker postId={item.id} open={pickerOpen} onClose={() => setPickerOpen(false)} />
+      {pickerReady ? <CollectionPicker postId={item.id} open={pickerOpen} onClose={() => setPickerOpen(false)} /> : null}
 
       {/* Repost composer — optional recommendation caption or instant Post Now */}
       <RepostComposer
@@ -2780,29 +2797,36 @@ function ReelCard({
           setComposerAudience(audience);
           openComposer("create", null);
         }}
-        onSendInChat={() => setShareOpen(true)}
-        onSaveForLater={() => setPickerOpen(true)}
+        onSendInChat={openShare}
+        onSaveForLater={() => {
+          setPickerReady(true);
+          setPickerOpen(true);
+        }}
       />
 
       {/* Who reposted — behind the avatar cluster */}
       <RepostersSheet postId={item.id} open={repostersOpen} onClose={() => setRepostersOpen(false)} />
 
-      <ReportSheet targetType="post" targetId={item.id} open={reportOpen} onClose={() => setReportOpen(false)} />
+      {reportReady ? <ReportSheet targetType="post" targetId={item.id} open={reportOpen} onClose={() => setReportOpen(false)} /> : null}
 
       {/* Send — the same Share sheet as the feed (DMs, copy link, OS share) */}
-      <ShareSheet
-        postId={item.id}
-        title={title ?? undefined}
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        onRepost={item.isOwner ? undefined : () => openComposer("create", null)}
-        onQrCode={() => setQrOpen(true)}
-      />
-      <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} />
+      {shareReady ? (
+        <>
+          <ShareSheet
+            postId={item.id}
+            title={title ?? undefined}
+            open={shareOpen}
+            onClose={() => setShareOpen(false)}
+            onRepost={item.isOwner ? undefined : () => openComposer("create", null)}
+            onQrCode={() => setQrOpen(true)}
+          />
+          <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} />
+        </>
+      ) : null}
 
       {/* Inline editor — a creator edits caption/visibility (or deletes) without
           leaving the reel. */}
-      {item.isOwner ? (
+      {item.isOwner && editReady ? (
         <PostEditSheet
           item={{ id: item.id, title: title ?? "" }}
           open={editOpen}

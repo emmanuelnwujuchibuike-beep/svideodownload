@@ -7,6 +7,10 @@ import {
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import type { Metadata } from "next";
+// Aliased — this file exports the reserved route-segment config
+// `export const dynamic = "force-dynamic"` further down, which would
+// otherwise collide with next/dynamic's default export name.
+import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
@@ -19,7 +23,6 @@ import { SITE_URL } from "@/lib/site";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RichText } from "@/components/social/rich-text";
 import { PostEditButton } from "@/features/social/post-edit-button";
-import { PostGrid } from "@/components/social/post-grid";
 import { Comments } from "@/features/social/comments";
 import { FollowButton } from "@/features/social/follow-button";
 import { PostDeleteButton } from "@/features/social/post-delete-button";
@@ -30,8 +33,16 @@ import { categoryLabel } from "@/lib/social/categories";
 import { getUserPlan } from "@/lib/monetization/plan";
 import { canComment, getViewerReactions, listComments } from "@/lib/social/engagement";
 import { getPoll } from "@/lib/social/polls";
-import { PostPoll, PollCreator } from "@/features/social/post-poll";
 import { PostMedia } from "@/features/social/post-media";
+
+// Code-split (this is a Server Component, so no `ssr: false` — these still
+// render into the initial HTML for SEO/no-JS, but their hydration code
+// becomes its own chunk instead of shipping in every visitor's initial JS).
+// PostGrid ("related posts") is below the fold on every visit; PostPoll/
+// PollCreator only ever render for the minority of posts that carry a poll.
+const PostGrid = nextDynamic(() => import("@/components/social/post-grid").then((m) => m.PostGrid));
+const PostPoll = nextDynamic(() => import("@/features/social/post-poll").then((m) => m.PostPoll));
+const PollCreator = nextDynamic(() => import("@/features/social/post-poll").then((m) => m.PollCreator));
 import type { FeedItem } from "@/lib/social/home-feed";
 import { getPost, getPostMediaItems, recordPostView, relatedPosts } from "@/lib/social/posts";
 import { createClient } from "@/lib/supabase/server";

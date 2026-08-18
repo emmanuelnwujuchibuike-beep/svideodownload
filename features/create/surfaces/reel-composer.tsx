@@ -12,6 +12,7 @@ import {
   useComposerScrollLock,
 } from "@/features/create/composer-core";
 import { CreateDone } from "@/features/create/surfaces/post-composer";
+import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -104,12 +105,22 @@ export function ReelComposer() {
         onShare={async () => {
           try {
             if (navigator.share) await navigator.share({ title: "Check out my reel on Frenz", url: doneUrl });
-            else await navigator.clipboard.writeText(doneUrl);
+            else {
+              await navigator.clipboard.writeText(doneUrl);
+              toast("Link copied.", "success");
+            }
           } catch {
             /* cancelled */
           }
         }}
-        onCopy={() => navigator.clipboard?.writeText(doneUrl).catch(() => {})}
+        onCopy={() => {
+          // Owner, 2026-08-18: "post link... copied to show a link copied
+          // prompt" — this button gave zero feedback of any kind before.
+          navigator.clipboard
+            ?.writeText(doneUrl)
+            .then(() => toast("Link copied.", "success"))
+            .catch(() => toast("Couldn't copy the link.", "error"));
+        }}
         onDone={() => router.push("/reels")}
       />
     );

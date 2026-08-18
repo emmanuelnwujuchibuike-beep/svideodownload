@@ -38,8 +38,8 @@ export function isDoubleTap(now: number, lastTapAt: number, doubleTapMs: number)
 export function useTapOrDoubleTap({
   onTap,
   onDoubleTap,
-  expandDelayMs = 300,
-  doubleTapMs = 300,
+  expandDelayMs = 350,
+  doubleTapMs = 350,
   moveTolerance = 12,
 }: {
   /** Fires after `expandDelayMs` if no second tap arrived — open the viewer. */
@@ -56,9 +56,17 @@ export function useTapOrDoubleTap({
    * 20ms gap arrived AFTER the single-tap action had already fired. This
    * hook inherited the same two numbers when it was extracted from that
    * code, so it had the identical bug in `FeedImage`/`MediaCarousel` even
-   * though only the video case was reported. Now defaults equal to
+   * though only the video case was reported. Defaults equal to
    * `doubleTapMs`, closing the race by construction — override only if you
    * also raise `doubleTapMs` to match.
+   *
+   * 🔴 300 → 350 (owner, 2026-08-18, again: "single post in feed opens on
+   * double tap" — the race above was already closed by construction, so a
+   * real double-tap's own gap must simply be exceeding a 300ms window on a
+   * genuine touch device now and then. 350ms is still inside the spec's own
+   * stated "approximately 250-350ms" range (see this hook's test file) —
+   * the upper end of what was always considered acceptable, not a new
+   * number invented for this fix.
    */
   expandDelayMs?: number;
   /** Window a second tap has to land in to count as a double-tap. */

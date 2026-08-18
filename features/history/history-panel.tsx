@@ -22,6 +22,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { startDownload } from "@/features/downloads/manager";
 import { totalUsedBytes } from "@/features/history/usage";
+import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn, formatBytes } from "@/lib/utils";
@@ -300,7 +301,12 @@ export function HistoryPanel({
     const text = urls.join("\n");
     try {
       if (navigator.share) await navigator.share({ title: "My downloads", text });
-      else await navigator.clipboard.writeText(text);
+      else {
+        await navigator.clipboard.writeText(text);
+        // Owner, 2026-08-18: "any link copied" should show a prompt — the
+        // clipboard fallback (every desktop browser) gave no confirmation.
+        toast(urls.length > 1 ? "Links copied." : "Link copied.", "success");
+      }
     } catch {
       /* the user dismissed the sheet — nothing to report */
     }

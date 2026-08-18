@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useUser } from "@/features/auth/use-user";
+import { toast } from "@/features/ui/toast";
 import { COMMANDS } from "@/lib/navigation/registry";
 import { searchNavigation, type NavViewer } from "@/lib/navigation/queries";
 import { createClient } from "@/lib/supabase/client";
@@ -100,6 +101,9 @@ export function CommandCenter({ open, onClose }: { open: boolean; onClose: () =>
         if (cmd?.action === "copy-link") {
           try {
             await navigator.clipboard.writeText(window.location.href);
+            // Owner, 2026-08-18: "any link copied" should show a prompt — this
+            // command closed the whole palette with no confirmation at all.
+            toast("Link copied.", "success");
           } catch {
             /* clipboard denied — nothing to recover, and failing loudly here would
                interrupt a navigation action the user did not think was risky */

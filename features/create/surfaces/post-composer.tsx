@@ -28,6 +28,7 @@ import {
 } from "@/features/create/composer-core";
 import { PhotoEditor } from "@/features/create/photo-editor";
 import { openStudio } from "@/features/create/studio/studio-store";
+import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -122,7 +123,10 @@ export function PostComposer({
     if (!doneUrl) return;
     try {
       if (navigator.share) await navigator.share({ title: "Check out my post on Frenz", url: doneUrl });
-      else await navigator.clipboard.writeText(doneUrl);
+      else {
+        await navigator.clipboard.writeText(doneUrl);
+        toast("Link copied.", "success");
+      }
     } catch {
       /* cancelled */
     }
@@ -142,7 +146,14 @@ export function PostComposer({
               : "It's live on your profile and the feed."
         }
         onShare={share}
-        onCopy={() => navigator.clipboard?.writeText(doneUrl).catch(() => {})}
+        onCopy={() => {
+          // Owner, 2026-08-18: "post link... copied to show a link copied
+          // prompt" — this button gave zero feedback of any kind before.
+          navigator.clipboard
+            ?.writeText(doneUrl)
+            .then(() => toast("Link copied.", "success"))
+            .catch(() => toast("Couldn't copy the link.", "error"));
+        }}
         onDone={leave}
       />
     );

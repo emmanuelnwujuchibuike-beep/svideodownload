@@ -1023,20 +1023,27 @@ function ActionButton({
         initial={false}
         animate={active ? { scale: [1, 1.35, 1] } : { scale: 1 }}
         transition={{ duration: 0.32, ease: [0.34, 1.4, 0.5, 1] }}
-        className="inline-flex"
+        className={cn(
+          "inline-flex",
+          // 🔴 A REAL RAISED CHIP, NOT JUST A SHADOW ON THE GLYPH (owner,
+          // 2026-08-18, twice: "more premium and 3d and more darker" — the
+          // first pass only deepened the row's own background gradient and
+          // added a drop-shadow to the bare icon, which read as too subtle a
+          // change to notice against a genuinely dark video frame, where a
+          // few extra points of gradient opacity behind an already-dark icon
+          // is nearly invisible. A solid dark circular ground BEHIND each
+          // icon — its own shadow, its own hairline ring — reads as a
+          // distinct raised button regardless of what's playing behind it,
+          // which is the actual "3D" cue Twitter/Instagram's own icon
+          // treatments lean on, not a deeper page-level wash.
+          light && "h-7 w-7 items-center justify-center rounded-full bg-black/55 shadow-[0_3px_8px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] ring-1 ring-white/10",
+        )}
       >
         <Icon
           className={cn(
             light ? "h-4 w-4" : "h-5 w-5",
             fill && "fill-current",
-            // 🔴 PREMIUM/3D/DARKER (owner, 2026-08-18, against a screenshot of
-            // this exact row: "more premium and 3d and more darker, fitting
-            // the professionality of instagram and twitter"). Matches the
-            // reels rail's own already-validated-against-an-Instagram-
-            // reference treatment (glass-button.tsx) — a real multi-stop drop
-            // shadow reads as depth/weight rather than a flat glyph floating
-            // on the gradient, which is what a bare `drop-shadow-sm` gave.
-            light && "drop-shadow-[0_2px_5px_rgba(0,0,0,0.5)]",
+            light && "drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]",
           )}
           strokeWidth={light ? 2.3 : 2}
         />

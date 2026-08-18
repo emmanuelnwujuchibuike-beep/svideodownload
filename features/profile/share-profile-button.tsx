@@ -3,6 +3,8 @@
 import { Check, Share2 } from "lucide-react";
 import { useState } from "react";
 
+import { toast } from "@/features/ui/toast";
+
 /**
  * Share a profile: native share sheet where available (mobile), clipboard
  * copy with a ✓ confirmation elsewhere.
@@ -24,9 +26,14 @@ export function ShareProfileButton({ handle, name }: { handle: string; name: str
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
+      // 🔴 A toast too, not just the icon swap (owner, 2026-08-18: "make
+      // profile and post link... copied to show a link copied prompt") —
+      // this button carries no visible text label (only an aria-label), so
+      // the checkmark alone was easy to miss/ambiguous with "shared".
+      toast("Link copied.", "success");
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* ignore */
+      toast("Couldn't copy the link.", "error");
     }
   };
 

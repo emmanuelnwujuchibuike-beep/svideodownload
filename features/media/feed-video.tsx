@@ -17,8 +17,10 @@ const TAP_MOVE_TOLERANCE = 18;
 // How long a second tap has to land to count as a double-tap — and, just as
 // importantly, the FLOOR for how long the single-tap "open fullscreen" timer
 // must wait before firing (see the tap-up handler below for why these must
-// never be two different numbers).
-const DOUBLE_TAP_WINDOW_MS = 300;
+// never be two different numbers). 300 → 350 (owner, 2026-08-18: "single post
+// in feed opens on double tap") — kept matching use-tap-or-double-tap.ts's
+// own identical widening, so every media surface still shares one window.
+const DOUBLE_TAP_WINDOW_MS = 350;
 
 /**
  * Inline feed video. Autoplays muted when scrolled into view (Reels feel) and

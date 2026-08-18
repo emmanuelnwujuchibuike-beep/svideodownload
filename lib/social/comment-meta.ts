@@ -40,3 +40,31 @@ export function commentMood(id: string | null | undefined): CommentMood | null {
   if (!id) return null;
   return MOOD_BY_ID.get(id) ?? null;
 }
+
+export interface PinLabel {
+  id: string;
+  label: string;
+  emoji: string;
+  tint: string;
+}
+
+/** Creator-facing pin categories (Part 5). Multiple pins are allowed —
+ *  MAX_PINNED caps how many can be pinned at once (see pin/route.ts). */
+export const PIN_LABELS: PinLabel[] = [
+  { id: "important", label: "Important", emoji: "📌", tint: "text-violet-500 border-violet-500/30 bg-violet-500/10" },
+  { id: "announcement", label: "Announcement", emoji: "📣", tint: "text-rose-500 border-rose-500/30 bg-rose-500/10" },
+  { id: "faq", label: "FAQ", emoji: "❓", tint: "text-blue-500 border-blue-500/30 bg-blue-500/10" },
+  { id: "update", label: "Update", emoji: "🔄", tint: "text-cyan-500 border-cyan-500/30 bg-cyan-500/10" },
+  { id: "winner", label: "Contest winner", emoji: "🏆", tint: "text-amber-500 border-amber-500/30 bg-amber-500/10" },
+  { id: "guideline", label: "Community guideline", emoji: "📋", tint: "text-emerald-500 border-emerald-500/30 bg-emerald-500/10" },
+];
+export const MAX_PINNED = 5;
+
+const PIN_LABEL_BY_ID = new Map(PIN_LABELS.map((p) => [p.id, p]));
+export function isPinLabel(id: string): boolean {
+  return PIN_LABEL_BY_ID.has(id);
+}
+export function pinLabel(id: string | null | undefined): PinLabel | null {
+  if (!id) return null;
+  return PIN_LABEL_BY_ID.get(id) ?? null;
+}

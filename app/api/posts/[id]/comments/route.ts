@@ -4,7 +4,7 @@ import { z } from "zod";
 import { pushSocialEvent } from "@/lib/push/social-push";
 import { assistantLimiter } from "@/lib/rate-limit";
 import { isCommentMood } from "@/lib/social/comment-meta";
-import { canComment, commentSpamReason, listComments } from "@/lib/social/engagement";
+import { canComment, commentKeywordBlocked, commentSpamReason, listComments } from "@/lib/social/engagement";
 import { isStickerId } from "@/lib/social/stickers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -59,12 +59,18 @@ const schema = z.object({
   videoUrl: z.string().url().max(2048).nullable().optional(),
   videoDurationMs: z.number().int().min(0).max(80_000).nullable().optional(),
   videoThumbnailUrl: z.string().url().max(2048).nullable().optional(),
+  // Part 5 tranche 4.
+  quotedCommentId: z.string().uuid().nullable().optional(),
+  locationLat: z.number().min(-90).max(90).nullable().optional(),
+  locationLng: z.number().min(-180).max(180).nullable().optional(),
+  locationLabel: z.string().trim().max(200).nullable().optional(),
 });
 
 const GATE_MSG: Record<string, string> = {
   off: "Comments are turned off for this post.",
   followers: "Only the creator's followers can comment.",
   blocked: "You can't comment here.",
+  muted: "The creator has muted you from commenting.",
   unavailable: "This post isn't available.",
 };
 
@@ -108,8 +114,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const mood = parsed.data.mood && isCommentMood(parsed.data.mood) ? parsed.data.mood : null;
   const voiceUrl = parsed.data.voiceUrl ?? null;
   const videoUrl = parsed.data.videoUrl ?? null;
-  if (!body && !sticker && !imageUrl && !voiceUrl && !videoUrl) {
-    return NextResponse.json({ error: "Add a comment, sticker, picture, voice note, or video." }, { status: 400 });
+  const hasLocation = parsed.data.locationLat != null && parsed.data.locationLng != null;
+  if (!body && !sticker && !imageUrl && !voiceUrl && !videoUrl && !hasLocation) {
+    return NextResponse.json({ error: "Add a comment, sticker, picture, voice note, video, or location." }, { status: 400 });
   }
 
   if (body) {
@@ -120,26 +127,46 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const gate = await canComment(id, user.id);
   if (!gate.ok) return NextResponse.json({ error: GATE_MSG[gate.reason] }, { status: 403 });
 
-  // Keep threads exactly one level deep: a reply to a reply attaches to the
-  // top-level parent. Ignore parents that aren't on this post. The composer
-  // UI never shows a Reply button below depth 0, so in practice `parentId`
-  // always already IS the top-level comment — `replyTargetAuthorId` is
-  // captured before any reassignment below so push notifies whoever was
-  // actually replied to, not whatever the (normally no-op) flatten resolves to.
+  // Keyword filter (Part 5 tranche 4) — the publisher's own muted-words list.
+  // Only meaningful when the comment carries actual text.
+  if (body) {
+    const { data: postRow } = await supabase.from("posts").select("publisher_id").eq("id", id).maybeSingle();
+    const publisherId = postRow?.publisher_id as string | undefined;
+    if (publisherId && (await commentKeywordBlocked(publisherId, body))) {
+      // Deliberately doesn't name the matched word — a specific error would
+      // hand a spammer a one-word-at-a-time way to probe the filter list.
+      return NextResponse.json({ error: "Your comment couldn't be posted — it may contain a filtered word." }, { status: 400 });
+    }
+  }
+
+  // Part 5 tranche 2: real arbitrary-depth threading — a reply to a reply
+  // attaches to the comment actually being replied to, not flattened to the
+  // top-level parent (the prior "exactly one level deep" behavior). Ignore
+  // parents that aren't on this post. `replyTargetAuthorId` notifies whoever
+  // was actually replied to, at any depth.
   let parentId = parsed.data.parentId ?? null;
   let replyTargetAuthorId: string | null = null;
   if (parentId) {
     const { data: parent } = await supabase
       .from("post_comments")
-      .select("post_id, parent_id, author_id")
+      .select("post_id, author_id")
       .eq("id", parentId)
       .maybeSingle();
     if (!parent || parent.post_id !== id) {
       parentId = null;
     } else {
       replyTargetAuthorId = parent.author_id as string;
-      if (parent.parent_id) parentId = parent.parent_id as string;
     }
+  }
+
+  // Quote Reply (Part 5 tranche 4) — validated the same way parentId is:
+  // must be a real comment on THIS post, or it's silently dropped rather
+  // than trusted from the client (a hand-rolled request can't make a
+  // comment appear to quote something from a different post).
+  let quotedCommentId = parsed.data.quotedCommentId ?? null;
+  if (quotedCommentId) {
+    const { data: quoted } = await supabase.from("post_comments").select("post_id").eq("id", quotedCommentId).maybeSingle();
+    if (!quoted || quoted.post_id !== id) quotedCommentId = null;
   }
 
   // Only send the rich columns when they carry a value, so a plain-text comment
@@ -163,11 +190,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     insert.video_duration_ms = parsed.data.videoDurationMs ?? null;
     insert.video_thumbnail_url = parsed.data.videoThumbnailUrl ?? null;
   }
+  if (quotedCommentId) insert.quoted_comment_id = quotedCommentId;
+  if (hasLocation) {
+    insert.location_lat = parsed.data.locationLat;
+    insert.location_lng = parsed.data.locationLng;
+    insert.location_label = parsed.data.locationLabel ?? null;
+  }
 
   const { data, error } = await supabase.from("post_comments").insert(insert).select("id").single();
   if (error) {
     const msg =
-      (sticker || imageUrl || mood || voiceUrl || videoUrl) && /column|schema/i.test(error.message ?? "")
+      (sticker || imageUrl || mood || voiceUrl || videoUrl || quotedCommentId || hasLocation) && /column|schema/i.test(error.message ?? "")
         ? "Some comment features aren't enabled yet."
         : "Couldn't post comment.";
     return NextResponse.json({ error: msg }, { status: 500 });

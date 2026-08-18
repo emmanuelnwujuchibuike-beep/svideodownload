@@ -344,6 +344,9 @@ export interface PrivacySettings {
   show_plan_badge: boolean;
   /** Migration 0106 — the profile's total view count, public by default. */
   show_views: boolean;
+  /** Migration 0122 (Feature 15 Part 5 tranche 4) — comments containing any
+   *  of these words (case-insensitive substring) are rejected at post time. */
+  muted_comment_keywords: string[];
 }
 
 export const DEFAULT_PRIVACY: PrivacySettings = {
@@ -364,6 +367,7 @@ export const DEFAULT_PRIVACY: PrivacySettings = {
   show_reputation: true,
   show_plan_badge: true,
   show_views: true,
+  muted_comment_keywords: [],
 };
 
 /* ----------------------------- follow lists ----------------------------- */
@@ -550,27 +554,39 @@ export async function listMutedCreators(viewerId: string): Promise<ListUser[]> {
 const PRIVACY_BASE_COLS =
   "activity_visibility, followers_visibility, reposts_visibility, likes_visibility, saves_visibility, comments_policy, messages_policy, allow_indexing, show_in_recommendations, read_receipts_enabled, typing_indicators_enabled, last_seen_visibility, group_invite_policy";
 const PRIVACY_NEW_COLS = "show_reputation, show_plan_badge, show_views"; // migrations 0102 + 0106
+const PRIVACY_NEWER_COLS = "muted_comment_keywords"; // migration 0122
 
 export async function getPrivacySettings(userId: string): Promise<PrivacySettings> {
   if (!hasSupabase) return DEFAULT_PRIVACY;
   const db = createAdminClient();
-  // Try WITH the migration-0102 columns; if they aren't applied yet the select
-  // errors, so fall back to the base columns rather than reverting every OTHER
-  // privacy setting to its default (which would be a real privacy regression).
+  // Three-tier fallback, oldest columns last — a later migration not being
+  // applied yet must never revert an EARLIER, already-live setting to its
+  // default (that would be a real privacy regression), so each tier only
+  // drops the columns that are actually missing.
   try {
     const { data, error } = await db
       .from("privacy_settings")
-      .select(`${PRIVACY_BASE_COLS}, ${PRIVACY_NEW_COLS}`)
+      .select(`${PRIVACY_BASE_COLS}, ${PRIVACY_NEW_COLS}, ${PRIVACY_NEWER_COLS}`)
       .eq("user_id", userId)
       .maybeSingle();
     if (error) throw error;
     return { ...DEFAULT_PRIVACY, ...((data ?? {}) as Partial<PrivacySettings>) };
   } catch {
     try {
-      const { data } = await db.from("privacy_settings").select(PRIVACY_BASE_COLS).eq("user_id", userId).maybeSingle();
+      const { data, error } = await db
+        .from("privacy_settings")
+        .select(`${PRIVACY_BASE_COLS}, ${PRIVACY_NEW_COLS}`)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) throw error;
       return { ...DEFAULT_PRIVACY, ...((data ?? {}) as Partial<PrivacySettings>) };
     } catch {
-      return DEFAULT_PRIVACY;
+      try {
+        const { data } = await db.from("privacy_settings").select(PRIVACY_BASE_COLS).eq("user_id", userId).maybeSingle();
+        return { ...DEFAULT_PRIVACY, ...((data ?? {}) as Partial<PrivacySettings>) };
+      } catch {
+        return DEFAULT_PRIVACY;
+      }
     }
   }
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { Activity, Award, Bookmark, CheckCheck, Clock, Crown, Eye, Loader2, MessageSquare, Repeat2, Search, Sparkles, UserPlus, Users } from "lucide-react";
+import { Activity, Award, Bookmark, CheckCheck, Clock, Crown, Eye, Loader2, MessageSquare, Repeat2, Search, ShieldOff, Sparkles, UserPlus, Users, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { WowOutline } from "@/components/brand/wow-icon";
 import { SETTINGS_TINTS } from "@/features/account/settings-ui";
@@ -116,12 +116,153 @@ export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
         </div>
       </div>
 
+      <p className="mb-1.5 ml-1.5 mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Comment moderation</p>
+      <div className="overflow-hidden rounded-2xl border border-border/70 bg-card p-3.5 shadow-sm">
+        <span className="flex items-center gap-3">
+          <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset", SETTINGS_TINTS.rose)}>
+            <ShieldOff className="h-[18px] w-[18px]" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">Keyword filter</span>
+            <span className="block text-xs text-muted-foreground">Comments containing these words are never posted, on any of your posts</span>
+          </span>
+        </span>
+        <KeywordFilterEditor
+          keywords={state.muted_comment_keywords ?? []}
+          onChange={(kw) => set("muted_comment_keywords", kw)}
+        />
+        <div className="mt-4 border-t border-border/60 pt-3">
+          <MutedCommenters />
+        </div>
+      </div>
+
       <div className="mt-5 flex items-center gap-3 px-0.5">
         <button type="button" onClick={save} disabled={busy} className="btn-lux btn-lux-primary">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save privacy
         </button>
         {msg ? <span className={cn("text-sm font-medium", msg.ok ? "text-green-500" : "text-red-400")}>{msg.text}</span> : null}
       </div>
+    </div>
+  );
+}
+
+interface MutedPerson {
+  id: string;
+  handle: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+/** Manages who's been muted via a comment's ⋯ menu (comments.tsx) — makes
+ *  that action reversible instead of one-way. Lazily fetched on first
+ *  expand, not on every Privacy page load. */
+function MutedCommenters() {
+  const [open, setOpen] = useState(false);
+  const [muted, setMuted] = useState<MutedPerson[] | null>(null);
+
+  useEffect(() => {
+    if (!open || muted !== null) return;
+    let cancelled = false;
+    void fetch("/api/privacy/muted-commenters")
+      .then((r) => (r.ok ? r.json() : { muted: [] }))
+      .then((j: { muted?: MutedPerson[] }) => {
+        if (!cancelled) setMuted(j.muted ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setMuted([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, muted]);
+
+  const unmute = async (id: string) => {
+    setMuted((m) => (m ? m.filter((p) => p.id !== id) : m));
+    try {
+      await fetch(`/api/privacy/muted-commenters?userId=${id}`, { method: "DELETE" });
+    } catch {
+      /* best-effort — a refresh of this panel will show the true state */
+    }
+  };
+
+  return (
+    <div className="pl-[3.25rem]">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="text-xs font-semibold text-primary hover:opacity-80">
+        {open ? "Hide muted commenters" : "Manage muted commenters"}
+      </button>
+      {open ? (
+        muted === null ? (
+          <p className="mt-2 text-xs text-muted-foreground">Loading…</p>
+        ) : muted.length === 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">No one is muted — mute someone from their comment&apos;s ⋯ menu.</p>
+        ) : (
+          <ul className="mt-2 space-y-1.5">
+            {muted.map((p) => (
+              <li key={p.id} className="flex items-center gap-2.5">
+                {p.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+                ) : (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-xs font-bold text-white">{p.displayName.charAt(0).toUpperCase()}</span>
+                )}
+                <span className="min-w-0 flex-1 truncate text-sm">{p.displayName}</span>
+                <button type="button" onClick={() => unmute(p.id)} className="text-xs font-semibold text-muted-foreground hover:text-foreground">
+                  Unmute
+                </button>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+    </div>
+  );
+}
+
+function KeywordFilterEditor({ keywords, onChange }: { keywords: string[]; onChange: (k: string[]) => void }) {
+  const [draft, setDraft] = useState("");
+
+  const add = () => {
+    const w = draft.trim().toLowerCase();
+    if (!w || keywords.includes(w) || keywords.length >= 50) {
+      setDraft("");
+      return;
+    }
+    onChange([...keywords, w]);
+    setDraft("");
+  };
+
+  return (
+    <div className="mt-3 pl-[3.25rem]">
+      <div className="flex items-center gap-2">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.slice(0, 40))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder="Add a word or phrase…"
+          aria-label="Add a filtered word"
+          className="w-full max-w-xs rounded-xl border border-border/60 bg-secondary/40 px-3 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50"
+        />
+        <button type="button" onClick={add} disabled={!draft.trim()} className="rounded-xl bg-secondary px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-secondary/80 disabled:opacity-50">
+          Add
+        </button>
+      </div>
+      {keywords.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {keywords.map((k) => (
+            <span key={k} className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-secondary/50 px-2.5 py-1 text-xs font-medium text-foreground">
+              {k}
+              <button type="button" onClick={() => onChange(keywords.filter((x) => x !== k))} aria-label={`Remove ${k}`} className="text-muted-foreground hover:text-foreground">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

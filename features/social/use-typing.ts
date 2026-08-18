@@ -75,15 +75,15 @@ function notifyListeners(entry: SharedTyping): void {
   for (const listener of entry.listeners) listener(names);
 }
 
-function acquireChannel(conversationId: string, viewerId: string): SharedTyping {
-  const existing = registry.get(conversationId);
+function acquireChannel(topicId: string, viewerId: string): SharedTyping {
+  const existing = registry.get(topicId);
   if (existing) {
     existing.refCount++;
     return existing;
   }
 
   const supabase = createClient();
-  const channel = supabase.channel(`typing:${conversationId}`, {
+  const channel = supabase.channel(`typing:${topicId}`, {
     config: { private: true, presence: { key: viewerId } },
   });
 
@@ -175,12 +175,12 @@ function acquireChannel(conversationId: string, viewerId: string): SharedTyping 
   void supabase.auth.getSession().then(joinChannel).catch(joinChannel);
 
   entry.staleInterval = setInterval(pruneStale, 2_000);
-  registry.set(conversationId, entry);
+  registry.set(topicId, entry);
   return entry;
 }
 
-function releaseChannel(conversationId: string): void {
-  const entry = registry.get(conversationId);
+function releaseChannel(topicId: string): void {
+  const entry = registry.get(topicId);
   if (!entry) return;
   entry.refCount--;
   if (entry.refCount > 0) return;
@@ -189,7 +189,7 @@ function releaseChannel(conversationId: string): void {
   if (entry.heartbeatTimer) clearInterval(entry.heartbeatTimer);
   const supabase = createClient();
   void supabase.removeChannel(entry.channel);
-  registry.delete(conversationId);
+  registry.delete(topicId);
 }
 
 /**
@@ -214,12 +214,22 @@ function releaseChannel(conversationId: string): void {
  *     re-sent on every (re)join.
  *
  * 2026-07-13 rework — the channel itself is now a shared, ref-counted
- * singleton per conversationId (see the module doc above `acquireChannel`)
- * rather than one-per-hook-instance, fixing a real production crash caused
- * by more than one observer of the same conversation subscribing at once.
+ * singleton per topic (see the module doc above `acquireChannel`) rather
+ * than one-per-hook-instance, fixing a real production crash caused by more
+ * than one observer of the same conversation subscribing at once.
+ *
+ * Generalized (Part 5 tranche 2) to take a bare `topicId` instead of
+ * assuming "conversation" — comments needed the identical mechanics
+ * (shared ref-counted channel, buffered track-until-subscribed, heartbeat,
+ * stale-eviction, visibility-change handling) for a different topic shape
+ * (`typing:comments:<postId>` vs `typing:<conversationId>`), and this code
+ * has enough hard-won, non-obvious fixes (documented above) that forking it
+ * a second time was a worse trade than generalizing the one battle-tested
+ * copy. `useTypingIndicator` and `useCommentTypingIndicator` below are thin
+ * wrappers over this with zero behavior change for existing callers.
  */
-export function useTypingIndicator(
-  conversationId: string,
+function useTypingChannel(
+  topicId: string,
   viewerId: string,
   viewerName: string,
   /** Part 11b privacy toggle — viewer's own "show when I'm typing" choice. False mutes only OUR OWN outbound `typing:true` broadcast; we still join the channel and see everyone else's typing state normally. */
@@ -231,14 +241,14 @@ export function useTypingIndicator(
   viewerNameRef.current = viewerName;
 
   useEffect(() => {
-    // An empty conversationId is the list page's way of saying "this row
-    // isn't subscribed" (capped upstream) — skip opening a channel entirely
+    // An empty topicId is the list page's way of saying "this row isn't
+    // subscribed" (capped upstream) — skip opening a channel entirely
     // rather than joining a nonsense `typing:` topic per uncapped row.
-    if (!conversationId) {
+    if (!topicId) {
       setTypingNames([]);
       return;
     }
-    const entry = acquireChannel(conversationId, viewerId);
+    const entry = acquireChannel(topicId, viewerId);
     entryRef.current = entry;
     const listener = (names: string[]) => setTypingNames(names);
     entry.listeners.add(listener);
@@ -247,9 +257,9 @@ export function useTypingIndicator(
     return () => {
       entry.listeners.delete(listener);
       entryRef.current = null;
-      releaseChannel(conversationId);
+      releaseChannel(topicId);
     };
-  }, [conversationId, viewerId]);
+  }, [topicId, viewerId]);
 
   // Stop broadcasting the instant the tab is backgrounded/app is suspended —
   // don't wait out the idle timer (which still fires, just not necessarily
@@ -342,4 +352,16 @@ export function useTypingIndicator(
   }, [trackState]);
 
   return { typingNames, notifyTyping, clearTyping };
+}
+
+/** Messaging typing indicator — unchanged behavior, topic `typing:<conversationId>`. */
+export function useTypingIndicator(conversationId: string, viewerId: string, viewerName: string, broadcastEnabled = true) {
+  return useTypingChannel(conversationId, viewerId, viewerName, broadcastEnabled);
+}
+
+/** Comment-thread typing indicator (Part 5 tranche 2) — topic
+ *  `typing:comments:<postId>`, authorized by migration 0120 rather than
+ *  0043/0066's conversation-membership predicate. */
+export function useCommentTypingIndicator(postId: string, viewerId: string, viewerName: string, broadcastEnabled = true) {
+  return useTypingChannel(postId ? `comments:${postId}` : "", viewerId, viewerName, broadcastEnabled);
 }

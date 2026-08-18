@@ -76,6 +76,22 @@ export interface CommentReactionCount {
   count: number;
 }
 
+/** Minimal snapshot of a quoted comment — resolved from the SAME post's
+ *  already-fetched rows (never a second query), so a quote can never leak a
+ *  comment the viewer wouldn't otherwise be allowed to see on this post. */
+export interface QuotedCommentSnapshot {
+  id: string;
+  author: CommentAuthor | null;
+  /** First ~140 chars — a preview, not the full quoted body. */
+  bodySnippet: string;
+}
+
+export interface CommentLocation {
+  lat: number;
+  lng: number;
+  label: string | null;
+}
+
 export interface CommentNode {
   id: string;
   body: string;
@@ -92,6 +108,12 @@ export interface CommentNode {
   videoUrl: string | null;
   videoDurationMs: number | null;
   videoThumbnailUrl: string | null;
+  /** Quote Reply (Part 5 tranche 4) — references any comment on this post,
+   *  not necessarily the structural parent (parentId). Null if not quoting,
+   *  or if the quoted comment was deleted. */
+  quotedComment: QuotedCommentSnapshot | null;
+  /** Location comment type. */
+  location: CommentLocation | null;
   /** Total reactions (any emoji). Kept as `likesCount` for compatibility. */
   likesCount: number;
   viewerLiked: boolean;
@@ -102,10 +124,17 @@ export interface CommentNode {
   /** Mood tag id (see comment-meta), if the author set one. */
   mood: string | null;
   pinned: boolean;
+  /** Pin category (see lib/social/comment-meta PIN_LABELS), null = unlabelled. */
+  pinLabel: string | null;
+  pinnedAt: string | null;
   isBest: boolean;
   createdAt: string;
+  editedAt: string | null;
   author: CommentAuthor | null;
   canDelete: boolean;
+  /** Only the comment's own author may edit (moderators can delete, never
+   *  rewrite someone else's words). */
+  canEdit: boolean;
   /** The viewer may pin / mark best (post owner or admin). */
   canModerate: boolean;
   replies: CommentNode[];
@@ -126,10 +155,17 @@ interface CommentRow {
   video_url?: string | null;
   video_duration_ms?: number | null;
   video_thumbnail_url?: string | null;
+  quoted_comment_id?: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  location_label?: string | null;
   likes_count?: number | null;
   mood?: string | null;
   pinned?: boolean | null;
+  pin_label?: string | null;
+  pinned_at?: string | null;
   is_best?: boolean | null;
+  edited_at?: string | null;
 }
 
 /** Visible comments for a post, threaded one level, with author cards. */
@@ -145,8 +181,9 @@ export async function listComments(
     // Prefer the rich columns (sticker/image), but fall back cleanly if the
     // migration hasn't been applied yet so comments never vanish.
     const EXT =
-      "id, author_id, parent_id, body, status, created_at, sticker, image_url, likes_count, mood, pinned, is_best, " +
-      "voice_url, voice_duration_ms, voice_waveform, video_url, video_duration_ms, video_thumbnail_url";
+      "id, author_id, parent_id, body, status, created_at, sticker, image_url, likes_count, mood, pinned, pin_label, pinned_at, is_best, edited_at, " +
+      "voice_url, voice_duration_ms, voice_waveform, video_url, video_duration_ms, video_thumbnail_url, " +
+      "quoted_comment_id, location_lat, location_lng, location_label";
     const BASE = "id, author_id, parent_id, body, status, created_at, likes_count";
     const runQuery = (cols: string) =>
       db
@@ -244,7 +281,30 @@ export async function listComments(
 
     const canDelete = (authorId: string) =>
       isAdmin || viewerId === authorId || viewerId === postPublisherId;
+    const canEdit = (authorId: string) => !!viewerId && viewerId === authorId;
     const canModerate = isAdmin || (!!viewerId && viewerId === postPublisherId);
+
+    // Quote Reply — resolved from the SAME already-fetched `rows`, never a
+    // second query, so a quote can only ever reference something the viewer
+    // could already see on this post. A quoted comment from a BLOCKED author
+    // returns null entirely (not just author: null) — the block hides their
+    // comment from rendering directly (see the tree-building loop below);
+    // letting the body text leak through someone else's quote of it, even
+    // with the identity stripped, would defeat that. Same treatment applies
+    // when the quoted author is the viewer's own blocked-by (block is
+    // symmetric here, matching canComment's own bidirectional block check).
+    const rowById = new Map(rows.map((r) => [r.id, r]));
+    const quotedSnapshot = (quotedId: string | null | undefined): QuotedCommentSnapshot | null => {
+      if (!quotedId) return null;
+      const q = rowById.get(quotedId);
+      if (!q) return null;
+      if (blockedIds.has(q.author_id) && q.author_id !== viewerId) return null;
+      return {
+        id: q.id,
+        author: authorById.get(q.author_id) ?? null,
+        bodySnippet: (q.body || "").slice(0, 140),
+      };
+    };
 
     const toNode = (r: CommentRow): CommentNode => {
       const rmap = reactionsByComment.get(r.id);
@@ -264,6 +324,11 @@ export async function listComments(
         videoUrl: r.video_url ?? null,
         videoDurationMs: r.video_duration_ms ?? null,
         videoThumbnailUrl: r.video_thumbnail_url ?? null,
+        quotedComment: quotedSnapshot(r.quoted_comment_id),
+        location:
+          r.location_lat != null && r.location_lng != null
+            ? { lat: r.location_lat, lng: r.location_lng, label: r.location_label ?? null }
+            : null,
         // Prefer the live reaction tally; fall back to the denormalized counter.
         likesCount: total || (r.likes_count ?? 0),
         viewerLiked: !!viewerReaction,
@@ -271,15 +336,24 @@ export async function listComments(
         viewerReaction,
         mood: r.mood ?? null,
         pinned: !!r.pinned,
+        pinLabel: r.pin_label ?? null,
+        pinnedAt: r.pinned_at ?? null,
         isBest: !!r.is_best,
         createdAt: r.created_at,
+        editedAt: r.edited_at ?? null,
         author: authorById.get(r.author_id) ?? null,
         canDelete: canDelete(r.author_id),
+        canEdit: canEdit(r.author_id),
         canModerate,
         replies: [],
       };
     };
 
+    // Part 5 tranche 2: real arbitrary-depth threading. Grouping by parent_id
+    // was always generic (works at any depth) — the "one level deep" limit
+    // lived entirely in the WRITE path (see app/api/posts/[id]/comments),
+    // which no longer flattens. Rows are already created_at-ascending, so
+    // each node's replies land in chronological order for free.
     const nodes = new Map<string, CommentNode>();
     const top: CommentNode[] = [];
     for (const r of rows) {
@@ -290,8 +364,13 @@ export async function listComments(
     for (const r of rows) {
       const node = nodes.get(r.id);
       if (!node) continue;
-      if (r.parent_id && nodes.has(r.parent_id)) nodes.get(r.parent_id)!.replies.push(node);
-      else if (!r.parent_id) top.push(node);
+      const parent = r.parent_id ? nodes.get(r.parent_id) : undefined;
+      // A reply whose parent is missing (deleted, or hidden via a block) is
+      // surfaced at the top level rather than silently dropped — "unknown
+      // parent" is not the same as "this comment doesn't exist" (same
+      // principle as Part 4's `unknown ≠ zero` provenance rule).
+      if (parent) parent.replies.push(node);
+      else top.push(node);
     }
     return top;
   } catch {
@@ -301,9 +380,10 @@ export async function listComments(
 
 export type CommentGate =
   | { ok: true }
-  | { ok: false; reason: "off" | "followers" | "blocked" | "unavailable" };
+  | { ok: false; reason: "off" | "followers" | "blocked" | "muted" | "unavailable" };
 
-/** Whether `viewerId` may comment on `postId` (comments_policy + blocks). */
+/** Whether `viewerId` may comment on `postId` (comments_policy + blocks +
+ *  mute-this-commenter, Part 5 tranche 4). */
 export async function canComment(postId: string, viewerId: string): Promise<CommentGate> {
   if (!hasSupabase) return { ok: false, reason: "unavailable" };
   try {
@@ -326,6 +406,24 @@ export async function canComment(postId: string, viewerId: string): Promise<Comm
       );
     if ((blk ?? 0) > 0) return { ok: false, reason: "blocked" };
 
+    // Mute-this-commenter — narrower than a block (see 0122's own comment):
+    // the muted user keeps following/messaging/seeing this creator's posts,
+    // they just can't comment on them. Its own try/catch: a missing
+    // comment_muted_users table (0122 not applied yet) must degrade to
+    // "not muted" rather than take down commenting entirely — same
+    // graceful-degrade discipline every other optional-migration read in
+    // this file already follows (see listComments' EXT/BASE fallback).
+    try {
+      const { count: muted } = await db
+        .from("comment_muted_users")
+        .select("creator_id", { head: true, count: "exact" })
+        .eq("creator_id", publisherId)
+        .eq("muted_user_id", viewerId);
+      if ((muted ?? 0) > 0) return { ok: false, reason: "muted" };
+    } catch {
+      /* comment_muted_users not migrated yet */
+    }
+
     const { data: priv } = await db
       .from("privacy_settings")
       .select("comments_policy")
@@ -344,6 +442,30 @@ export async function canComment(postId: string, viewerId: string): Promise<Comm
     return { ok: true };
   } catch {
     return { ok: false, reason: "unavailable" };
+  }
+}
+
+/** Comment body matches one of the publisher's own muted keywords (Part 5
+ *  tranche 4)? Case-insensitive substring match — no regex, no per-keyword
+ *  metadata, matching commentSpamReason's own "simple heuristic, not a
+ *  content-moderation platform" scope. Gracefully returns false if 0122
+ *  isn't applied yet (the column just doesn't exist). */
+export async function commentKeywordBlocked(publisherId: string, body: string): Promise<boolean> {
+  if (!hasSupabase || !body.trim()) return false;
+  try {
+    const db = createAdminClient();
+    const { data, error } = await db
+      .from("privacy_settings")
+      .select("muted_comment_keywords")
+      .eq("user_id", publisherId)
+      .maybeSingle();
+    if (error || !data) return false;
+    const keywords = (data.muted_comment_keywords as string[] | null) ?? [];
+    if (keywords.length === 0) return false;
+    const lower = body.toLowerCase();
+    return keywords.some((k) => k.trim() && lower.includes(k.trim().toLowerCase()));
+  } catch {
+    return false;
   }
 }
 

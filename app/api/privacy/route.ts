@@ -33,6 +33,8 @@ const schema = z.object({
   friends_visibility: z.enum(["public", "friends", "private"]).optional(),
   following_visibility: vis.optional(),
   show_mutual_connections: z.boolean().optional(),
+  // Migration 0122 — comment keyword filter (Feature 15 Part 5 tranche 4).
+  muted_comment_keywords: z.array(z.string().trim().min(1).max(40)).max(50).optional(),
 });
 
 /** PATCH /api/privacy — upsert the signed-in user's privacy settings. */
@@ -67,6 +69,7 @@ export async function PATCH(request: Request) {
       friends_visibility: _fv,
       following_visibility: _flv,
       show_mutual_connections: _smc,
+      muted_comment_keywords: _mck,
       ...base
     } = row;
     void _sr;
@@ -75,6 +78,7 @@ export async function PATCH(request: Request) {
     void _fv;
     void _flv;
     void _smc;
+    void _mck;
     const retry = await supabase.from("privacy_settings").upsert(base, { onConflict: "user_id" });
     if (retry.error) return NextResponse.json({ error: "Couldn't save settings." }, { status: 500 });
   }

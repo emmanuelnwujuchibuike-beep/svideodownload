@@ -1,11 +1,17 @@
 "use client";
 
 import { Download } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useState } from "react";
 
-import { FloatingDownloadProgress } from "@/features/downloads/floating-progress";
 import { startDownload } from "@/features/downloads/manager";
 import { detectPlatform } from "@/lib/platforms";
 import type { MediaKind } from "@/types";
+
+const FloatingDownloadProgress = dynamic(
+  () => import("@/features/downloads/floating-progress").then((m) => m.FloatingDownloadProgress),
+  { ssr: false },
+);
 
 /**
  * Public-page download: re-extracts from the original source on demand via the
@@ -24,7 +30,10 @@ export function PostDownloadButton({
   mediaKind: MediaKind;
   title: string;
 }) {
+  const [progressReady, setProgressReady] = useState(false);
+
   const onClick = () => {
+    setProgressReady(true);
     const platform = detectPlatform(sourceUrl);
     startDownload({
       url: sourceUrl,
@@ -59,7 +68,7 @@ export function PostDownloadButton({
         <span className="relative">Download</span>
       </button>
       {/* Progress card for public pages outside the app shell (singleton). */}
-      <FloatingDownloadProgress />
+      {progressReady ? <FloatingDownloadProgress /> : null}
     </>
   );
 }

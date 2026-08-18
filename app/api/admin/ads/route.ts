@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/admin/guard";
-import { adCreateSchema } from "@/lib/monetization/ad-schema";
+import { adCreateSchema } from "@/lib/monetization/ad-validation";
 import { clearAdCache, listAds } from "@/lib/monetization/ads";
 import { createAdminClient } from "@/lib/supabase/admin";
 

@@ -1,11 +1,19 @@
 "use client";
 
 import { Camera, LayoutGrid, Search } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
 
-import { ProfileMenuBottomSheet } from "./profile-menu-bottom-sheet";
 import type { MenuUser } from "./profile-menu-panel";
+
+// Was a plain static import — ~32kB of profile-menu UI, its full nav icon
+// set, and (transitively, via the Language row) the entire ~50-locale
+// message catalogue, all riding into every profile page's first load
+// regardless of whether the menu was ever opened. No `ssr: false`: nothing
+// inside renders until `open` is true, matching UserMenu's own on-tap
+// `import()` for the identical desktop control.
+const ProfileMenuBottomSheet = dynamic(() => import("./profile-menu-bottom-sheet").then((m) => m.ProfileMenuBottomSheet));
 
 /**
  * The owner profile's floating cover controls.
@@ -26,6 +34,7 @@ import type { MenuUser } from "./profile-menu-panel";
  */
 export function ProfileCoverControls({ user }: { user: MenuUser }) {
   const [open, setOpen] = useState(false);
+  const [ready, setReady] = useState(false);
 
   return (
     <>
@@ -50,7 +59,10 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
           </Link>
           <button
             type="button"
-            onClick={() => setOpen(true)}
+            onClick={() => {
+              setReady(true);
+              setOpen(true);
+            }}
             aria-label="Menu"
             aria-expanded={open}
             className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/40 text-white backdrop-blur-md transition hover:bg-black/55 active:scale-95"
@@ -60,7 +72,7 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
         </div>
       </div>
 
-      <ProfileMenuBottomSheet open={open} user={user} onClose={() => setOpen(false)} />
+      {ready ? <ProfileMenuBottomSheet open={open} user={user} onClose={() => setOpen(false)} /> : null}
     </>
   );
 }

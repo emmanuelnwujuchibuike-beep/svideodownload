@@ -4,8 +4,9 @@ import { BookOpen, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { JOURNAL_CONTENT_MAX, type JournalEntry } from "@/lib/social/journal";
-import { PROFILE_MOODS } from "@/lib/social/profile";
+import type { JournalEntry } from "@/lib/social/journal";
+import { JOURNAL_CONTENT_MAX } from "@/lib/social/journal-constants";
+import { PROFILE_MOODS } from "@/lib/social/profile-moods";
 import { cn } from "@/lib/utils";
 
 function formatEntryDate(iso: string): string {

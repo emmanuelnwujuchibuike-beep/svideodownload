@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { LIVE_MODULE_KEYS } from "@/lib/profile/modules";
 import { SELECTABLE_PROFILE_TYPE_KEYS } from "@/lib/profile/profile-types";
-import { normalizeHandle, PROFILE_ACCENT_KEYS, PROFILE_MOODS } from "@/lib/social/profile";
+import { normalizeHandle } from "@/lib/social/profile";
+import { PROFILE_ACCENT_KEYS, PROFILE_MOODS } from "@/lib/social/profile-moods";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getJournalEntries, JOURNAL_CONTENT_MAX } from "@/lib/social/journal";
-import { PROFILE_MOODS } from "@/lib/social/profile";
+import { getJournalEntries } from "@/lib/social/journal";
+import { JOURNAL_CONTENT_MAX } from "@/lib/social/journal-constants";
+import { PROFILE_MOODS } from "@/lib/social/profile-moods";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";

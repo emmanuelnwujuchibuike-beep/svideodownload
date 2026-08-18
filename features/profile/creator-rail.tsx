@@ -12,17 +12,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
+import nextDynamic from "next/dynamic";
 
 import { SoonButton } from "@/components/profile/dashboard/soon";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { AchievementsShowcase } from "@/features/profile/achievements-showcase";
-import { CreatorActivity } from "@/features/profile/creator-activity";
-import { IdentityAnalytics, type IdentityAnalyticsData, type TopContent } from "@/features/profile/identity-analytics";
-import { LifeJourneyCard } from "@/features/profile/life-journey-card";
-import { PrivateJournalCard } from "@/features/profile/private-journal-card";
-import { HealthCard } from "@/features/profile/health-card";
-import { ReputationCard } from "@/features/profile/reputation-card";
-import { TimeCapsuleCard } from "@/features/profile/time-capsule-card";
+import type { IdentityAnalyticsData, TopContent } from "@/features/profile/identity-analytics";
 import type { ActivityRow } from "@/features/profile/activity-map";
 import type { EarnedAchievement } from "@/lib/social/achievements";
 import type { JournalEntry } from "@/lib/social/journal";
@@ -31,6 +25,28 @@ import type { ProfileHealth } from "@/lib/profile/health";
 import type { Reputation } from "@/lib/social/reputation";
 import type { TimeCapsule } from "@/lib/social/time-capsules";
 import { cn } from "@/lib/utils";
+
+/*
+  🔴 Every rail card below is below-the-fold on ANY viewport (`.frenz-profile-
+  cols` is `flex-col` until the `@container` hits 62rem — see the file's own
+  layout note) and was a plain static import, so all eight cards' full weight
+  — including Achievements, Life Journey, Time Capsule, the Private Journal,
+  and Identity Analytics — rode into `/u/[handle]/page`'s first-load JS
+  whether or not a visitor ever scrolled to them. `next/dynamic` here (no
+  `ssr: false`: this is a Server Component, which disallows it, and the HTML
+  should still render server-side for SEO/no-JS) turns each into its own
+  chunk the browser fetches after the page's own code, rather than one
+  monolithic bundle — the same treatment `/p/[id]/page.tsx` already gives
+  PostGrid/PostPoll.
+*/
+const HealthCard = nextDynamic(() => import("@/features/profile/health-card").then((m) => m.HealthCard));
+const ReputationCard = nextDynamic(() => import("@/features/profile/reputation-card").then((m) => m.ReputationCard));
+const LifeJourneyCard = nextDynamic(() => import("@/features/profile/life-journey-card").then((m) => m.LifeJourneyCard));
+const TimeCapsuleCard = nextDynamic(() => import("@/features/profile/time-capsule-card").then((m) => m.TimeCapsuleCard));
+const PrivateJournalCard = nextDynamic(() => import("@/features/profile/private-journal-card").then((m) => m.PrivateJournalCard));
+const IdentityAnalytics = nextDynamic(() => import("@/features/profile/identity-analytics").then((m) => m.IdentityAnalytics));
+const AchievementsShowcase = nextDynamic(() => import("@/features/profile/achievements-showcase").then((m) => m.AchievementsShowcase));
+const CreatorActivity = nextDynamic(() => import("@/features/profile/creator-activity").then((m) => m.CreatorActivity));
 
 /**
  * The creator profile's right rail (design: public/mainprofile.jpg) — About Me,

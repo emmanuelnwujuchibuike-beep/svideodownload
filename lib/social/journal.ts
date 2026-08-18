@@ -1,9 +1,9 @@
+import "server-only";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-export const JOURNAL_CONTENT_MAX = 2000;
 /** How many recent entries the profile rail shows — a private journal is not
  *  a feed to paginate on the profile itself; older entries still exist and
  *  are readable via the API, just not all loaded onto the page at once. */

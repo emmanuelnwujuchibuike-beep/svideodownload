@@ -1,7 +1,10 @@
+import "server-only";
+
 import { getCached } from "@/lib/cache";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { flagsOf, isAccountVisibleTo, relationTo } from "@/lib/social/account-visibility";
 import { friendIdSet } from "@/lib/social/friend-ids";
+import { PROFILE_ACCENTS } from "@/lib/social/profile-moods";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -207,33 +210,6 @@ export async function getOwnProfile(userId: string): Promise<OwnProfile | null> 
     return null;
   }
 }
-
-/** The moods a member may set (Feature 18 · Part 9). Stored as the label itself,
- *  so the profile can render it with no lookup. No emoji — labels only, per the
- *  brand's no-emoji design rule. */
-export const PROFILE_MOODS = [
-  "Inspired",
-  "Focused",
-  "Relaxed",
-  "Excited",
-  "Creative",
-  "Celebrating",
-  "Motivated",
-  "Peaceful",
-] as const;
-export type ProfileMood = (typeof PROFILE_MOODS)[number];
-
-/** The profile accent palette (migration 0096). Stored as the key; mapped to a
- *  brand-safe hex here. Drives a subtle accent line on the Identity Card. */
-export const PROFILE_ACCENTS = [
-  { key: "blue", label: "Electric Blue", hex: "#0A84FF" },
-  { key: "violet", label: "Royal Purple", hex: "#6C4DFF" },
-  { key: "emerald", label: "Emerald", hex: "#10b981" },
-  { key: "rose", label: "Rose", hex: "#f43f5e" },
-  { key: "amber", label: "Amber", hex: "#f59e0b" },
-  { key: "cyan", label: "Cyan", hex: "#06b6d4" },
-] as const;
-export const PROFILE_ACCENT_KEYS = ["blue", "violet", "emerald", "rose", "amber", "cyan"] as const;
 
 /** The hex for a stored accent key, or null (unset / unknown key). */
 export function accentHex(key: string | null | undefined): string | null {

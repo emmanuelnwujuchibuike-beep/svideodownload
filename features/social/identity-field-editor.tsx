@@ -7,7 +7,8 @@ import { useState } from "react";
 import { ImageUpload } from "@/components/social/image-upload";
 import { ProfileVideoUpload } from "@/features/social/profile-video-upload";
 import type { IdentityFieldKey } from "@/features/social/identity-fields";
-import { PROFILE_ACCENTS, PROFILE_MOODS, type IdentityMode, type Visibility } from "@/lib/social/profile";
+import { PROFILE_ACCENTS, PROFILE_MOODS } from "@/lib/social/profile-moods";
+import type { IdentityMode, Visibility } from "@/lib/social/profile";
 import { cn } from "@/lib/utils";
 
 /**

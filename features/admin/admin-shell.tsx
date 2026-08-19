@@ -23,6 +23,8 @@ import {
   Headset,
   Megaphone,
   Palette,
+  Pin,
+  PinOff,
   Radio,
   Rss,
   ShieldAlert,
@@ -112,8 +114,62 @@ const SectionContext = createContext<string>(DEFAULT_ADMIN_SECTION);
 
 const STORAGE_KEY = "frenz:admin-section";
 
+/*
+ * Pinned shortcuts — up to 5 sections an operator can jump straight to from
+ * the top of the dashboard instead of hunting through the categorised nav
+ * (owner, 2026-08-18: "admin can pin it to shortcut... pin at the top...
+ * up to 5 sections"). `localStorage`, not the `sessionStorage` the active-
+ * section memory above uses: a shortcut is meant to persist across visits,
+ * not just the current tab session — this is a standing preference, not a
+ * scroll-position-style return value.
+ */
+const PINS_STORAGE_KEY = "frenz:admin-pinned-sections";
+const MAX_PINS = 5;
+
+function usePinnedSections() {
+  const [pinned, setPinned] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PINS_STORAGE_KEY);
+      if (!raw) return;
+      const ids = JSON.parse(raw) as unknown;
+      if (Array.isArray(ids)) {
+        // Drop any id from a section that no longer exists (renamed/removed
+        // since it was pinned) rather than rendering a dead shortcut.
+        setPinned(ids.filter((id): id is string => typeof id === "string" && !!getAdminSection(id)).slice(0, MAX_PINS));
+      }
+    } catch {
+      /* storage blocked — no pins is a fine answer */
+    }
+  }, []);
+
+  const persist = (next: string[]) => {
+    setPinned(next);
+    try {
+      localStorage.setItem(PINS_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      /* non-fatal — the toggle still worked for this session */
+    }
+  };
+
+  const toggle = (id: string) => {
+    if (pinned.includes(id)) {
+      persist(pinned.filter((p) => p !== id));
+    } else if (pinned.length < MAX_PINS) {
+      persist([...pinned, id]);
+    }
+    // At the cap and not already pinned: no-op. The pin button disables
+    // itself in that state (see the nav item below) rather than needing a
+    // toast — there's no Toaster mounted on /admin to show one in.
+  };
+
+  return { pinned, toggle };
+}
+
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const [active, setActive] = useState<string>(DEFAULT_ADMIN_SECTION);
+  const { pinned, toggle: togglePin } = usePinnedSections();
 
   /*
     Restore the last section on return, read AFTER mount rather than during
@@ -141,6 +197,44 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SectionContext.Provider value={active}>
+      {/*
+        Pinned shortcuts — up to 5, chosen via the pin toggle on each nav
+        item below. Sits at the very top of the dashboard shell (above the
+        categorised nav + panel grid), only rendering once something is
+        actually pinned so an operator who never uses it sees nothing extra.
+      */}
+      {pinned.length > 0 ? (
+        <nav aria-label="Pinned shortcuts" className="mb-6 px-3 sm:px-0">
+          <ul className="flex flex-wrap gap-2">
+            {pinned.map((id) => {
+              const section = getAdminSection(id);
+              if (!section) return null;
+              const Icon = ICONS[section.icon] ?? Activity;
+              const isActive = active === id;
+              return (
+                <li key={id}>
+                  <button
+                    type="button"
+                    onClick={() => select(id)}
+                    aria-current={isActive ? "page" : undefined}
+                    className={cn(
+                      "inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-medium transition-colors",
+                      isActive
+                        ? "border-primary/30 bg-primary/10 text-primary"
+                        : "border-border bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+                    )}
+                  >
+                    <Pin aria-hidden className="h-3.5 w-3.5 shrink-0 fill-current" />
+                    <Icon aria-hidden className="h-4 w-4 shrink-0" />
+                    {section.label}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      ) : null}
+
       <div className="lg:grid lg:grid-cols-[210px_1fr] lg:gap-10">
         <nav aria-label="Dashboard sections" className="mb-8 px-3 sm:px-0 lg:mb-0">
           <div className="lg:sticky lg:top-28 space-y-6">
@@ -157,8 +251,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     {sections.map((section) => {
                       const Icon = ICONS[section.icon] ?? Activity;
                       const isActive = active === section.id;
+                      const isPinned = pinned.includes(section.id);
+                      const pinDisabled = !isPinned && pinned.length >= MAX_PINS;
                       return (
-                        <li key={section.id} className="shrink-0">
+                        <li key={section.id} className="flex shrink-0 items-center gap-1">
                           <button
                             type="button"
                             onClick={() => select(section.id)}
@@ -179,6 +275,26 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                           >
                             <Icon aria-hidden className="h-4 w-4 shrink-0" />
                             <span className="whitespace-nowrap">{section.label}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => togglePin(section.id)}
+                            disabled={pinDisabled}
+                            aria-pressed={isPinned}
+                            aria-label={isPinned ? `Unpin ${section.label}` : `Pin ${section.label} to shortcuts`}
+                            title={pinDisabled ? `Up to ${MAX_PINS} pinned sections — unpin one first` : isPinned ? "Unpin" : "Pin to top"}
+                            className={cn(
+                              "shrink-0 rounded-lg p-1.5 transition-colors",
+                              isPinned
+                                ? "text-primary hover:bg-primary/10"
+                                : "text-muted-foreground/50 hover:bg-secondary hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-30",
+                            )}
+                          >
+                            {isPinned ? (
+                              <PinOff aria-hidden className="h-3.5 w-3.5" />
+                            ) : (
+                              <Pin aria-hidden className="h-3.5 w-3.5" />
+                            )}
                           </button>
                         </li>
                       );

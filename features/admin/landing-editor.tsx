@@ -4,21 +4,23 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
 import { ImageUpload } from "@/components/social/image-upload";
-import { FEED_GRID_SLOTS, LANDING_IMAGE_ASPECT, type LandingSettings } from "@/lib/landing/settings";
+import { LANDING_IMAGE_ASPECT, type LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
 
 /**
- * Admin editor for the public landing page's two decorative image slots:
+ * Admin editor for the public landing page's decorative image slots:
  *
  *  1. the still poster shown in the hero phone's reels tile (the mockup no longer
  *     plays a reel — that moved to /reels in full screen), and
- *  2. the four images in the 2×2 "feed grid" showcase section, which shows ONLY
- *     these admin-uploaded images and nothing until they are set.
+ *  2. the Wallpaper CTA tile's background.
+ *
+ * The 2×2 "feed grid" slot was removed 2026-08-23 along with the landing section
+ * it fed — see the note further down.
  *
  * Both persist to `settings.landing` via /api/admin/landing and appear on `/` at
- * the next ISR regeneration. Empty is a valid state everywhere: the poster falls
- * back to a branded gradient and the grid section hides, so a fresh site is never
- * broken — it just hasn't been dressed yet.
+ * the next ISR regeneration. Empty is a valid state: the poster falls back to a
+ * branded gradient, so a fresh site is never broken — it just hasn't been
+ * dressed yet.
  *
  * Uploads reuse the existing `ImageUpload` widget (Supabase Storage, public URL),
  * so nothing new touches storage.
@@ -27,20 +29,8 @@ export function LandingEditor({ settings }: { settings: LandingSettings }) {
   const router = useRouter();
   const [reelsPosterUrl, setReelsPosterUrl] = useState(settings.reelsPosterUrl);
   const [wallpaperCtaImageUrl, setWallpaperCtaImageUrl] = useState(settings.wallpaperCtaImageUrl);
-  // A fixed 4-length array of nullable slots so each grid cell has a stable
-  // position in the UI; compacted to the non-empty URLs on save.
-  const [grid, setGrid] = useState<(string | null)[]>(() => {
-    const slots: (string | null)[] = Array.from({ length: FEED_GRID_SLOTS }, () => null);
-    settings.feedGridImages.slice(0, FEED_GRID_SLOTS).forEach((url, i) => {
-      slots[i] = url;
-    });
-    return slots;
-  });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const setSlot = (i: number, url: string | null) =>
-    setGrid((g) => g.map((v, idx) => (idx === i ? url : v)));
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -53,7 +43,6 @@ export function LandingEditor({ settings }: { settings: LandingSettings }) {
         body: JSON.stringify({
           reelsPosterUrl,
           wallpaperCtaImageUrl,
-          feedGridImages: grid.filter((v): v is string => !!v),
         }),
       });
       const json = await res.json();
@@ -70,7 +59,6 @@ export function LandingEditor({ settings }: { settings: LandingSettings }) {
     }
   };
 
-  const filledGrid = grid.filter(Boolean).length;
 
   return (
     <section className="rounded-3xl border border-border bg-card px-3 py-6 sm:px-6 shadow-card">
@@ -177,48 +165,16 @@ export function LandingEditor({ settings }: { settings: LandingSettings }) {
           </div>
         </div>
 
-        {/* 2×2 feed grid */}
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold">
-                Feed grid — {filledGrid}/{FEED_GRID_SLOTS} images
-              </p>
-              <p className="text-xs text-muted-foreground">
-                The 2×2 showcase grid on the landing page. Only these images show
-                there — real posts never do. Each crops to the cell&rsquo;s 4:5
-                portrait shape. The section is hidden until you add at least one.
-              </p>
-            </div>
-          </div>
-          <div className="grid max-w-md grid-cols-2 gap-3">
-            {grid.map((url, i) => (
-              <div key={i} className="relative">
-                <ImageUpload
-                  kind="banner"
-                  value={url}
-                  onChange={(u) => setSlot(i, u)}
-                  aspect={LANDING_IMAGE_ASPECT.feedGrid}
-                  outputLongEdge={1000}
-                />
-                {url ? (
-                  <button
-                    type="button"
-                    onClick={() => setSlot(i, null)}
-                    aria-label={`Remove image ${i + 1}`}
-                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-black/80"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                ) : (
-                  <span className="pointer-events-none absolute left-2 top-2 rounded-md bg-black/40 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                    Slot {i + 1}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        {/*
+          🔴 The 2x2 feed-grid slot is REMOVED (owner, 2026-08-23), together with
+          the landing section it fed.
+
+          The "Premium Experience" panel that rendered these four images is gone
+          from the landing page — a cold-start audit measured it as the LCP
+          element — and image browsing now lives on /wallpapers. An upload
+          control whose output renders nowhere is a dead affordance: an operator
+          would keep curating four images no visitor could ever see.
+        */}
 
         <div>
           <button

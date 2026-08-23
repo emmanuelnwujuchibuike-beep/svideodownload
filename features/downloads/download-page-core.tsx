@@ -14,6 +14,7 @@ import {
 } from "@/features/downloads/downloads-sections";
 import { useHistory } from "@/features/history/use-history";
 import { AdSurface } from "@/features/monetization/ad-surface";
+import { InstallHeroBanner } from "@/features/pwa/install-button";
 import type { PlatformStatusMap } from "@/lib/platform-status";
 
 /**
@@ -78,6 +79,14 @@ export function DownloadPageCore({
   return (
     <>
       <DownloadsHero />
+
+      {/*
+        Install — the primary placement (owner, 2026-08-23), directly under the
+        hero copy and above the paste box, matching the reference. Renders in
+        the first paint and removes itself via CSS once installed, so it never
+        shifts the headline above it. See `InstallHeroBanner`.
+      */}
+      <InstallHeroBanner />
 
       <section id="download" className="mt-5 scroll-mt-20">
         <div className="rounded-[1.5rem] bg-white p-4 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-[#0b1020] dark:ring-white/10 sm:p-5">

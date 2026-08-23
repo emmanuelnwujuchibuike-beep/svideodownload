@@ -989,6 +989,28 @@
 }
 
 @layer utilities {
+  /*
+    ── Hide once the app is actually installed ───────────────────────────
+    For chrome that only makes sense in a BROWSER — the hero's "Install
+    Frenz" banner above all.
+
+    CSS, not JavaScript, and the reason is the same one `public/launch.html`
+    documents for its own `display-mode` guard:
+
+     • No layout shift. A JS/mount-gated banner cannot render until after
+       hydration, so on the landing it would appear late and push the H1 —
+       the LCP element — down the page. That is a CLS regression on the one
+       page with a measured CLS budget. Rendering it in the FIRST paint and
+       letting CSS remove it for installed users shifts nothing, ever.
+     • It fails CLOSED. If script never runs, an installed user sees a
+       banner they don't need; with the CSS guard they simply never do.
+  */
+  @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+    .hide-when-installed {
+      display: none !important;
+    }
+  }
+
   /* ── Depth, not colour ────────────────────────────────────────────────
      A stacked shadow reads as elevation; a tinted background reads as a
      highlighter. Both lift a card; only one of them stays quiet. */

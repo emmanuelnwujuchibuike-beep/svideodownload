@@ -76,6 +76,61 @@ export function InstallButton({ className }: { className?: string }) {
 }
 
 /**
+ * The hero banner — the primary, unmissable placement (owner, 2026-08-23:
+ * "professionally organised to be well visible at the top of the hero, just
+ * below the top header").
+ *
+ * ── Why this one does NOT use `useInstallVisible()` ───────────────────────────
+ * Every other placement waits for mount before deciding whether to show. Here
+ * that would be a measured regression: this sits directly above the H1, which
+ * the cold-start audit identified as the landing's LCP neighbourhood, so a
+ * banner that appears after hydration would push it down and register as CLS on
+ * the one page carrying a CLS budget.
+ *
+ * So it renders in the FIRST paint and the installed case is removed by CSS
+ * (`.hide-when-installed`, a `display-mode` media query in globals.css) — the
+ * same fail-closed trick `public/launch.html` uses for its loader. Nothing
+ * moves, and an installed user never sees it.
+ *
+ * `installed` is still honoured, because that transition happens in response to
+ * the person's own tap — a banner disappearing right after you install from it
+ * is feedback, not shift.
+ */
+export function InstallHeroBanner() {
+  const state = useSyncExternalStore(subscribeInstall, getInstallState, getServerInstallState);
+  const [open, setOpen] = useState(false);
+
+  if (state.installed) return null;
+
+  return (
+    <>
+      <div className="hide-when-installed mt-3 flex items-center gap-3 rounded-2xl border border-slate-900/[0.06] bg-white px-3.5 py-3 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] dark:border-white/10 dark:bg-white/[0.04]">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-lg shadow-violet-500/25">
+          <Download className="h-5 w-5" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-bold leading-tight text-slate-900 dark:text-white">
+            Install Frenz on your device
+          </span>
+          <span className="mt-0.5 block text-xs leading-snug text-slate-500 dark:text-white/60">
+            Get the full Frenz experience on your home screen.
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          className="shrink-0 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-violet-500/25 transition active:scale-[0.97]"
+        >
+          Install
+        </button>
+      </div>
+      {open ? <InstallModal onClose={() => setOpen(false)} /> : null}
+    </>
+  );
+}
+
+/**
  * The secondary placement: a full-width card inside the mobile menu drawer.
  *
  * ── Why the drawer and not the mobile header ──────────────────────────────────

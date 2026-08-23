@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 
-import { CreatorsSection } from "@/components/landing/creators-section";
 import { CtaBanner } from "@/components/landing/cta-banner";
 import { Faq } from "@/components/landing/faq";
 import { FeaturesGrid } from "@/components/landing/features-grid";
@@ -171,13 +170,27 @@ export default function HomePage() {
           the `content-visibility` wrapper that was compensating for it.
         */}
 
-        {/* The admin-controlled 2×2 image grid — moved UP to sit directly below the
-            download mockup (owner). Each tile opens full screen + downloads. */}
-        <Suspense fallback={<section className="min-h-[560px]" />}>
-          <div className="frenz-reveal">
-            <CreatorsSection />
-          </div>
-        </Suspense>
+        {/*
+          🔴 REMOVED 2026-08-23 — the "Premium Experience" panel and its 2×2
+          image grid (owner: "remove premium experience section in the landing
+          page and this four image grid section since the wallpaper page is the
+          main image download page, so it improves the landing CLS, FCP and
+          LCP").
+
+          It was also, measurably, the landing's LCP element: a cold-start audit
+          the same day (slow-4G + 4x CPU) found the first LCP candidate was the
+          hero paragraph at 932ms, and LCP then REGRESSED to 1872ms waiting on
+          the first tile of this grid — four `next/image` requests, a client
+          island for the viewer, and a `min-h-[560px]` Suspense hole above the
+          fold. Removing it deletes that regression outright rather than tuning
+          it, and hands image browsing to /wallpapers, which is the surface
+          built for it.
+
+          `CreatorsSection` and `FeedGridGallery` are deleted with it, along
+          with the admin Landing panel's feed-grid slot that fed them — an
+          admin control whose output renders nowhere is exactly the dead
+          affordance this codebase keeps having to remove.
+        */}
 
         {/* Stats band (four-up icons). */}
         <StatsCounter />

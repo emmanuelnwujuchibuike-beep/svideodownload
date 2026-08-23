@@ -6,6 +6,7 @@ import {
   BadgeCheck,
   Check,
   CheckCircle2,
+  Crown,
   Download,
   Eye,
   Heart,
@@ -50,6 +51,20 @@ interface PreviewCardProps {
   onDownload: (formatId: string, kind: MediaKind, options?: DownloadOptions) => void;
 }
 
+/**
+ * Batch selection limits for free members (owner, 2026-08-23).
+ *
+ * `FREE_BATCH_SELECT_LIMIT` is the hard cap on how many items one batch may
+ * carry. `FREE_SELECT_ALL_PROMPT_AT` is the point where "Select all" stops
+ * quietly clamping and instead explains itself: selecting 20 out of 60 without
+ * a word looks like a bug, so past this size the upgrade sheet does the talking.
+ *
+ * Two different numbers on purpose — the owner asked for both. The cap is what
+ * a free batch may contain; the threshold is when the product should say why.
+ */
+const FREE_BATCH_SELECT_LIMIT = 20;
+const FREE_SELECT_ALL_PROMPT_AT = 30;
+
 export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const videoFormats = useMemo(
     () => metadata.formats.filter((f) => f.kind === "video"),
@@ -83,6 +98,29 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   // Select All, live counter + total size, one button downloads everything in
   // the background (each item streams through the download manager).
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** Which limit the free member just hit, and how many items were on offer. */
+  const [upgradePrompt, setUpgradePrompt] = useState<{ kind: "cap" | "selectAll"; total: number } | null>(null);
+
+  /*
+    Premium is derived the same way every other surface derives it
+    (site-header, wallpaper-reels): "ads are resolved AND we are not showing
+    them". Deliberately NOT a separate entitlement read — two sources for one
+    question is how a Pro member ends up gated on one screen and not another.
+
+    While `ready` is false we treat the viewer as PREMIUM, i.e. we do NOT
+    enforce the cap. The alternative fails closed on a slow connection: a
+    paying member whose entitlement hasn't resolved yet would be told to
+    upgrade, which is the worst possible false positive here. Nothing is
+    granted by being optimistic — this only decides what the picker lets you
+    tick, and the download path keeps its own server-side checks.
+
+    Declared here, beside the selection state it governs, rather than down with
+    the ad-policy block: `onSelectAll` and `selectableCount` are evaluated
+    during render, so a declaration below them is a temporal-dead-zone error,
+    not merely untidy.
+  */
+  const { showAds, ready: adsReady } = useShowAds();
+  const isPremiumBatch = !adsReady || !showAds;
   useEffect(() => setSelected(new Set()), [metadata.id]);
 
   /*
@@ -118,11 +156,47 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const toggleSelect = (formatId: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(formatId)) next.delete(formatId);
-      else next.add(formatId);
+      if (next.has(formatId)) {
+        next.delete(formatId);
+        return next;
+      }
+      // Deselecting is always free; only ADDING can cross the cap.
+      if (!isPremiumBatch && next.size >= FREE_BATCH_SELECT_LIMIT) {
+        setUpgradePrompt({ kind: "cap", total: batchItems.length });
+        return prev;
+      }
+      next.add(formatId);
       return next;
     });
-  const allSelected = isBatchable && selected.size === batchItems.length;
+
+  /**
+   * "Select all", which is where the limit actually bites.
+   *
+   * Three outcomes, in the order a free member meets them:
+   *  • more than `FREE_SELECT_ALL_PROMPT_AT` items → the upgrade sheet, because
+   *    silently selecting 20 of 60 and saying nothing would read as broken.
+   *  • at or under that, but over the cap → select the first 20 and say so.
+   *  • Pro → everything, always.
+   */
+  const onSelectAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+      return;
+    }
+    if (!isPremiumBatch && batchItems.length > FREE_SELECT_ALL_PROMPT_AT) {
+      setUpgradePrompt({ kind: "selectAll", total: batchItems.length });
+      return;
+    }
+    const take = isPremiumBatch ? batchItems.length : Math.min(batchItems.length, FREE_BATCH_SELECT_LIMIT);
+    setSelected(new Set(batchItems.slice(0, take).map((f) => f.formatId)));
+  };
+
+  /* Pro selects everything; a free member's "all" is their cap. Without this
+     the tick never fills at 20/60 and the control looks stuck. */
+  const selectableCount = isPremiumBatch
+    ? batchItems.length
+    : Math.min(batchItems.length, FREE_BATCH_SELECT_LIMIT);
+  const allSelected = isBatchable && selected.size >= selectableCount;
   const batchBytes = batchItems.reduce((n, f) => (selected.has(f.formatId) ? n + (f.filesize ?? 0) : n), 0);
   /*
     ── Batch is free, and an ad pays for it (owner, 2026-08-09) ────────────
@@ -264,7 +338,6 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     another" literal, and it means the second ad's own props (its skip window)
     come from the policy rather than from a flag threaded through the component.
   */
-  const { showAds } = useShowAds();
   const {
     rewardTopTierCount,
     rewardVideoTopTierSeconds,
@@ -597,10 +670,16 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
                 <span className="font-semibold text-muted-foreground tabular-nums">
                   ({selected.size}/{batchItems.length})
                 </span>
+                {/* The cap is stated UP FRONT, not sprung at item 21. */}
+                {!isPremiumBatch && batchItems.length > FREE_BATCH_SELECT_LIMIT ? (
+                  <span className="ml-1.5 rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                    Free: {FREE_BATCH_SELECT_LIMIT} max
+                  </span>
+                ) : null}
               </p>
               <button
                 type="button"
-                onClick={() => setSelected(allSelected ? new Set() : new Set(batchItems.map((f) => f.formatId)))}
+                onClick={onSelectAll}
                 className="inline-flex shrink-0 items-center gap-1.5 text-sm font-bold text-violet-500 transition hover:text-violet-400 active:scale-95"
               >
                 {allSelected ? "Deselect all" : "Select all"}
@@ -857,7 +936,103 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       showComplete={batchFinished}
       onCompleteClosed={() => setBatchFinished(false)}
     />
+
+    {upgradePrompt ? (
+      <BatchLimitSheet
+        kind={upgradePrompt.kind}
+        total={upgradePrompt.total}
+        onSelectMax={() => {
+          setSelected(new Set(batchItems.slice(0, FREE_BATCH_SELECT_LIMIT).map((f) => f.formatId)));
+          setUpgradePrompt(null);
+        }}
+        onClose={() => setUpgradePrompt(null)}
+      />
+    ) : null}
     </>
+  );
+}
+
+/**
+ * The free batch-selection ceiling, explained.
+ *
+ * Deliberately offers a way to CONTINUE FOR FREE ("Select 20") next to the
+ * upgrade, rather than being a pure paywall: the owner's instruction was
+ * "upgrade to pro for unlimited selection OR select below 30 for free", and a
+ * sheet with only an upgrade button would strand someone who just wants their
+ * files. The free path is the secondary button, not a hidden link.
+ */
+function BatchLimitSheet({
+  kind,
+  total,
+  onSelectMax,
+  onClose,
+}: {
+  kind: "cap" | "selectAll";
+  total: number;
+  onSelectMax: () => void;
+  onClose: () => void;
+}) {
+  // Escape closes, and the page behind cannot scroll while it is open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const previous = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflowY = previous;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/55 p-0 sm:items-center sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="batch-limit-title"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-t-3xl bg-card p-5 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200 motion-reduce:animate-none sm:rounded-3xl pb-[max(1.25rem,calc(env(safe-area-inset-bottom)+0.75rem))] sm:pb-5"
+      >
+        <span aria-hidden className="mx-auto mb-3 block h-1 w-9 rounded-full bg-border sm:hidden" />
+        <div className="flex items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shadow-amber-500/25">
+            <Crown className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p id="batch-limit-title" className="text-base font-bold leading-snug">
+              {kind === "selectAll"
+                ? `Select all is ${total} items`
+                : `Free batches hold ${FREE_BATCH_SELECT_LIMIT} items`}
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              {kind === "selectAll"
+                ? `Pro downloads all ${total} in one batch with no limit. On the free plan you can take ${FREE_BATCH_SELECT_LIMIT} at a time — grab these, then run another batch.`
+                : `You've selected ${FREE_BATCH_SELECT_LIMIT}, the most a free batch can carry. Go Pro for unlimited selection, or download these and start another batch.`}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2">
+          <Link href="/pricing" className="btn-lux btn-lux-primary w-full justify-center">
+            <Crown className="h-4 w-4" /> Go Pro — unlimited batches
+          </Link>
+          {kind === "selectAll" ? (
+            <button type="button" onClick={onSelectMax} className="btn-lux btn-lux-secondary w-full justify-center">
+              Select {FREE_BATCH_SELECT_LIMIT} for free
+            </button>
+          ) : (
+            <button type="button" onClick={onClose} className="btn-lux btn-lux-secondary w-full justify-center">
+              Continue with {FREE_BATCH_SELECT_LIMIT}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

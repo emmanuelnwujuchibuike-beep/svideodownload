@@ -15,7 +15,19 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Which platforms are supported?",
-    a: "TikTok, Instagram, YouTube, Telegram, X (Twitter), Facebook, Pinterest, Snapchat, Vimeo, Reddit, LinkedIn and Threads — plus public Telegram channels and, when configured, private/Story content.",
+    /*
+      🔴 Rewritten 2026-08-23 (AdSense audit, Phase 8: copyright/responsible-
+      use wording). Used to read "…plus public Telegram channels and, when
+      configured, private/Story content" — accurate about the underlying
+      feature (server/services/telegram-mtproto.ts: a signed-in user's OWN
+      Telegram login reaching channels/chats THEY are already a member of,
+      same as opening the Telegram app itself) but genuinely ambiguous to a
+      reader who doesn't know that, and "private" sitting next to "content" on
+      a downloader's own FAQ reads exactly like the wording the brief warned
+      against — a claim of bypassing someone else's privacy, which this
+      product does not do and never has.
+    */
+    a: "TikTok, Instagram, YouTube, Telegram, X (Twitter), Facebook, Pinterest, Snapchat, Vimeo, Reddit, LinkedIn and Threads — including Stories, and, if you sign in with your own Telegram account, the channels and chats you're already a member of there.",
   },
   {
     q: "Can I download just the audio (MP3)?",

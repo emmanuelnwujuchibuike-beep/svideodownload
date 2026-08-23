@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import { REMOVED_SEO_PAGES } from "./lib/seo/removed-seo-pages";
+
 // A per-deploy build stamp, baked into BOTH the client bundle and the server at
 // build time. The client compares its own stamp against /api/app-version and
 // reloads itself when they differ — this is what keeps an installed PWA (whose
@@ -320,6 +322,21 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
+  },
+  /*
+    70 generated downloader pages merged away 2026-08-23 (AdSense "Low value
+    content" audit — see the removal note in config/seoPages.ts). Each was a
+    real, previously-sitemapped URL, so this redirects it to the platform's
+    primary page (301/permanent) rather than letting it 404 — that consolidates
+    whatever ranking signal it had earned onto the page that now actually
+    answers the query, instead of just discarding it.
+  */
+  async redirects() {
+    return REMOVED_SEO_PAGES.map(({ from, to }) => ({
+      source: `/${from}`,
+      destination: `/${to}`,
+      permanent: true,
+    }));
   },
 };
 

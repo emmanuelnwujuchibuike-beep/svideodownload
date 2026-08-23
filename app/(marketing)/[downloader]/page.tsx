@@ -40,7 +40,9 @@ export const dynamic = "force-static";
   slot, two different kinds of page. Next.js only allows one dynamic segment
   NAME at this tree position across the whole app (route groups are
   transparent to it), so the category hubs (`/sports`, `/news`, …) and the
-  ~150 generated downloader-tool pages (`/tiktok-downloader`, …) have to
+  ~90 generated downloader-tool pages (`/tiktok-downloader`, …; ~160 before
+  the 2026-08-23 AdSense low-value-content merge — see config/seoPages.ts)
+  have to
   share this one file even though they're unrelated content — verified empty
   intersection between CATEGORIES and every SEO_SLUGS value, so a param is
   never ambiguous between the two. See the branch in the component and in

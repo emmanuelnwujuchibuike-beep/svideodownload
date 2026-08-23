@@ -14,7 +14,12 @@ export interface SeoPage {
   tagline: string;
   primaryKeyword: string;
   secondaryKeywords: string[];
-  /** SEO body paragraphs (300-700 words combined with benefits + FAQ). */
+  /**
+   * SEO body paragraphs: an intro, the modifier's own angle, and two rotated
+   * platform facts. No length target — see buildPage's note on the two
+   * closing paragraphs removed 2026-08-23 for existing purely to pad word
+   * count, which is the opposite of what this array should optimise for.
+   */
   about: string[];
   benefits: { title: string; text: string }[];
   faqs: { q: string; a: string }[];
@@ -74,22 +79,28 @@ function buildPage(
     `${brand} downloader`,
     f(`download ${brand} ${thing}`),
   ];
-  const [s0, s1, s2] = secondaryKeywords;
 
-  // Keyword-weaving closing paragraphs keep each page over the 300-word target
-  // while staying platform- and intent-specific.
-  const closing1 =
-    `On any device — iPhone, Android, Windows or Mac — the ${keyword} works the same way: ` +
-    `paste a ${brand} link, choose HD video or MP3 audio, and the file saves in seconds. ` +
-    `There's no app to install, no browser extension and no ${brand} login, so your account stays private.`;
-  const closing2 =
-    `People reach this page searching for ${s0}, ${s1} and ${s2} — and it handles all of them. ` +
-    `Downloads are unlimited and completely free, with clean files and no watermark added by us, ` +
-    `so you can keep, repost or edit your ${thing} however you like.`;
+  /*
+    🔴 REMOVED 2026-08-23 (AdSense "Low value content" audit): two closing
+    paragraphs used to sit here, and the comment above them said exactly what
+    they were for — "keep each page over the 300-word target". That is
+    padding: text whose job is to hit a length, not to tell a visitor
+    something. Worse, the FIRST one was close to word-for-word identical on
+    every one of the ~160 generated pages regardless of platform ("On any
+    device — iPhone, Android, Windows or Mac — the {keyword} works the same
+    way…"), which is a duplicate-content signal repeated at scale, not a
+    quality signal.
 
+    Nothing replaces them. `about` below is intro + the modifier's own angle +
+    two platform-specific facts — genuine content, and shorter without the
+    filler is a better page than longer with it. See the sibling MERGE in
+    config/seoPages.ts for the larger fix this was found alongside: most of
+    this padding lived on pages (iphone/android/pc aside) that were themselves
+    near-duplicates of the platform's primary page.
+  */
   const intro = f(cluster.intros[seed % cluster.intros.length]!);
   const facts = rotate(cluster.facts, seed, 2).map(f);
-  const about = [intro, f(modifier.angle), ...facts, closing1, closing2];
+  const about = [intro, f(modifier.angle), ...facts];
 
   const benefits = [
     { title: f(modifier.benefit.title), text: f(modifier.benefit.text) },

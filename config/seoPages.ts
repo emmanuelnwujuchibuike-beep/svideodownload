@@ -84,20 +84,6 @@ const mMp3: SeoModifier = {
   secondary: ["{brand} mp3 converter", "{brand} audio downloader", "{brand} song download"],
 };
 
-const mMp4: SeoModifier = {
-  slug: "mp4-downloader",
-  title: "{brand} to MP4 — Video Downloader",
-  keyword: "{brand} to MP4",
-  tagline: "Save {brand} {thing} as universal MP4 files — plays anywhere.",
-  angle:
-    "Download {brand} {thing} as standard MP4 files that play on any phone, computer or TV. MP4 is the most compatible video format, so your saved clip works in any player or editor without conversion — and you pick the quality before you download.",
-  benefit: { title: "Universal MP4", text: "Saves in the most compatible format — plays on every device." },
-  faqs: [
-    { q: "What format are downloads in?", a: "Videos download as MP4 (H.264), which plays on virtually every device and editor with no conversion needed." },
-  ],
-  secondary: ["{brand} mp4 converter", "download {brand} mp4", "save {brand} video mp4"],
-};
-
 const mIphone: SeoModifier = {
   slug: "downloader-for-iphone",
   title: "{brand} Downloader for iPhone (iOS)",
@@ -143,80 +129,44 @@ const mPc: SeoModifier = {
   secondary: ["{brand} downloader windows", "{brand} downloader mac", "{brand} download laptop"],
 };
 
-const mOnline: SeoModifier = {
-  slug: "online-downloader",
-  title: "{brand} Downloader Online (Free)",
-  keyword: "{brand} downloader online",
-  tagline: "Download {brand} {thing} online — nothing to install.",
-  angle:
-    "This is a fully online {brand} downloader: everything happens in your browser and on our servers, so there's nothing to download or install. Paste a link from any device and the {thing} are fetched in seconds. It works the same on mobile and desktop, with no extensions and no sign-up.",
-  benefit: { title: "100% online", text: "No software, no extension — just paste a link in your browser." },
-  faqs: [
-    { q: "Is this {brand} downloader really online?", a: "Yes — it's entirely web-based. There's no app, extension or program to install." },
-  ],
-  secondary: ["{brand} online video download", "free online {brand} downloader", "{brand} saver online"],
-};
+/*
+  🔴 SIX MODIFIERS REMOVED HERE 2026-08-23 (AdSense "Low value content"
+  rejection, twice — owner: "fix any duplicate pages and all that is likely to
+  cause the low value content, that's the main part").
 
-const mFree: SeoModifier = {
-  slug: "free-downloader",
-  title: "Free {brand} Video Downloader",
-  keyword: "free {brand} downloader",
-  tagline: "A free {brand} downloader — unlimited, no sign-up.",
-  angle:
-    "Our free {brand} downloader has no hidden costs, no daily limits and no account requirement. Download as many {thing} as you like, in HD or as MP3, completely free. We keep it free by staying lightweight and ad-supported — your downloads are never throttled or paywalled.",
-  benefit: { title: "Always free", text: "No subscription, no limits, no credit card — ever." },
-  faqs: [
-    { q: "Is it really free?", a: "Yes — 100% free and unlimited, with no account or payment required." },
-    { q: "Are there download limits?", a: "No daily caps. Download as many {thing} as you want." },
-  ],
-  secondary: ["free {brand} video download", "{brand} downloader no sign up", "unlimited {brand} downloader"],
-};
+  This file generates CLUSTER × MODIFIER pages, and GENERIC modifiers below
+  are the ones attached to nearly every cluster — so each one is a template
+  whose `angle`/`benefit`/`faqs` text rendered close to word-for-word
+  identical (only {brand}/{thing} substituted) across 9-11 different platform
+  URLs. That is the textbook shape of what Google calls scaled content abuse:
+  many pages, one template, minimal variation, no added value per page. Two
+  AdSense "Low value content" rejections on a site whose largest content
+  surface is ~160 of these generated pages is not a coincidence worth
+  ignoring.
 
-const mFast: SeoModifier = {
-  slug: "fast-downloader",
-  title: "Fast {brand} Video Downloader",
-  keyword: "fast {brand} downloader",
-  tagline: "Download {brand} {thing} in seconds — built for speed.",
-  angle:
-    "Speed matters. Our {brand} downloader processes links on fast servers and delivers your file in seconds, even for longer or high-resolution {thing}. There are no countdown timers, no forced waits and no multi-step redirects — paste, download, done.",
-  benefit: { title: "Seconds, not minutes", text: "Server-side processing with no countdowns or forced waits." },
-  faqs: [
-    { q: "How fast is the download?", a: "Most {thing} are ready in a few seconds. There are no artificial wait timers." },
-  ],
-  secondary: ["quick {brand} downloader", "instant {brand} download", "{brand} downloader no wait"],
-};
+  `mp4-downloader`, `online-downloader`, `free-downloader`, `fast-downloader`,
+  `video-saver` and `downloader-without-app` were removed because they added
+  NOTHING a visitor couldn't already get from the platform's own primary page:
+  every downloader page already states "Free · No watermark · No login" in
+  its hero and already shows full device compatibility — so a whole extra
+  page built around the word "free," or "fast," or "without an app" was a
+  synonym of the primary page wearing a different URL, not a different
+  answer. Redirected (301, permanent — see next.config.ts / lib/seo/removed-
+  seo-pages.ts) to each cluster's primary page rather than deleted outright,
+  so no indexed URL 404s and whatever ranking signal they'd earned
+  consolidates onto the page that actually earns it.
 
-const mSave: SeoModifier = {
-  slug: "video-saver",
-  title: "{brand} Video Saver — Download Free",
-  keyword: "{brand} video saver",
-  tagline: "Save {brand} {thing} to your device — free and instant.",
-  angle:
-    "A {brand} video saver that keeps {thing} on your device for offline viewing. Paste a link and the clip is saved at full quality — no app, no account and no watermark. It's perfect for building a personal archive you can watch anytime, even without internet.",
-  benefit: { title: "Offline ready", text: "Keep {thing} saved for offline viewing anytime." },
-  faqs: [
-    { q: "Where do saved {thing} go?", a: "They download to your device's Downloads, Files or gallery, depending on your browser." },
-  ],
-  secondary: ["save {brand} video", "{brand} video keeper", "download {brand} offline"],
-};
-
-const mWithoutApp: SeoModifier = {
-  slug: "downloader-without-app",
-  title: "{brand} Downloader Without App",
-  keyword: "{brand} downloader without app",
-  tagline: "Download {brand} {thing} without installing any app.",
-  angle:
-    "Skip the app stores — this {brand} downloader works entirely in your browser, so there's nothing to install, update or grant permissions to. It's safer and lighter than a dedicated app and works identically on iPhone, Android and desktop. Just paste a link and download.",
-  benefit: { title: "Zero install", text: "No app, no extension, no permissions — just a web page." },
-  faqs: [
-    { q: "Can I download {brand} {thing} without an app?", a: "Yes — everything runs in your browser, so no app or extension is needed." },
-  ],
-  secondary: ["{brand} download no app", "{brand} downloader no install", "{brand} web downloader"],
-};
-
-const GENERIC: SeoModifier[] = [
-  mHd, mMp3, mMp4, mIphone, mAndroid, mPc, mOnline, mFree, mFast, mSave, mWithoutApp,
-];
+  KEPT: `mHd` (quality-tier is a real distinct query), `mMp3` (audio-only is a
+  genuinely different output/use-case), `mIphone`/`mAndroid`/`mPc`
+  (device-targeted searches carry real, distinct volume and the content,
+  while still templated, contains actual per-device how-to steps — Files app
+  vs. Downloads folder vs. gallery — not just a restated tagline). These are
+  the more defensible generics; de-templating THEIR copy is the next pass,
+  not a same-day rewrite of unrelated original text (see the brief's own
+  warning against replacing genuine content with generic filler to chase a
+  word count).
+*/
+const GENERIC: SeoModifier[] = [mHd, mMp3, mIphone, mAndroid, mPc];
 
 /* ------------------------------------------------------------------ *
  * Clusters
@@ -1057,11 +1007,14 @@ const GENERIC_BY_CLUSTER: Record<string, SeoModifier[]> = {
   // Drop generics that would overlap a cluster's own specific intent.
   tiktok: without("mp3-downloader", "hd-downloader"), // has sound + 4k pages
   instagram: without("mp3-downloader"), // has audio page
-  youtube: without("mp3-downloader", "mp4-downloader", "hd-downloader"), // has to-mp3, video, 1080p
+  youtube: without("mp3-downloader", "hd-downloader"), // has to-mp3, 1080p pages
   twitter: GENERIC,
   facebook: GENERIC,
   pinterest: GENERIC,
-  snapchat: [mMp4, mIphone, mAndroid, mOnline, mFree, mSave, mWithoutApp],
+  // Trimmed alongside the GENERIC removal above (2026-08-23) — was
+  // [mMp4, mIphone, mAndroid, mOnline, mFree, mSave, mWithoutApp]; the five
+  // merged-away modifiers are gone with it.
+  snapchat: [mIphone, mAndroid],
   reddit: GENERIC,
   vimeo: GENERIC,
   linkedin: GENERIC,

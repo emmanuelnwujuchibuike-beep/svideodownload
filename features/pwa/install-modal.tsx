@@ -203,32 +203,63 @@ export function InstallModal({ onClose }: { onClose: () => void }) {
     already handles the iPadOS-reports-as-Mac case via `maxTouchPoints`. No new
     detection code and no UA library for this, per the brief.
 
-    `apkUnavailable` is what stops a missing file looking like a success: the
-    APK may legitimately not be uploaded yet, and this modal must not say
-    "downloading" and hand someone a 404. When the HEAD check fails we fall back
-    to the written per-browser steps that are already on screen and say so.
+    The availability check stops a missing file looking like a success: the APK
+    may legitimately not be uploaded yet, and this modal must not say
+    "downloading" and hand someone a 404. When it fails we fall back to the
+    written per-browser steps that are already on screen and say so.
+
+    🔴 THE CHECK RUNS ON OPEN, AND THE TAP HANDLER IS SYNCHRONOUS (owner,
+    2026-08-23: "when I click on download app on android it just loads for half
+    a second and disappears").
+
+    It used to `await apkAvailable()` inside the click handler and only then
+    create the anchor. That await is what broke it: a browser only honours a
+    programmatic download while the tap's TRANSIENT USER ACTIVATION is still
+    alive, and awaiting a network round-trip outlives it. Chrome on Android then
+    blocks the download silently — no error, no file — while our own code
+    carried on to `close()`, which is the "loads for half a second and
+    disappears" exactly as described.
+
+    This codebase has hit the same class of bug before: `saveFilesToDevice`
+    documents that iOS only permits `navigator.share` inside the live gesture,
+    and that awaiting a dynamic import first destroys it. Same rule, different
+    API — so the fix is the same shape. The HEAD request now happens when the
+    sheet opens, its result is held in state, and the tap does nothing but click
+    an anchor.
   */
   const isAndroid = env.os === "android";
-  const [apkUnavailable, setApkUnavailable] = useState(false);
+  const [apkStatus, setApkStatus] = useState<"checking" | "ready" | "missing">("checking");
+  const [apkStarted, setApkStarted] = useState(false);
 
-  const downloadApk = async () => {
-    setBusy(true);
-    setApkUnavailable(false);
-    const ok = await apkAvailable();
-    if (!ok) {
-      setBusy(false);
-      setApkUnavailable(true);
-      return;
-    }
+  useEffect(() => {
+    if (!isAndroid) return;
+    const controller = new AbortController();
+    void apkAvailable(controller.signal).then((ok) => {
+      if (!controller.signal.aborted) setApkStatus(ok ? "ready" : "missing");
+    });
+    return () => controller.abort();
+  }, [isAndroid]);
+
+  /*
+    Synchronous. No `await`, no promise, nothing between the tap and the click —
+    see the note above. `void` on the beacon because `reportInstallEvent` is
+    already fire-and-forget; awaiting it here would reintroduce the exact bug.
+  */
+  const downloadApk = () => {
+    if (apkStatus !== "ready") return;
     startApkDownload();
-    setBusy(false);
-    // The transfer is handed to the download manager; the person continues the
-    // install from the notification, so there is nothing left for this sheet to
-    // do. Reported as an accepted install intent — NOT as `pwa_installed`,
-    // which is reserved for the browser's own `appinstalled` event and must
-    // keep meaning "the app is actually on the device".
+    setApkStarted(true);
+    // An accepted install INTENT — deliberately not `pwa_installed`, which is
+    // reserved for the browser's own `appinstalled` event and must keep meaning
+    // "the app is actually on the device".
     reportInstallEvent("pwa_install_accepted", platform);
-    close();
+    /*
+      The sheet deliberately stays OPEN and switches to a "download started"
+      state. Closing instantly was the other half of what read as a failure:
+      Android hands the transfer to the download manager with no visible change
+      on the page, so a sheet that vanishes at the same moment looks like the
+      tap dismissed it rather than started anything.
+    */
   };
 
   const install = async () => {
@@ -312,15 +343,23 @@ export function InstallModal({ onClose }: { onClose: () => void }) {
           person to follow. The written matrix is the FALLBACK, so it only
           renders when there is genuinely no prompt to fire.
         */}
-        {isAndroid && !apkUnavailable ? (
+        {isAndroid && apkStatus !== "missing" ? (
           /* Android: the APK is the install, so the PWA steps would be the
              wrong instructions entirely. Says what the download is and what
              Android will ask for, because "install blocked" from an unknown
              source is the step people actually get stuck on. */
-          <p className="mt-4 rounded-2xl bg-secondary/45 px-3 py-2.5 text-[13px] leading-snug text-muted-foreground">
-            Downloads the Frenz app (.apk). Android will ask you to confirm the install — if it
-            warns about an unknown source, allow it for your browser and tap Install.
-          </p>
+          apkStarted ? (
+            <p className="mt-4 rounded-2xl bg-emerald-500/10 px-3 py-2.5 text-[13px] leading-snug text-emerald-700 dark:text-emerald-400">
+              <strong>Download started.</strong> Check your notifications or Downloads folder, open{" "}
+              <span className="font-mono">frenzsave.apk</span>, and tap Install. If Android warns
+              about an unknown source, allow it for your browser and tap Install again.
+            </p>
+          ) : (
+            <p className="mt-4 rounded-2xl bg-secondary/45 px-3 py-2.5 text-[13px] leading-snug text-muted-foreground">
+              Downloads the Frenz app (.apk). Android will ask you to confirm the install — if it
+              warns about an unknown source, allow it for your browser and tap Install.
+            </p>
+          )
         ) : canPromptNatively ? (
           <p className="mt-4 rounded-2xl bg-secondary/45 px-3 py-2.5 text-[13px] leading-snug text-muted-foreground">
             One tap — {env.label.split(" on ")[0]} will ask you to confirm, then Frenz appears with your
@@ -351,7 +390,7 @@ export function InstallModal({ onClose }: { onClose: () => void }) {
 
         {/* The APK genuinely isn't there — say so plainly and let the written
             steps below stand in. Never silently "succeeds". */}
-        {isAndroid && apkUnavailable ? (
+        {isAndroid && apkStatus === "missing" ? (
           <p className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
             <ExternalLink aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             The app download isn&apos;t available right now. You can still add Frenz to your home
@@ -360,20 +399,30 @@ export function InstallModal({ onClose }: { onClose: () => void }) {
         ) : null}
 
         <div className="mt-4">
-          {isAndroid && !apkUnavailable ? (
+          {isAndroid && apkStatus !== "missing" ? (
             /* Android: downloads the APK. Deliberately ahead of the
                `canPromptNatively` branch — on Android Chrome BOTH are true, and
                the owner's instruction is that this button installs the app, not
-               that it fires the PWA prompt. */
-            <button
-              type="button"
-              onClick={downloadApk}
-              disabled={busy}
-              className="btn-lux btn-lux-primary w-full justify-center disabled:opacity-70"
-            >
-              <Download className="h-4 w-4" />
-              {busy ? "Starting download…" : "Download the app"}
-            </button>
+               that it fires the PWA prompt.
+
+               Disabled only while the on-open availability check is still in
+               flight, which is a single HEAD request — never gated on an await
+               that runs INSIDE the tap. */
+            apkStarted ? (
+              <button type="button" onClick={close} className="btn-lux btn-lux-primary w-full justify-center">
+                <Check className="h-4 w-4" /> Done
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={downloadApk}
+                disabled={apkStatus === "checking"}
+                className="btn-lux btn-lux-primary w-full justify-center disabled:opacity-70"
+              >
+                <Download className="h-4 w-4" />
+                {apkStatus === "checking" ? "Preparing…" : "Download the app"}
+              </button>
+            )
           ) : canPromptNatively ? (
             /* A REAL native install — only rendered when the browser actually
                parked a `beforeinstallprompt`. Never a fake button that opens

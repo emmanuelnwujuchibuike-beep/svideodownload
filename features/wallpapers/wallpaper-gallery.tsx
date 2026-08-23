@@ -13,7 +13,7 @@ import { useWallpaperDownload } from "@/features/wallpapers/use-wallpaper-downlo
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
-import type { Wallpaper } from "@/lib/wallpapers";
+import { wallpaperCredit, type Wallpaper } from "@/lib/wallpapers";
 
 /**
  * The download page's Wallpapers section — a grid that opens the REELS viewer.
@@ -148,7 +148,7 @@ function WallpaperTile({ wp, onOpen }: { wp: Wallpaper; onOpen: () => void }) {
       <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2.5">
         <span className="block truncate text-xs font-semibold text-white">{wp.name}</span>
         <span className="flex items-center gap-2 text-[10px] text-white/70">
-          {wp.category}
+          {wallpaperCredit(wp)}
           {/* Real counts only — a built-in placeholder has no row, so it shows none. */}
           {wp.likes > 0 ? (
             <span className="inline-flex items-center gap-0.5">
@@ -175,17 +175,17 @@ function ShareYourOwn() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const share = async (file: File) => {
+  const share = async (files: File[]) => {
     setBusy(true);
     setMsg(null);
     try {
       const form = new FormData();
-      form.append("file", file);
-      form.append("title", file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim() || "Shared wallpaper");
+      for (const f of files) form.append("files", f);
       const res = await fetch("/api/wallpapers/share", { method: "POST", body: form });
-      const json = (await res.json()) as { ok?: boolean; error?: string };
+      const json = (await res.json()) as { ok?: boolean; created?: number; error?: string };
       if (res.ok && json.ok) {
-        setMsg({ ok: true, text: "Shared — it's in the library now." });
+        const n = json.created ?? files.length;
+        setMsg({ ok: true, text: n > 1 ? `${n} wallpapers shared — they're in the library now.` : "Shared — it's in the library now." });
         router.refresh();
       } else {
         setMsg({ ok: false, text: json.error ?? "Couldn't share that." });
@@ -203,11 +203,12 @@ function ShareYourOwn() {
       <input
         ref={input}
         type="file"
+        multiple
         accept="image/jpeg,image/png,image/webp,image/avif"
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void share(f);
+          const list = Array.from(e.target.files ?? []);
+          if (list.length > 0) void share(list);
         }}
       />
       <button
@@ -217,7 +218,7 @@ function ShareYourOwn() {
         className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border px-4 py-3 text-sm font-semibold text-muted-foreground transition hover:border-foreground/30 hover:text-foreground disabled:opacity-60"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
-        {busy ? "Sharing…" : "Share one of yours to the library"}
+        {busy ? "Sharing…" : "Share yours to the library"}
       </button>
       {msg ? (
         <p className={cn("mt-1.5 text-center text-xs font-medium", msg.ok ? "text-emerald-500" : "text-rose-500")}>{msg.text}</p>

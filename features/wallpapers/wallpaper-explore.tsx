@@ -3,9 +3,11 @@
 import {
   ChevronDown,
   ChevronLeft,
+  CloudUpload,
   Download,
   Image as ImageIcon,
   LayoutGrid,
+  Loader2,
   Search,
   SlidersHorizontal,
   X,
@@ -32,6 +34,7 @@ import {
   popularity,
   resolutionBadge,
   wallpaperAlt,
+  wallpaperCredit,
   wallpaperType,
   WALLPAPER_TYPES,
   type Wallpaper,
@@ -151,6 +154,71 @@ export function WallpaperExplore({
   const [searchOpen, setSearchOpen] = useState(false);
   const [tuneOpen, setTuneOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
+
+  /*
+    The upload button (owner, 2026-08-23: "put a premium, noticeable upload
+    button in the wallpaper page so users can see they can upload wallpapers
+    and they should be able to mark more than one").
+
+    The backend for this already existed — `/api/wallpapers/share` is how a
+    signed-in member publishes their own image to the public library — but
+    nothing on THIS page surfaced it: the only entry point was a muted, dashed
+    text link buried on the download page. `multiple` on the file input plus
+    the route's batch support (extended alongside this) is the "mark more than
+    one" part: picking five photos is one upload, not five round trips.
+  */
+  const uploadInput = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [uploadSignIn, setUploadSignIn] = useState(false);
+  useEffect(() => {
+    if (!uploadMsg) return;
+    const t = setTimeout(() => setUploadMsg(null), 4000);
+    return () => clearTimeout(t);
+  }, [uploadMsg]);
+
+  const startUpload = useCallback(() => {
+    haptic("light");
+    playSound("tap");
+    if (!canEngage) {
+      setUploadSignIn(true);
+      return;
+    }
+    uploadInput.current?.click();
+  }, [canEngage]);
+
+  const uploadFiles = useCallback(
+    async (files: File[]) => {
+      setUploading(true);
+      setUploadMsg(null);
+      try {
+        const form = new FormData();
+        for (const f of files) form.append("files", f);
+        const res = await fetch("/api/wallpapers/share", { method: "POST", body: form });
+        const json = (await res.json()) as { ok?: boolean; created?: number; failed?: string[]; error?: string };
+        if (res.ok && json.ok) {
+          const n = json.created ?? files.length;
+          haptic("medium");
+          setUploadMsg({
+            ok: true,
+            text:
+              n > 1
+                ? `${n} wallpapers uploaded — live in the library now.`
+                : "Uploaded — it's live in the library now.",
+          });
+          router.refresh();
+        } else {
+          setUploadMsg({ ok: false, text: json.error ?? "Couldn't upload that." });
+        }
+      } catch {
+        setUploadMsg({ ok: false, text: "Network error — try again." });
+      } finally {
+        setUploading(false);
+        if (uploadInput.current) uploadInput.current.value = "";
+      }
+    },
+    [router],
+  );
 
   /* The category pills are the REAL categories in the library, most-used first,
      so the row reflects what has actually been published rather than a fixed
@@ -733,7 +801,99 @@ export function WallpaperExplore({
         />
       ) : null}
       {limitHit ? <WallpaperLimitSheet limit={allowance?.limit ?? 5} onClose={closeLimit} /> : null}
+
+      {/*
+        The upload button (owner, 2026-08-23) — a premium, hard-to-miss floating
+        pill rather than a plain icon, and bottom-LEFT specifically so it can
+        never collide with `FloatingDownloadProgress`, which docks bottom-right.
+        Same gradient the active category pill and the download page's "See
+        more wallpapers" CTA already use, so it reads as the site's one premium
+        accent rather than a new color introduced just for this.
+      */}
+      <input
+        ref={uploadInput}
+        type="file"
+        multiple
+        accept="image/jpeg,image/png,image/webp,image/avif"
+        className="hidden"
+        onChange={(e) => {
+          const list = Array.from(e.target.files ?? []);
+          if (list.length > 0) void uploadFiles(list);
+        }}
+      />
+      <div
+        className="fixed z-40 flex flex-col items-start gap-2"
+        style={{
+          left: "1rem",
+          bottom: "calc(1.25rem + env(safe-area-inset-bottom))",
+        }}
+      >
+        {uploadMsg ? (
+          <div
+            role="status"
+            className={cn(
+              "animate-in fade-in slide-in-from-bottom-2 max-w-[min(80vw,20rem)] rounded-2xl px-3.5 py-2.5 text-xs font-semibold shadow-elevated ring-1 ring-inset duration-200 motion-reduce:animate-none",
+              uploadMsg.ok
+                ? "bg-card text-foreground ring-border/60"
+                : "bg-rose-500 text-white ring-rose-400/40",
+            )}
+          >
+            {uploadMsg.text}
+          </div>
+        ) : null}
+        <button
+          type="button"
+          onClick={startUpload}
+          disabled={uploading}
+          aria-label="Upload your own wallpapers"
+          className="group relative flex items-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-[#6D5CFF] to-[#8B5CF6] py-3 pl-4 pr-5 text-sm font-bold text-white shadow-xl shadow-violet-500/30 ring-1 ring-inset ring-white/15 transition active:scale-95 disabled:opacity-70"
+        >
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 [transition-timing-function:var(--ease-out)] group-hover:translate-x-full"
+          />
+          {uploading ? (
+            <Loader2 className="relative h-[18px] w-[18px] animate-spin" />
+          ) : (
+            <CloudUpload className="relative h-[18px] w-[18px]" />
+          )}
+          <span className="relative">{uploading ? "Uploading…" : "Upload"}</span>
+        </button>
+      </div>
+
+      {uploadSignIn ? <UploadSignInPrompt onClose={() => setUploadSignIn(false)} /> : null}
     </>
+  );
+}
+
+/** Sign-in nudge for the upload button — shown instead of silently ignoring a
+ *  tap from a signed-out visitor. Same shape as the reels viewer's own prompt
+ *  for like/save/comment. */
+function UploadSignInPrompt({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-[110] flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-3xl bg-card p-5 text-center shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <CloudUpload className="mx-auto h-8 w-8 text-primary" />
+        <p className="mt-3 font-bold">Sign in to upload wallpapers</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Browsing and downloading are open to everyone — publishing your own to the library needs an account.
+        </p>
+        <div className="mt-4 flex gap-2">
+          <button type="button" onClick={onClose} className="btn-lux btn-lux-secondary flex-1 justify-center">
+            Not now
+          </button>
+          <Link href="/login?next=/wallpapers" className="btn-lux btn-lux-primary flex-1 justify-center">
+            Sign in
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -875,7 +1035,9 @@ function ExploreTile({
       <span className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-end justify-between gap-1 p-2">
         <span className="min-w-0">
           <span className="block truncate text-[11px] font-bold leading-tight text-white">{wp.name}</span>
-          <span className="block truncate text-[10px] leading-tight text-white/70">{wp.category}</span>
+          {/* The sharer's @handle on member uploads, the category on curated
+              ones — see `wallpaperCredit`. */}
+          <span className="block truncate text-[10px] leading-tight text-white/70">{wallpaperCredit(wp)}</span>
         </span>
         {badge ? (
           <span className="shrink-0 rounded-md bg-black/55 px-1.5 py-0.5 text-[9px] font-extrabold text-white backdrop-blur-sm">

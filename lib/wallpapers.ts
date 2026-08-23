@@ -48,6 +48,34 @@ export interface Wallpaper {
   builtIn: boolean;
   viewerLiked?: boolean;
   viewerSaved?: boolean;
+  /**
+   * Who shared this, for MEMBER uploads only (owner, 2026-08-23: "make users
+   * uploaded wallpaper to show the user's username instead of community").
+   *
+   * Null on admin-curated rows and on the built-ins — those are the library
+   * speaking, not a person, and attributing them to an operator's handle would
+   * be a claim nobody made. `handle` is null for a member who has never set
+   * one; `wallpaperCredit` falls back to the category in that case rather than
+   * rendering an empty byline.
+   */
+  uploader?: { handle: string | null; displayName: string | null } | null;
+}
+
+/**
+ * The caption line under a wallpaper: the sharer's @handle where a real person
+ * shared it, the category otherwise.
+ *
+ * One function rather than the same ternary in the grid, the download-page
+ * preview and the reels viewer — those three drifted apart once already over
+ * the resolution badge, and a byline that says "@ada" in one place and
+ * "Community" in another for the same picture is worse than either alone.
+ */
+export function wallpaperCredit(w: Wallpaper): string {
+  const handle = w.uploader?.handle?.trim();
+  if (handle) return `@${handle}`;
+  const name = w.uploader?.displayName?.trim();
+  if (name) return name;
+  return w.category;
 }
 
 /**

@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useUser } from "@/features/auth/use-user";
 import { UserMenu } from "@/features/auth/user-menu";
+import { InstallButton, InstallCta } from "@/features/pwa/install-button";
 import { LanguageSelector } from "@/components/i18n/language-selector";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { SearchTrigger, SearchTriggerIcon } from "@/features/navigation/search-trigger";
@@ -378,6 +379,15 @@ export function SiteHeader({
           {/* Language selector for the top ~50 languages (owner — replaced the
               downloads/history icon). History lives in the bottom nav now. */}
           <LanguageSelector />
+          {/*
+            Install — Frenz | Search | Language | Install | Menu.
+
+            Placed AFTER the language selector and before the theme/account
+            cluster so it reads as a site-level action rather than an account
+            one. Renders null when the app is already installed or running
+            standalone, so it never becomes a dead control.
+          */}
+          <InstallButton />
           <ThemeToggle />
           <UserMenu />
           {/*
@@ -522,6 +532,14 @@ export function SiteHeader({
                   is an accelerator for people with a keyboard; on a phone the only
                   discoverable search is one you can see and tap. */}
               <SearchTrigger className="w-full" />
+
+              {/*
+                Install — the secondary placement for every viewport below `lg`,
+                where the header pill does not render. Renders null once the app
+                is installed or running standalone, so the drawer does not carry
+                a dead row for people who already have it.
+              */}
+              <InstallCta />
 
               {!isPremium && (
                 <Link

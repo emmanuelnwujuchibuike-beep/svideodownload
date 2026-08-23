@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { startDownload } from "@/features/downloads/manager";
-import { resolutionBadge, type Wallpaper, type WallpaperComment } from "@/lib/wallpapers";
+import { resolutionBadge, wallpaperCredit, type Wallpaper, type WallpaperComment } from "@/lib/wallpapers";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
@@ -501,7 +501,9 @@ export function WallpaperReels({
             what used to be a full card pinned above this — same offer, no
             vertical footprint until someone asks for it. */}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pr-16">
-          <span className="text-sm text-white/70">{current.category}</span>
+          {/* The sharer's @handle on member uploads, the category on curated
+              ones — see `wallpaperCredit`. */}
+          <span className="text-sm text-white/70">{wallpaperCredit(current)}</span>
           {(() => {
             const badge = resolutionBadge(current.width, current.height);
             return badge ? (

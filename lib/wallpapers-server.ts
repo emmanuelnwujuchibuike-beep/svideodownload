@@ -26,6 +26,9 @@ interface Row {
   width: number | null;
   height: number | null;
   downloads_count: number | null;
+  /** 'admin' | 'member' — only member rows carry a byline. */
+  source: string | null;
+  uploaded_by: string | null;
   /** Migration 0108 — absent until it is applied. */
   views_count?: number | null;
   views_boost?: number | null;
@@ -41,7 +44,7 @@ interface Row {
   could not exist before now and why old rows need the backfill script.
 */
 const BASE_COLUMNS =
-  "id, title, category, image_url, thumb_url, status, likes_count, saves_count, comments_count, downloads_count, width, height, created_at";
+  "id, title, category, image_url, thumb_url, status, likes_count, saves_count, comments_count, downloads_count, width, height, created_at, source, uploaded_by";
 /** Migration 0108: real views + the signed operator adjustments. */
 const METRIC_COLUMNS = "views_count, views_boost, likes_boost, saves_boost";
 
@@ -86,6 +89,52 @@ function toWallpaper(row: Row): Wallpaper {
     createdAt: row.created_at ?? null,
     builtIn: false,
   };
+}
+
+/**
+ * Attaches the sharer's handle to MEMBER-uploaded wallpapers, in one query for
+ * the whole page (owner, 2026-08-23: "make users uploaded wallpaper to show the
+ * user's username instead of community").
+ *
+ * Batched deliberately: the grid renders up to 600 rows, and a profile lookup
+ * per tile would be 600 round trips for what is almost always a handful of
+ * distinct people. Only `source = 'member'` rows are looked up — admin-curated
+ * rows have an `uploaded_by` too (the operator who uploaded them), and putting
+ * an admin's personal handle under a curated wallpaper would attribute the
+ * library to them.
+ *
+ * Best-effort: a failure leaves every byline falling back to the category,
+ * which is exactly today's behaviour, never a failed page.
+ */
+async function attachUploaders(rows: Row[], wallpapers: Wallpaper[]): Promise<void> {
+  const ids = [
+    ...new Set(
+      rows
+        .filter((r) => r.source === "member" && r.uploaded_by)
+        .map((r) => r.uploaded_by as string),
+    ),
+  ];
+  if (ids.length === 0) return;
+
+  try {
+    const { data } = await createAdminClient()
+      .from("profiles")
+      .select("id, handle, display_name")
+      .in("id", ids);
+    const byId = new Map(
+      (data ?? []).map((p) => [
+        p.id as string,
+        { handle: (p.handle as string | null) ?? null, displayName: (p.display_name as string | null) ?? null },
+      ]),
+    );
+    rows.forEach((row, i) => {
+      const target = wallpapers[i];
+      if (!target || row.source !== "member" || !row.uploaded_by) return;
+      target.uploader = byId.get(row.uploaded_by) ?? null;
+    });
+  } catch {
+    /* no byline is better than no page */
+  }
 }
 
 /**
@@ -153,6 +202,7 @@ export async function listWallpapers(viewerId?: string | null, limit = 600): Pro
   }
 
   const wallpapers = rows.map(toWallpaper);
+  await attachUploaders(rows, wallpapers);
   if (!viewerId) return wallpapers;
 
   try {
@@ -239,8 +289,10 @@ export async function listAllWallpapers(limit = 300) {
       .order("created_at", { ascending: false })
       .limit(limit),
   );
-  return rows.map((row) => ({
-    ...toWallpaper(row),
+  const base = rows.map(toWallpaper);
+  await attachUploaders(rows, base);
+  return rows.map((row, i) => ({
+    ...base[i]!,
     status: row.status,
     sortOrder: (row as { sort_order?: number }).sort_order ?? 0,
     createdAt: row.created_at,

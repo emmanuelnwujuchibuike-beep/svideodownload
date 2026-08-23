@@ -57,6 +57,43 @@ self.addEventListener("fetch", (event) => {
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
   if (/\.(m3u8|ts|m4s|mp4|m4a|mp3|webm)$/i.test(url.pathname)) return;
 
+  /*
+    🔴 FILE DOWNLOADS MUST NEVER ENTER THIS WORKER (owner, 2026-08-23: tapping
+    Download on Android "doesn't show anything").
+
+    This is why the Android APK download did nothing at all. A click on an
+    `<a href download>` is issued by the browser as a request with
+    `mode: "navigate"` — it is a top-level navigation that Chrome converts into
+    a download once it sees the response. So `/downloads/frenzsave.apk` sailed
+    past every branch above and landed in the GENERIC NAVIGATION branch further
+    down, which answers with `networkFirst(..., { offlineFallback })`.
+
+    Once a service worker calls `respondWith` on that navigation, the download
+    is at the mercy of a Response this worker synthesised: `networkFirst` reads
+    and re-serves the body, and on any hiccup `offlineFallback` hands back an
+    HTML page instead. Either way the browser never receives the plain,
+    untouched binary response it needs to hand to the download manager — and
+    because a failed download surfaces nothing in the page, the symptom is
+    exactly "I tap it and nothing happens".
+
+    The fix is the same one the media bail above uses, for the same reason: get
+    out before any strategy runs and let the browser's native pipeline do it.
+    Extension-based rather than path-based so a future download (an .aab, a
+    .zip export) is covered without editing this again — and `/downloads/` is
+    matched too, since that whole directory exists to be downloaded.
+
+    NOTE: `.apk` is also excluded from the Next middleware matcher
+    (middleware.ts). Both are required and neither substitutes for the other —
+    the middleware runs on the server, this runs on the device, and the request
+    passes through both.
+  */
+  if (
+    url.origin === self.location.origin &&
+    (url.pathname.startsWith("/downloads/") || /\.(apk|aab|zip)$/i.test(url.pathname))
+  ) {
+    return;
+  }
+
   const isStatic =
     url.origin === self.location.origin &&
     (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/fonts/"));

@@ -6,6 +6,16 @@
  * activation. */
 var SWX = (self.SWX = self.SWX || {});
 
+// v16 (2026-08-23): routes.js now bails out of the worker entirely for
+// `/downloads/` and `.apk`/`.aab`/`.zip`. A `<a href download>` click is issued
+// as `mode: "navigate"`, so the Android APK was being answered by the generic
+// navigation branch's `networkFirst(..., { offlineFallback })` — the browser
+// never got the untouched binary response it needs to start a download, and the
+// symptom was a tap that did nothing at all. A ROUTING change only, but the
+// bump is what makes an installed worker replace itself: without it every
+// device that already has v15 keeps running the code with the bug, which is
+// every device reporting it.
+//
 // v15 (2026-08-23): `/launch.html` gained the twelve `apple-touch-startup-image`
 // links that stop iOS painting its own plain-white splash before the loader
 // (owner: "it still shows white on cold load entry in the pwa"). The document is
@@ -23,7 +33,7 @@ var SWX = (self.SWX = self.SWX || {});
 // v13 (2026-08-11): PRECACHE_URLS gained /launch + the splash logo — the cache
 // CONTENTS changed, so the bucket must be new or an installed client keeps a v12
 // cache that has neither.
-SWX.VERSION = "v15";
+SWX.VERSION = "v16";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

@@ -77,15 +77,44 @@ export default function PrivacyPage() {
         abuse, and understand overall usage trends.
       </p>
 
+      {/*
+        🔴 Rewritten 2026-08-23 for ACCURACY (owner: the policy claimed AdSense
+        was serving when it is not yet approved, and named Monetag when
+        `DEFAULT_MONETIZATION.monetag` is `false`).
+
+        A privacy policy that overstates what runs is a real problem, not a
+        cosmetic one — it is the document a reviewer checks against observable
+        behaviour, and naming a provider that is switched off is exactly the
+        kind of mismatch that reads as boilerplate nobody maintains.
+
+        What this now says is what is actually true today and stays true when
+        approval lands, without needing a rewrite either way:
+         • The Service is ad-supported (it is — see lib/monetization/settings).
+         • Google's AdSense code IS present on the site. That part matters and
+           must NOT be softened away: the site-level script in app/layout.tsx
+           loads on every page whenever a publisher id is configured, whether
+           or not ads are approved to serve, so it can set cookies TODAY. A
+           policy claiming "no ad providers are active" would be its own,
+           opposite inaccuracy.
+         • Providers can change, and the accurate framing is "may", not a fixed
+           roster that goes stale the moment a switch is flipped.
+
+        Deliberately does NOT name Monetag or Adsterra. Both default to `false`
+        and neither ships a script in that state. If either is ever switched
+        back on, name it here — do not rely on the vague "partners" line to
+        cover it.
+      */}
       <h2>3. Advertising</h2>
       <p>
-        FrenzSave shows ads through Google AdSense and Monetag to help fund
-        the Service. These providers may use cookies, device identifiers, or
-        similar technologies to serve ads, measure their performance, and
-        limit how often you see the same ad. Google&apos;s use of advertising
-        cookies enables it and its partners to serve ads based on your visits
-        to this and other sites; you can opt out of personalised advertising
-        by visiting{" "}
+        FrenzSave is supported by advertising. Google AdSense code is present on
+        the site, and we may work with other advertising partners over time; the
+        providers we use can change as monetisation partners are enabled or
+        retired. Advertising providers may use cookies, device identifiers, or
+        similar technologies to serve ads, measure their performance, and limit
+        how often you see the same ad. Google&apos;s use of advertising cookies
+        enables it and its partners to serve ads based on your visits to this
+        and other sites; you can opt out of personalised advertising by
+        visiting{" "}
         <a href="https://adssettings.google.com" target="_blank" rel="noopener noreferrer">
           Google Ads Settings
         </a>{" "}
@@ -99,9 +128,15 @@ export default function PrivacyPage() {
 
       <h2>4. Third-party services</h2>
       <p>
+        {/*
+          "named above" no longer parses — Section 3 deliberately stopped
+          publishing a fixed roster (see its note), so a cross-reference to
+          names that are no longer there would send a reader looking for a list
+          that does not exist.
+        */}
         We rely on infrastructure providers (such as hosting, CDN, and caching
-        services) and the advertising providers named above to run the
-        Service. These providers process data on our behalf, or on their own
+        services) and on the advertising providers described in Section 3 to run
+        the Service. These providers process data on our behalf, or on their own
         behalf for ad delivery, under their own security and privacy
         commitments.
       </p>

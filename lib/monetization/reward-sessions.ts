@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import { trackEvent } from "@/lib/analytics/events";
 import { alreadyCounted, consumeDaily } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCachedMetadata, getMetadata } from "@/server/extractors";
@@ -192,6 +193,19 @@ export async function startRewardSession(input: {
     .select("id, expires_at")
     .single();
   if (error || !data) throw new RewardError("INVALID_REQUEST", "Couldn't start the reward session.");
+
+  /*
+    Surface the START in the admin live feed (owner, 2026-08-23). Paired with
+    the `reward_granted` emit in `completeRewardSession` — the gap between the
+    two is the rewarded-ad completion rate, and it only exists if BOTH are
+    recorded. Fire-and-forget by design (`trackEvent` never awaits and swallows
+    its own errors), so analytics can never fail a reward.
+  */
+  trackEvent("reward_started", {
+    userId,
+    metadata: { rewardType: input.type, items: items.length },
+  });
+
   return { id: data.id as string, expiresAt: data.expires_at as string };
 }
 
@@ -241,6 +255,17 @@ export async function completeRewardSession(input: {
     .update({ status: "granted", granted_at: new Date().toISOString(), expires_at: grantedExpiry })
     .eq("id", input.rewardSessionId)
     .eq("status", "pending");
+
+  /*
+    Emitted AFTER the row actually flips to `granted`, and only on the path
+    that does the flipping — the early `return` for an already-granted session
+    above never reaches here, so a replayed `/complete` cannot double-count a
+    reward in the feed the way it cannot double-charge the daily limit.
+  */
+  trackEvent("reward_granted", {
+    userId: input.userId,
+    metadata: { rewardType: row.type, items: row.payload.items.length },
+  });
 
   return { items: row.payload.items };
 }

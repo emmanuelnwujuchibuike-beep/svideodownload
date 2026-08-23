@@ -40,6 +40,25 @@ export const EVENTS = [
   { id: "ad_impression", label: "Ad impression", description: "An ad unit rendered.", domain: "monetization", metadata: ["zone", "adId"] },
   { id: "ad_click", label: "Ad click", description: "An ad unit was clicked.", domain: "monetization", metadata: ["zone", "adId"] },
   { id: "affiliate_click", label: "Affiliate click", description: "An affiliate offer was clicked.", domain: "monetization", metadata: ["offerId", "country", "device"] },
+  /*
+    Rewarded-ad lifecycle (owner, 2026-08-23: "I want all impression, clicks,
+    reward ad watched and all information … wired in the admin dashboard in
+    live activity").
+
+    TWO events, not one, because the gap between them is the only number that
+    says whether rewarded ads actually work: `reward_started` is the moment a
+    visitor chose to watch, `reward_granted` is the moment the server accepted
+    the reward. Recording only the grant would make the funnel look perfect —
+    every reward that exists completed, by definition — and hide every
+    abandoned or failed watch, which is exactly the metric worth having.
+
+    Emitted from the reward-session lifecycle (lib/monetization/reward-sessions.ts),
+    NOT from the client: the client already reports "ad finished", and that claim
+    is precisely what the server refuses to trust. These fire where the session
+    row actually changes state.
+  */
+  { id: "reward_started", label: "Reward ad started", description: "A visitor opened a rewarded ad to unlock a download.", domain: "monetization", metadata: ["rewardType", "items"] },
+  { id: "reward_granted", label: "Reward ad completed", description: "A rewarded ad was verified and the download authorized.", domain: "monetization", metadata: ["rewardType", "items"] },
   { id: "subscribe", label: "Subscribe", description: "A paid subscription started.", domain: "monetization", metadata: ["plan"] },
   { id: "subscribe_cancel", label: "Subscription cancelled", description: "A paid subscription ended.", domain: "monetization", metadata: ["plan"] },
   { id: "api_call", label: "API call", description: "A developer-API request was served.", domain: "api" },

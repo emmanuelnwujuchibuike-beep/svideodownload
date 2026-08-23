@@ -6,6 +6,15 @@
  * activation. */
 var SWX = (self.SWX = self.SWX || {});
 
+// v15 (2026-08-23): `/launch.html` gained the twelve `apple-touch-startup-image`
+// links that stop iOS painting its own plain-white splash before the loader
+// (owner: "it still shows white on cold load entry in the pwa"). The document is
+// PRECACHED into PAGE_CACHE and served cache-first, so without a bump every
+// installed PWA would keep booting the old, tag-less copy from a v14 bucket and
+// the fix would reach nobody who already has the app — precisely the people
+// reporting it. The CONTENTS of a precached document changed, so the bucket
+// must be new.
+//
 // v14 (2026-08-11): the cold-entry redirect for the stale `/home` start_url
 // (routes.js). The cache contents are unchanged, but the bump is what makes an
 // installed worker update at all — a routing change that never activates is a
@@ -14,7 +23,7 @@ var SWX = (self.SWX = self.SWX || {});
 // v13 (2026-08-11): PRECACHE_URLS gained /launch + the splash logo — the cache
 // CONTENTS changed, so the bucket must be new or an installed client keeps a v12
 // cache that has neither.
-SWX.VERSION = "v14";
+SWX.VERSION = "v15";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

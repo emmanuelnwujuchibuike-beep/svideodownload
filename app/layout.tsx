@@ -172,11 +172,27 @@ export const viewport: Viewport = {
 // each device's CSS device-width/height + pixel ratio exactly for iOS to
 // pick the right file; images generated via scratchpad's gen-splash.mjs
 // (solid brand background + the existing frenz-logo.png centered).
+/*
+  🔴 This list is DUPLICATED in public/launch.html, and that file is the one
+  that matters most (2026-08-23).
+
+  iOS reads `apple-touch-startup-image` from the LAUNCH DOCUMENT and nowhere
+  else. `start_url` is `/launch.html` — a hand-written static file that inherits
+  nothing from this layout — so for a while these tags existed here, on every
+  page except the only page iOS actually consults at launch. The installed app
+  therefore fell back to iOS's auto-generated plain-WHITE splash on every cold
+  start (owner: "it still shows white on cold load entry in the pwa").
+
+  Keep the two lists in step. If a size is added here it must be added there,
+  or that device silently goes back to the white default.
+*/
 const SPLASH_SCREENS: { file: string; width: number; height: number; ratio: number }[] = [
   { file: "1170x2532", width: 390, height: 844, ratio: 3 }, // iPhone 12/13/14
   { file: "1179x2556", width: 393, height: 852, ratio: 3 }, // iPhone 14 Pro/15/16
+  { file: "1206x2622", width: 402, height: 874, ratio: 3 }, // iPhone 16 Pro
   { file: "1284x2778", width: 428, height: 926, ratio: 3 }, // Pro Max / Plus
   { file: "1290x2796", width: 430, height: 932, ratio: 3 }, // Pro Max (newest)
+  { file: "1320x2868", width: 440, height: 956, ratio: 3 }, // iPhone 16 Pro Max
   { file: "1125x2436", width: 375, height: 812, ratio: 3 }, // X/XS/11 Pro/12 mini/13 mini
   { file: "750x1334", width: 375, height: 667, ratio: 2 }, // SE
 ];
